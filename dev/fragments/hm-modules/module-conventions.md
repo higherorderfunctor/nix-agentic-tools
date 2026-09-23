@@ -1,9 +1,8 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-20 — package modules own consumer checks; the
-> shared harness discovers backend imports and owner activation probes. The
-> "parity does not require identical delivery paths" worked example below is now
-> `ai.codex.execpolicyRules`, not the removed `ai.codex.profiles`.
+> **Last verified:** 2026-09-23 — the shared LSP producers are `mkKiroLspFile` /
+> `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
+> (one entry); `mkLspConfig` / `mkCopilotLspConfig` are gone.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -300,8 +299,8 @@ enforces exact flattened option-name and type parity across the full generated
 `ai.*` trees; module-eval tests cover backend-specific lowering and diagnostics.
 
 **Shared types live in `lib/`.** Both HM and devenv modules import types from
-`lib/ai-common.nix` (`ruleModule`, `lspServerModule`, `mkCopilotLspConfig`,
-`mkLspConfig`) so the surfaces stay in sync by construction.
+`lib/ai/ai-common.nix` (`ruleModule`, `lspServerModule`, `mkCopilotLspFile`,
+`mkKiroLspFile`) so the surfaces stay in sync by construction.
 
 **Stronger than shared types: one shared DECLARATION.** `packages/glab` puts its
 entire `options.glab` block in `packages/glab/modules/options.nix` and both

@@ -1,11 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-21 — the shared text-source types carry every
-> authored prose surface, semantic-agent `instructions` and Kiro typed-agent
-> `prompt` included. They arbitrate `text` against `source` by priority, enforce
-> content on enabled and required sources, preserve lazy source-backed emission,
-> take package prose through `defaultContent`, and suppress with
-> `enable = false`.
+> **Last verified:** 2026-09-23 — `ai.lspServers` renders whole files with each
+> runtime's envelope, and Copilot/Kiro require `extensions`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -359,7 +355,14 @@ enabled ecosystem whose native model preserves the option's semantics):
 - `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
   Kiro native config. Codex is deliberately excluded: its current public config
   reference and pinned CLI expose no LSP-server registration surface, so
-  pretending to fan out this pool would silently discard the declaration.
+  pretending to fan out this pool would silently discard the declaration. The
+  Copilot and Kiro producers (`mkCopilotLspFile`, `mkKiroLspFile`) emit the
+  WHOLE file, envelope included (`lspServers` / `languages`): both CLIs reject a
+  bare per-server map, which is what shipped until 2026-09-23 while substring
+  checks stayed green. Both route files to servers by extension alone, so a
+  server they receive with empty `extensions` throws at eval rather than render
+  an entry that never starts; drop it for that runtime with
+  `ai.<runtime>.lspServers.<name> = null`.
 - `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
   of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`

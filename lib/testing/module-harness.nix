@@ -288,7 +288,18 @@
   # escapes its separator, so this is a true literal search. Use it whenever
   # the needle is shell syntax rather than prose.
   hasLiteral = needle: hay: builtins.length (lib.splitString needle hay) > 1;
+  # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
+  # Null unless `envelope` is the file's ONLY top-level key, so a bare
+  # per-server map (which Copilot and Kiro both reject) never matches.
+  # `fromJSON` refuses a string carrying store-path context, which a
+  # `package`-resolved command adds.
+  lspEntryOf = envelope: file: server: let
+    json = builtins.fromJSON (builtins.unsafeDiscardStringContext file.text);
+  in
+    if file != null && lib.attrNames json == [envelope]
+    then json.${envelope}.${server} or null
+    else null;
 in {
-  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmStubs mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest tomlFormat;
+  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest tomlFormat;
   inherit testing;
 }

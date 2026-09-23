@@ -31,7 +31,7 @@
   mkIdentityMaterializer = import ./identityBundle.nix {inherit lib pkgs;};
   workflowReminder = import ./workflowReminder.nix {inherit lib pkgs;};
 
-  # Shared AI helpers (filterNulls, mkLspConfig, flattenDotKeysUntil, …). Hoisted to
+  # Shared AI helpers (filterNulls, mkKiroLspFile, flattenDotKeysUntil, …). Hoisted to
   # the top-level `let` so option TYPES and renderers can reach it too — both
   # backend blocks previously imported it separately.
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -1457,7 +1457,7 @@ in
       lspServers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
         default = {};
-        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkLspConfig` into settings/lsp.json on emission.";
+        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
       };
       # Env vars exported when launching kiro. In HM they're baked into
       # Baked into the symlinkJoin launcher on BOTH backends. devenv used to
@@ -1777,10 +1777,15 @@ in
                   rules = permissionRules;
                 };
               })
-            # settings/lsp.json — typed LSP server definitions.
+            # settings/lsp.json — typed LSP server definitions. Kiro reads
+            # `<workspace>/.kiro/settings/lsp.json`, so this HOME copy is
+            # live only when the workspace is $HOME (a case kiro-cli 2.22.1
+            # itself calls a mistake). Written anyway and NOT asserted:
+            # `ai.lspServers` is a shared pool, and the devenv backend is the
+            # one that delivers per project.
             (lib.mkIf (mergedLspServers != {}) {
               home.file."${cfg.configDir}/settings/lsp.json".text =
-                builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
+                builtins.toJSON (aiCommon.mkKiroLspFile mergedLspServers);
             })
             # settings/mcp.json — merged MCP server pool, delivered as a
             # REAL file assembled at activation (never a store symlink) so
@@ -1992,7 +1997,7 @@ in
             # settings/lsp.json — typed LSP server definitions.
             (lib.mkIf (mergedLspServers != {}) {
               files."${cfg.configDir}/settings/lsp.json".text =
-                builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
+                builtins.toJSON (aiCommon.mkKiroLspFile mergedLspServers);
             })
             # settings/mcp.json — merged MCP server pool, delivered as a
             # REAL file via enterShell (anchored to $DEVENV_ROOT), matching

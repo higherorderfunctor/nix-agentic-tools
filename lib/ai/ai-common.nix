@@ -143,6 +143,30 @@
       attrs;
   in
     go "";
+  # ── LSP helpers ────────────────────────────────────────────────────
+  # Command resolution: prefer explicit `command`, else
+  # `${package}/bin/${binary}`, else throw.
+  lspCommand = name: server:
+    if server.command != null
+    then server.command
+    else if server.package != null
+    then "${server.package}/bin/${server.binary}"
+    else throw "ai.lspServers.${name}: must set one of `command` or `package`";
+  # A server's `extensions`, for a runtime that routes files to servers by
+  # extension alone (Copilot, Kiro). With none, the entry would handle no
+  # file at all, and Copilot rejects the whole file besides, so this throws
+  # rather than render a server that silently never starts.
+  lspRequiredExtensions = runtime: name: server:
+    if server.extensions != []
+    then server.extensions
+    else throw "ai.lspServers.${name}: ${runtime} routes files to LSP servers by extension, so `extensions` must name at least one; set it, or drop the server for ${runtime} with `ai.${runtime}.lspServers.${name} = null`";
+  # `{ ".<ext>" = <server attribute name>; }` for Copilot and Claude.
+  lspExtensionMap = name: extensions:
+    lib.listToAttrs (map (ext: {
+        name = ".${ext}";
+        value = name;
+      })
+      extensions);
 in {
   # ── Markdown content records ───────────────────────────────────────
   # Context and rules share one text-source record. The type resolves source
@@ -210,9 +234,8 @@ in {
 
   # ── LSP server submodule type ──────────────────────────────────────
   # Typed LSP server definition. The ai.* module holds these; fanout
-  # transforms to per-ecosystem JSON via mkLspConfig (Kiro base),
-  # mkCopilotLspConfig (adds fileExtensions), mkClaudeLspConfig
-  # (adds extensionToLanguage).
+  # transforms to per-ecosystem JSON via mkKiroLspFile, mkCopilotLspFile
+  # (both whole files) and mkClaudeLspConfig (one entry).
   #
   # Command resolution (exactly one of these two must be set):
   # - `package` (+ optional `binary` override) — renders as
@@ -241,7 +264,7 @@ in {
       extensions = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [];
-        description = "File extensions this server handles (without leading dots). Used by Copilot/Claude to build ext→language mappings; ignored by Kiro.";
+        description = "File extensions this server handles (without leading dots). Kiro emits them as `file_extensions`; Copilot and Claude map each to the server name. Copilot and Kiro route files to servers by extension alone, so a server they receive must name at least one (evaluation throws otherwise).";
         example = ["nix"];
       };
       initializationOptions = lib.mkOption {
@@ -258,75 +281,63 @@ in {
   });
 
   # ── LSP config transforms ─────────────────────────────────────────
-  # Transform a typed LSP server to the JSON format expected by CLIs.
-  # Helpers are inlined below rather than broken out as separate
-  # attrset members because the attrset can't reference its own
-  # members without a let-wrap around the whole module output.
+  # Each ecosystem gets a producer for its WHOLE lsp file, not one entry,
+  # because both Copilot and Kiro reject a bare per-server map: the
+  # envelope key is part of the file format, so it belongs with the
+  # producer rather than with each writer.
 
-  # Base format (Kiro): { command, args, ?initializationOptions }.
-  # Command resolution: prefer explicit `command`, else
-  # `${package}/bin/${binary}`, else throw. Kiro does not consume
-  # `extensions` — it has no extension→language mapping surface;
-  # editor plugins handle that separately.
-  mkLspConfig = name: server:
+  # Kiro: `.kiro/settings/lsp.json` = `{ languages.<id> = { … }; }` with
+  # snake_case fields, per https://kiro.dev/docs/tools/code-intelligence/
+  # and the default table embedded in kiro-cli 2.22.1. The docs mark only
+  # `file_patterns`, `multi_workspace` and `request_timeout_secs` as
+  # optional, so every other documented field is always emitted.
+  # `project_patterns` and `exclude_patterns` have no `lspServerModule`
+  # option and are emitted empty. Kiro's `<id>` key is a language, which the
+  # server's attribute name stands in for, as it does for Copilot below.
+  mkKiroLspFile = servers: {
+    languages =
+      lib.mapAttrs (name: server: {
+        inherit name;
+        inherit (server) args;
+        command = lspCommand name server;
+        exclude_patterns = [];
+        file_extensions = lspRequiredExtensions "kiro" name server;
+        initialization_options = server.initializationOptions;
+        project_patterns = [];
+      })
+      servers;
+  };
+
+  # Copilot: `~/.copilot/lsp-config.json` (user) and `.github/lsp.json`
+  # (repository) are both `{ lspServers.<name> = { … }; }`. copilot-cli
+  # 1.0.88's validator marks `fileExtensions` Required, so a server with no
+  # `extensions` throws instead of producing a file Copilot rejects whole.
+  # Upstream maps each extension to a LANGUAGE id (".ts" = "typescript");
+  # `lspServerModule` has no language-id option, so the server's attribute
+  # name stands in, which matches only when the server is named after its
+  # language.
+  mkCopilotLspFile = servers: {
+    lspServers = lib.mapAttrs (name: server:
+      {
+        command = lspCommand name server;
+        inherit (server) args;
+        fileExtensions = lspExtensionMap name (lspRequiredExtensions "copilot" name server);
+      }
+      // lib.optionalAttrs (server.initializationOptions != {}) {
+        inherit (server) initializationOptions;
+      })
+    servers;
+  };
+
+  # Claude: one `programs.claude-code.lspServers.<name>` entry, with an
+  # `extensionToLanguage` mapping of the same shape as Copilot's.
+  mkClaudeLspConfig = name: server:
     {
-      command =
-        if server.command != null
-        then server.command
-        else if server.package != null
-        then "${server.package}/bin/${server.binary}"
-        else throw "ai.lspServers.${name}: must set one of `command` or `package`";
+      command = lspCommand name server;
       inherit (server) args;
     }
-    // lib.optionalAttrs (server.initializationOptions != {}) {
-      inherit (server) initializationOptions;
-    };
-
-  # Copilot adds `fileExtensions` mapping: `{ ".ext" = <serverName>; }`.
-  mkCopilotLspConfig = name: server: let
-    base = {
-      command =
-        if server.command != null
-        then server.command
-        else if server.package != null
-        then "${server.package}/bin/${server.binary}"
-        else throw "ai.lspServers.${name}: must set one of `command` or `package`";
-      inherit (server) args;
-    };
-  in
-    base
     // lib.optionalAttrs (server.extensions != []) {
-      fileExtensions = lib.listToAttrs (map (ext: {
-          name = ".${ext}";
-          value = name;
-        })
-        server.extensions);
-    }
-    // lib.optionalAttrs (server.initializationOptions != {}) {
-      inherit (server) initializationOptions;
-    };
-
-  # Claude adds `extensionToLanguage` mapping. Same structure as
-  # Copilot's fileExtensions; different key name per upstream docs
-  # for `programs.claude-code.lspServers.<name>`.
-  mkClaudeLspConfig = name: server: let
-    base = {
-      command =
-        if server.command != null
-        then server.command
-        else if server.package != null
-        then "${server.package}/bin/${server.binary}"
-        else throw "ai.lspServers.${name}: must set one of `command` or `package`";
-      inherit (server) args;
-    };
-  in
-    base
-    // lib.optionalAttrs (server.extensions != []) {
-      extensionToLanguage = lib.listToAttrs (map (ext: {
-          name = ".${ext}";
-          value = name;
-        })
-        server.extensions);
+      extensionToLanguage = lspExtensionMap name server.extensions;
     }
     // lib.optionalAttrs (server.initializationOptions != {}) {
       inherit (server) initializationOptions;

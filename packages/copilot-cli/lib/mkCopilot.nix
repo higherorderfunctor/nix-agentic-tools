@@ -130,17 +130,12 @@ in
         default = {};
         description = "Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).";
       };
-      # Typed LSP server definitions for lsp-config.json. Freeform
-      # attrs-of-anything (matching the legacy `attrsOf jsonFormat.type`)
-      # — consumers pass the JSON shape copilot expects. A richer typed
-      # schema shared with kiro lives in `lib/ai-common.nix`
-      # (`lspServerModule` + `mkCopilotLspConfig`) and is a pattern
-      # expansion deferred until the cross-ecosystem `ai.lspServers`
-      # surface lands; per-app options are fine for now.
+      # Typed LSP server definitions, merged with the shared
+      # `ai.lspServers` pool and rendered by `mkCopilotLspFile`.
       lspServers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule);
         default = {};
-        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspConfig` into lsp-config.json on emission (adds fileExtensions mapping).";
+        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspFile` into the `lspServers` envelope: `<configDir>/lsp-config.json` under Home Manager, `<projectDir>/lsp.json` under devenv. Every entry must set `extensions`, because Copilot requires `fileExtensions`.";
       };
       # Baked into the symlinkJoin wrapper on BOTH backends. devenv used to
       # populate its native `env` attrset instead, which exported them into the
@@ -236,12 +231,13 @@ in
           # Dir expansion feeds the same `ai.copilot.agents` pool via
           # mkDefault priority, so explicit entries override Dir
           # entries without a collision.
-          # lsp-config.json — typed LSP server definitions for the
-          # copilot CLI. Inlined via `text` so module-eval can assert
-          # on content and we don't pay for a store build per eval.
+          # lsp-config.json — Copilot's USER-level LSP config
+          # (`~/.copilot/lsp-config.json`). Inlined via `text` so
+          # module-eval can assert on content and we don't pay for a
+          # store build per eval.
           (lib.mkIf (mergedLspServers != {}) {
             home.file."${cfg.configDir}/lsp-config.json".text =
-              builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
+              builtins.toJSON (aiCommon.mkCopilotLspFile mergedLspServers);
           })
           # Inline agent .md files. Mirrors the legacy
           # `mkMarkdownEntries` shape — one entry per agent, written
@@ -333,15 +329,12 @@ in
       options = {
         # Wrapper-aimed config dir. `mcp-config.json` here is LIVE — the
         # `packages` wrapper points `--additional-mcp-config` at it.
-        # `lsp-config.json` and `settings.json` are INERT: Copilot reads
-        # neither at project scope and offers no flag to inject them
-        # (measured, see dev/fragments/ai-clis/copilot-config-delivery.md).
-        # They are kept as declared-but-undelivered rather than removed, so
-        # the option surface stays at HM parity and they become live for free
-        # if upstream grows discovery. Project-scope files Copilot DOES read
-        # live under `projectDir` (default `.github`) instead — that is also
-        # the surface github.com's Copilot code review consumes, and it is a
-        # different consumer from this CLI.
+        # `settings.json` is INERT: Copilot does not read it at project
+        # scope and offers no flag to inject it (measured, see
+        # dev/fragments/ai-clis/copilot-config-delivery.md). It is kept as
+        # declared-but-undelivered so the option surface stays at HM parity.
+        # Project-scope files Copilot DOES read live under `projectDir`
+        # (default `.github`) instead, LSP config (`lsp.json`) included.
         configDir = lib.mkOption {
           type = lib.types.str;
           default = ".config/github-copilot";
@@ -350,11 +343,10 @@ in
             `mcp-config.json`, which the wrapped `copilot` is pointed at via
             `--additional-mcp-config`.
 
-            Also holds `lsp-config.json` and `settings.json`, which Copilot
-            does NOT read at project scope and provides no flag to inject;
-            those are written for option parity with Home Manager but are not
-            delivered. Configure LSP servers and settings through the Home
-            Manager module if they must take effect.
+            Also holds `settings.json`, which Copilot does NOT read at
+            project scope and provides no flag to inject; it is written for
+            option parity with Home Manager but is not delivered. LSP servers
+            are delivered through `<projectDir>/lsp.json` instead.
 
             This is NOT the directory github.com's Copilot code review reads —
             that consumes committed files under `projectDir` (`.github`), and
@@ -384,16 +376,13 @@ in
               dirHelpers.agentsFromDir cfg.agentsDir
             );
           })
-          # lsp-config.json — INERT at project scope. Copilot opens
-          # `$HOME/.copilot/lsp-config.json` and nothing project-local, and
-          # unlike MCP there is no `--additional-lsp-config` to point it here
-          # (verified against 1.0.78 `--help`). Written anyway for option
-          # parity with HM, and deliberately NOT an assertion: `ai.lspServers`
-          # is a shared pool, so failing here would break a project that
-          # legitimately targets Claude or Kiro with it.
+          # lsp.json — Copilot's REPOSITORY-level LSP config. copilot-cli
+          # 1.0.88 loads `.github/lsp.json` from the repository root
+          # (upstream README "Repository-level configuration"), same
+          # `lspServers` envelope as the user-level file.
           (lib.mkIf (mergedLspServers != {}) {
-            files."${cfg.configDir}/lsp-config.json".text =
-              builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
+            files."${cfg.projectDir}/lsp.json".text =
+              builtins.toJSON (aiCommon.mkCopilotLspFile mergedLspServers);
           })
           # Inline agent files — one devenv `files.*` entry per agent
           # under `${projectDir}/agents/<name>.agent.md`. Copilot's
@@ -449,8 +438,7 @@ in
           # there's no `trusted_folders` preservation problem to solve
           # here. Static JSON write is sufficient.
           #
-          # INERT at project scope, same as lsp-config.json above: Copilot
-          # reads its settings from `$HOME/.copilot/config.json` and never
+          # INERT at project scope: Copilot reads its settings from `$HOME/.copilot/config.json` and never
           # stats a project-local settings.json. Kept for option parity.
           {
             files."${cfg.configDir}/settings.json".text =
