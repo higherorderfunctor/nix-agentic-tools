@@ -3,8 +3,9 @@ result
 result-*
 result-docs
 
-# Bytecode from running checks/markdown/split-code-spans.py by hand. The check runs
-# it through nix, but invoking it directly is the normal way to iterate.
+# Bytecode from running the markdown scanners by hand. Running a scanner as
+# __main__ caches nothing; the .pyc comes from the sibling module each one
+# path-loads (see `_load` in checks/markdown/doubled-words.py).
 __pycache__/
 
 # Claude Code plugin state

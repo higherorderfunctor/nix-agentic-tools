@@ -63,7 +63,16 @@ def _load(module, filename):
 
     Load order matters: doubled_words does `from split_code_spans import …`,
     so split_code_spans has to be in sys.modules under that name first,
-    which is what the assignment below is for.
+    which is what the assignment below is for. ./doubled-words.py carries
+    its own copy of this helper and bootstraps split_code_spans itself, so
+    the pre-load below is belt and braces rather than the only thing holding
+    that order.
+
+    THAT COPY IS DELIBERATE; keep the two in step. ./doubled-words.py's
+    `_load` carries the reasoning, including the false reason this change
+    first recorded: a shared `_bootstrap.py` DOES work in both layouts and
+    is smaller. It is declined because it needs a fourth file in
+    ./markdown-scanners.nix's store directory, which is untouched here.
     """
     try:
         return importlib.import_module(module)
