@@ -24,7 +24,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > semantics. Upstream delegation aliases the content field's own definitions.
 > Ledger-owned copies whose files nothing else retracts opt into
 > `runWhenDisabled`. `ai.lspServers` renders whole files with each runtime's
-> envelope, and Copilot/Kiro require `extensions`.
+> envelope, Copilot/Kiro require `extensions`, and Copilot constrains server
+> names.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -416,7 +417,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   checks stayed green. Both route files to servers by extension alone, so a
   server they receive with empty `extensions` throws at eval rather than render
   an entry that never starts; drop it for that runtime with
-  `ai.<runtime>.lspServers.<name> = null`.
+  `ai.<runtime>.lspServers.<name> = null`. Copilot also keys `lspServers` by the
+  attribute name and rejects the whole file for a name outside `[A-Za-z0-9_-]+`,
+  so such a name throws for Copilot too.
 - `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
   of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
