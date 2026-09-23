@@ -1,27 +1,62 @@
-# Force devenv's eval-cache tracer (and direnv's watch list) to SEE the
-# CONTENTS of a source tree that is otherwise only path-copied into the store.
+# Register every regular file under a source tree as a tracked eval input, so
+# that direnv reloads the shell when one of them is edited.
 #
-# WHY: devenv invalidates its eval cache — and direnv reloads — only on files
-# that were READ during evaluation (`import` / `readFile` / `hashFile` /
-# `readDir`). `readDir` alone tracks only the directory LISTING, not file
-# contents, so adding or removing a file is caught but editing one is not.
-# Hashing every regular file here registers each as a tracked eval input — the
-# same mechanism that makes `dev/fragments/*.md` auto-bust the cache via
-# `builtins.readFile`.
+# THE ONLY REMAINING CONSUMER IS DIRENV. Measured 2026-09-22 on devenv
+# 2.3.2+87edd16, Nix 2.34.4, direnv 2.37.1, across four independent passes (two
+# measuring, two refuting). Each of the other two candidate consumers was
+# checked and does not need this:
 #
-# OPEN QUESTION, and it is measured. This header used to go on to claim that a
-# bare `${src}` store copy (`cp -R ${src}` in a runCommand, or `builtins.path`)
-# "reads nothing INSIDE the tree", leaving devenv to serve a stale memoized
-# path after an edit under `src`. On devenv 2.3.2 / Nix 2.34.4 (2026-09-22)
-# that is FALSE. Probes of both real call shapes — `env.X = "${./dir}"`, the
-# `ai.skills` shape, and a `runCommand` that `cp -R`s the dir, the
-# stacked-workflows-content shape — each re-evaluated to a NEW store path after
-# a content-only edit inside the tree, and devenv's own
-# `.devenv/nix-eval-cache.db` records the copied directory with `recursive=1`.
-# So on devenv this module may now be redundant. That call belongs to its owner
-# and has NOT been made here; direnv's watch list, the other consumer, was not
-# measured. The claim is deleted rather than restated, because a header
-# asserting a refuted mechanism is worse than one admitting the question.
+#   - NIX ITSELF NEVER NEEDED IT. `builtins.path` and a bare `${./dir}` store
+#     copy are content-addressed. A content-only edit inside the tree moves the
+#     store path with no fingerprint involved, so the output rebuilds on its
+#     own. Measured on the filtered `builtins.path {filter = ...;}` shape that
+#     `stacked-workflows-content` uses, not only on the bare one.
+#
+#   - DEVENV'S EVAL CACHE NO LONGER NEEDS IT. `.devenv/nix-eval-cache.db`
+#     records a bare store-copied directory as `is_directory=1, recursive=1`
+#     with a content hash over the whole subtree (the `recursive` column
+#     arrived in devenv migration `20260603000000`). A content-only edit moves
+#     that hash and busts the cache. Measured across all three real call
+#     shapes: `ai.skills.<name> = ./dir`, `env.X = "${./dir}"`, and
+#     `builtins.path {path = ./dir; filter = ...;}`. 21 trials, upheld under an
+#     independent refutation pass that added the missing "unrelated edit is
+#     inert" control and re-ran every edit with the inode and size held fixed.
+#
+# What direnv watches is a different set, and that is the gap this closes.
+# devenv's `direnvrc` builds `use_devenv`'s ENTIRE watch set by running
+# `watch_file` over the lines of `.devenv/input-paths.txt`, which holds the
+# files that evaluation actually READ. A store copy contributes nothing to it:
+# measured, 0 watch entries for a bare `${./dir}` and 0 for the filtered
+# `builtins.path` shape, while 0 of 594 watches was a directory. Reading each
+# file with `builtins.hashFile` is what puts it there. devenv exposes no API
+# for this — every `watch` option it has (`processes.<name>.watch.paths`,
+# `tasks.<name>.process.watch.paths`) restarts a PROCESS, not the shell — so
+# reading the file IS the mechanism and there is no cleaner call to switch to.
+#
+# TWO MECHANISMS, TWO KEYS, and confusing them produces wrong conclusions:
+# direnv triggers on MTIME, devenv's eval cache on CONTENT. A content edit that
+# restores the original mtime reloads nothing while the eval cache still
+# catches it; a bare `touch` with identical bytes reloads direnv. So this buys
+# a watch, not a content check.
+#
+# FOR DIRENV, THE MISSED CASE IS **ADD**, NOT EDIT. An edit is caught and a
+# removal is caught, because both move a watched path's stat. An ADD is not:
+# direnv watches individual files only, never directories, so a path that did
+# not exist during evaluation has no watch to trip. The exception is real —
+# evaluation probes paths that do not exist (33 of 301 input paths on this
+# repo: `devenv.local.nix`, `.env`, `pathExists` probes, dangling symlinks), so
+# creating one of THOSE does reload.
+#
+# UNVERIFIED UNDER `devenv hook`, AND THIS IS THE THING TO RE-MEASURE. The
+# operator intends to migrate off direnv to devenv 2.1's shell integration
+# (`eval "$(devenv hook zsh)"`, no `.envrc`, trust via `devenv allow`). Its
+# reload-on-change logic lives inside the devenv binary and its watch set was
+# NOT determined by any of the four passes. Since direnv's watch list is this
+# module's ONLY remaining justification, that migration can invalidate the
+# module outright. Whoever migrates MUST run this measurement first: make a
+# content-only edit to a file under `packages/stacked-workflows/references/`
+# and check whether the environment reloads. If it does without this module,
+# delete the module and its one call site. If it does not, keep it.
 #
 # Files are hashed with `builtins.hashFile`, NEVER with
 # `builtins.hashString "sha256" (builtins.readFile f)`. `readFile` aborts
@@ -44,25 +79,22 @@
 # projects, one per builtin: editing the hashed file's CONTENTS while leaving
 # the directory listing alone busted devenv's cache under `hashFile` and under
 # `readFile` alike, whereas a `readDir`-only probe served the stale value from
-# cache. That probe DID bust when a file was added, which is what proves its
-# cache was live rather than frozen. Editing a SIBLING file the builtin never
-# touched was also served from cache, so what is tracked is the individual
-# file, not the enclosing tree. On text the two spellings agree byte-for-byte,
-# so no existing fingerprint moved.
+# cache. Editing a SIBLING file the builtin never touched was also served from
+# cache, so what is tracked is the individual file, not the enclosing tree. On
+# text the two spellings agree byte-for-byte, so no existing value moved.
 #
 # Symlinks are skipped on purpose: a stale devenv activation can drop dangling
 # store-path symlinks into a source skill dir, and hashing a broken link would
 # abort evaluation — `hashFile` resolves its argument, so this hazard survives
 # the move off `readFile`. A symlinked DIRECTORY is skipped too, which means
-# content behind one is invisible to the trace. That is pre-existing and load
+# content behind one is invisible to the walk. That is pre-existing and load
 # bearing: stacked-workflows carries its `references/` as symlinks and covers
-# them by fingerprinting that tree separately.
+# them by registering that tree separately.
 #
-# Callers MUST FORCE the fingerprint so the hashes actually execute during eval:
-#   - `fingerprint src` -> put in a derivation env attr (also makes Nix itself
-#     rebuild the output when a file's content changes), or
-#   - `tracedPath src`  -> returns `src` unchanged but forces the content trace
-#     as a side effect (for a bare `./dir` handed straight to `ai.skills`).
+# THE CALLER MUST FORCE THE RESULT, or the hashes never execute and nothing is
+# registered. Put the returned string in a derivation env attr; that is what
+# makes eval demand it. The value itself is incidental — a reader who assumes
+# the attr is unused and deletes it silently removes the watch registration.
 #
 # Regression tests: checks/trace-source/.
 {lib}: let
@@ -81,15 +113,18 @@
           else [] # skip symlinks (dangling store-link cruft) and unknown types
       ) (builtins.readDir dir)
     );
-
-  # Fingerprint each file as `<relative-path>\n<sha256-of-contents>\n`, then
-  # hash the concatenation. The per-file path + fixed-width content hash +
-  # newline framing make the result unambiguous: unlike a bare concatenation of
-  # raw contents, no byte shifting a change across a file boundary can produce a
-  # colliding fingerprint. The relative path (not absolute) keeps the value
-  # stable across checkout locations. `builtins.hashFile` is what registers each
-  # file as a tracked eval input — the framing is only for collision safety.
-  fingerprint = src: let
+in {
+  # Read every regular file under `src` with `builtins.hashFile`, which is what
+  # registers each as a tracked eval input and therefore as a direnv watch.
+  #
+  # The returned digest exists only to give the caller something to force. It
+  # is built as `<relative-path>\n<sha256-of-contents>\n` per file, hashed as a
+  # whole: the per-file path plus fixed-width content hash plus newline framing
+  # make it unambiguous, so no byte shifting a change across a file boundary
+  # can collide two different trees. The relative path (not absolute) keeps the
+  # value stable across checkout locations, which matters because it lands in a
+  # derivation env attr.
+  registerTrackedInputs = src: let
     base = toString src + "/";
   in
     builtins.hashString "sha256" (
@@ -97,10 +132,4 @@
       (f: "${lib.removePrefix base (toString f)}\n${builtins.hashFile "sha256" f}\n")
       (collect src)
     );
-in {
-  inherit fingerprint;
-
-  # Return `src` unchanged, forcing the content trace as a side effect. Use
-  # where a bare `./dir` path must stay a path (e.g. an `ai.skills` value).
-  tracedPath = src: builtins.seq (fingerprint src) src;
 }
