@@ -34,12 +34,20 @@ direnv, by contrast, reloads at the next prompt. That is the capability the
 migration would give up.
 
 Timings, same machine, same day: cold re-entry under `devenv hook` 15-20s, a
-direnv cache hit 0.01s, a direnv reload 15-21s.
+direnv cache hit 0.01s, a direnv reload 14-18s.
 
-This holds for zsh as well as bash. The two generated hook scripts differ by 13
-lines, all of them the registration tail (bash's `PROMPT_COMMAND` versus zsh's
-prompt-command array) plus one `_DEVENV_SHELL_HINT` value. The `DEVENV_ROOT`
-early return is line 30 in both.
+This holds for zsh as well as bash — re-derive it rather than trusting the
+figures, since they came from a direct comparison of the two generated scripts
+and not from the probe transcript:
+
+```bash
+diff <(devenv hook bash) <(devenv hook zsh) | grep -c '^[<>]'   # 13
+devenv hook zsh | grep -n 'DEVENV_ROOT:-'                       # 30
+```
+
+The 13 differing lines are all the registration tail (bash's `PROMPT_COMMAND`
+versus zsh's prompt-command array) plus one `_DEVENV_SHELL_HINT` value, and the
+`DEVENV_ROOT` early return is line 30 in both.
 
 ## Migrating would be a REMOVAL, not an addition
 

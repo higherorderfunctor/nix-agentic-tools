@@ -22,11 +22,13 @@ to `devenv hook`.
 The only change made when committing it: absolute paths under the author's home
 directory and the session scratchpad were replaced with the placeholders
 `<home>`, `<worktrees>`, `<user>` and `<session-scratchpad>`. Nothing was
-reflowed, rewritten, reordered or removed — editing evidence destroys its value.
-Spell-checking is switched off below rather than in `config/`, because what it
-flags is verbatim output: Nix store-hash fragments, probe marker tokens, and the
-British spellings the agents happened to use. Correcting those would be editing
-the evidence; whitelisting them would apply to the whole repository.
+rewritten, reordered or removed — editing evidence destroys its value. Line
+wrapping shifted around the substituted paths, because the replacements are a
+different length and the formatter re-wraps those paragraphs; no wording
+changed. Spell-checking is switched off below rather than in `config/`, because
+what it flags is verbatim output: Nix store-hash fragments, probe marker tokens,
+and the British spellings the agents happened to use. Correcting those would be
+editing the evidence; whitelisting them would apply to the whole repository.
 
 <!-- cspell:disable -->
 
