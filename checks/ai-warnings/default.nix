@@ -52,16 +52,23 @@
   # control through the actual factory. Unsupported runtime options use root.
   gaps = lib.filter (row: row.primitive == "notApplicable" || row ? deliveryGap) policy.rows;
   rowCase = row: let
+    supported = builtins.elem row.surface records.${row.ecosystem}.supportedPools;
+    enabled = {ai.${row.ecosystem}.enable = true;};
+    empty = evaluate row.mode enabled;
+    messagesFor = path: evaluate row.mode (lib.recursiveUpdate enabled (lib.setAttrByPath path sample.${row.surface}));
+    warns = path: let
+      messages = messagesFor path;
+      needle = lib.showOption path;
+    in
+      contains needle messages
+      && contains (row.deliveryGap or row.reason) messages
+      && !contains needle empty;
     path =
       if row.surface == "settings"
       then ["ai" row.ecosystem "nativeSettings"]
       else if row.surface == "permissions"
       then ["ai" row.ecosystem "permissions"]
       else ["ai" row.surface];
-    enabled = {ai.${row.ecosystem}.enable = true;};
-    messages = evaluate row.mode (lib.recursiveUpdate enabled (lib.setAttrByPath path sample.${row.surface}));
-    empty = evaluate row.mode enabled;
-    needle = lib.showOption path;
   in
     # No permissions option or translation exists for these runtimes, so there
     # is nothing to probe. Assert the EMPTY input list rather than skipping the
@@ -69,24 +76,29 @@
     # default instead of staying silently unexercised.
     if row.surface == "permissions" && row.ecosystem != "kiro"
     then row.inputOptions == []
-    # A bare root pool the runtime's capability gate excludes is deliberately
-    # silent — there is no per-runtime option to tombstone it with, so the
-    # warning would have no consumer remedy. The silence is the assertion.
-    else if builtins.length path == 2 && !(builtins.elem row.surface records.${row.ecosystem}.supportedPools)
-    then messages == [] && empty == []
-    else
-      contains needle messages
-      && contains (row.deliveryGap or row.reason) messages
-      && !contains needle empty;
+    # A bare root pool is deliberately silent unless the runtime can tombstone
+    # it one name at a time: an excluded pool has no per-runtime option, and a
+    # non-keyed pool (context, hooks) composes root with per-runtime, so the
+    # warning would have no consumer remedy. The silence is the assertion. A
+    # supported non-keyed pool must still warn for its PER-RUNTIME path, which
+    # is also what proves this evaluation produces warnings at all.
+    else if builtins.length path == 2 && !(supported && builtins.elem row.surface policy.keyedSurfaces)
+    then
+      messagesFor path
+      == []
+      && empty == []
+      && (!supported || warns ["ai" row.ecosystem row.surface])
+    else warns path;
   # `ai.kiro.trustedMcpTools` is NOT a case here: the wrapper appends
   # `--trust-tools` on both backends, so a devenv consumer setting it has no
   # delivery gap to be told about. The narrower withhold it does have — the v3
   # `acp` arm and Darwin's bundle-discovery launcher — is asserted by
   # ai-warnings-darwin-trust below.
   #
-  # Root pools an incapable runtime excludes (`ai.agents`/`ai.hooks` on Kiro,
-  # `ai.shell` on Kimchi and Copilot) are not cases either: they are silent by
-  # design, and rowCase above asserts that silence.
+  # Root pools nothing per-runtime can withdraw (`ai.agents`/`ai.hooks` on
+  # Kiro, `ai.shell` on Kimchi and Copilot, `ai.context` on Copilot's and
+  # `ai.hooks` on Kimchi's Home Manager rows) are not cases either: they are
+  # silent by design, and rowCase above asserts that silence.
   cases =
     [
       {

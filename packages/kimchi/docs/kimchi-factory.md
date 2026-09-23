@@ -4,8 +4,9 @@
 > devenv its project paths; the mutable JSON documents (`config.json`, harness
 > `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
 > reconcile by leaf through the shared delivery router; agents are owned
-> writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only.
-> Full lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only, and
+> their exclusions are silent for the shared pool. Full lineage:
+> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -41,7 +42,7 @@ is:
 | harness settings | `<configDir>/harness/settings.json`               | `.config/kimchi/harness/settings.json` |
 | permissions      | `.config/kimchi/harness/permissions.json` (fixed) | `.kimchi/permissions.json`             |
 | agents           | `<configDir>/harness/agents/<name>.md`            | `.kimchi/agents/<name>.md`             |
-| hooks            | none (warned exclusion)                           | `.kimchi/hooks.json`                   |
+| hooks            | none (explicit exclusion)                         | `.kimchi/hooks.json`                   |
 | project trust    | `<configDir>/harness/trust.json`                  | none (rejected: user scope)            |
 
 Project Kimchi settings, MCP servers, harness settings, permissions, agents, and
@@ -201,12 +202,19 @@ writes the shared groups followed by `ai.kimchi.hooks` (typed over Kimchi's own
 20 events) into `.kimchi/hooks.json`, rendered by `lib/ai/hooks.nix`'s `render`,
 the same one Claude's settings use. It takes the default facts and lands as a
 symlink. PermissionRequest is not a Kimchi event and the reader skips unknown
-events silently, so the factory leaves it out and `lib/ai/delivery-warnings.nix`
-warns. Home Manager has no lifecycle sink: the only user-scope route is a
-configured pi package's `hooks/hooks.json`, which would make Home Manager own
-`packages` in harness `settings.json` and clobber `kimchi install`. Its policy
-row is `absent` with that reason, so a non-empty `ai.hooks` or `ai.kimchi.hooks`
-warns there. Locked by `module-kimchi-hooks`.
+events silently, so the factory leaves it out. Home Manager has no lifecycle
+sink it can own. A configured pi package's `hooks/hooks.json` would make Home
+Manager own `packages` in harness `settings.json` and clobber `kimchi install`.
+The opt-in Claude Code hook adapter (`extensions.claude-code-hook-adapter`,
+`defaultEnabled: false`, `src/resources/definitions.ts:75-80`) reads
+`~/.claude/settings.json`
+(`src/extensions/claude-code-hook-adapter/definition.ts:25-28`), which Claude's
+own delivery already writes. The policy row is `absent` with that reason. Both
+shared-pool exclusions are silent, because `ai.hooks` composes with
+`ai.kimchi.hooks` and nothing Kimchi-scoped can withdraw it: a warning would
+repeat on every activation (the root-pool rule in the ai-module fanout
+fragment). A non-empty `ai.kimchi.hooks` still warns on Home Manager. Locked by
+`module-kimchi-hooks`.
 
 The bash-hook directory (`harness/hooks/bash`, `.kimchi/hooks/bash`) is
 deliberately not a sink: those scripts filter or rewrite the bash tool only, a

@@ -64,8 +64,9 @@
     "UserPromptSubmit"
   ];
   # Shared groups first, Kimchi's own appended, restricted to the events
-  # Kimchi reads: the one portable event it lacks is warned about in
-  # lib/ai/delivery-warnings.nix instead of written.
+  # Kimchi reads. The one portable event it lacks can only arrive through the
+  # shared pool, which has no per-runtime remedy, so it is dropped silently
+  # (see the root-pool rule in lib/ai/delivery-warnings.nix).
   projectHooksFor = {
     cfg,
     topHooks,
@@ -792,10 +793,11 @@ in
           groups, over Kimchi's own event set. Devenv writes both into
           `.kimchi/hooks.json`, which Kimchi reads only in a trusted project
           and from the exact devenv root. Home Manager delivers nothing and
-          warns: Kimchi has no user-scope lifecycle hook file. `ai.hooks`'
-          PermissionRequest is not a Kimchi event, so it is left out with a
-          warning. If Kimchi's opt-in Claude Code hook adapter is enabled, a
-          shared hook that also reaches `.claude/settings.json` fires twice.
+          warns about this option: Kimchi has no user-scope lifecycle hook
+          file Home Manager can own. `ai.hooks`' PermissionRequest is not a
+          Kimchi event, so it is left out silently. If Kimchi's opt-in Claude
+          Code hook adapter is enabled, a shared hook that also reaches
+          `.claude/settings.json` fires twice.
         '';
       };
 
