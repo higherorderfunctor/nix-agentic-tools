@@ -92,6 +92,21 @@
   # whose file a sibling target in the same bundle also writes — see
   # `mkMcpTargets`. The mode is optional everywhere else and absent everywhere
   # else, which `claudeUnpin` above is the control for.
+  # A document may name its native writer's lock (Kimchi's trust.json).
+  lockedDocument = own (base
+    // {
+      backend = "hm";
+      entryNames.write = "kimchiProjectTrustMerge";
+      targets = [
+        {
+          codec = "json";
+          ledger = "json-settings/kimchi-trust-fixture.json";
+          lock = ".config/kimchi/harness/trust.json.lock";
+          path = ".config/kimchi/harness/trust.json";
+          units.run = "printf '{}'";
+        }
+      ];
+    });
   mergeMode = own (base
     // {
       backend = "hm";
@@ -180,6 +195,17 @@
         };
       }
     ];
+    # A native writer's lock guards one document's read-modify-write; a
+    # directory publishes each unit atomically and has none to share.
+    directoryLock.targets = [
+      {
+        codec = "dir";
+        ledger = "materialize/x.manifest";
+        lock = "settings.lock";
+        path = "settings";
+        units."unit.txt".text = "x";
+      }
+    ];
     dotPrefixedAddress.targets = [
       {
         codec = "dir";
@@ -232,6 +258,15 @@
         }
       ];
     };
+    traversingLock.targets = [
+      {
+        codec = "json";
+        ledger = "json-settings/x.json";
+        lock = "../outside.lock";
+        path = "settings.json";
+        units.text = "{}";
+      }
+    ];
     traversingAddress.targets = [
       {
         codec = "dir";
@@ -299,7 +334,7 @@
       }
       // overrides);
 
-  passed = assert lib.assertMsg (accepted kiroMcp && accepted claudeUnpin && accepted steeringRetirement && accepted mergeMode)
+  passed = assert lib.assertMsg (accepted kiroMcp && accepted claudeUnpin && accepted steeringRetirement && accepted mergeMode && accepted lockedDocument)
   "ai.own: a design §8 call shape was rejected";
   assert lib.assertMsg (accepted (devenvHooks false) && accepted (devenvHooks true))
   "ai.own: the devenv call shape was rejected";
@@ -358,12 +393,14 @@
     # own.py ever imposes on a file it did not create.
     && (builtins.head mergeMode.plan.targets).units.mode == "0600"
     && !((builtins.head claudeUnpin.plan.targets).units ? mode)
+    # The native lock is plan data on the TARGET, where own.py reads it.
+    && (builtins.head lockedDocument.plan.targets).lock == ".config/kimchi/harness/trust.json.lock"
   ) "ai.own: the plan is no longer eval-visible data";
   assert lib.assertMsg (lib.all (name: rejected (refuse refusals.${name})) (builtins.attrNames refusals))
   "ai.own: a malformed bundle was accepted: ${lib.concatStringsSep ", " (lib.filter (name: accepted (refuse refusals.${name})) (builtins.attrNames refusals))}"; true;
 in {
   checks.ai-own-eval = assert passed;
     pkgs.runCommandLocal "ai-own-eval-check" {} ''
-      echo 'PASS: ai.own accepted 6 call shapes and refused ${toString (builtins.length (builtins.attrNames refusals))} malformed bundles' > "$out"
+      echo 'PASS: ai.own accepted 7 call shapes and refused ${toString (builtins.length (builtins.attrNames refusals))} malformed bundles' > "$out"
     '';
 }

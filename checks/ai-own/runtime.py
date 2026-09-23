@@ -944,12 +944,14 @@ def rejections(fixture):
         ]}),
         ("two content tags", {"targets": [dir_target({"unit": {"store": "/dev/null", "text": "x"}})]}),
         ("missing field", {"targets": [{"codec": "dir", "path": "settings", "units": {}}]}),
+        ("directory lock", {"targets": [{**dir_target({"unit": {"text": "x"}}), "lock": "settings.lock"}]}),
+        ("traversing lock", {"targets": [{**doc_target({"text": "{}"}), "lock": "../outside.lock"}]}),
     ):
         result = fixture.own(plan, succeeds=False)
         assert result.stderr.startswith("own: "), (arguments, result.stderr)
         assert list(fixture.root.iterdir()) == [], (arguments, "a rejected plan touched the root")
         assert not fixture.state.exists(), (arguments, "a rejected plan created state")
-    print("PASS rejections: nine malformed plans refused before any container opened")
+    print("PASS rejections: eleven malformed plans refused before any container opened")
 
 
 CASES = {
