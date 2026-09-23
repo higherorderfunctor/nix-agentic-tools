@@ -214,6 +214,32 @@ in {
         && !(result.config.files ? ".config/kimchi/harness/settings.json")
     );
 
+    # Kimchi persists the normalized values unchanged at pi's
+    # `defaultThinkingLevel`. Cover both writers and prove a consumer-authored
+    # native value wins over the derived mkDefault.
+    module-kimchi-normalized-reasoning-effort = mkTest "kimchi-normalized-reasoning-effort" (
+      let
+        config.ai = {
+          kimchi.enable = true;
+          settings.reasoningEffort = "high";
+        };
+        overridden = evalDevenv {
+          ai = {
+            kimchi = {
+              enable = true;
+              harnessSettings.defaultThinkingLevel = "low";
+            };
+            settings.reasoningEffort = "high";
+          };
+        };
+      in
+        (hmHarnessDocument (evalHm config)).value.defaultThinkingLevel
+        or null
+        == "high"
+        && (projectHarnessDocument (evalDevenv config)).value.defaultThinkingLevel or null == "high"
+        && (projectHarnessDocument overridden).value.defaultThinkingLevel or null == "low"
+    );
+
     module-kimchi-devenv-project-paths = mkTest "kimchi-devenv-project-paths" (
       let
         result = evalDevenv {
