@@ -1172,8 +1172,8 @@ path types".
 > delivery matrix is generated from the layer with Kimchi's off-layer files
 > hand-authored. Normalized pools carry only a text-source record's winning arm.
 > Claude's devenv rules and Codex's execpolicy rules are read-only copies whose
-> writers survive a disable. Native file settings live under
-> `ai.<runtime>.native`.
+> writers survive a disable. Copilot reconciles settings.json on HM only. Native
+> file settings live under `ai.<runtime>.native`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1280,17 +1280,20 @@ path types".
   host-directory materializer through a command writer named
   `ai:codex:materialize-profiles`. The materializer still owns its
   Git-common-directory manifest and lock.
-- **Shared documents reconcile on both backends.** Copilot settings and Kiro's
-  cli.json state `facts.harnessWrites = true` and declare writers
-  unconditionally while enabled. The adapter runs the same bundle on HM
-  activation or devenv shell entry. Backend-keyed `entry` preserves HM names
-  while giving devenv its required namespace, such as
-  `ai:copilot:settings-merge`. Devenv uses `$DEVENV_ROOT` and
-  `$DEVENV_STATE/nix-agentic-tools`, with verification in `enterTest`. Empty
-  declarations retain their writers so prior leaves can be retracted. Existing
-  file modes and unowned leaves survive; a new file is 0600. This does not
-  change existing project-discovery limitations. Codex's project config remains
-  a static source because its native writer is user-scoped.
+- **Shared documents reconcile where the CLI writes them.** Kiro's cli.json
+  states `facts.harnessWrites = true` and declares its writer unconditionally
+  while enabled. The adapter runs the same bundle on HM activation or devenv
+  shell entry. Backend-keyed `entry` preserves HM names while giving devenv its
+  required namespace, such as `ai:kiro:settings-merge`. Devenv uses
+  `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
+  `enterTest`. Empty declarations retain their writers so prior leaves can be
+  retracted. Existing file modes and unowned leaves survive; a new file is 0600.
+  The fact is per backend when the CLI writes only one copy. Copilot's
+  settings.json is `{devenv = false; hm = true;}` with an HM-only writer:
+  Copilot never opens the project copy, so a devenv reconciler would maintain
+  bytes nothing reads, and the delivery warning covers the consumer instead.
+  Codex's project config remains a static source because its native writer is
+  user-scoped.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON/TOML ledger, even without a
