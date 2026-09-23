@@ -650,7 +650,7 @@
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths |
     | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex) | Same |
-    | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
+    | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi) | Same; project-native paths |
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
     | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Same; Codex has no native LSP registry |
     | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
@@ -666,6 +666,7 @@
     | Kimchi settings | `.kimchi/config.json` | Requires project trust and launch from the devenv root |
     | Skills | `.kimchi/skills` | Requires project trust; nearest ancestor wins, but the wrapper remains root-only |
     | Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust and launch from the devenv root; user-scope-only keys are rejected during evaluation |
+    | Agents | `.kimchi/agents/<name>.md` | Requires project trust and launch from the devenv root; each file is an owned, writable copy that Kimchi's /agents commands may edit until the next shell entry restores it |
     | Hooks | `.kimchi/hooks.json` | Requires project trust and launch from the devenv root; PermissionRequest is not a Kimchi event and is left out with a warning. Home Manager has no user-scope hook file and warns |
 
     devenv rejects Kimchi's user-scope-only harness settings:
@@ -676,8 +677,8 @@
     `harness/settings.json` and `mcp.json` by owned leaf because Kimchi writes
     them at runtime.
 
-    Project settings, MCP servers, harness settings, and hooks resolve under the
-    exact working directory. The devenv wrapper rejects descendant launches
+    Project settings, MCP servers, harness settings, agents, and hooks resolve
+    under the exact working directory. The devenv wrapper rejects descendant launches
     instead of silently missing them. Context and skills walk ancestors, so a
     devenv that declares none of the exact-cwd files leaves the launch directory
     unrestricted.

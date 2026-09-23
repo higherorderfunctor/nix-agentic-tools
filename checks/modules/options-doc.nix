@@ -85,6 +85,8 @@
       "ai.skillsDir"
     ];
     sharedDescriptionsThatMustDiscussKimchi = [
+      "ai.agents"
+      "ai.agentsDir"
       "ai.context"
       "ai.hooks"
       "ai.mcpServers"
