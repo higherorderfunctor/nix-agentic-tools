@@ -254,6 +254,13 @@
       );
     ledgerFor = name: path: "json-settings/kimchi-${name}-${ledgerIdentity path}.json";
     agentsLedger = "materialize/kimchi-agents-${ledgerIdentity agentsDir}.manifest";
+    # pi 0.85.1's ProjectTrustStore reads `<agentDir>/trust.json`
+    # (dist/core/trust-manager.js), and Kimchi pins agentDir to the harness
+    # directory (src/entry.ts:46-47), so the file follows configDir exactly as
+    # harness settings do. User scope only: pi reads trust from the global
+    # store so that a project cannot trust itself.
+    projectTrustPath = "${harness}/trust.json";
+    relativeTrustKeys = builtins.filter (key: !(lib.hasPrefix "/" key)) (builtins.attrNames cfg.projectTrust);
     # A semantic record's `tools` names Claude/Copilot tools (`Read`), while
     # Kimchi compares its own lowercase builtins exactly
     # (src/extensions/agents/personas/agent-types.ts:12). Dropping the list
@@ -278,16 +285,20 @@
       entry,
       ledger,
       path,
-      value,
+      value ? null,
+      run ? null,
     }: {
       ai.kimchi.files.${path} = {
         inherit entry ledger;
-        # `value` IS the content form for this entry, so the text/source form
-        # must be off: an entry may enable exactly one.
-        content = {
-          enable = false;
-          inherit value;
-        };
+        # `value` or `run` IS the content form for this entry, so the
+        # text/source form must be off: an entry may enable exactly one.
+        content =
+          {enable = false;}
+          // (
+            if run != null
+            then {inherit run;}
+            else {inherit value;}
+          );
         facts.harnessWrites = true;
         format = "json";
       };
@@ -319,6 +330,19 @@
               message = "ai.agents ${lib.concatStringsSep ", " rootMarkdownAgents} are Markdown written for Claude/Copilot, which Kimchi misreads (`name:` ignored, `model:` taken as a Kimchi model id, `tools:` matched against its lowercase builtins). Set ai.kimchi.agents.<name> to native Kimchi Markdown, a portable { description, instructions } record, or null.";
             }
           ]
+          ++ lib.optional (!isDevenv) {
+            assertion = relativeTrustKeys == [];
+            message = "ai.kimchi.projectTrust keys must be absolute paths; Kimchi looks trust up by the realpath of the working directory, so ${lib.concatStringsSep ", " relativeTrustKeys} could never match.";
+          }
+          # Explicit exclusion, not a silent no-op: trust.json lives only under
+          # the user's HOME and devenv writes only inside the project.
+          ++ lib.optional isDevenv {
+            assertion = cfg.projectTrust == {};
+            message = ''
+              ai.kimchi.projectTrust is user scope: Kimchi reads project trust only from ~/.config/kimchi/harness/trust.json, so that a project cannot trust itself, and devenv writes only inside the project.
+              Under devenv, either set with HM, or configure inside the harness so it writes to user global (answer Kimchi's trust prompt, which persists the decision there).
+            '';
+          }
           ++ lib.optional isDevenv {
             assertion = userScopeOnlyHarnessSettings == [];
             message = ''
@@ -435,6 +459,36 @@
         path = permissionsPath;
         value = aiCommon.filterNulls cfg.permissions;
       })
+
+      # trust.json — Kimchi's trust prompt rewrites it with writeFileSync
+      # (setMany → writeTrustFile, dist/core/trust-manager.js), so declared
+      # decisions are owned by leaf like the documents above and the ones a
+      # user answers interactively survive. The renderer canonicalizes each
+      # key when the writer runs (see project-trust.py), which is why this
+      # document declares `run` rather than `value`. Declared even when empty,
+      # so removing the last entry retracts it. Home Manager only: devenv
+      # rejects the option in the assertions above.
+      (lib.mkIf (!isDevenv) (lib.mkMerge [
+        {
+          ai.kimchi.activation.kimchiProjectTrustMerge = {
+            entry = "kimchiProjectTrustMerge";
+            ledgers.${ledgerFor "project-trust" projectTrustPath} = {
+              codec = "json";
+              path = projectTrustPath;
+            };
+          };
+        }
+        (document {
+          entry = "kimchiProjectTrustMerge";
+          ledger = ledgerFor "project-trust" projectTrustPath;
+          path = projectTrustPath;
+          run = ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            exec ${pkgs.python3}/bin/python3 ${./project-trust.py} ${pkgs.writeText "kimchi-project-trust.json" (builtins.toJSON cfg.projectTrust)}
+          '';
+        })
+      ]))
 
       # User harness context stays runtime-owned. Project context joins the one
       # shared repository AGENTS.md owner used by Codex and Kiro.
@@ -603,6 +657,27 @@ in
           `allow` or `deny` is dropped at the next activation or shell entry.
           `allow` and `deny` concatenate across user and project files; for
           the scalars the project value wins.
+        '';
+      };
+
+      projectTrust = lib.mkOption {
+        type = lib.types.attrsOf lib.types.bool;
+        default = {};
+        example = {
+          "/home/me/src" = true;
+          "/home/me/src/untrusted-fork" = false;
+        };
+        description = ''
+          Project trust decisions keyed by absolute directory, mirroring
+          Kimchi's `trust.json`. Kimchi uses the nearest decision at or above
+          the working directory, so one entry covers every project below it
+          and `false` denies a subtree. This is how an ACP session, which
+          ignores `--approve`, trusts a project without the global
+          `harnessSettings.defaultProjectTrust = "always"`. Home Manager
+          reconciles `<configDir>/harness/trust.json`, resolving each key
+          through symlinks when activation runs because Kimchi matches the
+          realpath; decisions answered at Kimchi's trust prompt are unowned
+          and survive. Devenv rejects this option: trust is user scope.
         '';
       };
 
