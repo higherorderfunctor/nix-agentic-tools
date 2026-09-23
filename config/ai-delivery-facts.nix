@@ -218,6 +218,8 @@
     then probe ["ai" "codex" "native" "settings" "permissions"] {probe.network.enabled = false;} {}
     else if row.surface == "rules" && row.ecosystem == "claude"
     then probe ["ai" "rules"] {probe.text = "probe";} {}
+    else if row.ecosystem == "codex" && row.surface == "rules" && lib.hasInfix "/rules/" row.target
+    then probe ["ai" "codex" "execpolicyRules"] {probe = "prefix_rule(pattern = [\"probe\"], decision = \"allow\")";} {}
     else if row.ecosystem == "claude"
     then probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}
     else if row.ecosystem == "kimchi"
