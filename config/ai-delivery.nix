@@ -138,7 +138,7 @@
   mcpProbe = ecosystem: probe ["ai" ecosystem "mcpServers"] {probe.command = "true";} {};
   settingsProbe = ecosystem: probe ["ai" ecosystem "nativeSettings"] {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
-  kiroManaged = pruneTrigger: mode: name: target: declaration: {
+  managed = pruneTrigger: mode: name: target: declaration: {
     inherit pruneTrigger target;
     primitive = "ownPathManaged";
     writerAttr =
@@ -149,7 +149,7 @@
   };
   kiroMcp = mode: let
     primary =
-      kiroManaged (ownFiles (retractionMoment mode)) mode (
+      managed (ownFiles (retractionMoment mode)) mode (
         if mode == "hm"
         then "kiroMcpJson"
         else "ai:kiro:materialize-mcp"
@@ -180,28 +180,48 @@
             role = "Retire merge leaves and prune retired whole paths before the write phase.";
           });
     };
-  kiroHooks = mode: let
+  # A writer owning a directory of whole files. Home Manager runs it as two
+  # entries — the prune phase before checkLinkTargets, the write phase after
+  # linkGeneration — and both must survive an empty declaration.
+  managedDir = {
+    devenvEntry,
+    hmEntry,
+    hmPruneEntry,
+    path,
+    probe,
+  }: mode: let
     primary =
-      kiroManaged (ownFiles (retractionMoment mode)) mode (
+      managed (ownFiles (retractionMoment mode)) mode (
         if mode == "hm"
-        then "materialize-kiro-hooks-write"
-        else "ai:kiro:materialize-hooks"
+        then hmEntry
+        else devenvEntry
       )
       "${
         if mode == "hm"
         then "$HOME"
         else "$DEVENV_ROOT"
-      }/.kiro/hooks/<name>.json"
-      hookProbe;
+      }/${
+        if lib.isAttrs path
+        then path.${mode}
+        else path
+      }"
+      probe;
   in
     primary
     // {
       additionalWriters = lib.optional (mode == "hm") (primary
         // {
-          writerAttr = ["home" "activation" "materialize-kiro-hooks-prune"];
+          writerAttr = ["home" "activation" hmPruneEntry];
           role = "Prune phase must survive an empty declaration as well as the write phase.";
         });
     };
+  kiroHooks = managedDir {
+    devenvEntry = "ai:kiro:materialize-hooks";
+    hmEntry = "materialize-kiro-hooks-write";
+    hmPruneEntry = "materialize-kiro-hooks-prune";
+    path = ".kiro/hooks/<name>.json";
+    probe = hookProbe;
+  };
   codexConfig = leaves ownRetraction "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
   copilotInert = "Factory documents this project file as undelivered: Copilot offers no flag or discovery for it. Presence is not proof of application consumption.";
 
@@ -216,7 +236,22 @@
       };
       codex = paths ".codex/agents/<name>.toml" ".codex/agents/<name>.toml";
       copilot = paths ".copilot/agents/<name>.md" ".github/agents/<name>.agent.md";
-      kimchi = both (absent "Kimchi's supportedPools excludes agents and no native agent writer exists.");
+      # Owned, writable copies: Kimchi's /agents commands rewrite them in place.
+      kimchi = lib.genAttrs modes (managedDir {
+        devenvEntry = "ai:kimchi:agents";
+        hmEntry = "kimchiAgents";
+        hmPruneEntry = "kimchiAgentsPrune";
+        path = {
+          devenv = ".kimchi/agents/<name>.md";
+          hm = ".config/kimchi/harness/agents/<name>.md";
+        };
+        probe = probe ["ai" "kimchi" "agents"] {
+          probe = {
+            description = "probe";
+            instructions.text = "probe";
+          };
+        } {};
+      });
       kiro = paths ".kiro/agents/<name>.json" ".kiro/agents/<name>.json";
     };
     context = {
@@ -236,7 +271,7 @@
         // {
           additionalWriters = let
             retirement = name: role:
-              (kiroManaged (ownFiles (retractionMoment mode)) mode name
+              (managed (ownFiles (retractionMoment mode)) mode name
                 "${
                   if mode == "hm"
                   then "$HOME"

@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest ownedDocument;
+  inherit (harness) evalDevenv evalHm mkTest ownPlan ownedDocument;
   kimchiDocument = path: ownedDocument "kimchi" path;
   hmConfigDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/config.json" evaluated;
   hmHarnessDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated;
@@ -44,6 +44,35 @@
         };
       }
       extraConfig)).config.packages;
+
+  # Agents: one portable record from the root pool and one Kimchi-native
+  # Markdown file from the runtime pool, on both backends.
+  nativeAgent = ''
+    ---
+    description: native
+    tools: read, grep
+    ---
+
+    NATIVE
+  '';
+  agentConfig.ai = {
+    agents.reviewer = {
+      description = "Reviews code";
+      instructions.text = "BODY";
+    };
+    kimchi = {
+      enable = true;
+      agents.native = nativeAgent;
+    };
+  };
+  # The units one agents writer owns, read from the plan it applies.
+  agentUnits = entry: dir: evaluated:
+    (lib.head (lib.filter (target: target.codec == "dir" && target.path == dir)
+        (ownPlan "kimchi" entry evaluated).targets))
+    .units;
+  hmAgentUnits = agentUnits "kimchiAgents" ".config/kimchi/harness/agents";
+  devenvAgentUnits = agentUnits "ai:kimchi:agents" ".kimchi/agents";
+  failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
 
   checkModuleAssertions = evaluated: let
     failed = builtins.filter (entry: !entry.assertion) evaluated.config.assertions;
@@ -440,6 +469,151 @@ in {
         && (evalHm {ai.kimchi.enable = true;}).config.warnings == []
     );
 
+    # Kimchi reads `<agentDir>/agents/*.md` and a trusted project's
+    # `.kimchi/agents/*.md`, and its /agents commands write both in place
+    # (src/extensions/agents/index.ts:2556-2874). So each agent is an OWNED,
+    # WRITABLE real file in a real directory, never a store symlink: no
+    # home.file or devenv files entry, a dir ledger, mode 0644. A portable
+    # record renders without `name:` (the filename is the name); native
+    # Markdown lands verbatim. An empty declaration still emits the writer, so
+    # removing the last agent retracts it.
+    module-kimchi-agents = mkTest "kimchi-agents" (
+      let
+        hm = evalHm agentConfig;
+        devenv = evalDevenv agentConfig;
+        expected = {
+          "native.md" = {
+            mode = "0644";
+            text = nativeAgent;
+          };
+          "reviewer.md" = {
+            mode = "0644";
+            text = "---\ndescription: \"Reviews code\"\n---\n\nBODY\n";
+          };
+        };
+        emptyHm = evalHm {ai.kimchi.enable = true;};
+        emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
+        fromDir = evalDevenv {
+          ai.kimchi = {
+            enable = true;
+            agentsDir = ../../claude-code/checks/fixtures/claude-agents;
+          };
+        };
+        underAgents = prefix: lib.filter (lib.hasPrefix prefix);
+      in
+        hmAgentUnits hm
+        == expected
+        && devenvAgentUnits devenv == expected
+        && failedAssertions hm == []
+        && failedAssertions devenv == []
+        && hm.config.home.activation ? kimchiAgents
+        && hm.config.home.activation ? kimchiAgentsPrune
+        && devenv.config.tasks ? "ai:kimchi:agents"
+        && underAgents ".config/kimchi/harness/agents" (builtins.attrNames hm.config.home.file) == []
+        && underAgents ".kimchi/agents" (builtins.attrNames devenv.config.files) == []
+        && hmAgentUnits emptyHm == {}
+        && devenvAgentUnits emptyDevenv == {}
+        && (devenvAgentUnits fromDir)."agent-one.md".store == ../../claude-code/checks/fixtures/claude-agents/agent-one.md
+    );
+
+    # What has no Kimchi reading fails evaluation instead of landing: a
+    # record's Claude/Copilot `tools` list, and root Markdown written for
+    # Claude/Copilot. A null or a Kimchi-native value under ai.kimchi.agents is
+    # the remedy each message names, and it clears the failure.
+    module-kimchi-agents-rejected = mkTest "kimchi-agents-rejected" (
+      let
+        failures = evaluate: agents: kimchiAgents:
+          failedAssertions (evaluate {
+            ai = {
+              inherit agents;
+              kimchi = {
+                enable = true;
+                agents = kimchiAgents;
+              };
+            };
+          });
+        withTools = {
+          description = "d";
+          instructions.text = "BODY";
+          tools = ["Read"];
+        };
+        claudeMarkdown = "---\nname: probe\nmodel: sonnet\n---\n\nBODY\n";
+        says = needle: lib.any (lib.hasInfix needle);
+      in
+        lib.all (evaluate:
+          says "carry a `tools` allowlist" (failures evaluate {probe = withTools;} {})
+          && says "carry a `tools` allowlist" (failures evaluate {} {probe = withTools;})
+          && says "Markdown written for Claude/Copilot" (failures evaluate {probe = claudeMarkdown;} {})
+          && failures evaluate {probe = claudeMarkdown;} {probe = null;} == []
+          && failures evaluate {probe = claudeMarkdown;} {probe = nativeAgent;} == []
+          && failures evaluate {probe = withTools // {tools = [];};} {} == [])
+        [evalHm evalDevenv]
+    );
+
+    # The delivery itself, executed: the real HM prune and write entries and
+    # the real devenv task, against scratch roots. A Kimchi edit (Edit and
+    # Disable overwrite the file in place) must SUCCEED, the next run must back
+    # it up and restore the declaration, a file Kimchi created beside it must
+    # survive, and an empty declaration must remove only the owned file.
+    module-kimchi-agents-runtime = let
+      script = backend: evaluated:
+        pkgs.writeShellScript "kimchi-agents-${backend}" ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${
+            if backend == "hm"
+            then evaluated.config.home.activation.kimchiAgentsPrune.text + "\n" + evaluated.config.home.activation.kimchiAgents.text
+            else evaluated.config.tasks."ai:kimchi:agents".exec
+          }
+        '';
+      run = backend: let
+        evaluate =
+          if backend == "hm"
+          then evalHm
+          else evalDevenv;
+        dir =
+          if backend == "hm"
+          then ".config/kimchi/harness/agents"
+          else ".kimchi/agents";
+        declared = script backend (evaluate agentConfig);
+        empty = script backend (evaluate {ai.kimchi.enable = true;});
+        expected = pkgs.writeText "kimchi-reviewer.md" (hmAgentUnits (evalHm agentConfig))."reviewer.md".text;
+      in ''
+        export HOME="$TMPDIR/${backend}-home"
+        export XDG_STATE_HOME="$TMPDIR/${backend}-state"
+        export DEVENV_ROOT="$HOME"
+        export DEVENV_STATE="$XDG_STATE_HOME"
+        mkdir -p "$HOME"
+        agent="$HOME/${dir}/reviewer.md"
+
+        ${declared}
+        [ -f "$agent" ] && [ ! -L "$agent" ] || fail '${backend}: agent is not a real file'
+        [ ! -L "$HOME/${dir}" ] || fail '${backend}: agents directory is a symlink'
+        [ "$(stat -c %a "$agent")" = 644 ] || fail '${backend}: agent is not writable'
+        cmp ${expected} "$agent" || fail '${backend}: agent content'
+
+        # Kimchi's /agents Disable and Edit, and a Create beside it.
+        printf -- '---\nenabled: false\n' > "$agent" || fail '${backend}: an in-place edit was refused'
+        printf 'created\n' > "$HOME/${dir}/created.md"
+
+        ${declared}
+        cmp ${expected} "$agent" || fail '${backend}: the declaration was not restored'
+        ls "$XDG_STATE_HOME"/nix-agentic-tools/materialize/kimchi-agents-*.bak/reviewer.md.* >/dev/null \
+          || fail '${backend}: the edit was not backed up'
+        [ "$(cat "$HOME/${dir}/created.md")" = created ] || fail '${backend}: a Kimchi-created agent changed'
+
+        ${empty}
+        [ ! -e "$agent" ] || fail '${backend}: an empty declaration kept the agent'
+        [ "$(cat "$HOME/${dir}/created.md")" = created ] || fail '${backend}: retraction touched an unowned agent'
+      '';
+    in
+      pkgs.runCommand "module-test-kimchi-agents-runtime" {} ''
+        fail() { echo "FAIL: kimchi-agents-runtime: $1" >&2; exit 1; }
+        ${run "hm"}
+        ${run "devenv"}
+        echo PASS > "$out"
+      '';
+
     module-kimchi-devenv-exact-cwd-guard = let
       guardedPackages = [
         (mkDevenvKimchiPackage {
@@ -456,6 +630,9 @@ in {
         })
         (mkDevenvKimchiPackage {
           ai.hooks.PreToolUse = [{hooks = [{command = "true";}];}];
+        })
+        (mkDevenvKimchiPackage {
+          ai.kimchi.agents.native = nativeAgent;
         })
       ];
       # Nothing exact-cwd is declared, so nothing is missed from a

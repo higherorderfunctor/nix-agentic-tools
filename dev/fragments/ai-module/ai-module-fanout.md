@@ -1,9 +1,9 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — portable hooks also reach Kimchi's project
-> `hooks.json` on devenv; reasoning effort lowers to Claude, Codex, and Kimchi;
-> authored prose and final delivery share one priority-aware text-source record
-> with enable semantics.
+> **Last verified:** 2026-09-23 — portable agents reach Kimchi as owned writable
+> copies and portable hooks reach its project `hooks.json` on devenv; reasoning
+> effort lowers to Claude, Codex, and Kimchi; authored prose and final delivery
+> share one priority-aware text-source record with enable semantics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -291,7 +291,14 @@ enabled ecosystem whose native model preserves the option's semantics):
   `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
   `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
   capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
-  table, not a pass-through. Add one and the exclusion can be revisited.
+  table, not a pass-through. Add one and the exclusion can be revisited. Kimchi
+  takes semantic records as frontmatter plus body with no `name:`, and rejects a
+  non-empty `tools` (its lowercase builtin names differ) and root Markdown (it
+  misreads Claude's `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries
+  Kimchi-native Markdown. Its files are the one Markdown surface a harness
+  rewrites (the /agents commands), so they state `method = "copy-ro"` with
+  `mode = "0644"`: `shared` needs a leaf container and a symlink or read-only
+  copy would refuse the write.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex

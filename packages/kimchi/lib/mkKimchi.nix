@@ -16,6 +16,7 @@
 }: let
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+  dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   userScopeOnlyHarnessSettingKeys = import ./user-scope-only-harness-settings.nix;
@@ -162,6 +163,7 @@
   kimchiDevenvInstallPackage = {
     cfg,
     config,
+    mergedAgents,
     mergedContext,
     mergedEnvironmentVariables,
     mergedServers,
@@ -174,6 +176,7 @@
       != {}
       || aiCommon.filterNulls cfg.harnessSettings != {}
       || mergedServers != {}
+      || mergedAgents != {}
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
@@ -189,7 +192,9 @@
   # consumer facts below.
   kimchiDelivery = backend: {
     cfg,
+    config,
     hasMergedContext,
+    mergedAgents,
     mergedContext,
     mergedEnvironmentVariables,
     mergedServers,
@@ -219,6 +224,12 @@
       if isDevenv
       then ".kimchi"
       else harness;
+    # Kimchi 1.1.30 loads `<agentDir>/agents/*.md` and a trusted project's
+    # `.kimchi/agents/*.md` (src/extensions/agents/personas/custom-agents.ts:21-35).
+    agentsDir =
+      if isDevenv
+      then ".kimchi/agents"
+      else "${harness}/agents";
     unknownModelRoles = lib.subtractLists modelRoleNames (builtins.attrNames cfg.harnessSettings.modelRoles);
     listedSingleModelRoles = builtins.filter (role: builtins.isList (cfg.harnessSettings.modelRoles.${role} or null)) singleModelRoles;
     userScopeOnlyHarnessSettings = lib.intersectLists userScopeOnlyHarnessSettingKeys (builtins.attrNames filteredHarnessSettings);
@@ -226,11 +237,26 @@
     # upgrade contract: keep hashing configDir so a new generation retracts
     # leaves owned before this port. Devenv has no prior Kimchi reconciliation
     # ledger and keys its new ownership records by the actual project path.
-    ledgerFor = name: path: "json-settings/kimchi-${name}-${builtins.hashString "sha256" (
-      if isDevenv
-      then path
-      else cfg.configDir
-    )}.json";
+    ledgerIdentity = path:
+      builtins.hashString "sha256" (
+        if isDevenv
+        then path
+        else cfg.configDir
+      );
+    ledgerFor = name: path: "json-settings/kimchi-${name}-${ledgerIdentity path}.json";
+    agentsLedger = "materialize/kimchi-agents-${ledgerIdentity agentsDir}.manifest";
+    # A semantic record's `tools` names Claude/Copilot tools (`Read`), while
+    # Kimchi compares its own lowercase builtins exactly
+    # (src/extensions/agents/personas/agent-types.ts:12). Dropping the list
+    # would widen the agent to every tool, and translating it would fail
+    # silently on the first unmatched name, so the record is rejected instead.
+    toolAgents = builtins.attrNames (lib.filterAttrs (_: value: lib.ai.agent.isSemantic value && (value.tools or null) != null && value.tools != []) mergedAgents);
+    # Root Markdown is written for Claude and Copilot. Kimchi reads the same
+    # file differently: `name:` is ignored, `model: sonnet` becomes a Kimchi
+    # model id, and `tools:` is matched against its lowercase builtins
+    # (custom-agents.ts:52-85,125-132). Only a portable record crosses over;
+    # Markdown under ai.kimchi.agents is Kimchi's own.
+    rootMarkdownAgents = builtins.attrNames (lib.filterAttrs (name: value: value != null && !(lib.ai.agent.isSemantic value) && !(cfg.agents ? ${name})) config.ai.agents);
     # Kimchi rewrites all three of its JSON documents while it runs —
     # `/multi-model` and `kimchi resources` write `harness/settings.json`, and
     # MCP edits rename a temporary over `mcp.json` (see below) — so the only
@@ -274,6 +300,16 @@
               message = "ai.kimchi.harnessSettings.modelRoles.${lib.concatStringsSep ", " listedSingleModelRoles} must be a single provider/model string; Kimchi ignores a list there.";
             }
           ]
+          ++ [
+            {
+              assertion = toolAgents == [];
+              message = "ai.kimchi agents ${lib.concatStringsSep ", " toolAgents} carry a `tools` allowlist in Claude/Copilot tool names, which Kimchi does not read (it matches its lowercase builtins read, bash, edit, write, grep, find, ls exactly). Set ai.kimchi.agents.<name> to native Kimchi Markdown with its own `tools:` line, or to null.";
+            }
+            {
+              assertion = rootMarkdownAgents == [];
+              message = "ai.agents ${lib.concatStringsSep ", " rootMarkdownAgents} are Markdown written for Claude/Copilot, which Kimchi misreads (`name:` ignored, `model:` taken as a Kimchi model id, `tools:` matched against its lowercase builtins). Set ai.kimchi.agents.<name> to native Kimchi Markdown, a portable { description, instructions } record, or null.";
+            }
+          ]
           ++ lib.optional isDevenv {
             assertion = userScopeOnlyHarnessSettings == [];
             message = ''
@@ -313,6 +349,19 @@
               codec = "json";
               path = mcpPath;
             };
+          };
+          # A directory of whole files; Home Manager needs the second entry
+          # that deletes a retired real file before checkLinkTargets.
+          kimchiAgents = {
+            entry = {
+              devenv = "ai:kimchi:agents";
+              hm = "kimchiAgents";
+            };
+            ledgers.${agentsLedger} = {
+              codec = "dir";
+              path = agentsDir;
+            };
+            pruneEntry = "kimchiAgentsPrune";
           };
         };
       }
@@ -372,6 +421,37 @@
         }
       ))
 
+      # agents/<name>.md — one real file per agent, in a real directory.
+      # Kimchi's /agents Edit, Disable and Enable writeFileSync the file in
+      # place, and Create and Eject write new ones beside it
+      # (src/extensions/agents/index.ts:2556-2874). A store symlink, or the
+      # layer's default read-only copy, would turn each of those into
+      # EROFS/EACCES. The rule's harness-writes answer, `shared`, owns leaves
+      # inside a JSON or TOML document and Markdown has none, so the method is
+      # stated per file: an owned copy the user can write. The next activation
+      # backs an edited file up and restores the declaration; a file Kimchi
+      # created is an unowned sibling and is never touched.
+      (lib.mkIf (cfg.agentsDir != null) {
+        ai.kimchi.agents = lib.mapAttrs (_: lib.mkDefault) (dirHelpers.agentsFromDir cfg.agentsDir);
+      })
+      {
+        ai.kimchi.files = lib.mapAttrs' (name: value: let
+          rendered = lib.ai.agent.renderKimchi name value;
+        in
+          lib.nameValuePair "${agentsDir}/${name}.md" {
+            content = lib.mkDefault (
+              if builtins.isPath rendered
+              then {source = rendered;}
+              else {text = rendered;}
+            );
+            entry = "kimchiAgents";
+            ledger = agentsLedger;
+            method = lib.mkDefault "copy-ro";
+            mode = lib.mkDefault "0644";
+          })
+        mergedAgents;
+      }
+
       # .kimchi/hooks.json — devenv only, because Kimchi reads lifecycle hooks
       # from a trusted project's .kimchi/ and has no user-scope file
       # (src/extensions/kimchi-hooks/definition.ts:25-37). Kimchi never writes
@@ -410,6 +490,7 @@ in
       compatibly. Devenv always writes project-root `AGENTS.md`.
     '';
     supportedPools = [
+      "agents"
       "context"
       "environmentVariables"
       "hooks"
@@ -423,6 +504,29 @@ in
       outputPath = null;
     };
     options = {
+      agents = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.nullOr lib.ai.agent.agentType);
+        default = {};
+        description = ''
+          Kimchi agents, one `<name>.md` each: Home Manager writes
+          `<configDir>/harness/agents/`, devenv a trusted project's
+          `.kimchi/agents/`. A portable `{ description, instructions }` record
+          renders to Kimchi frontmatter plus body; Markdown here is Kimchi's
+          own and lands verbatim. Entries replace root `ai.agents` at the same
+          key and null suppresses one. Root Markdown and a record's
+          Claude/Copilot `tools` list have no Kimchi reading and fail
+          evaluation, naming this option as the remedy. Each file is a real,
+          writable copy so Kimchi's /agents commands can edit it; the next
+          activation backs such an edit up and restores the declaration.
+        '';
+      };
+
+      agentsDir = lib.mkOption {
+        type = lib.types.nullOr aiCommon.dirOptionType;
+        default = null;
+        description = "Directory of Kimchi-native `.md` agent files, expanded into `ai.kimchi.agents` keyed by basename minus `.md`.";
+      };
+
       configDir = lib.mkOption {
         type = lib.types.str;
         default = ".config/kimchi";
