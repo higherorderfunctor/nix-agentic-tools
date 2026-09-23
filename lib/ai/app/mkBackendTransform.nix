@@ -14,7 +14,7 @@
 # even though both run the SAME merge code. Unifying on the fuller
 # text makes the devenv option docs correct rather than terse.
 #
-# Input record shape (from mkAiApp):
+# Input record shape (from mkRuntime):
 #   {
 #     name;
 #     transformers;
@@ -60,7 +60,7 @@
   # it in this function's formals makes the module system resolve it via
   # `_module.args`, which requires `config` and deadlocks against any
   # factory whose options use `pkgs.formats.json` as a freeform type —
-  # see the note on `pkgs` in mkAiApp.nix.
+  # see the note on `pkgs` in mkRuntime.nix.
   mcpProxy = import ../mcpProxy.nix {
     inherit lib;
     inherit (appRecord) pkgs;

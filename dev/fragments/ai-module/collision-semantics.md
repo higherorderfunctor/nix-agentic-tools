@@ -1,8 +1,10 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-21 — rules and context use entry-local `enable`
-> suppression, and Semble's CLI rule uses text-source priority arbitration.
-> Delivery entries default `content` alone; `null` absorbs at equal priority.
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Rules and context use
+> entry-local `enable` suppression, and Semble's CLI rule uses text-source
+> priority arbitration. Delivery entries default `content` alone; `null` absorbs
+> at equal priority.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -104,7 +106,7 @@ claim the same managed-proxy identity. A top-level owner inherited by no enabled
 capable runtime is not materialized. The shared owner aggregator dynamically
 discovers every runtime option subtree carrying the internal normalized-MCP
 capability marker. Do not infer capability from the `mcpServers` name alone: the
-generic public `mkAiApp` factory permits an unrelated same-named native option
+generic public `mkRuntime` factory permits an unrelated same-named native option
 when the normalized pool is unsupported.
 
 ### Package ownership rule

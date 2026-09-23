@@ -1,9 +1,9 @@
-# SECTION_SCHEMA: Typed per-event hook options inside the mkAiApp factory (Claude + Kiro, HM + devenv parity)
+# SECTION_SCHEMA: Typed per-event hook options inside the mkRuntime factory (Claude + Kiro, HM + devenv parity)
 
 ## Scope of this section
 
 How to model **typed, per-event, matcher-aware** hook options for Claude Code
-and Kiro CLI inside the existing `mkAiApp` record factory, replacing today's
+and Kiro CLI inside the existing `mkRuntime` record factory, replacing today's
 untyped passthrough (`ai.claude.hooks` = `attrsOf lines` script bodies +
 event-wiring buried in freeform `ai.claude.settings.hooks`; `ai.kiro.hooks` =
 raw-JSON-envelope files). Everything below uses explicit `lib.types` — never
@@ -423,7 +423,7 @@ Three tiers, matching existing precedents:
 
 ---
 
-## 9. Factory wiring summary (the mkAiApp plumbing, per the 4-layer pattern)
+## 9. Factory wiring summary (the mkRuntime plumbing, per the 4-layer pattern)
 
 - **Options** (`ai.claude.hooks` typed event map; `ai.kiro.hooks` typed records)
   live in each package's `mkClaude.nix` / `mkKiro.nix` `options` block

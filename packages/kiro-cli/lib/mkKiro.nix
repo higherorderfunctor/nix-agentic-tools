@@ -1228,8 +1228,8 @@
       identityMaterializer = resolveIdentityMaterializer cfg;
     };
 in
-  lib.ai.app.mkAiApp {
-    # Carried as DATA, not a module argument — see mkAiApp.nix.
+  lib.ai.app.mkRuntime {
+    # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
     contextFilename = "AGENTS.md";

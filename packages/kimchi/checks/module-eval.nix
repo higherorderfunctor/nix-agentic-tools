@@ -33,7 +33,7 @@ in {
         == expected
         && devenv.config.files.".config/kimchi/harness/AGENTS.md".text == expected
     );
-    # ── Kimchi (mkAiApp factory participant) ──────────────────────────
+    # ── Kimchi (mkRuntime factory participant) ──────────────────────────
     module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);
 
     module-kimchi-enable-toggles = mkTest "kimchi-enable-toggles" (evalHm {ai.kimchi.enable = true;}).config.ai.kimchi.enable;
