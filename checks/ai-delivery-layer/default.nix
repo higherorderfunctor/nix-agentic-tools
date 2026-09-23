@@ -245,6 +245,32 @@ in {
         ) [evalHm evalDevenv]
     );
 
+    # The normalized pools copy text-source records, and only the winning arm
+    # may cross: a `text` carried beside a winning `source` lands at the same
+    # priority, which the record rejects ("defined at the same priority"),
+    # and computing that priority reads the source first. Context and rules
+    # are pinned by module-single-context-source-does-not-trigger-ifd,
+    # module-runtime-files-generated-empty-codex-source-omitted and
+    # module-kiro-hm-rule-path-bakes; this is the agent-instructions arm.
+    module-delivery-normalized-agent-source-crosses-alone = mkTest "delivery-normalized-agent-source-crosses-alone" (
+      let
+        source = ./fixtures/probe-skill/SKILL.md;
+      in
+        lib.all (evaluate: let
+          instructions =
+            (evaluate {
+              ai = {
+                agents.probe = {
+                  description = "probe";
+                  instructions.source = source;
+                };
+                claude.enable = true;
+              };
+            }).config.ai.claude.normalized.agents.probe.instructions;
+        in
+          instructions._sourceWins && instructions.source == source) [evalHm evalDevenv]
+    );
+
     module-delivery-normalized-rule-extension-reaches-files = mkTest "delivery-normalized-rule-extension-reaches-files" (
       lib.all (
         evaluate: let

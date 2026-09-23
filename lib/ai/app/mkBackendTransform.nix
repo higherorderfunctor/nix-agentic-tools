@@ -53,6 +53,7 @@
   };
   agent = import ../agent.nix {inherit lib;};
   aiCommon = import ../ai-common.nix {inherit lib;};
+  aiTypes = import ../types.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
@@ -145,6 +146,22 @@
     GIT_SSH_COMMAND = sandboxSshCommand;
   };
 
+  # A text-source record becomes the DEFAULT of a public normalized option,
+  # so every field it carries becomes a definition at one priority. Two
+  # consequences: its computed read-only fields would be defined twice, and
+  # carrying both `text` and `source` would tie them — which throws, and
+  # before throwing forces `text`, whose `apply` already read the source.
+  # So only the winning arm crosses, chosen from the ORIGINAL record's
+  # `_sourceWins`, which compares priorities without reading any bytes.
+  toNormalizedTextSource = value:
+    removeAttrs value (
+      ["_enableDefined" "_sourceWins" "_textSourceType"]
+      ++ (
+        if aiTypes.textSourceUsesSource value
+        then ["text"]
+        else ["source"]
+      )
+    );
   contextValues = [config.ai.context cfg.context];
   # Presence must stay structural. `composeContent` reads source-backed bytes
   # when two values compose, so using `mergedContext != null` as a generator
@@ -158,20 +175,34 @@
     if supportsPool "context"
     then aiCommon.composeContent contextValues
     else null;
+  # A submodule value includes its computed read-only fields. When that value
+  # becomes the default of the public normalized option, its type recomputes
+  # those fields; carrying them across would define each read-only option twice.
+  normalizedContext =
+    if mergedContext == null
+    then null
+    else removeAttrs (toNormalizedTextSource mergedContext) ["filename"];
   topHooks =
     if supportsPool "hooks"
     then config.ai.hooks
     else {};
 
+  normalizedAgents = lib.mapAttrs (_: value:
+    if agent.isSemantic value
+    then value // {instructions = toNormalizedTextSource value.instructions;}
+    else value)
+  mergedAgents;
+  normalizedRules = lib.mapAttrs (_: toNormalizedTextSource) mergedRules;
+
   # A whole-pool option default disappears when a consumer adds just one key.
   # Keep these folds as per-key definitions, so ordinary additions preserve
   # unrelated entries while a whole-pool mkForce still replaces everything.
   normalizedKeyedPools = {
-    agents = mergedAgents;
+    agents = normalizedAgents;
     environmentVariables = mergedEnvironmentVariables;
     lspServers = mergedLspServers;
     mcpServers = mergedServers;
-    rules = mergedRules;
+    rules = normalizedRules;
     skills = mergedSkills;
   };
   normalizedPools = {
@@ -179,7 +210,7 @@
       type = lib.types.attrsOf agent.agentType;
     };
     context = {
-      default = mergedContext;
+      default = normalizedContext;
       type = lib.types.nullOr aiCommon.optionalContentModule;
     };
     environmentVariables = {

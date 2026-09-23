@@ -187,6 +187,11 @@ Two consequences follow.
   `lib/ai/app/sharedAgentsMd.nix`) keep whole-entry `mkDefault` and say so at
   the site.
 
+Structured documents instead contribute ordinary `content.value` leaves (or
+per-leaf defaults). A default on the whole content or value drops every
+generated leaf when a consumer adds one, silently retiring previously owned
+siblings.
+
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
 definition. That keeps module plumbing out of the consumer-owned override pool
@@ -213,8 +218,13 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
-every supported pool, then additionally filters disabled rules, and hands only
-the surviving `merged*` values to package callbacks. For MCP,
+every supported pool, additionally filters disabled rules, and contributes the
+result as per-key defaults beneath `ai.<runtime>.normalized.<pool>`, whose
+option default is `{}`. Ordinary extensions retain unrelated inherited keys;
+whole-pool `mkForce` replaces the merged input. Package callbacks and
+transformer arguments read those public options. A text-source record crosses
+into its normalized pool carrying only its winning arm, `text` or `source`, so
+the copy never reads a source to recompute a priority. For MCP,
 `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
 scope while preserving null tombstones; only those client views cross the
 root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
