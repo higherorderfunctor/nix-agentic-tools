@@ -864,21 +864,6 @@ in {
               };
             }).config.home.activation.kiroSettingsMerge.text))
         (mkDevenvCase {
-          configFile = ".config/github-copilot/settings.json";
-          entry = "ai:copilot:settings-merge";
-          first = {
-            model = "first";
-            preferences.managed = true;
-          };
-          native = {
-            preferences.native = "survives";
-            trusted_folders = ["native-folder"];
-          };
-          option = ["native" "settings"];
-          runtime = "copilot";
-          second.model = "second";
-        })
-        (mkDevenvCase {
           configFile = ".kiro/settings/cli.json";
           entry = "ai:kiro:settings-merge";
           first = {

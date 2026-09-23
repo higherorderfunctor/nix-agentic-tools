@@ -119,18 +119,18 @@ in
           placement.
         '';
       };
-      # Copilot-specific freeform settings. Consumed by the settings.json leaf
-      # reconciliation in `hm.config` (`helpers.mkOwnedDocument`, which owns
-      # exactly these leaves, retracts one this generation drops, and leaves a
-      # runtime-written sibling such as `trusted_folders` alone) and by the
-      # static write in `devenv.config`. Full typed surface (editor
-      # integration, telemetry, typed model selection) is tracked in
+      # Copilot-specific freeform settings. Consumed by the `settings.json`
+      # entry: Home Manager reconciles exactly these leaves on activation,
+      # retracting one this generation drops and leaving a runtime-written
+      # sibling such as `trusted_folders` alone; devenv writes the project
+      # copy statically, which Copilot does not read. Full typed surface
+      # (editor integration, telemetry, typed model selection) is tracked in
       # docs/plan.md "Ideal architecture gate → Absorption backlog" under
       # the copilot-cli absorption item.
       native.settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
-        description = "Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).";
+        description = "Freeform settings for Copilot's `settings.json` under `configDir`. Home Manager reconciles the declared leaves into it on activation and leaves Copilot's own keys alone. devenv writes a static project copy for option parity; Copilot never reads a project-scope settings.json, and the module warns when this is set there.";
       };
       # Typed LSP server definitions for lsp-config.json. Freeform
       # attrs-of-anything (matching the legacy `attrsOf jsonFormat.type`)
@@ -312,34 +312,36 @@ in
           })
         ]))
 
-        # settings.json — Copilot rewrites it while it runs (`trusted_folders`,
-        # the oauth record), so both backends own only the leaves declared here
-        # and leave every native sibling alone. The writer is declared whether
-        # or not there are leaves: an empty declaration RETRACTS what the
-        # previous generation owned, and with no prior ownership it leaves an
-        # externally managed file untouched — which is what a consumer enabling
-        # Copilot purely for MCP or skills fanout needs.
+        # settings.json — on Home Manager, Copilot rewrites it while it runs
+        # (`trusted_folders`, the oauth record), so HM owns only the leaves
+        # declared here and leaves every native sibling alone. The writer is
+        # declared whether or not there are leaves: an empty declaration
+        # RETRACTS what the previous generation owned, and with no prior
+        # ownership it leaves an externally managed file untouched — which is
+        # what a consumer enabling Copilot purely for MCP or skills fanout needs.
         #
-        # Devenv uses the same bundle under the project root. This preserves
-        # edits there without changing Copilot's project-discovery limitation.
-        {
-          ai.copilot.activation.copilotSettingsMerge = {
-            # Devenv requires a namespace; retain HM's existing ordering name.
-            entry = {
-              devenv = "ai:copilot:settings-merge";
-              hm = "copilotSettingsMerge";
-            };
-            ledgers.${settingsLedger} = {
-              codec = "json";
-              path = "${cfg.configDir}/settings.json";
-            };
+        # The fact is keyed by backend because the project copy has no such
+        # writer: Copilot never opens a project-scope settings.json (see the
+        # devenv `configDir` note below), so nothing rewrites it and nothing
+        # reads it. It stays a static write for option parity, and the
+        # delivery diagnostics warn when a consumer sets it. A shell-entry
+        # reconciler there would maintain bytes nothing reads. The writer is
+        # HM-only for the same reason — a writer with ledgers and no claiming
+        # file lowers to a task that retracts nothing.
+        (lib.optionalAttrs isHm {
+          ai.copilot.activation.copilotSettingsMerge.ledgers.${settingsLedger} = {
+            codec = "json";
+            path = "${cfg.configDir}/settings.json";
           };
-        }
+        })
         {
           ai.copilot.files."${cfg.configDir}/settings.json" = {
             content.value = cfg.native.settings;
             entry = "copilotSettingsMerge";
-            facts.harnessWrites = true;
+            facts.harnessWrites = {
+              devenv = false;
+              hm = true;
+            };
             format = "json";
             ledger = settingsLedger;
           };
