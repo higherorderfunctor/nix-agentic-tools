@@ -173,9 +173,9 @@
     ...
   }: let
     hasExactCwdProjectFiles =
-      aiCommon.filterNulls cfg.nativeSettings
+      aiCommon.filterNulls cfg.native.settings
       != {}
-      || aiCommon.filterNulls cfg.harnessSettings != {}
+      || aiCommon.filterNulls cfg.native.harnessSettings != {}
       || mergedServers != {}
       || mergedAgents != {}
       || aiCommon.filterNulls cfg.permissions != {}
@@ -240,8 +240,8 @@
       if isDevenv
       then ".kimchi/agents"
       else "${harness}/agents";
-    unknownModelRoles = lib.subtractLists modelRoleNames (builtins.attrNames cfg.harnessSettings.modelRoles);
-    listedSingleModelRoles = builtins.filter (role: builtins.isList (cfg.harnessSettings.modelRoles.${role} or null)) singleModelRoles;
+    unknownModelRoles = lib.subtractLists modelRoleNames (builtins.attrNames cfg.native.harnessSettings.modelRoles);
+    listedSingleModelRoles = builtins.filter (role: builtins.isList (cfg.native.harnessSettings.modelRoles.${role} or null)) singleModelRoles;
     userScopeOnlyHarnessSettings = lib.intersectLists userScopeOnlyHarnessSettingKeys (builtins.attrNames filteredHarnessSettings);
     # Home Manager's ledger identity predates project-path delivery and is an
     # upgrade contract: keep hashing configDir so a new generation retracts
@@ -314,11 +314,11 @@
           [
             {
               assertion = unknownModelRoles == [];
-              message = "ai.kimchi.harnessSettings.modelRoles has unknown roles: ${lib.concatStringsSep ", " unknownModelRoles}. Kimchi 1.1.30 accepts only ${lib.concatStringsSep ", " modelRoleNames}.";
+              message = "ai.kimchi.native.harnessSettings.modelRoles has unknown roles: ${lib.concatStringsSep ", " unknownModelRoles}. Kimchi 1.1.30 accepts only ${lib.concatStringsSep ", " modelRoleNames}.";
             }
             {
               assertion = listedSingleModelRoles == [];
-              message = "ai.kimchi.harnessSettings.modelRoles.${lib.concatStringsSep ", " listedSingleModelRoles} must be a single provider/model string; Kimchi ignores a list there.";
+              message = "ai.kimchi.native.harnessSettings.modelRoles.${lib.concatStringsSep ", " listedSingleModelRoles} must be a single provider/model string; Kimchi ignores a list there.";
             }
           ]
           ++ [
@@ -347,7 +347,7 @@
           ++ lib.optional isDevenv {
             assertion = userScopeOnlyHarnessSettings == [];
             message = ''
-              ai.kimchi.harnessSettings contains settings Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeOnlyHarnessSettings}.
+              ai.kimchi.native.harnessSettings contains settings Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeOnlyHarnessSettings}.
               Under devenv, either set with HM, or configure inside the harness so it writes to user global.
               Home Manager delivers these declaratively by reconciling config.json and harness/settings.json; a /nix/store symlink would break Kimchi's runtime writes. Configuring inside Kimchi persists the decision or setting in its user-global harness files.
             '';
@@ -415,7 +415,7 @@
       # harness settings, so the lowering is lossless on both backends. It is
       # a default: an explicit native harness value wins.
       (lib.mkIf (resolvedSettings.reasoningEffort != null) {
-        ai.kimchi.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+        ai.kimchi.native.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
       })
 
       (document {
@@ -690,7 +690,7 @@ in
           the working directory, so one entry covers every project below it
           and `false` denies a subtree. This is how an ACP session, which
           ignores `--approve`, trusts a project without the global
-          `harnessSettings.defaultProjectTrust = "always"`. Home Manager
+          `native.harnessSettings.defaultProjectTrust = "always"`. Home Manager
           reconciles `<configDir>/harness/trust.json`, resolving each key
           through symlinks when activation runs because Kimchi matches the
           realpath; decisions answered at Kimchi's trust prompt are unowned

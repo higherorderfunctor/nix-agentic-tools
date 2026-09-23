@@ -11,7 +11,8 @@ applyTo: "devenv.nix,packages/chatgpt-codex/lib/mkCodex.nix,packages/claude-code
 > paths and guards the three exact-cwd readers only when one is declared. Kimchi
 > keeps reading user config, and `ai.kimchi.configDir` remains a Home Manager
 > output option. Copilot is the only runtime that needs an additive flag instead
-> of native project merge.
+> of native project merge. Kimchi's harness settings are declared under
+> `ai.kimchi.native.harnessSettings`.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
 > three factories side by side: no `ai.*` runtime redirects its config root, on
@@ -99,8 +100,8 @@ as evidence about the other.
 `piConfig.configDir = ".config/kimchi/harness"`, independent of the consumer's
 Home Manager `ai.kimchi.configDir` output option. Project config, MCP, skills,
 and harness settings stay inert until explicit or persisted trust; unattended
-use can set user-scope `harnessSettings.defaultProjectTrust = "always"` through
-Home Manager. A project cannot grant itself trust.
+use can set user-scope `native.harnessSettings.defaultProjectTrust = "always"`
+through Home Manager. A project cannot grant itself trust.
 
 Project-root `AGENTS.md` is the upstream exception. Kimchi's prompt-enrichment
 extension walks ancestor context files without consulting the project-scope
