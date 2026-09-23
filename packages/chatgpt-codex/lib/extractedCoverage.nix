@@ -253,6 +253,9 @@
       # other one-shot controls stay on the invocation. Some names such as
       # --env are context-dependent across commands; that is further reason
       # not to assign them one persistent config meaning.
+      # `--from-cli` and `--yes` control a daemon update invocation, which can
+      # copy or pin a durable daemon package. The Nix package lifecycle remains
+      # owned by the pinned derivation.
       #
       # `--worktree` — read from UPSTREAM SOURCE, not from `--help`, because
       # the one-line help ("Run the session in a new managed Git worktree")
@@ -302,6 +305,7 @@
         "--env"
         "--ephemeral"
         "--force"
+        "--from-cli"
         "--help"
         "--ignore-rules"
         "--ignore-user-config"
@@ -314,7 +318,9 @@
         "--max-mib-per-second"
         "--message"
         "--no-alt-screen"
+        "--no-browser"
         "--no-color"
+        "--no-daemon"
         "--output-last-message"
         "--output-schema"
         "--profile"
@@ -330,6 +336,7 @@
         "--verbose"
         "--version"
         "--worktree"
+        "--yes"
       ];
     };
   };
