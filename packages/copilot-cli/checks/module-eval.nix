@@ -660,6 +660,27 @@ in {
         !(builtins.tryEval result.config.home.file.".copilot/lsp-config.json".text).success
     );
 
+    # Copilot rejects the whole file when a server name holds anything but
+    # ASCII letters, digits, `_` and `-`, and the name is the attribute key,
+    # so a quoted "nix.lsp" must fail evaluation. The same config renamed to
+    # "nix_lsp-1" must render: that is the positive control, and it pins
+    # `_` and `-` as accepted.
+    module-copilot-lsp-invalid-name-throws = mkTest "copilot-lsp-invalid-name-throws" (
+      let
+        fileFor = name:
+          (evalHm {
+            ai.copilot.enable = true;
+            ai.lspServers.${name} = {
+              command = "nixd";
+              extensions = ["nix"];
+            };
+          }).config.home.file.".copilot/lsp-config.json";
+      in
+        (lspEntryOf "lspServers" (fileFor "nix_lsp-1") "nix_lsp-1").command or null
+        == "nixd"
+        && !(builtins.tryEval (fileFor "nix.lsp").text).success
+    );
+
     # HM: top-level ai.agents fans out to Copilot's agents file write.
     module-copilot-hm-top-level-agents-fanout = mkTest "copilot-hm-top-level-agents-fanout" (
       let

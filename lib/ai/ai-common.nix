@@ -142,6 +142,16 @@
     if server.extensions != []
     then server.extensions
     else throw "ai.lspServers.${name}: ${runtime} routes files to LSP servers by extension, so `extensions` must name at least one; set it, or drop the server for ${runtime} with `ai.${runtime}.lspServers.${name} = null`";
+  # A server's attribute name, for Copilot, which keys `lspServers` by it and
+  # rejects the WHOLE file when any name is empty or has a character other
+  # than an ASCII letter, digit, `_` or `-` (copilot-cli 1.0.88: "LSP server
+  # name must only contain alphanumeric characters, underscores, and
+  # hyphens"). A quoted Nix attribute such as "nix.lsp" evaluates fine, so
+  # this throws rather than render a file Copilot refuses.
+  lspCopilotServerName = name:
+    if builtins.match "[A-Za-z0-9_-]+" name != null
+    then name
+    else throw "ai.lspServers.\"${name}\": Copilot rejects LSP server names that are empty or contain anything but ASCII letters, digits, `_` and `-`; rename the server, or drop it for Copilot with `ai.copilot.lspServers.\"${name}\" = null`";
   # `{ ".<ext>" = <server attribute name>; }` for Copilot and Claude.
   lspExtensionMap = name: extensions:
     lib.listToAttrs (map (ext: {
@@ -300,22 +310,25 @@ in {
 
   # Copilot: `~/.copilot/lsp-config.json` (user) and `.github/lsp.json`
   # (repository) are both `{ lspServers.<name> = { … }; }`. copilot-cli
-  # 1.0.88's validator marks `fileExtensions` Required, so a server with no
-  # `extensions` throws instead of producing a file Copilot rejects whole.
+  # 1.0.88's validator marks `fileExtensions` Required and constrains the
+  # server name, so a server with no `extensions` or an unacceptable name
+  # throws instead of producing a file Copilot rejects whole.
   # Upstream maps each extension to a LANGUAGE id (".ts" = "typescript");
   # `lspServerModule` has no language-id option, so the server's attribute
   # name stands in, which matches only when the server is named after its
   # language.
   mkCopilotLspFile = servers: {
-    lspServers = lib.mapAttrs (name: server:
-      {
-        command = lspCommand name server;
-        inherit (server) args;
-        fileExtensions = lspExtensionMap name (lspRequiredExtensions "copilot" name server);
-      }
-      // lib.optionalAttrs (server.initializationOptions != {}) {
-        inherit (server) initializationOptions;
-      })
+    lspServers = lib.mapAttrs' (name: server:
+      lib.nameValuePair (lspCopilotServerName name) (
+        {
+          command = lspCommand name server;
+          inherit (server) args;
+          fileExtensions = lspExtensionMap name (lspRequiredExtensions "copilot" name server);
+        }
+        // lib.optionalAttrs (server.initializationOptions != {}) {
+          inherit (server) initializationOptions;
+        }
+      ))
     servers;
   };
 
