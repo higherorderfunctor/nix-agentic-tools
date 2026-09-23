@@ -33,304 +33,225 @@
   },
   "environment": {
     "CASTAI_API_KEY": {
-      "consumerOverridable": true,
       "controls": "Cast AI API key fallback for the stats command when config.json and KIMCHI_API_KEY provide none"
     },
     "DIFF_THEME": {
-      "consumerOverridable": true,
       "controls": "syntax-highlighting theme for rendered diffs (default github-dark)"
     },
     "JS_DEBUG_PATH": {
-      "consumerOverridable": true,
       "controls": "js-debug DAP server script used by the debugger extension"
     },
     "KIMCHI_ACTIVE_FERMENT": {
-      "consumerOverridable": true,
       "controls": "active ferment identifier inherited by worker processes"
     },
     "KIMCHI_AGENT_PERSONA": {
-      "consumerOverridable": true,
       "controls": "persona selected for an agent worker"
     },
     "KIMCHI_API_KEY": {
-      "consumerOverridable": true,
       "controls": "Kimchi API authentication; overrides config.json"
     },
     "KIMCHI_AUTO_GIT_INIT": {
-      "consumerOverridable": true,
       "controls": "automatic git initialization for ferment work"
     },
     "KIMCHI_CLIPBOARD_FORCE": {
-      "consumerOverridable": true,
       "controls": "clipboard backend override"
     },
     "KIMCHI_CODING_AGENT_DIR": {
-      "consumerOverridable": false,
-      "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)",
-      "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
+      "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)"
     },
     "KIMCHI_CODING_AGENT_SESSION_DIR": {
-      "consumerOverridable": true,
       "controls": "pi session storage directory (pi's ENV_SESSION_DIR, named from Kimchi's piConfig.name)"
     },
     "KIMCHI_DAP_BINARIES": {
-      "consumerOverridable": true,
       "controls": "DAP adapter binary overrides"
     },
     "KIMCHI_DEBUG_PROMPTS": {
-      "consumerOverridable": true,
       "controls": "prompt debugging output"
     },
     "KIMCHI_DEBUG_SESSION": {
-      "consumerOverridable": true,
       "controls": "session debugging output"
     },
     "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
-      "consumerOverridable": false,
-      "controls": "suppression of pi built-in providers",
-      "reason": "entry.ts overwrites it with 1"
+      "controls": "suppression of pi built-in providers"
     },
     "KIMCHI_FERMENTS_DIR": {
-      "consumerOverridable": true,
       "controls": "ferment state directory"
     },
     "KIMCHI_FERMENT_DISABLE_PARALLEL": {
-      "consumerOverridable": true,
       "controls": "parallel ferment execution"
     },
     "KIMCHI_FERMENT_LOCK_DIR": {
-      "consumerOverridable": true,
       "controls": "ferment lock directory"
     },
     "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": {
-      "consumerOverridable": true,
       "controls": "ferment stale-lock age"
     },
     "KIMCHI_IDE_LOCKFILE_DIR": {
-      "consumerOverridable": true,
       "controls": "IDE lock-file directory"
     },
     "KIMCHI_INFRA_BREAKER_THRESHOLD": {
-      "consumerOverridable": true,
       "controls": "infrastructure circuit-breaker failure threshold"
     },
     "KIMCHI_LSP_BINARIES": {
-      "consumerOverridable": true,
       "controls": "LSP server binary overrides"
     },
     "KIMCHI_MCP_E2E_KEYRING_DIR": {
-      "consumerOverridable": true,
       "controls": "MCP end-to-end test keyring directory"
     },
     "KIMCHI_NO_PROXY": {
-      "consumerOverridable": true,
       "controls": "explicit proxy bypass list"
     },
     "KIMCHI_NO_UPDATE_CHECK": {
-      "consumerOverridable": true,
       "controls": "background Kimchi update check"
     },
     "KIMCHI_OAUTH_TEMPLATE_DIR": {
-      "consumerOverridable": false,
-      "controls": "OAuth result-page template directory",
-      "reason": "entry.ts derives and overwrites it from PI_PACKAGE_DIR"
+      "controls": "OAuth result-page template directory"
     },
     "KIMCHI_OLLAMA_HOST": {
-      "consumerOverridable": true,
       "controls": "Ollama host URL"
     },
     "KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR": {
-      "consumerOverridable": true,
       "controls": "preserved inherited pi agent directory"
     },
     "KIMCHI_PARENT_SESSION_ID": {
-      "consumerOverridable": true,
       "controls": "parent session identity for subagents"
     },
     "KIMCHI_PERMISSIONS": {
-      "consumerOverridable": true,
       "controls": "initial permission mode"
     },
     "KIMCHI_PROXY": {
-      "consumerOverridable": true,
       "controls": "HTTP and HTTPS proxy override"
     },
     "KIMCHI_PROXY_HELPER": {
-      "consumerOverridable": true,
       "controls": "SSH proxy helper executable"
     },
     "KIMCHI_REDACTION_ENABLED": {
-      "consumerOverridable": true,
       "controls": "PII redaction override"
     },
     "KIMCHI_REMOTE_ENDPOINT": {
-      "consumerOverridable": true,
       "controls": "remote execution endpoint"
     },
     "KIMCHI_REMOTE_RUN": {
-      "consumerOverridable": true,
       "controls": "remote execution mode"
     },
     "KIMCHI_REVIEW_LOG": {
-      "consumerOverridable": true,
       "controls": "session-review log path"
     },
     "KIMCHI_REVIEW_THRESHOLD": {
-      "consumerOverridable": true,
       "controls": "session-review threshold"
     },
     "KIMCHI_ROUTER_ENDPOINT": {
-      "consumerOverridable": true,
       "controls": "model router endpoint"
     },
     "KIMCHI_SANDBOX": {
-      "consumerOverridable": true,
       "controls": "sandbox detection override"
     },
     "KIMCHI_SESSION_REVIEW": {
-      "consumerOverridable": true,
       "controls": "session-review enablement"
     },
     "KIMCHI_STREAM_IDLE_TIMEOUT_MS": {
-      "consumerOverridable": true,
       "controls": "outbound HTTP stream idle timeout"
     },
     "KIMCHI_SUBAGENT": {
-      "consumerOverridable": true,
       "controls": "subagent process marker"
     },
     "KIMCHI_TAGS": {
-      "consumerOverridable": true,
       "controls": "tags attached to LLM requests"
     },
     "KIMCHI_TELEMETRY_DEBUG": {
-      "consumerOverridable": true,
       "controls": "telemetry debugging output"
     },
     "KIMCHI_TELEMETRY_ENABLED": {
-      "consumerOverridable": true,
       "controls": "telemetry enablement override"
     },
     "KIMCHI_WEB_APP_URL": {
-      "consumerOverridable": true,
       "controls": "Kimchi web application base URL"
     },
     "LLAMA_BASE_URL": {
-      "consumerOverridable": true,
       "controls": "default llama.cpp server URL offered by pi's llama provider login"
     },
     "MCP_OAUTH_DIR": {
-      "consumerOverridable": true,
       "controls": "legacy MCP OAuth token directory read during keyring migration (default <harness>/mcp-oauth)"
     },
     "OLLAMA_HOST": {
-      "consumerOverridable": true,
       "controls": "Ollama endpoint; takes precedence over KIMCHI_OLLAMA_HOST"
     },
     "PI_CACHE_RETENTION": {
-      "consumerOverridable": true,
       "controls": "provider prompt-cache retention"
     },
     "PI_CLEAR_ON_SHRINK": {
-      "consumerOverridable": true,
       "controls": "terminal clearing when content shrinks"
     },
     "PI_CODING_AGENT_DIR": {
-      "consumerOverridable": false,
-      "controls": "inherited pi agent directory, preserved as KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR",
-      "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
+      "controls": "pi agent directory the caller inherited; entry.ts copies it to KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR (unless that is set) before pointing pi at the Kimchi harness, and pi package lookup reads that copy"
     },
     "PI_EXPERIMENTAL": {
-      "consumerOverridable": true,
       "controls": "pi experimental features"
     },
     "PI_HARDWARE_CURSOR": {
-      "consumerOverridable": true,
       "controls": "terminal hardware cursor"
     },
     "PI_HYPERLINKS": {
-      "consumerOverridable": true,
       "controls": "terminal hyperlink capability"
     },
     "PI_IMAGE_PROTOCOL": {
-      "consumerOverridable": true,
       "controls": "terminal image protocol"
     },
     "PI_INSTALLER_API_BASE": {
-      "consumerOverridable": true,
       "controls": "managed installer API base URL"
     },
     "PI_MANAGED_INSTALL_ROOT": {
-      "consumerOverridable": true,
       "controls": "managed pi installation root"
     },
     "PI_MCP_ADAPTER_KEYRING_RECOVERY_HELPER": {
-      "consumerOverridable": true,
       "controls": "MCP keyring recovery helper executable"
     },
     "PI_MCP_ADAPTER_KEYRING_RECOVERY_NODE": {
-      "consumerOverridable": true,
       "controls": "MCP keyring recovery Node.js executable"
     },
     "PI_OAUTH_CALLBACK_HOST": {
-      "consumerOverridable": true,
       "controls": "OAuth callback bind host"
     },
     "PI_OFFLINE": {
-      "consumerOverridable": true,
       "controls": "pi startup network operations"
     },
     "PI_PACKAGE_DIR": {
-      "consumerOverridable": true,
       "controls": "pi package and runtime asset directory"
     },
     "PI_SHARE_VIEWER_URL": {
-      "consumerOverridable": true,
       "controls": "shared-session viewer base URL"
     },
     "PI_SKIP_VERSION_CHECK": {
-      "consumerOverridable": false,
-      "controls": "pi version check",
-      "reason": "entry.ts overwrites it with 1"
+      "controls": "pi version check"
     },
     "PI_STARTUP_BENCHMARK": {
-      "consumerOverridable": true,
       "controls": "interactive startup benchmark"
     },
     "PI_TELEMETRY": {
-      "consumerOverridable": true,
       "controls": "pi install telemetry"
     },
     "PI_TIMING": {
-      "consumerOverridable": true,
       "controls": "startup timing instrumentation"
     },
     "PI_TRUE_COLOR": {
-      "consumerOverridable": true,
       "controls": "terminal true-color capability"
     },
     "PI_TUI_DEBUG": {
-      "consumerOverridable": true,
       "controls": "TUI debug logging"
     },
     "PI_TUI_DEBUG_REDRAW": {
-      "consumerOverridable": true,
       "controls": "TUI redraw logging"
     },
     "PI_TUI_ESC_TIMEOUT": {
-      "consumerOverridable": true,
       "controls": "TUI escape-sequence timeout"
     },
     "PI_TUI_NO_CLEAR_SCROLLBACK": {
-      "consumerOverridable": true,
       "controls": "scrollback clearing in Kimchi's pi-tui patch"
     },
     "PI_TUI_WRITE_LOG": {
-      "consumerOverridable": true,
       "controls": "raw TUI ANSI output log path"
     },
     "SKILLS_DIR": {
-      "consumerOverridable": true,
       "controls": "skills-manager skills directory (default <cwd>/skills)"
     }
   },

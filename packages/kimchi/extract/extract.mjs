@@ -1325,6 +1325,259 @@ function environmentReads(sourceFile, context) {
   return found;
 }
 
+// The program source files `sourceFile` imports: static imports and re-exports
+// that execute (never `import type`), plus `import("…")` when `dynamic`.
+function importedSourceFiles(sourceFile, program, ts, { dynamic, types }) {
+  const specifiers = [];
+  function visit(node) {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteralLike(node.moduleSpecifier) &&
+      (types ||
+        !(ts.isImportDeclaration(node)
+          ? node.importClause?.isTypeOnly
+          : node.isTypeOnly))
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    }
+    if (
+      dynamic &&
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specifiers.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return specifiers
+    .map(
+      (specifier) =>
+        ts.resolveModuleName(
+          specifier,
+          sourceFile.fileName,
+          program.getCompilerOptions(),
+          ts.sys,
+        ).resolvedModule?.resolvedFileName,
+    )
+    .map((fileName) => fileName && program.getSourceFile(fileName))
+    .filter(Boolean);
+}
+
+// Every program source file reachable from `roots` through imports.
+function moduleClosure(roots, program, ts, options) {
+  const reached = new Set(roots);
+  const queue = [...roots];
+  while (queue.length) {
+    for (const imported of importedSourceFiles(
+      queue.pop(),
+      program,
+      ts,
+      options,
+    )) {
+      if (!reached.has(imported)) {
+        reached.add(imported);
+        queue.push(imported);
+      }
+    }
+  }
+  return reached;
+}
+
+// Named reads of `parameter` inside `declaration`'s body. Any other use of the
+// parameter (passing it on, spreading it) hides which names it reads.
+function parameterEnvironmentReads(declaration, parameter, context) {
+  const { checker, ts } = context;
+  const symbol = checker.getSymbolAtLocation(parameter.name);
+  const found = new Set();
+  function visit(node) {
+    if (
+      ts.isIdentifier(node) &&
+      node !== parameter.name &&
+      checker.getSymbolAtLocation(node) === symbol
+    ) {
+      const parent = node.parent;
+      let name;
+      if (ts.isPropertyAccessExpression(parent) && parent.expression === node)
+        name = parent.name.text;
+      else if (
+        ts.isElementAccessExpression(parent) &&
+        parent.expression === node
+      )
+        name = stringConstant(parent.argumentExpression, context);
+      if (name === undefined)
+        fail(
+          `${declaration.getSourceFile().fileName} uses the environment parameter ${parameter.name.getText()} as a whole (${parent.getText()}), so the names it reads cannot be listed`,
+        );
+      if (!isWriteOnly(parent, ts)) found.add(name);
+    }
+    ts.forEachChild(node, visit);
+  }
+  if (declaration.body) visit(declaration.body);
+  return found;
+}
+
+// Environment names one top-level entry.ts statement reads: named member
+// reads, plus what a callee reads from the environment object passed to it.
+function statementEnvironmentReads(statement, context) {
+  const { checker, ts } = context;
+  const found = environmentReads(statement, context);
+  function visit(node) {
+    const isEnvironmentObject =
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "process" &&
+      node.name.text === "env";
+    const parent = node.parent;
+    if (
+      isEnvironmentObject &&
+      !(
+        (ts.isPropertyAccessExpression(parent) ||
+          ts.isElementAccessExpression(parent)) &&
+        parent.expression === node
+      )
+    ) {
+      let callee;
+      if (ts.isCallExpression(parent) && parent.arguments.includes(node)) {
+        let symbol = checker.getSymbolAtLocation(parent.expression);
+        if (symbol && symbol.flags & ts.SymbolFlags.Alias)
+          symbol = checker.getAliasedSymbol(symbol);
+        callee = symbol?.declarations?.find(
+          (declaration) =>
+            ts.isFunctionDeclaration(declaration) && declaration.body,
+        );
+      }
+      const parameter =
+        callee?.parameters[parent.arguments.indexOf(node)] ?? undefined;
+      if (!parameter || !ts.isIdentifier(parameter.name))
+        fail(
+          `src/entry.ts hands process.env to ${parent.getText()} before its last assignment, and the names that reads cannot be resolved`,
+        );
+      for (const name of parameterEnvironmentReads(callee, parameter, context))
+        found.add(name);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(statement);
+  return found;
+}
+
+// Names a top-level statement assigns on every path through it.
+function definiteEnvironmentWrites(statement, context) {
+  const { ts } = context;
+  if (
+    ts.isExpressionStatement(statement) &&
+    ts.isBinaryExpression(statement.expression) &&
+    statement.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
+  ) {
+    const target = statement.expression.left;
+    const isEnvironment = (node) =>
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "process" &&
+      node.name.text === "env";
+    if (
+      ts.isPropertyAccessExpression(target) &&
+      isEnvironment(target.expression)
+    )
+      return new Set([target.name.text]);
+    if (
+      ts.isElementAccessExpression(target) &&
+      isEnvironment(target.expression)
+    ) {
+      const name = stringConstant(target.argumentExpression, context);
+      if (name === undefined)
+        fail(
+          `src/entry.ts assigns a computed environment name: ${statement.getText()}`,
+        );
+      return new Set([name]);
+    }
+    return new Set();
+  }
+  if (ts.isIfStatement(statement) && statement.elseStatement) {
+    const then = definiteEnvironmentWrites(statement.thenStatement, context);
+    const otherwise = definiteEnvironmentWrites(
+      statement.elseStatement,
+      context,
+    );
+    return new Set([...then].filter((name) => otherwise.has(name)));
+  }
+  if (ts.isBlock(statement)) {
+    return new Set(
+      statement.statements.flatMap((child) => [
+        ...definiteEnvironmentWrites(child, context),
+      ]),
+    );
+  }
+  return new Set();
+}
+
+// Variables Kimchi's entry point assigns on every launch before anything
+// reads them, so a value the caller sets is never read. entry.ts exists to set
+// pi's environment before pi loads; its top-level statements run in order
+// once the modules it statically imports have been evaluated. A variable
+// counts as overwritten when a top-level statement assigns it on every path
+// and no earlier statement (or a callee handed process.env) reads it. Anything
+// that would make that order unknowable fails the extraction: a read of the
+// same name anywhere in the statically imported modules, or an assignment
+// after entry.ts first awaits or imports dynamically.
+function launchOverwrites(entrySource, program, context) {
+  const { ts } = context;
+  const imported = moduleClosure([entrySource], program, ts, {
+    dynamic: false,
+    types: false,
+  });
+  imported.delete(entrySource);
+  const importedReads = new Map();
+  for (const sourceFile of imported) {
+    for (const name of environmentReads(sourceFile, context)) {
+      if (!importedReads.has(name))
+        importedReads.set(name, sourceFile.fileName);
+    }
+  }
+  const read = new Set();
+  const overwritten = new Set();
+  let suspended;
+  for (const statement of entrySource.statements) {
+    if (ts.isImportDeclaration(statement)) continue;
+    for (const name of statementEnvironmentReads(statement, context))
+      read.add(name);
+    for (const name of definiteEnvironmentWrites(statement, context)) {
+      if (read.has(name) || overwritten.has(name)) continue;
+      if (suspended)
+        fail(
+          `src/entry.ts assigns ${name} after it suspends at ${suspended}, when dynamically imported code may already have read it`,
+        );
+      if (importedReads.has(name))
+        fail(
+          `src/entry.ts assigns ${name} before reading it, but ${importedReads.get(name)}, which it imports, reads it too; whether that read runs first is not decidable here`,
+        );
+      overwritten.add(name);
+    }
+    // Past an `await` or `import()`, modules loaded dynamically (by entry.ts
+    // or by anything it called) may have run.
+    function findSuspension(node) {
+      if (
+        !suspended &&
+        (ts.isAwaitExpression(node) ||
+          (ts.isCallExpression(node) &&
+            node.expression.kind === ts.SyntaxKind.ImportKeyword))
+      ) {
+        const { line } = entrySource.getLineAndCharacterOfPosition(
+          node.getStart(),
+        );
+        suspended = `src/entry.ts:${line + 1}`;
+      }
+      ts.forEachChild(node, findSuspension);
+    }
+    findSuspension(statement);
+  }
+  return overwritten;
+}
+
 function patchAddedSource(text) {
   return text
     .split("\n")
@@ -1339,6 +1592,7 @@ async function extractEnvironment(
   patchPaths,
   annotations,
   ignored,
+  overwritten,
   context,
 ) {
   const { ts } = context;
@@ -1390,13 +1644,27 @@ async function extractEnvironment(
     );
   const variables = {};
   for (const [name, annotation] of Object.entries(annotations)) {
+    const handKeys = Object.keys(annotation).filter(
+      (key) => key !== "controls",
+    );
+    if (!annotation.controls || handKeys.length)
+      fail(
+        `environment.${name} must carry only a 'controls' description; ${JSON.stringify(handKeys)} are derived from the sources`,
+      );
+    const fixed = overwritten.has(name);
     variables[name] = {
-      consumerOverridable: annotation.consumerOverridable ?? true,
+      consumerOverridable: !fixed,
       readBy: Object.entries(reads)
         .filter(([, names]) => names.has(name))
         .map(([runtime]) => runtime)
         .sort(),
       ...annotation,
+      ...(fixed
+        ? {
+            reason:
+              "src/entry.ts assigns it on every launch before anything reads it",
+          }
+        : {}),
     };
   }
   return { variables: sortObject(variables) };
@@ -1510,6 +1778,12 @@ async function main() {
 
   const configSource = requireSource(join(kimchiRoot, "src/config.ts"));
   const configTsReads = discoverConfigKeys(configSource, checker, ts);
+  const environmentContext = {
+    appName: kimchiPackage.piConfig?.name,
+    checker,
+    declarations,
+    ts,
+  };
   const result = {
     config: extractConfig(
       configSource,
@@ -1532,12 +1806,12 @@ async function main() {
       annotations.environment,
       annotations.environmentIgnored ??
         fail("annotations lack environmentIgnored"),
-      {
-        appName: kimchiPackage.piConfig?.name,
-        checker,
-        declarations,
-        ts,
-      },
+      launchOverwrites(
+        requireSource(join(kimchiRoot, "src/entry.ts")),
+        program,
+        environmentContext,
+      ),
+      environmentContext,
     ),
     harness: extractHarness(
       declarations,

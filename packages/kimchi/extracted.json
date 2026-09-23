@@ -308,7 +308,7 @@
         "consumerOverridable": false,
         "readBy": ["kimchi", "pi"],
         "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)",
-        "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it"
       },
       "KIMCHI_CODING_AGENT_SESSION_DIR": {
         "consumerOverridable": true,
@@ -334,7 +334,7 @@
         "consumerOverridable": false,
         "readBy": ["pi"],
         "controls": "suppression of pi built-in providers",
-        "reason": "entry.ts overwrites it with 1"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it"
       },
       "KIMCHI_FERMENT_DISABLE_PARALLEL": {
         "consumerOverridable": true,
@@ -390,7 +390,7 @@
         "consumerOverridable": false,
         "readBy": ["kimchi"],
         "controls": "OAuth result-page template directory",
-        "reason": "entry.ts derives and overwrites it from PI_PACKAGE_DIR"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it"
       },
       "KIMCHI_OLLAMA_HOST": {
         "consumerOverridable": true,
@@ -518,10 +518,9 @@
         "controls": "terminal clearing when content shrinks"
       },
       "PI_CODING_AGENT_DIR": {
-        "consumerOverridable": false,
+        "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "inherited pi agent directory, preserved as KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR",
-        "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
+        "controls": "pi agent directory the caller inherited; entry.ts copies it to KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR (unless that is set) before pointing pi at the Kimchi harness, and pi package lookup reads that copy"
       },
       "PI_EXPERIMENTAL": {
         "consumerOverridable": true,
@@ -587,7 +586,7 @@
         "consumerOverridable": false,
         "readBy": ["pi"],
         "controls": "pi version check",
-        "reason": "entry.ts overwrites it with 1"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it"
       },
       "PI_STARTUP_BENCHMARK": {
         "consumerOverridable": true,

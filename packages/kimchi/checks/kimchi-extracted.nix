@@ -73,6 +73,14 @@
           'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
         mutant "$kimchi" config-second-shape src/config.ts \
           'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
+        mutant "$kimchi" entry-imported-read src/auxiliary-files/resolver.ts \
+          'if (env.XDG_DATA_HOME) {' 'if (env.XDG_DATA_HOME && !process.env.KIMCHI_CODING_AGENT_DIR) {'
+        mutant "$kimchi" entry-late-write src/entry.ts \
+          'installPasteInterceptor()' $'installPasteInterceptor()\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "1"'
+        mutant "$kimchi" entry-overwrite src/entry.ts \
+          'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "0"'
+        mutant "$kimchi" entry-unread src/entry.ts \
+          'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = undefined'
         mutant "$kimchi" environment-app-name package.json \
           '"name": "kimchi"' '"name": "tau"'
         mutant "$kimchi" environment-stale-ignore src/agent-discovery/agents/opencode.ts \
@@ -128,6 +136,10 @@
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
+          'src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but' >> "$TMPDIR/proof"
+        expect_rejection entry-late-write "$TMPDIR/entry-late-write-source" \
+          'src/entry.ts assigns KIMCHI_NO_UPDATE_CHECK after it suspends' >> "$TMPDIR/proof"
         expect_rejection environment-app-name "$TMPDIR/environment-app-name-source" \
           '"TAU_CODING_AGENT_SESSION_DIR"' >> "$TMPDIR/proof"
         expect_rejection environment-stale-ignore "$TMPDIR/environment-stale-ignore-source" \
@@ -152,6 +164,22 @@
           echo "FAIL: project-tier mutation did not change compiler-derived project keys" >&2
           exit 1
         fi
+        # The overwrite flag is derived from entry.ts, so an assignment before
+        # any read flips a variable to fixed and a read before it flips back.
+        ${runExtractor ''"$TMPDIR/entry-overwrite-source"'' ''"$TMPDIR/entry-overwrite.json"'' ''"$pi"''}
+        ${runExtractor ''"$TMPDIR/entry-unread-source"'' ''"$TMPDIR/entry-unread.json"'' ''"$pi"''}
+        for fixture in real:true:true entry-overwrite:false:true entry-unread:true:false; do
+          IFS=: read -r label update_check agent_dir <<< "$fixture"
+          if ${pkgs.jq}/bin/jq -e --argjson a "$update_check" --argjson b "$agent_dir" \
+            '.environment.variables | (.KIMCHI_NO_UPDATE_CHECK.consumerOverridable == $a) and (.PI_CODING_AGENT_DIR.consumerOverridable == $b)' \
+            "$TMPDIR/$label.json" > /dev/null; then
+            echo "$label (exit 0): overridable KIMCHI_NO_UPDATE_CHECK=$update_check PI_CODING_AGENT_DIR=$agent_dir" >> "$TMPDIR/proof"
+          else
+            echo "FAIL: $label did not derive the expected entry.ts overwrite flags" >&2
+            ${pkgs.jq}/bin/jq '.environment.variables | {KIMCHI_NO_UPDATE_CHECK, PI_CODING_AGENT_DIR}' "$TMPDIR/$label.json" >&2
+            exit 1
+          fi
+        done
         {
           ${pkgs.coreutils}/bin/cat "$TMPDIR/proof"
           echo "real (exit 0): kimchi-extract: config.json harness guard passed"
