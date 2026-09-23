@@ -40,11 +40,14 @@
       # is the only thing that puts those files on direnv's watch list; the
       # digests themselves are incidental. Nothing above registers them:
       # `builtins.path` and the `${../../references}` store copy are
-      # content-addressed but contribute no watches, `readDir` yields names
-      # only, and the skills reach `ai.skills` as store-path strings. Measured
-      # 2026-09-22 by elimination plus an observed reload; the full mechanism
-      # and the re-measurement this needs under `devenv hook` are in
-      # lib/traceSource.nix.
+      # whole-DIRECTORY copies, which register only the directory and so yield
+      # no watch, `readDir` yields names only, and the skills reach
+      # `ai.skills` as store-path strings (so nothing emits a per-file entry
+      # against the source tree the way `dev/skills/` gets one). Measured
+      # 2026-09-22 by elimination plus an observed reload. The full mechanism
+      # is in lib/traceSource.nix, along with the 2026-09-23 measurement that
+      # `devenv hook` has no watch set at all — which is what would retire
+      # this pair once the operator migrates off direnv.
       referencesTrackedInputs = traceSource.registerTrackedInputs ../../references;
       skillsTrackedInputs = traceSource.registerTrackedInputs ../../skills;
     } ''

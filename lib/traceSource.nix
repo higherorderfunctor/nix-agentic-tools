@@ -25,13 +25,19 @@
 # What direnv watches is a different set, and that is the gap this closes.
 # devenv's `direnvrc` builds `use_devenv`'s ENTIRE watch set by running
 # `watch_file` over the lines of `.devenv/input-paths.txt`, which holds the
-# files that evaluation actually READ. A store copy contributes nothing to it:
-# measured, 0 watch entries for a bare `${./dir}` and 0 for the filtered
-# `builtins.path` shape, while 0 of 594 watches was a directory. Reading each
-# file with `builtins.hashFile` is what puts it there. devenv exposes no API
-# for this — every `watch` option it has (`processes.<name>.watch.paths`,
+# individual paths evaluation touched — whether it read their bytes or
+# realized them into the store. GRANULARITY, NOT READING, IS WHAT DECIDES: a
+# DIRECTORY store copy registers the directory, and a directory yields no
+# usable watch (measured: 0 watch entries for a bare `${./dir}` and 0 for the
+# filtered `builtins.path` shape, and 0 of 594 watches was a directory). A
+# PER-FILE realization registers that one leaf, and that leaf is watched — so
+# a store copy is not inert in general, only a whole-directory one is.
+# Hashing each file with `builtins.hashFile` reaches the same per-leaf
+# granularity by reading, which is the route available here. devenv exposes no
+# API for this — every `watch` option it has (`processes.<name>.watch.paths`,
 # `tasks.<name>.process.watch.paths`) restarts a PROCESS, not the shell — so
-# reading the file IS the mechanism and there is no cleaner call to switch to.
+# walking the tree file by file IS the mechanism and there is no cleaner call
+# to switch to.
 #
 # TWO MECHANISMS, TWO KEYS, and confusing them produces wrong conclusions:
 # direnv triggers on MTIME, devenv's eval cache on CONTENT. A content edit that
@@ -47,16 +53,48 @@
 # repo: `devenv.local.nix`, `.env`, `pathExists` probes, dangling symlinks), so
 # creating one of THOSE does reload.
 #
-# UNVERIFIED UNDER `devenv hook`, AND THIS IS THE THING TO RE-MEASURE. The
-# operator intends to migrate off direnv to devenv 2.1's shell integration
-# (`eval "$(devenv hook zsh)"`, no `.envrc`, trust via `devenv allow`). Its
-# reload-on-change logic lives inside the devenv binary and its watch set was
-# NOT determined by any of the four passes. Since direnv's watch list is this
-# module's ONLY remaining justification, that migration can invalidate the
-# module outright. Whoever migrates MUST run this measurement first: make a
+# MEASURED UNDER `devenv hook`: THAT MIGRATION ENDS THIS MODULE. The operator
+# intends to migrate off direnv to devenv 2.1's shell integration
+# (`eval "$(devenv hook zsh)"`, no `.envrc`, trust via `devenv allow`).
+# Measured 2026-09-23 on devenv 2.3.2+87edd16, 24 activations, controls
+# passing:
+#
+#   - `devenv hook` HAS NO WATCH SET AND NO RELOAD PATH. `_devenv_hook`
+#     returns at its first statement when `DEVENV_ROOT` is set, so inside an
+#     active devenv shell nothing is noticed — not even an edit to
+#     `devenv.nix`. It never reads `.devenv/input-paths.txt`. Verified for
+#     zsh, not only bash: the two hook scripts differ by 13 lines, all of them
+#     the registration tail (`PROMPT_COMMAND` vs `precmd_functions`) and a
+#     `_DEVENV_SHELL_HINT` value, and the `DEVENV_ROOT` early return is line
+#     30 in both.
+#
+#   - ITS ONLY REFRESH POINT IS EXITING AND RE-ENTERING THE SHELL, where the
+#     decider is devenv's own content-hashed eval cache — the
+#     `is_directory=1, recursive=1` mechanism described above.
+#
+#   - SO THIS MODULE IS DEAD POST-MIGRATION. The pure store copy
+#     `env.X = "${./dir}"` picks up a content edit on re-entry with no wrapper
+#     at all, 3/3, and the wrapped twin behaves identically.
+#
+#   - IT ALSO INVERTS DIRENV'S KEYING: content, not mtime, and an ADDED file
+#     IS caught — the opposite of direnv on both.
+#
+# NOT MEASURED: ablating the `registerTrackedInputs` call site itself under
+# the hook. The mechanism says it is redundant too, but that is inference.
+#
+# So the module's remaining justification is direnv SPECIFICALLY, and
+# migrating to `devenv hook` ends that justification: the module and its one
+# call site can be deleted when the migration happens. Confirm by ABLATION,
+# and ablate FIRST — remove this module and its call site, THEN make a
 # content-only edit to a file under `packages/stacked-workflows/references/`
-# and check whether the environment reloads. If it does without this module,
-# delete the module and its one call site. If it does not, keep it.
+# and check whether the environment picks it up. Running that check with the
+# module still in place cannot distinguish "the hook catches this" from
+# "`registerTrackedInputs` put the path there". If it is caught without the
+# module, the deletion stands; if not, restore it.
+#
+# The migration itself is the operator's call and is NOT made here. It carries
+# a cost they are weighing: no in-shell reload at all, and a 15-20s cold
+# re-entry.
 #
 # Files are hashed with `builtins.hashFile`, NEVER with
 # `builtins.hashString "sha256" (builtins.readFile f)`. `readFile` aborts
@@ -86,10 +124,14 @@
 # Symlinks are skipped on purpose: a stale devenv activation can drop dangling
 # store-path symlinks into a source skill dir, and hashing a broken link would
 # abort evaluation — `hashFile` resolves its argument, so this hazard survives
-# the move off `readFile`. A symlinked DIRECTORY is skipped too, which means
-# content behind one is invisible to the walk. That is pre-existing and load
-# bearing: stacked-workflows carries its `references/` as symlinks and covers
-# them by registering that tree separately.
+# the move off `readFile`. The skip covers a symlinked DIRECTORY too, so
+# content behind one would be invisible to the walk — but no symlinked
+# directory exists in this repo, so that arm is untested rather than load
+# bearing. What is real is symlinked FILES: every
+# `packages/stacked-workflows/skills/*/references/` is a real directory
+# holding symlinks into `packages/stacked-workflows/references/`, and the walk
+# skips every one of them. They are covered because `stacked-workflows-content`
+# registers that shared `references/` tree separately.
 #
 # THE CALLER MUST FORCE THE RESULT, or the hashes never execute and nothing is
 # registered. Put the returned string in a derivation env attr; that is what

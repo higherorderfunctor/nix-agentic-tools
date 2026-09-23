@@ -425,12 +425,22 @@ in {
       prefixDev pkgs.stacked-workflows-content.passthru.skills
       // {
         # Dev skills (repo-local tooling, not published packages). Handed over
-        # as bare paths: `ai.skills` walks each directory with `readDir` and
-        # emits one per-file source entry, so every leaf is already read during
-        # evaluation and already on direnv's watch list. Measured 2026-09-22 —
-        # bare and `lib/traceSource.nix`-wrapped arms reloaded identically,
-        # 3/3 each, with an attribution control confirming nothing else walks
-        # `dev/skills/`.
+        # as bare paths: `mkDevenvSkillEntries` (lib/ai/hm-helpers.nix) walks
+        # each directory with `readDir` and emits one `files.<path>.source`
+        # entry per leaf, for kind `regular` AND kind `symlink`. That is a
+        # per-file store realization, not a read — but granularity is what
+        # direnv keys on, so each leaf lands in `.devenv/input-paths.txt`
+        # individually, where a whole-directory store copy would register only
+        # the directory (mechanism in lib/traceSource.nix).
+        #
+        # Wrapping these in `lib/traceSource.nix` therefore cannot add a path:
+        # the per-file set is a strict superset of what that wrapper's
+        # regular-files-only walk reaches. The live `.devenv/input-paths.txt`
+        # already lists the symlinked leaves under
+        # `dev/skills/repo-review/references/`, which the wrapper's walk skips
+        # outright. Measured 2026-09-22 — bare and wrapped arms reloaded
+        # identically, 3/3 each, with an attribution control confirming
+        # nothing else walks `dev/skills/`.
         index-repo-docs = ./dev/skills/index-repo-docs;
         kimchi-surface-scan = ./dev/skills/kimchi-surface-scan;
         pr-review-loop = ./dev/skills/pr-review-loop;
