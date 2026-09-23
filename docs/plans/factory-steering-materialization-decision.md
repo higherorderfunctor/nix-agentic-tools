@@ -1,8 +1,7 @@
 # Decision: how the factory materializes generated instruction files
 
-Answers `docs/plans/factory-steering-copy-kickoff.md`. Written 2026-07-21 on
-`refactor/ai-factory-architecture`. **Recommendation + evidence. No emitter
-changes made.**
+Answers `docs/plans/factory-steering-copy-kickoff.md`. Written 2026-07-21.
+**Recommendation + evidence. No emitter changes made.**
 
 ---
 

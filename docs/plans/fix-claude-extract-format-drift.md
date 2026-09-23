@@ -1,8 +1,8 @@
 # Fix: claude-code update PR fails `checks.formatting` (sidecar format drift)
 
-**Date:** 2026-06-22 **Branch:** `refactor/ai-factory-architecture` **Trigger:**
-PR #253 (`update/claude-code`, head `fa39eb7`) — `test` job fails on
-`checks.x86_64-linux.formatting`. `build` (both platforms) and `gitleaks` pass.
+**Date:** 2026-06-22 **Trigger:** PR #253 (`update/claude-code`, head `fa39eb7`)
+— `test` job fails on `checks.x86_64-linux.formatting`. `build` (both platforms)
+and `gitleaks` pass.
 
 ## Root cause
 

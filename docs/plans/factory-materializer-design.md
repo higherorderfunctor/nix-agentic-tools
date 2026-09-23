@@ -244,14 +244,14 @@ table row 1).
 
 ## 9. Implementation record (2026-07-21)
 
-IMPLEMENTED as PR #437 (`feat/steering-materializer`: bc03db20 ordering fix ·
-cba33507 materializer · d91edb28 plan riders · 02cbdea1 options-doc stubs ·
-03cae974 review follow-ups). Three-lens adversarial review: 3× APPROVE, zero
-blocking. Builder deviations, all judged faithful-hardening: dot-escaped
-manifest greps; slug-uniqueness as documented limitation + `mkStateSlug`
-derivation (true cross-surface registry deferred — see below); temp sweep covers
-the state dir too; enterTest uses `exit 1` (devenv convention; the no-exit rule
-is HM-activation-specific); extra `symlink-strategy` test.
+IMPLEMENTED as PR #437 (bc03db20 ordering fix · cba33507 materializer · d91edb28
+plan riders · 02cbdea1 options-doc stubs · 03cae974 review follow-ups).
+Three-lens adversarial review: 3× APPROVE, zero blocking. Builder deviations,
+all judged faithful-hardening: dot-escaped manifest greps; slug-uniqueness as
+documented limitation + `mkStateSlug` derivation (true cross-surface registry
+deferred — see below); temp sweep covers the state dir too; enterTest uses
+`exit 1` (devenv convention; the no-exit rule is HM-activation-specific); extra
+`symlink-strategy` test.
 
 Accepted nonblocking review findings (modify-time context for the next editor):
 HM prune-abort repeats loudly every activation while devenv's single-task shape

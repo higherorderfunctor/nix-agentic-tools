@@ -126,7 +126,7 @@ edits below target current text:
 
 ```bash
 RIPGREP_CONFIG_PATH=/dev/null rg --no-config -n "ai\.settings" \
-  /home/caubut/Documents/projects/nix-agentic-tools-ideation \
+  /home/<user>/Documents/projects/nix-agentic-tools-ideation \
   --glob '!**/.claude/rules/**' --glob '!**/.github/instructions/**' \
   --glob '!**/.kiro/steering/**'
 ```
@@ -295,7 +295,7 @@ by the derivation.
 
 ```bash
 RIPGREP_CONFIG_PATH=/dev/null rg --no-config "ai\.settings" \
-  /home/caubut/Documents/projects/nix-agentic-tools-ideation \
+  /home/<user>/Documents/projects/nix-agentic-tools-ideation \
   --glob '!dev/notes/ai-transformer-design.md'
 ```
 
@@ -1536,8 +1536,8 @@ route through the `/stack-*` skills (AGENTS.md "Skill Routing").
 **Executed 2026-06-18** as a supervisor-worker-verifier run (one worker subagent
 per task, supervisor-verified, committed via the `/stack-*` skills). All 7 tasks
 landed and the full `nix flake check` is green. The stack was then rebased onto
-the latest `origin/refactor/ai-factory-architecture` (which had merged
-`update claude-code` to 2.1.181); commits 3–4 were amended to adapt:
+the latest origin (which had merged `update claude-code` to 2.1.181); commits
+3–4 were amended to adapt:
 
 - `mkClaudeExtract` is now minifier-variable-agnostic — 2.1.159 emitted the
   effort validator as `effortLevel:y.enum(…)`, 2.1.181 as

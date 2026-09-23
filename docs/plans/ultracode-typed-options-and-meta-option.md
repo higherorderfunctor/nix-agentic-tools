@@ -1,10 +1,9 @@
 # Ultracode: typed settings options + "ultracode-on-launch" meta option
 
-> **Status:** ✅ IMPLEMENTED 2026-07-08 on `refactor/ai-factory-architecture`
-> and committed as one commit. `nix flake check` green. **Owner:** Christopher
-> Aubut. **Started:** 2026-07-07. **Committed 2026-07-08 at user request**
-> (normally untracked working context per repo convention — do not commit unless
-> explicitly asked).
+> **Status:** ✅ IMPLEMENTED 2026-07-08 and committed as one commit.
+> `nix flake check` green. **Owner:** Christopher Aubut. **Started:**
+> 2026-07-07. **Committed 2026-07-08 at user request** (normally untracked
+> working context per repo convention — do not commit unless explicitly asked).
 >
 > **Decisions locked (2026-07-07):** option **A1** — thin meta option, **NO
 > wrapper**, persisted undocumented `ultracode` key + **required `extraExtract`

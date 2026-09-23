@@ -7,8 +7,7 @@
 > evaluated over four measurement passes and rejected. `devenv hook` notices
 > nothing at all while a shell is active, so the swap trades a next-prompt
 > reload for a manual exit-and-re-enter. Transcripts:
-> `git show origin/archive/devenv-storecopy-probe:PROBE.md` — an archive ref
-> kept for retrieval, never a branch to merge — and the header of
+> `dev/references/devenv-activation-probe.md`, and the header of
 > `lib/traceSource.nix`.
 
 **Decision: keep direnv. Do not delete `.envrc`. Do not migrate to
@@ -28,12 +27,20 @@ direnv, by contrast, reloads at the next prompt. That is the capability the
 migration would give up.
 
 Timings, same machine, same day: cold re-entry under `devenv hook` 15-20s, a
-direnv cache hit 0.01s, a direnv reload 15-21s.
+direnv cache hit 0.01s, a direnv reload 14-18s.
 
-This holds for zsh as well as bash. The two generated hook scripts differ by 13
-lines, all of them the registration tail (bash's `PROMPT_COMMAND` versus zsh's
-prompt-command array) plus one `_DEVENV_SHELL_HINT` value. The `DEVENV_ROOT`
-early return is line 30 in both.
+This holds for zsh as well as bash — re-derive it rather than trusting the
+figures, since they came from a direct comparison of the two generated scripts
+and not from the probe transcript:
+
+```bash
+diff <(devenv hook bash) <(devenv hook zsh) | grep -c '^[<>]'   # 13
+devenv hook zsh | grep -n 'DEVENV_ROOT:-'                       # 30
+```
+
+The 13 differing lines are all the registration tail (bash's `PROMPT_COMMAND`
+versus zsh's prompt-command array) plus one `_DEVENV_SHELL_HINT` value, and the
+`DEVENV_ROOT` early return is line 30 in both.
 
 ## Migrating would be a REMOVAL, not an addition
 
@@ -68,12 +75,17 @@ direnv triggers on mtime; `devenv hook` triggers on content, through the eval
 cache. Neither is a superset of the other. The mtime keying is what makes direnv
 noisy, and it is also what makes in-shell reload possible at all.
 
+Every cell above is a single trial, because each row is a mechanism rather than
+a rate. The mechanism behind the third row is directly observable: at a cold
+load direnv held 593 watches and not one of them was a directory, so an added
+file has no listing-level watch to trip. The add was missed in both probe trees.
+
 ## It is what keeps `lib/traceSource.nix` load-bearing
 
 direnv's watch list is that module's only remaining consumer. Under
 `devenv hook`, a bare store copy (`env.X = "${./dir}"`) already picks up a
 content edit on re-entry with no help — measured 3/3, and the traced twin
-behaves identically. A migration would therefore turn that module into dead
+behaves identically, 2/2. A migration would therefore turn that module into dead
 code. Its header carries the full reasoning, the census of every dependent that
 would go with it, and the ablation recipe for confirming the deletion; read it
 there rather than restating it here.

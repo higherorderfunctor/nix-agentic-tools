@@ -1,7 +1,6 @@
 # Agent-Primitive Labs — Design
 
-Status: draft, awaiting review Date: 2026-07-20 Branch:
-`refactor/ai-factory-architecture`
+Status: draft, awaiting review Date: 2026-07-20
 
 ## 1. Purpose
 
@@ -64,10 +63,10 @@ from the resolved chain.
 `/home`:
 
 ```
-/home/caubut/<lab>/…/CLAUDE.md
+/home/<user>/<lab>/…/CLAUDE.md
 …
-/home/caubut/.claude/CLAUDE.md      ← the real global instructions
-/home/caubut/CLAUDE.md
+/home/<user>/.claude/CLAUDE.md      ← the real global instructions
+/home/<user>/CLAUDE.md
 /home/.claude/CLAUDE.md
 ```
 

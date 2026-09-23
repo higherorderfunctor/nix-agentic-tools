@@ -6,12 +6,11 @@ Full code-grounding pass done — see **§10 Grounding delta** for three
 corrections/expansions to the original design (Copilot is a split-brain, not a
 hard collision; devenv-Claude context-drop repaired by the same change; ~3
 existing module-eval tests must be rewritten). **Next: TDD (§6) — write the
-failing Claude fixture first.** **Branch:** `refactor/ai-factory-architecture`
-**Scope:** FACTORY fix (`lib/ai/*` + per-app `mk*.nix`). This is **beyond S1's
-SWS revert** — S1 only _exposed_ a pre-existing latent design flaw.
-**Execution:** systematic-debugging Phase 4 (failing test FIRST) →
-supervisor-worker-verifier. No `nix flake check` locally (OOM rule); per-check
-`nix build .#checks.x86_64-linux.<name> --max-jobs 1`.
+failing Claude fixture first.** **Scope:** FACTORY fix (`lib/ai/*` + per-app
+`mk*.nix`). This is **beyond S1's SWS revert** — S1 only _exposed_ a
+pre-existing latent design flaw. **Execution:** systematic-debugging Phase 4
+(failing test FIRST) → supervisor-worker-verifier. No `nix flake check` locally
+(OOM rule); per-check `nix build .#checks.x86_64-linux.<name> --max-jobs 1`.
 
 ---
 
@@ -311,7 +310,7 @@ transform's aggregate render was the one L4 violation.
 
 ### Banked — commit/push discipline (reaffirmed by operator 2026-07-20)
 
-At the **next natural commit** (not before): `git fetch` + rebase
-`refactor/ai-factory-architecture` over the updated remote (operator merged the
-package-update PRs / "updated deps"), then commit + push. Do NOT rebase early.
-Land the compose fix as a **separate factory commit** on the S1 tip.
+At the **next natural commit** (not before): `git fetch` + rebase over the
+updated remote (operator merged the package-update PRs / "updated deps"), then
+commit + push. Do NOT rebase early. Land the compose fix as a **separate factory
+commit** on the S1 tip.

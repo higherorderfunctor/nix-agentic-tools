@@ -1,7 +1,6 @@
 # Single-mechanism materialization for generated instruction files
 
-Status: **LANDED (repo-local) / factory conversion DEFERRED** · 2026-07-21 ·
-branch `refactor/ai-factory-architecture`
+Status: **LANDED (repo-local) / factory conversion DEFERRED** · 2026-07-21
 
 - `f12aa5f1` — repo-local single-mechanism refactor. Verified: all four store
   paths bit-identical across the extraction (mechanism-only change); deleting

@@ -12,7 +12,7 @@ levers are the ones the F1–F22 items enumerated; F21 does not discover new
 surfaces, it composes the known ones.
 
 Bundle path abbreviated `$B` below:
-`/home/caubut/.local/share/kiro-cli/kas/2.15.1-e20633b4.../node_modules/@kiro/agent/dist/server/acp-server.js`.
+`/home/<user>/.local/share/kiro-cli/kas/2.15.1-e20633b4.../node_modules/@kiro/agent/dist/server/acp-server.js`.
 
 ## 2. What is already known (inputs)
 

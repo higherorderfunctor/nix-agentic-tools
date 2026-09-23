@@ -236,7 +236,7 @@ gitlab-mcp.nix builds successfully.
 
 Use git-intel-mcp.nix as your template:
 
-  Read: /home/caubut/Documents/projects/nix-agentic-tools-ideation/overlays/mcp-servers/git-intel-mcp.nix
+  Read: /home/<user>/Documents/projects/nix-agentic-tools-ideation/overlays/mcp-servers/git-intel-mcp.nix
 
 Create overlays/mcp-servers/gitlab-mcp.nix with these frozen values:
 
@@ -274,7 +274,7 @@ Hash bootstrap procedure (two hashes to discover):
 
 After the overlay file exists, register it in overlays/default.nix:
 
-  Read: /home/caubut/Documents/projects/nix-agentic-tools-ideation/overlays/default.nix
+  Read: /home/<user>/Documents/projects/nix-agentic-tools-ideation/overlays/default.nix
 
   Insert between the github-mcp block (around line 80-82) and the kagi-mcp
   block (line 83-85). Maintain alphabetical order. Insertion:
@@ -364,10 +364,10 @@ You are implementing Phase 2 of docs/plans/gitlab-mcp-packaging.md.
 
 Reference files to read first:
 
-  /home/caubut/Documents/projects/nix-agentic-tools-ideation/packages/github-mcp/default.nix
-  /home/caubut/Documents/projects/nix-agentic-tools-ideation/packages/github-mcp/modules/mcp-server.nix
-  /home/caubut/Documents/projects/nix-agentic-tools-ideation/packages/github-mcp/lib/mkGitHub.nix
-  /home/caubut/Documents/projects/nix-agentic-tools-ideation/lib/mcp.nix    (lines 1-100 — credential machinery)
+  /home/<user>/Documents/projects/nix-agentic-tools-ideation/packages/github-mcp/default.nix
+  /home/<user>/Documents/projects/nix-agentic-tools-ideation/packages/github-mcp/modules/mcp-server.nix
+  /home/<user>/Documents/projects/nix-agentic-tools-ideation/packages/github-mcp/lib/mkGitHub.nix
+  /home/<user>/Documents/projects/nix-agentic-tools-ideation/lib/mcp.nix    (lines 1-100 — credential machinery)
 
 Create the following files.
 

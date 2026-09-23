@@ -1,9 +1,9 @@
 # Claude typed hooks — implementation record (do-it-right, NOT surgical)
 
-> **Status: ✅ COMPLETE + DEPLOYED (2026-07-20d).** Commits C1–C6b on
-> `refactor/ai-factory-architecture`, pushed (origin @ `b5f7f74f`); nixos-config
-> repinned + activated clean. Committed as the implementation record + handoff
-> (operator-requested). Read "Final state & handoff" next.
+> **Status: ✅ COMPLETE + DEPLOYED (2026-07-20d).** Commits C1–C6b pushed
+> (origin @ `b5f7f74f`); nixos-config repinned + activated clean. Committed as
+> the implementation record + handoff (operator-requested). Read "Final state &
+> handoff" next.
 >
 > Supersedes the "surgical devenv hooks fix" framing in
 > `docs/plans/typed-hooks-research/handoff-devenv-hooks-bug.md`. Operator
@@ -17,9 +17,8 @@
 
 ## 0. Where this sits
 
-- Compose fix is DONE + shipped: `4b463554` on
-  `refactor/ai-factory-architecture` (pushed; nixos-config repinned; operator's
-  HITL activation was running at close).
+- Compose fix is DONE + shipped: `4b463554` (pushed; nixos-config repinned;
+  operator's HITL activation was running at close).
 - This plan = the next work unit (the old "commit 2"), now scoped up to
   typed-northbound + ride-southbound per operator philosophy.
 

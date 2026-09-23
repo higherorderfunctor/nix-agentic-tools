@@ -39,9 +39,9 @@ Facts below were adversarially verified against git/code; where a handoff claim
 was stale, THIS section wins. Do not re-inherit handoff claims without checking
 here first.
 
-- **Base divergence RESOLVED.** Local `refactor/ai-factory-architecture` ==
-  `origin/...` at `b3906bd9` (0/0). Session #2's "9 PRs behind + 5 unpushed"
-  gating item is satisfied; PR #433 squash `af53cf63` IS an ancestor of HEAD.
+- **Base divergence RESOLVED.** Local == origin at `b3906bd9` (0/0). Session
+  #2's "9 PRs behind + 5 unpushed" gating item is satisfied; PR #433 squash
+  `af53cf63` IS an ancestor of HEAD.
 - **REFUTED: "HM Kiro hooks emitter never converted."** Current tree delivers
   general `ai.kiro.hooks` via `home.activation` real files
   (`packages/kiro-cli/lib/mkKiro.nix:631-643`). Session (a)'s §9 claim predates
@@ -67,8 +67,8 @@ here first.
   merge-tree). Known follow-up: its module-eval golden asserts pre-#433
   `home.file` delivery and must re-point at `home.activation`;
   `kiro-auto-memory.md` fragment needs reconciling with #433's version.
-- **Labs branch:** `refactor/agent-primitive-labs` clean at `a4560b77`, 6
-  commits, fork point `010dbe15` = 19 commits behind HEAD. Zero deletions.
+- **Labs branch:** clean at `a4560b77`, 6 commits, fork point `010dbe15` = 19
+  commits behind HEAD. Zero deletions.
 - **Worktrees:** `agent-primitive-labs`, `kiro-hook-colocation` (both live
   work); `typed-hooks-kiro` (454b091c), `typed-hooks-phase1a` (d964ae1c)
   presumed superseded — cleanup gated HITL.
@@ -124,8 +124,8 @@ worktrees); P4 labs payload consumes P1's rebase; P5 is the goal state.
 
 Everything rebases onto one tip; kills all cross-session staleness. Units:
 
-- u1-labs-rebase: rebase `refactor/agent-primitive-labs` onto `b3906bd9` in its
-  worktree. Hand-resolve `flake.nix` only; regenerate `devenv.yaml`
+- u1-labs-rebase: rebase onto `b3906bd9` in its worktree. Hand-resolve
+  `flake.nix` only; regenerate `devenv.yaml`
   (`nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' > devenv.yaml`),
   `flake.lock`/`devenv.lock`; union `config/cspell/project-terms.txt`. Then
   targeted single-job check builds.

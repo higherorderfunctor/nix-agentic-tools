@@ -8,7 +8,7 @@
 >
 > **Origin session:** 2026-06-01. Active versions while diagnosing: claude-code
 > **2.1.159**, kiro-cli **2.5.0**, copilot-cli **1.0.56**. Repo
-> `nix-agentic-tools`, branch `refactor/ai-factory-architecture`.
+> `nix-agentic-tools`.
 >
 > **nixos-config is OUT OF SCOPE.** It still uses the removed
 > `ai.claude.settings.effortLevel` path and requires a separate consumer

@@ -13,8 +13,7 @@
 > Copilot) **without re-deriving anything below.**
 >
 > **Origin session date:** 2026-06-01. Active Claude Code version while
-> diagnosing: **2.1.159**. Repo: `nix-agentic-tools` (factory architecture
-> branch `refactor/ai-factory-architecture`).
+> diagnosing: **2.1.159**. Repo: `nix-agentic-tools`.
 >
 > **Do NOT touch nixos-config** — `effortLevel = "xhigh"` is already set there.
 > This work is entirely in `nix-agentic-tools`.

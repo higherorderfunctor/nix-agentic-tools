@@ -11,7 +11,7 @@ ledger that accumulates.
 
 ## Where things are
 
-- Repo: `/home/caubut/Documents/projects/nix-agentic-tools` (primary checkout, on
+- Repo: `/home/<user>/Documents/projects/nix-agentic-tools` (primary checkout, on
   `main`). Work in a NEW worktree off `origin/main`, per `AGENTS.md` — worktrees
   live in the sibling `nix-agentic-tools-worktrees/`. Bootstrap it with **one**
   `devenv shell` before the first commit, and if a second shell entry ever leaves
@@ -22,9 +22,6 @@ ledger that accumulates.
   through C-15). **Read `README.md` first, then `carried-negatives.md`.** The
   negatives are the cheapest orientation in the repo: they are the wrong turns
   already paid for, and several are methodology traps you will otherwise repeat.
-- There is an unmerged branch `test/kiro-mode-f-harness` (11 commits) carrying a
-  mode-F fixture harness. **Do not run its live fixtures** — those are reserved
-  for an operator-driven sitting. You may reuse its read-only tooling; see below.
 
 ## The situation that triggered this
 
@@ -109,21 +106,21 @@ Practical notes that will save you time:
   every diff on it stops being reviewable. This already happened once here.
 
 There is a scriptable, read-only way to interrogate the engine directly:
-`fixtures/kiro-primitives/harness/acp-probe.py` on the harness branch drives the
-engine's **unadvertised** `_kiro/workflow/*` ACP extension methods over stdio,
-under a scratch `HOME`, with the auth request refused. It needs no seeded
-session, no feature flag and no model. Useful for confirming that a *behaviour*
-survived, not merely that a string did. Note it isolates with `HOME` — never
-`KIRO_HOME`, which reaches a different root — and it deliberately leaves
-`XDG_DATA_HOME` real, because an empty credential store triggers a browser login
-rather than an error.
+`fixtures/kiro-primitives/harness/acp-probe.py` drives the engine's
+**unadvertised** `_kiro/workflow/*` ACP extension methods over stdio, under a
+scratch `HOME`, with the auth request refused. It needs no seeded session, no
+feature flag and no model. Useful for confirming that a *behaviour* survived,
+not merely that a string did. Note it isolates with `HOME` — never `KIRO_HOME`,
+which reaches a different root — and it deliberately leaves `XDG_DATA_HOME`
+real, because an empty credential store triggers a browser login rather than an
+error.
 
 ### 3. Report drift as findings, not as a diff
 
 For anything in the **changed** or **removed** column, treat it the way the
 corpus treats a discovery: what was believed, what is now true, how the
 difference would have presented to someone trusting the old record, and whether
-it invalidates a downstream design decision. Several records feed an unmerged
+it invalidates a downstream design decision. Several records feed the
 mode-F harness; if one of them moved, say so explicitly.
 
 If a change deserves a new carried negative, add it in the existing four-field

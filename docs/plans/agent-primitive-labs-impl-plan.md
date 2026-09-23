@@ -25,19 +25,17 @@ bash.
 ## Global Constraints
 
 - **Where the docs live vs. where the work happens.** This plan and its
-  companion spec are canonical in the **main checkout** on
-  `refactor/ai-factory-architecture`:
+  companion spec are canonical in the **main checkout**:
   - plan —
-    `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-impl-plan.md`
+    `/home/<user>/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-impl-plan.md`
   - spec —
-    `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
+    `/home/<user>/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
 
   **All code changes happen in the worktree** at
-  `/home/caubut/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs`
-  (branch `refactor/agent-primitive-labs`). Do not copy the docs into the
-  worktree — they are read from the absolute paths above and updated in place
-  there. Step-tick updates and any spec corrections go to the main-checkout
-  copies.
+  `/home/<user>/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs`.
+  Do not copy the docs into the worktree — they are read from the absolute paths
+  above and updated in place there. Step-tick updates and any spec corrections
+  go to the main-checkout copies.
 
 - **Companion spec:** read it before starting. Every empirical claim below is
   verified there; do not re-derive.
@@ -879,7 +877,7 @@ git commit -m "feat(labs): add skill-trigger lab probing description-only trigge
 
 - Modify: the spec's §5 open items — record the outcome. **Absolute path, main
   checkout:**
-  `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
+  `/home/<user>/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
   (it is deliberately not present in the worktree)
 - Modify: `dev/tasks/lab.nix` **only if** the probe shows `KIRO_HOME` does not
   cover `hooks/`
@@ -947,7 +945,7 @@ cat /tmp/nat-lab-hook-probe.log 2>/dev/null || echo "NOT FIRED"
 - [ ] **Step 4: Record the outcome in the spec**
 
 Replace the `KIRO_HOME` bullet under `## 5. Open items` in
-`/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
+`/home/<user>/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
 with the verified result, including the Kiro version tested and the method. If
 REFUTED, add a `Known blockers` entry stating that Kiro-hook labs are not
 isolated, and **stop** — do not invent a mitigation without checking with the

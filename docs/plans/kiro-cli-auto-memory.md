@@ -905,7 +905,6 @@ delivery, module ergonomics, retire legacy, louder/observable, Graphiti,
   1-confirmed [the D33 SSOT registration, fixed here] / 3-refuted). **The
   workstream's in-repo code + docs are now complete;** only the HITL
   nixos-config consumer flip (A, Q10/Q11) remains — user-gated.
-- **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.12.0` (S13; was 2.11.1 through S12). On
   2.12.0 BOTH `kiro-cli chat --tui --v3` (the `chat` subcommand, verified live)
   and the launcher form `kiro-cli --v3 --tui` work; `chat` additionally exposes
@@ -2501,24 +2500,23 @@ hook format.
     distiller, and the v3 hook + steering nix emission.
 
 - **Session 8 — 2026-07-12.** Landed D24 (the deferred D23a tail-loss fix)
-  self-serve on refactor/ai-factory-architecture; the distiller is still
-  unwired, so the change is isolated to overlays/kiro-memory-distiller/. TDD
-  throughout (watched each test fail first): shouldDistill gate AND→OR +
-  flushSessionTails SessionStart scan + `--flush` CLI + lastTranscriptSize state
-  field + DRY helpers (58 bun tests, treefmt + cspell clean). Ran a 4-lens
-  adversarial review workflow (correctness / concurrency / design / tests) with
-  a per-finding refute pass (16 agents, 12 findings, 6 confirmed); fixed the
-  3-lens-confirmed watermark re-parse defect + a DRY nit + 2 test gaps before
-  landing. User delegated implementation order to the agent (agile working
-  increments; most load-bearing otherwise) → encoded a frozen stage order + a
-  new protocol bullet into the bootstrap. **Next:** STAGE 2 — nix-package the
-  distiller as a derivation.
+  self-serve; the distiller is still unwired, so the change is isolated to
+  overlays/kiro-memory-distiller/. TDD throughout (watched each test fail
+  first): shouldDistill gate AND→OR + flushSessionTails SessionStart scan +
+  `--flush` CLI + lastTranscriptSize state field + DRY helpers (58 bun tests,
+  treefmt + cspell clean). Ran a 4-lens adversarial review workflow (correctness
+  / concurrency / design / tests) with a per-finding refute pass (16 agents, 12
+  findings, 6 confirmed); fixed the 3-lens-confirmed watermark re-parse defect +
+  a DRY nit + 2 test gaps before landing. User delegated implementation order to
+  the agent (agile working increments; most load-bearing otherwise) → encoded a
+  frozen stage order + a new protocol bullet into the bootstrap. **Next:** STAGE
+  2 — nix-package the distiller as a derivation.
 
 - **Session 9 — 2026-07-12.** Landed **STAGE 2 — nix-packaged the distiller**
-  (D25), self-serve on refactor/ai-factory-architecture; the distiller is now a
-  buildable/cachix-able flake package but still unwired (no hook/module consumer
-  — that is STAGE 3), so the change is contained to `overlays/` + `checks/`.
-  First mapped the repo's bun/TS packaging precedent (openmemory-mcp et al. =
+  (D25), self-serve; the distiller is now a buildable/cachix-able flake package
+  but still unwired (no hook/module consumer — that is STAGE 3), so the change
+  is contained to `overlays/` + `checks/`. First mapped the repo's bun/TS
+  packaging precedent (openmemory-mcp et al. =
   `makeWrapper ${bun}/bin/bun --add-flags <entry>`, all inputs via `ourPkgs` for
   cache-hit parity), then wrote `overlays/kiro-memory-distiller.nix`
   (stdenvNoCC, dep-free, two role bins, checkPhase = 58 in-sandbox bun tests,
@@ -2537,24 +2535,24 @@ hook format.
   anchor via `ai.kiro.hooks` / `ai.kiro.rules`, referencing the packaged bins by
   absolute store path (HOME must be exported in the hook action env).
 
-- **Session 10 — 2026-07-12.** Landed STAGE 3 (D27) self-serve on
-  refactor/ai-factory-architecture — the first end-to-end auto-memory wiring,
-  turning the packaged-but-unwired distiller into referenced-and-emitted hooks +
-  steering. First mapped the real option surface (mkKiro.nix hooks/rules
-  emission, ai-common ruleModule, the kiro transformer's `inclusion: always`,
-  the distiller's HOME/`KIRO_MEMORY_*`/`--flush` contract, the flake's
-  `lib.ai.apps` merge), then wrote `packages/kiro-cli/lib/autoMemory.nix` +
-  exported it + added 4 module-eval parity tests. Verified OOM-safely (targeted
-  `evalModules` + built wrappers for all HOME branches — no flake eval). Ran a
-  4-lens adversarial review workflow (schema-fidelity / option-surface /
-  distiller-contract / plan-and-nix) + a per-finding refute pass (8 agents): **2
-  CONFIRMED, 1 PARTIAL, 1 REFUTED, 1 clean.** The CONFIRMED finding (a
-  `home != null` bake would emit `export HOME=''` for an empty-string input →
-  silent cwd-relative loss) was FIXED before presenting — always-guard +
-  bake-only-non-empty, regression-locked by `empty == unset`. The PARTIAL
-  (dangling D27 label) is resolved by recording D27 + annotating B3 in the same
-  change. **Next:** STAGE 4 (D23b buffer lockfile) or STAGE 5 (openmemory-mem
-  SDK helper) — agent's call; the consumer flip + live-TUI test stay HITL.
+- **Session 10 — 2026-07-12.** Landed STAGE 3 (D27) self-serve — the first
+  end-to-end auto-memory wiring, turning the packaged-but-unwired distiller into
+  referenced-and-emitted hooks + steering. First mapped the real option surface
+  (mkKiro.nix hooks/rules emission, ai-common ruleModule, the kiro transformer's
+  `inclusion: always`, the distiller's HOME/`KIRO_MEMORY_*`/`--flush` contract,
+  the flake's `lib.ai.apps` merge), then wrote
+  `packages/kiro-cli/lib/autoMemory.nix` + exported it + added 4 module-eval
+  parity tests. Verified OOM-safely (targeted `evalModules` + built wrappers for
+  all HOME branches — no flake eval). Ran a 4-lens adversarial review workflow
+  (schema-fidelity / option-surface / distiller-contract / plan-and-nix) + a
+  per-finding refute pass (8 agents): **2 CONFIRMED, 1 PARTIAL, 1 REFUTED, 1
+  clean.** The CONFIRMED finding (a `home != null` bake would emit
+  `export HOME=''` for an empty-string input → silent cwd-relative loss) was
+  FIXED before presenting — always-guard + bake-only-non-empty,
+  regression-locked by `empty == unset`. The PARTIAL (dangling D27 label) is
+  resolved by recording D27 + annotating B3 in the same change. **Next:** STAGE
+  4 (D23b buffer lockfile) or STAGE 5 (openmemory-mem SDK helper) — agent's
+  call; the consumer flip + live-TUI test stay HITL.
 
 - **Interim — 2026-07-12 (post-S9).** Recorded a user backlog item without
   touching code: a comprehensive implementation doc (README/fragment/steering)
@@ -2566,8 +2564,8 @@ hook format.
   unchanged:** STAGE 3.
 
 - **Session 11 — 2026-07-13.** Landed **STAGE 4 — the D23b per-project buffer
-  lockfile** (D28), self-serve on refactor/ai-factory-architecture; isolated to
-  overlays/kiro-memory-distiller/ (distiller.ts
+  lockfile** (D28), self-serve; isolated to overlays/kiro-memory-distiller/
+  (distiller.ts
   - tests) + a cspell bump. TDD throughout (watched RED first): `withBufferLock`
     (linkSync O_EXCL mutex + ttl stale-break + `Atomics.wait` backoff,
     injectable clock/sleep) around the shared-buffer RMW; `distill()` returns
@@ -2586,11 +2584,11 @@ hook format.
     call next session; run the HITL live-TUI test first per D27).
 
 - **Session 12 — 2026-07-13.** Landed **STAGE 5a — the `openmemory-mem` SDK
-  helper binary** (D29), self-serve on refactor/ai-factory-architecture. First
-  VERIFIED the real `Memory` SDK API against the pinned 9af0f95 GitHub source
-  (via the github MCP) rather than trusting D19/D20 from memory — confirmed
-  `add`/`search` accept `project_id` and the SDK path bypasses the HTTP tenant
-  layer (so Q10 doesn't bite the helper). TDD (watched RED): a pure
+  helper binary** (D29), self-serve. First VERIFIED the real `Memory` SDK API
+  against the pinned 9af0f95 GitHub source (via the github MCP) rather than
+  trusting D19/D20 from memory — confirmed `add`/`search` accept `project_id`
+  and the SDK path bypasses the HTTP tenant layer (so Q10 doesn't bite the
+  helper). TDD (watched RED): a pure
   `parseArgs`/`formatHits`/`normalizeRows`/`runMem` core with the SDK as an
   injected `MemoryBackend` seam (real backend built lazily in the entry, so the
   bun suite never loads dist/PG); CLI matches the distiller's
@@ -2722,7 +2720,7 @@ hook format.
   `settingsToEnv` (Q11 lockstep). No re-key/migration — the 9af0f95 base schema
   has `project_id` natively on a fresh DB (user chose "fresh parallel DB, retire
   legacy later" over re-keying real data; empirical ai-pg inspection showed the
-  dominant existing user_id was `caubut`, not `anonymous`, which the fresh-DB
+  dominant existing user_id was `<user>`, not `anonymous`, which the fresh-DB
   path made moot). Hit + fixed a pgvector HNSW-dimension create-race in the
   openmemory-mcp MODULE (D34, `58536a4c`) — after first mis-fixing it by hand
   (recorded the no-manual-masking lesson); proven reproducibly by dropping

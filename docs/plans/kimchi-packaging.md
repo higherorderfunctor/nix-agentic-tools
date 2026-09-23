@@ -1,7 +1,7 @@
 # Plan: package Kimchi CLI as a first-class binary package
 
 > Status: **IMPLEMENTED** (binary package + propagation) 2026-06-22. Created:
-> 2026-06-22. Branch: `refactor/ai-factory-architecture`.
+> 2026-06-22.
 >
 > **Outcome:** `nix build .#kimchi` builds and runs (`--version` → 0.1.34,
 > `--help` renders with theme assets). `autoPatchelfHook` repointed both ELFs

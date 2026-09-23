@@ -35,9 +35,8 @@ Your working rules for this task, in priority order:
    current code, and the replacement. Do not refactor surrounding code, rename
    things, or "improve" adjacent lines.
 
-Deliverable: a 4-commit stack (optionally submitted as stacked PRs against
-`refactor/ai-factory-architecture`) implementing Tasks 1–4, pushed so CI can
-verify it.
+Deliverable: a 4-commit stack (optionally submitted as stacked PRs) implementing
+Tasks 1–4, pushed so CI can verify it.
 
 ---
 
@@ -109,7 +108,7 @@ other, which is exactly why they must be **four separate commits**.
   safe to run locally; it is not a Nix build.
 - **Maintainer conventions & memory** (optional deeper context; the load-bearing
   pieces are already inlined above):
-  `/home/caubut/Documents/projects/nixos-config/home/caubut/features/cli/code/ai/claude-config/projects/-home-caubut-Documents-projects-nix-agentic-tools`
+  `/home/<user>/Documents/projects/nixos-config/home/<user>/features/cli/code/ai/claude-config/projects/-home-<user>-Documents-projects-nix-agentic-tools`
 
 ---
 
@@ -499,10 +498,10 @@ maintainer's audit.
 
 ## Submit
 
-- [ ] Push the 4-commit stack with `stack-submit` (stacked PRs against
-      `refactor/ai-factory-architecture` are fine; a single branch carrying the
-      4 commits is also acceptable). CI (`ci.yml`, `pull_request` event) then
-      builds and verifies on both `x86_64-linux` and `aarch64-darwin`.
+- [ ] Push the 4-commit stack with `stack-submit` (stacked PRs are fine; a
+      single branch carrying the 4 commits is also acceptable). CI (`ci.yml`,
+      `pull_request` event) then builds and verifies on both `x86_64-linux` and
+      `aarch64-darwin`.
 - [ ] Do **not** merge anything. The maintainer reviews the stack and CI.
 
 ## Success criteria

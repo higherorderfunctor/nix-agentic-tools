@@ -7,11 +7,10 @@
 
 ## The spiral
 
-User is on `refactor/ai-factory-architecture`, has been for weeks, won't merge
-to main — trust isn't there. Every cross-cutting system (module system,
-fragments, transforms, doc-gen, DRY enforcement) reaches into every other. No
-system locks in isolation; every refactor reopens the others. Round-robin
-between them is the current mode.
+User won't merge to main — trust isn't there. Every cross-cutting system (module
+system, fragments, transforms, doc-gen, DRY enforcement) reaches into every
+other. No system locks in isolation; every refactor reopens the others.
+Round-robin between them is the current mode.
 
 In the user's own words:
 

@@ -13,8 +13,8 @@
 > findings into the sibling auto-detect/effort-pin handoff **without re-deriving
 > anything below.**
 >
-> **Origin session date:** 2026-06-01. Repo `nix-agentic-tools`, branch
-> `refactor/ai-factory-architecture`. **nixos-config is out of scope.**
+> **Origin session date:** 2026-06-01. Repo `nix-agentic-tools`. **nixos-config
+> is out of scope.**
 >
 > **Sibling handoff (read it):**
 > `docs/plans/claude-effort-pin-and-mutable-state-reconciliation.md`. That doc

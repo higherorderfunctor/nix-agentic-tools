@@ -1,7 +1,6 @@
 # Update pipeline: transitive-hash gap
 
 > **Status:** open. Documented 2026-05-20 to resume in a future session.
-> **Branch context:** `refactor/ai-factory-architecture`.
 >
 > **Superseded in part, 2026-09-09.** This document's remedy — "run the build in
 > the bot job and let `report_held_back` catch every failure" — bundled two
@@ -532,7 +531,7 @@ Real fixes pending:
 
 ## How to resume
 
-State on `refactor/ai-factory-architecture` as of 2026-05-20 late evening:
+State as of 2026-05-20 late evening:
 
 1. ~~Gap 4 content fix~~ — commit `51a8429`.
 2. ~~Gap 4 structural guard~~ — commit `1d864d3`.
@@ -574,7 +573,7 @@ package invisible to the push step.
 
 - `treefmt` CLI was misconfigured in the worktree-agent environment (PWD
   tree-root mismatch — agent worktrees live under
-  `/home/caubut/Documents/projects/nix-agentic-tools/.claude/worktrees/` but the
+  `/home/<user>/Documents/projects/nix-agentic-tools/.claude/worktrees/` but the
   treefmt wrapper hardcodes `--tree-root` to `nix-agentic-tools-ideation`).
   Workaround used by all four agents: `nix fmt <files>`. Worth root-causing
   before another agent run.

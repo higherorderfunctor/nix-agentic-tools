@@ -289,7 +289,7 @@ becomes part of the path, which is how `bundled://investigate` launched with no
 inputs produced this artifact:
 
 ```
-report = /home/caubut/.../nix-agentic-tools/{{report_path}}
+report = /home/<user>/.../nix-agentic-tools/{{report_path}}
 ```
 
 a real directory name containing braces (§4.1). And a relative path in a
@@ -419,7 +419,7 @@ check (§7.1). The rejection message is worth reading in full, because it names
 the only escape hatch mentioned anywhere in the surface:
 
 ```
-... resolves outside the allowed workspace roots (/home/caubut/.../nix-agentic-tools). The stop condition would never match; move the file inside the workspace or add its directory to additionalDirectories.
+... resolves outside the allowed workspace roots (/home/<user>/.../nix-agentic-tools). The stop condition would never match; move the file inside the workspace or add its directory to additionalDirectories.
 ```
 
 `additionalDirectories` is a property of the **run**, not of the workflow JSON —
@@ -951,7 +951,7 @@ a recipe's inputs were supplied: the launch succeeded, the run reached
 into the prompt and into the artifact path alike, producing
 
 ```
-report = /home/caubut/.../nix-agentic-tools/{{report_path}}
+report = /home/<user>/.../nix-agentic-tools/{{report_path}}
 ```
 
 The step agent, not the engine, caught it. It replied at `warning` severity

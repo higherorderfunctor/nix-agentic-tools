@@ -58,7 +58,6 @@ caoff
 castai
 catchable
 catppuccin
-caubut
 cavira
 cclsp
 cctools

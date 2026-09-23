@@ -6,7 +6,7 @@
 >
 > **Convention for the other two sessions:** write yours to
 > `docs/plans/session-state/<topic>.md` in the MAIN checkout
-> (`/home/caubut/Documents/projects/nix-agentic-tools`), same section order, so
+> (`/home/<user>/Documents/projects/nix-agentic-tools`), same section order, so
 > the merge session can diff them side by side.
 
 ## 1. Identity and scope
@@ -29,9 +29,8 @@ golden files. Deferred until the labs produce something worth locking down.
 
 | Thing               | Path                                                                               |
 | ------------------- | ---------------------------------------------------------------------------------- |
-| Worktree (ALL code) | `/home/caubut/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs` |
-| Branch              | `refactor/agent-primitive-labs`                                                    |
-| Branch point        | `010dbe15` (on `refactor/ai-factory-architecture`)                                 |
+| Worktree (ALL code) | `/home/<user>/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs` |
+| Branch point        | `010dbe15`                                                                         |
 | Design spec         | `docs/plans/agent-primitive-labs-design.md` (main checkout, untracked)             |
 | Impl plan           | `docs/plans/agent-primitive-labs-impl-plan.md` (main checkout, untracked)          |
 | Execution ledger    | `<worktree>/.superpowers/sdd/progress.md`                                          |
@@ -170,7 +169,7 @@ live. (Used to justify cutting Task 3; may be useful elsewhere.)
 
 ### 6.1 File overlap (mechanical)
 
-My branch vs `010dbe15..88f1fc8b` (what landed on `refactor` meanwhile):
+My branch vs `010dbe15..88f1fc8b` (what landed meanwhile):
 
 | File                              | Mine                                                                  | Theirs                           | Risk                                                                                                                        |
 | --------------------------------- | --------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -237,9 +236,9 @@ probe rig at `/var/tmp/nat-kiro-probe/` for re-running against their fixes.
 
 ## 8. Recommended merge order
 
-1. Rebase `refactor/agent-primitive-labs` onto current `refactor` HEAD
-   (`88f1fc8b`+). Regenerate `devenv.yaml`, `devenv.lock`, `flake.lock` rather
-   than resolving them by hand. Expect a real `flake.nix` conflict.
+1. Rebase onto `88f1fc8b`+. Regenerate `devenv.yaml`, `devenv.lock`,
+   `flake.lock` rather than resolving them by hand. Expect a real `flake.nix`
+   conflict.
 2. Re-run `nix flake check --max-jobs 1` before anything else.
 3. Re-run the Kiro probe (§5.3.1) against the post-`af53cf63` tree.
 4. Reconcile (b)'s hook target against §5.3.

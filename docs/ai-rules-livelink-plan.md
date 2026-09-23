@@ -1,11 +1,10 @@
 # `ai.rules` live-edit support via out-of-store symlink
 
 > **Status:** ROLLED BACK. Shipped in commit `fab4e5c` as `sourcePath` on
-> `ruleModule`. Reverted in the `refactor/ai-factory-architecture` branch per
-> the ai-factory-collision refactor plan §6 (commit 2). User decided live-edit
-> is not worth the impurity — devenv covers iteration and pure-eval rules are
-> simpler. Rules now always bake into the store with transformer-injected
-> frontmatter. See the
+> `ruleModule`. Reverted per the ai-factory-collision refactor plan §6 (commit
+> 2). User decided live-edit is not worth the impurity — devenv covers iteration
+> and pure-eval rules are simpler. Rules now always bake into the store with
+> transformer-injected frontmatter. See the
 > [historical refactor rationale](https://github.com/higherorderfunctor/nix-agentic-tools/blob/3510a5dbc816a1598e0ff0c357c0c237dc78b267/docs/archive/ai-factory-collision-refactor-plan.md#33-pure-eval--deprecate-live-edit)
 > for the original discussion.
 >

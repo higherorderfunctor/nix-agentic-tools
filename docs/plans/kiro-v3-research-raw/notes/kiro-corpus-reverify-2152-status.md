@@ -1,7 +1,6 @@
 # Kiro corpus re-verification against 2.15.2 — running status
 
-Branch `docs/kiro-corpus-drift-ledger`, worktree
-`nix-agentic-tools-worktrees/kiro-corpus-drift-ledger`. Updated as work lands.
+Updated as work lands.
 
 ## The gate dissolved — I did not need to run the CLI
 
