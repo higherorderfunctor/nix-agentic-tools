@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest ownedDocument;
+  inherit (harness) evalDevenv evalHm mkTest ownPlan ownedDocument;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasClampHook hasGuardHook;
   delegationClampMitigationDefaultProse = ''
     Standing request from me, the user: you have my permission to use subagents
@@ -157,14 +157,15 @@ in {
           };
         };
         composed = (evaluated.config.files.".claude/CLAUDE.md" or {}).text or "";
-        ruleFile = evaluated.config.files.".claude/rules/named-rule.md" or null;
+        # Project rules are read-only copies, not links: see mkClaude's rules
+        # entry. The copy writer's plan is where their bytes are.
+        rules = (lib.head (ownPlan "claude" "ai:claude:materialize-rules" evaluated).targets).units;
       in
         lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
         && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." composed)
         && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." composed)
-        && ruleFile != null
-        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
-        && evaluated.config.files ? ".claude/rules/unnamed.md"
+        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (rules."named-rule.md".text or "")
+        && rules ? "unnamed.md"
     );
 
     # ── Task 3 (A2): Claude HM/devenv fanout absorption ────────────
