@@ -1,10 +1,11 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-23 — the builder entry point is
-> `lib.ai.app.mkRuntime`, renamed from its old app name. Rules and context use
-> entry-local `enable` suppression, and Semble's CLI rule uses text-source
-> priority arbitration. Delivery entries default `content` alone, and
-> `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-23 — merged pools are public
+> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
+> text-source record crosses into them with only its winning arm. Path claims
+> fail across runtimes except the shared AGENTS.md target. Rules and context use
+> entry-local `enable` suppression; delivery entries default `content` alone,
+> and `content.enable = false` suppresses every content form.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
