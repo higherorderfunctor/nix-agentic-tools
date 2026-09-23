@@ -656,8 +656,17 @@ in
           owned, so values Kimchi writes elsewhere in the file survive. A list
           is owned whole: a rule `/permissions … save` appends to a declared
           `allow` or `deny` is dropped at the next activation or shell entry.
-          `allow` and `deny` concatenate across user and project files; for
-          the scalars the project value wins.
+          `allow` and `deny` concatenate across user and project files. The
+          scalars do NOT inherit per key: Kimchi fills `defaultMode` and
+          `classifierTimeoutMs` with its own defaults for any project file
+          that exists, and the project value wins
+          (src/extensions/permissions/config.ts:56-60,98-101). So any devenv
+          declaration, even `allow` alone, resets a user `defaultMode` and
+          classifier timeout inside that project; declare them here too to
+          keep them. `classifierMaxTotalMs` alone falls through to the user
+          file. Removing the last declared key deletes a file that is left
+          empty, so no `{}` keeps overriding the user after the declaration
+          is gone.
         '';
       };
 

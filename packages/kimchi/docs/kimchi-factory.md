@@ -5,8 +5,9 @@
 > `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
 > reconcile by leaf through the shared delivery router; agents are owned
 > writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only, and
-> their exclusions are silent for the shared pool; root reasoning effort makes
-> the devenv harness file exist. Full lineage:
+> their exclusions are silent for the shared pool; a project permissions file
+> resets the user's scalars, and its emptied retraction is deleted; root
+> reasoning effort makes the devenv harness file exist. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -117,6 +118,14 @@ one unknown key invalidates the whole file. The user file is hard-coded to
 ignores `configDir`. A list leaf is owned whole: a rule `/permissions … save`
 appends to a declared `allow` or `deny` is dropped on the next activation, the
 same trade Claude's reconciled permissions make.
+
+The scalars do not inherit per key. Kimchi fills `defaultMode` and
+`classifierTimeoutMs` with its defaults for any project file that exists, and
+the project value wins (`config.ts:56-60,98-101`); only `classifierMaxTotalMs`
+falls through to the user file. So any devenv permissions declaration resets a
+user's `defaultMode` inside that project, which the option description states.
+Retracting the last key deletes the emptied file (`lib/ai/own.py`
+`DocContainer.commit`), so a `{}` never outlives the declaration.
 
 `harnessSettings.modelRoles` values are provider/model strings, or for delegable
 roles a non-empty list of them; `orchestrator` and `compactor` take one string,
