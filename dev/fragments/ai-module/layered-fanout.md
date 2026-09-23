@@ -1,9 +1,10 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Context and rules retain text-source priority and
-> enable semantics; L5 is the delivery router plus one adapter per backend.
+> **Last verified:** 2026-09-23 — L5 is the delivery router plus one adapter per
+> backend; Claude, Codex, Copilot and Kiro describe delivery once, and the
+> delivery matrix is generated from the layer with Kimchi's off-layer files
+> hand-authored. Normalized pools carry only a text-source record's winning arm.
+> Native file settings live under `ai.<runtime>.native`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -70,12 +71,12 @@
 - **One owner per physical path.** Enabled runtime file maps supply claims on
   both backends. Only shared repository context targets arbitrate multiple
   runtime claims; contributors are discovered from their context target and
-  delivery options, without a runtime-name list. Public overrides and tombstones
-  enter the aggregate before lowering, and claimants must agree with its symlink
-  method. All three readers use `deliveryMethod.resolve`, so an explicit method
-  beats `methodFor` consistently after option merging. Kimchi's current native
-  context stays under its harness directory; an explicit root AGENTS.md entry
-  can participate as a third claimant.
+  delivery options, without a runtime-name list. Public overrides and disabled
+  entries enter the aggregate before lowering, and claimants must agree with its
+  symlink method. All three readers use `deliveryMethod.resolve`, so an explicit
+  method beats `methodFor` consistently after option merging. Kimchi's current
+  native context stays under its harness directory; an explicit root AGENTS.md
+  entry can participate as a third claimant.
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
