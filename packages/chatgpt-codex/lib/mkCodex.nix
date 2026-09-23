@@ -670,9 +670,20 @@
       )
     );
 
+  # Codex's execpolicy loader keeps a `rules/*.rules` entry only when
+  # `DirEntry::file_type().is_file()` — which does not follow symlinks — so a
+  # linked rule is skipped without a word ("loaded 0 .rules files"; codex-rs
+  # core/src/exec_policy.rs, 0.156.0; CS-J9). The rules are therefore real
+  # read-only copies on both backends, claimed file by file: Codex writes its
+  # own `rules/default.rules` beside them, which a directory claim would delete.
+  execpolicyLedger = "materialize/codex-execpolicy.manifest";
+  execpolicyWriter = "materialize-codex-execpolicy-write";
   mkExecpolicyEntries = prefix:
     lib.mapAttrs' (name: content:
       lib.nameValuePair "${prefix}/rules/${name}.rules" {
+        entry = execpolicyWriter;
+        facts.symlinkReadable = false;
+        ledger = execpolicyLedger;
         # Every path-like value is a `source`, valid or not: `text` is a
         # string, so a directory or missing path typed as text fails eval
         # before mkExecpolicyAssertions can name what is wrong with it.
@@ -1108,6 +1119,21 @@ in
               before = ["linkCheck"];
             }
           );
+        }
+
+        # Declared whether or not any rule is, so N→0 retracts the last copies.
+        {
+          ai.codex.activation.${execpolicyWriter} = {
+            entry = {
+              devenv = "ai:codex:materialize-execpolicy";
+              hm = execpolicyWriter;
+            };
+            ledgers.${execpolicyLedger} = {
+              codec = "dir";
+              path = "${nativeDir}/rules";
+            };
+            pruneEntry.hm = "materialize-codex-execpolicy-prune";
+          };
         }
 
         (lib.optionalAttrs isHm {
