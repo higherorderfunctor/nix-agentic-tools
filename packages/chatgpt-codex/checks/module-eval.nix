@@ -52,7 +52,7 @@ in {
         settings = {
           ai.codex = {
             enable = true;
-            nativeSettings.sandbox_mode = "workspace-write";
+            native.settings.sandbox_mode = "workspace-write";
           };
         };
         hmRoots = (hmCodexSettings (evalHm settings)).sandbox_workspace_write.writable_roots;
@@ -91,7 +91,7 @@ in {
         legacy = evaluate {
           ai.codex = {
             enable = true;
-            nativeSettings = {
+            native.settings = {
               sandbox_mode = "workspace-write";
               sandbox_workspace_write.writable_roots = ["/tmp/xdg-cache/treefmt"];
             };
@@ -101,7 +101,7 @@ in {
         named = evaluate {
           ai.codex = {
             enable = true;
-            nativeSettings = {
+            native.settings = {
               default_permissions = "project-edit";
               permissions.project-edit.extends = ":workspace";
             };
@@ -111,7 +111,7 @@ in {
         disabled = evaluate {
           ai.codex = {
             enable = true;
-            nativeSettings.sandbox_mode = "workspace-write";
+            native.settings.sandbox_mode = "workspace-write";
           };
         };
         expectedIntegrationRoots = [
@@ -235,7 +235,7 @@ in {
             } {
               ai.codex = {
                 enable = true;
-                nativeSettings = settings;
+                native.settings = settings;
               };
               devenv.root = root;
               git.root = root;
@@ -280,7 +280,7 @@ in {
           (evalDevenv {
             ai.codex = {
               enable = true;
-              nativeSettings.sandbox_mode = "workspace-write";
+              native.settings.sandbox_mode = "workspace-write";
             };
           }).config.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots;
       in
@@ -407,7 +407,7 @@ in {
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             model = null;
             model_reasoning_effort = null;
           };
@@ -431,7 +431,7 @@ in {
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings.default_permissions = ":workspace";
+          native.settings.default_permissions = ":workspace";
         };
         passes = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
       in
@@ -442,7 +442,7 @@ in {
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             default_permissions = "project-edit";
             permissions.project-edit.extends = ":workspace";
           };
@@ -596,20 +596,20 @@ in {
           ai = {
             codex = {
               enable = true;
-              nativeSettings.mcp_servers.native.command = "native";
+              native.settings.mcp_servers.native.command = "native";
             };
             mcpServers.shared.command = "shared";
           };
         };
       in
-        builtins.any (assertion: !assertion.assertion && lib.hasInfix "nativeSettings.mcp_servers" assertion.message) evaluated.config.assertions
+        builtins.any (assertion: !assertion.assertion && lib.hasInfix "native.settings.mcp_servers" assertion.message) evaluated.config.assertions
     );
 
     module-codex-settings-rendering-parity = mkTest "codex-settings-rendering-parity" (
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             features = {
               memories = true;
               speculative_future_flag = false;
@@ -649,7 +649,7 @@ in {
       activationV1 = codexSettingsActivation {
         ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             features.memories = true;
             future_array = [
               {
@@ -666,7 +666,7 @@ in {
       activationV2 = codexSettingsActivation {
         ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             model = "nix-model-v2";
             sandbox_mode = "read-only";
             shape.child = "table-v2";
@@ -676,7 +676,7 @@ in {
       activationEmpty = codexSettingsActivation {
         ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             model = null;
             model_reasoning_effort = null;
           };
@@ -686,14 +686,14 @@ in {
         ai.codex = {
           configDir = ".codex-malformed";
           enable = true;
-          nativeSettings.model = "must-not-land";
+          native.settings.model = "must-not-land";
         };
       };
       activationBadManifest = codexSettingsActivation {
         ai.codex = {
           configDir = ".codex-bad-manifest";
           enable = true;
-          nativeSettings.model = "manifest-guard";
+          native.settings.model = "manifest-guard";
         };
       };
     in
@@ -854,7 +854,7 @@ in {
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             allow_login_shell = false;
             approval_policy.granular = {
               mcp_elicitations = true;
@@ -900,7 +900,7 @@ in {
       evaluated = evalHm {
         ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             approval_policy.granular = {
               request_permissions = false;
               sandbox_approval = true;
@@ -931,7 +931,7 @@ in {
           evaluated.config.assertions;
         config.ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             default_permissions = ":workspace";
             sandbox_mode = "workspace-write";
           };
@@ -945,7 +945,7 @@ in {
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             permissions = {};
             sandbox_mode = "read-only";
           };
@@ -960,7 +960,7 @@ in {
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             default_permissions = "project-edit";
             permissions.project-edit = {
               description = "Project editing with API access.";
@@ -1020,7 +1020,7 @@ in {
         user = evalHm {
           ai.codex = {
             enable = true;
-            nativeSettings = {
+            native.settings = {
               default_permissions = "project-edit";
               permissions.project-edit = {
                 extends = ":workspace";
@@ -1033,7 +1033,7 @@ in {
         project = evalDevenv {
           ai.codex = {
             enable = true;
-            nativeSettings = {
+            native.settings = {
               default_permissions = "project-edit";
               permissions.project-edit.filesystem = {
                 "/tmp/project-cache" = "write";
@@ -1065,7 +1065,7 @@ in {
       evaluated = evalHm {
         ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             default_permissions = "project-edit";
             permissions.project-edit = {
               extends = ":workspace";
@@ -1238,7 +1238,7 @@ in {
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings.projects."/home/test/project".trust_level = "trusted";
+          native.settings.projects."/home/test/project".trust_level = "trusted";
         };
         hm = evalHm config;
         devenv = evalDevenv config;
@@ -1254,7 +1254,7 @@ in {
       evaluated = evalHm {
         ai.codex = {
           enable = true;
-          nativeSettings = {
+          native.settings = {
             features.memories = true;
             model = "custom-provider/model";
             model_reasoning_effort = "high";
@@ -1278,7 +1278,7 @@ in {
             (hmCodexSettings (evalHm {
               ai.codex = {
                 enable = true;
-                nativeSettings.${name} = value;
+                native.settings.${name} = value;
               };
             })))
         .success;
@@ -1287,7 +1287,7 @@ in {
             (hmCodexSettings (evalHm {
               ai.codex = {
                 enable = true;
-                nativeSettings.features.${name} = value;
+                native.settings.features.${name} = value;
               };
             })))
         .success;
@@ -1296,7 +1296,7 @@ in {
             (hmCodexSettings (evalHm {
               ai.codex = {
                 enable = true;
-                nativeSettings.permissions.test = lib.setAttrByPath path value;
+                native.settings.permissions.test = lib.setAttrByPath path value;
               };
             })))
         .success;
@@ -1341,7 +1341,7 @@ in {
         devenv = evalDevenv {
           ai.codex = {
             enable = true;
-            nativeSettings = {
+            native.settings = {
               model_provider = "custom";
               notify = ["notify-send"];
             };
@@ -1350,7 +1350,7 @@ in {
         hm = evalHm {
           ai.codex = {
             enable = true;
-            nativeSettings.model_provider = "custom";
+            native.settings.model_provider = "custom";
           };
         };
         failed = lib.findFirst (assertion: !assertion.assertion) null devenv.config.assertions;
@@ -1504,7 +1504,7 @@ in {
       let
         config.ai.codex = {
           enable = true;
-          nativeSettings.agents = {
+          native.settings.agents = {
             default_subagent_model = "worker-model";
             default_subagent_reasoning_effort = "high";
             enabled = true;
@@ -1577,13 +1577,13 @@ in {
           ai.codex = {
             enable = true;
             hooks.Stop = [{hooks = [{command = "validate";}];}];
-            nativeSettings.hooks.Stop = [{hooks = [{command = "legacy";}];}];
+            native.settings.hooks.Stop = [{hooks = [{command = "legacy";}];}];
           };
         };
       in
         builtins.any (assertion:
           !assertion.assertion
-          && lib.hasInfix "cannot be combined with ai.codex.nativeSettings.hooks" assertion.message)
+          && lib.hasInfix "cannot be combined with ai.codex.native.settings.hooks" assertion.message)
         result.config.assertions
     );
 

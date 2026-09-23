@@ -1,7 +1,9 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-22 — context and rules retain text-source priority
-> and enable semantics; L5 is the delivery router plus one adapter per backend.
+> **Last verified:** 2026-09-22 — native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Context and rules retain text-source priority and
+> enable semantics; L5 is the delivery router plus one adapter per backend.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -92,7 +94,7 @@
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
   may support only a subset of fields. Runtime-shaped passthrough is separate
-  under `nativeSettings` and is not a normalized pool.
+  under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over

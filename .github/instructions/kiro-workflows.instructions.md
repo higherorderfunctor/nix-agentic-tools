@@ -7,8 +7,10 @@ applyTo: "packages/kiro-cli/packages/ai/kiro-cli/package.nix,packages/kiro-cli/l
 
 ## Kiro workflows: three gates, all of them silent
 
-> **Last verified:** 2026-09-22 — the shipped TUI source still excludes
-> `chat.enableWorkflows` from the workspace settings allowlist.
+> **Last verified:** 2026-09-23 — the shipped TUI source still excludes
+> `chat.enableWorkflows` from the workspace settings allowlist; native file
+> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`).
 
 `ai.kiro.unlockedRolloutFeatures = ["workflows"]` is necessary and **not**
 sufficient. Three independent conditions must hold, none of them errors or logs
@@ -95,7 +97,7 @@ it is read, filtered out, and dropped without a warning. The two backends
 therefore honor different key sets, because they write different files:
 
 - **Home Manager** writes the GLOBAL file. Every key works. Unlocking
-  `workflows` implies `nativeSettings.chat.enableWorkflows = mkDefault true`
+  `workflows` implies `native.settings.chat.enableWorkflows = mkDefault true`
   (`workflowsSettingImplication`), so gates 1 and 3 cannot drift apart, and an
   explicit value still wins.
 - **devenv** writes the PROJECT-LOCAL file. Only allowlisted keys work, so

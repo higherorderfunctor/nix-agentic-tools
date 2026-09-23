@@ -178,7 +178,7 @@ Cross-cutting invariants the modules must encode:
   and runtime option tree; Beads modules use that resolved state to contribute
   to the normalized hooks, skills, rules/context, MCP, settings, and other typed
   pools each runtime supports. Runtime transformers perform supported native
-  lowering. `nativeSettings` is the runtime-shaped passthrough and arbitration
+  lowering. `native.settings` is the runtime-shaped passthrough and arbitration
   target for supported lowering, not a normalized pool or a merged
   normalized/native attribute set. Prefer filling a normalization gap over
   adding a Beads-specific native workaround.

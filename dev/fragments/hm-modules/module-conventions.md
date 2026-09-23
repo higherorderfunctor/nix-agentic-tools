@@ -1,6 +1,8 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-21 — generation-owned documents and directories
+> **Last verified:** 2026-09-22 — native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Generation-owned documents and directories
 > reconcile through `lib/ai/own.{nix,py}`, document targets may enforce modes,
 > and the delivery-path parity example uses `ai.codex.execpolicyRules`.
 >
@@ -31,11 +33,11 @@ lives flat.
 
 **Keep normalized and native settings separate.** `ai.<runtime>.settings` is a
 closed normalized submodule shared by every runtime. Runtime-shaped passthrough
-belongs under `ai.<runtime>.nativeSettings`; when wrapping a CLI's native
+belongs under `ai.<runtime>.native.settings`; when wrapping a CLI's native
 settings file, use `freeformType = jsonFormat.type` plus explicit `mkOption`
-declarations for known typed keys (for example, `nativeSettings.model` and
-`nativeSettings.telemetry`). Unknown native keys flow through freely; known keys
-get type-checked. Do not add runtime-native keys to normalized `settings`.
+declarations for known typed keys (for example, `native.settings.model` and
+`native.settings.telemetry`). Unknown native keys flow through freely; known
+keys get type-checked. Do not add runtime-native keys to normalized `settings`.
 
 **Defaults via `mkOption { default = ...; }`**, not `mkDefault` in the
 declaration. Reserve `mkDefault` for fanout values in the config block (so
@@ -265,7 +267,7 @@ while the ecosystem is enabled, whatever the declaration says. An empty
 declaration is not "nothing to do", it is the RETRACTION path: empty settings
 plus no prior ledger is a strict no-op, while empty settings plus a prior ledger
 must run so a later generation retracts the leaves it used to own without
-erasing native state. A `mkIf (cfg.nativeSettings != {})` around one of these
+erasing native state. A `mkIf (cfg.native.settings != {})` around one of these
 writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on it —
 it evaluates every imperative writer under a populated AND an empty declaration.
 

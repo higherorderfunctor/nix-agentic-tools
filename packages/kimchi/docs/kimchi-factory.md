@@ -1,9 +1,11 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-19 — both runtime-writable documents reconcile
-> their owned leaves through `lib/ai/own.py`, one bundle and one activation
-> entry each, and the context entry defaults its `content` option rather than
-> the whole entry. Full lineage:
+> **Last verified:** 2026-09-22 — native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Both runtime-writable documents reconcile their
+> owned leaves through `lib/ai/own.py`, one bundle and one activation entry
+> each, and the context entry defaults its `content` option rather than the
+> whole entry. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -11,7 +13,7 @@ closest in shape to `mkKiro` (dual config trees + activation-merge for the
 mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
 / `devenvTransform` to the record.
 
-The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings`. The
+The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings`. The
 closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
 may be present there before Kimchi has a lossless native lowering, in which case
 it remains declarative data rather than being guessed into either native file.
