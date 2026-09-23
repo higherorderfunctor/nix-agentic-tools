@@ -729,6 +729,16 @@ in {
           tools = ["Read"];
         };
         claudeMarkdown = "---\nname: probe\nmodel: sonnet\n---\n\nBODY\n";
+        dirFailures = evaluate: kimchiAgents:
+          failedAssertions (evaluate {
+            ai = {
+              agentsDir = ../../claude-code/checks/fixtures/claude-agents;
+              kimchi = {
+                enable = true;
+                agents = kimchiAgents;
+              };
+            };
+          });
         says = needle: lib.any (lib.hasInfix needle);
       in
         lib.all (evaluate:
@@ -737,7 +747,16 @@ in {
           && says "Markdown written for Claude/Copilot" (failures evaluate {probe = claudeMarkdown;} {})
           && failures evaluate {probe = claudeMarkdown;} {probe = null;} == []
           && failures evaluate {probe = claudeMarkdown;} {probe = nativeAgent;} == []
-          && failures evaluate {probe = withTools // {tools = [];};} {} == [])
+          && failures evaluate {probe = withTools // {tools = [];};} {} == []
+          # Root agentsDir feeds ai.agents, so a Claude agents directory is
+          # rejected too — not skipped silently, as the option once said — and
+          # withdrawing each name is the per-runtime remedy.
+          && says "Markdown written for Claude/Copilot" (dirFailures evaluate {})
+          && dirFailures evaluate {
+            agent-one = null;
+            agent-two = null;
+          }
+          == [])
         [evalHm evalDevenv]
     );
 

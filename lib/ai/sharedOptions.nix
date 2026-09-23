@@ -245,7 +245,11 @@ in {
         default when non-null. The current `reasoningEffort` field lowers to
         Claude `effortLevel`, Codex `model_reasoning_effort` and Kimchi
         `defaultThinkingLevel`; the enum is their exact persisted semantic
-        intersection. Set a runtime's native key, including an explicit null,
+        intersection. On devenv, Kimchi's value lands in the project
+        `.config/kimchi/harness/settings.json`, so setting it here makes Kimchi
+        project-trust-gated for that setting and makes the devenv wrapper
+        refuse launches below the devenv root, exactly as any declared
+        harness setting does. Set a runtime's native key, including an explicit null,
         under `ai.<runtime>.nativeSettings` (Kimchi: `harnessSettings`) to
         arbitrate against the derived default.
         Runtime-specific identifiers and lossy translations are deliberately
@@ -304,10 +308,14 @@ in {
       description = ''
         Directory of legacy `.md` agent files fanned out to Claude and
         Copilot. Each file becomes one entry in `ai.agents` keyed by the
-        basename minus `.md`. Codex and Kimchi are excluded because they
-        require semantic records (standalone TOML for Codex, and Kimchi reads
-        Claude Markdown differently); use explicit `ai.agents` records for
-        wider fanout, or `ai.kimchi.agentsDir` for Kimchi-native files. Kiro is excluded because these are Markdown
+        basename minus `.md`. Codex and Kimchi do not take these files, and
+        they are NOT skipped silently: enabling either one with a non-empty
+        `agentsDir` fails evaluation, because Codex needs a semantic record
+        (standalone TOML) and Kimchi misreads Claude Markdown (`model:` and
+        `tools:` mean something else to it). Withdraw each name with
+        `ai.codex.agents.<name> = null` or `ai.kimchi.agents.<name> = null`,
+        use explicit `ai.agents` records for wider fanout, or
+        `ai.kimchi.agentsDir` for Kimchi-native files. Kiro is excluded because these are Markdown
         files while Kiro's agents are JSON, and because its tool tags are a
         different vocabulary from the Claude/Copilot tool names this pool
         carries; use `ai.kiro.agentsDir` for that ecosystem.
