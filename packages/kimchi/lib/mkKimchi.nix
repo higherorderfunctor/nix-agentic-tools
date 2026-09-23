@@ -17,6 +17,7 @@
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
+  sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   userScopeOnlyHarnessSettingKeys = import ./user-scope-only-harness-settings.nix;
 
   # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
@@ -34,6 +35,43 @@
   roleModelsType = lib.types.addCheck (lib.types.listOf roleModelType) (values: values != []);
   modelRoleNames = ["builder" "compactor" "explorer" "judge" "orchestrator" "planner" "researcher" "reviewer"];
   singleModelRoles = ["compactor" "orchestrator"];
+
+  # Kimchi 1.1.30's lifecycle events, FULL_COMMAND_HOOK_EVENTS
+  # (src/extensions/hook-adapters/discovery.ts:29-50). Every portable event
+  # except PermissionRequest is among them, and the reader skips an event
+  # outside this list without a word (:131).
+  hookEvents = [
+    "MessageEnd"
+    "MessageStart"
+    "ModelSelect"
+    "Notification"
+    "PostCompact"
+    "PostToolBatch"
+    "PostToolUse"
+    "PostToolUseFailure"
+    "PreCompact"
+    "PreToolUse"
+    "SessionEnd"
+    "SessionStart"
+    "Stop"
+    "StopFail"
+    "SubagentStart"
+    "SubagentStop"
+    "TaskCompleted"
+    "TurnStart"
+    "UserBash"
+    "UserPromptSubmit"
+  ];
+  # Shared groups first, Kimchi's own appended, restricted to the events
+  # Kimchi reads: the one portable event it lacks is warned about in
+  # lib/ai/delivery-warnings.nix instead of written.
+  projectHooksFor = {
+    cfg,
+    topHooks,
+  }:
+    lib.filterAttrs (event: blocks: builtins.elem event hookEvents && blocks != [])
+    (sharedHooks.merge topHooks cfg.hooks);
+  hasHookHandlers = hooks: lib.any (lib.any (block: block.hooks != [])) (builtins.attrValues hooks);
 
   # The delivery function and package hook need the same settings, env and
   # context values from merged inputs; prepare them once.
@@ -128,13 +166,15 @@
     mergedEnvironmentVariables,
     mergedServers,
     moduleEnvironmentVariables,
+    topHooks,
     ...
   }: let
     hasExactCwdProjectFiles =
       aiCommon.filterNulls cfg.nativeSettings
       != {}
       || aiCommon.filterNulls cfg.harnessSettings != {}
-      || mergedServers != {};
+      || mergedServers != {}
+      || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
       inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;
@@ -156,6 +196,7 @@
     mergedSkills,
     moduleEnvironmentVariables,
     resolvedSettings,
+    topHooks,
     ...
   }: let
     prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
@@ -331,6 +372,22 @@
         }
       ))
 
+      # .kimchi/hooks.json — devenv only, because Kimchi reads lifecycle hooks
+      # from a trusted project's .kimchi/ and has no user-scope file
+      # (src/extensions/kimchi-hooks/definition.ts:25-37). Kimchi never writes
+      # it, so it takes the default facts and lands as a symlink. Home Manager
+      # declares nothing here; its policy row warns instead. The bash-hook
+      # directory is not this surface: those scripts filter the bash tool only.
+      (let
+        projectHooks = projectHooksFor {inherit cfg topHooks;};
+      in
+        lib.mkIf (isDevenv && hasHookHandlers projectHooks) {
+          ai.kimchi.files.".kimchi/hooks.json" = {
+            content.value.hooks = sharedHooks.render projectHooks;
+            format = "json";
+          };
+        })
+
       # harness/skills/ — one entry per skill tree; Home Manager expands the
       # directory and the router expands it for devenv.
       (lib.mkIf (mergedSkills != {}) {
@@ -355,6 +412,7 @@ in
     supportedPools = [
       "context"
       "environmentVariables"
+      "hooks"
       "mcpServers"
       "settings"
       "skills"
@@ -465,6 +523,22 @@ in
         type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
         default = {};
         description = "Environment variables exported when launching kimchi. Null suppresses a root entry at the same key.";
+      };
+
+      hooks = lib.mkOption {
+        type = sharedHooks.mkHooksType hookEvents;
+        default = {};
+        apply = lib.filterAttrs (_event: blocks: blocks != []);
+        description = ''
+          Kimchi lifecycle hooks appended after the shared `ai.hooks` matcher
+          groups, over Kimchi's own event set. Devenv writes both into
+          `.kimchi/hooks.json`, which Kimchi reads only in a trusted project
+          and from the exact devenv root. Home Manager delivers nothing and
+          warns: Kimchi has no user-scope lifecycle hook file. `ai.hooks`'
+          PermissionRequest is not a Kimchi event, so it is left out with a
+          warning. If Kimchi's opt-in Claude Code hook adapter is enabled, a
+          shared hook that also reaches `.claude/settings.json` fires twice.
+        '';
       };
 
       # Cast AI key — a runtime credential (file | helper), exported as
