@@ -4,8 +4,9 @@
 > backend; Claude, Codex, Copilot and Kiro describe delivery once, and the
 > delivery matrix is generated from the layer with Kimchi's off-layer files
 > hand-authored. Normalized pools carry only a text-source record's winning arm.
-> Claude's devenv rules and Codex's execpolicy rules are read-only copies.
-> Native file settings live under `ai.<runtime>.native`.
+> Claude's devenv rules and Codex's execpolicy rules are read-only copies whose
+> writers survive a disable. Native file settings live under
+> `ai.<runtime>.native`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -146,18 +147,22 @@
   setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
   the store is never read. User scope passes true. The rules entry therefore
   states `facts.symlinkReadable = {devenv = false; hm = true;}`: devenv resolves
-  `copy-ro` through the `ai:claude:materialize-rules` directory ledger, declared
-  on devenv only and kept through N→0, while Home Manager keeps its link.
+  `copy-ro` through the `ai:claude:materialize-rules` directory ledger, while
+  Home Manager keeps its link. The writer is declared on devenv only, from
+  `migrationConfig` with `runWhenDisabled = true`, so both N→0 and disabling
+  Claude retract the copies.
 - **Codex execpolicy rules are read-only copies on both backends.** Codex keeps
   a `rules/*.rules` entry only when `DirEntry::file_type().is_file()`, which
   does not follow symlinks, so a linked rule is skipped silently (codex
   0.156.0). Each rule states `facts.symlinkReadable = false` and is claimed file
   by file through the `materialize/codex-execpolicy.manifest` directory ledger:
   Codex writes its own `rules/default.rules` beside them, which the ledger never
-  records and so never touches. The writer is declared while enabled, so N→0
-  retracts the copies.
+  records and so never touches. The writer is declared from `migrationConfig`
+  with `runWhenDisabled = true`, so both N→0 and disabling Codex retract the
+  copies; an `allow` policy must not outlive its declaration.
 - **Retirement can survive disable explicitly.** Kiro's migration callback
-  declares its unclaimed steering ledger with `runWhenDisabled = true`. The
+  declares its unclaimed steering ledger with `runWhenDisabled = true`, and the
+  Claude rules and Codex execpolicy writers declare theirs the same way. The
   adapter strips every file claim and ordinary writer while disabled; the
   opted-in writer keeps both HM phases or the existing devenv task. A directory
   ledger's unit basenames must be unique; the router rejects collisions before a
