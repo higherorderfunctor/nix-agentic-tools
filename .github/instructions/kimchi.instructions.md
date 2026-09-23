@@ -7,10 +7,10 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-08-16 — normalized context renders into
-> `ai.kimchi.files` before the generic backend sink, so the final
-> `harness/AGENTS.md` is replaceable or suppressible as one whole entry. Full
-> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-23 — `config.json` carries credentials, so an
+> ungated `kimchiConfigMode` activation entry narrows it to owner-only
+> independently of the settings merge. Full lineage:
+> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -36,13 +36,20 @@ The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json
 (`/multi-model`, `kimchi resources`) and downloads vendor content into it. So
 `config.json` and `harness/settings.json` go through
 `helpers.mkSettingsActivationScript` (jq `.[0] * .[1]` merge) on HM and a static
-write on devenv — never a raw symlink-to-store. Immutable artifacts ultimately
-use static `home.file` / `files.*`, but normalized context first renders into
-the final `ai.kimchi.files` map and only then reaches that generic sink. This
-makes `harness/AGENTS.md` a whole-entry consumer replacement/tombstone point;
-`mcp.json` and skills retain their existing typed owners. When both root and
-Kimchi-specific context are configured, their bodies concatenate root-first;
-`ai.kimchi.context.filename` controls the artifact name.
+write on devenv — never a raw symlink-to-store. The merge writes at 0600, but
+only when its caller's settings gate is open. `config.json` holds `apiKey` and
+`gitTokens`, so it also gets an ungated `kimchiConfigMode` entry
+(`helpers.mkCredentialModeActivationScript`) that strips group and other access
+from a regular file an earlier generation left 0644. That entry is redundant
+today, because `nativeSettings.skillPaths` defaults to `[]` and keeps the merge
+gate open whenever Kimchi is enabled; it stops being redundant the moment that
+default changes. Immutable artifacts ultimately use static `home.file` /
+`files.*`, but normalized context first renders into the final `ai.kimchi.files`
+map and only then reaches that generic sink. This makes `harness/AGENTS.md` a
+whole-entry consumer replacement/tombstone point; `mcp.json` and skills retain
+their existing typed owners. When both root and Kimchi-specific context are
+configured, their bodies concatenate root-first; `ai.kimchi.context.filename`
+controls the artifact name.
 
 ## Normalized pool capability boundary
 

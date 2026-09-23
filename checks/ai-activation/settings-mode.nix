@@ -10,9 +10,35 @@
 {
   lib,
   pkgs,
+  harness,
   ...
 }: let
   helpers = import ../../lib/ai/hm-helpers.nix {inherit lib;};
+
+  # The merge helper only narrows when its caller emits it, and every caller
+  # gates it on non-empty settings. So render the REAL modules with the gates
+  # closed and run what activation would then run.
+  #
+  # Claude's gate closes on an empty flag map; assert it really did, or a
+  # later default that reopens it would turn case 5 into a merge test.
+  # Kimchi's cannot close today: `nativeSettings.skillPaths` defaults to `[]`,
+  # which filterNulls keeps, so `kimchiConfigMerge` is emitted whenever kimchi
+  # is enabled. The case therefore leaves that entry out, which is exactly
+  # what a closed gate would leave, and exercises `kimchiConfigMode` alone.
+  gateClosed = harness.evalHm {
+    ai.claude = {
+      enable = true;
+      unpinLaunchEffort = lib.mkForce {};
+    };
+    ai.kimchi.enable = true;
+  };
+  gateClosedActivation = gateClosed.config.home.activation;
+  gateClosedBody = assert lib.assertMsg (!(lib.hasInfix "jq" gateClosedActivation.claudeUnpinLaunchEffort.text))
+  "ai-activation-settings-mode: claude's unpin merge gate is open with no flags; case 5 no longer tests a closed gate";
+    pkgs.writeText "activation-gate-closed.sh" (lib.concatMapStrings
+      (name: gateClosedActivation.${name}.text + "\n")
+      ["claudeUnpinLaunchEffort" "claudeConfigMode" "kimchiConfigMode"]);
+  kimchiConfig = "${gateClosed.config.ai.kimchi.configDir}/config.json";
 
   mkScript = extra:
     pkgs.writeText "activation-body.sh" (helpers.mkSettingsActivationScript ({
@@ -113,6 +139,10 @@ in {
           echo "FAIL [$race race]: activation lost the concurrent deviceId/gitTokens write" >&2
           false
         fi
+        # In the repeated race the writer's rename lands last, so this does
+        # not re-test the temp file's mode (cases 1 and 2 do). It guards the
+        # refusal path: activation must not widen the destination after the
+        # final runtime write, before it gives up.
         assert_mode "$race_home" 600 "$race race"
         if [ "$race" = once ]; then
           test "$status" -eq 0
@@ -126,6 +156,38 @@ in {
         fi
         test -z "$(find "$race_home/.natcreds" -name 'config.json.activation.*' -print)"
       done
+
+      # 5. A credential file an earlier generation widened to 0644 must be
+      #    narrowed even when no merge runs. Runtimes preserve the existing
+      #    mode on rewrite, so nothing else would ever close it again.
+      h5="$PWD/h5"; mkdir -p "$h5/$(dirname ${kimchiConfig})"
+      printf '{"oauthAccount":"token"}' > "$h5/.claude.json"
+      printf '{"apiKey":"secret"}' > "$h5/${kimchiConfig}"
+      chmod 644 "$h5/.claude.json" "$h5/${kimchiConfig}"
+      HOME="$h5" ${pkgs.bash}/bin/bash ${gateClosedBody} > /dev/null
+      for f in .claude.json ${kimchiConfig}; do
+        got=$(stat -c %a "$h5/$f")
+        if [ "$got" != 600 ]; then
+          echo "FAIL [gate closed]: ~/$f left at mode $got, expected 600" >&2
+          false
+        fi
+      done
+      # Narrowing must not rewrite what the runtime wrote.
+      test "$(cat "$h5/.claude.json")" = '{"oauthAccount":"token"}'
+      test "$(cat "$h5/${kimchiConfig}")" = '{"apiKey":"secret"}'
+
+      # 6. The narrowing is guarded: a missing file must not fail activation,
+      #    and a symlink (a Home Manager store link, say) is not ours to chmod.
+      h6="$PWD/h6"; mkdir -p "$h6"
+      printf '{}' > "$h6/linked.json"
+      chmod 644 "$h6/linked.json"
+      ln -s linked.json "$h6/.claude.json"
+      HOME="$h6" ${pkgs.bash}/bin/bash ${gateClosedBody} > /dev/null
+      got=$(stat -c %a "$h6/linked.json")
+      if [ "$got" != 644 ]; then
+        echo "FAIL [symlink]: activation changed a symlink target's mode to $got" >&2
+        false
+      fi
 
       touch "$out"
     '';

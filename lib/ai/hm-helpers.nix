@@ -227,6 +227,29 @@ in rec {
       fi
     '';
 
+  # Strip group and other access from a runtime credential file, UNGATED.
+  #
+  # mkSettingsActivationScript narrows only when its caller emits it, and
+  # every caller gates it on non-empty settings. Generations before 0600 left
+  # these files 0644, and runtimes preserve the existing mode on rewrite, so a
+  # file widened back then stays readable for as long as the gate is closed.
+  # Emit this for every file that carries credentials, whatever its settings.
+  #
+  # A symlink is skipped: it is Home Manager's or the user's to own, and a
+  # store target would make chmod fail and abort activation.
+  mkCredentialModeActivationScript = {
+    configFile,
+    coreutils,
+  }:
+    aiCommon.scopedActivation ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      CONFIG_FILE="$HOME/${configFile}"
+      if [ -f "$CONFIG_FILE" ] && [ ! -L "$CONFIG_FILE" ]; then
+        ${coreutils}/bin/chmod go-rwx -- "$CONFIG_FILE"
+      fi
+    '';
+
   # Reconcile Nix-declared TOML leaves into a runtime-writable file without
   # claiming the whole file. This is intentionally stronger than the JSON
   # merge helper above: a plain recursive merge cannot remove a setting after

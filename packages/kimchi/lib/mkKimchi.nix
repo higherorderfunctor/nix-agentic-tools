@@ -241,12 +241,22 @@ in
       }: let
         prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
         inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
+        configFile = "${cfg.configDir}/config.json";
       in
         lib.mkMerge [
+          # config.json holds `apiKey` and `gitTokens`. Ungated, so a file an
+          # earlier generation widened is narrowed even with no settings.
+          {
+            home.activation.kimchiConfigMode = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkCredentialModeActivationScript {
+              inherit configFile;
+              inherit (pkgs) coreutils;
+            });
+          }
+
           # config.json activation merge.
           (lib.mkIf (filteredSettings != {}) {
             home.activation.kimchiConfigMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
-              configFile = "${cfg.configDir}/config.json";
+              inherit configFile;
               settingsJson = builtins.toJSON filteredSettings;
               jq = "${pkgs.jq}/bin/jq";
               inherit (pkgs) coreutils;

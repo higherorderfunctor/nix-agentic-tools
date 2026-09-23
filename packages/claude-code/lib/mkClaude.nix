@@ -826,18 +826,25 @@ in
           # project_claude_effort_pin_state + feedback_hm_activation_exit.
           (let
             n = builtins.length (builtins.attrNames cfg.unpinLaunchEffort);
+            configFile = ".claude.json";
           in {
             home.activation.claudeUnpinLaunchEffort = lib.hm.dag.entryAfter ["linkGeneration"] (
               ''
-                echo "ai.claude: reconciling ${toString n} launch-effort unpin flag(s) into ~/.claude.json"
+                echo "ai.claude: reconciling ${toString n} launch-effort unpin flag(s) into ~/${configFile}"
               ''
               + lib.optionalString (n > 0) (helpers.mkSettingsActivationScript {
-                configFile = ".claude.json";
+                inherit configFile;
                 settingsJson = builtins.toJSON cfg.unpinLaunchEffort;
                 jq = "${pkgs.jq}/bin/jq";
                 inherit (pkgs) coreutils;
               })
             );
+            # ~/.claude.json holds account tokens. Ungated, so a file an
+            # earlier generation widened is narrowed even with no flags.
+            home.activation.claudeConfigMode = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkCredentialModeActivationScript {
+              inherit configFile;
+              inherit (pkgs) coreutils;
+            });
           })
           # Final always-on context enters the runtime file registry before the
           # generic backend sink. This replaces upstream's direct CLAUDE.md
