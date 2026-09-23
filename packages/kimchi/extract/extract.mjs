@@ -652,6 +652,17 @@ function runtimeValidationKinds(node, ts, initialAliases = {}) {
       const parent = pathFor(expression.expression);
       if (parent) return [...parent, expression.name.text];
     }
+    // `record[key]` with a computed key reads any member: `*`.
+    if (ts.isElementAccessExpression(expression)) {
+      const parent = pathFor(expression.expression);
+      if (parent)
+        return [
+          ...parent,
+          ts.isStringLiteralLike(expression.argumentExpression)
+            ? expression.argumentExpression.text
+            : "*",
+        ];
+    }
     return undefined;
   }
   function collectAliases(current) {
@@ -835,6 +846,43 @@ function inertConfigKeys(
   return new Map([...deprecated].filter(([name]) => !consumed.has(name)));
 }
 
+// A config.json shape written by hand (the compiler has no declared type for
+// it) must match its reader's runtime guards both ways: every scalar leaf is
+// guarded as its type, and every guarded path under the key is in the shape.
+// So a release that reads a new member, or re-types one, stops the extraction
+// instead of meeting a closed submodule as an unknown option.
+function validateHandShape(name, descriptor, reader, root, ts) {
+  const kinds = runtimeValidationKinds(reader, ts, { [root]: [] });
+  const functionName = reader.name?.text ?? "<anonymous>";
+  function leaves(node, path) {
+    if (["boolean", "number", "string"].includes(node.type)) {
+      if (!kinds.get(path.join("."))?.has(node.type))
+        fail(
+          `config.json hand shape changed: ${functionName} no longer guards ${path.join(".")} as a ${node.type}`,
+        );
+    }
+    for (const [child, value] of Object.entries(node.properties ?? {}))
+      leaves(value, [...path, child]);
+    if (node.additionalProperties)
+      leaves(node.additionalProperties, [...path, "*"]);
+  }
+  leaves(descriptor, [name]);
+  const resolve = (node, segments) =>
+    segments.reduce(
+      (current, segment) =>
+        current &&
+        (current.properties?.[segment] ?? current.additionalProperties),
+      node,
+    );
+  for (const path of kinds.keys()) {
+    const [head, ...rest] = path.split(".");
+    if (head === name && !resolve(descriptor, rest))
+      fail(
+        `config.json hand shape changed: ${functionName} reads ${path}, which the ${name} shape lacks`,
+      );
+  }
+}
+
 function extractConfig(
   sourceFile,
   discovered,
@@ -923,6 +971,19 @@ function extractConfig(
     ),
   };
 
+  for (const [name, reader] of [
+    ["gitTokens", "readGitToken"],
+    ["surveys", "readSurveyConfig"],
+    ["teleport", "readTeleportCompactHintEnabled"],
+  ]) {
+    validateHandShape(
+      name,
+      keys[name],
+      configDeclaration(reader, ts.isFunctionDeclaration),
+      "parsed",
+      ts,
+    );
+  }
   const extrasValidation = runtimeValidationKinds(readExtras, ts, {
     parsed: [],
   });
@@ -1167,12 +1228,69 @@ function piSettingsScopes(names, piSources, ts) {
   return new Map(names.map((name) => [name, merged.has(name)]));
 }
 
+// Every key Kimchi passes to config/settings.ts's harness helpers
+// (readConfigSetting and friends read and write ~/.config/kimchi/harness/
+// settings.json by key). A key that is not a constant stops the extraction.
+const SETTINGS_HELPERS = [
+  "readConfigSetting",
+  "readConfigSettingAsync",
+  "writeConfigSetting",
+  "writeConfigSettingAsync",
+];
+
+function settingsHelperKeys(settingsSource, kimchiSources, context) {
+  const { checker, ts } = context;
+  const helpers = new Set(
+    SETTINGS_HELPERS.flatMap((name) => {
+      const declarations = settingsSource.statements.filter(
+        (statement) =>
+          ts.isFunctionDeclaration(statement) && statement.name?.text === name,
+      );
+      if (!declarations.length)
+        fail(`${settingsSource.fileName} no longer declares ${name}`);
+      return declarations;
+    }),
+  );
+  const keys = new Set();
+  for (const sourceFile of kimchiSources) {
+    if (sourceFile === settingsSource) continue;
+    function visit(node) {
+      if (ts.isCallExpression(node)) {
+        let symbol = checker.getSymbolAtLocation(node.expression);
+        if (symbol && symbol.flags & ts.SymbolFlags.Alias)
+          symbol = checker.getAliasedSymbol(symbol);
+        if (
+          symbol?.declarations?.some((declaration) => helpers.has(declaration))
+        ) {
+          const key =
+            node.arguments[0] && stringConstant(node.arguments[0], context);
+          if (key === undefined) {
+            const { line } = sourceFile.getLineAndCharacterOfPosition(
+              node.getStart(),
+            );
+            fail(
+              `${sourceFile.fileName}:${line + 1} passes a non-constant key to ${symbol.name}: ${node.getText()}`,
+            );
+          }
+          keys.add(key);
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+  }
+  return keys;
+}
+
 function extractHarness(
   declarations,
   configSource,
   settingsManagerSource,
   settingsDeclarationSource,
   piSources,
+  settingsHelperSource,
+  kimchiSources,
+  analysisContext,
   configTsHarnessReads,
   checker,
   ts,
@@ -1368,12 +1486,15 @@ function extractHarness(
   // through pi's project-merging SettingsManager, which does not type them.
   for (const [name, descriptor] of Object.entries(additions))
     keys[name] = { source: "kimchi", ...descriptor, project: false };
-  const unknownHarnessReads = [...configTsHarnessReads]
+  const unknownHarnessReads = [
+    ...configTsHarnessReads,
+    ...settingsHelperKeys(settingsHelperSource, kimchiSources, analysisContext),
+  ]
     .filter((name) => !keys[name])
     .sort();
   if (unknownHarnessReads.length) {
     fail(
-      `config.ts reads harness/settings.json keys that are neither pi Settings nor Kimchi additions: ${JSON.stringify(unknownHarnessReads)}`,
+      `Kimchi reads harness/settings.json keys (in config.ts or through config/settings.ts) that are neither pi Settings nor Kimchi additions: ${JSON.stringify([...new Set(unknownHarnessReads)])}`,
     );
   }
   return {
@@ -2112,6 +2233,11 @@ async function main() {
           piPaths.includes(sourceFile.fileName) &&
           sourceFile.fileName.endsWith(".js"),
       ),
+      requireSource(join(kimchiRoot, "src/config/settings.ts")),
+      sourceFiles.filter((sourceFile) =>
+        kimchiPaths.includes(sourceFile.fileName),
+      ),
+      { ...environmentContext, checker: analysisChecker },
       configTsReads.harness,
       checker,
       ts,
