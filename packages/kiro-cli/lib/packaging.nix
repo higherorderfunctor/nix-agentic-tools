@@ -192,208 +192,23 @@ rec {
       json.dump(names, sys.stdout)
     '';
 
-  # Kiro workspace-settings allowlist — which `cli.json` keys a PROJECT-LOCAL
-  # `.kiro/settings/cli.json` may actually override.
-  #
-  # Kiro's TUI resolves settings as "global, then workspace on top, but only for
-  # keys on an allowlist":
-  #
-  #   function vr(){ let e = dA();            // global ~/.kiro/settings/cli.json
-  #     try { let n = Qq(Eq());               // workspace .kiro/settings/cli.json
-  #       for (let [t,a] of Object.entries(n))
-  #         if (Cq.has(t)) e[t] = a           // <- the allowlist
-  #     } catch(n){ ee.warn("[cli-settings] failed to read workspace cli.json:", n) }
-  #     return e }
-  #
-  # A key OUTSIDE `Cq` written to a workspace file is read, filtered out, and
-  # dropped with no warning — which is why the devenv backend needs this list to
-  # refuse such a key at eval instead of emitting a file Kiro will ignore.
-  #
-  # Extracted, never curated, for the same reason `rolloutFeatures` is: the set
-  # IS the contract, and a hand-copied copy drifts silently the first time
-  # upstream adds a key.
-  #
-  # ANCHORED ON CONTENT, NOT ON HANDLES. `Cq` and `pn` above are esbuild
-  # collision suffixes, not stable names (see the kiro primitives corpus), so
-  # this keys off a member the set has carried since the mechanism shipped
-  # (`"chat.enableTangentMode"`) and resolves symbolic members through the
-  # SCREAMING -> "dotted.key" registry the same bundle carries.
-  #
-  # AN EMPTY RESULT IS A REAL ANSWER, not a failure, and the difference is why
-  # this does not simply assert non-empty like the rollout extractor does. The
-  # workspace merge is NEW in 2.21.1: measured across the store, 2.18.1, 2.19.0,
-  # 2.20.2 and 2.21.0 have no such set and no `[cli-settings]` workspace warning
-  # at all, so on those the honest answer is "this kiro honors NO workspace
-  # override" — and wedging the update pipeline on an upstream revert of a
-  # release-old mechanism would be a merge-blocking liability, not a signal.
-  #
-  # What IS fatal is anything that means the probe cannot answer:
-  #   * the settings-key registry missing entirely (the JS payload is not what
-  #     we think it is, so "no allowlist" would be a guess, not a finding);
-  #   * more than one candidate set (ambiguous; the extract describes one);
-  #   * a member that resolves to nothing or to two different keys (a PARTIAL
-  #     allowlist is worse than none — it would reject valid keys).
+  # TypeScript locates the TUI's registry, allowlist, and workspace merge.
+  # The script validates their shapes, evaluates the two settings expressions,
+  # and tests the selected merge against isolated fixtures in a VM. It never
+  # executes the full vendor bundle.
   kiroSettingsExtractScript = pkgs:
-    pkgs.writeText "kiro-settings-extract.py" ''
-      import json, mmap, re, sys
-
-      # `[^\]]` bounds the body at the first `]`, so the match cannot run away
-      # across the whole binary. The cost is that a `]` anywhere inside the set
-      # TRUNCATES it, and truncation has two outcomes, both handled below and
-      # neither by the resolution assertions:
-      #
-      #   * the `]` is not followed by `)`, so nothing matches at all - caught
-      #     by the merge-marker guard, which knows the set must exist;
-      #   * the `]` IS followed by `)` (a member like `g(z[0])`), so the match
-      #     succeeds on a PREFIX. Measured: a 24-member set truncated that way
-      #     yields 12 keys, resolves cleanly, clears the size floor and exits 0
-      #     - a short allowlist that looks entirely plausible and would make the
-      #     module reject the 12 keys it lost. The BRACKET CHECK below is what
-      #     catches that: a flat set of strings and `pn.KEY` references contains
-      #     no `[` at all, so one in the captured body proves truncation.
-      SET_RE = re.compile(rb'new Set\(\[([^\]]{20,4000})\]\)')
-      PAIR_RE = re.compile(rb'([A-Z][A-Z0-9_]{2,}):"([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+)"')
-      MEMBER_RE = re.compile(rb'"([^"]+)"|[A-Za-z_$][A-Za-z0-9_$]*\.([A-Z][A-Z0-9_]+)')
-      PROBE = b'"chat.enableTangentMode"'
-      CONTROL = "CHAT_DEFAULT_MODEL"
-      # Present iff the workspace-merge code itself is present: it is the warn
-      # branch of the very function that consults the allowlist. This is what
-      # tells an EMPTY capture ("upstream has no workspace merge") apart from a
-      # FAILED one ("it does, and we could not read its set") - without it,
-      # under-capture emits [] and the module then rejects every key, which is
-      # the worst possible direction for this list to be wrong in.
-      MERGE_MARKER = b"[cli-settings] failed to read workspace cli.json"
-
-
-      def die(msg):
-          sys.stderr.write("kiro-extract: " + msg + "\n")
-          sys.exit(1)
-
-
-      # mmap for the same reason the rollout extractor and the patcher use it:
-      # the input is a ~800 MB binary and read() would peak that much RSS on a
-      # builder to scan for a few hundred bytes.
-      with open(sys.argv[1], "rb") as fh:
-          with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-              symbols = {}
-              for m in PAIR_RE.finditer(mm):
-                  symbols.setdefault(m.group(1).decode(), set()).add(m.group(2).decode())
-              if CONTROL not in symbols:
-                  die(
-                      "the embedded settings-key registry is unrecognizable - no "
-                      "%s entry among %d SCREAMING:\"dotted.key\" pairs. This is an "
-                      "ANCHOR failure, not a finding: nothing can be concluded "
-                      "about which settings a workspace cli.json may override."
-                      % (CONTROL, len(symbols))
-                  )
-              bodies = [m.group(1) for m in SET_RE.finditer(mm) if PROBE in m.group(1)]
-              merges_workspace = mm.find(MERGE_MARKER) != -1
-
-      if len(bodies) > 1:
-          die(
-              "ambiguous - %d candidate workspace-override sets carry %s, and the "
-              "extract must describe exactly one."
-              % (len(bodies), PROBE.decode())
-          )
-
-      if not bodies and merges_workspace:
-          die(
-              "this kiro DOES merge a workspace cli.json - it carries the "
-              "%r warning - but no allowlist set carrying %s could be read. "
-              "Emitting an empty list here would make the module reject every "
-              "workspace setting, so this fails instead. The set literal has "
-              "most likely outgrown the body bound or gained a nested member; "
-              "re-derive SET_RE against the binary."
-              % (MERGE_MARKER.decode(), PROBE.decode())
-          )
-
-      for body in bodies:
-          if b"[" in body:
-              die(
-                  "the workspace-override set was TRUNCATED - its captured body "
-                  "contains a '[', which a flat set of keys never does, so a "
-                  "nested member ended the match early and the keys after it "
-                  "were lost. A short allowlist is worse than none here: the "
-                  "module would reject the keys that fell off. Re-derive SET_RE "
-                  "against the binary."
-              )
-
-      keys, unresolved, ambiguous = set(), [], []
-      for body in bodies:
-          for m in MEMBER_RE.finditer(body):
-              if m.group(1):
-                  keys.add(m.group(1).decode())
-                  continue
-              sym = m.group(2).decode()
-              vals = symbols.get(sym)
-              if not vals:
-                  unresolved.append(sym)
-              elif len(vals) > 1:
-                  ambiguous.append("%s -> %s" % (sym, sorted(vals)))
-              else:
-                  keys.add(next(iter(vals)))
-
-      # The two emitted lists fail in OPPOSITE directions and therefore need
-      # opposite guards. For the allowlist, which is used to REJECT, the danger
-      # is under-capture. For `settingKeys`, which is used to STOP A WALK, the
-      # danger is OVER-capture: a spurious key makes the flattener halt early
-      # and emit nested JSON kiro cannot read. The guards below all constrain
-      # the allowlist, so this one constrains the registry — every symbol must
-      # name exactly one key, not merely every symbol the allowlist references.
-      registry_ambiguous = sorted(
-          "%s -> %s" % (k, sorted(v)) for k, v in symbols.items() if len(v) > 1
-      )
-      if registry_ambiguous:
-          die(
-              "the settings-key registry maps symbols to more than one key (%s), "
-              "so the regex is over-matching and `settingKeys` would carry an "
-              "invented boundary." % registry_ambiguous
-          )
-
-      if unresolved:
-          die(
-              "the workspace-override set references key symbols with no registry "
-              "entry (%s); a PARTIAL allowlist is worse than none, because it "
-              "would reject settings kiro actually honors."
-              % sorted(set(unresolved))
-          )
-      if ambiguous:
-          die(
-              "the workspace-override set references key symbols that resolve two "
-              "ways (%s), so the registry regex is over-matching." % sorted(set(ambiguous))
-          )
-      # A sanity floor, NOT the control against under-capture - the bracket check
-      # above is that. A floor tight enough to catch truncation on its own would
-      # have to sit just under the current count and would then fire the first
-      # time upstream legitimately retired a key.
-      if bodies and len(keys) < 10:
-          die(
-              "the workspace-override set matched but yielded only %d keys; its "
-              "member shape changed." % len(keys)
-          )
-
-      # `settingKeys` is every key the bundle's own registry names, and it is
-      # emitted for a different consumer than the allowlist: it is the FLATTEN
-      # BOUNDARY. Kiro's cli.json is flat dotted keys whose VALUES may be
-      # objects, and nothing in the shape of a Nix attrset says where the key
-      # stops and the value begins. `chat.modelDefaults` is a key whose value is
-      # an object of per-model records; without this list the module flattens
-      # straight through it and writes `chat.modelDefaults.<model>.<field>`,
-      # which kiro does not match. Knowing the key lets the flattener stop
-      # there.
-      #
-      # Registry-only, deliberately NOT merged with the allowlist here. The
-      # sidecar reports what each probe measured; combining two measurements
-      # into one field is a policy decision and belongs at the consumer, where
-      # it can be read.
-      json.dump(
-          {
-              "settingKeys": sorted({v for vals in symbols.values() for v in vals}),
-              "workspaceOverridableSettings": sorted(keys),
-          },
-          sys.stdout,
-      )
+    pkgs.writeShellScript "kiro-settings-extract" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      exec ${pkgs.nodejs}/bin/node ${../extract/settings.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
+
+  kiroFakeKasScript = pkgs:
+    pkgs.writeTextFile {
+      name = "kiro-extract-fake-kas";
+      executable = true;
+      text = "#!${pkgs.python3}/bin/python3\n" + builtins.readFile ../extract/fake-kas.py;
+    };
 
   mkKiroExtract = {
     pkgs,
@@ -459,10 +274,13 @@ rec {
     # Appended rather than slotted in alphabetically: the field order here is
     # the sidecar's on-disk order, and reordering it would churn the committed
     # JSON for every reader without telling anyone anything.
-    # ONE scan for both settings fields: they share the key registry, and a
-    # second pass over a ~800 MB binary to re-derive the same regex would be
-    # both slower and a second place for that regex to drift.
-    settingsJson=$("$python3" ${kiroSettingsExtractScript pkgs} "$kiroChatBin")
+    # The chat executable materializes its embedded TUI JavaScript on first
+    # launch. Since 2.23.0 the JS is no longer present as plaintext in the ELF,
+    # so both settings fields come from that authoritative TUI source. The
+    # materializer stops before agent startup and has only a fake KAS available.
+    tuiJs="$PWD/kiro-tui.js"
+    "$python3" ${../extract/embedded-tui.py} "$kiroChatBin" "$tuiJs" ${kiroFakeKasScript pkgs} ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+    settingsJson=$(${kiroSettingsExtractScript pkgs} "$tuiJs")
     # Model availability is server-side and account-dependent. Suggestions come
     # from the public documentation snapshot, refreshed independently of releases.
     modelsJson=$("$python3" ${../extract/models.py} ids ${../model-catalog.json})
