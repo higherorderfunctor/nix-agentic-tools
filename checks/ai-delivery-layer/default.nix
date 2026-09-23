@@ -205,7 +205,7 @@ in {
         samples = {
           agents = {
             description = "probe";
-            instructions = "probe";
+            instructions.text = "probe";
           };
           environmentVariables = "probe";
           lspServers.command = "probe";
@@ -296,7 +296,7 @@ in {
               result = overlay: (evaluate {ai.kiro = lib.mkMerge [base.ai.kiro overlay];}).config;
               failures = cfg: map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) cfg.assertions);
               healthy = result {};
-              retired = result {files.${path} = null;};
+              retired = result {files.${path}.content.enable = false;};
               unrelated = result {files.".kiro/unrelated.json".content.text = "{}";};
               expected = ''ai.kiro.files."${path}" resolves to `symlink`, but ai.kiro.activation.probeDocument.ledgers."${ledger}" still declares this ${codec} document path. Empty document retirement preserves a regular file and native leaves; it cannot hand this path to symlink delivery.'';
             in
@@ -421,13 +421,13 @@ in {
             ai.kimchi.files."AGENTS.md" = entry;
           });
         replaced = (evaluate {content.text = "THIRD-CLAIMANT";}).config;
-        suppressed = (evaluate null).config;
+        suppressed = (evaluate {content.enable = false;}).config;
       in
         replaced.ai.internal.files."AGENTS.md".content.text
         == "THIRD-CLAIMANT"
         && replaced.files."AGENTS.md".text == "THIRD-CLAIMANT"
         && lib.all (assertion: assertion.assertion) replaced.assertions
-        && suppressed.ai.internal.files."AGENTS.md" == null
+        && !suppressed.ai.internal.files."AGENTS.md".content.enable
         && !(suppressed.files ? "AGENTS.md")
         && lib.all (assertion: assertion.assertion) suppressed.assertions
     );
@@ -453,7 +453,7 @@ in {
           failed =
             lib.filter (assertion: !assertion.assertion)
             (result {content.text = "SAME";}).assertions;
-          healthy = result null;
+          healthy = result {content.enable = false;};
         in
           lib.any (assertion:
             lib.hasInfix "codex, kimchi" assertion.message
