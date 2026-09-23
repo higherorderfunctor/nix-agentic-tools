@@ -229,13 +229,16 @@ in {
 
   # Variables Kimchi's entry point overwrites before anything reads them,
   # with the sidecar's reason. A value set for one of these is never read.
+  # The extractor derives `consumerOverridable` from src/entry.ts's top-level
+  # assignment order; the annotations carry only descriptions.
   fixedEnvironmentVariables =
     lib.mapAttrs (_: variable: variable.reason or "Kimchi overwrites it at launch")
     (lib.filterAttrs (_: variable: !(variable.consumerOverridable or false)) variables);
 
   # Every variable the factory sets itself goes through this, so a Kimchi
-  # release that stops reading one, or starts overwriting it, fails evaluation
-  # by name instead of leaving a dead `--set` in the wrapper.
+  # release that stops reading one (the environment census drops it), or
+  # starts overwriting it (the entry.ts analysis flips `consumerOverridable`),
+  # fails evaluation by name instead of leaving a dead `--set` in the wrapper.
   environmentName = name:
     if (variables.${name}.consumerOverridable or false)
     then name
