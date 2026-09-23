@@ -2209,6 +2209,26 @@ in {
         resolves hmEntry && resolves devenvEntry
     );
 
+    # A store-path STRING — a flake input's "${src}/agent.json" — is a file too.
+    # The option's `lines` arm accepts it, so the writer must route it to
+    # `source` like a path, or both backends write a file whose body is the
+    # literal /nix/store path.
+    module-kiro-store-string-agent-both-backends = mkTest "kiro-store-string-agent-both-backends" (
+      let
+        storeString = "${./fixtures/kiro-agent-raw.json}";
+        mod = {
+          ai.kiro = {
+            enable = true;
+            agents.store-string = storeString;
+          };
+        };
+        hmEntry = (evalHm mod).config.home.file.".kiro/agents/store-string.json";
+        devenvEntry = (evalDevenv mod).config.files.".kiro/agents/store-string.json";
+        resolves = e: toString (e.source or "") == storeString && (e.text or null) == null;
+      in
+        resolves hmEntry && resolves devenvEntry
+    );
+
     # `agents` and `agentsDir` are mutually exclusive; the assertion existed but
     # nothing exercised it.
     module-kiro-agents-dir-exclusive = mkTest "kiro-agents-dir-exclusive" (
