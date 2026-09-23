@@ -1396,7 +1396,7 @@
   },
   "provenance": {
     "extractorSchema": 3,
-    "kimchiVersion": "1.1.30",
+    "kimchiVersion": "1.1.31",
     "piVersion": "0.85.1"
   }
 }
