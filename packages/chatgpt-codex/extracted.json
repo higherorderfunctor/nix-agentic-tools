@@ -6340,6 +6340,18 @@
       "slug": "gpt-6-astra"
     },
     {
+      "defaultReasoningLevel": "medium",
+      "displayName": "GPT-6-Luna",
+      "reasoningLevels": ["high", "low", "max", "medium", "xhigh"],
+      "slug": "gpt-6-luna"
+    },
+    {
+      "defaultReasoningLevel": "medium",
+      "displayName": "GPT-6-Sol",
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6-sol"
+    },
+    {
       "defaultReasoningLevel": "low",
       "displayName": "Daybreak Blue",
       "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
@@ -6353,7 +6365,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.156.0",
+    "codexVersion": "0.156.1",
     "extractorSchema": 1
   }
 }
