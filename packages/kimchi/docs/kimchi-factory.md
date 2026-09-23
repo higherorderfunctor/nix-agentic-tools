@@ -1,11 +1,11 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-09-23 — Home Manager keeps Kimchi's user paths and
-> devenv its project paths; all four mutable JSON documents (`config.json`,
-> harness `settings.json`, `mcp.json`, `permissions.json`) reconcile by leaf
-> through the shared delivery router; agents are owned writable copies; portable
-> hooks reach `.kimchi/hooks.json` on devenv only. Full lineage:
-> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> devenv its project paths; the mutable JSON documents (`config.json`, harness
+> `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
+> reconcile by leaf through the shared delivery router; agents are owned
+> writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only.
+> Full lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -42,6 +42,7 @@ is:
 | permissions      | `.config/kimchi/harness/permissions.json` (fixed) | `.kimchi/permissions.json`             |
 | agents           | `<configDir>/harness/agents/<name>.md`            | `.kimchi/agents/<name>.md`             |
 | hooks            | none (warned exclusion)                           | `.kimchi/hooks.json`                   |
+| project trust    | `<configDir>/harness/trust.json`                  | none (rejected: user scope)            |
 
 Project Kimchi settings, MCP servers, harness settings, permissions, agents, and
 hooks are exact-cwd readers. The devenv wrapper rejects launches below the
@@ -90,16 +91,17 @@ HM. Locked by `module-kimchi-hm-mcp-reconciled`,
 `configDir`, preserving ownership from generations before project-path delivery;
 devenv's new ledgers hash their actual project document paths.
 
-All four files state `facts.harnessWrites = true`, and every writer survives an
-empty declaration on either backend, so removing the last MCP server retracts
-it. HM uses `$HOME` and XDG state; devenv uses `$DEVENV_ROOT` and
-`$DEVENV_STATE/nix-agentic-tools`. New documents are 0600 and existing regular
-files retain their modes. Empty settings on either document release all owned
-leaves: every typed sub-option defaults to null or `{}`, and `filterNulls`
-recurses. `skillPaths` in particular defaults to null, because 1.1.30 reads
-`projectExtras.skillPaths ?? globalExtras.skillPaths` (`src/config.ts:526`), so
-a project `[]` would replace the user's global skill paths; an explicit list,
-empty included, still lands. Locked by `module-kimchi-skill-paths-inherit`.
+All four files, and `trust.json` on Home Manager, state
+`facts.harnessWrites = true`, and every writer survives an empty declaration on
+either backend, so removing the last MCP server retracts it. HM uses `$HOME` and
+XDG state; devenv uses `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`. New
+documents are 0600 and existing regular files retain their modes. Empty settings
+on either document release all owned leaves: every typed sub-option defaults to
+null or `{}`, and `filterNulls` recurses. `skillPaths` in particular defaults to
+null, because 1.1.30 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
+(`src/config.ts:526`), so a project `[]` would replace the user's global skill
+paths; an explicit list, empty included, still lands. Locked by
+`module-kimchi-skill-paths-inherit`.
 
 `ai.kimchi.permissions` mirrors Kimchi's `.strict()` zod schema key for key
 (`src/extensions/permissions/config.ts:11-19`) with no freeform tail, because
@@ -130,10 +132,29 @@ Project config, MCP, skills, and harness settings remain inert until project
 trust is established. Interactive trust persists in the user's harness
 `trust.json`; headless and ACP sessions honor that decision or the user-global
 `defaultProjectTrust`. `--approve` is a run-scoped override for CLI and TUI
-only: ACP resolves trust again for each session without it, so an unattended ACP
-client needs the persisted decision or `defaultProjectTrust`. Root `AGENTS.md`
-is the upstream exception: Kimchi's context loader walks ancestors directly
-without consulting the project-scope gate.
+only: ACP resolves trust again for each session without it
+(`src/modes/acp/server.ts:2166-2173`), so an unattended ACP client needs the
+persisted decision or `defaultProjectTrust`. Root `AGENTS.md` is the upstream
+exception: Kimchi's context loader walks ancestors directly without consulting
+the project-scope gate.
+
+`ai.kimchi.projectTrust` (absolute path → bool) is the persisted decision,
+declared. pi 0.85.1 keeps it in `<agentDir>/trust.json`, which Kimchi pins to
+its harness directory, and looks it up under `realpath(cwd)` and then each
+parent, reading keys verbatim (`findNearestTrustEntry`,
+`dist/core/trust-manager.js:20-33`). So one entry covers every project beneath
+it, `false` denies a subtree, and a key reached through a symlink never matches.
+The trust prompt rewrites the file (`setMany` → `writeFileSync`), so Home
+Manager reconciles it by leaf through its own `kimchiProjectTrustMerge` writer,
+and the document declares `content.run` rather than `value`:
+`lib/project-trust.py` canonicalizes each key with `os.path.realpath` when the
+writer runs, since evaluation cannot see the filesystem, and fails the writer
+when two keys resolve to one directory with different answers. Prompted
+decisions are unowned siblings and survive. Devenv rejects the option with an
+assertion: pi reads trust only from the user store, so that a project cannot
+trust itself, and devenv writes only inside the project. Locked by
+`module-kimchi-project-trust` and `module-kimchi-project-trust-runtime`, which
+runs the real writer against a symlinked fixture.
 
 The devenv module rejects every `harnessSettings` key Kimchi reads only from
 user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,

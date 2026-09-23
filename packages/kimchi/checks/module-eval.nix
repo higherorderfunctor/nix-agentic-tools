@@ -531,6 +531,123 @@ in {
         && !(accepts {classifierTimeoutMs = 0;})
     );
 
+    # ai.kimchi.projectTrust mirrors trust.json, which ACP consults because it
+    # ignores `--approve`. Home Manager owns the declared leaves through its
+    # own writer, which follows configDir like harness settings; devenv
+    # rejects the option by name rather than dropping it, and each arm has a
+    # control that isolates the one input under test.
+    module-kimchi-project-trust = mkTest "kimchi-project-trust" (
+      let
+        projectTrust = {"/srv/projects" = true;};
+        hm = evalHm {
+          ai.kimchi = {
+            inherit projectTrust;
+            configDir = "custom/kimchi";
+            enable = true;
+          };
+        };
+        target = lib.head (ownPlan "kimchi" "kimchiProjectTrustMerge" hm).targets;
+        devenvWith = trust:
+          evalDevenv {
+            ai.kimchi = {
+              enable = true;
+              projectTrust = trust;
+            };
+          };
+        rejected = devenvWith projectTrust;
+        accepted = devenvWith {};
+        hmFailures = trust:
+          failedAssertions (evalHm {
+            ai.kimchi = {
+              enable = true;
+              projectTrust = trust;
+            };
+          });
+      in
+        target.path
+        == "custom/kimchi/harness/trust.json"
+        && target.codec == "json"
+        && lib.hasPrefix "json-settings/kimchi-project-trust-" target.ledger
+        && lib.hasInfix "project-trust.py" target.units.run
+        && !(hm.config.home.file ? "custom/kimchi/harness/trust.json")
+        && hmFailures projectTrust == []
+        && builtins.any (lib.hasInfix "must be absolute paths") (hmFailures {"srv/projects" = true;})
+        && builtins.any (lib.hasInfix "ai.kimchi.projectTrust is user scope") (failedAssertions rejected)
+        && failedAssertions accepted == []
+        # Devenv declares no trust writer of any kind, even when accepted.
+        && !(lib.any (target: lib.hasSuffix "trust.json" target.path)
+          (lib.concatMap (record: record.plan.targets) (lib.attrValues accepted.config.ai.kimchi._ownPlans)))
+        && !(lib.any (lib.hasSuffix "trust.json") (builtins.attrNames accepted.config.files))
+    );
+
+    # Runs the real Home Manager writer. A key reached through a symlink must
+    # land under its realpath, the only key pi 0.85.1 ever looks up
+    # (findNearestTrustEntry); a missing tail is still declared; a decision
+    # Kimchi's prompt wrote survives; an empty declaration retracts only what
+    # was owned; and two keys resolving to one directory with different
+    # answers fail the writer without touching the file.
+    module-kimchi-project-trust-runtime = let
+      fixture = pkgs.runCommand "kimchi-project-trust-fixture" {} ''
+        mkdir -p "$out/real/project"
+        ln -s real "$out/link"
+      '';
+      # An attribute name cannot carry string context. The runCommand below
+      # interpolates `fixture` itself, which keeps it in the check's closure.
+      under = relative: builtins.unsafeDiscardStringContext "${fixture}/${relative}";
+      writer = projectTrust:
+        pkgs.writeShellScript "kimchi-project-trust" ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${(evalHm {
+            ai.kimchi = {
+              enable = true;
+              inherit projectTrust;
+            };
+          }).config.home.activation.kimchiProjectTrustMerge.text}
+        '';
+      declared = writer {
+        ${under "link/project"} = true;
+        "/nonexistent/kimchi-project" = false;
+      };
+      conflicting = writer {
+        ${under "link/project"} = true;
+        ${under "real/project"} = false;
+      };
+      empty = writer {};
+    in
+      pkgs.runCommand "module-test-kimchi-project-trust-runtime" {nativeBuildInputs = [pkgs.jq];} ''
+        fail() { echo "FAIL: kimchi-project-trust-runtime: $1" >&2; exit 1; }
+        export HOME="$TMPDIR/home"
+        export XDG_STATE_HOME="$TMPDIR/state"
+        trust="$HOME/.config/kimchi/harness/trust.json"
+        mkdir -p "$(dirname "$trust")"
+        # A decision Kimchi's own prompt persisted before activation.
+        printf '{\n  "/prompted": true\n}\n' > "$trust"
+
+        ${declared}
+        jq -e --arg real '${fixture}/real/project' '.[$real] == true' "$trust" >/dev/null \
+          || fail "the symlinked key did not land under its realpath: $(cat "$trust")"
+        jq -e --arg link '${fixture}/link/project' 'has($link) | not' "$trust" >/dev/null \
+          || fail "the literal symlinked key was written, which Kimchi never matches"
+        jq -e '.["/nonexistent/kimchi-project"] == false' "$trust" >/dev/null \
+          || fail 'a declared path that does not exist yet was dropped'
+        jq -e '.["/prompted"] == true' "$trust" >/dev/null \
+          || fail 'a prompted decision was lost'
+
+        cp "$trust" "$TMPDIR/before-conflict"
+        if ${conflicting} 2>"$TMPDIR/conflict.err"; then
+          fail 'two keys resolving to one directory with different decisions were accepted'
+        fi
+        grep -q 'declare different decisions' "$TMPDIR/conflict.err" \
+          || fail "the conflict did not name its cause: $(cat "$TMPDIR/conflict.err")"
+        cmp "$TMPDIR/before-conflict" "$trust" || fail 'a failed render changed trust.json'
+
+        ${empty}
+        jq -e '. == {"/prompted": true}' "$trust" >/dev/null \
+          || fail "an empty declaration did not retract exactly the owned leaves: $(cat "$trust")"
+        echo PASS > "$out"
+      '';
+
     # Kimchi reads `<agentDir>/agents/*.md` and a trusted project's
     # `.kimchi/agents/*.md`, and its /agents commands write both in place
     # (src/extensions/agents/index.ts:2556-2874). So each agent is an OWNED,
