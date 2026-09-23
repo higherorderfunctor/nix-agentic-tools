@@ -781,9 +781,9 @@
     finalEntry,
   }: let
     finalText =
-      if finalEntry == null || !finalEntry.content.enable || aiTypes.textSourceUsesSource finalEntry.content
+      if finalEntry == null
       then null
-      else finalEntry.content.text;
+      else aiTypes.textSourceInlineText finalEntry.content;
     renderedBytes =
       if finalText == null
       then 0

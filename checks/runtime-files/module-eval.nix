@@ -411,17 +411,142 @@ in {
             kiro.enable = true;
           };
         };
-        explicitEmpty = evalDevenv {
-          ai.codex = {
-            enable = true;
-            files."AGENTS.md".content.text = "";
-          };
-        };
       in
         !(hmCodex.config.home.file ? ".codex/AGENTS.md")
         && !(devenvCodex.config.files ? "AGENTS.md")
         && !(devenvKiro.config.files ? "AGENTS.md")
-        && !(explicitEmpty.config.files ? "AGENTS.md")
+    );
+
+    # Content at `mkDefault` is still content: the leaf-default idiom a
+    # downstream module uses for an overridable file must deliver it, not
+    # leave a record that nothing writes and nothing reports.
+    module-runtime-files-default-priority-content-delivers = mkTest "runtime-files-default-priority-content-delivers" (
+      let
+        source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+        config.ai.claude = {
+          enable = true;
+          files = {
+            "literal/default-source.md".content.source = lib.mkDefault source;
+            "literal/default-text.md".content.text = lib.mkDefault "DEFAULT-TEXT";
+          };
+        };
+        delivered = sink: let
+          field = target: name: (sink.${target} or {}).${name} or null;
+        in
+          field "literal/default-text.md" "text"
+          == "DEFAULT-TEXT"
+          && field "literal/default-source.md" "source" == source;
+      in
+        delivered (evalHm config).config.home.file
+        && delivered (evalDevenv config).config.files
+    );
+
+    # Empty inline text is not content. An entry left with nothing else is
+    # rejected rather than silently written as nothing; `enable = false` is
+    # the deliberate way to keep an entry that delivers nothing.
+    module-runtime-files-empty-text-rejected = mkTest "runtime-files-empty-text-rejected" (
+      let
+        attempt = evaluate: runtime: target: content:
+          builtins.tryEval (builtins.deepSeq
+            (lib.getAttrFromPath ["ai" runtime "files"]
+              (evaluate {
+                ai.${runtime} = {
+                  enable = true;
+                  files.${target}.content = content;
+                };
+              }).config)
+            true);
+        rejected = evaluate: runtime: target: content:
+          !(attempt evaluate runtime target content).success;
+        disabled = evalDevenv {
+          ai.codex = {
+            enable = true;
+            files."AGENTS.md".content = {
+              enable = false;
+              text = "";
+            };
+          };
+        };
+      in
+        rejected evalHm "claude" "literal/empty.md" {text = "";}
+        && rejected evalDevenv "claude" "literal/empty.md" {text = "";}
+        && rejected evalHm "claude" "literal/empty.md" {text = lib.mkDefault "";}
+        && rejected evalDevenv "codex" "AGENTS.md" {text = "";}
+        # Control: the same entry with content evaluates.
+        && (attempt evalHm "claude" "literal/empty.md" {text = "PRESENT";}).success
+        && !(disabled.config.files ? "AGENTS.md")
+    );
+
+    # `content.enable = false` is the one suppression lever, so it must reach
+    # every content form. A `value` document or a `run` body that ignored it
+    # would be written while the consumer's disable is accepted in silence.
+    module-runtime-files-disable-suppresses-every-form = mkTest "runtime-files-disable-suppresses-every-form" (
+      let
+        runtimeFiles = import ../../lib/ai/runtime-files.nix {inherit lib;};
+        target = ".kiro/probe.json";
+        valueEntry = contents:
+          lib.mkMerge ([
+              {
+                ai.kiro = {
+                  enable = true;
+                  files.${target}.format = "json";
+                };
+              }
+            ]
+            ++ map (content: {ai.kiro.files.${target}.content = content;}) contents);
+        delivered = config:
+          (evalHm config).config.home.file
+          ? ${target}
+          && (evalDevenv config).config.files ? ${target};
+        suppressed = config:
+          !((evalHm config).config.home.file ? ${target})
+          && !((evalDevenv config).config.files ? ${target});
+        runEntry = extra:
+          (evalHm {
+            ai.kiro = {
+              enable = true;
+              files.".kiro/probe.run".content = {run = "printf probe";} // extra;
+            };
+          }).config.ai.kiro.files.".kiro/probe.run";
+      in
+        # Control: an ordinary value document is delivered.
+        delivered (valueEntry [{value.a = true;}])
+        && suppressed (valueEntry [
+          {
+            enable = false;
+            value.a = true;
+          }
+        ])
+        # A generated leaf default, disabled by a separate consumer module.
+        && suppressed (valueEntry [
+          {value.a = lib.mkDefault true;}
+          {enable = false;}
+        ])
+        && runtimeFiles.isLive (runEntry {})
+        && !runtimeFiles.isLive (runEntry {enable = false;})
+    );
+
+    # A store-backed replacement of the shared AGENTS.md stays lazy: it is not
+    # read to be measured against a size limit, which would build it during
+    # evaluation. The source is a derivation that fails to build.
+    module-runtime-files-shared-agentsmd-source-stays-lazy = mkTest "runtime-files-shared-agentsmd-source-stays-lazy" (
+      let
+        source = pkgs.runCommand "shared-agents-md-source-must-not-build" {} ''
+          exit 1
+        '';
+        evaluated = evalDevenv {
+          ai = {
+            codex = {
+              enable = true;
+              files."AGENTS.md".content.source = source;
+              projectDocMaxBytes = 8;
+            };
+            context.text = "SHARED-CONTEXT";
+          };
+        };
+      in
+        builtins.all (assertion: assertion.assertion) evaluated.config.assertions
+        && toString evaluated.config.files."AGENTS.md".source == toString source
     );
 
     module-runtime-files-discarded-composed-context-stays-lazy = mkTest "runtime-files-discarded-composed-context-stays-lazy" (

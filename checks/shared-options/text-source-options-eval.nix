@@ -152,6 +152,50 @@
   samePriorityFailed = !(builtins.tryEval (builtins.deepSeq samePriority.config.entries true)).success;
   unset = evaluate [{entries.example = {};}];
 
+  # `enableOnMkDefault`: a record with no package prose treats content at
+  # `mkDefault` as content. Without the flag the same definition stays dormant
+  # (pinned by package-source-does-not-change-enable-default-false).
+  evaluateEnableOnMkDefault = evaluateWith (aiTypes.optionalTextSource {
+    description = "entry prose";
+    enableOnMkDefault = true;
+  });
+  mkDefaultText = evaluateEnableOnMkDefault [{entries.example.text = lib.mkDefault "default prose";}];
+  mkDefaultSource = evaluateEnableOnMkDefault [{entries.example.source = lib.mkDefault source;}];
+  mkDefaultEmpty = evaluateEnableOnMkDefault [{entries.example.text = lib.mkDefault "";}];
+  enableOnMkDefaultWithDefaultContentFailed =
+    !(builtins.tryEval (aiTypes.optionalTextSource {
+      defaultContent.text = "package prose";
+      description = "contradictory prose";
+      enableOnMkDefault = true;
+    })).success;
+
+  # devshell `files`: the same record, materialized by a shell hook.
+  evaluateDevshellFiles = files:
+    (lib.evalModules {
+      modules = [
+        ../../devshell/files.nix
+        {
+          options.shellHook = lib.mkOption {
+            type = lib.types.lines;
+            default = "";
+          };
+          config = {inherit files;};
+        }
+      ];
+      specialArgs = {inherit pkgs;};
+    }).config;
+  devshellMkDefault = evaluateDevshellFiles {"probe.txt".text = lib.mkDefault "DEFAULT";};
+  devshellEmptyFailed =
+    !(builtins.tryEval (builtins.deepSeq
+      (evaluateDevshellFiles {"probe.txt".text = "";}).shellHook
+      true)).success;
+  devshellEmptyDisabled = evaluateDevshellFiles {
+    "probe.txt" = {
+      enable = false;
+      text = "";
+    };
+  };
+
   invalidTextSourceDefaults = path: declarations:
     lib.concatLists (lib.mapAttrsToList (name: declaration: let
       optionPath = path ++ [name];
@@ -225,10 +269,17 @@
     default-content-unset-preserves-prose = defaultContentUnset.config.value.text == "package prose";
     default-content-unset-remains-disabled = !defaultContentUnset.config.value.enable;
     default-text-yields-to-source = defaultText.config.entries.example.text == "packaged prose\n";
+    devshell-files-default-priority-text-materialized = lib.hasInfix "_target=\"probe.txt\"" devshellMkDefault.shellHook;
+    devshell-files-empty-text-disabled-accepted = !(lib.hasInfix "probe.txt" devshellEmptyDisabled.shellHook);
+    devshell-files-empty-text-rejected = devshellEmptyFailed;
     disabled-empty-default-source-keeps-text-empty = disabledEmptyOverridesDefaultSource.config.entries.example.text == "";
     disabled-empty-default-source-remains-disabled = !disabledEmptyOverridesDefaultSource.config.entries.example.enable;
     disabled-text-source-preserves-content = consumerTextDisabled.config.entries.example.text == "consumer prose";
     empty-override-of-default-source-rejected = emptyOverridesDefaultSourceFailed;
+    enable-on-default-priority-empty-remains-disabled = !mkDefaultEmpty.config.entries.example.enable;
+    enable-on-default-priority-source-enables = mkDefaultSource.config.entries.example.enable;
+    enable-on-default-priority-text-enables = mkDefaultText.config.entries.example.enable;
+    enable-on-default-priority-with-default-content-rejected = enableOnMkDefaultWithDefaultContentFailed;
     enabled-empty-optional-source-rejected = enabledEmptyFailed;
     explicit-disable-overrides-auto-enable = !consumerTextDisabled.config.entries.example.enable;
     forced-source-overrides-text = forcedSource.config.entries.example.text == "packaged prose\n";
