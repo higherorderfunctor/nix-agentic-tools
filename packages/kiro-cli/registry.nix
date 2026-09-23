@@ -13,7 +13,7 @@
   };
   documentation.aiCliDescriptions.kiro-cli = "Kiro CLI";
   fragments.categories = {
-    # kiro-settings: how nested `nativeSettings` lowers into kiro's FLAT
+    # kiro-settings: how nested `native.settings` lowers into kiro's FLAT
     # cli.json, and why the flatten boundary has to come from the binary rather
     # than from attrset shape. Scoped to the flattener, the extractor that
     # measures the boundary, and the module that applies it — an edit to any of

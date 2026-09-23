@@ -1,7 +1,9 @@
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-09-22 — settings extraction evaluates the shipped TUI
-> registry and workspace allowlist after sandboxed source materialization.
+> **Last verified:** 2026-09-23 — settings extraction evaluates the shipped TUI
+> registry and workspace allowlist after sandboxed source materialization;
+> native file settings live under `ai.<runtime>.native` (`native.settings`;
+> Kimchi also `native.harnessSettings`).
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -11,8 +13,8 @@ materialized source.
 
 ### Model suggestions are a public catalog, not an account entitlement list
 
-`nativeSettings.chat.defaultModel` reads `extracted.json.models` as a soft enum.
-Any string remains accepted. The model field is derived from
+`native.settings.chat.defaultModel` reads `extracted.json.models` as a soft
+enum. Any string remains accepted. The model field is derived from
 `model-catalog.json`, a snapshot of the names in
 [Kiro's public comparison table](https://kiro.dev/docs/models.md). The other
 extracted fields still come from the pinned binary.
@@ -54,8 +56,8 @@ establish a complete suggestion list.
 ### Flat settings and object values
 
 `~/.kiro/settings/cli.json` is FLAT: its keys are dotted strings, not nested
-objects. `nativeSettings` lets you write the nested Nix that reads naturally and
-`flattenKiroSettings` lowers it:
+objects. `native.settings` lets you write the nested Nix that reads naturally
+and `flattenKiroSettings` lowers it:
 
 ```nix
 { mcp.loadedBefore = true; chat.enableTangentMode = true; }

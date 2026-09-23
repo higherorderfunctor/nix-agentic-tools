@@ -1,8 +1,8 @@
 {lib, ...}: let
-  # ── The unrecognized-key guard on the freeform nativeSettings tail ────
+  # ── The unrecognized-key guard on the freeform native.settings tail ────
   #
   # These four cases exist because the guard is built ONCE
-  # (`nativeSettingsAssertions` in mkClaude.nix) and consumed by BOTH
+  # (`nativeFileAssertions` in mkClaude.nix) and consumed by BOTH
   # projections' mkMerge lists. Nothing else in this file forces
   # `config.assertions` for claude, so without them the check would ship to CI
   # never having been evaluated on either backend.
@@ -32,7 +32,7 @@
   claudeKnownKeysCfg = {
     ai.claude = {
       enable = true;
-      nativeSettings = {
+      native.settings = {
         env.MY_VAR = "1";
         hooks.PreToolUse = [{matcher = "Bash";}];
         modelPricing.overrides."claude-opus-5".input = 1.0;
@@ -46,7 +46,7 @@
   claudeNestedTypoCfg = {
     ai.claude = {
       enable = true;
-      nativeSettings.permissions.alow = ["Read"];
+      native.settings.permissions.alow = ["Read"];
     };
   };
 

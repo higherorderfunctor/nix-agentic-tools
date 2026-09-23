@@ -122,7 +122,7 @@ in {
           ai.shell = pkgs.bash;
           ai.claude = {
             enable = true;
-            nativeSettings.env.CLAUDE_CODE_SHELL = "/usr/bin/bash";
+            native.settings.env.CLAUDE_CODE_SHELL = "/usr/bin/bash";
           };
         };
         settings = result.config.programs.claude-code.settings or {};

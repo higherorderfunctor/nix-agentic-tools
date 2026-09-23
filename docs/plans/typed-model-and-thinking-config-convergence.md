@@ -2,7 +2,7 @@
 
 > **Status:** **IMPLEMENTED 2026-06-18; execution handoff archived.** The
 > runtime-native paths in this record were refreshed for the 2026-08-15
-> `nativeSettings` split. Every design choice below is _decided_ — there are
+> `native.settings` split. Every design choice below is _decided_ — there are
 > deliberately **no open `OR` forks**. Where something is genuinely deferred, it
 > is marked **DEFERRED** with a reason, not left ambiguous.
 >
@@ -12,7 +12,7 @@
 >
 > **nixos-config is OUT OF SCOPE.** It still uses the removed
 > `ai.claude.settings.effortLevel` path and requires a separate consumer
-> migration to `ai.claude.nativeSettings.effortLevel` after this repository's
+> migration to `ai.claude.native.settings.effortLevel` after this repository's
 > 2026-08-15 settings split.
 >
 > **This doc SUPERSEDES and merges two prior handoffs** (kept for history,
@@ -148,7 +148,7 @@ default" question: yes.
    `mkKiro.nix:68-113`). At implementation time this kept the existing
    `ai.claude.settings.effortLevel` path so **nixos-config kept working**; the
    later settings split requires its separate migration to
-   `ai.claude.nativeSettings.effortLevel`.
+   `ai.claude.native.settings.effortLevel`.
 7. **`unpinLaunchEffort` is a top-level `ai.claude.*` option** (it controls
    `~/.claude.json` reconciliation, not a `settings.json` key).
 8. **Effort + pin data → one combined sidecar**
@@ -277,7 +277,7 @@ in {
 
 **Null-filter requirement:** because the typed keys default to `null`, the HM
 projection must stop using raw `inherit (cfg) settings` and instead pass
-`aiCommon.filterNulls cfg.nativeSettings` (or the Kiro `filteredSettings`
+`aiCommon.filterNulls cfg.native.settings` (or the Kiro `filteredSettings`
 pattern) into `programs.claude-code.settings`, so upstream never receives
 `effortLevel = null` / `model = null`. Verify `filterNulls` handles the
 submodule (recurse if needed).
@@ -285,7 +285,7 @@ submodule (recurse if needed).
 **Why a submodule, not a top-level option:** the original implementation kept
 the then-current `ai.claude.settings.effortLevel` path, so nixos-config kept
 working and `xhigh` gained enum validation. The later settings split moved that
-native key to `ai.claude.nativeSettings.effortLevel` and requires a separate
+native key to `ai.claude.native.settings.effortLevel` and requires a separate
 nixos-config migration.
 
 ### 3.4 Verification (WS1)
@@ -455,19 +455,19 @@ model drift.
 files. Scrub (one commit,
 `docs(ai): drop unimplemented normalized ai.settings; models are per-CLI`):
 
-| File:line                                           | Action                                                                                         |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `devshell/docs-site/pages/ai-mapping.md:64`         | Replace `ai.settings.model` example with per-CLI (`ai.kiro.nativeSettings.chat.defaultModel`). |
-| `devshell/docs-site/pages/home-manager-footer.md:8` | Same.                                                                                          |
-| `devshell/docs-site/default.nix:38`                 | Remove the `settings.model` fanout table row (found this session).                             |
-| `dev/fragments/ai-module/ai-module-fanout.md:84`    | Remove `ai.settings.{model,telemetry}` from normalized list, then regenerate.                  |
-| `dev/fragments/hm-modules/module-conventions.md:30` | Remove `ai.settings` from top-level options list, then regenerate.                             |
-| `dev/references/config-parity.md:29,69,71,74`       | Delete the "Normalized Settings (ai.settings)" section + row; **keep** per-CLI rows.           |
-| `dev/docs/concepts/config-parity.md:24`             | Fix settings row.                                                                              |
-| `dev/docs/concepts/unified-ai-module.md:55,63`      | Rewrite model example as per-CLI.                                                              |
-| `dev/docs/getting-started/home-manager.md:168`      | Rewrite model example as per-CLI.                                                              |
-| `.claude/rules/ai-module.md` (+ Copilot/Kiro twins) | **Generated** — fixed by regenerating after the fragment edits, **not** hand-edited.           |
-| `dev/notes/ai-transformer-design.md:23,241,1459`    | **Leave** (design archive); optionally annotate "rejected — models are ecosystem-specific".    |
+| File:line                                           | Action                                                                                          |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `devshell/docs-site/pages/ai-mapping.md:64`         | Replace `ai.settings.model` example with per-CLI (`ai.kiro.native.settings.chat.defaultModel`). |
+| `devshell/docs-site/pages/home-manager-footer.md:8` | Same.                                                                                           |
+| `devshell/docs-site/default.nix:38`                 | Remove the `settings.model` fanout table row (found this session).                              |
+| `dev/fragments/ai-module/ai-module-fanout.md:84`    | Remove `ai.settings.{model,telemetry}` from normalized list, then regenerate.                   |
+| `dev/fragments/hm-modules/module-conventions.md:30` | Remove `ai.settings` from top-level options list, then regenerate.                              |
+| `dev/references/config-parity.md:29,69,71,74`       | Delete the "Normalized Settings (ai.settings)" section + row; **keep** per-CLI rows.            |
+| `dev/docs/concepts/config-parity.md:24`             | Fix settings row.                                                                               |
+| `dev/docs/concepts/unified-ai-module.md:55,63`      | Rewrite model example as per-CLI.                                                               |
+| `dev/docs/getting-started/home-manager.md:168`      | Rewrite model example as per-CLI.                                                               |
+| `.claude/rules/ai-module.md` (+ Copilot/Kiro twins) | **Generated** — fixed by regenerating after the fragment edits, **not** hand-edited.            |
+| `dev/notes/ai-transformer-design.md:23,241,1459`    | **Leave** (design archive); optionally annotate "rejected — models are ecosystem-specific".     |
 
 Regenerate via `devenv tasks run --mode before generate:instructions` (memory
 `feedback_use_devenv_tasks` — never hand-edit generated files). `treefmt` every

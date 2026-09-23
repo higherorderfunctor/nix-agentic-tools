@@ -34,7 +34,7 @@ in {
         config = {
           ai.codex = {
             enable = true;
-            nativeSettings = {
+            native.settings = {
               sandbox_mode = "workspace-write";
               sandbox_workspace_write.writable_roots = ["/consumer-cache"];
             };
@@ -53,23 +53,23 @@ in {
         devenv = (evalDevenv config).config;
         readOnly =
           (evalDevenv {
-            ai.codex.nativeSettings.sandbox_mode = "read-only";
+            ai.codex.native.settings.sandbox_mode = "read-only";
             ai.codex.programs.semble.enable = true;
           }).config;
         noCodex =
           (evalDevenv {
-            ai.codex.nativeSettings.sandbox_mode = "workspace-write";
+            ai.codex.native.settings.sandbox_mode = "workspace-write";
             ai.claude.programs.semble.enable = true;
           }).config;
         profileConfig.ai.codex = {
           enable = true;
-          nativeSettings.default_permissions = "project-edit";
+          native.settings.default_permissions = "project-edit";
           programs.semble.enable = true;
         };
         profileOnly = (evalDevenv profileConfig).config;
         profileDenied =
           (evalDevenv (lib.recursiveUpdate profileConfig {
-            ai.codex.nativeSettings.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" = "deny";
+            ai.codex.native.settings.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" = "deny";
           })).config;
       in
         builtins.all
@@ -84,9 +84,9 @@ in {
         # export the value to the user's session and everything else in it.
         && hasWrappedSemble hm.home.packages
         && hasWrappedSemble devenv.packages
-        && readOnly.ai.codex.nativeSettings.sandbox_workspace_write == null
-        && noCodex.ai.codex.nativeSettings.sandbox_workspace_write == null
-        && profileOnly.ai.codex.nativeSettings.sandbox_workspace_write == null
+        && readOnly.ai.codex.native.settings.sandbox_workspace_write == null
+        && noCodex.ai.codex.native.settings.sandbox_workspace_write == null
+        && profileOnly.ai.codex.native.settings.sandbox_workspace_write == null
         && profileOnly.files.".codex/config.toml".source.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "write"
         && profileDenied.files.".codex/config.toml".source.value.permissions.project-edit.filesystem."/tmp/devenv-state/semble-cache" == "deny"
         && builtins.all (assertion: assertion.assertion) profileOnly.assertions
