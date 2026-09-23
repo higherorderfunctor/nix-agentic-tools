@@ -138,6 +138,19 @@
         (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
       ignored
     )) (builtins.attrNames cfg.hooks));
+  # Kimchi's lifecycle event set lacks PermissionRequest and its reader skips
+  # an unknown event silently, so the factory leaves it out of
+  # .kimchi/hooks.json. Devenv only: on Home Manager the whole `ai.hooks` pool
+  # is undelivered, and its policy row already says so.
+  kimchiHookWarnings = let
+    hooks = get ["ai" "hooks"];
+  in
+    lib.optional (runtime
+      == "kimchi"
+      && backend == "devenv"
+      && hooks != null
+      && lib.any (block: block.hooks != []) (hooks.PermissionRequest or []))
+    (message ["ai" "hooks" "PermissionRequest"] "Kimchi's hook event set has no PermissionRequest (src/extensions/hook-adapters/discovery.ts:29-50), so these matcher groups are left out of .kimchi/hooks.json.");
   # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
   # withhold test rather than a platform test. Two argv paths drop the flag:
   # Darwin's launcher resolves the chat binary by app-bundle discovery and never
@@ -188,4 +201,4 @@ in
   then []
   else
     lib.unique
-    (rowWarnings ++ effortWarnings ++ agentWarnings ++ lspWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings)
+    (rowWarnings ++ effortWarnings ++ agentWarnings ++ lspWarnings ++ ruleWarnings ++ hookWarnings ++ kimchiHookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings)

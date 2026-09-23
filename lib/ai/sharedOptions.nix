@@ -314,12 +314,17 @@ in {
       default = {};
       apply = lib.filterAttrs (_event: blocks: blocks != []);
       description = ''
-        Portable command hooks fanned out to Claude and Codex. The event set is
-        their exact lifecycle intersection: ${lib.concatStringsSep ", " hooks.portableEvents}.
+        Portable command hooks fanned out to Claude and Codex, and to Kimchi on
+        devenv. The event set is Claude and Codex's exact lifecycle
+        intersection: ${lib.concatStringsSep ", " hooks.portableEvents}.
         Matcher strings pass through unchanged, so use regex syntax supported
-        by both runtimes. Per-runtime hook maps append after these shared
-        matcher groups. Kiro is excluded because its v3 trigger schema is not
-        semantically interchangeable.
+        by every runtime. Per-runtime hook maps append after these shared
+        matcher groups. Kimchi reads the same shape from a trusted project's
+        `.kimchi/hooks.json` and has no PermissionRequest event, so that event
+        is left out for it with a warning; Kimchi has no user-scope lifecycle
+        file, so Home Manager delivers nothing to it and warns. Kiro is
+        excluded because its v3 trigger schema is not semantically
+        interchangeable.
       '';
     };
 

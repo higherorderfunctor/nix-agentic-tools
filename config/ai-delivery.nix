@@ -287,7 +287,12 @@
       };
       codex = paths ".codex/hooks.json" ".codex/hooks.json";
       copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
-      kimchi = both (absent "Kimchi's supportedPools excludes hooks; harnessSettings resource toggles are settings, not hook definitions.");
+      # Kimchi reads lifecycle hooks only from a trusted project's
+      # .kimchi/hooks.json and .kimchi/hooks.local.json, never from user scope.
+      kimchi = {
+        devenv = declarative "devenv" ".kimchi/hooks.json";
+        hm = absent "Kimchi reads lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). Its one user-scope route is a configured pi package's hooks/hooks.json, which would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`; the bash-hook directory filters the bash tool only and is not a lifecycle sink.";
+      };
       kiro = lib.genAttrs modes kiroHooks;
     };
     lspServers = {

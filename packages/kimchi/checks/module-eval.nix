@@ -363,6 +363,83 @@ in {
         && !(lib.any (lib.hasPrefix "custom/kimchi") (builtins.attrNames files))
     );
 
+    # Kimchi 1.1.30 reads lifecycle hooks from a trusted project's
+    # .kimchi/hooks.json, in the Claude hook shape with timeouts in seconds
+    # (src/extensions/kimchi-hooks/definition.ts:25-37,
+    # src/extensions/hook-adapters/discovery.ts:130-190), and never writes it.
+    # Its event set has no PermissionRequest, so that event is left out of the
+    # file and warned about rather than written as bytes nothing reads. Home
+    # Manager has no user-scope lifecycle file: it writes nothing and warns.
+    module-kimchi-hooks = mkTest "kimchi-hooks" (
+      let
+        config.ai = {
+          hooks = {
+            PermissionRequest = [{hooks = [{command = "never";}];}];
+            PreToolUse = [
+              {
+                matcher = "Bash";
+                hooks = [
+                  {
+                    command = "true";
+                    timeout = 5;
+                  }
+                ];
+              }
+            ];
+          };
+          kimchi = {
+            enable = true;
+            hooks.TurnStart = [{hooks = [{command = "turn";}];}];
+          };
+        };
+        devenv = evalDevenv config;
+        hm = evalHm config;
+        onlyPermissionRequest = evalDevenv {
+          ai = {
+            hooks.PermissionRequest = [{hooks = [{command = "never";}];}];
+            kimchi.enable = true;
+          };
+        };
+        mentions = needle: lib.any (lib.hasInfix needle);
+        hmHookPaths = lib.filter (lib.hasInfix "hooks") (builtins.attrNames hm.config.home.file);
+      in
+        builtins.fromJSON devenv.config.files.".kimchi/hooks.json".text
+        == {
+          hooks = {
+            PreToolUse = [
+              {
+                matcher = "Bash";
+                hooks = [
+                  {
+                    command = "true";
+                    timeout = 5;
+                    type = "command";
+                  }
+                ];
+              }
+            ];
+            TurnStart = [
+              {
+                hooks = [
+                  {
+                    command = "turn";
+                    type = "command";
+                  }
+                ];
+              }
+            ];
+          };
+        }
+        && mentions "ai.hooks.PermissionRequest" devenv.config.warnings
+        && !(onlyPermissionRequest.config.files ? ".kimchi/hooks.json")
+        && mentions "ai.hooks.PermissionRequest" onlyPermissionRequest.config.warnings
+        && !((evalDevenv {ai.kimchi.enable = true;}).config.files ? ".kimchi/hooks.json")
+        && hmHookPaths == []
+        && mentions "ai.hooks is set but hm does not deliver it to kimchi" hm.config.warnings
+        && mentions "ai.kimchi.hooks is set but hm does not deliver it to kimchi" hm.config.warnings
+        && (evalHm {ai.kimchi.enable = true;}).config.warnings == []
+    );
+
     module-kimchi-devenv-exact-cwd-guard = let
       guardedPackages = [
         (mkDevenvKimchiPackage {
@@ -376,6 +453,9 @@ in {
             package = pkgs.hello;
             type = "stdio";
           };
+        })
+        (mkDevenvKimchiPackage {
+          ai.hooks.PreToolUse = [{hooks = [{command = "true";}];}];
         })
       ];
       # Nothing exact-cwd is declared, so nothing is missed from a
