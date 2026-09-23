@@ -62,13 +62,16 @@
   # `SNAPSHOT-NATIVE` leaves an inline entry, or the store path of a file that
   # embeds it (a TOML config, an activation's ownership plan) changes. Kiro's
   # `chat.defaultModel` is in the pinned workspace allowlist, so devenv writes
-  # it too.
+  # it too. Kimchi's harness key must be one a PROJECT file can carry, because
+  # the devenv sections take it as well: a user-scope-only key such as
+  # `resources` fails devenv's assertions (`hideThinkingBlock` is the key
+  # config/ai-delivery.nix probes for the same reason).
   native = {
     claude.native.settings.model = "SNAPSHOT-NATIVE";
     codex.native.settings.model = "SNAPSHOT-NATIVE";
     copilot.native.settings.model = "SNAPSHOT-NATIVE";
     kimchi = {
-      native.harnessSettings.resources.SNAPSHOT-NATIVE = true;
+      native.harnessSettings.hideThinkingBlock = true;
       native.settings.llmEndpoint = "SNAPSHOT-NATIVE";
     };
     kiro.native.settings.chat.defaultModel = "SNAPSHOT-NATIVE";
@@ -91,13 +94,21 @@
       lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "files ${builtins.toJSON path}" entry) config.files)
       + lib.concatStrings (lib.mapAttrsToList (name: task: renderEntry "tasks ${builtins.toJSON name}" task) config.tasks)
       + renderEntry "enterTest" config.enterTest;
-  snapshotSection = backend: label: runtimes:
-    "== ${backend} ${label} ==\n"
-    + renderSink backend ((
+  # A section is only evidence when its configuration is one the modules
+  # accept. The bare evaluation never enforces `assertions`, so a fixture a
+  # backend rejects would still render an ownership plan no consumer can
+  # reach, and a diff over it would compare bytes nothing reads.
+  snapshotSection = backend: label: runtimes: let
+    evaluated = (
       if backend == "hm"
       then evalHm
       else evalDevenv
-    ) (snapshotConfig runtimes));
+    ) (snapshotConfig runtimes);
+    failed = map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
+  in
+    if failed != []
+    then throw "ai-delivery-snapshot: the ${backend} ${label} fixture fails module assertions:\n${lib.concatStringsSep "\n" failed}"
+    else "== ${backend} ${label} ==\n" + renderSink backend evaluated;
   snapshot = lib.concatStrings (lib.concatMap (backend:
     map (runtime: snapshotSection backend runtime [runtime]) harnessNames
     ++ [(snapshotSection backend "<all>" harnessNames)])
