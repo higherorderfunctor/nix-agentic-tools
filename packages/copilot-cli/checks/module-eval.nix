@@ -187,6 +187,24 @@ in {
         && (settingsDocument result).value.model == "gpt-4"
     );
 
+    # The project copy is a static write, not a reconciled document: Copilot
+    # never opens a project-scope settings.json, so a shell-entry reconciler
+    # there would maintain bytes nothing reads. The consumer is warned instead.
+    module-copilot-devenv-settings-stay-static = mkTest "copilot-devenv-settings-stay-static" (
+      let
+        result = evalDevenv {
+          ai.copilot.enable = true;
+          ai.copilot.native.settings.model = "gpt-4";
+        };
+        path = ".config/github-copilot/settings.json";
+      in
+        builtins.fromJSON (result.config.files.${path}.text or "null")
+        == {model = "gpt-4";}
+        && result.config.ai.copilot._ownPlans == {}
+        && !(result.config.tasks ? "ai:copilot:settings-merge")
+        && lib.any (lib.hasPrefix "ai.copilot.native.settings is set but devenv does not deliver it") result.config.warnings
+    );
+
     module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (
       let
         result = evalHm {
