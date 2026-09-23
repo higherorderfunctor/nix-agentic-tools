@@ -47,8 +47,8 @@
         "typeExpression": "number",
         "type": "number",
         "optional": true,
+        "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
         "inert": true,
-        "warning": "read only to detect obsolete configuration; it has no runtime effect",
         "project": true
       },
       "mcpSearch": {
@@ -92,16 +92,16 @@
           }
         },
         "optional": true,
+        "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
         "inert": true,
-        "warning": "read only to detect obsolete configuration; it has no runtime effect",
         "project": true
       },
       "mcpSearchLimit": {
         "typeExpression": "number",
         "type": "number",
         "optional": true,
+        "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
         "inert": true,
-        "warning": "read only to detect obsolete configuration; it has no runtime effect",
         "project": true
       },
       "migrationState": {
