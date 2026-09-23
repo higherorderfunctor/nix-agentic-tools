@@ -7,8 +7,14 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-09-19 — model suggestions join the extracted sidecar
-> from a public documentation snapshot, independently of CLI releases.
+> **Last verified:** 2026-09-22 — settings extraction evaluates the shipped TUI
+> registry and workspace allowlist after sandboxed source materialization.
+
+**Settled — do not relitigate:** Native `settings list --all` is not a
+substitute for the TUI workspace contract. It reports 60 workspace keys while
+the shipped TUI merge allows 23, including in 2.22.1. The package's
+project-local guard must follow the TUI consumer, so extraction uses the
+materialized source.
 
 ### Model suggestions are a public catalog, not an account entitlement list
 
@@ -83,8 +89,8 @@ setting keys and stops recursing the moment the accumulated path is one of them.
 `mkKiro.nix` passes `kiroSettingKeys` — the union of two measured lists from
 `packages/kiro-cli/extracted.json`:
 
-- `settingKeys`: the bundle's own `SCREAMING -> "dotted.key"` registry, 52 keys
-  at 2.21.1, all `chat.*`.
+- `settingKeys`: the bundle's own `SCREAMING -> "dotted.key"` registry, 55 keys
+  at 2.23.0, all `chat.*`.
 - `workspaceOverridableSettings`: the workspace allowlist, which adds 21 keys
   the registry omits — the whole `toolSearch.*`, `compaction.*` and
   `knowledge.*` families, plus ten `chat.*` keys including
@@ -94,9 +100,16 @@ setting keys and stops recursing the moment the accumulated path is one of them.
   the registry scan.
 
 Neither alone covers the format, which is why the sidecar reports them
-separately and the union is taken at the consumer. Both come out of one scan of
-the chat binary (`kiroSettingsExtractScript`) because they share the registry
-regex, and a second pass would be a second place for it to drift.
+separately and the union is taken at the consumer. Since 2.23.0 the chat binary
+materializes its compressed TUI source on first launch. The extractor runs that
+launch only inside a Nix build sandbox with a fake KAS and isolated state;
+HOME/XDG isolation alone does not prevent native credential discovery from
+reaching host facilities. Linux and macOS use different state-directory layouts,
+so it finds a unique TUI asset beneath the isolated state root and accepts it
+only after its SHA-256 matches the binary's materialized checksum. TypeScript
+AST checks then locate the registry, the allowlist, and the workspace merge that
+uses it. The two validated expressions and the selected merge helper are
+evaluated with inert loaders and dynamic code generation disabled.
 
 `flattenDotKeys` is now `flattenDotKeysUntil []` — the historical
 flatten-everything behavior, unchanged for anything that does not pass a

@@ -7,10 +7,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-09-21 — publication retries briefly when a newly
-> pushed App branch has no queryable activity row or its PR view is unavailable.
-> Identity mismatches still fail immediately, and auto-merge intent is rechecked
-> before arming.
+> **Last verified:** 2026-09-22 — Kiro's scoped native CI jobs also validate
+> extracted metadata on Linux and Darwin.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -194,10 +192,12 @@ after receipt upload. The two dedicated `kiro-patched` jobs, `test`, and
 `gitleaks` remain the other four required contexts. The full Devenv Diagnostic
 remains manual-only; its extracted deterministic contracts remain in `test`.
 
-Generated documents stay in the flake checks. Patched proprietary Kiro stays in
-its dedicated native jobs without cache publication; the update workers retain
-Cachix's `pushFilter: kiro-cli`. Numtide substitution remains confined to
-package build runners through job-level `NIX_CONFIG`, which survives
+Generated documents stay in the flake checks. Kiro's scoped native jobs build
+the extracted-metadata drift check on both Linux and Darwin, covering TUI
+materialization on macOS where the Linux-only flake check cannot. Patched
+proprietary Kiro stays in those jobs without cache publication; the update
+workers retain Cachix's `pushFilter: kiro-cli`. Numtide substitution remains
+confined to package build runners through job-level `NIX_CONFIG`, which survives
 cachix-action's configuration override. On authenticated main builds, only the
 shard containing Semble mirrors its runtime closure into the project cache and
 checks its narinfo.
