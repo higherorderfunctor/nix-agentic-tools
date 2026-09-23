@@ -671,14 +671,17 @@
     `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`, `modelMetadata`,
     `modelRoles`, `multiModel`, `resources`,
     `shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set those with Home
-    Manager or through Kimchi itself. Both backends reconcile `config.json` and
-    `harness/settings.json` by owned leaf because Kimchi writes them at runtime.
+    Manager or through Kimchi itself. Both backends reconcile `config.json`,
+    `harness/settings.json` and `mcp.json` by owned leaf because Kimchi writes
+    them at runtime.
 
     Project settings, MCP servers, and harness settings resolve under the exact
     working directory. The devenv wrapper rejects descendant launches instead
-    of silently missing them. Context and skills walk ancestors, but the typed
-    Kimchi settings include a default `skillPaths = []`, so every enabled
-    devenv Kimchi currently delivers project config and remains root-only.
+    of silently missing them. Context and skills walk ancestors, so a devenv
+    that declares none of the three leaves the launch directory unrestricted.
+    `skillPaths` defaults to unset: Kimchi reads the project list in place of
+    the user's global one, so only an explicit list, empty included, replaces
+    it.
 
     Trust gates every project-scope reader except root `AGENTS.md`. Grant trust
     interactively, set user-scope `defaultProjectTrust = "always"`, or pass

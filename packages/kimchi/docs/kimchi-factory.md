@@ -1,10 +1,11 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-23 — `mcp.json` is reconciled by leaf like the
-> other two JSON documents; normalized reasoning effort lowers to harness
-> `defaultThinkingLevel`. Home Manager retains Kimchi's user paths while devenv
-> uses the pinned runtime's project paths. Both mutable documents still reach
-> the shared delivery router. Full lineage:
+> **Last verified:** 2026-09-23 — `skillPaths` defaults to unset and
+> `modelRoles` takes Kimchi's string shape; `mcp.json` is reconciled by leaf
+> like the other two JSON documents; normalized reasoning effort lowers to
+> harness `defaultThinkingLevel`. Home Manager retains Kimchi's user paths while
+> devenv uses the pinned runtime's project paths. Both mutable documents still
+> reach the shared delivery router. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -42,10 +43,9 @@ is:
 
 Project Kimchi settings, MCP servers, and harness settings are exact-cwd
 readers. The devenv wrapper rejects launches below the devenv root instead of
-silently missing them. Context and skills walk ancestors, but the typed Kimchi
-settings include a default `skillPaths = []`, so every enabled devenv Kimchi
-currently delivers project config and receives the root-only guard. Locked by
-`module-kimchi-devenv-exact-cwd-guard`.
+silently missing them. Context and skills walk ancestors, so a devenv that
+declares none of the three leaves the launch directory unrestricted. Locked by
+`module-kimchi-devenv-exact-cwd-guard`, which checks both arms.
 
 The project harness directory is deliberately fixed. pi derives
 `CONFIG_DIR_NAME` from Kimchi's packaged
@@ -86,9 +86,19 @@ All three files state `facts.harnessWrites = true`, and every writer survives an
 empty declaration on either backend, so removing the last MCP server retracts
 it. HM uses `$HOME` and XDG state; devenv uses `$DEVENV_ROOT` and
 `$DEVENV_STATE/nix-agentic-tools`. New documents are 0600 and existing regular
-files retain their modes. Empty harness settings release all owned leaves; empty
-native settings still declare the typed `skillPaths = []` default. A file
-tombstone releases that final claim too.
+files retain their modes. Empty settings on either document release all owned
+leaves: every typed sub-option defaults to null or `{}`, and `filterNulls`
+recurses. `skillPaths` in particular defaults to null, because 1.1.30 reads
+`projectExtras.skillPaths ?? globalExtras.skillPaths` (`src/config.ts:526`), so
+a project `[]` would replace the user's global skill paths; an explicit list,
+empty included, still lands. Locked by `module-kimchi-skill-paths-inherit`.
+
+`harnessSettings.modelRoles` values are provider/model strings, or for delegable
+roles a non-empty list of them; `orchestrator` and `compactor` take one string,
+and role names are 1.1.30's eight. Any other shape is discarded with a runtime
+warning (`src/extensions/orchestration/model-roles.ts:117-181`), so the type and
+two module assertions reject it at evaluation. Locked by
+`module-kimchi-model-roles-shape`.
 
 Everything else Kimchi delivers is immutable and symlink-readable, so it takes
 both defaults and states no fact at all. Normalized context renders into the

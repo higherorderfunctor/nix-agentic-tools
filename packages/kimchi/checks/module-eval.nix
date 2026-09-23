@@ -20,7 +20,7 @@
     fermentV2 = true;
     hidePhaseChanges = true;
     modelMetadata.example.description = "Example model";
-    modelRoles.example.provider = "example";
+    modelRoles.builder = "provider/model";
     multiModel = true;
     resources."tools.web_search" = true;
     shellProfileApiKeyMigrationDismissed = true;
@@ -166,10 +166,8 @@ in {
     # plan. The ledger prefixes are the live migration contract every
     # previously written ownership record hangs off.
     #
-    # The values are NOT asserted empty here. `nativeSettings` and
-    # `harnessSettings` are submodules with defaulted sub-options, so an
-    # undeclared Kimchi still owns `telemetry.enabled` and friends; that is
-    # pre-existing and `filterNulls` is deliberately shallow.
+    # The values ARE empty: every typed sub-option defaults to null or {},
+    # and `filterNulls` recurses, so an undeclared Kimchi owns no leaf.
     module-kimchi-hm-empty-settings-emits-writers = mkTest "kimchi-hm-empty-settings-emits-writers" (
       let
         evaluated = evalHm {ai.kimchi.enable = true;};
@@ -179,6 +177,8 @@ in {
         && lib.hasInfix "--phase all" activation.kimchiHarnessSettingsMerge.text
         && lib.hasPrefix "json-settings/kimchi-config-" (hmConfigDocument evaluated).ledger
         && lib.hasPrefix "json-settings/kimchi-harness-settings-" (hmHarnessDocument evaluated).ledger
+        && (hmConfigDocument evaluated).value == {}
+        && (hmHarnessDocument evaluated).value == {}
     );
 
     # Upgrade contract: generations before project-path delivery keyed both HM
@@ -270,6 +270,67 @@ in {
         && (hmMcpDocument empty).value == {}
     );
 
+    # Kimchi 1.1.30 accepts a role value only as a provider/model string, or
+    # for delegable roles a non-empty list of them
+    # (src/extensions/orchestration/model-roles.ts:117-181). Anything else is
+    # discarded with a warning at runtime, so the module rejects it instead.
+    module-kimchi-model-roles-shape = mkTest "kimchi-model-roles-shape" (
+      let
+        withRoles = modelRoles:
+          evalHm {
+            ai.kimchi = {
+              enable = true;
+              harnessSettings.modelRoles = modelRoles;
+            };
+          };
+        valid = evaluated: lib.all (entry: entry.assertion) evaluated.config.assertions;
+        typeChecks = value:
+          (builtins.tryEval (builtins.deepSeq
+            (withRoles {builder = value;}).config.ai.kimchi.harnessSettings
+            true)).success;
+        rendered = withRoles {
+          builder = ["a/b" "c/d"];
+          orchestrator = "a/b";
+        };
+      in
+        valid rendered
+        && (hmHarnessDocument rendered).value.modelRoles
+        == {
+          builder = ["a/b" "c/d"];
+          orchestrator = "a/b";
+        }
+        && typeChecks "provider/model"
+        && !(typeChecks "")
+        && !(typeChecks "  ")
+        && !(typeChecks [])
+        && !(typeChecks [""])
+        && !(typeChecks {provider = "a";})
+        && !(valid (withRoles {unknown = "a/b";}))
+        && !(valid (withRoles {orchestrator = ["a/b"];}))
+        && !(valid (withRoles {compactor = ["a/b"];}))
+        && valid (withRoles {compactor = "a/b";})
+    );
+
+    # Kimchi 1.1.30 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
+    # (src/config.ts:526): a project `[]` replaces the user's global list, so
+    # an undeclared skillPaths must leave the key out of .kimchi/config.json.
+    # An explicit list, empty included, still lands.
+    module-kimchi-skill-paths-inherit = mkTest "kimchi-skill-paths-inherit" (
+      let
+        withPaths = extra:
+          projectConfigDocument (evalDevenv {
+            ai.kimchi =
+              {
+                enable = true;
+              }
+              // extra;
+          });
+      in
+        !((withPaths {}).value ? skillPaths)
+        && (withPaths {nativeSettings.skillPaths = [];}).value.skillPaths == []
+        && (withPaths {nativeSettings.skillPaths = [".custom/skills"];}).value.skillPaths == [".custom/skills"]
+    );
+
     module-kimchi-devenv-project-paths = mkTest "kimchi-devenv-project-paths" (
       let
         result = evalDevenv {
@@ -317,8 +378,13 @@ in {
           };
         })
       ];
+      # Nothing exact-cwd is declared, so nothing is missed from a
+      # subdirectory and the wrapper must not refuse the launch.
+      unguardedPackage = mkDevenvKimchiPackage {};
     in
       pkgs.runCommand "module-test-kimchi-devenv-exact-cwd-guard" {} ''
+        (cd ${exactCwdProjectRoot}/subdir && ${unguardedPackage}/bin/kimchi)
+
         for kimchi_bin in ${lib.concatMapStringsSep " " (package: "${package}/bin/kimchi") guardedPackages}; do
           (cd ${exactCwdProjectRoot} && "$kimchi_bin")
           if (cd ${exactCwdProjectRoot}/subdir && "$kimchi_bin" 2>"$TMPDIR/guard.stderr"); then

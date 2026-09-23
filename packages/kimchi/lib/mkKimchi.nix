@@ -25,6 +25,16 @@
   projectHarnessDir = ".config/kimchi/harness";
   projectContextFilename = "AGENTS.md";
 
+  # Kimchi 1.1.30 reads each modelRoles value as a provider/model string, and
+  # for delegable roles also a non-empty list of them; orchestrator and
+  # compactor take one string only. Any other shape is discarded with a
+  # warning at runtime (src/extensions/orchestration/model-roles.ts:83-91,
+  # 117-122 and 144-181), so the module rejects it at evaluation instead.
+  roleModelType = lib.types.addCheck lib.types.str (value: builtins.match "[[:space:]]*" value == null);
+  roleModelsType = lib.types.addCheck (lib.types.listOf roleModelType) (values: values != []);
+  modelRoleNames = ["builder" "compactor" "explorer" "judge" "orchestrator" "planner" "researcher" "reviewer"];
+  singleModelRoles = ["compactor" "orchestrator"];
+
   # The delivery function and package hook need the same settings, env and
   # context values from merged inputs; prepare them once.
   mkPrep = {
@@ -168,6 +178,8 @@
       if isDevenv
       then ".kimchi"
       else harness;
+    unknownModelRoles = lib.subtractLists modelRoleNames (builtins.attrNames cfg.harnessSettings.modelRoles);
+    listedSingleModelRoles = builtins.filter (role: builtins.isList (cfg.harnessSettings.modelRoles.${role} or null)) singleModelRoles;
     userScopeOnlyHarnessSettings = lib.intersectLists userScopeOnlyHarnessSettingKeys (builtins.attrNames filteredHarnessSettings);
     # Home Manager's ledger identity predates project-path delivery and is an
     # upgrade contract: keep hashing configDir so a new generation retracts
@@ -210,14 +222,25 @@
       # several targets: nothing orders these against each other, and each
       # name is a consumer-visible ordering contract.
       {
-        assertions = lib.optional isDevenv {
-          assertion = userScopeOnlyHarnessSettings == [];
-          message = ''
-            ai.kimchi.harnessSettings contains settings Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeOnlyHarnessSettings}.
-            Under devenv, either set with HM, or configure inside the harness so it writes to user global.
-            Home Manager delivers these declaratively by reconciling config.json and harness/settings.json; a /nix/store symlink would break Kimchi's runtime writes. Configuring inside Kimchi persists the decision or setting in its user-global harness files.
-          '';
-        };
+        assertions =
+          [
+            {
+              assertion = unknownModelRoles == [];
+              message = "ai.kimchi.harnessSettings.modelRoles has unknown roles: ${lib.concatStringsSep ", " unknownModelRoles}. Kimchi 1.1.30 accepts only ${lib.concatStringsSep ", " modelRoleNames}.";
+            }
+            {
+              assertion = listedSingleModelRoles == [];
+              message = "ai.kimchi.harnessSettings.modelRoles.${lib.concatStringsSep ", " listedSingleModelRoles} must be a single provider/model string; Kimchi ignores a list there.";
+            }
+          ]
+          ++ lib.optional isDevenv {
+            assertion = userScopeOnlyHarnessSettings == [];
+            message = ''
+              ai.kimchi.harnessSettings contains settings Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeOnlyHarnessSettings}.
+              Under devenv, either set with HM, or configure inside the harness so it writes to user global.
+              Home Manager delivers these declaratively by reconciling config.json and harness/settings.json; a /nix/store symlink would break Kimchi's runtime writes. Configuring inside Kimchi persists the decision or setting in its user-global harness files.
+            '';
+          };
         ai.kimchi.activation = {
           kimchiConfigMerge = {
             # Devenv requires a namespace; HM ordering names stay stable.
@@ -376,9 +399,14 @@ in
               description = "LLM endpoint override.";
             };
             skillPaths = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [];
-              description = "Additional skill search paths.";
+              type = lib.types.nullOr (lib.types.listOf lib.types.str);
+              default = null;
+              description = ''
+                Skill search paths. Null leaves the key out, so project config
+                inherits the user's global list; Kimchi reads
+                `project.skillPaths ?? global.skillPaths`, so an explicit list,
+                empty included, replaces it.
+              '';
             };
             preferences = lib.mkOption {
               type = lib.types.submodule {
@@ -403,22 +431,18 @@ in
           freeformType = (pkgs.formats.json {}).type;
           options = {
             modelRoles = lib.mkOption {
-              type = lib.types.attrsOf (lib.types.submodule {
-                options = {
-                  provider = lib.mkOption {
-                    type = lib.types.nullOr lib.types.str;
-                    default = null;
-                    description = "Model provider for this role.";
-                  };
-                  model = lib.mkOption {
-                    type = lib.types.nullOr lib.types.str;
-                    default = null;
-                    description = "Model identifier for this role.";
-                  };
-                };
-              });
+              type = lib.types.attrsOf (lib.types.either roleModelType roleModelsType);
               default = {};
-              description = "Model role assignments (e.g. orchestrator, planner).";
+              example = {
+                builder = ["anthropic/claude-sonnet-4-5" "openai/gpt-4o"];
+                orchestrator = "anthropic/claude-sonnet-4-5";
+              };
+              description = ''
+                Model role assignments as provider/model strings, or for
+                delegable roles a non-empty list of them. Roles:
+                ${lib.concatStringsSep ", " modelRoleNames}; orchestrator and
+                compactor take one string.
+              '';
             };
             resources = lib.mkOption {
               type = lib.types.attrsOf lib.types.bool;
