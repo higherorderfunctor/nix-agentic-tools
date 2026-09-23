@@ -81,6 +81,8 @@
           'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "0"'
         mutant "$kimchi" entry-unread src/entry.ts \
           'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = undefined'
+        mutant "$kimchi" inert-consumed src/config.ts \
+          'export function getAgentConfigDir(): string {' $'export function getAgentConfigDir(): string {\n\tvoid loadConfig().maxToolResultChars'
         mutant "$kimchi" environment-app-name package.json \
           '"name": "kimchi"' '"name": "tau"'
         mutant "$kimchi" environment-stale-ignore src/agent-discovery/agents/opencode.ts \
@@ -177,6 +179,20 @@
           else
             echo "FAIL: $label did not derive the expected entry.ts overwrite flags" >&2
             ${pkgs.jq}/bin/jq '.environment.variables | {KIMCHI_NO_UPDATE_CHECK, PI_CODING_AGENT_DIR}' "$TMPDIR/$label.json" >&2
+            exit 1
+          fi
+        done
+        # Inertness is derived too: one consumer of the loaded value clears it.
+        ${runExtractor ''"$TMPDIR/inert-consumed-source"'' ''"$TMPDIR/inert-consumed.json"'' ''"$pi"''}
+        for fixture in real:true inert-consumed:null; do
+          IFS=: read -r label inert <<< "$fixture"
+          if ${pkgs.jq}/bin/jq -e --argjson inert "$inert" \
+            '.config.keys | (.maxToolResultChars.inert == $inert) and .mcpSearch.inert and .mcpSearchLimit.inert' \
+            "$TMPDIR/$label.json" > /dev/null; then
+            echo "$label (exit 0): maxToolResultChars inert=$inert" >> "$TMPDIR/proof"
+          else
+            echo "FAIL: $label did not derive the expected inert config keys" >&2
+            ${pkgs.jq}/bin/jq '.config.keys | {maxToolResultChars, mcpSearch, mcpSearchLimit}' "$TMPDIR/$label.json" >&2
             exit 1
           fi
         done
