@@ -205,7 +205,7 @@
   definitions = {
     agents = {
       claude = {
-        devenv = absent "Parity gap: mergedAgents is not consumed by mkClaude.devenv.config, although the option exists.";
+        devenv = declarative "devenv" ".claude/agents/<name>.md";
         hm = delegated "hm" "agents" "$HOME/.claude/agents/<name>.md";
       };
       codex = paths ".codex/agents/<name>.toml" ".codex/agents/<name>.toml";

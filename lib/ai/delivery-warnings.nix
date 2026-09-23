@@ -176,8 +176,6 @@
   claudeWarnings = lib.optionals (runtime == "claude" && backend == "devenv") (
     lib.optional (nonEmpty (cfg.native.settings.mcpServers or null))
     (message ["ai" "claude" "native" "settings" "mcpServers"] "MCP belongs under ai.claude.mcpServers; this key is removed from settings.json.")
-    ++ lib.optional ((cfg.agentsDir or null) != null && (import ./dir-helpers.nix {inherit lib;}).agentsFromDir cfg.agentsDir != {})
-    (message ["ai" "claude" "agentsDir"] policy.definitions.agents.claude.devenv.reason)
     ++ lib.concatMap (surface:
       lib.optional (nonEmpty (cfg.${surface} or {}))
       (message ["ai" "claude" surface] "The devenv backend has no writer for this Claude surface."))
