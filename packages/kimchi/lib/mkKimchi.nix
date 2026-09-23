@@ -461,8 +461,9 @@
         value = aiCommon.filterNulls cfg.permissions;
       })
 
-      # trust.json — Kimchi's trust prompt rewrites it with writeFileSync
-      # (setMany → writeTrustFile, dist/core/trust-manager.js), so declared
+      # trust.json — Kimchi's trust prompt rewrites it in place with
+      # writeFileSync under pi's lock (setMany → writeTrustFile,
+      # dist/core/trust-manager.js), so declared
       # decisions are owned by leaf like the documents above and the ones a
       # user answers interactively survive. The renderer canonicalizes each
       # key when the writer runs (see project-trust.py), which is why this
@@ -475,6 +476,12 @@
             entry = "kimchiProjectTrustMerge";
             ledgers.${ledgerFor "project-trust" projectTrustPath} = {
               codec = "json";
+              # pi takes proper-lockfile's `<path>.lock` around every trust
+              # read and rewrite (acquireTrustLockSync, withTrustFileLock:
+              # dist/core/trust-manager.js:105-142, 187-200), so the reconciler
+              # takes the same lock rather than racing a prompt answered
+              # during a switch.
+              lock = "${projectTrustPath}.lock";
               path = projectTrustPath;
             };
           };

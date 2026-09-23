@@ -2,8 +2,9 @@
 
 > **Last verified:** 2026-09-23 — generation-owned documents and directories
 > reconcile through `lib/ai/own.{nix,py}`, a fully retracted empty document is
-> deleted, document targets may enforce modes, and the delivery-path parity
-> example uses `ai.codex.execpolicyRules`.
+> deleted, a document may name its native writer's lock, document targets may
+> enforce modes, and the delivery-path parity example uses
+> `ai.codex.execpolicyRules`.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -219,6 +220,13 @@ leaves it serializing to an empty object: every byte was ours. Leaving `{}`
 behind is not inert, because some readers (Kimchi's permissions) fill defaults
 for any file that exists. A TOML comment the user added keeps the file, and a
 symlink is never touched. Locked by `ai-own-runtime` (`two_phase`, `lazy_toml`).
+
+A document whose native writer takes a lock names it on the ledger (`lock`,
+relative to the backend root). `own.py` then holds that proper-lockfile-style
+`mkdir` lock around the pre-flight parse and the whole locked read-modify-write,
+taken after its own flock so waiting on another reconcile never ages it toward
+stale. Only Kimchi's `trust.json` declares one; `own.nix` refuses it on a `dir`
+target.
 
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the

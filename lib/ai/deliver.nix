@@ -158,6 +158,7 @@ in
             inherit ledger;
             inherit (declaration) codec path;
           }
+          // lib.optionalAttrs (declaration.lock != null) {inherit (declaration) lock;}
           // {
             units =
               if declaration.codec == "dir"

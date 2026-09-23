@@ -657,6 +657,35 @@ in {
         ${empty}
         jq -e '. == {"/prompted": true}' "$trust" >/dev/null \
           || fail "an empty declaration did not retract exactly the owned leaves: $(cat "$trust")"
+
+        # pi's trust prompt, mid read-modify-write: it holds proper-lockfile's
+        # `trust.json.lock` directory, has read the file, and writes it back
+        # with its new decision. The writer must wait for that lock and then
+        # build on pi's bytes; an unlocked writer lands first and pi's stale
+        # rewrite drops every declared leaf.
+        mkdir "$trust.lock"
+        snapshot="$(cat "$trust")"
+        ${declared} &
+        writer=$!
+        sleep 1
+        jq -e 'has("/nonexistent/kimchi-project") | not' "$trust" >/dev/null \
+          || fail "the writer did not wait for pi's trust.json lock"
+        jq '. + {"/during": true}' <<<"$snapshot" > "$trust"
+        rmdir "$trust.lock"
+        wait "$writer" || fail 'the writer failed after pi released its lock'
+        jq -e '.["/during"] == true and .["/nonexistent/kimchi-project"] == false' "$trust" >/dev/null \
+          || fail "a decision saved under pi's lock or a declared leaf was lost: $(cat "$trust")"
+        [ ! -e "$trust.lock" ] || fail 'the writer left the lock behind'
+
+        # A lock whose holder died goes stale after proper-lockfile's 10 s, and
+        # pi breaks it then; so does the writer, instead of failing activation.
+        ${empty}
+        mkdir "$trust.lock"
+        touch -d "@$(( $(date +%s) - 60 ))" "$trust.lock"
+        ${declared} || fail 'a stale pi lock blocked the writer'
+        [ ! -e "$trust.lock" ] || fail 'the stale lock survived the writer'
+        jq -e '.["/nonexistent/kimchi-project"] == false' "$trust" >/dev/null \
+          || fail "the writer did not land past a stale lock: $(cat "$trust")"
         echo PASS > "$out"
       '';
 
