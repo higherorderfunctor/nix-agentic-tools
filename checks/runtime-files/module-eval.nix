@@ -247,21 +247,46 @@ in {
             files."AGENTS.md".content.enable = false;
           };
         };
-        consumerOnlyDivergent = builtins.tryEval (let
-          evaluated = evalDevenv {
-            ai = {
-              codex = {
-                enable = true;
-                files."AGENTS.md".content.text = "CONSUMER-ONLY";
-              };
-              kimchi = {
-                enable = true;
-                files."AGENTS.md".content.enable = false;
-              };
+        # Identical to consumerOnly except Kimchi suppresses instead of
+        # agreeing. The rejection is pinned to its cause: the merged `enable`
+        # throws, and the definitions reaching it are exactly one suppression
+        # and one enabled text, so an unrelated evaluation failure cannot pass
+        # for this one.
+        consumerOnlyDivergentEval = evalDevenv {
+          ai = {
+            codex = {
+              enable = true;
+              files."AGENTS.md".content.text = "CONSUMER-ONLY";
+            };
+            kimchi = {
+              enable = true;
+              files."AGENTS.md".content.enable = false;
             };
           };
+        };
+        divergentContent = consumerOnlyDivergentEval.config.ai.internal.files."AGENTS.md".content;
+        consumerOnlyDivergent = builtins.tryEval (builtins.deepSeq consumerOnlyDivergentEval.config.files."AGENTS.md" true);
+        divergentEnables =
+          lib.sort (a: b: !a && b)
+          (map (definition: definition.value."AGENTS.md".content.enable)
+            (builtins.filter (definition: (definition.value."AGENTS.md".content or {}) ? enable)
+              consumerOnlyDivergentEval.options.ai.internal.files.definitionsWithLocations));
+        consumerOnlyDivergentCause =
+          !(builtins.tryEval divergentContent.enable).success
+          && divergentEnables == [false true];
+        # A source-backed consumer AGENTS.md beside generated context. Only the
+        # shared owner may lower it: when a runtime's ordinary sink lowers the
+        # same target too (the runtime missing from mkBackendTransform's
+        # sharedAgentsMdTargets), the second `source` definition conflicts and
+        # this throws. Identical text from two sinks merges silently, which is
+        # why the text cases above could not catch that bypass.
+        sourced = runtime: let
+          file = pkgs.writeText "${runtime}-agents.md" "SOURCED-${runtime}";
+          evaluated = evalDevenv (lib.recursiveUpdate base {
+            ai.${runtime}.files."AGENTS.md".content.source = file;
+          });
         in
-          builtins.deepSeq evaluated.config.files."AGENTS.md" true);
+          (builtins.tryEval "${evaluated.config.files."AGENTS.md".source}").value or null == "${file}";
       in
         replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
@@ -277,6 +302,8 @@ in {
         && !(consumerOnlySuppressed.config.files ? "AGENTS.md")
         && !(consumerOnlySuppressed.config.files ? "custom.md")
         && !consumerOnlyDivergent.success
+        && consumerOnlyDivergentCause
+        && lib.all sourced ["codex" "kimchi" "kiro"]
     );
 
     module-runtime-files-shared-agentsmd-ignores-disabled-runtime = mkTest "runtime-files-shared-agentsmd-ignores-disabled-runtime" (
