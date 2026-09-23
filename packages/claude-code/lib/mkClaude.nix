@@ -247,6 +247,25 @@
           lib.mapAttrs (_: lib.mkDefault) moduleEnvironmentVariables;
       }
     ];
+
+  # Devenv's project rules are ledger-owned copies (see the rules entries
+  # below), which nothing but their writer retracts. Declared outside the
+  # enable gate so the shell that DISABLES Claude still drains the copies the
+  # previous one wrote: while disabled the adapter hands the writer no files,
+  # so it only removes what the ledger recorded. Home Manager links its rules,
+  # and its generation diff retracts them.
+  rulesLedger = "materialize/claude-rules.manifest";
+  rulesWriter = "materialize-claude-rules";
+  claudeRulesWriterConfig = _: {
+    ai.claude.activation.${rulesWriter} = {
+      entry = "ai:claude:materialize-rules";
+      ledgers.${rulesLedger} = {
+        codec = "dir";
+        path = ".claude/rules";
+      };
+      runWhenDisabled = true;
+    };
+  };
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -710,8 +729,6 @@ in
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       isHm = backend == "hm";
       unpinLedger = "json-settings/claude-unpin-launch-effort.json";
-      rulesLedger = "materialize/claude-rules.manifest";
-      rulesWriter = "materialize-claude-rules";
       upstream = path: sink: value: {
         ai.claude.files.${path} = {
           content.value = value;
@@ -803,16 +820,9 @@ in
         # User scope passes true, so Home Manager's `~/.claude/rules` links
         # load. Hence the per-backend fact: devenv copies read-only, HM links.
         # The directory ledger claims individual files, so a hand-placed rule
-        # survives, and the writer stays declared so N→0 retracts the copies.
-        (lib.optionalAttrs (!isHm) {
-          ai.claude.activation.${rulesWriter} = {
-            entry = "ai:claude:materialize-rules";
-            ledgers.${rulesLedger} = {
-              codec = "dir";
-              path = ".claude/rules";
-            };
-          };
-        })
+        # survives. Its writer is `claudeRulesWriterConfig`, declared whether
+        # or not a rule is and whether or not Claude is enabled, so both N→0
+        # and a disable retract the copies.
         (let
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
           inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
@@ -939,5 +949,6 @@ in
     # Home Manager installs finalPackage through programs.claude-code. A
     # second profile entry would collide at bin/claude. Devenv's integration
     # has no package option, so it keeps the shared transform's installation.
+    devenv.migrationConfig = claudeRulesWriterConfig;
     hm.installPackage = null;
   }
