@@ -83,6 +83,14 @@
           'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "0"'
         mutant "$kimchi" entry-unread src/entry.ts \
           'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = undefined'
+        mutant "$kimchi" hand-shape-new-member src/config.ts \
+          '		const enabled = parsed?.teleport?.compactHint?.enabled' $'\t\tif (typeof parsed?.teleport?.delayMs === "number") return false\n\t\tconst enabled = parsed?.teleport?.compactHint?.enabled'
+        mutant "$kimchi" hand-shape-retyped src/config.ts \
+          'return typeof seenAt === "string" && seenAt.length > 0' 'return typeof seenAt === "number"'
+        mutant "$kimchi" helper-computed-key src/extensions/multi-model.ts \
+          'readConfigSetting("multiModel"' 'readConfigSetting(String(Date.now())'
+        mutant "$kimchi" helper-unknown-key src/extensions/tags.ts \
+          'readConfigSetting("hidePhaseChanges"' 'readConfigSetting("hidePhaseChangesProbe"'
         mutant "$kimchi" inert-consumed src/config.ts \
           'export function getAgentConfigDir(): string {' $'export function getAgentConfigDir(): string {\n\tvoid loadConfig().maxToolResultChars'
         mutant "$kimchi" environment-app-name package.json \
@@ -159,6 +167,14 @@
           'TypeScript declaration ModelCustomMetadataSchema is declared 2 times' >> "$TMPDIR/proof"
         expect_rejection pi-definition-collision "$kimchi" \
           'two different interfaces named CompactionSettings' "$TMPDIR/pi-definition-collision-source" >> "$TMPDIR/proof"
+        expect_rejection hand-shape-new-member "$TMPDIR/hand-shape-new-member-source" \
+          'readTeleportCompactHintEnabled reads teleport.delayMs, which the teleport shape lacks' >> "$TMPDIR/proof"
+        expect_rejection hand-shape-retyped "$TMPDIR/hand-shape-retyped-source" \
+          'readSurveyConfig no longer guards surveys.*.seenAt as a string' >> "$TMPDIR/proof"
+        expect_rejection helper-computed-key "$TMPDIR/helper-computed-key-source" \
+          'passes a non-constant key to readConfigSetting' >> "$TMPDIR/proof"
+        expect_rejection helper-unknown-key "$TMPDIR/helper-unknown-key-source" \
+          'that are neither pi Settings nor Kimchi additions: ["hidePhaseChangesProbe"]' >> "$TMPDIR/proof"
         expect_rejection pi-scope-unread "$kimchi" \
           'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
         expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
