@@ -11,7 +11,7 @@ ledger that accumulates.
 
 ## Where things are
 
-- Repo: `/home/caubut/Documents/projects/nix-agentic-tools` (primary checkout, on
+- Repo: `/home/<user>/Documents/projects/nix-agentic-tools` (primary checkout, on
   `main`). Work in a NEW worktree off `origin/main`, per `AGENTS.md` — worktrees
   live in the sibling `nix-agentic-tools-worktrees/`. Bootstrap it with **one**
   `devenv shell` before the first commit, and if a second shell entry ever leaves

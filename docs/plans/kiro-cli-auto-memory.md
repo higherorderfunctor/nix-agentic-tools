@@ -2720,7 +2720,7 @@ hook format.
   `settingsToEnv` (Q11 lockstep). No re-key/migration — the 9af0f95 base schema
   has `project_id` natively on a fresh DB (user chose "fresh parallel DB, retire
   legacy later" over re-keying real data; empirical ai-pg inspection showed the
-  dominant existing user_id was `caubut`, not `anonymous`, which the fresh-DB
+  dominant existing user_id was `<user>`, not `anonymous`, which the fresh-DB
   path made moot). Hit + fixed a pgvector HNSW-dimension create-race in the
   openmemory-mcp MODULE (D34, `58536a4c`) — after first mis-fixing it by hand
   (recorded the no-manual-masking lesson); proven reproducibly by dropping

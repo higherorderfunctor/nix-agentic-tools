@@ -126,7 +126,7 @@ edits below target current text:
 
 ```bash
 RIPGREP_CONFIG_PATH=/dev/null rg --no-config -n "ai\.settings" \
-  /home/caubut/Documents/projects/nix-agentic-tools-ideation \
+  /home/<user>/Documents/projects/nix-agentic-tools-ideation \
   --glob '!**/.claude/rules/**' --glob '!**/.github/instructions/**' \
   --glob '!**/.kiro/steering/**'
 ```
@@ -295,7 +295,7 @@ by the derivation.
 
 ```bash
 RIPGREP_CONFIG_PATH=/dev/null rg --no-config "ai\.settings" \
-  /home/caubut/Documents/projects/nix-agentic-tools-ideation \
+  /home/<user>/Documents/projects/nix-agentic-tools-ideation \
   --glob '!dev/notes/ai-transformer-design.md'
 ```
 

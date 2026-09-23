@@ -63,10 +63,10 @@ from the resolved chain.
 `/home`:
 
 ```
-/home/caubut/<lab>/…/CLAUDE.md
+/home/<user>/<lab>/…/CLAUDE.md
 …
-/home/caubut/.claude/CLAUDE.md      ← the real global instructions
-/home/caubut/CLAUDE.md
+/home/<user>/.claude/CLAUDE.md      ← the real global instructions
+/home/<user>/CLAUDE.md
 /home/.claude/CLAUDE.md
 ```
 

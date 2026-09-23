@@ -76,7 +76,7 @@ the user-global file. Launching Codex in a new repository produced the required
 trust prompt, then failed to save the answer:
 
 ```text
-Failed to set trust for /home/caubut/Documents/projects/nixos-config:
+Failed to set trust for /home/<user>/Documents/projects/nixos-config:
 config/batchWrite failed: failed to persist config.toml: failed to persist
 config at /nix/store/...-codex-config.toml
 ```

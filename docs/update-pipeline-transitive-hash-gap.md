@@ -573,7 +573,7 @@ package invisible to the push step.
 
 - `treefmt` CLI was misconfigured in the worktree-agent environment (PWD
   tree-root mismatch — agent worktrees live under
-  `/home/caubut/Documents/projects/nix-agentic-tools/.claude/worktrees/` but the
+  `/home/<user>/Documents/projects/nix-agentic-tools/.claude/worktrees/` but the
   treefmt wrapper hardcodes `--tree-root` to `nix-agentic-tools-ideation`).
   Workaround used by all four agents: `nix fmt <files>`. Worth root-causing
   before another agent run.

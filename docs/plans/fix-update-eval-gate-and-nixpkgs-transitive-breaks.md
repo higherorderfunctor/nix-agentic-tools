@@ -108,7 +108,7 @@ other, which is exactly why they must be **four separate commits**.
   safe to run locally; it is not a Nix build.
 - **Maintainer conventions & memory** (optional deeper context; the load-bearing
   pieces are already inlined above):
-  `/home/caubut/Documents/projects/nixos-config/home/caubut/features/cli/code/ai/claude-config/projects/-home-caubut-Documents-projects-nix-agentic-tools`
+  `/home/<user>/Documents/projects/nixos-config/home/<user>/features/cli/code/ai/claude-config/projects/-home-<user>-Documents-projects-nix-agentic-tools`
 
 ---
 

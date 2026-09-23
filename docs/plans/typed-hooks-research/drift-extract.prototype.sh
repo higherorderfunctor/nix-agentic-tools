@@ -5,8 +5,8 @@
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
-repo="/home/caubut/Documents/projects/nix-agentic-tools"
-out="/tmp/claude-1000/-home-caubut-Documents-projects-nix-agentic-tools/2e94ecbf-e0c4-4828-9fef-e69f6903aab0/scratchpad/sidecars"
+repo="/home/<user>/Documents/projects/nix-agentic-tools"
+out="/tmp/claude-1000/-home-<user>-Documents-projects-nix-agentic-tools/2e94ecbf-e0c4-4828-9fef-e69f6903aab0/scratchpad/sidecars"
 mkdir -p "$out"
 today="$(date +%Y-%m-%d)"
 

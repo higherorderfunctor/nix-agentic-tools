@@ -6,7 +6,7 @@
 >
 > **Convention for the other two sessions:** write yours to
 > `docs/plans/session-state/<topic>.md` in the MAIN checkout
-> (`/home/caubut/Documents/projects/nix-agentic-tools`), same section order, so
+> (`/home/<user>/Documents/projects/nix-agentic-tools`), same section order, so
 > the merge session can diff them side by side.
 
 ## 1. Identity and scope
@@ -29,7 +29,7 @@ golden files. Deferred until the labs produce something worth locking down.
 
 | Thing               | Path                                                                               |
 | ------------------- | ---------------------------------------------------------------------------------- |
-| Worktree (ALL code) | `/home/caubut/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs` |
+| Worktree (ALL code) | `/home/<user>/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs` |
 | Branch point        | `010dbe15`                                                                         |
 | Design spec         | `docs/plans/agent-primitive-labs-design.md` (main checkout, untracked)             |
 | Impl plan           | `docs/plans/agent-primitive-labs-impl-plan.md` (main checkout, untracked)          |
