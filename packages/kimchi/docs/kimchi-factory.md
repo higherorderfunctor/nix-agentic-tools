@@ -5,7 +5,8 @@
 > `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
 > reconcile by leaf through the shared delivery router; agents are owned
 > writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only, and
-> their exclusions are silent for the shared pool. Full lineage:
+> their exclusions are silent for the shared pool; root reasoning effort makes
+> the devenv harness file exist. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -25,7 +26,12 @@ the shared normalized surface. Its `reasoningEffort` field lowers losslessly to
 `native.harnessSettings.defaultThinkingLevel` at `mkDefault` priority, so an
 explicit native harness value wins: pi 0.85.1's `ThinkingLevel` is a superset of
 the normalized enum, and pi reads the key from the merged user and project
-harness settings. Locked by `module-kimchi-normalized-reasoning-effort`.
+harness settings. Locked by `module-kimchi-normalized-reasoning-effort`. On
+devenv the key lands in the project harness `settings.json`, so a root effort
+alone creates that exact-cwd, trust-gated file: Kimchi applies it only in a
+trusted project, and the wrapper refuses launches below the devenv root. That is
+the uniform consequence of any project harness setting, and the only way to
+deliver effort at project scope.
 
 ## User and project paths (the load-bearing fact)
 
