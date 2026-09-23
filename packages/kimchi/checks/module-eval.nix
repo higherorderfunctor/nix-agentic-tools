@@ -719,6 +719,21 @@ in {
             agentsDir = ../../claude-code/checks/fixtures/claude-agents;
           };
         };
+        # A store-path STRING, as a flake input yields, both as one agent and
+        # as the directory: delivered as a source, never as text holding the
+        # path, the way Home Manager's `isPathLike` decides.
+        fixtureAgent = "${../../claude-code/checks/fixtures/claude-agents}/agent-one.md";
+        stringConfig.ai.kimchi = {
+          enable = true;
+          agents.store-string = fixtureAgent;
+          agentsDir = {
+            path = "${../../claude-code/checks/fixtures/claude-agents}";
+            filter = name: name == "agent-one.md";
+          };
+        };
+        deliveredAsSource = units:
+          lib.all (unit: toString (unit.store or "") == fixtureAgent && !(unit ? text))
+          [units."agent-one.md" units."store-string.md"];
         underAgents = prefix: lib.filter (lib.hasPrefix prefix);
       in
         hmAgentUnits hm
@@ -734,6 +749,8 @@ in {
         && hmAgentUnits emptyHm == {}
         && devenvAgentUnits emptyDevenv == {}
         && (devenvAgentUnits fromDir)."agent-one.md".store == ../../claude-code/checks/fixtures/claude-agents/agent-one.md
+        && deliveredAsSource (hmAgentUnits (evalHm stringConfig))
+        && deliveredAsSource (devenvAgentUnits (evalDevenv stringConfig))
     );
 
     # What has no Kimchi reading fails evaluation instead of landing: a

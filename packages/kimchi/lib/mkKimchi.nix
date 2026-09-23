@@ -530,8 +530,10 @@
           rendered = lib.ai.agent.renderKimchi name value;
         in
           lib.nameValuePair "${agentsDir}/${name}.md" {
+            # A store-path string, as a flake input yields, is a source too;
+            # `builtins.isPath` alone would write the path as the agent's text.
             content = lib.mkDefault (
-              if builtins.isPath rendered
+              if lib.ai.agent.isPathLike rendered
               then {source = rendered;}
               else {text = rendered;}
             );
