@@ -1,11 +1,9 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-23 — `skillPaths` defaults to unset and
-> `modelRoles` takes Kimchi's string shape; `mcp.json` is reconciled by leaf
-> like the other two JSON documents; normalized reasoning effort lowers to
-> harness `defaultThinkingLevel`. Home Manager retains Kimchi's user paths while
-> devenv uses the pinned runtime's project paths. Both mutable documents still
-> reach the shared delivery router. Full lineage:
+> **Last verified:** 2026-09-23 — Home Manager keeps Kimchi's user paths and
+> devenv its project paths; all three mutable JSON documents (`config.json`,
+> harness `settings.json`, `mcp.json`) reconcile by leaf through the shared
+> delivery router. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -43,9 +41,11 @@ is:
 
 Project Kimchi settings, MCP servers, and harness settings are exact-cwd
 readers. The devenv wrapper rejects launches below the devenv root instead of
-silently missing them. Context and skills walk ancestors, so a devenv that
-declares none of the three leaves the launch directory unrestricted. Locked by
-`module-kimchi-devenv-exact-cwd-guard`, which checks both arms.
+silently missing them. It does not `cd` to the root instead, because that would
+also change the working directory Kimchi's tools see. Context and skills walk
+ancestors, so a devenv that declares none of the three leaves the launch
+directory unrestricted. Locked by `module-kimchi-devenv-exact-cwd-guard`, which
+checks both arms.
 
 The project harness directory is deliberately fixed. pi derives
 `CONFIG_DIR_NAME` from Kimchi's packaged
@@ -112,9 +112,11 @@ devenv always writes `AGENTS.md`.
 Project config, MCP, skills, and harness settings remain inert until project
 trust is established. Interactive trust persists in the user's harness
 `trust.json`; headless and ACP sessions honor that decision or the user-global
-`defaultProjectTrust`. Root `AGENTS.md` is the upstream exception: Kimchi's
-context loader walks ancestors directly without consulting the project-scope
-gate.
+`defaultProjectTrust`. `--approve` is a run-scoped override for CLI and TUI
+only: ACP resolves trust again for each session without it, so an unattended ACP
+client needs the persisted decision or `defaultProjectTrust`. Root `AGENTS.md`
+is the upstream exception: Kimchi's context loader walks ancestors directly
+without consulting the project-scope gate.
 
 The devenv module rejects every `harnessSettings` key Kimchi reads only from
 user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
