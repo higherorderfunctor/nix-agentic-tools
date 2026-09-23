@@ -459,14 +459,14 @@
       kimchi = {
         devenv =
           (devenvLeaves "ai:kimchi:config-merge" "$DEVENV_ROOT/.kimchi/config.json"
-            (probe ["ai" "kimchi" "nativeSettings"] {
+            (probe ["ai" "kimchi" "native" "settings"] {
               llmEndpoint = "https://example.invalid";
               skillPaths = ["probe"];
             } {}))
           // {
             additionalWriters = [
               (devenvLeaves "ai:kimchi:harness-settings-merge" "$DEVENV_ROOT/.config/kimchi/harness/settings.json"
-                (probe ["ai" "kimchi" "harnessSettings"] {hideThinkingBlock = true;} {}))
+                (probe ["ai" "kimchi" "native" "harnessSettings"] {hideThinkingBlock = true;} {}))
             ];
             deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys reconcile into the fixed project harness path.";
           };
