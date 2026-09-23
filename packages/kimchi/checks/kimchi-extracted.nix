@@ -11,7 +11,7 @@
     committed = ../extracted.json;
     extractor = ../extract/extract.mjs;
 
-    runExtractor = source: output: ''
+    runExtractor = source: output: pi: ''
       ${pkgs.nodejs}/bin/node ${extractor} \
         --annotations ${../extract/annotations.json} \
         --kimchi-source ${source} \
@@ -20,7 +20,7 @@
         --out ${output} \
         --pi-agent-core-package ${extractionSources.piAgentCore} \
         --pi-ai-package ${extractionSources.piAi} \
-        --pi-package ${extractionSources.pi} \
+        --pi-package ${pi} \
         --pi-tui-package ${extractionSources.piTui} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
@@ -47,48 +47,57 @@
       pkgs.runCommand "kimchi-extracted-harness-guard" {
         nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
       } ''
-        cp -r ${extractionSources.kimchi} "$TMPDIR/collision-source"
-        cp -r ${extractionSources.kimchi} "$TMPDIR/config-array-shape-source"
-        cp -r ${extractionSources.kimchi} "$TMPDIR/config-nested-shape-source"
-        cp -r ${extractionSources.kimchi} "$TMPDIR/config-shape-source"
-        cp -r ${extractionSources.kimchi} "$TMPDIR/config-second-shape-source"
-        cp -r ${extractionSources.kimchi} "$TMPDIR/flags-shape-source"
-        cp -r ${extractionSources.kimchi} "$TMPDIR/harness-shape-source"
-        cp -r ${extractionSources.kimchi} "$TMPDIR/project-tier-source"
-        chmod -R u+w \
-          "$TMPDIR/collision-source" \
-          "$TMPDIR/config-array-shape-source" \
-          "$TMPDIR/config-nested-shape-source" \
-          "$TMPDIR/config-shape-source" \
-          "$TMPDIR/config-second-shape-source" \
-          "$TMPDIR/flags-shape-source" \
-          "$TMPDIR/harness-shape-source" \
-          "$TMPDIR/project-tier-source"
+        # mutant SOURCE LABEL FILE FROM TO: a writable copy of SOURCE at
+        # $TMPDIR/LABEL-source with FROM replaced by TO in FILE.
+        mutant() {
+          cp -r "$1" "$TMPDIR/$2-source"
+          chmod -R u+w "$TMPDIR/$2-source"
+          substituteInPlace "$TMPDIR/$2-source/$3" --replace-fail "$4" "$5"
+        }
+        kimchi=${extractionSources.kimchi}
+        pi=${extractionSources.pi}
 
-        substituteInPlace "$TMPDIR/collision-source/src/config.ts" \
-          --replace-fail 'const parsed = JSON.parse(raw)' $'const parsed = JSON.parse(raw)\n\t\tvoid parsed.harness'
-        substituteInPlace "$TMPDIR/config-array-shape-source/src/config.ts" \
-          --replace-fail 'typeof p === "string"' 'typeof p === "number"'
-        substituteInPlace "$TMPDIR/config-nested-shape-source/src/config.ts" \
-          --replace-fail 'typeof t.enabled === "boolean"' 'typeof t.enabled === "string"'
-        substituteInPlace "$TMPDIR/config-shape-source/src/config.ts" \
-          --replace-fail 'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
-        substituteInPlace "$TMPDIR/config-second-shape-source/src/config.ts" \
-          --replace-fail 'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
-        substituteInPlace "$TMPDIR/flags-shape-source/src/commands/help.ts" \
-          --replace-fail 'Object.entries(CLI_OPTIONS).map' 'Object.values(CLI_OPTIONS).map'
-        substituteInPlace "$TMPDIR/harness-shape-source/src/extensions/orchestration/model-roles.ts" \
-          --replace-fail 'orchestrator: string' 'orchestrator: number'
-        substituteInPlace "$TMPDIR/project-tier-source/src/config.ts" \
-          --replace-fail 'apiKey: projectExtras.apiKey ?? globalExtras.apiKey' 'apiKey: globalExtras.apiKey'
+        mutant "$kimchi" collision src/config.ts \
+          'const parsed = JSON.parse(raw)' $'const parsed = JSON.parse(raw)\n\t\tvoid parsed.harness'
+        mutant "$kimchi" config-array-shape src/config.ts \
+          'typeof p === "string"' 'typeof p === "number"'
+        mutant "$kimchi" config-nested-shape src/config.ts \
+          'typeof t.enabled === "boolean"' 'typeof t.enabled === "string"'
+        mutant "$kimchi" config-parse-attribution src/config.ts \
+          'JSON.parse(readFileSync(settingsPath ?? resolve(AGENT_CONFIG_DIR, "settings.json"), "utf-8"))' \
+          'JSON.parse(readFileSync(settingsPath ?? KIMCHI_CONFIG_PATH, "utf-8"))'
+        mutant "$kimchi" config-parse-unattributable src/config.ts \
+          'JSON.parse(readFileSync(settingsPath ?? resolve(AGENT_CONFIG_DIR, "settings.json"), "utf-8"))' \
+          'JSON.parse(readFileSync(settingsPath ?? resolve(AGENT_CONFIG_DIR, "state.json"), "utf-8"))'
+        mutant "$kimchi" config-shape src/config.ts \
+          'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
+        mutant "$kimchi" config-second-shape src/config.ts \
+          'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
+        mutant "$kimchi" environment-app-name package.json \
+          '"name": "kimchi"' '"name": "tau"'
+        mutant "$kimchi" environment-stale-ignore src/agent-discovery/agents/opencode.ts \
+          'const envOverride = process.env.OPENCODE_CONFIG' 'const envOverride = undefined'
+        mutant "$kimchi" environment-unlisted src/extensions/skills-manager/skill-manager.ts \
+          'process.env.SKILLS_DIR ??' 'process.env.SKILLS_DIR ?? process.env.UNLISTED_PROBE_DIR ??'
+        mutant "$kimchi" flags-shape src/commands/help.ts \
+          'Object.entries(CLI_OPTIONS).map' 'Object.values(CLI_OPTIONS).map'
+        mutant "$kimchi" harness-auto-default src/config.ts \
+          'return parsed.autoDefaultApplied === true' 'return parsed.autoDefaultApplied === "yes"'
+        mutant "$kimchi" harness-shape src/extensions/orchestration/model-roles.ts \
+          'orchestrator: string' 'orchestrator: number'
+        mutant "$kimchi" project-tier src/config.ts \
+          'apiKey: projectExtras.apiKey ?? globalExtras.apiKey' 'apiKey: globalExtras.apiKey'
+        mutant "$pi" pi-app-name dist/config.js \
+          'export const APP_NAME = piConfigName || "pi";' 'export const APP_NAME = "pi";'
 
         expect_rejection() {
           label="$1"
           source="$2"
           expected="$3"
+          pi_source="''${4:-$pi}"
           if rejected_output=$(
             {
-              ${runExtractor "$source" ''"$TMPDIR/$label.json"''}
+              ${runExtractor "$source" ''"$TMPDIR/$label.json"'' ''"$pi_source"''}
             } 2>&1
           ); then
             echo "FAIL: extraction accepted the $label mutation" >&2
@@ -113,17 +122,31 @@
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-nested-shape "$TMPDIR/config-nested-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection config-parse-attribution "$TMPDIR/config-parse-attribution-source" \
+          'config.json key census changed; new=["autoDefaultApplied"]' >> "$TMPDIR/proof"
+        expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
+          'cannot attribute the JSON read' >> "$TMPDIR/proof"
         expect_rejection config-shape "$TMPDIR/config-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection environment-app-name "$TMPDIR/environment-app-name-source" \
+          '"TAU_CODING_AGENT_SESSION_DIR"' >> "$TMPDIR/proof"
+        expect_rejection environment-stale-ignore "$TMPDIR/environment-stale-ignore-source" \
+          'staleIgnored=["OPENCODE_CONFIG"]' >> "$TMPDIR/proof"
+        expect_rejection environment-unlisted "$TMPDIR/environment-unlisted-source" \
+          'environment census changed; new=["UNLISTED_PROBE_DIR"]' >> "$TMPDIR/proof"
         expect_rejection flags-shape "$TMPDIR/flags-shape-source" \
           "KIMCHI_FLAGS is no longer CLI help derived from CLI_OPTIONS" >> "$TMPDIR/proof"
         expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection harness-auto-default "$TMPDIR/harness-auto-default-source" \
+          "readAutoDefaultApplied no longer reads autoDefaultApplied === true" >> "$TMPDIR/proof"
+        expect_rejection pi-app-name "$kimchi" \
+          'pi APP_NAME in' "$TMPDIR/pi-app-name-source" >> "$TMPDIR/proof"
 
-        ${runExtractor extractionSources.kimchi ''"$TMPDIR/real.json"''}
-        ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"''}
+        ${runExtractor ''"$kimchi"'' ''"$TMPDIR/real.json"'' ''"$pi"''}
+        ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"'' ''"$pi"''}
         if ${pkgs.jq}/bin/jq -e \
           '(.config.projectTier.honoredKeys | index("apiKey") == null and index("api_key") == null) and
            (.config.keys.apiKey.project == false and .config.keys.api_key.project == false)' \

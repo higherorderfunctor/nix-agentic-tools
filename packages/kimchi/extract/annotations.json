@@ -32,6 +32,18 @@
     "teleport": {}
   },
   "environment": {
+    "CASTAI_API_KEY": {
+      "consumerOverridable": true,
+      "controls": "Cast AI API key fallback for the stats command when config.json and KIMCHI_API_KEY provide none"
+    },
+    "DIFF_THEME": {
+      "consumerOverridable": true,
+      "controls": "syntax-highlighting theme for rendered diffs (default github-dark)"
+    },
+    "JS_DEBUG_PATH": {
+      "consumerOverridable": true,
+      "controls": "js-debug DAP server script used by the debugger extension"
+    },
     "KIMCHI_ACTIVE_FERMENT": {
       "consumerOverridable": true,
       "controls": "active ferment identifier inherited by worker processes"
@@ -54,8 +66,12 @@
     },
     "KIMCHI_CODING_AGENT_DIR": {
       "consumerOverridable": false,
-      "controls": "Kimchi harness configuration directory",
+      "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)",
       "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
+    },
+    "KIMCHI_CODING_AGENT_SESSION_DIR": {
+      "consumerOverridable": true,
+      "controls": "pi session storage directory (pi's ENV_SESSION_DIR, named from Kimchi's piConfig.name)"
     },
     "KIMCHI_DAP_BINARIES": {
       "consumerOverridable": true,
@@ -199,6 +215,18 @@
       "consumerOverridable": true,
       "controls": "Kimchi web application base URL"
     },
+    "LLAMA_BASE_URL": {
+      "consumerOverridable": true,
+      "controls": "default llama.cpp server URL offered by pi's llama provider login"
+    },
+    "MCP_OAUTH_DIR": {
+      "consumerOverridable": true,
+      "controls": "legacy MCP OAuth token directory read during keyring migration (default <harness>/mcp-oauth)"
+    },
+    "OLLAMA_HOST": {
+      "consumerOverridable": true,
+      "controls": "Ollama endpoint; takes precedence over KIMCHI_OLLAMA_HOST"
+    },
     "PI_CACHE_RETENTION": {
       "consumerOverridable": true,
       "controls": "provider prompt-cache retention"
@@ -209,12 +237,8 @@
     },
     "PI_CODING_AGENT_DIR": {
       "consumerOverridable": false,
-      "controls": "pi agent configuration directory",
+      "controls": "inherited pi agent directory, preserved as KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR",
       "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
-    },
-    "PI_CODING_AGENT_SESSION_DIR": {
-      "consumerOverridable": true,
-      "controls": "pi session storage directory"
     },
     "PI_EXPERIMENTAL": {
       "consumerOverridable": true,
@@ -304,6 +328,182 @@
     "PI_TUI_WRITE_LOG": {
       "consumerOverridable": true,
       "controls": "raw TUI ANSI output log path"
+    },
+    "SKILLS_DIR": {
+      "consumerOverridable": true,
+      "controls": "skills-manager skills directory (default <cwd>/skills)"
+    }
+  },
+  "environmentIgnored": {
+    "awsSdk": {
+      "names": [
+        "AWS_ACCESS_KEY_ID",
+        "AWS_ACCOUNT_ID",
+        "AWS_CONTAINER_AUTHORIZATION_TOKEN",
+        "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+        "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        "AWS_CREDENTIAL_EXPIRATION",
+        "AWS_CREDENTIAL_SCOPE",
+        "AWS_DEFAULT_REGION",
+        "AWS_EC2_METADATA_DISABLED",
+        "AWS_EC2_METADATA_SERVICE_ENDPOINT",
+        "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE",
+        "AWS_LOGIN_CACHE_DIRECTORY",
+        "AWS_NEW_RETRIES_2026",
+        "AWS_PROFILE",
+        "AWS_REGION",
+        "AWS_ROLE_ARN",
+        "AWS_ROLE_SESSION_NAME",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_WEB_IDENTITY_TOKEN_FILE",
+        "SMITHY_NEW_RETRIES_2026"
+      ],
+      "reason": "AWS SDK credential, region, metadata and retry chain in pi's bundled Bedrock client and pi-ai's Bedrock credential detection; configured the AWS way, not a Kimchi setting"
+    },
+    "googleAuth": {
+      "names": [
+        "CLOUDSDK_CONFIG",
+        "CLOUD_RUN_JOB",
+        "DETECT_GCP_RETRIES",
+        "FUNCTION_NAME",
+        "FUNCTION_TARGET",
+        "GAE_MODULE_NAME",
+        "GAE_SERVICE",
+        "GCE_METADATA_HOST",
+        "GCE_METADATA_IP",
+        "GCLOUD_PROJECT",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_CLOUD_QUOTA_PROJECT",
+        "GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES",
+        "K_CONFIGURATION",
+        "K_SERVICE",
+        "METADATA_SERVER_DETECTION",
+        "gcloud_project",
+        "google_application_credentials",
+        "google_cloud_project"
+      ],
+      "reason": "Google auth library project, credential and metadata-server detection in pi's bundled Vertex client; configured the Google Cloud way, not a Kimchi setting"
+    },
+    "libraryInternals": {
+      "names": [
+        "AWS_LAMBDA_BENCHMARK_MODE",
+        "AWS_LAMBDA_NODEJS_NO_GLOBAL_AWSLAMBDA",
+        "AWS_SDK_JS_NODE_VERSION_SUPPORT_WARNING_DISABLED",
+        "CI",
+        "DEBUG",
+        "DEBUG_AUTH",
+        "GRACEFUL_FS_PLATFORM",
+        "JEST_WORKER_ID",
+        "NODE_DEBUG",
+        "NODE_ENV",
+        "TEST_GRACEFUL_FS_GLOBAL_PATCH",
+        "UNDICI_NO_WASM_SIMD",
+        "VITEST",
+        "WS_NO_BUFFER_UTIL",
+        "WS_NO_UTF_8_VALIDATE",
+        "__MINIMATCH_TESTING_PLATFORM__"
+      ],
+      "reason": "debug, test-runner and feature switches inside bundled libraries (graceful-fs, minimatch, undici, ws, AWS Lambda runtime, debug) or Kimchi's own test guards; no user-facing behavior"
+    },
+    "platform": {
+      "names": [
+        "APPDATA",
+        "ComSpec",
+        "HOME",
+        "HOMEBREW_PREFIX",
+        "OSTYPE",
+        "PATH",
+        "PATHEXT",
+        "PNPM_HOME",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "SHELL",
+        "SystemRoot",
+        "USER",
+        "USERNAME",
+        "USERPROFILE",
+        "WINDIR",
+        "XDG_CACHE_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "comspec"
+      ],
+      "reason": "operating-system and user-session state (home, PATH, shell, user, XDG and Windows directories, package-manager prefixes) read to locate files; set by the host, not a Kimchi setting"
+    },
+    "providerClients": {
+      "names": [
+        "AWS_BEARER_TOKEN_BEDROCK",
+        "AWS_BEDROCK_FORCE_CACHE",
+        "AWS_BEDROCK_FORCE_HTTP1",
+        "AWS_BEDROCK_SKIP_AUTH",
+        "AZURE_OPENAI_API_VERSION",
+        "AZURE_OPENAI_BASE_URL",
+        "AZURE_OPENAI_DEPLOYMENT_NAME_MAP",
+        "AZURE_OPENAI_ENDPOINT",
+        "AZURE_OPENAI_RESOURCE_NAME",
+        "GOOGLE_CLOUD_LOCATION",
+        "KIMI_CODE_OAUTH_HOST",
+        "KIMI_OAUTH_HOST"
+      ],
+      "reason": "third-party model-provider client settings (Azure OpenAI, Bedrock, Kimi) read by pi-ai's bundled provider clients through getProviderEnvValue; documented by that provider, not by Kimchi"
+    },
+    "proxy": {
+      "names": [
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy"
+      ],
+      "reason": "the de-facto HTTP proxy convention honored by Kimchi's and pi's HTTP dispatchers; set for the whole user environment, not per tool"
+    },
+    "terminal": {
+      "names": [
+        "COLORFGBG",
+        "COLORTERM",
+        "COLUMNS",
+        "DISPLAY",
+        "GHOSTTY_RESOURCES_DIR",
+        "ITERM_SESSION_ID",
+        "KITTY_WINDOW_ID",
+        "LINES",
+        "MOSH_CONNECTION",
+        "SSH_CLIENT",
+        "SSH_CONNECTION",
+        "SSH_TTY",
+        "STY",
+        "TERM",
+        "TERMINAL_EMULATOR",
+        "TERMUX_VERSION",
+        "TERM_PROGRAM",
+        "TMUX",
+        "WARP_SESSION_ID",
+        "WARP_TERMINAL_SESSION_UUID",
+        "WAYLAND_DISPLAY",
+        "WEZTERM_PANE",
+        "WSLENV",
+        "WSL_DISTRO_NAME",
+        "WSL_INTEROP",
+        "WT_SESSION",
+        "XDG_SESSION_TYPE",
+        "ZELLIJ"
+      ],
+      "reason": "terminal, display-server, multiplexer, remote-session and WSL detection; describes the host the TUI runs in"
+    },
+    "toolConventions": {
+      "names": [
+        "EDITOR",
+        "HF_HOME",
+        "HF_TOKEN",
+        "HF_TOKEN_PATH",
+        "OPENCODE_CONFIG",
+        "VISUAL"
+      ],
+      "reason": "another tool's own variable (POSIX editor, HuggingFace, opencode) that Kimchi or pi honors for interoperability; owned and documented by that tool"
     }
   }
 }

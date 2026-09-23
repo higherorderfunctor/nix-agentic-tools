@@ -7,9 +7,10 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-22 — the TypeScript compiler API measures both
-> native settings files without changing the existing module surface. Full
-> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-22 — the extractor measures Kimchi 1.1.30:
+> `config.ts` JSON reads are attributed to the file they read, and every
+> resolved environment read is published or ignored by exact name. Full lineage:
+> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -22,9 +23,13 @@ may be present there before Kimchi has a lossless native lowering, in which case
 it remains declarative data rather than being guessed into either native file.
 
 `packages/kimchi/extracted.json` measures the two native settings surfaces, the
-Kimchi and pi CLI layers, and the `KIMCHI_*` / `PI_*` environment namespaces. It
-uses the TypeScript compiler's checker for declared keys and types and syntax
-tree queries for CLI and environment access sites. CLI queries follow
+Kimchi and pi CLI layers, and the environment variables Kimchi and pi read.
+Every resolved environment name is either published from an annotation or
+listed, with a reason, under `environmentIgnored` in `extract/annotations.json`;
+pi's own names follow Kimchi's `piConfig.name`
+(`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). It uses the
+TypeScript compiler's checker for declared keys and types and syntax tree
+queries for CLI and environment access sites. CLI queries follow
 argument-derived switch cases and called imported helpers, while config queries
 cross-check compiler types against top-level, nested, and array-element runtime
 validation guards. Three additional hash-pinned pi declaration packages resolve
