@@ -241,7 +241,12 @@ jobs:
                   flake.nix | \
                   lib/facets.nix | \
                   lib/facets/* | \
+                  packages/kiro-cli/checks.nix | \
+                  packages/kiro-cli/checks/* | \
+                  packages/kiro-cli/extract/* | \
+                  packages/kiro-cli/extracted.json | \
                   packages/kiro-cli/lib/packaging.nix | \
+                  packages/kiro-cli/model-catalog.json | \
                   packages/kiro-cli/packages/* | \
                   packages/kiro-cli/sources.json | \
                   lib/packaging.nix)
@@ -274,12 +279,14 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            sandbox = true
 
       - if: steps.scope.outputs.needed == 'true'
         uses: ./.github/actions/assert-nix-config
         with:
           require: |
             ^accept-flake-config = true
+            ^sandbox = true
 
       # This only realizes the IFD sources used during evaluation. It has no
       # Cachix credentials and does not build the patched Kiro output; the
@@ -289,6 +296,16 @@ jobs:
         uses: ./.github/actions/warm-ifd
         with:
           systems: ${{ matrix.system }}
+
+      # The Linux flake check covers this drift assertion, but flake check on
+      # ubuntu omits Darwin. Exercise first-run TUI materialization and the
+      # settings parser natively on both Kiro-supported platforms here.
+      - name: Check extracted Kiro metadata
+        if: steps.scope.outputs.needed == 'true'
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          nix build ".#checks.${{ matrix.system }}.kiro-cli-extracted" --no-link
 
       - name: Build patched Kiro without the project cache
         id: build-patched

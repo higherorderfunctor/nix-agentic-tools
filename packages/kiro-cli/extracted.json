@@ -43,6 +43,7 @@
     "cloud_config",
     "infra_safety",
     "lite",
+    "local_sandbox",
     "memory",
     "model_fallback",
     "remote_changelog",
