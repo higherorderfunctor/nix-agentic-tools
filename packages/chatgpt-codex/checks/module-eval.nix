@@ -229,14 +229,17 @@ in {
           readFileType = path: filesystem.${path}.type;
         };
         evaluate = root: settings:
-          (evalDevenvWithSpecialArgs {codexGitCommonDirResolver = resolver;} {
-            ai.codex = {
-              enable = true;
-              nativeSettings = settings;
-            };
-            devenv.root = root;
-            git.root = root;
-          }).config.files.".codex/config.toml".source.value;
+          (evalDevenvWithSpecialArgs {
+              codexGetEnv = _: "";
+              codexGitCommonDirResolver = resolver;
+            } {
+              ai.codex = {
+                enable = true;
+                nativeSettings = settings;
+              };
+              devenv.root = root;
+              git.root = root;
+            }).config.files.".codex/config.toml".source.value;
         namedSettings = {
           default_permissions = "project-edit";
           permissions.project-edit.extends = ":workspace";
@@ -974,7 +977,7 @@ in {
           };
         };
         hm = evalHm config;
-        devenv = evalDevenv config;
+        devenv = evalDevenvWithGetEnv (name: {HOME = "/home/test";}.${name} or "") config;
         hmSettings = hmCodexSettings hm;
         devenvSettings = devenv.config.files.".codex/config.toml".source.value;
         withoutBackendRoots = settings:
