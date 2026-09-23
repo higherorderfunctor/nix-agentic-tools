@@ -7,10 +7,10 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-22 — Kiro settings extraction validates its
+> **Last verified:** 2026-09-23 — Kiro settings extraction validates its
 > materialized TUI registry and workspace merge with AST checks; Kimchi
-> attributes every config.ts JSON read to the file it reads and censuses every
-> resolved environment read.
+> attributes every config.ts JSON read to the file it reads, censuses every
+> resolved environment read, and no longer extracts a CLI surface nothing read.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -174,10 +174,10 @@ Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
 `mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract`; glab and Kimchi
 instead measure pinned source inputs. Consumers read the committed file, never
-the derivation, so option surfaces derived from it cost no IFD. Kimchi's sidecar
-is measurement only until its option shape is settled.
-`checks/<pkg>-extracted.nix` then compares committed against freshly built
-output to catch a stale sidecar.
+the derivation, so option surfaces derived from it cost no IFD. Kimchi's
+`ai.kimchi.native.*` types are generated from its sidecar
+(`packages/kimchi/lib/extracted.nix`). `checks/<pkg>-extracted.nix` then
+compares committed against freshly built output to catch a stale sidecar.
 
 Kiro's `models` field is the exception to the binary source: it is derived from
 the committed public documentation snapshot, refreshed by the update job even
@@ -202,18 +202,21 @@ is the only place that claim is ever tested by a build. Kimchi's JavaScript
 extractor reads the hash-pinned release source, exact pi npm package, and the
 three pi declaration packages imported by its settings type through nixpkgs'
 pinned TypeScript compiler API. The checker supplies declared settings keys and
-types; syntax-tree queries supply CLI, validation, and environment access sites.
-It measures both native settings files, both CLI layers, and every environment
-read it can resolve without unpacking the Bun executable or pattern-matching
-TypeScript text. Two measurements are attribution, not collection. A
-`JSON.parse` in `config.ts` counts toward `config.json` only when its
-`readFileSync` path resolves there; 1.1.30 also parses `harness/settings.json`
-in that file, and a read that resolves to neither fails the extraction. The
-environment census compares every resolved name against the published
-annotations plus an exact-name ignore list with reasons, in both directions; the
-former `KIMCHI_`/`PI_` prefix filter ran before the census, so the census could
-never report an unprefixed read. pi's own variable names come from Kimchi's
-`piConfig.name` the way pi derives them, not from pi's `PI_` default.
+types; syntax-tree queries supply validation and environment access sites. It
+measures both native settings files and every environment read it can resolve
+without unpacking the Bun executable or pattern-matching TypeScript text. It
+extracted both CLI layers until 2026-09-23; that surface was dropped because the
+Kimchi wrapper passes no flags, so nothing read it. The code is at
+`git show b92a18a8:packages/kimchi/extract/extract.mjs` if a consumer appears.
+Two measurements are attribution, not collection. A `JSON.parse` in `config.ts`
+counts toward `config.json` only when its `readFileSync` path resolves there;
+1.1.30 also parses `harness/settings.json` in that file, and a read that
+resolves to neither fails the extraction. The environment census compares every
+resolved name against the published annotations plus an exact-name ignore list
+with reasons, in both directions; the former `KIMCHI_`/`PI_` prefix filter ran
+before the census, so the census could never report an unprefixed read. pi's own
+variable names come from Kimchi's `piConfig.name` the way pi derives them, not
+from pi's `PI_` default.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
