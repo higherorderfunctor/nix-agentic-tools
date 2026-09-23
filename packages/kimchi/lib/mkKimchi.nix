@@ -20,22 +20,18 @@
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   userScopeOnlyHarnessSettingKeys = import ./user-scope-only-harness-settings.nix;
+  # Native option types, project-tier keys and environment names, all read
+  # from the committed sidecar (never passthru.extracted: that is IFD).
+  sidecar = import ./extracted.nix {
+    inherit lib pkgs;
+    extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+  };
 
   # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
   # That fixed project namespace is independent of ai.kimchi.configDir, which
   # selects the Home Manager output root.
   projectHarnessDir = ".config/kimchi/harness";
   projectContextFilename = "AGENTS.md";
-
-  # Kimchi 1.1.30 reads each modelRoles value as a provider/model string, and
-  # for delegable roles also a non-empty list of them; orchestrator and
-  # compactor take one string only. Any other shape is discarded with a
-  # warning at runtime (src/extensions/orchestration/model-roles.ts:83-91,
-  # 117-122 and 144-181), so the module rejects it at evaluation instead.
-  roleModelType = lib.types.addCheck lib.types.str (value: builtins.match "[[:space:]]*" value == null);
-  roleModelsType = lib.types.addCheck (lib.types.listOf roleModelType) (values: values != []);
-  modelRoleNames = ["builder" "compactor" "explorer" "judge" "orchestrator" "planner" "researcher" "reviewer"];
-  singleModelRoles = ["compactor" "orchestrator"];
 
   # Kimchi 1.1.30's lifecycle events, FULL_COMMAND_HOOK_EVENTS
   # (src/extensions/hook-adapters/discovery.ts:29-50). Every portable event
@@ -88,9 +84,9 @@
 
     # Non-secret env vars — baked into the wrapper via `--set`.
     kimchiEnvVars =
-      lib.optionalAttrs cfg.noUpdateCheck {KIMCHI_NO_UPDATE_CHECK = "1";}
+      lib.optionalAttrs cfg.noUpdateCheck {${sidecar.environmentName "KIMCHI_NO_UPDATE_CHECK"} = "1";}
       // lib.optionalAttrs (cfg.telemetry != null) {
-        KIMCHI_TELEMETRY_ENABLED =
+        ${sidecar.environmentName "KIMCHI_TELEMETRY_ENABLED"} =
           if cfg.telemetry
           then "1"
           else "0";
@@ -106,7 +102,7 @@
     # the MCP servers use (lib/mcp.nix); sops-nix / agenix agnostic.
     credSnippet =
       if cfg.apiKey != null
-      then mcpLib.mkCredentialsSnippet pkgs {apiKey.envVar = "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
+      then mcpLib.mkCredentialsSnippet pkgs {apiKey.envVar = sidecar.environmentName "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
       else "";
 
     # Kimchi resolves project config, MCP servers, and harness settings from
@@ -240,9 +236,9 @@
       if isDevenv
       then ".kimchi/agents"
       else "${harness}/agents";
-    unknownModelRoles = lib.subtractLists modelRoleNames (builtins.attrNames cfg.native.harnessSettings.modelRoles);
-    listedSingleModelRoles = builtins.filter (role: builtins.isList (cfg.native.harnessSettings.modelRoles.${role} or null)) singleModelRoles;
     userScopeOnlyHarnessSettings = lib.intersectLists userScopeOnlyHarnessSettingKeys (builtins.attrNames filteredHarnessSettings);
+    userScopeConfigSettings = lib.intersectLists sidecar.userScopeConfigKeys (builtins.attrNames filteredSettings);
+    fixedEnvironmentVariables = builtins.attrNames (builtins.intersectAttrs sidecar.fixedEnvironmentVariables (lib.filterAttrs (_: value: value != null) mergedEnvironmentVariables));
     # Home Manager's ledger identity predates project-path delivery and is an
     # upgrade contract: keep hashing configDir so a new generation retracts
     # leaves owned before this port. Devenv has no prior Kimchi reconciliation
@@ -312,15 +308,12 @@
         assertions =
           [
             {
-              assertion = unknownModelRoles == [];
-              message = "ai.kimchi.native.harnessSettings.modelRoles has unknown roles: ${lib.concatStringsSep ", " unknownModelRoles}. Kimchi 1.1.30 accepts only ${lib.concatStringsSep ", " modelRoleNames}.";
+              assertion = fixedEnvironmentVariables == [];
+              message = ''
+                ai.kimchi environment variables ${lib.concatStringsSep ", " fixedEnvironmentVariables} are overwritten by Kimchi before anything reads them (${lib.concatMapStringsSep "; " (name: "${name}: ${sidecar.fixedEnvironmentVariables.${name}}") fixedEnvironmentVariables}), so a value set here is never read.
+                Remove it from ai.kimchi.environmentVariables, or tombstone a root ai.environmentVariables entry with ai.kimchi.environmentVariables.<name> = null.
+              '';
             }
-            {
-              assertion = listedSingleModelRoles == [];
-              message = "ai.kimchi.native.harnessSettings.modelRoles.${lib.concatStringsSep ", " listedSingleModelRoles} must be a single provider/model string; Kimchi ignores a list there.";
-            }
-          ]
-          ++ [
             {
               assertion = toolAgents == [];
               message = "ai.kimchi agents ${lib.concatStringsSep ", " toolAgents} carry a `tools` allowlist in Claude/Copilot tool names, which Kimchi does not read (it matches its lowercase builtins read, bash, edit, write, grep, find, ls exactly). Set ai.kimchi.agents.<name> to native Kimchi Markdown with its own `tools:` line, or to null.";
@@ -341,6 +334,13 @@
             message = ''
               ai.kimchi.projectTrust is user scope: Kimchi reads project trust only from ~/.config/kimchi/harness/trust.json, so that a project cannot trust itself, and devenv writes only inside the project.
               Under devenv, either set with HM, or configure inside the harness so it writes to user global (answer Kimchi's trust prompt, which persists the decision there).
+            '';
+          }
+          ++ lib.optional isDevenv {
+            assertion = userScopeConfigSettings == [];
+            message = ''
+              ai.kimchi.native.settings contains config.json keys Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeConfigSettings}.
+              Kimchi merges only its project-honored keys from .kimchi/config.json, so under devenv, either set with HM, or configure inside the harness so it writes to user global.
             '';
           }
           ++ lib.optional isDevenv {
@@ -707,87 +707,30 @@ in
         '';
       };
 
+      # Both native files are typed from packages/kimchi/extracted.json by
+      # ./extracted.nix. The submodules are closed: a key Kimchi does not read
+      # is an unknown-option error, not bytes nothing reads.
       native.settings = lib.mkOption {
-        type = lib.types.submodule {
-          freeformType = (pkgs.formats.json {}).type;
-          options = {
-            telemetry = lib.mkOption {
-              type = lib.types.submodule {
-                freeformType = (pkgs.formats.json {}).type;
-                options = {
-                  enabled = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Enable telemetry reporting in config.json.";
-                  };
-                };
-              };
-              default = {};
-              description = "Telemetry settings.";
-            };
-            llmEndpoint = lib.mkOption {
-              type = lib.types.nullOr lib.types.str;
-              default = null;
-              description = "LLM endpoint override.";
-            };
-            skillPaths = lib.mkOption {
-              type = lib.types.nullOr (lib.types.listOf lib.types.str);
-              default = null;
-              description = ''
-                Skill search paths. Null leaves the key out, so project config
-                inherits the user's global list; Kimchi reads
-                `project.skillPaths ?? global.skillPaths`, so an explicit list,
-                empty included, replaces it.
-              '';
-            };
-            preferences = lib.mkOption {
-              type = lib.types.submodule {
-                freeformType = (pkgs.formats.json {}).type;
-                options = {};
-              };
-              default = {};
-              description = "User preferences (freeform).";
-            };
-          };
-        };
+        type = lib.types.submodule {options = sidecar.settingsOptions;};
         default = {};
         description = ''
-          Kimchi settings reconciled by leaf in <configDir>/config.json on Home
-          Manager activation or .kimchi/config.json on devenv shell entry. API
-          keys should be injected through the environment instead.
+          Kimchi `config.json`, typed from the keys the pinned Kimchi reads
+          (packages/kimchi/extracted.json). Reconciled by leaf in
+          <configDir>/config.json on Home Manager activation or
+          .kimchi/config.json on devenv shell entry. Devenv rejects keys Kimchi
+          reads only from the user file. `apiKey` has no option here: it is a
+          secret, delivered by `ai.kimchi.apiKey`.
         '';
       };
 
       native.harnessSettings = lib.mkOption {
-        type = lib.types.submodule {
-          freeformType = (pkgs.formats.json {}).type;
-          options = {
-            modelRoles = lib.mkOption {
-              type = lib.types.attrsOf (lib.types.either roleModelType roleModelsType);
-              default = {};
-              example = {
-                builder = ["anthropic/claude-sonnet-4-5" "openai/gpt-4o"];
-                orchestrator = "anthropic/claude-sonnet-4-5";
-              };
-              description = ''
-                Model role assignments as provider/model strings, or for
-                delegable roles a non-empty list of them. Roles:
-                ${lib.concatStringsSep ", " modelRoleNames}; orchestrator and
-                compactor take one string.
-              '';
-            };
-            resources = lib.mkOption {
-              type = lib.types.attrsOf lib.types.bool;
-              default = {};
-              description = "Resource toggles (e.g. hooks.bash, tools.web_search).";
-            };
-          };
-        };
+        type = lib.types.submodule {options = sidecar.harnessSettingsOptions;};
         default = {};
         description = ''
-          Harness settings reconciled by leaf in
-          <configDir>/harness/settings.json on Home Manager activation or
-          .config/kimchi/harness/settings.json on devenv shell entry. Kimchi
+          Kimchi and pi harness `settings.json`, typed from the keys the pinned
+          Kimchi and pi read (packages/kimchi/extracted.json). Reconciled by
+          leaf in <configDir>/harness/settings.json on Home Manager activation
+          or .config/kimchi/harness/settings.json on devenv shell entry. Kimchi
           mutates the user file at runtime, so both backends preserve unowned
           settings and retract retired leaves.
         '';
@@ -796,7 +739,12 @@ in
       environmentVariables = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
         default = {};
-        description = "Environment variables exported when launching kimchi. Null suppresses a root entry at the same key.";
+        description = ''
+          Environment variables exported when launching kimchi. Null suppresses
+          a root entry at the same key. A variable Kimchi overwrites at launch
+          (listed with its reason in packages/kimchi/extracted.json) fails
+          evaluation, because a value set for it is never read.
+        '';
       };
 
       hooks = lib.mkOption {
@@ -821,7 +769,7 @@ in
       # pattern (lib/mcp.nix) so the secret is read from its decrypted file
       # at runtime and never lands in the /nix/store. Set exactly one of
       # apiKey.file (sops-nix/agenix path) or apiKey.helper.
-      apiKey = mcpLib.mkCredentialsOption "KIMCHI_API_KEY";
+      apiKey = mcpLib.mkCredentialsOption (sidecar.environmentName "KIMCHI_API_KEY");
 
       noUpdateCheck = lib.mkOption {
         type = lib.types.bool;

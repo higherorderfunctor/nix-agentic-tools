@@ -1,16 +1,16 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-23 — the builder entry point is
-> `lib.ai.app.mkRuntime`, and Kimchi's native files are declared under
-> `ai.kimchi.native` (`native.settings`, `native.harnessSettings`). Home Manager
-> keeps Kimchi's user paths and devenv its project paths; the mutable JSON
-> documents (`config.json`, harness `settings.json`, `mcp.json`,
-> `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
-> shared delivery router; agents are owned writable copies; portable hooks reach
-> `.kimchi/hooks.json` on devenv only, and their exclusions are silent for the
-> shared pool; a project permissions file resets the user's scalars, and its
-> emptied retraction is deleted; the trust writer takes pi's `trust.json.lock`;
-> root reasoning effort makes the devenv harness file exist. Full lineage:
+> **Last verified:** 2026-09-23 — `ai.kimchi.native.settings` and
+> `native.harnessSettings` are closed option trees generated from
+> `extracted.json` by `lib/extracted.nix`; devenv rejects user-scope
+> `config.json` keys and both backends reject environment variables Kimchi
+> overwrites, both read from the sidecar; the builder entry point is
+> `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and devenv its
+> project paths; the mutable JSON documents (`config.json`, harness
+> `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
+> reconcile by leaf through the shared delivery router; agents are owned
+> writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only; the
+> trust writer takes pi's `trust.json.lock`. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -37,25 +37,47 @@ trusted project, and the wrapper refuses launches below the devenv root. That is
 the uniform consequence of any project harness setting, and the only way to
 deliver effort at project scope.
 
-`packages/kimchi/extracted.json` measures the two native settings surfaces, the
-Kimchi and pi CLI layers, and the environment variables Kimchi and pi read.
+`packages/kimchi/extracted.json` measures the two native settings surfaces and
+the environment variables Kimchi and pi read, and `lib/extracted.nix` is its
+only reader. It generates the closed `native.settings` (from `config.*`) and
+`native.harnessSettings` (from `harness.*`, resolving `harness.definitions`)
+option trees: scalars and enums map directly, objects with properties become
+closed submodules, `additionalProperties` becomes `attrsOf`, and arrays keep
+untyped elements unless they are scalars, because `filterNulls` does not recurse
+into lists. So a key upstream adds becomes an option at the next re-extraction,
+and a key it removes fails its consumer as an unknown option instead of writing
+bytes nothing reads. Every option is `nullOr` with a null default. Alias keys
+(`aliasFor`) and inert keys have no option. Three hand tables remain: one
+exclusion (`apiKey`, a secret delivered by `ai.kimchi.apiKey`), one refinement
+(`modelRoles`, whose role names and single-string roles come from the sidecar
+while the non-blank and non-empty checks do not), and one description note.
+`report.stale*` lists any row whose path the sidecar lost, and
+`checks/native-options.nix` fails on it. That check also runs the generator over
+a fixture sidecar with a key added, a key removed and an enum widened, and
+requires the option surface to move with it.
+
+The sidecar also drives two rejections and one lookup. Devenv rejects
+`native.settings` keys whose `project` flag is false, because Kimchi merges only
+its project-honored keys from `.kimchi/config.json`. Both backends reject an
+environment variable the sidecar marks not `consumerOverridable`, because
+Kimchi's entry point overwrites it before anything reads it. Every variable the
+factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_NO_UPDATE_CHECK`,
+`KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
+evaluation if the pinned Kimchi no longer reads it.
+
 Every resolved environment name is either published from an annotation or
 listed, with a reason, under `environmentIgnored` in `extract/annotations.json`;
 pi's own names follow Kimchi's `piConfig.name`
-(`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). It uses the
-TypeScript compiler's checker for declared keys and types and syntax tree
-queries for CLI and environment access sites. CLI queries follow
-argument-derived switch cases and called imported helpers, while config queries
-cross-check compiler types against top-level, nested, and array-element runtime
-validation guards. Three additional hash-pinned pi declaration packages resolve
-the settings type's external imports; unresolved named leaves fail extraction.
-The extractor also checks that the hash-pinned source URL names the same release
-tag recorded in provenance; Kimchi's source `package.json` intentionally retains
-the `0.0.0` development placeholder. It is deliberately not consumed by this
-factory yet: the nesting of the two native settings files is an open
-option-shape decision. The committed sidecar is stable input to that later
-decision, not an implicit change to `nativeSettings`, `harnessSettings`, or the
-shared normalized settings pool.
+(`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). The extractor uses
+the TypeScript compiler's checker for declared keys and types and syntax tree
+queries for environment access sites, while config queries cross-check compiler
+types against top-level, nested, and array-element runtime validation guards.
+Three additional hash-pinned pi declaration packages resolve the settings type's
+external imports; unresolved named leaves fail extraction. The extractor also
+checks that the hash-pinned source URL names the same release tag recorded in
+provenance; Kimchi's source `package.json` intentionally retains the `0.0.0`
+development placeholder. It no longer extracts the CLI: the wrapper passes no
+flags, so that surface had no reader.
 
 ## User and project paths (the load-bearing fact)
 
@@ -151,10 +173,11 @@ Retracting the last key deletes the emptied file (`lib/ai/own.py`
 `DocContainer.commit`), so a `{}` never outlives the declaration.
 
 `native.harnessSettings.modelRoles` values are provider/model strings, or for
-delegable roles a non-empty list of them; `orchestrator` and `compactor` take
-one string, and role names are 1.1.30's eight. Any other shape is discarded with
-a runtime warning (`src/extensions/orchestration/model-roles.ts:117-181`), so
-the type and two module assertions reject it at evaluation. Locked by
+delegable roles a non-empty list of them. The role names, and which roles take
+one string (`orchestrator` and `compactor` in 1.1.30), come from the sidecar's
+`modelRoles` properties. Any other shape is discarded with a runtime warning
+(`src/extensions/orchestration/model-roles.ts:117-181`), so the option type
+rejects it at evaluation: an unknown role is an unknown option. Locked by
 `module-kimchi-model-roles-shape`.
 
 Everything else Kimchi delivers except agents (below) is immutable and
@@ -204,9 +227,14 @@ symlinked fixture, a held lock and a stale one.
 The devenv module rejects every `native.harnessSettings` key Kimchi reads only
 from user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
 `modelMetadata`, `modelRoles`, `multiModel`, `resources`,
-`shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set these with Home
-Manager or through Kimchi itself. Home Manager and devenv reconcile the mutable
-JSON documents by owned leaf, preserving runtime-written siblings.
+`shellProfileApiKeyMigrationDismissed`, and `statusLine`. The sidecar's
+`harness.projectTier` carries no per-key scope, so this list stays hand-kept in
+`lib/user-scope-only-harness-settings.nix`. It likewise rejects every
+`native.settings` key whose sidecar `project` flag is false (`gitTokens`,
+`onboarding`, `preferences`, `surveys`, `telemetry`, `teleport` in 1.1.30). Set
+these with Home Manager or through Kimchi itself. Home Manager and devenv
+reconcile the mutable JSON documents by owned leaf, preserving runtime-written
+siblings.
 
 ## Agents: owned, writable copies
 

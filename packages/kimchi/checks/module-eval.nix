@@ -17,7 +17,7 @@
   userScopeOnlyHarnessSettingKeys = import ../lib/user-scope-only-harness-settings.nix;
   userScopeOnlyHarnessSettingValues = {
     defaultProjectTrust = "always";
-    fermentV2 = true;
+    fermentV2.autoResume = true;
     hidePhaseChanges = true;
     modelMetadata.example.description = "Example model";
     modelRoles.builder = "provider/model";
@@ -159,19 +159,19 @@ in {
     module-kimchi-enable-toggles = mkTest "kimchi-enable-toggles" (evalHm {ai.kimchi.enable = true;}).config.ai.kimchi.enable;
 
     # Regression lock for the flattenDotKeys bug: config.json must be NESTED
-    # JSON, never Kiro-style flat dot keys ("telemetry.enabled").
+    # JSON, never Kiro-style flat dot keys ("redaction.enabled").
     module-kimchi-config-json-nested = mkTest "kimchi-config-json-nested" (
       let
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            native.settings.telemetry.enabled = false;
+            native.settings.redaction.enabled = false;
           };
         };
         text = builtins.toJSON (projectConfigDocument result).value;
       in
-        lib.hasInfix ''"telemetry":{"enabled":false}'' text
-        && !lib.hasInfix "telemetry.enabled" text
+        lib.hasInfix ''"redaction":{"enabled":false}'' text
+        && !lib.hasInfix "redaction.enabled" text
     );
 
     # Parity: the same config.json surface triggers the HM activation merge.
@@ -302,7 +302,8 @@ in {
     # Kimchi 1.1.30 accepts a role value only as a provider/model string, or
     # for delegable roles a non-empty list of them
     # (src/extensions/orchestration/model-roles.ts:117-181). Anything else is
-    # discarded with a warning at runtime, so the module rejects it instead.
+    # discarded with a warning at runtime, so the option type rejects it. The
+    # role names, and which roles take one string, come from extracted.json.
     module-kimchi-model-roles-shape = mkTest "kimchi-model-roles-shape" (
       let
         withRoles = modelRoles:
@@ -313,10 +314,11 @@ in {
             };
           };
         valid = evaluated: lib.all (entry: entry.assertion) evaluated.config.assertions;
-        typeChecks = value:
+        rolesTypeCheck = modelRoles:
           (builtins.tryEval (builtins.deepSeq
-            (withRoles {builder = value;}).config.ai.kimchi.native.harnessSettings
+            (withRoles modelRoles).config.ai.kimchi.native.harnessSettings
             true)).success;
+        typeChecks = value: rolesTypeCheck {builder = value;};
         rendered = withRoles {
           builder = ["a/b" "c/d"];
           orchestrator = "a/b";
@@ -334,10 +336,10 @@ in {
         && !(typeChecks [])
         && !(typeChecks [""])
         && !(typeChecks {provider = "a";})
-        && !(valid (withRoles {unknown = "a/b";}))
-        && !(valid (withRoles {orchestrator = ["a/b"];}))
-        && !(valid (withRoles {compactor = ["a/b"];}))
-        && valid (withRoles {compactor = "a/b";})
+        && !(rolesTypeCheck {unknown = "a/b";})
+        && !(rolesTypeCheck {orchestrator = ["a/b"];})
+        && !(rolesTypeCheck {compactor = ["a/b"];})
+        && rolesTypeCheck {compactor = "a/b";}
     );
 
     # Kimchi 1.1.30 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
@@ -369,7 +371,7 @@ in {
               configDir = "custom/kimchi";
               context.filename = "custom.md";
               enable = true;
-              native.settings.telemetry.enabled = false;
+              native.settings.redaction.enabled = false;
             };
             mcpServers.example = {
               package = pkgs.hello;
@@ -381,7 +383,7 @@ in {
         };
         files = result.config.files;
       in
-        (projectConfigDocument result).value.telemetry.enabled
+        (projectConfigDocument result).value.redaction.enabled
         == false
         && result.config.tasks ? "ai:kimchi:mcp-merge"
         && (projectMcpDocument result).value.mcpServers.example.command == "hello"
@@ -856,7 +858,7 @@ in {
     module-kimchi-devenv-exact-cwd-guard = let
       guardedPackages = [
         (mkDevenvKimchiPackage {
-          ai.kimchi.native.settings.telemetry.enabled = false;
+          ai.kimchi.native.settings.redaction.enabled = false;
         })
         (mkDevenvKimchiPackage {
           ai.kimchi.native.harnessSettings.hideThinkingBlock = true;
