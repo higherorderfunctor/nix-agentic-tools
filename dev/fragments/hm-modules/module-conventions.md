@@ -1,10 +1,11 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-22 — native file settings live under
+> **Last verified:** 2026-09-23 — native file settings live under
 > `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Generation-owned documents and directories
-> reconcile through `lib/ai/own.{nix,py}`, document targets may enforce modes,
-> and the delivery-path parity example uses `ai.codex.execpolicyRules`.
+> reconcile through `lib/ai/own.{nix,py}`, a fully retracted empty document is
+> deleted, document targets may enforce modes, and the delivery-path parity
+> example uses `ai.codex.execpolicyRules`.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -214,6 +215,12 @@ previous generation declared and this one DROPPED is retracted, and every
 unowned sibling — a runtime-written `trusted_folders`, an oauth token — is left
 alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no way to
 tell a native key from a Nix key that was deleted.
+
+A target that stops declaring anything deletes its document when the retraction
+leaves it serializing to an empty object: every byte was ours. Leaving `{}`
+behind is not inert, because some readers (Kimchi's permissions) fill defaults
+for any file that exists. A TOML comment the user added keeps the file, and a
+symlink is never touched. Locked by `ai-own-runtime` (`two_phase`, `lazy_toml`).
 
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the

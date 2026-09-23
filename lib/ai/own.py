@@ -369,7 +369,7 @@ class DirContainer:
             )
         target.unlink()
 
-    def commit(self) -> None:
+    def commit(self, retiring: bool = False) -> None:
         """Nothing to do: every unit was published atomically on its own."""
 
 
@@ -464,14 +464,31 @@ class DocContainer:
             else:
                 break
 
-    def commit(self) -> None:
+    def commit(self, retiring: bool = False) -> None:
         """One write of the whole document, or none when nothing moved.
 
         The document lands before its ledger. If the run dies between the two
         atomic replacements the older ledger makes the next one repeat safe,
         idempotent deletes and sets rather than treating an owned leaf as
         unowned.
+
+        `retiring` is a target that declares nothing any more. When its
+        retraction leaves the document serializing to nothing but an empty
+        object, every byte in it was ours, so the file goes rather than
+        staying behind as `{}`. A TOML comment the user added survives
+        serialization and keeps the file. An empty document is
+        not inert everywhere: Kimchi fills its permission scalars' defaults
+        for any project file that exists, so a leftover `{}` would keep
+        overriding the user's `defaultMode` after the declaration is gone
+        (src/extensions/permissions/config.ts:56-60,98-101). A symlink is
+        someone else's publication and is left alone.
         """
+        if retiring and self.serialize(self.document).strip() in ("", "{}"):
+            sweep(self.path.parent)
+            sweep(self.ledger.parent)
+            if self.path.is_file() and not self.path.is_symlink():
+                self.path.unlink()
+            return
         # The reserved sweep, for the two directories this container writes
         # into. HERE rather than in the constructor, which DirContainer can use
         # because only its constructor runs under the lock: a document is also
@@ -766,7 +783,7 @@ def run(plan: Mapping[str, Any], root: Path, state: Path, phase: str) -> None:
             # ordering in one mode and the reverse in the other.
             for target, units, previous, ledger, box in opened:
                 if not units:
-                    box.commit()
+                    box.commit(retiring=True)
                     write_ledger(target["codec"], ledger, {})
 
             # Every assertion.

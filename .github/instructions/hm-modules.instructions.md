@@ -7,11 +7,10 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Generation-owned documents and directories
-> reconcile through `lib/ai/own.{nix,py}`, document targets may enforce modes,
-> and the delivery-path parity example uses `ai.codex.execpolicyRules`.
+> **Last verified:** 2026-09-23 — generation-owned documents and directories
+> reconcile through `lib/ai/own.{nix,py}`, a fully retracted empty document is
+> deleted, document targets may enforce modes, and the delivery-path parity
+> example uses `ai.codex.execpolicyRules`.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -40,11 +39,11 @@ lives flat.
 
 **Keep normalized and native settings separate.** `ai.<runtime>.settings` is a
 closed normalized submodule shared by every runtime. Runtime-shaped passthrough
-belongs under `ai.<runtime>.native.settings`; when wrapping a CLI's native
+belongs under `ai.<runtime>.nativeSettings`; when wrapping a CLI's native
 settings file, use `freeformType = jsonFormat.type` plus explicit `mkOption`
-declarations for known typed keys (for example, `native.settings.model` and
-`native.settings.telemetry`). Unknown native keys flow through freely; known
-keys get type-checked. Do not add runtime-native keys to normalized `settings`.
+declarations for known typed keys (for example, `nativeSettings.model` and
+`nativeSettings.telemetry`). Unknown native keys flow through freely; known keys
+get type-checked. Do not add runtime-native keys to normalized `settings`.
 
 **Defaults via `mkOption { default = ...; }`**, not `mkDefault` in the
 declaration. Reserve `mkDefault` for fanout values in the config block (so
@@ -222,6 +221,12 @@ unowned sibling — a runtime-written `trusted_folders`, an oauth token — is l
 alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no way to
 tell a native key from a Nix key that was deleted.
 
+A target that stops declaring anything deletes its document when the retraction
+leaves it serializing to an empty object: every byte was ours. Leaving `{}`
+behind is not inert, because some readers (Kimchi's permissions) fill defaults
+for any file that exists. A TOML comment the user added keeps the file, and a
+symlink is never touched. Locked by `ai-own-runtime` (`two_phase`, `lazy_toml`).
+
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the
 TUI trust prompt writes ad-hoc `projects.<path>.trust_level` entries through
@@ -274,7 +279,7 @@ while the ecosystem is enabled, whatever the declaration says. An empty
 declaration is not "nothing to do", it is the RETRACTION path: empty settings
 plus no prior ledger is a strict no-op, while empty settings plus a prior ledger
 must run so a later generation retracts the leaves it used to own without
-erasing native state. A `mkIf (cfg.native.settings != {})` around one of these
+erasing native state. A `mkIf (cfg.nativeSettings != {})` around one of these
 writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on it —
 it evaluates every imperative writer under a populated AND an empty declaration.
 
