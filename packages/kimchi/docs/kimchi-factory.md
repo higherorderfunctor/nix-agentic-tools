@@ -6,11 +6,12 @@
 > keeps Kimchi's user paths and devenv its project paths; the mutable JSON
 > documents (`config.json`, harness `settings.json`, `mcp.json`,
 > `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
-> shared delivery router; agents are owned writable copies; portable hooks reach
-> `.kimchi/hooks.json` on devenv only, and their exclusions are silent for the
-> shared pool; a project permissions file resets the user's scalars, and its
-> emptied retraction is deleted; the trust writer takes pi's `trust.json.lock`;
-> root reasoning effort makes the devenv harness file exist. Full lineage:
+> shared delivery router; agents are owned writable copies, copied from a
+> store-path string as from a path; portable hooks reach `.kimchi/hooks.json` on
+> devenv only, and their exclusions are silent for the shared pool; a project
+> permissions file resets the user's scalars, and its emptied retraction is
+> deleted; the trust writer takes pi's `trust.json.lock`; root reasoning effort
+> makes the devenv harness file exist. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -214,7 +215,11 @@ matches its lowercase builtins exactly, `agent-types.ts:12`, so dropping it
 would widen the agent and translating it would fail silently), and root Markdown
 (written for Claude, and Kimchi ignores `name:` and reads `model: sonnet` as a
 model id). Markdown under `ai.kimchi.agents` or `ai.kimchi.agentsDir` is
-Kimchi's own and lands verbatim. Locked by `module-kimchi-agents-rejected`.
+Kimchi's own and lands verbatim. A path-like entry, a store-path string such as
+a flake input's `"${src}/a.md"` included, is copied from that source by
+`lib.ai.agent.isPathLike`; `builtins.isPath` alone would write the path itself
+as the agent's text. Locked by `module-kimchi-agents-rejected` and, for the
+string form on both backends, `module-kimchi-agents`.
 
 ## Hooks: project `hooks.json` only
 

@@ -1,11 +1,11 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-23 — Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`, choosing `source` by Home
-> Manager's `isPathLike`. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; Claude and Kimchi choose
+> an agent's `source` by Home Manager's `isPathLike`. File content at
+> `mkDefault` enables its entry; `content.enable = false` suppresses every
+> content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
+> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
@@ -298,20 +298,21 @@ enabled ecosystem whose native model preserves the option's semantics):
   fields and cannot carry a raw Markdown or path entry. A path-like legacy entry
   — a Nix path, a store-path string such as a flake input's `"${src}/a.md"`, or
   a derivation, i.e. upstream Home Manager's `isPathLike` — stays a file
-  `source` for Claude on both backends (`agent.isPathLike`), but is read into
-  text for Copilot's file writer. Kiro remains excluded, but NOT because its
-  agents are untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's
-  v3 agent schema, and its `prompt` uses the same `text`/`source` content shape.
-  The blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
-  tool names (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`,
-  `@mcp`), so lowering needs a translation table, not a pass-through. Add one
-  and the exclusion can be revisited. Kimchi takes semantic records as
-  frontmatter plus body with no `name:`, and rejects a non-empty `tools` (its
-  lowercase builtin names differ) and root Markdown (it misreads Claude's
-  `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries Kimchi-native Markdown.
-  Its files are the one Markdown surface a harness rewrites (the /agents
-  commands), so they state `method = "copy-ro"` with `mode = "0644"`: `shared`
-  needs a leaf container and a symlink or read-only copy would refuse the write.
+  `source` for Claude and Kimchi on both backends (`agent.isPathLike`), but is
+  read into text for Copilot's file writer. Kiro remains excluded, but NOT
+  because its agents are untyped JSON — `ai.kiro.agents` is a typed record
+  modelling Kiro's v3 agent schema, and its `prompt` uses the same
+  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
+  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
+  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
+  table, not a pass-through. Add one and the exclusion can be revisited. Kimchi
+  takes semantic records as frontmatter plus body with no `name:`, and rejects a
+  non-empty `tools` (its lowercase builtin names differ) and root Markdown (it
+  misreads Claude's `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries
+  Kimchi-native Markdown. Its files are the one Markdown surface a harness
+  rewrites (the /agents commands), so they state `method = "copy-ro"` with
+  `mode = "0644"`: `shared` needs a leaf container and a symlink or read-only
+  copy would refuse the write.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex
