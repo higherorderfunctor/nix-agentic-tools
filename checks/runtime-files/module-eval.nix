@@ -217,6 +217,51 @@ in {
           });
         in
           builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
+        # The consumerOnly* cases have NO generated context, so Kimchi never
+        # registers its generated shared target. A consumer-authored final
+        # AGENTS.md must still arbitrate with Codex's, land alone, suppress,
+        # and reject a text-versus-suppression conflict. Ported from #1849.
+        consumerOnly = evalDevenv {
+          ai = {
+            codex = {
+              enable = true;
+              files."AGENTS.md".content.text = "CONSUMER-ONLY";
+            };
+            kimchi = {
+              enable = true;
+              files."AGENTS.md".content.text = "CONSUMER-ONLY";
+            };
+          };
+        };
+        kimchiConsumerOnly = evalDevenv {
+          ai.kimchi = {
+            enable = true;
+            context.filename = "custom.md";
+            files."AGENTS.md".content.text = "KIMCHI-CONSUMER-ONLY";
+          };
+        };
+        consumerOnlySuppressed = evalDevenv {
+          ai.kimchi = {
+            enable = true;
+            context.filename = "custom.md";
+            files."AGENTS.md".content.enable = false;
+          };
+        };
+        consumerOnlyDivergent = builtins.tryEval (let
+          evaluated = evalDevenv {
+            ai = {
+              codex = {
+                enable = true;
+                files."AGENTS.md".content.text = "CONSUMER-ONLY";
+              };
+              kimchi = {
+                enable = true;
+                files."AGENTS.md".content.enable = false;
+              };
+            };
+          };
+        in
+          builtins.deepSeq evaluated.config.files."AGENTS.md" true);
       in
         replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
@@ -226,6 +271,12 @@ in {
         && deduplicated.config.ai.internal.files."AGENTS.md".content.text == "SHARED-CONSUMER"
         && deduplicated.config.files."AGENTS.md".text == "SHARED-CONSUMER"
         && !divergent.success
+        && consumerOnly.config.files."AGENTS.md".text or null == "CONSUMER-ONLY"
+        && kimchiConsumerOnly.config.files."AGENTS.md".text or null == "KIMCHI-CONSUMER-ONLY"
+        && !(kimchiConsumerOnly.config.files ? "custom.md")
+        && !(consumerOnlySuppressed.config.files ? "AGENTS.md")
+        && !(consumerOnlySuppressed.config.files ? "custom.md")
+        && !consumerOnlyDivergent.success
     );
 
     module-runtime-files-shared-agentsmd-ignores-disabled-runtime = mkTest "runtime-files-shared-agentsmd-ignores-disabled-runtime" (
