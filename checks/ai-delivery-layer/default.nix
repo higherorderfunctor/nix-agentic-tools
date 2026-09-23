@@ -54,8 +54,27 @@
     # `content.text`.
     skills.probe-file = "${./fixtures/probe-skill}/SKILL.md";
   };
+  # Each runtime's native-file options, set to a value no default can produce.
+  # The pools above never reach them, so without this a reader left on a
+  # renamed option path would still evaluate — to the default `{}` — and the
+  # snapshot would show no change while a consumer's native settings were
+  # dropped. With it, a lost reader shows in the before/after diff: either
+  # `SNAPSHOT-NATIVE` leaves an inline entry, or the store path of a file that
+  # embeds it (a TOML config, an activation's ownership plan) changes. Kiro's
+  # `chat.defaultModel` is in the pinned workspace allowlist, so devenv writes
+  # it too.
+  native = {
+    claude.nativeSettings.model = "SNAPSHOT-NATIVE";
+    codex.nativeSettings.model = "SNAPSHOT-NATIVE";
+    copilot.nativeSettings.model = "SNAPSHOT-NATIVE";
+    kimchi = {
+      harnessSettings.resources.SNAPSHOT-NATIVE = true;
+      nativeSettings.llmEndpoint = "SNAPSHOT-NATIVE";
+    };
+    kiro.nativeSettings.chat.defaultModel = "SNAPSHOT-NATIVE";
+  };
   snapshotConfig = runtimes: {
-    ai = pools // lib.genAttrs runtimes (_runtime: {enable = true;});
+    ai = pools // lib.genAttrs runtimes (runtime: {enable = true;} // native.${runtime});
   };
   renderEntry = label: value: "${label} ${builtins.toJSON value}\n";
   renderSink = backend: evaluated: let
@@ -65,6 +84,9 @@
     then
       lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "home.file ${builtins.toJSON path}" entry) config.home.file)
       + lib.concatStrings (lib.mapAttrsToList (name: entry: renderEntry "home.activation ${builtins.toJSON name}" entry) config.home.activation)
+      # Claude's HM settings.json is written by upstream's programs.claude-code
+      # module, so the factory's delivery ends at this option, not home.file.
+      + lib.optionalString (config.programs.claude-code ? settings) (renderEntry "programs.claude-code.settings" config.programs.claude-code.settings)
     else
       lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "files ${builtins.toJSON path}" entry) config.files)
       + lib.concatStrings (lib.mapAttrsToList (name: task: renderEntry "tasks ${builtins.toJSON name}" task) config.tasks)
