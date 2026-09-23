@@ -13,8 +13,10 @@ applyTo: ".envrc,devenv.yaml,lib/traceSource.nix"
 > **Settled — do not relitigate.** Replacing `.envrc` with `devenv hook` was
 > evaluated over four measurement passes and rejected. `devenv hook` notices
 > nothing at all while a shell is active, so the swap trades a next-prompt
-> reload for a manual exit-and-re-enter. Transcripts: `PROBE.md` on branch
-> `probe/devenv-storecopy`, and the header of `lib/traceSource.nix`.
+> reload for a manual exit-and-re-enter. Transcripts:
+> `git show origin/archive/devenv-storecopy-probe:PROBE.md` — an archive ref
+> kept for retrieval, never a branch to merge — and the header of
+> `lib/traceSource.nix`.
 
 **Decision: keep direnv. Do not delete `.envrc`. Do not migrate to
 `devenv hook`.**
@@ -54,12 +56,18 @@ scaffolding sitting next to a newer mechanism.
 
 ## The two mechanisms key on opposite things
 
-| Event                          | direnv            | `devenv hook` |
-| ------------------------------ | ----------------- | ------------- |
-| While a shell is active        | reloads at prompt | never         |
-| `touch`, bytes unchanged       | reloads           | no reload     |
-| Content edit, mtime restored   | no reload         | reloads       |
-| A file ADDED to a watched tree | missed            | caught        |
+The two columns below are not like-for-like in time, so the frame is named in
+each heading rather than left implied. While a shell is live, direnv reloads at
+the next prompt and `devenv hook` does nothing whatsoever — it has no in-shell
+refresh point to compare against. Its only moment is exiting and re-entering,
+where devenv's eval cache decides. So read every row as: what direnv does at
+your next prompt, versus what `devenv hook` does the next time you re-enter.
+
+| Event                          | direnv, at the next prompt | `devenv hook`, at re-entry |
+| ------------------------------ | -------------------------- | -------------------------- |
+| `touch`, bytes unchanged       | reloads                    | no rebuild                 |
+| Content edit, mtime restored   | no reload                  | rebuilds                   |
+| A file ADDED to a watched tree | missed                     | caught                     |
 
 direnv triggers on mtime; `devenv hook` triggers on content, through the eval
 cache. Neither is a superset of the other. The mtime keying is what makes direnv
@@ -71,7 +79,8 @@ direnv's watch list is that module's only remaining consumer. Under
 `devenv hook`, a bare store copy (`env.X = "${./dir}"`) already picks up a
 content edit on re-entry with no help — measured 3/3, and the traced twin
 behaves identically. A migration would therefore turn that module into dead
-code. Its header carries the full reasoning and the ablation recipe; read it
+code. Its header carries the full reasoning, the census of every dependent that
+would go with it, and the ablation recipe for confirming the deletion; read it
 there rather than restating it here.
 
 ## Documented, NOT measured here
