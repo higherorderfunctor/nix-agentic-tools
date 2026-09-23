@@ -273,15 +273,20 @@ in {
       description = ''
         Agent definitions fanned out to Claude and Copilot. Portable semantic
         records (`{ description, instructions, tools?, codex? }`) also fan out
-        to Codex; `tools` is rendered only for Claude and Copilot because Codex
-        has no equivalent agent field. Legacy Markdown/path values remain
-        Claude/Copilot-only and cause a clear assertion when Codex is enabled.
-        Each entry becomes a file:
+        to Codex and Kimchi; `tools` is rendered only for Claude and Copilot
+        because Codex has no equivalent agent field, and Kimchi rejects a
+        non-empty one because its tool names differ. Legacy Markdown/path
+        values remain Claude/Copilot-only and cause a clear assertion when
+        Codex or Kimchi is enabled; `ai.kimchi.agents` takes Kimchi-native
+        Markdown. Each entry becomes a file:
         - Claude  → ~/.claude/agents/<name>.md
         - Copilot → .github/agents/<name>.agent.md (devenv) or
                     ~/.copilot/agents/<name>.md (HM)
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
                     .codex/agents/<name>.toml (devenv)
+        - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
+                    .kimchi/agents/<name>.md (devenv), as a writable owned
+                    copy because Kimchi's /agents commands edit it
         Kiro intentionally excluded, but no longer because its agents are
         untyped JSON — `ai.kiro.agents` is a typed record now. The blocker is
         the tool vocabulary: this pool's `tools` list uses Claude/Copilot tool
@@ -299,9 +304,10 @@ in {
       description = ''
         Directory of legacy `.md` agent files fanned out to Claude and
         Copilot. Each file becomes one entry in `ai.agents` keyed by the
-        basename minus `.md`. Codex is excluded because it requires semantic
-        records rendered as standalone TOML; use explicit `ai.agents` records
-        for three-runtime fanout. Kiro is excluded because these are Markdown
+        basename minus `.md`. Codex and Kimchi are excluded because they
+        require semantic records (standalone TOML for Codex, and Kimchi reads
+        Claude Markdown differently); use explicit `ai.agents` records for
+        wider fanout, or `ai.kimchi.agentsDir` for Kimchi-native files. Kiro is excluded because these are Markdown
         files while Kiro's agents are JSON, and because its tool tags are a
         different vocabulary from the Claude/Copilot tool names this pool
         carries; use `ai.kiro.agentsDir` for that ecosystem.

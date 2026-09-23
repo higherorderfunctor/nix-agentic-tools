@@ -3,8 +3,9 @@
 > **Last verified:** 2026-09-23 — Home Manager keeps Kimchi's user paths and
 > devenv its project paths; all three mutable JSON documents (`config.json`,
 > harness `settings.json`, `mcp.json`) reconcile by leaf through the shared
-> delivery router; portable hooks reach `.kimchi/hooks.json` on devenv only.
-> Full lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> delivery router; agents are owned writable copies; portable hooks reach
+> `.kimchi/hooks.json` on devenv only. Full lineage:
+> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -31,22 +32,23 @@ harness settings. Locked by `module-kimchi-normalized-reasoning-effort`.
 `.config/kimchi`). It does not control devenv project paths. The backend split
 is:
 
-| pool             | Home Manager user path              | devenv project path                    |
-| ---------------- | ----------------------------------- | -------------------------------------- |
-| context          | `<configDir>/harness/AGENTS.md`     | root `AGENTS.md`                       |
-| MCP servers      | `<configDir>/harness/mcp.json`      | `.kimchi/mcp.json`                     |
-| skills           | `<configDir>/harness/skills/<name>` | `.kimchi/skills/<name>`                |
-| Kimchi settings  | `<configDir>/config.json`           | `.kimchi/config.json`                  |
-| harness settings | `<configDir>/harness/settings.json` | `.config/kimchi/harness/settings.json` |
-| hooks            | none (warned exclusion)             | `.kimchi/hooks.json`                   |
+| pool             | Home Manager user path                 | devenv project path                    |
+| ---------------- | -------------------------------------- | -------------------------------------- |
+| context          | `<configDir>/harness/AGENTS.md`        | root `AGENTS.md`                       |
+| MCP servers      | `<configDir>/harness/mcp.json`         | `.kimchi/mcp.json`                     |
+| skills           | `<configDir>/harness/skills/<name>`    | `.kimchi/skills/<name>`                |
+| Kimchi settings  | `<configDir>/config.json`              | `.kimchi/config.json`                  |
+| harness settings | `<configDir>/harness/settings.json`    | `.config/kimchi/harness/settings.json` |
+| agents           | `<configDir>/harness/agents/<name>.md` | `.kimchi/agents/<name>.md`             |
+| hooks            | none (warned exclusion)                | `.kimchi/hooks.json`                   |
 
-Project Kimchi settings, MCP servers, harness settings, and hooks are exact-cwd
-readers. The devenv wrapper rejects launches below the devenv root instead of
-silently missing them. It does not `cd` to the root instead, because that would
-also change the working directory Kimchi's tools see. Context and skills walk
-ancestors, so a devenv that declares none of the exact-cwd files leaves the
-launch directory unrestricted. Locked by `module-kimchi-devenv-exact-cwd-guard`,
-which checks both arms.
+Project Kimchi settings, MCP servers, harness settings, agents, and hooks are
+exact-cwd readers. The devenv wrapper rejects launches below the devenv root
+instead of silently missing them. It does not `cd` to the root instead, because
+that would also change the working directory Kimchi's tools see. Context and
+skills walk ancestors, so a devenv that declares none of the exact-cwd files
+leaves the launch directory unrestricted. Locked by
+`module-kimchi-devenv-exact-cwd-guard`, which checks both arms.
 
 The project harness directory is deliberately fixed. pi derives
 `CONFIG_DIR_NAME` from Kimchi's packaged
@@ -101,14 +103,15 @@ warning (`src/extensions/orchestration/model-roles.ts:117-181`), so the type and
 two module assertions reject it at evaluation. Locked by
 `module-kimchi-model-roles-shape`.
 
-Everything else Kimchi delivers is immutable and symlink-readable, so it takes
-both defaults and states no fact at all. Normalized context renders into the
-`ai.kimchi.files` map on Home Manager. Devenv context joins the single root
-`AGENTS.md` owner shared with Codex and Kiro. In either backend, the generated
-body is a default on the entry's `content` option, so a consumer can replace or
-suppress it. When root and Kimchi-specific context are both configured, their
-bodies concatenate root-first. Home Manager honors `ai.kimchi.context.filename`;
-devenv always writes `AGENTS.md`.
+Everything else Kimchi delivers except agents (below) is immutable and
+symlink-readable, so it takes both defaults and states no fact at all.
+Normalized context renders into the `ai.kimchi.files` map on Home Manager.
+Devenv context joins the single root `AGENTS.md` owner shared with Codex and
+Kiro. In either backend, the generated body is a default on the entry's
+`content` option, so a consumer can replace or suppress it. When root and
+Kimchi-specific context are both configured, their bodies concatenate
+root-first. Home Manager honors `ai.kimchi.context.filename`; devenv always
+writes `AGENTS.md`.
 
 Project config, MCP, skills, and harness settings remain inert until project
 trust is established. Interactive trust persists in the user's harness
@@ -125,6 +128,34 @@ user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
 `shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set these with Home
 Manager or through Kimchi itself. Home Manager and devenv reconcile the mutable
 JSON documents by owned leaf, preserving runtime-written siblings.
+
+## Agents: owned, writable copies
+
+Kimchi 1.1.30 loads `<agentDir>/agents/*.md` and a trusted project's
+`.kimchi/agents/*.md`, naming each agent by its filename
+(`src/extensions/agents/personas/custom-agents.ts:21-85`). Its /agents commands
+write those same files: Edit, Disable and Enable `writeFileSync` in place, and
+Create and Eject add new ones (`src/extensions/agents/index.ts:2556-2874`). A
+store symlink would make each of those fail with EROFS, and the layer's default
+read-only copy with EACCES. The rule's harness-writes answer, `shared`, owns
+leaves inside a JSON or TOML container, which Markdown lacks. So each agent file
+states `method = "copy-ro"` and `mode = "0644"`, at `mkDefault`: one real,
+writable file per agent in a real directory, owned by the `kimchiAgents`
+writer's `dir` ledger (`ai:kimchi:agents` on devenv, plus `kimchiAgentsPrune` on
+HM). An edit works until the next activation, which backs it up and restores the
+declaration; a file Kimchi created is an unowned sibling and is never touched.
+To turn a declared agent off, set it to null. Locked by `module-kimchi-agents`
+and `module-kimchi-agents-runtime`, which runs the real writers and edits the
+file.
+
+A portable record renders as `description:` frontmatter plus the instructions
+body, with no `name:`. Two inputs fail evaluation, naming `ai.kimchi.agents` as
+the remedy: a record with a non-empty `tools` list (Claude/Copilot names; Kimchi
+matches its lowercase builtins exactly, `agent-types.ts:12`, so dropping it
+would widen the agent and translating it would fail silently), and root Markdown
+(written for Claude, and Kimchi ignores `name:` and reads `model: sonnet` as a
+model id). Markdown under `ai.kimchi.agents` or `ai.kimchi.agentsDir` is
+Kimchi's own and lands verbatim. Locked by `module-kimchi-agents-rejected`.
 
 ## Hooks: project `hooks.json` only
 
@@ -151,9 +182,9 @@ Claude Code hook adapter, a shared hook that also reaches
 
 ## Normalized pool capability boundary
 
-The app record's `supportedPools` is exactly `context`, `environmentVariables`,
-`hooks`, `mcpServers`, `settings`, and `skills`. Kimchi has no native
-path-scoped rules, portable agents, LSP, or shell-selection landing key. Those
+The app record's `supportedPools` is exactly `agents`, `context`,
+`environmentVariables`, `hooks`, `mcpServers`, `settings`, and `skills`. Kimchi
+has no native path-scoped rules, LSP, or shell-selection landing key. Those
 per-runtime normalized options are absent; root values for them remain valid and
 silently degrade for Kimchi. `settings` is the uniform closed normalized
 namespace; its current field lowers to `defaultThinkingLevel` in the mutable
