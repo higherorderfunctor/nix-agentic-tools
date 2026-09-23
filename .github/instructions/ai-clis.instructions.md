@@ -9,7 +9,7 @@ applyTo: "packages/copilot-cli/checks/copilot-wrapper-argv.nix,packages/chatgpt-
 
 > **Last verified:** 2026-09-23 — LSP config is delivered at repository scope
 > through `<projectDir>/lsp.json` (copilot-cli 1.0.88), so only `settings.json`
-> remains inert under `configDir`.
+> remains inert under `configDir`; server names Copilot rejects throw at eval.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -169,8 +169,11 @@ That trace predates repository-scope LSP. copilot-cli 1.0.88 also loads
 ("Repository-level configuration"), `app.js` calls
 `lspConfigsLoadRawProjectConfig`, and the native `runtime.node` carries the path
 string. Both LSP files take the same `{"lspServers": {…}}` envelope; the
-validator rejects a bare per-server map (`lspServers must be an object`) and
-marks `fileExtensions` Required.
+validator rejects a bare per-server map (`lspServers must be an object`), marks
+`fileExtensions` Required, and rejects any server name that is empty or holds a
+character outside ASCII letters, digits, `_` and `-` ("LSP server name must only
+contain alphanumeric characters, underscores, and hyphens"; probed against
+`settingsParseLspServersConfig` in the 1.0.88 `runtime.node`).
 
 ### Why not `COPILOT_HOME`
 
@@ -250,9 +253,10 @@ with it. The exclusion is therefore documented (option description + this
 fragment), matching how Codex's missing LSP surface is handled — excluded and
 documented, not asserted.
 
-The one LSP throw is different in kind: a server Copilot receives with empty
-`extensions` throws, because Copilot requires `fileExtensions` and would reject
-the whole file. That names a fixable entry (set `extensions`, or
+The two LSP throws are different in kind: a server Copilot receives with empty
+`extensions`, or with a name its validator rejects (a quoted attribute such as
+`"nix.lsp"`), throws, because Copilot would otherwise reject the whole file.
+Each names a fixable entry (set `extensions` or rename the server, or
 `ai.copilot.lspServers.<name> = null`), not an undeliverable surface.
 
 ### What would change this decision

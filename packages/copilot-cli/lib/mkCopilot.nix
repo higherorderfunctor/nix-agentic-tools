@@ -135,7 +135,7 @@ in
       lspServers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule);
         default = {};
-        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspFile` into the `lspServers` envelope: `<configDir>/lsp-config.json` under Home Manager, `<projectDir>/lsp.json` under devenv. Every entry must set `extensions`, because Copilot requires `fileExtensions`.";
+        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspFile` into the `lspServers` envelope: `<configDir>/lsp-config.json` under Home Manager, `<projectDir>/lsp.json` under devenv. Every entry must set `extensions`, because Copilot requires `fileExtensions`, and its name must be non-empty ASCII letters, digits, `_` and `-`, because Copilot rejects the whole file otherwise.";
       };
       # Baked into the symlinkJoin wrapper on BOTH backends. devenv used to
       # populate its native `env` attrset instead, which exported them into the
