@@ -7,11 +7,11 @@ applyTo: "devenv.nix,packages/chatgpt-codex/lib/mkCodex.nix,packages/claude-code
 
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-22 — Kimchi's devenv facet writes native project
-> paths and guards the three exact-cwd readers. Kimchi keeps reading user
-> config, and `ai.kimchi.configDir` remains a Home Manager output option.
-> Copilot is the only runtime that needs an additive flag instead of native
-> project merge.
+> **Last verified:** 2026-09-23 — Kimchi's devenv facet writes native project
+> paths and guards the three exact-cwd readers only when one is declared. Kimchi
+> keeps reading user config, and `ai.kimchi.configDir` remains a Home Manager
+> output option. Copilot is the only runtime that needs an additive flag instead
+> of native project merge.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
 > three factories side by side: no `ai.*` runtime redirects its config root, on
@@ -110,9 +110,9 @@ Kimchi also has two path-lookup modes. Project config, MCP servers, and harness
 settings resolve only below the process's exact working directory; project
 context and skills walk ancestors. When devenv delivers any exact-cwd surface,
 the wrapper rejects launches below the devenv root instead of silently missing
-the file. The typed native settings include a default `skillPaths = []`, so
-every enabled devenv Kimchi currently owns project config and receives this
-root-only guard.
+the file. With none of them declared the wrapper leaves the launch directory
+unrestricted. `skillPaths` defaults to unset, because Kimchi reads a project
+list in place of the user's global one.
 
 ### What would change this decision
 
