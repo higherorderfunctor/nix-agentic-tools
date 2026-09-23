@@ -1,14 +1,16 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-23 — Home Manager keeps Kimchi's user paths and
-> devenv its project paths; the mutable JSON documents (`config.json`, harness
-> `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
-> reconcile by leaf through the shared delivery router; agents are owned
-> writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only, and
-> their exclusions are silent for the shared pool; a project permissions file
-> resets the user's scalars, and its emptied retraction is deleted; the trust
-> writer takes pi's `trust.json.lock`; root reasoning effort makes the devenv
-> harness file exist. Full lineage:
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, and Kimchi's native files are declared under
+> `ai.kimchi.native` (`native.settings`, `native.harnessSettings`). Home Manager
+> keeps Kimchi's user paths and devenv its project paths; the mutable JSON
+> documents (`config.json`, harness `settings.json`, `mcp.json`,
+> `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
+> shared delivery router; agents are owned writable copies; portable hooks reach
+> `.kimchi/hooks.json` on devenv only, and their exclusions are silent for the
+> shared pool; a project permissions file resets the user's scalars, and its
+> emptied retraction is deleted; the trust writer takes pi's `trust.json.lock`;
+> root reasoning effort makes the devenv harness file exist. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -128,11 +130,11 @@ user's `defaultMode` inside that project, which the option description states.
 Retracting the last key deletes the emptied file (`lib/ai/own.py`
 `DocContainer.commit`), so a `{}` never outlives the declaration.
 
-`harnessSettings.modelRoles` values are provider/model strings, or for delegable
-roles a non-empty list of them; `orchestrator` and `compactor` take one string,
-and role names are 1.1.30's eight. Any other shape is discarded with a runtime
-warning (`src/extensions/orchestration/model-roles.ts:117-181`), so the type and
-two module assertions reject it at evaluation. Locked by
+`native.harnessSettings.modelRoles` values are provider/model strings, or for
+delegable roles a non-empty list of them; `orchestrator` and `compactor` take
+one string, and role names are 1.1.30's eight. Any other shape is discarded with
+a runtime warning (`src/extensions/orchestration/model-roles.ts:117-181`), so
+the type and two module assertions reject it at evaluation. Locked by
 `module-kimchi-model-roles-shape`.
 
 Everything else Kimchi delivers except agents (below) is immutable and
@@ -179,8 +181,8 @@ writes only inside the project. Locked by `module-kimchi-project-trust` and
 `module-kimchi-project-trust-runtime`, which runs the real writer against a
 symlinked fixture, a held lock and a stale one.
 
-The devenv module rejects every `harnessSettings` key Kimchi reads only from
-user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
+The devenv module rejects every `native.harnessSettings` key Kimchi reads only
+from user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
 `modelMetadata`, `modelRoles`, `multiModel`, `resources`,
 `shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set these with Home
 Manager or through Kimchi itself. Home Manager and devenv reconcile the mutable

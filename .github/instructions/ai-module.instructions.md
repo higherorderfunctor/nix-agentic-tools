@@ -7,12 +7,18 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — a root request nothing per-runtime can
-> withdraw (excluded or non-keyed pool) never warns; portable agents reach
-> Kimchi as owned writable copies and portable hooks reach its project
-> `hooks.json` on devenv; reasoning effort lowers to Claude, Codex, and Kimchi;
-> authored prose and final delivery share one priority-aware text-source record
-> with enable semantics.
+> **Last verified:** 2026-09-23 — Claude devenv delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`, choosing `source` by Home
+> Manager's `isPathLike`. File content at `mkDefault` enables its entry;
+> `content.enable = false` suppresses every content form. The builder entry
+> point is `lib.ai.app.mkRuntime`. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). A root request nothing per-runtime can withdraw
+> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
+> owned writable copies and portable hooks reach its project `hooks.json` on
+> devenv. Reasoning effort lowers to Claude, Codex, and Kimchi; authored prose
+> and final delivery share one priority-aware text-source record with enable
+> semantics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -198,7 +204,7 @@ The ai module fans out TWO kinds of configuration:
   rejects the configuration instead of silently losing the grant. Direct payload
   packages may declare `passthru.kiroFhsSandbox = false`; the overlay does this
   for darwin and pre-split nixpkgs.
-- `ai.codex.nativeSettings` — typed stable keys plus a TOML-compatible native
+- `ai.codex.native.settings` — typed stable keys plus a TOML-compatible native
   freeform tail. Its model defaults to `gpt-6-astra` and reasoning effort to
   `xhigh` on both backends. Explicit native values override these defaults;
   normalized reasoning effort also overrides the native option default. Setting
@@ -250,13 +256,13 @@ The ai module fans out TWO kinds of configuration:
   the two other required native fields. `instructions.source` reads a packaged
   file into that text. Reserved core fields cannot be redefined in `codex`.
   Global concurrency, model/effort defaults, and interruption behavior live in
-  the typed `ai.codex.nativeSettings.agents` table.
+  the typed `ai.codex.native.settings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
   appended after portable `ai.hooks` groups and emitted in adjacent
   `hooks.json`. Typed native additions include `commandWindows`,
   `statusMessage`, and `additionalContextLimit`; a JSON-compatible tail remains
   for forward compatibility. Typed hooks cannot coexist with inline
-  `ai.codex.nativeSettings.hooks` at one layer because Codex loads both
+  `ai.codex.native.settings.hooks` at one layer because Codex loads both
   additively and warns rather than applying normal config precedence. Nix
   ownership does not make these native-policy hooks: Codex still requires
   `/hooks` review and hash-based trust before user/project handlers run.
@@ -293,21 +299,26 @@ enabled ecosystem whose native model preserves the option's semantics):
   allowlist; `null` and `[]` both omit the header. Codex deliberately omits it
   because its standalone agent format has no equivalent field. Codex fails
   loudly on a legacy raw entry instead of pretending Markdown is a valid agent
-  config. Legacy Nix paths stay path-valued for Claude's native option but are
-  read into text for Copilot's file writer. Kiro remains excluded, but NOT
-  because its agents are untyped JSON — `ai.kiro.agents` is a typed record
-  modelling Kiro's v3 agent schema, and its `prompt` uses the same
-  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
-  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
-  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
-  table, not a pass-through. Add one and the exclusion can be revisited. Kimchi
-  takes semantic records as frontmatter plus body with no `name:`, and rejects a
-  non-empty `tools` (its lowercase builtin names differ) and root Markdown (it
-  misreads Claude's `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries
-  Kimchi-native Markdown. Its files are the one Markdown surface a harness
-  rewrites (the /agents commands), so they state `method = "copy-ro"` with
-  `mode = "0644"`: `shared` needs a leaf container and a symlink or read-only
-  copy would refuse the write.
+  config. Claude HM hands entries to `programs.claude-code.agents`; Claude
+  devenv writes `.claude/agents/<name>.md` itself through the same renderer,
+  because upstream devenv `claude.code.agents` requires typed description/prompt
+  fields and cannot carry a raw Markdown or path entry. A path-like legacy entry
+  — a Nix path, a store-path string such as a flake input's `"${src}/a.md"`, or
+  a derivation, i.e. upstream Home Manager's `isPathLike` — stays a file
+  `source` for Claude on both backends (`agent.isPathLike`), but is read into
+  text for Copilot's file writer. Kiro remains excluded, but NOT because its
+  agents are untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's
+  v3 agent schema, and its `prompt` uses the same `text`/`source` content shape.
+  The blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
+  tool names (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`,
+  `@mcp`), so lowering needs a translation table, not a pass-through. Add one
+  and the exclusion can be revisited. Kimchi takes semantic records as
+  frontmatter plus body with no `name:`, and rejects a non-empty `tools` (its
+  lowercase builtin names differ) and root Markdown (it misreads Claude's
+  `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries Kimchi-native Markdown.
+  Its files are the one Markdown surface a harness rewrites (the /agents
+  commands), so they state `method = "copy-ro"` with `mode = "0644"`: `shared`
+  needs a leaf container and a symlink or read-only copy would refuse the write.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex
@@ -372,7 +383,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   case to native snake case. Literal `httpHeaders` are store-visible;
   `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
   values never enter generated TOML. Direct
-  `ai.codex.nativeSettings.mcp_servers` cannot be combined with either typed
+  `ai.codex.native.settings.mcp_servers` cannot be combined with either typed
   pool because their table ownership would be ambiguous. Credential-injecting
   `proxy.enable` entries lower at their declaration scope before pool merging: a
   used top-level declaration owns one shared managed proxy and only its
@@ -389,7 +400,7 @@ enabled ecosystem whose native model preserves the option's semantics):
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
   is a different thing and still is — that filters what SPAWNED commands
   inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.nativeSettings.env` is its
+  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
   native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
@@ -474,8 +485,10 @@ backend root (HOME for Home Manager, project root for devenv). An entry
 DESCRIBES a file rather than lowering one: `content` carries the bytes,
 `facts.{harnessWrites,symlinkReadable}` carry what the CLI does with the path,
 and `entry` / `ledger` name the writer that materializes it when it is not a
-symlink. `content.enable = false` suppresses generated text/source bytes while
-retaining an inspectable entry record.
+symlink. `content.enable = false`, defined at any priority, omits the file
+whatever supplies its bytes — `text`, `source`, `run` or `value` — while
+retaining an inspectable entry record. It is the only suppression lever; the old
+`null` tombstone is gone.
 
 `content` uses the repository's shared `{ enable, text, source }` record. `text`
 and `source` arbitrate by module priority: a strictly stronger arm wins, while
@@ -483,6 +496,14 @@ equal-priority definitions fail naming both paths. Delivery adds `value`
 (structured, rendered by `format`) and `run` (a body that writes the file when
 the writer runs) as explicit alternatives; validation permits at most one live
 form.
+
+A file record is built with `enableOnMkDefault`, so `text` or `source` defined
+at ANY priority, a leaf `mkDefault` included, enables it. Package prose records
+elsewhere stay dormant at `mkDefault`; a file has no dormant prose, and a leaf
+default is how a downstream module offers an overridable file. Empty inline
+`text` is not content: an entry with no content and no `enable` definition fails
+evaluation naming the path, rather than silently writing nothing. Spell an empty
+file as a `source`. The devshell `files.<name>` map follows the same rules.
 
 That is the part most likely to be remembered wrongly, because it replaced a
 whole-entry contract:
@@ -546,9 +567,14 @@ produces their CommonMark/JSON references. The old mdbook/NuschtOS site is gone,
 but `checks/modules/options-doc.nix` deliberately builds both renderings so this
 consumer-facing contract cannot become dead code. It compares every `ai.codex.*`
 option name, checks the expected top-level surface, and verifies that
-shared-pool descriptions discuss Codex. README.md remains generated from
-`dev/generate.nix`; `checks/instructions/instructions-drift.nix` prevents its
-checked-in capability matrix from diverging from that source.
+shared-pool descriptions discuss Codex. It also requires every runtime's native
+file option under `ai.<runtime>.native` and rejects the retired flat
+`nativeSettings`/`harnessSettings` names. Each guard runs through a shell helper
+that names the option and the rendering it failed on, and reports a jq or grep
+error as an error, so an unreadable rendering cannot pass an absence guard.
+README.md remains generated from `dev/generate.nix`;
+`checks/instructions/instructions-drift.nix` prevents its checked-in capability
+matrix from diverging from that source.
 
 ### Verifying fanout works
 
@@ -577,7 +603,7 @@ trees. A value set in the HM-imported copy of a module is visible only to HM's
 eval. Devenv's eval has a completely separate `config.ai.skills` (etc.) that
 doesn't see the HM contribution.
 
-**Consequence for package modules outside `mkAiApp`** (including the
+**Consequence for package modules outside `mkRuntime`** (including the
 `mkSkillPackageModule` consumers): when a package contributes to `ai.skills` /
 `ai.rules` / etc., the contribution MUST happen in the module's appropriate
 backend sibling. If the content is HM-scope (personal user config), put it in
@@ -586,10 +612,10 @@ Contributing in one and expecting the other to pick it up will silently fail —
 the contribution just doesn't land in the other eval. A program option tree can
 make enablement structural without changing that per-evaluation ownership.
 
-This is a different discipline from the AI CLI factories (`mkAiApp`), which have
-structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that force
-per-backend separation by construction. Plain modules have no such guardrail —
-authors must decide scope consciously.
+This is a different discipline from the AI CLI factories (`mkRuntime`), which
+have structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that
+force per-backend separation by construction. Plain modules have no such
+guardrail — authors must decide scope consciously.
 
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
@@ -714,9 +740,11 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-21 — rules and context use entry-local `enable`
-> suppression, and Semble's CLI rule uses text-source priority arbitration.
-> Delivery entries default `content` alone; `null` absorbs at equal priority.
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Rules and context use
+> entry-local `enable` suppression, and Semble's CLI rule uses text-source
+> priority arbitration. Delivery entries default `content` alone, and
+> `content.enable = false` suppresses every content form.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -731,22 +759,22 @@ This matrix is the authoritative cross-runtime merge and fanout contract. Any
 change to one of these boundaries must update the corresponding row in the same
 commit.
 
-| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                                   |
-| --- | ------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                         |
-| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                                       |
-| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                                        |
-| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                             |
-| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                             |
-| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                                      |
-| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                                      |
-| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                          |
-| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                          |
-| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                                      |
-| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses text/source bytes with `content.enable = false`. |
-| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                             |
-| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                                     |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                         |
+| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                          |
+| --- | ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                |
+| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                              |
+| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
+| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
+| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
+| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
+| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
+| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
+| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
+| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                             |
+| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the file with `content.enable = false`. |
+| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                    |
+| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                            |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit used to be
 the complete rendered native file; it is now the delivery entry's fields, and
@@ -818,7 +846,7 @@ claim the same managed-proxy identity. A top-level owner inherited by no enabled
 capable runtime is not materialized. The shared owner aggregator dynamically
 discovers every runtime option subtree carrying the internal normalized-MCP
 capability marker. Do not infer capability from the `mcpServers` name alone: the
-generic public `mkAiApp` factory permits an unrelated same-named native option
+generic public `mkRuntime` factory permits an unrelated same-named native option
 when the normalized pool is unsupported.
 
 ### Package ownership rule
@@ -888,9 +916,10 @@ runs before a type merges: a whole-entry `mkDefault` is discarded outright by a
 consumer who sets only `method` or a fact, and the survivor has no bytes at all.
 Two consequences follow.
 
-- The map has no nullable entry branch. A consumer suppresses generated
-  text/source bytes with `content.enable = false`, so ordinary submodule
-  priority arbitration remains available and the final record stays inspectable.
+- The map has no nullable entry branch. A consumer suppresses a generated file —
+  text, source, `run` or `value` alike — with `content.enable = false`, so
+  ordinary submodule priority arbitration remains available and the final record
+  stays inspectable.
 - An entry whose content decision reads its own rendered body cannot move its
   priority down at all: the module system forces the entry's shape long before
   it knows whether the definition survives, so the read would build a source the
@@ -1091,8 +1120,10 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-22 — context and rules retain text-source priority
-> and enable semantics; L5 is the delivery router plus one adapter per backend.
+> **Last verified:** 2026-09-22 — native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Context and rules retain text-source priority and
+> enable semantics; L5 is the delivery router plus one adapter per backend.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1185,7 +1216,7 @@ path types".
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
   may support only a subset of fields. Runtime-shaped passthrough is separate
-  under `nativeSettings` and is not a normalized pool.
+  under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -1270,16 +1301,19 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-16 — resolves #877: Kiro's FHS root supplies bash
-> but hides a host zsh, and that does not justify a runtime-specific implicit
-> shell default. `ai.shell` stays null; see below for the standing decision and
-> the override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
+> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Resolves #877: Kiro's FHS root supplies bash but
+> hides a host zsh, and that does not justify a runtime-specific implicit shell
+> default. `ai.shell` stays null; see below for the standing decision and the
+> override rule it shares with normalized `settings`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
 ### One record is the capability source
 
-Every `mkAiApp` record declares the normalized pools its runtime exposes in
+Every `mkRuntime` record declares the normalized pools its runtime exposes in
 `supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
 places:
 
@@ -1300,7 +1334,7 @@ it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
 A same-named native option does not imply normalized-pool support.
-Runtime-shaped passthrough now lives under `nativeSettings`, independently of
+Runtime-shaped passthrough now lives under `native.settings`, independently of
 the capability list. Normalized `settings` is the deliberate uniform exception:
 all five runtimes list it so the same closed schema is available at every
 runtime scope, even when a particular field currently has a lossless native
@@ -1323,9 +1357,9 @@ Normalized settings use that helper per field. For example,
 `ai.claude.settings.reasoningEffort = "low"` overrides a root
 `ai.settings.reasoningEffort = "high"` for Claude only; Codex still inherits
 `"high"`. A null runtime value inherits the root. This is distinct from
-`nativeSettings`, which carries runtime-shaped passthrough and typed-native keys
-and participates in native option-priority rules only after normalized values
-have been resolved.
+`native.settings`, which carries runtime-shaped passthrough and typed-native
+keys and participates in native option-priority rules only after normalized
+values have been resolved.
 
 `lib.ai.program.mkProgram` applies the same rule to every leaf of a program
 specification. Root declarations retain their ordinary types and defaults;
@@ -1344,16 +1378,16 @@ feature default without replacing unrelated leaves.
 only when `shell` appears in the app record's `supportedPools`. There is no
 sibling shell-specific capability flag.
 
-| runtime | knob                       | delivery                               |
-| ------- | -------------------------- | -------------------------------------- |
-| Claude  | `CLAUDE_CODE_SHELL`        | `nativeSettings.env` → `settings.json` |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`               |
-| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`              |
-| Copilot | **unknown — verified gap** | excluded                               |
-| Kimchi  | unassessed                 | excluded                               |
+| runtime | knob                       | delivery                                |
+| ------- | -------------------------- | --------------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`        | `native.settings.env` → `settings.json` |
+| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                |
+| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`               |
+| Copilot | **unknown — verified gap** | excluded                                |
+| Kimchi  | unassessed                 | excluded                                |
 
-Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
-because the issue that requested this never mentioned it.
+Four runtimes were asked for; five go through `mkRuntime`. Kimchi is easy to
+miss because the issue that requested this never mentioned it.
 
 ### Kiro's FHS root does not change the shell default
 
@@ -1447,7 +1481,7 @@ three runtimes demonstrably do not perform.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
-  has no wrapper here and `nativeSettings.env` is its native equivalent.
+  has no wrapper here and `native.settings.env` is its native equivalent.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more

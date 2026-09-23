@@ -87,7 +87,7 @@
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
-            harnessSettings = lib.setAttrByPath [key] userScopeOnlyHarnessSettingValues.${key};
+            native.harnessSettings = lib.setAttrByPath [key] userScopeOnlyHarnessSettingValues.${key};
           };
         };
         failed = builtins.filter (entry: !entry.assertion) rejected.config.assertions;
@@ -100,14 +100,14 @@
           (evalHm {
             ai.kimchi = {
               enable = true;
-              harnessSettings = lib.setAttrByPath [key] userScopeOnlyHarnessSettingValues.${key};
+              native.harnessSettings = lib.setAttrByPath [key] userScopeOnlyHarnessSettingValues.${key};
             };
           }).config.home.activation.kimchiHarnessSettingsMerge
           true);
         acceptedAttempt = builtins.tryEval (builtins.deepSeq (checkModuleAssertions (evalDevenv {
             ai.kimchi = {
               enable = true;
-              harnessSettings.hideThinkingBlock = true;
+              native.harnessSettings.hideThinkingBlock = true;
             };
           }))
           true);
@@ -258,7 +258,7 @@ in {
           ai = {
             kimchi = {
               enable = true;
-              harnessSettings.defaultThinkingLevel = "low";
+              native.harnessSettings.defaultThinkingLevel = "low";
             };
             settings.reasoningEffort = "high";
           };
@@ -309,13 +309,13 @@ in {
           evalHm {
             ai.kimchi = {
               enable = true;
-              harnessSettings.modelRoles = modelRoles;
+              native.harnessSettings.modelRoles = modelRoles;
             };
           };
         valid = evaluated: lib.all (entry: entry.assertion) evaluated.config.assertions;
         typeChecks = value:
           (builtins.tryEval (builtins.deepSeq
-            (withRoles {builder = value;}).config.ai.kimchi.harnessSettings
+            (withRoles {builder = value;}).config.ai.kimchi.native.harnessSettings
             true)).success;
         rendered = withRoles {
           builder = ["a/b" "c/d"];
@@ -356,8 +356,8 @@ in {
           });
       in
         !((withPaths {}).value ? skillPaths)
-        && (withPaths {nativeSettings.skillPaths = [];}).value.skillPaths == []
-        && (withPaths {nativeSettings.skillPaths = [".custom/skills"];}).value.skillPaths == [".custom/skills"]
+        && (withPaths {native.settings.skillPaths = [];}).value.skillPaths == []
+        && (withPaths {native.settings.skillPaths = [".custom/skills"];}).value.skillPaths == [".custom/skills"]
     );
 
     module-kimchi-devenv-project-paths = mkTest "kimchi-devenv-project-paths" (
@@ -369,7 +369,7 @@ in {
               configDir = "custom/kimchi";
               context.filename = "custom.md";
               enable = true;
-              nativeSettings.telemetry.enabled = false;
+              native.settings.telemetry.enabled = false;
             };
             mcpServers.example = {
               package = pkgs.hello;
@@ -856,10 +856,10 @@ in {
     module-kimchi-devenv-exact-cwd-guard = let
       guardedPackages = [
         (mkDevenvKimchiPackage {
-          ai.kimchi.nativeSettings.telemetry.enabled = false;
+          ai.kimchi.native.settings.telemetry.enabled = false;
         })
         (mkDevenvKimchiPackage {
-          ai.kimchi.harnessSettings.hideThinkingBlock = true;
+          ai.kimchi.native.harnessSettings.hideThinkingBlock = true;
         })
         (mkDevenvKimchiPackage {
           ai.mcpServers.example = {
