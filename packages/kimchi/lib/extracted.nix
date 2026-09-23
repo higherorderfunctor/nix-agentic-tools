@@ -10,7 +10,8 @@
 #
 #   config       → `ai.kimchi.native.settings` (config.json), plus the keys a
 #                  project config.json does not honor (devenv rejects them)
-#   harness      → `ai.kimchi.native.harnessSettings` (harness/settings.json)
+#   harness      → `ai.kimchi.native.harnessSettings` (harness/settings.json),
+#                  plus the keys a project harness file does not honor
 #   environment  → the variables Kimchi overwrites at launch (rejected), and a
 #                  lookup that validates every variable the factory sets itself
 #
@@ -221,15 +222,18 @@
   stale = table: lib.sort (a: b: a < b) (lib.filter (path: !(knownPath path)) (builtins.attrNames table));
 
   variables = extracted.environment.variables;
+  userScopeKeys = keys: builtins.attrNames (lib.filterAttrs (_: node: !(node.project or false)) keys);
 in {
   settingsOptions = generated.settings.options;
   harnessSettingsOptions = generated.harnessSettings.options;
 
-  # config.json keys a project config.json does not honor. Kimchi merges only
-  # `config.projectTier.honoredKeys` from `.kimchi/config.json`, so devenv
-  # rejects the rest rather than writing bytes nothing reads.
-  userScopeConfigKeys =
-    builtins.attrNames (lib.filterAttrs (_: node: !(node.project or false)) extracted.config.keys);
+  # Keys a project file does not honor, so devenv rejects them rather than
+  # writing bytes nothing reads. config.json: Kimchi merges only
+  # `config.projectTier.honoredKeys` from `.kimchi/config.json`. Harness
+  # settings.json: pi merges the project file only for keys it reads through
+  # its merged settings, and Kimchi reads its own additions from the user file.
+  userScopeConfigKeys = userScopeKeys extracted.config.keys;
+  userScopeHarnessKeys = userScopeKeys extracted.harness.keys;
 
   # Variables Kimchi's entry point overwrites before anything reads them,
   # with the sidecar's reason. A value set for one of these is never read.

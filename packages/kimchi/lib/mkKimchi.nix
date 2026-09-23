@@ -19,7 +19,6 @@
   dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
-  userScopeOnlyHarnessSettingKeys = import ./user-scope-only-harness-settings.nix;
   # Native option types, project-tier keys and environment names, all read
   # from the committed sidecar (never passthru.extracted: that is IFD).
   sidecar = import ./extracted.nix {
@@ -236,7 +235,7 @@
       if isDevenv
       then ".kimchi/agents"
       else "${harness}/agents";
-    userScopeOnlyHarnessSettings = lib.intersectLists userScopeOnlyHarnessSettingKeys (builtins.attrNames filteredHarnessSettings);
+    userScopeOnlyHarnessSettings = lib.intersectLists sidecar.userScopeHarnessKeys (builtins.attrNames filteredHarnessSettings);
     userScopeConfigSettings = lib.intersectLists sidecar.userScopeConfigKeys (builtins.attrNames filteredSettings);
     fixedEnvironmentVariables = builtins.attrNames (builtins.intersectAttrs sidecar.fixedEnvironmentVariables (lib.filterAttrs (_: value: value != null) mergedEnvironmentVariables));
     # Home Manager's ledger identity predates project-path delivery and is an
