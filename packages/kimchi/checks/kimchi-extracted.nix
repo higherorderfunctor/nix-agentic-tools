@@ -99,6 +99,15 @@
           'apiKey: projectExtras.apiKey ?? globalExtras.apiKey' 'apiKey: globalExtras.apiKey'
         mutant "$pi" pi-app-name dist/config.js \
           'export const APP_NAME = piConfigName || "pi";' 'export const APP_NAME = "pi";'
+        mutant "$pi" pi-scope-merged dist/core/settings-manager.js \
+          'const value = this.globalSettings.defaultProjectTrust;' 'const value = this.settings.defaultProjectTrust;'
+        # pi's own bundle repeats main.js, so every copy loses the read.
+        mutant "$pi" pi-scope-unread dist/main.js \
+          'getGlobalSettings().httpProxy' 'getGlobalSettings().httpProxyProbe'
+        for bundled in $(grep -rlF 'getGlobalSettings().httpProxy' "$TMPDIR/pi-scope-unread-source/dist/bundle"); do
+          substituteInPlace "$bundled" \
+            --replace-fail 'getGlobalSettings().httpProxy' 'getGlobalSettings().httpProxyProbe'
+        done
         mutant "$pi" pi-definition-collision dist/core/settings-manager.d.ts \
           '    compaction?: CompactionSettings;' $'    compaction?: CompactionSettings;\n    compactionProbe?: import("./compaction/compaction.js").CompactionSettings;'
         mutant "$pi" pi-definition-reference dist/core/settings-manager.d.ts \
@@ -150,6 +159,8 @@
           'TypeScript declaration ModelCustomMetadataSchema is declared 2 times' >> "$TMPDIR/proof"
         expect_rejection pi-definition-collision "$kimchi" \
           'two different interfaces named CompactionSettings' "$TMPDIR/pi-definition-collision-source" >> "$TMPDIR/proof"
+        expect_rejection pi-scope-unread "$kimchi" \
+          'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
         expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
           'src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but' >> "$TMPDIR/proof"
         expect_rejection entry-late-write "$TMPDIR/entry-late-write-source" \
@@ -207,6 +218,20 @@
           else
             echo "FAIL: $label did not resolve CompactionSettings through Settings" >&2
             ${pkgs.jq}/bin/jq '.harness.definitions.CompactionSettings' "$TMPDIR/$label.json" >&2
+            exit 1
+          fi
+        done
+        # A pi key's project scope follows how pi reads it.
+        ${runExtractor ''"$kimchi"'' ''"$TMPDIR/pi-scope-merged.json"'' ''"$TMPDIR/pi-scope-merged-source"''}
+        for fixture in real:false pi-scope-merged:true; do
+          IFS=: read -r label project <<< "$fixture"
+          if ${pkgs.jq}/bin/jq -e --argjson project "$project" \
+            '.harness.keys | (.defaultProjectTrust.project == $project) and (.httpProxy.project == false) and (.theme.project == true) and .autoDefaultApplied.project == false' \
+            "$TMPDIR/$label.json" > /dev/null; then
+            echo "$label (exit 0): defaultProjectTrust project=$project" >> "$TMPDIR/proof"
+          else
+            echo "FAIL: $label did not derive the expected harness key scopes" >&2
+            ${pkgs.jq}/bin/jq '.harness.keys | map_values(.project)' "$TMPDIR/$label.json" >&2
             exit 1
           fi
         done
