@@ -314,7 +314,13 @@
         hm = codexConfig // {probe = mcpProbe "codex";};
       };
       copilot = paths ".copilot/mcp-config.json" ".config/github-copilot/mcp-config.json";
-      kimchi = paths ".config/kimchi/harness/mcp.json" ".kimchi/mcp.json";
+      # Kimchi renames a temporary over both files at runtime (first-run
+      # migration and ACP import write the user file; `/mcp enable|disable`
+      # writes the project one), so they reconcile by leaf, never symlink.
+      kimchi = {
+        devenv = devenvLeaves "ai:kimchi:mcp-merge" "$DEVENV_ROOT/.kimchi/mcp.json" (mcpProbe "kimchi");
+        hm = leaves ownRetraction "kimchiMcpMerge" "$HOME/.config/kimchi/harness/mcp.json" (mcpProbe "kimchi");
+      };
       kiro = lib.genAttrs modes kiroMcp;
     };
     permissions = {

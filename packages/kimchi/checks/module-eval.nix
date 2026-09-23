@@ -12,6 +12,8 @@
   hmHarnessDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated;
   projectConfigDocument = kimchiDocument ".kimchi/config.json";
   projectHarnessDocument = kimchiDocument ".config/kimchi/harness/settings.json";
+  projectMcpDocument = kimchiDocument ".kimchi/mcp.json";
+  hmMcpDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/harness/mcp.json" evaluated;
   userScopeOnlyHarnessSettingKeys = import ../lib/user-scope-only-harness-settings.nix;
   userScopeOnlyHarnessSettingValues = {
     defaultProjectTrust = "always";
@@ -240,6 +242,34 @@ in {
         && (projectHarnessDocument overridden).value.defaultThinkingLevel or null == "low"
     );
 
+    # Kimchi 1.1.30 renames a temporary over the user harness/mcp.json
+    # (first-run migration, ACP import) and the project .kimchi/mcp.json
+    # (`/mcp enable|disable`), which silently replaces a store symlink. So HM
+    # must reconcile it by leaf rather than link it, and an empty declaration
+    # must still reach the writer so removing the last server retracts it.
+    module-kimchi-hm-mcp-reconciled = mkTest "kimchi-hm-mcp-reconciled" (
+      let
+        evaluated = evalHm {
+          ai = {
+            kimchi.enable = true;
+            mcpServers.example = {
+              package = pkgs.hello;
+              command = "hello";
+              type = "stdio";
+            };
+          };
+        };
+        empty = evalHm {ai.kimchi.enable = true;};
+        suffix = builtins.hashString "sha256" ".config/kimchi";
+      in
+        evaluated.config.home.activation ? kimchiMcpMerge
+        && (hmMcpDocument evaluated).value.mcpServers.example.command == "hello"
+        && (hmMcpDocument evaluated).ledger == "json-settings/kimchi-mcp-${suffix}.json"
+        && !(evaluated.config.home.file ? ".config/kimchi/harness/mcp.json")
+        && empty.config.home.activation ? kimchiMcpMerge
+        && (hmMcpDocument empty).value == {}
+    );
+
     module-kimchi-devenv-project-paths = mkTest "kimchi-devenv-project-paths" (
       let
         result = evalDevenv {
@@ -253,6 +283,7 @@ in {
             };
             mcpServers.example = {
               package = pkgs.hello;
+              command = "hello";
               type = "stdio";
             };
             skills.example = ../../claude-code/checks/fixtures/claude-skills/skill-a;
@@ -262,7 +293,9 @@ in {
       in
         (projectConfigDocument result).value.telemetry.enabled
         == false
-        && files ? ".kimchi/mcp.json"
+        && result.config.tasks ? "ai:kimchi:mcp-merge"
+        && (projectMcpDocument result).value.mcpServers.example.command == "hello"
+        && !(files ? ".kimchi/mcp.json")
         && files ? ".kimchi/skills/example/SKILL.md"
         && files ? "AGENTS.md"
         && !(files ? "custom.md")
