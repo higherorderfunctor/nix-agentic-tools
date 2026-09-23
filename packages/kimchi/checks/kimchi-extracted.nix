@@ -73,6 +73,8 @@
           'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
         mutant "$kimchi" config-second-shape src/config.ts \
           'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
+        mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
+          'import { homedir } from "node:os"' $'import "../../extensions/model-catalog/model-metadata.js"\nimport { homedir } from "node:os"'
         mutant "$kimchi" entry-imported-read src/auxiliary-files/resolver.ts \
           'if (env.XDG_DATA_HOME) {' 'if (env.XDG_DATA_HOME && !process.env.KIMCHI_CODING_AGENT_DIR) {'
         mutant "$kimchi" entry-late-write src/entry.ts \
@@ -97,6 +99,10 @@
           'apiKey: projectExtras.apiKey ?? globalExtras.apiKey' 'apiKey: globalExtras.apiKey'
         mutant "$pi" pi-app-name dist/config.js \
           'export const APP_NAME = piConfigName || "pi";' 'export const APP_NAME = "pi";'
+        mutant "$pi" pi-definition-collision dist/core/settings-manager.d.ts \
+          '    compaction?: CompactionSettings;' $'    compaction?: CompactionSettings;\n    compactionProbe?: import("./compaction/compaction.js").CompactionSettings;'
+        mutant "$pi" pi-definition-reference dist/core/settings-manager.d.ts \
+          '    compaction?: CompactionSettings;' '    compaction?: import("./compaction/compaction.js").CompactionSettings;'
 
         expect_rejection() {
           label="$1"
@@ -138,6 +144,12 @@
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
+        # A dead copy of a schema is invisible; importing it makes two live
+        # ones, which must stop the extraction rather than pick one.
+        expect_rejection duplicate-live-schema "$TMPDIR/duplicate-live-schema-source" \
+          'TypeScript declaration ModelCustomMetadataSchema is declared 2 times' >> "$TMPDIR/proof"
+        expect_rejection pi-definition-collision "$kimchi" \
+          'two different interfaces named CompactionSettings' "$TMPDIR/pi-definition-collision-source" >> "$TMPDIR/proof"
         expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
           'src/entry.ts assigns KIMCHI_CODING_AGENT_DIR before reading it, but' >> "$TMPDIR/proof"
         expect_rejection entry-late-write "$TMPDIR/entry-late-write-source" \
@@ -179,6 +191,22 @@
           else
             echo "FAIL: $label did not derive the expected entry.ts overwrite flags" >&2
             ${pkgs.jq}/bin/jq '.environment.variables | {KIMCHI_NO_UPDATE_CHECK, PI_CODING_AGENT_DIR}' "$TMPDIR/$label.json" >&2
+            exit 1
+          fi
+        done
+        # Settings definitions follow the interface Settings references, not
+        # the first interface of that name: pi's compaction.d.ts declares an
+        # all-required CompactionSettings next to settings-manager's.
+        ${runExtractor ''"$kimchi"'' ''"$TMPDIR/pi-definition-reference.json"'' ''"$TMPDIR/pi-definition-reference-source"''}
+        for fixture in real:true pi-definition-reference:null; do
+          IFS=: read -r label optional <<< "$fixture"
+          if ${pkgs.jq}/bin/jq -e --argjson optional "$optional" \
+            '.harness.definitions.CompactionSettings.enabled.optional == $optional' \
+            "$TMPDIR/$label.json" > /dev/null; then
+            echo "$label (exit 0): CompactionSettings.enabled optional=$optional" >> "$TMPDIR/proof"
+          else
+            echo "FAIL: $label did not resolve CompactionSettings through Settings" >&2
+            ${pkgs.jq}/bin/jq '.harness.definitions.CompactionSettings' "$TMPDIR/$label.json" >&2
             exit 1
           fi
         done

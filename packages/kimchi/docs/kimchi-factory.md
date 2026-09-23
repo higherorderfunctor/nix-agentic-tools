@@ -5,9 +5,10 @@
 > `extracted.json` by `lib/extracted.nix`; devenv rejects user-scope
 > `config.json` keys and both backends reject environment variables Kimchi
 > overwrites, both read from the sidecar, and the overwrite and inert flags are
-> derived from the sources; the builder entry point is `lib.ai.app.mkRuntime`.
-> Home Manager keeps Kimchi's user paths and devenv its project paths; the
-> mutable JSON documents (`config.json`, harness `settings.json`, `mcp.json`,
+> derived from the sources, and declarations resolve by reference or fail on
+> ambiguity; the builder entry point is `lib.ai.app.mkRuntime`. Home Manager
+> keeps Kimchi's user paths and devenv its project paths; the mutable JSON
+> documents (`config.json`, harness `settings.json`, `mcp.json`,
 > `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
 > shared delivery router; agents are owned writable copies, copied from a
 > store-path string as from a path; portable hooks reach `.kimchi/hooks.json` on
@@ -85,12 +86,24 @@ Kimchi's `piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_`
 default). The extractor uses the TypeScript compiler's checker for declared keys
 and types and syntax tree queries for environment access sites, while config
 queries cross-check compiler types against top-level, nested, and array-element
-runtime validation guards. Three additional hash-pinned pi declaration packages
-resolve the settings type's external imports; unresolved named leaves fail
-extraction. The extractor also checks that the hash-pinned source URL names the
-same release tag recorded in provenance; Kimchi's source `package.json`
-intentionally retains the `0.0.0` development placeholder. It no longer extracts
-the CLI: the wrapper passes no flags, so that surface had no reader.
+runtime validation guards. A declaration is never taken by bare name when a
+reference can pick it: config.ts's functions and interfaces resolve in
+config.ts's own scope (Kimchi 1.1.30 has a second `loadConfig`), pi's `Settings`
+comes from `settings-manager.d.ts`'s exports, and the harness `definitions` are
+the interfaces `Settings` references, collected through the checker (pi also
+declares an all-required `CompactionSettings` in `compaction.d.ts`). The Kimchi
+harness schemas still looked up by name must match exactly one declaration among
+the modules reachable from `src/entry.ts`, so the dead
+`model-catalog/model-metadata.ts` is ignored, and a second live
+`ModelCustomMetadataSchema` stops the extraction instead of narrowing the
+option. Same-named constants back a constant only where the checker finds no
+initializer, and only when they all agree. Three additional hash-pinned pi
+declaration packages resolve the settings type's external imports; unresolved
+named leaves fail extraction. The extractor also checks that the hash-pinned
+source URL names the same release tag recorded in provenance; Kimchi's source
+`package.json` intentionally retains the `0.0.0` development placeholder. It no
+longer extracts the CLI: the wrapper passes no flags, so that surface had no
+reader.
 
 ## User and project paths (the load-bearing fact)
 

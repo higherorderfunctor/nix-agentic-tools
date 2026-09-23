@@ -75,7 +75,26 @@ function syntaxName(node, ts) {
   return undefined;
 }
 
-function literalValue(node, ts, declarations, seen = new Set()) {
+// The initializer of the constant `identifier` names, resolved through the
+// checker (so a same-named constant elsewhere can never stand in for it).
+function constantInitializer(identifier, checker, ts) {
+  let symbol = checker.getSymbolAtLocation(identifier);
+  if (symbol && symbol.flags & ts.SymbolFlags.Alias)
+    symbol = checker.getAliasedSymbol(symbol);
+  const initializers = (symbol?.declarations ?? [])
+    .filter(
+      (declaration) =>
+        ts.isVariableDeclaration(declaration) && declaration.initializer,
+    )
+    .map((declaration) => declaration.initializer);
+  if (initializers.length !== 1)
+    fail(
+      `cannot resolve constant ${identifier.text} in ${identifier.getSourceFile().fileName} (${initializers.length} initialized declarations)`,
+    );
+  return initializers[0];
+}
+
+function literalValue(node, ts, checker, seen = new Set()) {
   if (ts.isStringLiteralLike(node) || ts.isNumericLiteral(node))
     return node.text;
   if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
@@ -87,7 +106,7 @@ function literalValue(node, ts, declarations, seen = new Set()) {
   }
   if (ts.isArrayLiteralExpression(node))
     return node.elements.map((element) =>
-      literalValue(element, ts, declarations, seen),
+      literalValue(element, ts, checker, seen),
     );
   if (ts.isObjectLiteralExpression(node)) {
     const object = {};
@@ -102,28 +121,35 @@ function literalValue(node, ts, declarations, seen = new Set()) {
       if (name === undefined)
         fail(`unsupported computed object key ${property.name.getText()}`);
       object[name] = ts.isShorthandPropertyAssignment(property)
-        ? literalValue(property.name, ts, declarations, seen)
-        : literalValue(property.initializer, ts, declarations, seen);
+        ? literalValue(property.name, ts, checker, seen)
+        : literalValue(property.initializer, ts, checker, seen);
     }
     return object;
   }
   if (ts.isIdentifier(node)) {
     if (seen.has(node.text))
       fail(`constant cycle while evaluating ${node.text}`);
-    const declaration = declarations.get(node.text);
-    if (!declaration?.initializer) fail(`cannot resolve constant ${node.text}`);
     return literalValue(
-      declaration.initializer,
+      constantInitializer(node, checker, ts),
       ts,
-      declarations,
+      checker,
       new Set([...seen, node.text]),
     );
   }
   fail(`unsupported constant expression ${node.getText()}`);
 }
 
+// Every interface, type alias, function and variable declaration, by name,
+// across the files that can matter: pi's, and the Kimchi modules reachable
+// from src/entry.ts. A bare name is not an identity — Kimchi 1.1.30 ships two
+// model-metadata.ts files with different schemas, one of them dead — so a
+// lookup by name must match exactly one declaration or the extraction stops.
 function declarationIndex(sourceFiles, ts) {
   const declarations = new Map();
+  const add = (name, node) => {
+    if (!declarations.has(name)) declarations.set(name, []);
+    declarations.get(name).push(node);
+  };
   for (const sourceFile of sourceFiles) {
     function visit(node) {
       if (
@@ -132,14 +158,10 @@ function declarationIndex(sourceFiles, ts) {
           ts.isFunctionDeclaration(node)) &&
         node.name
       ) {
-        const previous = declarations.get(node.name.text);
-        if (!previous) declarations.set(node.name.text, node);
+        add(node.name.text, node);
       }
-      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-        const previous = declarations.get(node.name.text);
-        if (!previous || (!previous.initializer && node.initializer))
-          declarations.set(node.name.text, node);
-      }
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name))
+        add(node.name.text, node);
       ts.forEachChild(node, visit);
     }
     visit(sourceFile);
@@ -148,10 +170,41 @@ function declarationIndex(sourceFiles, ts) {
 }
 
 function requireDeclaration(declarations, name, predicate = () => true) {
-  const declaration = declarations.get(name);
-  if (!declaration || !predicate(declaration))
-    fail(`TypeScript declaration ${name} was not found in the expected form`);
-  return declaration;
+  const found = (declarations.get(name) ?? []).filter(predicate);
+  if (found.length !== 1) {
+    const where = found.map((declaration) => {
+      const sourceFile = declaration.getSourceFile();
+      const { line } = sourceFile.getLineAndCharacterOfPosition(
+        declaration.getStart(),
+      );
+      return `${sourceFile.fileName}:${line + 1}`;
+    });
+    fail(
+      found.length === 0
+        ? `TypeScript declaration ${name} was not found in the expected form`
+        : `TypeScript declaration ${name} is declared ${found.length} times (${where.join(", ")}); the extraction cannot tell which one Kimchi uses`,
+    );
+  }
+  return found[0];
+}
+
+// The declaration `name` refers to at the top level of `sourceFile`: its own
+// declaration or the one it imports, never a same-named one elsewhere.
+function declarationInScope(sourceFile, name, predicate, checker, ts) {
+  let symbol = checker
+    .getSymbolsInScope(
+      sourceFile,
+      ts.SymbolFlags.Value | ts.SymbolFlags.Type | ts.SymbolFlags.Alias,
+    )
+    .find((candidate) => candidate.name === name);
+  if (symbol && symbol.flags & ts.SymbolFlags.Alias)
+    symbol = checker.getAliasedSymbol(symbol);
+  const found = (symbol?.declarations ?? []).filter(predicate);
+  if (found.length !== 1)
+    fail(
+      `${sourceFile.fileName} does not reach exactly one ${name} in the expected form (found ${found.length})`,
+    );
+  return found[0];
 }
 
 function docsFor(symbol, checker, ts) {
@@ -536,11 +589,13 @@ function discoverConfigKeys(sourceFile, checker, ts) {
   return found;
 }
 
-function discoverProjectConfigKeys(declarations, annotations, ts) {
-  const loadConfig = requireDeclaration(
-    declarations,
+function discoverProjectConfigKeys(configSource, annotations, checker, ts) {
+  const loadConfig = declarationInScope(
+    configSource,
     "loadConfig",
     ts.isFunctionDeclaration,
+    checker,
+    ts,
   );
   let merge;
   function locate(node) {
@@ -790,8 +845,11 @@ function extractConfig(
   analysisChecker,
   ts,
 ) {
-  const readExtras = requireDeclaration(
-    declarations,
+  // Every name below is resolved as config.ts itself sees it: Kimchi 1.1.30
+  // also declares a loadConfig in extensions/permissions/config.ts.
+  const configDeclaration = (name, predicate) =>
+    declarationInScope(sourceFile, name, predicate, checker, ts);
+  const readExtras = configDeclaration(
     "readConfigExtras",
     ts.isFunctionDeclaration,
   );
@@ -799,11 +857,7 @@ function extractConfig(
     fail("readConfigExtras no longer has an explicit return type");
   const extras = membersOfTypeNode(readExtras.type, checker, ts, true);
   const interfaceMembers = (name) => {
-    const declaration = requireDeclaration(
-      declarations,
-      name,
-      ts.isInterfaceDeclaration,
-    );
+    const declaration = configDeclaration(name, ts.isInterfaceDeclaration);
     return membersOfDeclaration(declaration, checker, ts, true);
   };
   const keys = { ...extras };
@@ -893,11 +947,7 @@ function extractConfig(
     ["preferences", "parsePreferencesConfig", "value"],
     ["telemetry", "readTelemetryConfig", "parsed"],
   ]) {
-    const parser = requireDeclaration(
-      declarations,
-      functionName,
-      ts.isFunctionDeclaration,
-    );
+    const parser = configDeclaration(functionName, ts.isFunctionDeclaration);
     const validation = runtimeValidationKinds(parser, ts, {
       [root]: name === "telemetry" ? [] : [name],
     });
@@ -915,12 +965,17 @@ function extractConfig(
     fail(
       `config.json key census changed; new=${JSON.stringify(unknown)}, missing=${JSON.stringify(missing)}`,
     );
-  const projectKeys = discoverProjectConfigKeys(declarations, annotations, ts);
+  const projectKeys = discoverProjectConfigKeys(
+    sourceFile,
+    annotations,
+    checker,
+    ts,
+  );
   const inert = inertConfigKeys(
     sourceFile,
     kimchiSources,
     readExtras,
-    requireDeclaration(declarations, "KimchiConfig", ts.isInterfaceDeclaration),
+    configDeclaration("KimchiConfig", ts.isInterfaceDeclaration),
     analysisChecker,
     ts,
   );
@@ -950,14 +1005,10 @@ function extractConfig(
   };
 }
 
-function typeBoxDescriptor(initializer, declarations, ts) {
+function typeBoxDescriptor(initializer, checker, ts) {
   function convert(node) {
-    if (ts.isIdentifier(node)) {
-      const declaration = declarations.get(node.text);
-      if (!declaration?.initializer)
-        fail(`cannot resolve TypeBox schema ${node.text}`);
-      return convert(declaration.initializer);
-    }
+    if (ts.isIdentifier(node))
+      return convert(constantInitializer(node, checker, ts));
     if (
       !ts.isCallExpression(node) ||
       !ts.isPropertyAccessExpression(node.expression)
@@ -972,7 +1023,7 @@ function typeBoxDescriptor(initializer, declarations, ts) {
     if (method === "Boolean")
       return { type: "boolean", typeExpression: "boolean" };
     if (method === "Literal") {
-      const value = literalValue(node.arguments[0], ts, declarations);
+      const value = literalValue(node.arguments[0], ts, checker);
       return {
         enum: [value],
         type: "enum",
@@ -1013,7 +1064,7 @@ function typeBoxDescriptor(initializer, declarations, ts) {
   return convert(initializer);
 }
 
-function extractDefaultProjectTrust(sourceFile, declarations, ts) {
+function extractDefaultProjectTrust(sourceFile, checker, ts) {
   let settingsManager;
   function findClass(node) {
     if (ts.isClassDeclaration(node) && node.name?.text === "SettingsManager") {
@@ -1036,24 +1087,65 @@ function extractDefaultProjectTrust(sourceFile, declarations, ts) {
   if (!expression || !ts.isConditionalExpression(expression)) {
     fail("pi getDefaultProjectTrust no longer returns a conditional fallback");
   }
-  const fallback = literalValue(expression.whenFalse, ts, declarations);
+  const fallback = literalValue(expression.whenFalse, ts, checker);
   if (typeof fallback !== "string")
     fail("pi getDefaultProjectTrust fallback is no longer a string literal");
   return fallback;
 }
 
+// The interfaces a declaration's properties are typed with, transitively and
+// by the checker's own resolution, keyed by the name walkType looks them up by.
+// Resolving by name instead picked whichever same-named interface loaded first
+// (pi 0.85.1 declares CompactionSettings twice, with different optionality).
+function referencedInterfaces(root, checker, ts) {
+  const found = new Map();
+  const queue = [root];
+  while (queue.length) {
+    const declaration = queue.pop();
+    for (const member of declaration.members) {
+      if (!ts.isPropertySignature(member) || !member.type) continue;
+      const type = checker.getNonNullableType(
+        checker.getTypeFromTypeNode(member.type),
+      );
+      if (checker.isArrayType(type)) continue;
+      const referenced = (type.aliasSymbol ? [] : [type.symbol])
+        .flatMap((symbol) => symbol?.declarations ?? [])
+        .filter(ts.isInterfaceDeclaration);
+      for (const target of referenced) {
+        const name = target.name.text;
+        const previous = found.get(name);
+        if (previous && previous !== target)
+          fail(
+            `two different interfaces named ${name} type ${root.name.text}'s settings (${previous.getSourceFile().fileName}, ${target.getSourceFile().fileName})`,
+          );
+        if (!previous) {
+          found.set(name, target);
+          queue.push(target);
+        }
+      }
+    }
+  }
+  return found;
+}
+
 function extractHarness(
   declarations,
+  configSource,
   settingsManagerSource,
+  settingsDeclarationSource,
   configTsHarnessReads,
   checker,
   ts,
 ) {
-  const settings = requireDeclaration(
-    declarations,
-    "Settings",
-    ts.isInterfaceDeclaration,
-  );
+  // pi's Settings, as its own settings-manager declares it.
+  const settings = checker
+    .getSymbolAtLocation(settingsDeclarationSource)
+    ?.exports?.get("Settings")
+    ?.declarations?.find(ts.isInterfaceDeclaration);
+  if (!settings)
+    fail(
+      `${settingsDeclarationSource.fileName} no longer exports a Settings interface`,
+    );
   const baseKeys = membersOfDeclaration(settings, checker, ts);
   baseKeys.modelThinkingLevels = membersOfDeclaration(
     settings,
@@ -1063,30 +1155,16 @@ function extractHarness(
   ).modelThinkingLevels;
   const defaultProjectTrust = extractDefaultProjectTrust(
     settingsManagerSource,
-    declarations,
+    checker,
     ts,
   );
   if (!baseKeys.defaultProjectTrust?.enum?.includes(defaultProjectTrust))
     fail("pi default project trust is outside DefaultProjectTrust");
   baseKeys.defaultProjectTrust.default = defaultProjectTrust;
   const definitions = {};
-  for (const name of [
-    "BranchSummarySettings",
-    "CompactionSettings",
-    "ImageSettings",
-    "MarkdownSettings",
-    "ProviderRetrySettings",
-    "RetrySettings",
-    "TerminalSettings",
-    "ThinkingBudgetsSettings",
-    "WarningSettings",
-  ]) {
-    definitions[name] = membersOfDeclaration(
-      requireDeclaration(declarations, name, ts.isInterfaceDeclaration),
-      checker,
-      ts,
-    );
-  }
+  const referenced = referencedInterfaces(settings, checker, ts);
+  for (const name of [...referenced.keys()].sort())
+    definitions[name] = membersOfDeclaration(referenced.get(name), checker, ts);
 
   const ferment = requireDeclaration(
     declarations,
@@ -1154,7 +1232,7 @@ function extractHarness(
     modelMetadata: {
       additionalProperties: typeBoxDescriptor(
         metadataSchema.initializer,
-        declarations,
+        checker,
         ts,
       ),
       type: "object",
@@ -1209,10 +1287,12 @@ function extractHarness(
     ts.forEachChild(node, findAutoDefaultMarker);
   }
   findAutoDefaultMarker(
-    requireDeclaration(
-      declarations,
+    declarationInScope(
+      configSource,
       "readAutoDefaultApplied",
       ts.isFunctionDeclaration,
+      checker,
+      ts,
     ),
   );
   if (!autoDefaultMarker) {
@@ -1334,10 +1414,32 @@ function stringConstant(expression, context, seen = new Set()) {
         if (value !== undefined) return value;
       }
     }
+    // A parameter or a computed local is not a constant.
+    const constantShaped = (symbol.declarations ?? []).every(
+      (declaration) =>
+        ts.isBindingElement(declaration) ||
+        (ts.isVariableDeclaration(declaration) && !declaration.initializer),
+    );
+    if (!constantShaped) return undefined;
   }
-  const declaration = declarations.get(expression.text);
-  if (declaration?.initializer) return fromDeclaration(declaration);
-  return undefined;
+  // No usable initializer: a patched source parsed outside the program, an
+  // import that resolves to pi's .d.ts rather than its .js, or a destructured
+  // re-import in a bundled chunk. Fall back to the constants of that name
+  // everywhere, but only when they all agree.
+  const values = new Set(
+    (declarations.get(expression.text) ?? [])
+      .filter(
+        (declaration) =>
+          ts.isVariableDeclaration(declaration) && declaration.initializer,
+      )
+      .map(fromDeclaration)
+      .filter((value) => value !== undefined),
+  );
+  if (values.size > 1)
+    fail(
+      `constant ${expression.text} in ${expression.getSourceFile().fileName} is ambiguous: same-named constants evaluate to ${JSON.stringify([...values].sort())}`,
+    );
+  return [...values][0];
 }
 
 function isWriteOnly(node, ts) {
@@ -1850,7 +1952,22 @@ async function main() {
         kimchiPaths.includes(sourceFile.fileName) ||
         piPaths.includes(sourceFile.fileName),
     );
-  const declarations = declarationIndex(sourceFiles, ts);
+  const liveKimchi = moduleClosure(
+    [
+      program.getSourceFile(join(kimchiRoot, "src/entry.ts")) ??
+        fail("program did not load src/entry.ts"),
+    ],
+    program,
+    ts,
+    { dynamic: true, types: true },
+  );
+  const declarations = declarationIndex(
+    sourceFiles.filter(
+      (sourceFile) =>
+        liveKimchi.has(sourceFile) || piPaths.includes(sourceFile.fileName),
+    ),
+    ts,
+  );
   const byPath = new Map(
     sourceFiles.map((sourceFile) => [resolve(sourceFile.fileName), sourceFile]),
   );
@@ -1943,7 +2060,9 @@ async function main() {
     ),
     harness: extractHarness(
       declarations,
+      configSource,
       requireSource(join(piRoot, "dist/core/settings-manager.js")),
+      requireSource(join(piRoot, "dist/core/settings-manager.d.ts")),
       configTsReads.harness,
       checker,
       ts,
