@@ -7,8 +7,9 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-22 — authored prose and final delivery share one
-> priority-aware text-source record with enable semantics.
+> **Last verified:** 2026-09-22 — reasoning effort lowers to Claude, Codex, and
+> Kimchi; authored prose and final delivery share one priority-aware text-source
+> record with enable semantics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -270,11 +271,12 @@ enabled ecosystem whose native model preserves the option's semantics):
   `xhigh` value. Every runtime exposes the same field at
   `ai.<runtime>.settings.reasoningEffort`; a non-null per-runtime value wins for
   only that runtime, while null inherits the root through `resolveOverride`.
-  Claude and Codex lower the resolved value to native `effortLevel` and
-  `model_reasoning_effort`; runtimes without a lossless lowering retain the
-  normalized value without emitting a native key. Values that only one runtime
-  persists remain under that runtime's `nativeSettings`. An explicit native
-  Claude/Codex effort key still has normal option priority over the derived
+  Claude, Codex, and Kimchi lower the resolved value to native `effortLevel`,
+  `model_reasoning_effort`, and harness `defaultThinkingLevel`, respectively;
+  runtimes without a lossless lowering emit no native key, and
+  `lib/ai/delivery-warnings.nix` warns that the value is inert there. Values
+  that only one runtime persists remain under that runtime's native settings. An
+  explicit native effort key still has normal option priority over the derived
   normalized default, and a native null excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM

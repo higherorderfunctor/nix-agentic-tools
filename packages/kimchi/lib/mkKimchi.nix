@@ -145,6 +145,7 @@
     mergedServers,
     mergedSkills,
     moduleEnvironmentVariables,
+    resolvedSettings,
     ...
   }: let
     prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
@@ -240,6 +241,14 @@
           };
         };
       }
+
+      # pi 0.85.1's ThinkingLevel is a superset of the normalized enum and
+      # pi reads `defaultThinkingLevel` from the merged user and project
+      # harness settings, so the lowering is lossless on both backends. It is
+      # a default: an explicit native harness value wins.
+      (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+        ai.kimchi.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+      })
 
       (document {
         entry = "kimchiConfigMerge";

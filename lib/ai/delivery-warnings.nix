@@ -92,7 +92,7 @@
     else ["ai" "settings" "reasoningEffort"];
   effortWarnings =
     lib.optional
-    (!(builtins.elem runtime ["claude" "codex"]) && get effortPath != null)
+    (!(builtins.elem runtime ["claude" "codex" "kimchi"]) && get effortPath != null)
     (message effortPath "No lossless native reasoning-effort translation exists for this runtime.");
   entries = pool:
     (lib.mapAttrsToList (name: value: {

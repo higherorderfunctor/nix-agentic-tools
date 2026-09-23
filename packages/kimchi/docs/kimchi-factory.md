@@ -1,8 +1,9 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-22 — Home Manager retains Kimchi's user paths while
-> devenv uses the pinned runtime's project paths. Both mutable documents still
-> reach the shared delivery router. Full lineage:
+> **Last verified:** 2026-09-22 — normalized reasoning effort lowers to harness
+> `defaultThinkingLevel`. Home Manager retains Kimchi's user paths while devenv
+> uses the pinned runtime's project paths. Both mutable documents still reach
+> the shared delivery router. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -16,10 +17,13 @@ function with the merged pools supplied by `mkBackendTransform.nix`, and
 `lib/ai/deliver.nix` decides how each entry lands. The other runtimes retain
 their existing callbacks during the staged migration.
 
-The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings`. The
-closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
-may be present there before Kimchi has a lossless native lowering, in which case
-it remains declarative data rather than being guessed into either native file.
+The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings` and
+`ai.kimchi.native.harnessSettings`. The closed `ai.kimchi.settings` submodule is
+the shared normalized surface. Its `reasoningEffort` field lowers losslessly to
+`native.harnessSettings.defaultThinkingLevel` at `mkDefault` priority, so an
+explicit native harness value wins: pi 0.85.1's `ThinkingLevel` is a superset of
+the normalized enum, and pi reads the key from the merged user and project
+harness settings. Locked by `module-kimchi-normalized-reasoning-effort`.
 
 ## User and project paths (the load-bearing fact)
 
@@ -105,7 +109,8 @@ The app record's `supportedPools` is exactly `context`, `environmentVariables`,
 portable agents, LSP, portable hooks, or shell-selection landing key. Those
 per-runtime normalized options are absent; root values for them remain valid and
 silently degrade for Kimchi. `settings` is the uniform closed normalized
-namespace; its current field has no Kimchi-native lowering.
+namespace; its current field lowers to `defaultThinkingLevel` in the mutable
+harness settings document.
 
 The three keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`, and
 `skills`) follow the shared atomic replacement rule. A Kimchi-specific same-key
