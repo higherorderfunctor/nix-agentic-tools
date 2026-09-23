@@ -696,12 +696,98 @@ function validateRuntimeDescriptor(
   }
 }
 
+// config.json keys that have no runtime effect, derived rather than annotated.
+// A key is inert when its loaded KimchiConfig member is tagged @deprecated
+// upstream AND nothing reads it: neither the loaded member anywhere, nor the
+// raw readConfigExtras member outside config.ts (whose own parse, merge and
+// obsolete-key warning read it by design). A release that starts consuming the
+// key clears the flag, and the key becomes an ordinary option.
+function inertConfigKeys(
+  configSource,
+  kimchiSources,
+  readExtras,
+  kimchiConfig,
+  checker,
+  ts,
+) {
+  const memberNamed = (container, name) =>
+    container.members.find(
+      (member) => member.name && syntaxName(member.name, ts) === name,
+    );
+  const deprecated = new Map();
+  for (const member of kimchiConfig.members) {
+    const tag = ts
+      .getJSDocTags(member)
+      .find((candidate) => candidate.tagName.text === "deprecated");
+    if (!tag || !member.name) continue;
+    const text = ts.getTextOfJSDocComment(tag.comment)?.trim();
+    if (!text)
+      fail(
+        `KimchiConfig.${member.name.getText()} is @deprecated without a reason`,
+      );
+    deprecated.set(syntaxName(member.name, ts), text);
+  }
+  const loaded = new Map();
+  const raw = new Map();
+  for (const name of deprecated.keys()) {
+    loaded.set(memberNamed(kimchiConfig, name), name);
+    const rawMember = memberNamed(readExtras.type, name);
+    if (rawMember) raw.set(rawMember, name);
+  }
+  const consumed = new Map();
+  for (const sourceFile of kimchiSources) {
+    function record(symbol, node) {
+      for (const declaration of symbol?.declarations ?? []) {
+        const name =
+          loaded.get(declaration) ??
+          (sourceFile !== configSource ? raw.get(declaration) : undefined);
+        if (name && !consumed.has(name)) {
+          const { line } = sourceFile.getLineAndCharacterOfPosition(
+            node.getStart(),
+          );
+          consumed.set(name, `${sourceFile.fileName}:${line + 1}`);
+        }
+      }
+    }
+    function visit(node) {
+      if (
+        (ts.isPropertyAccessExpression(node) ||
+          ts.isElementAccessExpression(node)) &&
+        !isWriteOnly(node, ts)
+      ) {
+        record(
+          checker.getSymbolAtLocation(
+            ts.isPropertyAccessExpression(node)
+              ? node.name
+              : node.argumentExpression,
+          ),
+          node,
+        );
+      }
+      if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+        const property = syntaxName(node.propertyName ?? node.name, ts);
+        if (property !== undefined) {
+          record(
+            checker.getTypeAtLocation(node.parent).getProperty?.(property),
+            node,
+          );
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+  }
+  return new Map([...deprecated].filter(([name]) => !consumed.has(name)));
+}
+
 function extractConfig(
   sourceFile,
   discovered,
   declarations,
   annotations,
+  kimchiSources,
   checker,
+  analysisChecker,
   ts,
 ) {
   const readExtras = requireDeclaration(
@@ -830,12 +916,28 @@ function extractConfig(
       `config.json key census changed; new=${JSON.stringify(unknown)}, missing=${JSON.stringify(missing)}`,
     );
   const projectKeys = discoverProjectConfigKeys(declarations, annotations, ts);
+  const inert = inertConfigKeys(
+    sourceFile,
+    kimchiSources,
+    readExtras,
+    requireDeclaration(declarations, "KimchiConfig", ts.isInterfaceDeclaration),
+    analysisChecker,
+    ts,
+  );
   for (const [name, annotation] of Object.entries(annotations)) {
     if (!keys[name])
       fail(`no compiler-derived type for config.json key ${name}`);
+    const handKeys = Object.keys(annotation).filter(
+      (key) => key !== "aliasFor",
+    );
+    if (handKeys.length)
+      fail(
+        `config.${name} annotations may name only an aliasFor; ${JSON.stringify(handKeys)} are derived from the sources`,
+      );
     keys[name] = {
       ...keys[name],
       ...annotation,
+      ...(inert.has(name) ? { deprecated: inert.get(name), inert: true } : {}),
       project: projectKeys.has(name),
     };
   }
@@ -1698,27 +1800,49 @@ async function main() {
     excludedDirectories: new Set(),
     file: (path) => path.endsWith(".patch"),
   });
-  const program = ts.createProgram({
-    rootNames: [...kimchiPaths, ...piPaths],
-    options: {
-      allowJs: true,
-      allowSyntheticDefaultImports: true,
-      baseUrl: "/",
-      checkJs: false,
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      noEmit: true,
-      paths: Object.fromEntries(
-        Object.entries(piTypePackages).map(([name, root]) => [
-          name,
-          [join(root, "dist/index.d.ts")],
-        ]),
-      ),
-      skipLibCheck: true,
-      target: ts.ScriptTarget.ESNext,
-    },
-  });
+  const compilerOptions = {
+    allowJs: true,
+    allowSyntheticDefaultImports: true,
+    baseUrl: "/",
+    checkJs: false,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    noEmit: true,
+    paths: Object.fromEntries(
+      Object.entries(piTypePackages).map(([name, root]) => [
+        name,
+        [join(root, "dist/index.d.ts")],
+      ]),
+    ),
+    skipLibCheck: true,
+    target: ts.ScriptTarget.ESNext,
+  };
+  const rootNames = [...kimchiPaths, ...piPaths];
+  const program = ts.createProgram({ rootNames, options: compilerOptions });
   const checker = program.getTypeChecker();
+  // A second checker over the same parsed files, for analyses that type-check
+  // arbitrary Kimchi code. The checker numbers types as it first meets them and
+  // prints unions in that order, so running those queries through `checker`
+  // would reorder the extracted enums. The syntax trees are shared, so nodes
+  // and bound symbols compare across the two.
+  const analysisHost = ts.createCompilerHost(compilerOptions);
+  const parse = analysisHost.getSourceFile;
+  analysisHost.getSourceFile = (fileName, ...rest) =>
+    program.getSourceFile(fileName) ??
+    parse.call(analysisHost, fileName, ...rest);
+  const analysisProgram = ts.createProgram({
+    host: analysisHost,
+    options: compilerOptions,
+    rootNames,
+  });
+  for (const fileName of rootNames) {
+    if (
+      analysisProgram.getSourceFile(fileName) !==
+      program.getSourceFile(fileName)
+    )
+      fail(`the analysis program re-parsed ${fileName}`);
+  }
+  const analysisChecker = analysisProgram.getTypeChecker();
   const sourceFiles = program
     .getSourceFiles()
     .filter(
@@ -1790,7 +1914,11 @@ async function main() {
       configTsReads.config,
       declarations,
       annotations.config,
+      sourceFiles.filter((sourceFile) =>
+        kimchiPaths.includes(sourceFile.fileName),
+      ),
       checker,
+      analysisChecker,
       ts,
     ),
     environment: await extractEnvironment(

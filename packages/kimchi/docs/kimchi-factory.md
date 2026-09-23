@@ -4,10 +4,10 @@
 > `native.harnessSettings` are closed option trees generated from
 > `extracted.json` by `lib/extracted.nix`; devenv rejects user-scope
 > `config.json` keys and both backends reject environment variables Kimchi
-> overwrites, both read from the sidecar, and the overwrite flag is derived from
-> `src/entry.ts`; the builder entry point is `lib.ai.app.mkRuntime`. Home
-> Manager keeps Kimchi's user paths and devenv its project paths; the mutable
-> JSON documents (`config.json`, harness `settings.json`, `mcp.json`,
+> overwrites, both read from the sidecar, and the overwrite and inert flags are
+> derived from the sources; the builder entry point is `lib.ai.app.mkRuntime`.
+> Home Manager keeps Kimchi's user paths and devenv its project paths; the
+> mutable JSON documents (`config.json`, harness `settings.json`, `mcp.json`,
 > `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
 > shared delivery router; agents are owned writable copies; portable hooks reach
 > `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
@@ -48,11 +48,16 @@ untyped elements unless they are scalars, because `filterNulls` does not recurse
 into lists. So a key upstream adds becomes an option at the next re-extraction,
 and a key it removes fails its consumer as an unknown option instead of writing
 bytes nothing reads. Every option is `nullOr` with a null default. Alias keys
-(`aliasFor`) and inert keys have no option. Three hand tables remain: one
-exclusion (`apiKey`, a secret delivered by `ai.kimchi.apiKey`), one refinement
-(`modelRoles`, whose role names and single-string roles come from the sidecar
-while the non-blank and non-empty checks do not), and one description note.
-`report.stale*` lists any row whose path the sidecar lost, and
+(`aliasFor`, the only hand annotation left on config keys) and inert keys have
+no option. A key is inert when upstream tags its `KimchiConfig` member
+`@deprecated` and no Kimchi code consumes it: nothing reads the loaded member,
+and nothing outside `config.ts` reads the raw `readConfigExtras` member, while
+`config.ts` still parses it to warn that it is obsolete. A release that consumes
+it again clears the flag, and the key becomes an option. Three hand tables
+remain: one exclusion (`apiKey`, a secret delivered by `ai.kimchi.apiKey`), one
+refinement (`modelRoles`, whose role names and single-string roles come from the
+sidecar while the non-blank and non-empty checks do not), and one description
+note. `report.stale*` lists any row whose path the sidecar lost, and
 `checks/native-options.nix` fails on it. That check also runs the generator over
 a fixture sidecar with a key added, a key removed and an enum widened, and
 requires the option surface to move with it.
