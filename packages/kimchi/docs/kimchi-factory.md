@@ -5,10 +5,11 @@
 > `extracted.json` by `lib/extracted.nix`; devenv rejects user-scope
 > `config.json` keys and both backends reject environment variables Kimchi
 > overwrites, both read from the sidecar, and the overwrite and inert flags are
-> derived from the sources, as is each harness key's project scope, and
-> declarations resolve by reference or fail on ambiguity; the builder entry
-> point is `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and
-> devenv its project paths; the mutable JSON documents (`config.json`, harness
+> derived from the sources, as is each harness key's project scope, declarations
+> resolve by reference or fail on ambiguity, and the extractor's own
+> hand-written parts are listed with their guards; the builder entry point is
+> `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and devenv its
+> project paths; the mutable JSON documents (`config.json`, harness
 > `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
 > reconcile by leaf through the shared delivery router; agents are owned
 > writable copies, copied from a store-path string as from a path; portable
@@ -47,22 +48,39 @@ only reader. It generates the closed `native.settings` (from `config.*`) and
 option trees: scalars and enums map directly, objects with properties become
 closed submodules, `additionalProperties` becomes `attrsOf`, and arrays keep
 untyped elements unless they are scalars, because `filterNulls` does not recurse
-into lists. So a key upstream adds becomes an option at the next re-extraction,
-and a key it removes fails its consumer as an unknown option instead of writing
-bytes nothing reads. Every option is `nullOr` with a null default. Alias keys
-(`aliasFor`, the only hand annotation left on config keys) and inert keys have
-no option. A key is inert when upstream tags its `KimchiConfig` member
-`@deprecated` and no Kimchi code consumes it: nothing reads the loaded member,
-and nothing outside `config.ts` reads the raw `readConfigExtras` member, while
-`config.ts` still parses it to warn that it is obsolete. A release that consumes
-it again clears the flag, and the key becomes an option. Three hand tables
-remain: one exclusion (`apiKey`, a secret delivered by `ai.kimchi.apiKey`), one
+into lists. So a key upstream adds to pi's `Settings` or to config.ts's
+`readConfigExtras` becomes an option at the next re-extraction, and a key it
+removes fails its consumer as an unknown option instead of writing bytes nothing
+reads. Every option is `nullOr` with a null default. Alias keys (`aliasFor`, the
+only hand annotation left on config keys) and inert keys have no option. A key
+is inert when upstream tags its `KimchiConfig` member `@deprecated` and no
+Kimchi code consumes it: nothing reads the loaded member, and nothing outside
+`config.ts` reads the raw `readConfigExtras` member, while `config.ts` still
+parses it to warn that it is obsolete. A release that consumes it again clears
+the flag, and the key becomes an option. The option generator keeps three hand
+tables: one exclusion (`apiKey`, a secret delivered by `ai.kimchi.apiKey`), one
 refinement (`modelRoles`, whose role names and single-string roles come from the
 sidecar while the non-blank and non-empty checks do not), and one description
 note. `report.stale*` lists any row whose path the sidecar lost, and
-`checks/native-options.nix` fails on it. That check also runs the generator over
-a fixture sidecar with a key added, a key removed and an enum widened, and
-requires the option surface to move with it.
+`checks/native-options.nix` fails on it.
+
+The extractor has hand-written parts of its own, each guarded only as far as
+stated. Kimchi's harness additions (`autoDefaultApplied`, `fermentV2`,
+`modelRoles` and the rest, each typed from a named declaration) are a hand list
+in `extract.mjs`. Two censuses check it: every harness key config.ts parses, and
+every constant key passed to config/settings.ts's `readConfigSetting`,
+`readConfigSettingAsync`, `writeConfigSetting` and `writeConfigSettingAsync`
+anywhere in `src/`, must be a pi `Settings` key or an addition. Other direct
+readers of the harness file are not censused (in 1.1.30,
+`telemetry/config-snapshot.ts` reads `model` and `provider` for telemetry), so a
+key upstream adds there meets the closed submodule as an unknown option with no
+drift signal. The config.json shapes of `teleport`, `gitTokens` and the
+`surveys` record have no declared type, so they are written by hand and pinned
+both ways to their readers' runtime guards (`readTeleportCompactHintEnabled`,
+`readGitToken`, `readSurveyConfig`): every scalar leaf must be `typeof`-guarded
+as its type, and every guarded path must be in the shape. That check also runs
+the generator over a fixture sidecar with a key added, a key removed and an enum
+widened, and requires the option surface to move with it.
 
 The sidecar also drives two rejections and one lookup. Devenv rejects
 `native.settings` keys whose `project` flag is false, because Kimchi merges only

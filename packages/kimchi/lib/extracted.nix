@@ -20,9 +20,11 @@
 # consumer that still sets it fail with an unknown-option error instead of
 # writing a key nothing reads. Every submodule is closed for the same reason.
 #
-# Three small hand tables are the only exceptions, and each row must name a
-# path the sidecar still has — `report.stale*` lists any that do not, and
-# `checks/native-options.nix` fails on it:
+# Three small hand tables are this generator's only exceptions (the extractor
+# keeps hand-written parts of its own; docs/kimchi-factory.md lists them and
+# their guards), and each row must name a path the sidecar still has —
+# `report.stale*` lists any that do not, and `checks/native-options.nix` fails
+# on it:
 #
 #   exclusions   key → reason it has no native option
 #   refinements  path → (node → type), runtime validation the type tree lacks
