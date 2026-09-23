@@ -8,10 +8,10 @@ applyTo: "packages/kimchi/**"
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-09-23 — Home Manager keeps Kimchi's user paths and
-> devenv its project paths; all three mutable JSON documents (`config.json`,
-> harness `settings.json`, `mcp.json`) reconcile by leaf through the shared
-> delivery router; agents are owned writable copies; portable hooks reach
-> `.kimchi/hooks.json` on devenv only. Full lineage:
+> devenv its project paths; all four mutable JSON documents (`config.json`,
+> harness `settings.json`, `mcp.json`, `permissions.json`) reconcile by leaf
+> through the shared delivery router; agents are owned writable copies; portable
+> hooks reach `.kimchi/hooks.json` on devenv only. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -39,22 +39,23 @@ settings. Locked by `module-kimchi-normalized-reasoning-effort`.
 `.config/kimchi`). It does not control devenv project paths. The backend split
 is:
 
-| pool             | Home Manager user path                 | devenv project path                    |
-| ---------------- | -------------------------------------- | -------------------------------------- |
-| context          | `<configDir>/harness/AGENTS.md`        | root `AGENTS.md`                       |
-| MCP servers      | `<configDir>/harness/mcp.json`         | `.kimchi/mcp.json`                     |
-| skills           | `<configDir>/harness/skills/<name>`    | `.kimchi/skills/<name>`                |
-| Kimchi settings  | `<configDir>/config.json`              | `.kimchi/config.json`                  |
-| harness settings | `<configDir>/harness/settings.json`    | `.config/kimchi/harness/settings.json` |
-| agents           | `<configDir>/harness/agents/<name>.md` | `.kimchi/agents/<name>.md`             |
-| hooks            | none (warned exclusion)                | `.kimchi/hooks.json`                   |
+| pool             | Home Manager user path                            | devenv project path                    |
+| ---------------- | ------------------------------------------------- | -------------------------------------- |
+| context          | `<configDir>/harness/AGENTS.md`                   | root `AGENTS.md`                       |
+| MCP servers      | `<configDir>/harness/mcp.json`                    | `.kimchi/mcp.json`                     |
+| skills           | `<configDir>/harness/skills/<name>`               | `.kimchi/skills/<name>`                |
+| Kimchi settings  | `<configDir>/config.json`                         | `.kimchi/config.json`                  |
+| harness settings | `<configDir>/harness/settings.json`               | `.config/kimchi/harness/settings.json` |
+| permissions      | `.config/kimchi/harness/permissions.json` (fixed) | `.kimchi/permissions.json`             |
+| agents           | `<configDir>/harness/agents/<name>.md`            | `.kimchi/agents/<name>.md`             |
+| hooks            | none (warned exclusion)                           | `.kimchi/hooks.json`                   |
 
-Project Kimchi settings, MCP servers, harness settings, agents, and hooks are
-exact-cwd readers. The devenv wrapper rejects launches below the devenv root
-instead of silently missing them. It does not `cd` to the root instead, because
-that would also change the working directory Kimchi's tools see. Context and
-skills walk ancestors, so a devenv that declares none of the exact-cwd files
-leaves the launch directory unrestricted. Locked by
+Project Kimchi settings, MCP servers, harness settings, permissions, agents, and
+hooks are exact-cwd readers. The devenv wrapper rejects launches below the
+devenv root instead of silently missing them. It does not `cd` to the root
+instead, because that would also change the working directory Kimchi's tools
+see. Context and skills walk ancestors, so a devenv that declares none of the
+exact-cwd files leaves the launch directory unrestricted. Locked by
 `module-kimchi-devenv-exact-cwd-guard`, which checks both arms.
 
 The project harness directory is deliberately fixed. pi derives
@@ -74,25 +75,29 @@ over the path, which silently replaces a store symlink: 1.1.30's first-run
 migration (`src/setup-wizard.ts:117-137`) and ACP import
 (`src/modes/acp/ext-methods/import-apply.ts:289`) write the user file, and
 `/mcp enable|disable` writes the project file through the patched pi-mcp-adapter
-2.34.0 (`config.ts:1142-1147`). So `config.json`, `harness/settings.json` and
-`mcp.json` each state `facts.harnessWrites` and name an `ai.kimchi.activation`
-writer that declares their ledger: the rule resolves them to `shared`, and the
-router builds one `lib/ai/own.nix` bundle and one activation entry or devenv
-task per document, reconciling only the leaves Nix declares against a
-per-document ledger. A migrated server or a `disabled` toggle Kimchi adds is an
-unowned sibling the reconciler keeps. The three are separate writers on purpose:
-nothing orders them against each other, and each entry name is a
-consumer-visible contract. Devenv requires namespaced task names, so each writer
-uses backend-keyed `entry`: `ai:kimchi:config-merge`,
-`ai:kimchi:harness-settings-merge` and `ai:kimchi:mcp-merge` on devenv, with
-`kimchiConfigMerge`, `kimchiHarnessSettingsMerge` and `kimchiMcpMerge` on HM.
-Locked by `module-kimchi-hm-mcp-reconciled`,
-`module-kimchi-devenv-project-paths` and the `ai-delivery` policy rows. Home
-Manager ledger names continue to hash `configDir`, preserving ownership from
-generations before project-path delivery; devenv's new ledgers hash their actual
-project document paths.
+2.34.0 (`config.ts:1142-1147`). `/permissions … save user|project` rewrites
+`permissions.json` with `writeFileSync`
+(`src/extensions/permissions/commands.ts:234-237`, `config.ts:153`). So
+`config.json`, `harness/settings.json`, `mcp.json` and `permissions.json` each
+state `facts.harnessWrites` and name an `ai.kimchi.activation` writer that
+declares their ledger: the rule resolves them to `shared`, and the router builds
+one `lib/ai/own.nix` bundle and one activation entry or devenv task per
+document, reconciling only the leaves Nix declares against a per-document
+ledger. A migrated server or a `disabled` toggle Kimchi adds is an unowned
+sibling the reconciler keeps. The four are separate writers on purpose: nothing
+orders them against each other, and each entry name is a consumer-visible
+contract. Devenv requires namespaced task names, so each writer uses
+backend-keyed `entry`: `ai:kimchi:config-merge`,
+`ai:kimchi:harness-settings-merge`, `ai:kimchi:mcp-merge` and
+`ai:kimchi:permissions-merge` on devenv, with `kimchiConfigMerge`,
+`kimchiHarnessSettingsMerge`, `kimchiMcpMerge` and `kimchiPermissionsMerge` on
+HM. Locked by `module-kimchi-hm-mcp-reconciled`,
+`module-kimchi-devenv-project-paths`, `module-kimchi-permissions` and the
+`ai-delivery` policy rows. Home Manager ledger names continue to hash
+`configDir`, preserving ownership from generations before project-path delivery;
+devenv's new ledgers hash their actual project document paths.
 
-All three files state `facts.harnessWrites = true`, and every writer survives an
+All four files state `facts.harnessWrites = true`, and every writer survives an
 empty declaration on either backend, so removing the last MCP server retracts
 it. HM uses `$HOME` and XDG state; devenv uses `$DEVENV_ROOT` and
 `$DEVENV_STATE/nix-agentic-tools`. New documents are 0600 and existing regular
@@ -102,6 +107,14 @@ recurses. `skillPaths` in particular defaults to null, because 1.1.30 reads
 `projectExtras.skillPaths ?? globalExtras.skillPaths` (`src/config.ts:526`), so
 a project `[]` would replace the user's global skill paths; an explicit list,
 empty included, still lands. Locked by `module-kimchi-skill-paths-inherit`.
+
+`ai.kimchi.permissions` mirrors Kimchi's `.strict()` zod schema key for key
+(`src/extensions/permissions/config.ts:11-19`) with no freeform tail, because
+one unknown key invalidates the whole file. The user file is hard-coded to
+`~/.config/kimchi/harness/permissions.json` (`config.ts:35`), so its HM path
+ignores `configDir`. A list leaf is owned whole: a rule `/permissions … save`
+appends to a declared `allow` or `deny` is dropped on the next activation, the
+same trade Claude's reconciled permissions make.
 
 `harnessSettings.modelRoles` values are provider/model strings, or for delegable
 roles a non-empty list of them; `orchestrator` and `compactor` take one string,
