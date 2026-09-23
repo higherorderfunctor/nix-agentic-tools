@@ -419,20 +419,32 @@ in {
         devName = "dev-${name}";
       in
         lib.nameValuePair devName (prefixSkill name value));
-      traceSource = import ./lib/traceSource.nix {inherit lib;};
     in
       # stacked-workflows: re-key the deref'd, self-contained stack-* skill
       # dirs (real reference files bundled inside each) as dev-stack-*.
       prefixDev pkgs.stacked-workflows-content.passthru.skills
       // {
-        # Dev skills (repo-local tooling, not published packages). Wrapped in
-        # traceSource.tracedPath so devenv/direnv track their source CONTENTS
-        # (a bare `./dir` handed to ai.skills is copied, never read inside, so
-        # an edit would otherwise be served from a stale eval cache).
-        index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
-        kimchi-surface-scan = traceSource.tracedPath ./dev/skills/kimchi-surface-scan;
-        pr-review-loop = traceSource.tracedPath ./dev/skills/pr-review-loop;
-        repo-review = traceSource.tracedPath ./dev/skills/repo-review;
+        # Dev skills (repo-local tooling, not published packages). Handed over
+        # as bare paths: `mkDevenvSkillEntries` (lib/ai/hm-helpers.nix) walks
+        # each directory with `readDir` and emits one `files.<path>.source`
+        # entry per leaf, for kind `regular` AND kind `symlink`. That is a
+        # per-file store realization, not a read — but granularity is what
+        # direnv keys on, so each leaf lands in `.devenv/input-paths.txt`
+        # individually, where a whole-directory store copy would register only
+        # the directory (mechanism in lib/traceSource.nix).
+        #
+        # Wrapping these in `lib/traceSource.nix` therefore cannot add a path:
+        # the per-file set is a strict superset of what that wrapper's
+        # regular-files-only walk reaches. The live `.devenv/input-paths.txt`
+        # already lists the symlinked leaves under
+        # `dev/skills/repo-review/references/`, which the wrapper's walk skips
+        # outright. Measured 2026-09-22 — bare and wrapped arms reloaded
+        # identically, 3/3 each, with an attribution control confirming
+        # nothing else walks `dev/skills/`.
+        index-repo-docs = ./dev/skills/index-repo-docs;
+        kimchi-surface-scan = ./dev/skills/kimchi-surface-scan;
+        pr-review-loop = ./dev/skills/pr-review-loop;
+        repo-review = ./dev/skills/repo-review;
       };
   };
 

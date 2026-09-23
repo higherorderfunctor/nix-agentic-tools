@@ -402,5 +402,25 @@ _: {
         "update-pipeline"
       ];
     };
+    # shell-activation: why this repo activates through direnv rather than
+    # `devenv hook`, and what a migration would silently cost.
+    #
+    # The scope is DELIBERATELY three paths, and widening it is a regression.
+    # `devenv.nix` is the obvious candidate and is excluded on purpose: it
+    # already pulls the two `devenv` fragments (~21 KB) for edits that have
+    # nothing to do with shell activation, and issue #1427 tracks the
+    # always-loaded projection already costing the Copilot reviewer ~19k
+    # tokens per review. The three paths below are the ones whose editor is
+    # actually deciding something about activation: the direnv entry point,
+    # the devenv input set it resolves, and the module whose only remaining
+    # consumer is direnv's watch list.
+    shell-activation = {
+      scopes = [
+        ".envrc"
+        "devenv.yaml"
+        "lib/traceSource.nix"
+      ];
+      sources = ["activation-mechanism"];
+    };
   };
 }
