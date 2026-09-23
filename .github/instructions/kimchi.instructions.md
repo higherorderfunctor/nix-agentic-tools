@@ -14,14 +14,14 @@ applyTo: "packages/kimchi/**"
 > overwrites, both read from the sidecar, and the overwrite and inert flags are
 > derived from the sources, as is each harness key's project scope, declarations
 > resolve by reference or fail on ambiguity, and the extractor's own
-> hand-written parts are listed with their guards; the builder entry point is
-> `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and devenv its
-> project paths; the mutable JSON documents (`config.json`, harness
-> `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
-> reconcile by leaf through the shared delivery router; agents are owned
-> writable copies, copied from a store-path string as from a path; portable
-> hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
-> `trust.json.lock`. Full lineage:
+> hand-written parts are listed with their guards, and pi's declaration packages
+> follow Kimchi's lockfile; the builder entry point is `lib.ai.app.mkRuntime`.
+> Home Manager keeps Kimchi's user paths and devenv its project paths; the
+> mutable JSON documents (`config.json`, harness `settings.json`, `mcp.json`,
+> `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
+> shared delivery router; agents are owned writable copies, copied from a
+> store-path string as from a path; portable hooks reach `.kimchi/hooks.json` on
+> devenv only; the trust writer takes pi's `trust.json.lock`. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -125,11 +125,15 @@ the modules reachable from `src/entry.ts`, so the dead
 option. Same-named constants back a constant only where the checker finds no
 initializer, and only when they all agree. Three additional hash-pinned pi
 declaration packages resolve the settings type's external imports; unresolved
-named leaves fail extraction. The extractor also checks that the hash-pinned
-source URL names the same release tag recorded in provenance; Kimchi's source
-`package.json` intentionally retains the `0.0.0` development placeholder. It no
-longer extracts the CLI: the wrapper passes no flags, so that surface had no
-reader.
+named leaves fail extraction. Their versions are the ones Kimchi's
+`pnpm-lock.yaml` resolves pi's dependencies to, which is what the release binary
+bundles, not the floor of pi's caret ranges: the update job reads them from the
+lockfile, and the extractor (handed the lockfile as JSON through `yq`) fails
+when a supplied package differs from it. The extractor also checks that the
+hash-pinned source URL names the same release tag recorded in provenance;
+Kimchi's source `package.json` intentionally retains the `0.0.0` development
+placeholder. It no longer extracts the CLI: the wrapper passes no flags, so that
+surface had no reader.
 
 ## User and project paths (the load-bearing fact)
 
