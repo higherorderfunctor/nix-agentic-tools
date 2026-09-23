@@ -184,7 +184,11 @@
   the portable root input; native event lists still append inside the runtime.
   Default context presence uses the structural input inventory until final-file
   arbitration keeps its content; an explicit normalized context override
-  determines its own presence.
+  determines its own presence. A text-source record (context, a rule, agent
+  instructions) crosses into its pool with only its WINNING arm, `text` or
+  `source`, chosen from the original record's `_sourceWins`. Carrying both lands
+  them at one priority, which the record rejects, and computing that priority
+  reads the source — a build during evaluation for a derivation.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
