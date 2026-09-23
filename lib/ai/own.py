@@ -33,6 +33,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import contextlib
 import os
 import shutil
 import stat
@@ -57,6 +58,13 @@ NEW_FILE_MODE = 0o600
 # sharing a backend. Two lock paths would let two sweeps run at once and delete
 # each other's live temporary files.
 LOCK = ("materialize", "lock")
+# A target's NATIVE writer lock is the proper-lockfile protocol pi uses around
+# trust.json (dist/core/trust-manager.js acquireTrustLockSync): a directory at
+# `<document>.lock`, created with mkdir, removed on release, and judged dead
+# once its mtime is older than the library's default `stale` of 10 s. A holder
+# that stops refreshing it for that long is gone, so this run breaks it too.
+FOREIGN_LOCK_STALE = 10.0
+FOREIGN_LOCK_WAIT = 10.0
 
 # The clobber guard, transcribed arm by arm from the shell it replaced so the
 # two can be diffed side by side. The citations are line numbers in that file,
@@ -612,6 +620,47 @@ def write_ledger(codec: str, path: Path, written: Mapping[Any, Any]) -> None:
     ledger_format(codec)[1](path, written)
 
 
+def acquire_foreign(path: Path) -> None:
+    """Take one native writer's mkdir lock, breaking it only once stale."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + FOREIGN_LOCK_WAIT
+    while True:
+        try:
+            path.mkdir()
+            return
+        except FileExistsError:
+            pass
+        try:
+            age = time.time() - path.lstat().st_mtime
+        except FileNotFoundError:
+            continue
+        if age > FOREIGN_LOCK_STALE:
+            with contextlib.suppress(FileNotFoundError):
+                path.rmdir()
+            continue
+        if time.monotonic() >= deadline:
+            raise ValueError(
+                f"{path} is still held by its native writer after "
+                f"{FOREIGN_LOCK_WAIT:.0f}s"
+            )
+        time.sleep(0.02)
+
+
+@contextlib.contextmanager
+def foreign_locks(paths: list[Path]):
+    """Hold every native writer lock in `paths`, released in reverse order."""
+    held: list[Path] = []
+    try:
+        for path in paths:
+            acquire_foreign(path)
+            held.append(path)
+        yield
+    finally:
+        for path in reversed(held):
+            with contextlib.suppress(FileNotFoundError):
+                path.rmdir()
+
+
 # ── Plan ────────────────────────────────────────────────────────────
 
 
@@ -653,6 +702,10 @@ def load_plan(path: Path) -> Mapping[str, Any]:
                 raise ValueError(f"two live targets claim the path '{path}'")
             claimed.add(path)
         check_relative("ledger", target["ledger"])
+        if "lock" in target:
+            check_relative("lock", target["lock"])
+            if target["codec"] == "dir":
+                raise ValueError(f"lock is for document targets only: {target['path']}")
         if target["ledger"] in ledgers:
             raise ValueError(f"two targets share the ledger '{target['ledger']}'")
         ledgers.add(target["ledger"])
@@ -721,20 +774,30 @@ def run(plan: Mapping[str, Any], root: Path, state: Path, phase: str) -> None:
     # side effects belong under the lock. The skip below mirrors the locked
     # phase exactly, so a target the locked phase would not open is not opened
     # here either.
-    for target, units in zip(considered, resolved):
-        ledger = ledger_path(state, target)
-        if target["codec"] == "dir" or (
-            not units and not ledger_format(target["codec"])[0](ledger)
-        ):
-            continue
-        open_container(root, target, ledger)
+    #
+    # A document whose native writer takes a lock is read under that lock,
+    # here and below: pi rewrites trust.json in place with writeFileSync, so an
+    # unlocked read can parse half a file and an unlocked write can lose the
+    # decision a prompt was saving. The native lock is taken AFTER this run's
+    # own flock below, so a wait on a concurrent reconcile never ages it
+    # toward stale while this run holds it.
+    native = [root / target["lock"] for target in considered if "lock" in target]
+    with foreign_locks(native):
+        for target, units in zip(considered, resolved):
+            ledger = ledger_path(state, target)
+            if target["codec"] == "dir" or (
+                not units and not ledger_format(target["codec"])[0](ledger)
+            ):
+                continue
+            open_container(root, target, ledger)
 
     lock = state.joinpath(*LOCK)
     lock.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with lock.open("a") as handle:
+    with lock.open("a") as handle, contextlib.ExitStack() as native_held:
         # flock releases on process death, so a killed activation cannot
         # strand a lock that turns every later run into manual recovery.
         fcntl.flock(handle, fcntl.LOCK_EX)
+        native_held.enter_context(foreign_locks(native))
 
         opened = []
         for target, units in zip(considered, resolved):
