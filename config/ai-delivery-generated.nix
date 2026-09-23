@@ -545,13 +545,13 @@
     {
       ecosystem = "claude";
       mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/.claude/rules/<name>.md";
       writerAttr = [
-        "files"
-        ".claude/rules/probe.md"
+        "tasks"
+        "ai:claude:materialize-rules"
       ];
     }
     {

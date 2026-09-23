@@ -710,6 +710,8 @@ in
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       isHm = backend == "hm";
       unpinLedger = "json-settings/claude-unpin-launch-effort.json";
+      rulesLedger = "materialize/claude-rules.manifest";
+      rulesWriter = "materialize-claude-rules";
       upstream = path: sink: value: {
         ai.claude.files.${path} = {
           content.value = value;
@@ -793,6 +795,24 @@ in
         # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
         # Each entry becomes one file, translated through claudeTransformer
         # (paths: frontmatter).
+        #
+        # A project rule must be a real file: Claude's rules loader skips a
+        # `.claude/rules/*.md` whose symlink target leaves the project, and its
+        # scoped-rule (`paths:`) loader passes `includeExternal: false` at
+        # Project scope with no setting to change it (claude-code 2.1.280).
+        # User scope passes true, so Home Manager's `~/.claude/rules` links
+        # load. Hence the per-backend fact: devenv copies read-only, HM links.
+        # The directory ledger claims individual files, so a hand-placed rule
+        # survives, and the writer stays declared so N→0 retracts the copies.
+        (lib.optionalAttrs (!isHm) {
+          ai.claude.activation.${rulesWriter} = {
+            entry = "ai:claude:materialize-rules";
+            ledgers.${rulesLedger} = {
+              codec = "dir";
+              path = ".claude/rules";
+            };
+          };
+        })
         (let
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
           inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
@@ -807,6 +827,12 @@ in
                     paths = rule.matcher;
                   });
               };
+              entry = rulesWriter;
+              facts.symlinkReadable = {
+                devenv = false;
+                hm = true;
+              };
+              ledger = rulesLedger;
             })
           mergedRules;
         })
