@@ -7,9 +7,11 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — Claude devenv now delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`. The builder entry point
-> is `lib.ai.app.mkRuntime`. Native file settings live under
+> **Last verified:** 2026-09-23 — Claude devenv delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`, choosing `source` by Home
+> Manager's `isPathLike`. File content at `mkDefault` enables its entry;
+> `content.enable = false` suppresses every content form. The builder entry
+> point is `lib.ai.app.mkRuntime`. Native file settings live under
 > `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Authored prose and final delivery share one
 > priority-aware text-source record with enable semantics.
@@ -295,12 +297,14 @@ enabled ecosystem whose native model preserves the option's semantics):
   config. Claude HM hands entries to `programs.claude-code.agents`; Claude
   devenv writes `.claude/agents/<name>.md` itself through the same renderer,
   because upstream devenv `claude.code.agents` requires typed description/prompt
-  fields and cannot carry a raw Markdown or path entry. Legacy Nix paths stay
-  path-valued for Claude (a devenv file `source`) but are read into text for
-  Copilot's file writer. Kiro remains excluded, but NOT because its agents are
-  untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's v3 agent
-  schema, and its `prompt` uses the same `text`/`source` content shape. The
-  blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
+  fields and cannot carry a raw Markdown or path entry. A path-like legacy entry
+  — a Nix path, a store-path string such as a flake input's `"${src}/a.md"`, or
+  a derivation, i.e. upstream Home Manager's `isPathLike` — stays a file
+  `source` for Claude on both backends (`agent.isPathLike`), but is read into
+  text for Copilot's file writer. Kiro remains excluded, but NOT because its
+  agents are untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's
+  v3 agent schema, and its `prompt` uses the same `text`/`source` content shape.
+  The blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
   tool names (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`,
   `@mcp`), so lowering needs a translation table, not a pass-through. Add one
   and the exclusion can be revisited.
@@ -460,8 +464,10 @@ backend root (HOME for Home Manager, project root for devenv). An entry
 DESCRIBES a file rather than lowering one: `content` carries the bytes,
 `facts.{harnessWrites,symlinkReadable}` carry what the CLI does with the path,
 and `entry` / `ledger` name the writer that materializes it when it is not a
-symlink. `content.enable = false` suppresses generated text/source bytes while
-retaining an inspectable entry record.
+symlink. `content.enable = false`, defined at any priority, omits the file
+whatever supplies its bytes — `text`, `source`, `run` or `value` — while
+retaining an inspectable entry record. It is the only suppression lever; the old
+`null` tombstone is gone.
 
 `content` uses the repository's shared `{ enable, text, source }` record. `text`
 and `source` arbitrate by module priority: a strictly stronger arm wins, while
@@ -469,6 +475,14 @@ equal-priority definitions fail naming both paths. Delivery adds `value`
 (structured, rendered by `format`) and `run` (a body that writes the file when
 the writer runs) as explicit alternatives; validation permits at most one live
 form.
+
+A file record is built with `enableOnMkDefault`, so `text` or `source` defined
+at ANY priority, a leaf `mkDefault` included, enables it. Package prose records
+elsewhere stay dormant at `mkDefault`; a file has no dormant prose, and a leaf
+default is how a downstream module offers an overridable file. Empty inline
+`text` is not content: an entry with no content and no `enable` definition fails
+evaluation naming the path, rather than silently writing nothing. Spell an empty
+file as a `source`. The devshell `files.<name>` map follows the same rules.
 
 That is the part most likely to be remembered wrongly, because it replaced a
 whole-entry contract:
@@ -707,8 +721,8 @@ package-provenance guard (see `collision-semantics.md`).
 > **Last verified:** 2026-09-23 — the builder entry point is
 > `lib.ai.app.mkRuntime`, renamed from its old app name. Rules and context use
 > entry-local `enable` suppression, and Semble's CLI rule uses text-source
-> priority arbitration. Delivery entries default `content` alone; `null` absorbs
-> at equal priority.
+> priority arbitration. Delivery entries default `content` alone, and
+> `content.enable = false` suppresses every content form.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -723,22 +737,22 @@ This matrix is the authoritative cross-runtime merge and fanout contract. Any
 change to one of these boundaries must update the corresponding row in the same
 commit.
 
-| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                                   |
-| --- | ------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                         |
-| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                                       |
-| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                                        |
-| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                             |
-| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                             |
-| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                                      |
-| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                                      |
-| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                          |
-| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                          |
-| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                                      |
-| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses text/source bytes with `content.enable = false`. |
-| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                             |
-| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                                     |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                         |
+| ID  | Boundary                                          | Unit    | Behavior                                                                                                                                          |
+| --- | ------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0  | root pool → runtime lacking that pool             | pool    | Degrade to the neutral value; the corresponding per-runtime option does not exist.                                                                |
+| B1  | root pool ↔ runtime pool, same key                | entry   | The runtime entry replaces the root entry wholesale.                                                                                              |
+| B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
+| B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
+| B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
+| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
+| B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
+| B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
+| B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
+| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                             |
+| B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the file with `content.enable = false`. |
+| B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                    |
+| B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                            |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit used to be
 the complete rendered native file; it is now the delivery entry's fields, and
@@ -880,9 +894,10 @@ runs before a type merges: a whole-entry `mkDefault` is discarded outright by a
 consumer who sets only `method` or a fact, and the survivor has no bytes at all.
 Two consequences follow.
 
-- The map has no nullable entry branch. A consumer suppresses generated
-  text/source bytes with `content.enable = false`, so ordinary submodule
-  priority arbitration remains available and the final record stays inspectable.
+- The map has no nullable entry branch. A consumer suppresses a generated file —
+  text, source, `run` or `value` alike — with `content.enable = false`, so
+  ordinary submodule priority arbitration remains available and the final record
+  stays inspectable.
 - An entry whose content decision reads its own rendered body cannot move its
   priority down at all: the module system forces the entry's shape long before
   it knows whether the definition survives, so the read would build a source the

@@ -25,18 +25,30 @@ in rec {
     lib.optionalAttrs (entry.executable != null) {inherit (entry) executable;}
     // lib.optionalAttrs entry.recursive {recursive = true;}
     // aiTypes.textSourceFile entry.content;
+  # Whether an entry is delivered. A DEFINED `content.enable = false` omits
+  # the file whatever supplies its bytes: it is the one suppression lever, so
+  # it has to reach `run` and `value` documents too, not only text/source.
+  # Otherwise text/source are live when enabled, and `run`/`value` whenever
+  # they are set, since nothing enables them.
+  isLive = entry:
+    entry.content.enable
+    || (!entry.content._enableDefined
+      && (entry.content.run != null || entry.content.value != null));
+
   validateFiles = runtime: files: let
     invalidTargets = builtins.filter (target: !targetIsNormalized target) (builtins.attrNames files);
     contentKinds = entry:
       lib.optional entry.content.enable "text or source"
       ++ lib.optional (entry.content.run != null) "run"
       ++ lib.optional (entry.content.value != null) "value";
+    # An entry with no content and no `enable` definition would silently
+    # write nothing. That is what an empty `text` is, because empty inline
+    # text is not content; a `content.enable = false` at any priority is the
+    # deliberate way to have an entry that delivers nothing.
     malformed = lib.filterAttrs (_target: entry: let
       count = builtins.length (contentKinds entry);
     in
-      count
-      > 1
-      || (count == 0 && !entry.content._enableExplicit && !entry.content._textSourceDefined))
+      count > 1 || (count == 0 && !entry.content._enableDefined))
     files;
   in
     if invalidTargets != []
@@ -51,7 +63,9 @@ in rec {
     else
       throw ''
         ai.${runtime}.files entries must enable exactly one content form:
-        `text`/`source`, `run`, or `value`; invalid entries:
+        `text`/`source`, `run`, or `value`. Empty `text` is not content:
+        spell an empty file as a `source`, or omit the entry with
+        `content.enable = false`. Invalid entries:
         ${lib.concatStringsSep ", " (builtins.attrNames malformed)}
       '';
 
@@ -60,7 +74,5 @@ in rec {
   # delivery description, and it has no methods, facts or writers.
   liveFiles = files:
     lib.mapAttrs (_target: sinkEntry)
-    (lib.filterAttrs (_target: entry:
-      entry.content.enable || entry.content.run != null || entry.content.value != null)
-    files);
+    (lib.filterAttrs (_target: isLive) files);
 }

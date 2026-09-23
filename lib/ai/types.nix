@@ -78,6 +78,7 @@
   mkEnableModule = {
     description,
     enableDefault,
+    enableOnMkDefault,
   }: {
     config,
     options,
@@ -88,30 +89,28 @@
     # config.text here would cycle through config.enable, and source presence
     # must enable lazily without reading the file.
     mergedText = lib.mergeDefinitions options.text.loc options.text.type options.text.definitionsWithLocations;
-    contentIsExplicit =
-      options.text.highestPrio
-      < defaultPriority
-      || options.source.highestPrio < defaultPriority;
-    contentIsDefined =
-      options.text.highestPrio
-      <= defaultPriority
-      || options.source.highestPrio <= defaultPriority;
+    # `defaultContent` is installed at `mkDefault`, so by default only content
+    # above that priority is a consumer's and enables the record: package
+    # prose stays dormant until someone opts in. A record with no
+    # `defaultContent` has no dormant prose to protect, and may opt into
+    # treating a `mkDefault` definition as content too.
+    enablesRecord = field:
+      if enableOnMkDefault
+      then options.${field}.highestPrio <= defaultPriority
+      else options.${field}.highestPrio < defaultPriority;
+    contentIsExplicit = enablesRecord "text" || enablesRecord "source";
     contentIsPresent =
       if contentUsesSource
       then true
       else mergedText.mergedValue != "";
   in {
     options = {
-      _enableExplicit = lib.mkOption {
+      # Whether any definition of `enable` exists, at whatever priority —
+      # including a generator's whole-entry `mkDefault`. It separates a record
+      # someone switched off from one that merely has nothing in it.
+      _enableDefined = lib.mkOption {
         type = lib.types.bool;
-        default = options.enable.highestPrio < defaultPriority;
-        internal = true;
-        readOnly = true;
-        visible = false;
-      };
-      _textSourceDefined = lib.mkOption {
-        type = lib.types.bool;
-        default = contentIsDefined;
+        default = options.enable.highestPrio <= defaultPriority;
         internal = true;
         readOnly = true;
         visible = false;
@@ -119,7 +118,11 @@
       enable = lib.mkOption {
         type = lib.types.bool;
         default = enableDefault;
-        description = "Whether to include ${description}. Content supplied through non-empty `text` or a `source` at consumer priority enables it automatically; setting `enable = false` omits it while retaining that content. An enabled or required text source without content is an evaluation error.";
+        description = "Whether to include ${description}. Content supplied through non-empty `text` or a `source` at ${
+          if enableOnMkDefault
+          then "any priority, `mkDefault` included,"
+          else "consumer priority"
+        } enables it automatically; setting `enable = false` omits it while retaining that content. An enabled or required text source without content is an evaluation error.";
       };
     };
 
@@ -132,6 +135,15 @@ in {
 
   inherit textSourceUsesSource;
 
+  # The inline text an enabled record delivers, or null when it is disabled or
+  # a `source` supplies it. Reading `text` of a source-backed record would
+  # `readFile` the source at evaluation time, which for a derivation output is
+  # import-from-derivation; callers that measure bytes stay lazy through this.
+  textSourceInlineText = value:
+    if !value.enable || textSourceUsesSource value
+    then null
+    else value.text;
+
   textSourceFile = value:
     if textSourceUsesSource value
     then {inherit (value) source;}
@@ -141,11 +153,14 @@ in {
     defaultContent ? {},
     description,
     enableDefault ? false,
+    enableOnMkDefault ? false,
     textType ? lib.types.lines,
   }: let
     baseType = mkTextSource {inherit defaultContent description textType;};
   in
-    extendSubmodule baseType (mkEnableModule {inherit description enableDefault;});
+    if enableOnMkDefault && defaultContent != {}
+    then throw "optionalTextSource: `enableOnMkDefault` would enable its own `defaultContent` (${description}); a record carries at most one of them."
+    else extendSubmodule baseType (mkEnableModule {inherit description enableDefault enableOnMkDefault;});
 
   textSource = mkTextSource;
 }

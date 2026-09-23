@@ -87,10 +87,12 @@
   sizeAssertions =
     lib.mapAttrsToList (filename: value: let
       finalEntry = config.ai.internal.files.${filename} or null;
+      # A source-backed final entry is not measured: reading it would build a
+      # derivation during evaluation. Only inline bytes are size-checked.
       finalText =
-        if finalEntry == null || !finalEntry.content.enable
+        if finalEntry == null
         then null
-        else finalEntry.content.text;
+        else aiTypes.textSourceInlineText finalEntry.content;
       size =
         if finalText == null
         then null
@@ -109,10 +111,11 @@
   projectEntry = entry:
     entry
     // {
+      # `enable` is forwarded only where the runtime entry defines it: a
+      # restated default `false` would read as a deliberate disable here and
+      # suppress a `run` or `value` entry.
       content =
-        {
-          inherit (entry.content) enable;
-        }
+        lib.optionalAttrs entry.content._enableDefined {inherit (entry.content) enable;}
         // lib.optionalAttrs entry.content.enable (aiTypes.textSourceFile entry.content)
         // lib.optionalAttrs (entry.content.run != null) {inherit (entry.content) run;}
         // lib.optionalAttrs (entry.content.value != null) {inherit (entry.content) value;};

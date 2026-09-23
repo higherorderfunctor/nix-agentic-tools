@@ -49,6 +49,10 @@
     aiTypes.extendSubmodule
     (aiTypes.optionalTextSource {
       description = "file content";
+      # A file carries no dormant package prose, so content at any priority
+      # is meant to be delivered: a leaf `content.text = mkDefault …` is the
+      # ordinary overridable-default idiom and must not vanish.
+      enableOnMkDefault = true;
       textType = lib.types.str;
     })
     {
@@ -102,6 +106,12 @@
           (`content.value.<leaf> = lib.mkDefault …`) — that is the shape that
           merges leaf-wise and survives. Exactly one of enabled text/source,
           `run`, or `value` may supply a live entry's bytes.
+
+          `content.enable = false` omits the file whatever supplies its
+          bytes — text, source, `run` or `value` — and is the one way to
+          suppress an entry. Empty `text` is not content: an entry left with
+          nothing else is an evaluation error, so spell an empty file as a
+          `source`.
         '';
       };
       entry = lib.mkOption {

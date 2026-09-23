@@ -1541,6 +1541,9 @@ in {
                 description = "Probe agent.";
                 instructions.text = "PROBE-AGENT-BODY-TOKEN.";
               };
+              # A store-path STRING, as a flake input yields: a source, the
+              # way upstream Home Manager's `isPathLike` delivers it.
+              store-string = "${./fixtures/claude-agents}/agent-one.md";
               suppressed = "Suppressed agent.";
             };
             claude = {
@@ -1550,8 +1553,12 @@ in {
           };
         };
         text = (result.config.files.".claude/agents/probe.md" or {}).text or "";
+        storeString = result.config.files.".claude/agents/store-string.md" or {};
       in
-        lib.hasInfix "name: \"probe\"" text
+        toString (storeString.source or "")
+        == "${./fixtures/claude-agents}/agent-one.md"
+        && (storeString.text or null) == null
+        && lib.hasInfix "name: \"probe\"" text
         && lib.hasInfix "description: \"Probe agent.\"" text
         && lib.hasInfix "PROBE-AGENT-BODY-TOKEN." text
         && !(result.config.files ? ".claude/agents/suppressed.md")
@@ -1572,9 +1579,22 @@ in {
           };
         };
         file = result.config.files.".claude/agents/agent-one.md" or {};
+        # The same directory as a store-path string, as a flake input yields.
+        fromString = evalDevenv {
+          ai.claude = {
+            enable = true;
+            agentsDir = {
+              path = "${./fixtures/claude-agents}";
+              filter = name: name == "agent-one.md";
+            };
+          };
+        };
+        stringFile = fromString.config.files.".claude/agents/agent-one.md" or {};
       in
         (file.source or null)
         == ./fixtures/claude-agents/agent-one.md
+        && toString (stringFile.source or "") == "${./fixtures/claude-agents}/agent-one.md"
+        && (stringFile.text or null) == null
         && !(result.config.files ? ".claude/agents/agent-two.md")
         && !(lib.any (lib.hasInfix "agentsDir") result.config.warnings)
     );

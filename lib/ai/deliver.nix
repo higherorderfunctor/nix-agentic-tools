@@ -85,11 +85,8 @@ in
           both backends use.
         '');
 
-    # Disabled text-source records are not files; everything below sees live
-    # entries only. `run` and `value` are independently live alternatives.
-    live = lib.filterAttrs (_path: entry:
-      entry.content.enable || entry.content.run != null || entry.content.value != null)
-    cfg.files;
+    # Disabled records are not files; everything below sees live entries only.
+    live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
 
     # The ONE place a method is resolved. Not at type level and not in an
     # `apply`: both would read a sibling option while the option they belong to

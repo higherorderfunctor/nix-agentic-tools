@@ -1053,7 +1053,7 @@ in
                 content = lib.mkDefault (
                   {enable = true;}
                   // (
-                    if builtins.isPath rendered
+                    if agent.isPathLike rendered
                     then {source = rendered;}
                     else {text = rendered;}
                   )
