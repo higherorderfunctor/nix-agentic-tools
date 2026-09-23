@@ -1,7 +1,7 @@
 ## Kiro workflows: three gates, all of them silent
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-22 — the shipped TUI source still excludes
+> `chat.enableWorkflows` from the workspace settings allowlist.
 
 `ai.kiro.unlockedRolloutFeatures = ["workflows"]` is necessary and **not**
 sufficient. Three independent conditions must hold, none of them errors or logs
@@ -101,29 +101,26 @@ Do not "restore parity" by adding the implication to devenv. The asymmetry is
 the correct lowering of one option onto two different native scopes; the option
 DECLARATION is shared, which is where parity actually lives.
 
-### The allowlist is extracted, and an empty result is a real answer
+### The allowlist is extracted from the workspace merge
 
 `packages/kiro-cli/extracted.json` carries `workspaceOverridableSettings`,
 produced by `kiroSettingsExtractScript` in
 `packages/kiro-cli/lib/packaging.nix`. It is extracted rather than curated for
 the same reason `rolloutFeatures` is: the set IS the contract.
 
-Unlike the rollout extractor, **absence is not fatal here**, and that is
-deliberate. Every release before 2.21.1 genuinely honors no workspace override,
-so `[]` is the truthful answer for them; hard-failing would wedge the update
-pipeline the first time upstream reverted a release-old mechanism. What IS fatal
-is anything meaning the probe could not answer: a missing settings-key registry
-(the JS payload is not what we think it is), more than one candidate set, or a
-member that resolves to nothing or to two different keys — a PARTIAL allowlist
-would reject settings kiro actually honors, which is worse than no allowlist.
-
-Anchoring is on CONTENT, never on the handles: `Cq` and `pn` in the snippets
-above are esbuild collision suffixes, not stable names. The probe keys off a
-member the set has carried since it shipped and resolves symbolic members
-through the bundle's own `SCREAMING -> "dotted.key"` registry — which is why
-`module-kiro-workspace-allowlist-from-sidecar` checks for `chat.defaultModel`
-specifically: it appears only symbolically, so it is the positive control on
-that resolution path.
+The extractor materializes the shipped TUI source in a Nix build sandbox and
+uses its JavaScript AST to find the registry and candidate allowlist by their
+contents, not by minified variable names. It also requires the workspace merge
+function to consult that same set. A missing or ambiguous registry is fatal.
+When both the set and merge are absent, the extractor returns `[]`, matching
+releases before 2.21.1 that had no workspace override. If only one is absent, it
+fails; silently treating an unreadable allowlist as empty would reject settings
+Kiro actually honors. The validated registry and set expressions and the
+selected merge helper are evaluated in an isolated VM with inert loaders. This
+resolves symbolic members through the bundle's own registry and verifies which
+keys the merge actually copies. `module-kiro-workspace-allowlist-from-sidecar`
+checks for `chat.defaultModel` specifically because it appears symbolically in
+the set.
 
 That test also asserts `chat.enableWorkflows` is ABSENT from the allowlist. If
 upstream adds it, the test failing is the signal to relax the devenv guidance
