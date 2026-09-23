@@ -181,8 +181,11 @@
       && lib.any (lib.hasInfix "config.json keys Kimchi reads only from user scope: telemetry") (failedAssertions devenvTelemetry)
       && failedAssertions hmTelemetry == [];
 
+    # PI_CODING_AGENT_DIR is overwritten too, but entry.ts reads it first and
+    # preserves it, so the derived flag must leave it settable.
     fixed-environment-is-rejected =
-      lib.any (lib.hasInfix "PI_SKIP_VERSION_CHECK: entry.ts overwrites it with 1") (fixedVariable {kimchi.environmentVariables.PI_SKIP_VERSION_CHECK = "0";})
+      lib.any (lib.hasInfix "PI_SKIP_VERSION_CHECK: src/entry.ts assigns it on every launch before anything reads it") (fixedVariable {kimchi.environmentVariables.PI_SKIP_VERSION_CHECK = "0";})
+      && fixedVariable {kimchi.environmentVariables.PI_CODING_AGENT_DIR = "/srv/pi-agent";} == []
       && fixedVariable {
         environmentVariables.PI_SKIP_VERSION_CHECK = "0";
         kimchi.environmentVariables.PI_SKIP_VERSION_CHECK = null;
