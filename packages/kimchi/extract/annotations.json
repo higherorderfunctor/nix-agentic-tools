@@ -10,18 +10,9 @@
     },
     "gitTokens": {},
     "llmEndpoint": {},
-    "maxToolResultChars": {
-      "inert": true,
-      "warning": "read only to detect obsolete configuration; it has no runtime effect"
-    },
-    "mcpSearch": {
-      "inert": true,
-      "warning": "read only to detect obsolete configuration; it has no runtime effect"
-    },
-    "mcpSearchLimit": {
-      "inert": true,
-      "warning": "read only to detect obsolete configuration; it has no runtime effect"
-    },
+    "maxToolResultChars": {},
+    "mcpSearch": {},
+    "mcpSearchLimit": {},
     "migrationState": {},
     "onboarding": {},
     "preferences": {},

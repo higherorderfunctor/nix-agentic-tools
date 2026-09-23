@@ -47,6 +47,9 @@
       typeExpression = "string | number";
     };
   });
+  withConsumedInertKey = surfaceFor (lib.recursiveUpdate committed {
+    config.keys.mcpSearchLimit.inert = false;
+  });
   withoutOwnVariable = surfaceFor (lib.recursiveUpdate committed {
     environment.variables.KIMCHI_NO_UPDATE_CHECK.consumerOverridable = false;
   });
@@ -167,6 +170,11 @@
       && withoutModelRoles.report.staleRefinements == ["harnessSettings.modelRoles"]
       # The hand-kept user-scope harness list names only keys Kimchi reads.
       && lib.all (key: real.harnessSettingsOptions ? ${key}) (import ../lib/user-scope-only-harness-settings.nix);
+
+    # The sidecar's derived inert flag, not a hand list, removes the option.
+    inert-keys-follow-the-sidecar =
+      lib.all (key: real.report.excluded.settings ? ${key} && !(real.settingsOptions ? ${key})) ["maxToolResultChars" "mcpSearch" "mcpSearchLimit"]
+      && withConsumedInertKey.settingsOptions ? mcpSearchLimit;
 
     every-type-is-mapped =
       real.report.untyped
