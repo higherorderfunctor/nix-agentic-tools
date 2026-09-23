@@ -178,11 +178,6 @@
     ++ [
       {
         runtime = "claude";
-        path = ["ai" "claude" "agentsDir"];
-        value = ../../packages/claude-code/checks/fixtures/claude-agents;
-      }
-      {
-        runtime = "claude";
         path = ["ai" "claude" "native" "settings" "mcpServers"];
         value.probe.command = "probe";
       }

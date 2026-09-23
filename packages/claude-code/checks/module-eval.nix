@@ -1528,6 +1528,57 @@ in {
         upstream.agent-one == ./fixtures/claude-agents/agent-one.md
     );
 
+    # Devenv parity: agents land at project `.claude/agents/<name>.md` through
+    # the same renderer HM hands to `programs.claude-code.agents`. A semantic
+    # root record renders frontmatter + body; a per-runtime null tombstone
+    # suppresses a root entry; nothing warns about an undelivered surface.
+    module-claude-devenv-agents = mkTest "claude-devenv-agents" (
+      let
+        result = evalDevenv {
+          ai = {
+            agents = {
+              probe = {
+                description = "Probe agent.";
+                instructions.text = "PROBE-AGENT-BODY-TOKEN.";
+              };
+              suppressed = "Suppressed agent.";
+            };
+            claude = {
+              enable = true;
+              agents.suppressed = null;
+            };
+          };
+        };
+        text = (result.config.files.".claude/agents/probe.md" or {}).text or "";
+      in
+        lib.hasInfix "name: \"probe\"" text
+        && lib.hasInfix "description: \"Probe agent.\"" text
+        && lib.hasInfix "PROBE-AGENT-BODY-TOKEN." text
+        && !(result.config.files ? ".claude/agents/suppressed.md")
+        && !(lib.any (lib.hasInfix "agents") result.config.warnings)
+    );
+
+    # Devenv parity for `agentsDir`: each `.md` becomes a path-valued agent
+    # delivered as its own file, with no undelivered-surface warning.
+    module-claude-devenv-agentsdir = mkTest "claude-devenv-agentsdir" (
+      let
+        result = evalDevenv {
+          ai.claude = {
+            enable = true;
+            agentsDir = {
+              path = ./fixtures/claude-agents;
+              filter = name: name == "agent-one.md";
+            };
+          };
+        };
+        file = result.config.files.".claude/agents/agent-one.md" or {};
+      in
+        (file.source or null)
+        == ./fixtures/claude-agents/agent-one.md
+        && !(result.config.files ? ".claude/agents/agent-two.md")
+        && !(lib.any (lib.hasInfix "agentsDir") result.config.warnings)
+    );
+
     # ── ai.claude.hookScriptsDir Dir helper ────────────────────
     # Claude-only per plan §5 (hook scripts are a Claude-specific
     # concept). See lib/ai/dir-helpers.nix:hooksFromDir. Default
