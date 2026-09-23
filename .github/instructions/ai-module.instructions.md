@@ -7,10 +7,12 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — portable agents reach Kimchi as owned writable
-> copies and portable hooks reach its project `hooks.json` on devenv; reasoning
-> effort lowers to Claude, Codex, and Kimchi; authored prose and final delivery
-> share one priority-aware text-source record with enable semantics.
+> **Last verified:** 2026-09-23 — a root request nothing per-runtime can
+> withdraw (excluded or non-keyed pool) never warns; portable agents reach
+> Kimchi as owned writable copies and portable hooks reach its project
+> `hooks.json` on devenv; reasoning effort lowers to Claude, Codex, and Kimchi;
+> authored prose and final delivery share one priority-aware text-source record
+> with enable semantics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -315,9 +317,10 @@ enabled ecosystem whose native model preserves the option's semantics):
   executable; bare-file derivations remain direct output paths. Kimchi reads the
   same Claude shape from a trusted project's `.kimchi/hooks.json`, so devenv
   writes shared plus `ai.kimchi.hooks` groups there; PermissionRequest is not a
-  Kimchi event and is left out with a warning. Kimchi has no user-scope
-  lifecycle file, so its Home Manager row is an explicit, warned exclusion.
-  Kiro's v3 trigger records remain native-only.
+  Kimchi event and is left out silently. Kimchi has no user-scope lifecycle file
+  Home Manager can own, so its Home Manager row is an explicit exclusion: silent
+  for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
+  remain native-only.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
   when both are present. The strictly higher-priority definition supplies the
@@ -418,14 +421,19 @@ Kimchi is the sharp example: it supports `context`, `environmentVariables`,
 assertion with a supported-runtime positive control so harness failure cannot
 masquerade as correct exclusion.
 
-A non-empty ROOT request for an excluded pool is SILENT — no assertion, and no
-activation warning either. The remedy a warning would ask for does not exist:
-`ai.kimchi.rules` is an unknown option by design, so nothing the consumer can
-write would silence it and it would repeat on every activation forever. The
-exclusion is recorded in the pool's option description and in the delivery
-matrix instead. A PER-RUNTIME request a backend cannot deliver does warn
-(`lib/ai/delivery-warnings.nix`), because that one the consumer wrote directly
-and can delete.
+A non-empty ROOT request is SILENT whenever nothing per-runtime can withdraw it
+— no assertion, and no activation warning either. That covers an excluded pool
+(`ai.kimchi.rules` is an unknown option by design) and a non-keyed pool
+(`context`, `hooks`), whose root and per-runtime values compose, so a pool a
+runtime supports on one backend and not the other (Kimchi's `ai.hooks` on Home
+Manager) stays silent too. A warning there would repeat on every activation
+forever, and the only remedy would be taking the shared value away from every
+other runtime. The exclusion is recorded in the pool's option description and in
+the delivery matrix instead. A root KEYED pool warns only for names the runtime
+has not withdrawn with `ai.<runtime>.<pool>.<name> = null`
+(`config/ai-delivery.nix` `keyedSurfaces`). A PER-RUNTIME request a backend
+cannot deliver does warn (`lib/ai/delivery-warnings.nix`), because that one the
+consumer wrote directly and can delete.
 
 ### Assertion semantics
 
