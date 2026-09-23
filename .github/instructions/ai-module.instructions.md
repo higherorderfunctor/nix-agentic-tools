@@ -10,11 +10,13 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > **Last verified:** 2026-09-23 — Claude, Codex, Copilot and Kiro describe
 > delivery once through `mkRuntime`'s record-level `config`; Kimchi keeps its
 > per-backend callbacks until its port. Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`. File content at
-> `mkDefault` enables its entry; `content.enable = false` suppresses every
-> content form. Native file settings live under `ai.<runtime>.native`. Upstream
-> delegation aliases the content field's own definitions. Ledger-owned copies
-> whose files nothing else retracts opt into `runWhenDisabled`.
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`. Every raw agent writer
+> (Claude, Copilot, Kiro) tests `agent.isPathLike`, so a store-path string is a
+> file, never a body naming its own path. File content at `mkDefault` enables
+> its entry; `content.enable = false` suppresses every content form. Native file
+> settings live under `ai.<runtime>.native`. Upstream delegation aliases the
+> content field's own definitions. Ledger-owned copies whose files nothing else
+> retracts opt into `runWhenDisabled`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -305,11 +307,14 @@ enabled ecosystem whose native model preserves the option's semantics):
   fields and cannot carry a raw Markdown or path entry. A path-like legacy entry
   — a Nix path, a store-path string such as a flake input's `"${src}/a.md"`, or
   a derivation, i.e. upstream Home Manager's `isPathLike` — stays a file
-  `source` for Claude on both backends (`agent.isPathLike`), but is read into
-  text for Copilot's file writer. Kiro remains excluded, but NOT because its
-  agents are untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's
-  v3 agent schema, and its `prompt` uses the same `text`/`source` content shape.
-  The blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
+  `source` for Claude on both backends (`agent.isPathLike`), and is read into
+  text by `renderCopilot` for Copilot's file writer; an `agentsDir` given as a
+  string yields string entries, so both writers must test `isPathLike`, never
+  `builtins.isPath`. Raw `ai.kiro.agents` entries route the same way to
+  `source`. Kiro remains excluded from this pool, but NOT because its agents are
+  untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's v3 agent
+  schema, and its `prompt` uses the same `text`/`source` content shape. The
+  blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
   tool names (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`,
   `@mcp`), so lowering needs a translation table, not a pass-through. Add one
   and the exclusion can be revisited.

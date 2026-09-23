@@ -31,6 +31,8 @@
   mkIdentityMaterializer = import ./identityBundle.nix {inherit lib pkgs;};
   workflowReminder = import ./workflowReminder.nix {inherit lib pkgs;};
 
+  agent = import ../../../lib/ai/agent.nix {inherit lib;};
+
   # Shared AI helpers (filterNulls, mkLspConfig, flattenDotKeysUntil, …). Hoisted to
   # the top-level `let` so option TYPES and renderers can reach it too — both
   # backend blocks previously imported it separately.
@@ -416,10 +418,13 @@
   # two cannot drift. Previously HM routed a path to `source` while devenv
   # assigned it to `.text`, which wrote the store path STRING as the file body
   # instead of its contents; going through one helper fixes that asymmetry.
+  # `isPathLike`, not `lib.isPath`: the `lines` arm also admits a store-path
+  # string (a flake input's `"${src}/agent.json"`), which is a file to copy,
+  # not JSON text whose body is its own path.
   mkAgentEntry = attrName: value:
     if isTypedAgent value
     then {text = renderAgent attrName value;}
-    else if lib.isPath value
+    else if agent.isPathLike value
     then {source = value;}
     else {text = value;};
 
