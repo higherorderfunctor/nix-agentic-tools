@@ -1,6 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-22 — normalized reasoning effort lowers to harness
+> **Last verified:** 2026-09-23 — `mcp.json` is reconciled by leaf like the
+> other two JSON documents; normalized reasoning effort lowers to harness
 > `defaultThinkingLevel`. Home Manager retains Kimchi's user paths while devenv
 > uses the pinned runtime's project paths. Both mutable documents still reach
 > the shared delivery router. Full lineage:
@@ -57,27 +58,37 @@ Kimchi settings are ordinary **nested** JSON (`telemetry`, `llmEndpoint`,
 context, and skills.
 
 The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json`
-(`/multi-model`, `kimchi resources`) and downloads vendor content into it. So
-`config.json` and `harness/settings.json` each state `facts.harnessWrites` and
-name an `ai.kimchi.activation` writer that declares their ledger: the rule
-resolves them to `shared`, and the router builds one `lib/ai/own.nix` bundle and
-one activation entry or devenv task per document, reconciling only the leaves
-Nix declares against a per-document ledger. The two are separate writers on
-purpose: nothing orders them against each other, and each entry name is a
+(`/multi-model`, `kimchi resources`) and downloads vendor content into it.
+`mcp.json` is written too, on both backends, and always by renaming a temporary
+over the path, which silently replaces a store symlink: 1.1.30's first-run
+migration (`src/setup-wizard.ts:117-137`) and ACP import
+(`src/modes/acp/ext-methods/import-apply.ts:289`) write the user file, and
+`/mcp enable|disable` writes the project file through the patched pi-mcp-adapter
+2.34.0 (`config.ts:1142-1147`). So `config.json`, `harness/settings.json` and
+`mcp.json` each state `facts.harnessWrites` and name an `ai.kimchi.activation`
+writer that declares their ledger: the rule resolves them to `shared`, and the
+router builds one `lib/ai/own.nix` bundle and one activation entry or devenv
+task per document, reconciling only the leaves Nix declares against a
+per-document ledger. A migrated server or a `disabled` toggle Kimchi adds is an
+unowned sibling the reconciler keeps. The three are separate writers on purpose:
+nothing orders them against each other, and each entry name is a
 consumer-visible contract. Devenv requires namespaced task names, so each writer
-uses backend-keyed `entry`: `ai:kimchi:config-merge` and
-`ai:kimchi:harness-settings-merge` on devenv, with the existing
-`kimchiConfigMerge` and `kimchiHarnessSettingsMerge` names on HM. Home Manager
-ledger names continue to hash `configDir`, preserving ownership from generations
-before project-path delivery; devenv's new ledgers hash their actual project
-document paths.
+uses backend-keyed `entry`: `ai:kimchi:config-merge`,
+`ai:kimchi:harness-settings-merge` and `ai:kimchi:mcp-merge` on devenv, with
+`kimchiConfigMerge`, `kimchiHarnessSettingsMerge` and `kimchiMcpMerge` on HM.
+Locked by `module-kimchi-hm-mcp-reconciled`,
+`module-kimchi-devenv-project-paths` and the `ai-delivery` policy rows. Home
+Manager ledger names continue to hash `configDir`, preserving ownership from
+generations before project-path delivery; devenv's new ledgers hash their actual
+project document paths.
 
-Both files state `facts.harnessWrites = true`, and both writers survive an empty
-declaration on either backend. HM uses `$HOME` and XDG state; devenv uses
-`$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`. New documents are 0600 and
-existing regular files retain their modes. Empty harness settings release all
-owned leaves; empty native settings still declare the typed `skillPaths = []`
-default. A file tombstone releases that final claim too.
+All three files state `facts.harnessWrites = true`, and every writer survives an
+empty declaration on either backend, so removing the last MCP server retracts
+it. HM uses `$HOME` and XDG state; devenv uses `$DEVENV_ROOT` and
+`$DEVENV_STATE/nix-agentic-tools`. New documents are 0600 and existing regular
+files retain their modes. Empty harness settings release all owned leaves; empty
+native settings still declare the typed `skillPaths = []` default. A file
+tombstone releases that final claim too.
 
 Everything else Kimchi delivers is immutable and symlink-readable, so it takes
 both defaults and states no fact at all. Normalized context renders into the
