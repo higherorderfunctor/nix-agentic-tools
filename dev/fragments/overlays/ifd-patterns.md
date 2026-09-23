@@ -1,8 +1,9 @@
 ## IFD Patterns and Gotchas
 
 > **Last verified:** 2026-09-23 — `fix_sidecar_hashes` also repairs
-> `pnpmDepsHash`; Kiro settings extraction validates its materialized TUI
-> registry and workspace merge with AST checks.
+> `pnpmDepsHash`; kimchi versions its pnpm-deps and src FOD names; Kiro settings
+> extraction validates its materialized TUI registry and workspace merge with
+> AST checks.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -591,6 +592,14 @@ feature maturities, and config-key extraction fail closed.
   writing a fake hash and reading `got:` — the same trick nix-update performs
   with `outputHash = ""`, which is why the sweep gets this right and a manual
   repin has to ask for it.
+
+  The structural fix is a versioned name, so every bump moves the path and the
+  fetch must verify the hash. kimchi passes `pname = "<pname>-<version>"` to
+  `fetchPnpmDeps` and an explicit `name = "<pname>-<version>-source"` to its
+  `fetchzip` src, whose default name `source` is unversioned for the same
+  reason. Measured 2026-09-23: an `overrideAttrs {version = "9.9.9";}` left both
+  FOD paths unchanged before and moved both after. oxlint, context7-mcp and
+  effect-mcp still pass the bare `pname`.
 
   `cargoDeps` cannot be masked this way: `fetchCargoVendor` names its staging
   output `${pname}-${version}-vendor-staging`, and `vu.mkVersion` puts the short

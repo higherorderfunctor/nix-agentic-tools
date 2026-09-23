@@ -35,6 +35,14 @@
   };
 in
   ourPkgs.stdenv.mkDerivation (finalAttrs: let
+    # A fixed-output store path is a function of its name and declared hash
+    # only. Both fetchers below default to a unversioned name (fetchzip's
+    # "source", fetchPnpmDeps' "<pname>-pnpm-deps"), so a bump that leaves a
+    # hash untouched resolves to the previous release's cached output and is
+    # never re-verified. Putting the version in the name moves the path on
+    # every bump, forcing a fetch that checks the hash. The Go vendor FOD
+    # needs nothing: buildGoModule already names it <pname>-<version>-go-modules.
+    versionedName = "${finalAttrs.pname}-${finalAttrs.version}";
     proxyHelper =
       (packageLib.mkGoBuilder {
         floor = goFloor;
@@ -52,10 +60,15 @@ in
   in {
     pname = "kimchi";
     inherit (sources) version;
-    src = ourPkgs.fetchzip {inherit (sources.src) url hash;};
+    src = ourPkgs.fetchzip {
+      name = "${versionedName}-source";
+      inherit (sources.src) url hash;
+    };
 
     pnpmDeps = ourPkgs.fetchPnpmDeps {
-      inherit (finalAttrs) pname src version;
+      # fetchPnpmDeps derives its name from pname alone.
+      pname = versionedName;
+      inherit (finalAttrs) src version;
       inherit pnpm;
       fetcherVersion = 3;
       hash = sources.pnpmDepsHash or lib.fakeHash;
