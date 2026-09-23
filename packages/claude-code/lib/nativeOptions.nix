@@ -1,4 +1,4 @@
-# The `ai.claude.nativeSettings` option surface.
+# The `ai.claude.native.settings` option surface.
 #
 # Two sources, merged here and nowhere else:
 #

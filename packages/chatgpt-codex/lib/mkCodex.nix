@@ -885,7 +885,7 @@ in
       };
       # `profiles` (removed 2026-09-19): a whole-file `codex --profile <name>`
       # layer, distinct from the mergeable `[permissions.<name>]` tables in
-      # nativeSettings. It was locked out by assertion from the day it landed
+      # native.settings. It was locked out by assertion from the day it landed
       # — a named profile silently overrides legacy sandbox settings beneath
       # it — which made the option and its HM/devenv materializer unreachable
       # dead code. It is not reinstated here because a Codex profile cannot
@@ -902,7 +902,7 @@ in
           before Codex can silently truncate content beyond this limit.
         '';
       };
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = codexSettingsType {
           model = "gpt-6-astra";
           model_reasoning_effort = "xhigh";
@@ -938,9 +938,9 @@ in
       agentsMdTarget = "${cfg.configDir}/${cfg.context.filename}";
       configFile = "${cfg.configDir}/config.toml";
       finalAgentsMdEntry = cfg.files.${agentsMdTarget} or null;
-      hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
+      hasNativeMcpServers = cfg.native.settings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
-      settings = helpers.filterNulls ((applyIntegrationRoots cfg.nativeSettings cfg.internal._integration_writable_roots)
+      settings = helpers.filterNulls ((applyIntegrationRoots cfg.native.settings cfg.internal._integration_writable_roots)
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
@@ -1009,7 +1009,7 @@ in
           })
         ];
         internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter ["${config.xdg.cacheHome}/nix"]);
-        nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+        native.settings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
           model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
         };
       };
@@ -1024,18 +1024,18 @@ in
           })
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
-            message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+            message = "ai.codex.native.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            inherit (mkSandboxModelAssertion "ai.codex.nativeSettings" cfg.nativeSettings) assertion message;
+            inherit (mkSandboxModelAssertion "ai.codex.native.settings" cfg.native.settings) assertion message;
           }
           {
             assertion = !(cfg.execpolicyRules ? default);
             message = "ai.codex.execpolicyRules.default is reserved in Home Manager because Codex writes user allow-list decisions to rules/default.rules; choose another rule filename";
           }
           {
-            assertion = effectiveHooks == {} || !(cfg.nativeSettings ? hooks);
-            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.nativeSettings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+            assertion = effectiveHooks == {} || !(cfg.native.settings ? hooks);
+            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.native.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
           }
         ];
       home = {
@@ -1092,7 +1092,7 @@ in
       resolvedSettings,
       ...
     }: let
-      hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
+      hasNativeMcpServers = cfg.native.settings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       configuredGitRoot = lib.attrByPath ["git" "root"] null config;
       gitRoot =
@@ -1100,7 +1100,7 @@ in
         then configuredGitRoot
         else config.devenv.root;
       gitCommonDir = resolveGitCommonDir gitRoot;
-      legacySettings = applyWorkspaceWriteRoots cfg.nativeSettings ["${config.devenv.root}/.git"];
+      legacySettings = applyWorkspaceWriteRoots cfg.native.settings ["${config.devenv.root}/.git"];
       integrationSettings = applyIntegrationRoots legacySettings cfg.internal._integration_writable_roots;
       permissionSettings = applyNamedPermissionRoots integrationSettings (lib.optional (gitCommonDir != null) gitCommonDir);
       settings = helpers.filterNulls (permissionSettings
@@ -1151,7 +1151,7 @@ in
             lib.optional (nixCacheRoot != null) nixCacheRoot
             ++ lib.optional (treefmtCacheRoot != null) treefmtCacheRoot
           ));
-          nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+          native.settings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
             model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
           };
         };
@@ -1172,22 +1172,22 @@ in
         ++ [
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
-            message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+            message = "ai.codex.native.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            inherit (mkSandboxModelAssertion "ai.codex.nativeSettings" cfg.nativeSettings) assertion message;
+            inherit (mkSandboxModelAssertion "ai.codex.native.settings" cfg.native.settings) assertion message;
           }
           {
             assertion = ignoredSettings == [];
             message = ''
-              ai.codex.nativeSettings contains keys Codex ignores in project config:
+              ai.codex.native.settings contains keys Codex ignores in project config:
               ${lib.concatStringsSep ", " ignoredSettings}. Move them to the
               Home Manager user-level configuration.
             '';
           }
           {
-            assertion = effectiveHooks == {} || !(cfg.nativeSettings ? hooks);
-            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.nativeSettings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+            assertion = effectiveHooks == {} || !(cfg.native.settings ? hooks);
+            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.native.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
           }
         ];
       files = lib.mkMerge [

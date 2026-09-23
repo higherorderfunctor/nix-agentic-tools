@@ -177,7 +177,7 @@ in {
         result.config.programs.claude-code.enable or false
     );
 
-    # HM: ai.claude.nativeSettings.<key> reaches programs.claude-code.settings.<key>
+    # HM: ai.claude.native.settings.<key> reaches programs.claude-code.settings.<key>
     # via the transitional raw-inherit in mkClaude.nix. Regression guard for
     # the inherit; will update to assert translation semantics when HM migrates
     # to the devenv pattern.
@@ -186,7 +186,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings = {
+            native.settings = {
               effortLevel = "medium";
               permissions.allow = ["Read"];
             };
@@ -207,12 +207,12 @@ in {
             ev = evalHm {
               ai.claude = {
                 enable = true;
-                nativeSettings.effortLevel = "ultra";
+                native.settings.effortLevel = "ultra";
               };
             };
           in
-            builtins.deepSeq ev.config.ai.claude.nativeSettings.effortLevel
-            ev.config.ai.claude.nativeSettings.effortLevel
+            builtins.deepSeq ev.config.ai.claude.native.settings.effortLevel
+            ev.config.ai.claude.native.settings.effortLevel
         );
       in
         attempt.success == false
@@ -224,7 +224,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings.effortLevel = "xhigh";
+            native.settings.effortLevel = "xhigh";
           };
         };
       in
@@ -239,12 +239,12 @@ in {
             ev = evalHm {
               ai.claude = {
                 enable = true;
-                nativeSettings.tui = "curses";
+                native.settings.tui = "curses";
               };
             };
           in
-            builtins.deepSeq ev.config.ai.claude.nativeSettings.tui
-            ev.config.ai.claude.nativeSettings.tui
+            builtins.deepSeq ev.config.ai.claude.native.settings.tui
+            ev.config.ai.claude.native.settings.tui
         );
       in
         attempt.success == false
@@ -256,7 +256,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings.tui = "fullscreen";
+            native.settings.tui = "fullscreen";
           };
         };
       in
@@ -270,7 +270,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings.attribution.commit = false;
+            native.settings.attribution.commit = false;
           };
         };
       in
@@ -283,7 +283,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings.attribution.pr = "Reviewed-by: me";
+            native.settings.attribution.pr = "Reviewed-by: me";
           };
         };
       in
@@ -297,7 +297,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings.attribution.commit = true;
+            native.settings.attribution.commit = true;
           };
         };
         s = result.config.programs.claude-code.settings;
@@ -328,7 +328,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings.enableWorkflows = true;
+            native.settings.enableWorkflows = true;
           };
         };
       in
@@ -342,7 +342,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings.workflowKeywordTriggerEnabled = false;
+            native.settings.workflowKeywordTriggerEnabled = false;
           };
         };
         s = result.config.programs.claude-code.settings;
@@ -366,7 +366,7 @@ in {
         (s.ultracode or null) == true && (s.enableWorkflows or null) == true
     );
 
-    # Meta option uses mkDefault, so an explicit nativeSettings.ultracode = false
+    # Meta option uses mkDefault, so an explicit native.settings.ultracode = false
     # wins over ultracodeOnLaunch, and the false survives the null-filter.
     module-claude-hm-ultracode-on-launch-explicit-false-wins = mkTest "claude-hm-ultracode-on-launch-explicit-false-wins" (
       let
@@ -374,7 +374,7 @@ in {
           ai.claude = {
             enable = true;
             ultracodeOnLaunch = true;
-            nativeSettings.ultracode = false;
+            native.settings.ultracode = false;
           };
         };
         s = result.config.programs.claude-code.settings;
@@ -405,7 +405,7 @@ in {
         result = evalHm {
           ai.claude = {
             enable = true;
-            nativeSettings.model = "some-future-model";
+            native.settings.model = "some-future-model";
           };
         };
       in
@@ -447,7 +447,7 @@ in {
         result.config.claude.code.enable or false
     );
 
-    # Devenv: cfg.nativeSettings gap write — non-hook/non-mcpServers keys land
+    # Devenv: cfg.native.settings gap write — non-hook/non-mcpServers keys land
     # in files.".claude/settings.json".json. Module-system attrs merge with
     # upstream's hook write (not exercised here; upstream claude.code is
     # stubbed to `attrsOf anything`) produces a single settings.json on
@@ -457,7 +457,7 @@ in {
         result = evalDevenv {
           ai.claude = {
             enable = true;
-            nativeSettings.effortLevel = "medium";
+            native.settings.effortLevel = "medium";
           };
         };
         settingsFile = result.config.files.".claude/settings.json" or null;
@@ -474,7 +474,7 @@ in {
         result = evalDevenv {
           ai.claude = {
             enable = true;
-            nativeSettings.env.FOO = "bar";
+            native.settings.env.FOO = "bar";
           };
         };
         settingsFile = result.config.files.".claude/settings.json" or null;
@@ -491,7 +491,7 @@ in {
         result = evalDevenv {
           ai.claude = {
             enable = true;
-            nativeSettings.enableWorkflows = true;
+            native.settings.enableWorkflows = true;
           };
         };
         settingsFile = result.config.files.".claude/settings.json" or null;
@@ -508,7 +508,7 @@ in {
         result = evalDevenv {
           ai.claude = {
             enable = true;
-            nativeSettings.attribution.commit = false;
+            native.settings.attribution.commit = false;
           };
         };
         settingsFile = result.config.files.".claude/settings.json" or null;
@@ -536,7 +536,7 @@ in {
         && (settingsFile.json.enableWorkflows or null) == true
     );
 
-    # Devenv parity for the mkDefault override: an explicit nativeSettings.ultracode =
+    # Devenv parity for the mkDefault override: an explicit native.settings.ultracode =
     # false wins over ultracodeOnLaunch and survives the gap-write null-filter.
     module-claude-devenv-ultracode-on-launch-explicit-false-wins = mkTest "claude-devenv-ultracode-on-launch-explicit-false-wins" (
       let
@@ -544,7 +544,7 @@ in {
           ai.claude = {
             enable = true;
             ultracodeOnLaunch = true;
-            nativeSettings.ultracode = false;
+            native.settings.ultracode = false;
           };
         };
         settingsFile = result.config.files.".claude/settings.json" or null;
@@ -555,7 +555,7 @@ in {
         && settingsFile.json.ultracode == false
     );
 
-    # Devenv: the legacy `nativeSettings.hooks` escape hatch lowers verbatim into
+    # Devenv: the legacy `native.settings.hooks` escape hatch lowers verbatim into
     # files.".claude/settings.json".json.hooks — NOT claude.code.hooks anymore
     # (approach B). Composes with the typed event map via the formats.json merge.
     module-claude-devenv-settings-hooks-escape-hatch = mkTest "claude-devenv-settings-hooks-escape-hatch" (
@@ -563,7 +563,7 @@ in {
         result = evalDevenv {
           ai.claude = {
             enable = true;
-            nativeSettings.hooks.PreToolUse = [{matcher = "Bash";}];
+            native.settings.hooks.PreToolUse = [{matcher = "Bash";}];
           };
         };
         settingsHooks = ((result.config.files.".claude/settings.json" or {}).json or {}).hooks or {};
@@ -573,7 +573,7 @@ in {
         && !(result.config.claude.code ? hooks)
     );
 
-    # Devenv: empty ai.claude.nativeSettings produces no gap file (lib.mkIf
+    # Devenv: empty ai.claude.native.settings produces no gap file (lib.mkIf
     # gate on hasGapSettings).
     #
     # The heron_brook mitigation writes hooks into the same settings.json through
@@ -774,7 +774,7 @@ in {
             (evalHm {
               ai.kiro = {
                 enable = true;
-                nativeSettings = {
+                native.settings = {
                   chat.defaultModel = settings."chat.defaultModel" or null;
                   chat.modelDefaults = settings."chat.modelDefaults" or {};
                 };
@@ -1304,14 +1304,14 @@ in {
     );
 
     # Devenv: hookScripts → a `.claude/hooks/<name>` file; the legacy
-    # nativeSettings.hooks escape hatch → settings.json.hooks (verbatim). Neither feeds
+    # native.settings.hooks escape hatch → settings.json.hooks (verbatim). Neither feeds
     # claude.code.hooks anymore (approach B — the old type-invalid mis-feed is gone).
     module-claude-devenv-hookscripts-and-settings-split = mkTest "claude-devenv-hookscripts-and-settings-split" (
       let
         result = evalDevenv {
           ai.claude = {
             enable = true;
-            nativeSettings.hooks.from-settings = [{matcher = "X";}];
+            native.settings.hooks.from-settings = [{matcher = "X";}];
             hookScripts.from-top = "#!/usr/bin/env bash\necho from-top\n";
           };
         };

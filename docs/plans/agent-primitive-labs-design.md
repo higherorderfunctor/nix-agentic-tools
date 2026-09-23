@@ -164,7 +164,7 @@ Also absent: `home.sessionVariables` (a separate output), so the lab exports
 
   # → homeConfigurations.lab-effort-ladder → config.home-files → fake user-global
   global = {
-    ai.claude.nativeSettings.effortLevel = "xhigh";
+    ai.claude.native.settings.effortLevel = "xhigh";
     ai.skills.ladder = ./skills/ladder;
   };
 

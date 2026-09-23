@@ -325,7 +325,7 @@ in {
       # Manager layer has already migrated to named permissions, but this
       # project override deliberately takes precedence while unrestricted
       # execution is needed here.
-      nativeSettings = {
+      native.settings = {
         approval_policy = "never";
         sandbox_mode = "danger-full-access";
       };
@@ -368,7 +368,7 @@ in {
       # it is not in the workspace-override allowlist, so no project-local
       # cli.json can satisfy it. Whoever wants `/workflow` in this shell sets it
       # GLOBALLY (`kiro-cli settings chat.enableWorkflows true`, or
-      # `ai.kiro.nativeSettings.chat.enableWorkflows` under home-manager). This
+      # `ai.kiro.native.settings.chat.enableWorkflows` under home-manager). This
       # line still earns its place: it keeps the patched-package path
       # exercised, and gate 3 is one global setting away.
       # See packages/kiro-cli/docs/workflow-gating.md.

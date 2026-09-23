@@ -1,10 +1,10 @@
-# Exception-table rot guard for the generated `ai.claude.nativeSettings`
+# Exception-table rot guard for the generated `ai.claude.native.settings`
 # option surface.
 #
 # Most of that surface is DERIVED: `generateSettingsOptions.nix` walks the
 # settings schema the packaged binary emits about itself and declares one typed
 # option per path. The parts that are NOT derived are two small hand tables —
-# `overrideTable` and the hand-authored declarations in `nativeSettingsOptions.nix`
+# `overrideTable` and the hand-authored declarations in `nativeOptions.nix`
 # — and a hand table's failure mode is silence. An override aimed at a key
 # upstream renamed simply stops applying; a hand declaration for a key upstream
 # dropped keeps offering an option that writes a setting Claude now ignores.
@@ -48,12 +48,12 @@
     # extraction was run against.
     claudeVersion =
       (builtins.fromJSON (builtins.readFile ../sources.json)).version;
-    surface = import ../lib/nativeSettingsOptions.nix {
+    surface = import ../lib/nativeOptions.nix {
       inherit extracted lib pkgs;
     };
     inherit (surface) report;
 
-    # SNAPSHOT — the hand-authored declarations in nativeSettingsOptions.nix.
+    # SNAPSHOT — the hand-authored declarations in nativeOptions.nix.
     # Update this list in the same commit as that attrset.
     expectedCollisions = [
       "attribution"
@@ -86,7 +86,7 @@
       (lib.evalModules {
         modules = [
           {
-            options.nativeSettings = lib.mkOption {
+            options.native.settings = lib.mkOption {
               type = lib.types.submodule {
                 freeformType = (pkgs.formats.json {}).type;
                 inherit (surface) options;
@@ -94,11 +94,11 @@
               default = {};
             };
           }
-          {nativeSettings = def;}
+          {native.settings = def;}
         ];
       })
     .config
-    .nativeSettings;
+    .native.settings;
 
     # `deepSeq` because the module system is lazy: a bad value buried in an
     # unforced attribute would otherwise "pass" by never being looked at.
@@ -213,7 +213,7 @@
         field = "staleExternalPaths";
         remedy = ''
           A hand-authored declaration in
-          packages/claude-code/lib/nativeSettingsOptions.nix names a key the
+          packages/claude-code/lib/nativeOptions.nix names a key the
           packaged binary no longer declares. The option still exists and still
           writes into settings.json, where Claude now ignores it silently.
           Delete the declaration, or re-point it.
@@ -248,7 +248,7 @@
         expected = expectedCollisions;
         remedy = ''
           This is the hand-authored declaration set in
-          packages/claude-code/lib/nativeSettingsOptions.nix. If you added or
+          packages/claude-code/lib/nativeOptions.nix. If you added or
           removed one deliberately, update `expectedCollisions` in this file in
           the same commit. If you did not, the packaged binary changed which keys
           it declares underneath a hand row.
@@ -305,7 +305,7 @@
         ''
       else
         pkgs.runCommandLocal "claude-settings-schema-check" {} ''
-          echo "ok — ${toString (builtins.length (lib.attrNames surface.options))} nativeSettings options, no stale or shadowed exception-table rows, ${toString (builtins.length behaviorCases)} composed-surface cases green" > $out
+          echo "ok — ${toString (builtins.length (lib.attrNames surface.options))} native.settings options, no stale or shadowed exception-table rows, ${toString (builtins.length behaviorCases)} composed-surface cases green" > $out
         '';
   };
 }

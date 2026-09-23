@@ -7,8 +7,10 @@ applyTo: "packages/claude-code/packages/ai/claude-code/package.nix,packages/clau
 
 ## claude-code Wrapper Chain
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-22 — native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Source paths and ownership guidance follow native
+> package assembly.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -64,16 +66,16 @@ input is `finalAttrs.finalPackage`, that made every PR and every local
 `nix flake check` realize the ~390 MB binary to produce a ~90 KB JSON. Swapping
 it changes the drv hash once; do not swap it back.
 
-### The `nativeSettings` option surface is GENERATED
+### The `native.settings` option surface is GENERATED
 
-`ai.claude.nativeSettings` used to be a handful of hand-written options plus a
+`ai.claude.native.settings` used to be a handful of hand-written options plus a
 freeform JSON tail. It is now one typed option per path in the packaged binary's
 OWN settings schema — ~150 top level, extracted into
 `packages/claude-code/extracted.json` by
 `packages/claude-code/extract/census.mjs` and turned into `lib.mkOption`
 declarations by `packages/claude-code/lib/generateSettingsOptions.nix`. The
-wiring lives in `packages/claude-code/lib/nativeSettingsOptions.nix`, which is
-the ONLY place the generated set and the hand-authored exceptions are merged.
+wiring lives in `packages/claude-code/lib/nativeOptions.nix`, which is the ONLY
+place the generated set and the hand-authored exceptions are merged.
 
 Three things follow, and each of them is a trap if you assume the old shape:
 
