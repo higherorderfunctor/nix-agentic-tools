@@ -101,9 +101,13 @@
 # path there". If it is caught without the module, the deletion stands; if
 # not, restore it.
 #
-# The migration itself is the operator's call and is NOT made here. It carries
-# a cost they are weighing: no in-shell reload at all, and a 15-20s cold
-# re-entry.
+# THAT MIGRATION WAS CONSIDERED AND DECLINED on 2026-09-23. The repo stays on
+# direnv, so this module stays load bearing — the deletion above is what to do
+# IF that ever reverses, not a pending task. What decided it: `devenv hook`
+# gives up in-shell reload entirely and costs a 15-20s cold re-entry, and
+# devenv's own docs claim `devenv up`/`test`/`tasks` skip re-evaluation under
+# direnv specifically (documented, not measured here). Reversing it means
+# deleting `.envrc`, which carries the same warning.
 #
 # Files are hashed with `builtins.hashFile`, NEVER with
 # `builtins.hashString "sha256" (builtins.readFile f)`. `readFile` aborts
