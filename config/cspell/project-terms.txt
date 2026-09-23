@@ -28,6 +28,7 @@ autosquash
 autostash
 autoupdater
 avifenesh
+AWSLAMBDA
 backgrounded
 backticked
 basenames
@@ -67,11 +68,14 @@ chonk
 clearenv
 clicolor
 clis
+CLOUDSDK
 cmdbuilder
 codemod
 codepaths
 codesign
 codewhisperer
+COLORFGBG
+COLORTERM
 commondir
 completionist
 configdir
@@ -154,6 +158,7 @@ getconf
 getdents
 getkimchi
 getpid
+GHOSTTY
 gitbook
 gitdir
 gitfile
@@ -331,6 +336,7 @@ passthru
 passwordless
 pasteable
 Patchelf
+PATHEXT
 pathlib
 pathspec
 pdsolve
@@ -452,6 +458,7 @@ sweepable
 sympy
 taplo
 tengu
+TERMUX
 testapp
 timespec
 tinyduck
@@ -510,9 +517,12 @@ vendorhash
 vllm
 watchlist
 webp
+WEZTERM
 wikilink
+WINDIR
 worktree
 worktrees
+WSLENV
 wyhash
 xhigh
 xyzzy
