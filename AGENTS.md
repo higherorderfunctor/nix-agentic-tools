@@ -237,6 +237,11 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
   - Match: `packages/semble/**`
   - Read: [`packages/semble/docs/semble.md`](packages/semble/docs/semble.md)
 
+- **`shell-activation`**
+  - Match: `.envrc`, `devenv.yaml`, `lib/traceSource.nix`
+  - Read:
+    [`dev/fragments/shell-activation/activation-mechanism.md`](dev/fragments/shell-activation/activation-mechanism.md)
+
 - **`stacked-workflows`**
   - Match: `packages/stacked-workflows/**`
   - Read:

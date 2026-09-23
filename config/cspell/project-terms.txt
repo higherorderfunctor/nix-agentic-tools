@@ -429,6 +429,7 @@ startupcompletedz
 statix
 stdenv
 stopword
+storecopy
 streamable
 strflocaltime
 strictdoc
