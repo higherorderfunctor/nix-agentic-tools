@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) evalDevenv evalHm mkTest ownPlan;
   inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 
   # `aiCommon.contentFileEntry` returns the delivery record wrapped in
@@ -125,7 +125,13 @@ in {
           };
         };
         hmFiles = (evalHm config).config.home.file;
-        devenvFiles = (evalDevenv config).config.files;
+        devenv = evalDevenv config;
+        # Claude's project rules are read-only copies; lay the copy writer's
+        # units over the linked files so one predicate reads both backends.
+        devenvFiles =
+          devenv.config.files
+          // lib.mapAttrs' (name: unit: lib.nameValuePair ".claude/rules/${name}" unit)
+          (lib.head (ownPlan "claude" "ai:claude:materialize-rules" devenv).targets).units;
         outputsAreCorrect = agentsPath: files:
           files ? ".claude/rules/active.md"
           && files ? ".kiro/steering/active.md"

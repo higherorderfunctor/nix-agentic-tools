@@ -1158,7 +1158,8 @@ path types".
 > backend; Claude, Codex, Copilot and Kiro describe delivery once, and the
 > delivery matrix is generated from the layer with Kimchi's off-layer files
 > hand-authored. Normalized pools carry only a text-source record's winning arm.
-> Native file settings live under `ai.<runtime>.native`.
+> Claude's devenv rules are read-only copies. Native file settings live under
+> `ai.<runtime>.native`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1294,6 +1295,13 @@ path types".
   secret readers. Hooks state `facts.symlinkReadable = false` because the v3
   scan keeps only `isFile()` entries, and their writer survives N→0. Permissions
   remain HM-only because Kiro never reads them from project `.kiro/`.
+- **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
+  (`paths:`) loader passes `includeExternal: false` at Project scope, with no
+  setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
+  the store is never read. User scope passes true. The rules entry therefore
+  states `facts.symlinkReadable = {devenv = false; hm = true;}`: devenv resolves
+  `copy-ro` through the `ai:claude:materialize-rules` directory ledger, declared
+  on devenv only and kept through N→0, while Home Manager keeps its link.
 - **Retirement can survive disable explicitly.** Kiro's migration callback
   declares its unclaimed steering ledger with `runWhenDisabled = true`. The
   adapter strips every file claim and ordinary writer while disabled; the
