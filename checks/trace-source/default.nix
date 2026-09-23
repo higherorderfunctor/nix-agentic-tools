@@ -1,8 +1,8 @@
 # Regression tests for lib/traceSource.nix.
 #
-# The fingerprint walks a source tree at EVAL time, so every hazard it has to
-# survive aborts `nix flake check`, `devenv shell` and direnv outright rather
-# than failing one derivation. Both fixture shapes encode a hazard seen in the
+# `registerTrackedInputs` walks a source tree at EVAL time, so every hazard it
+# has to survive aborts `nix flake check`, `devenv shell` and direnv outright
+# rather than failing one derivation. Both fixture shapes encode a hazard seen in the
 # wild:
 #
 #   - `fixtures/binary-*` carry a file with NUL bytes (a CPython `.pyc`
@@ -38,30 +38,28 @@
 
   isSha256Hex = s: builtins.match "[0-9a-f]{64}" s != null;
 
-  binaryA = traceSource.fingerprint ./fixtures/binary-a;
-  binaryB = traceSource.fingerprint ./fixtures/binary-b;
+  binaryA = traceSource.registerTrackedInputs ./fixtures/binary-a;
+  binaryB = traceSource.registerTrackedInputs ./fixtures/binary-b;
 in {
   checks = {
-    # Fails by ABORTING evaluation against a `readFile`-based fingerprint.
-    trace-source-fingerprint-hashes-unreadable-bytes =
-      mkTest "fingerprint-hashes-unreadable-bytes" (isSha256Hex binaryA);
+    # Fails by ABORTING evaluation against a `readFile`-based walk.
+    trace-source-hashes-unreadable-bytes =
+      mkTest "hashes-unreadable-bytes" (isSha256Hex binaryA);
 
-    trace-source-fingerprint-skips-dangling-symlinks =
-      mkTest "fingerprint-skips-dangling-symlinks"
-      (isSha256Hex (traceSource.fingerprint ./fixtures/symlinks));
+    trace-source-skips-dangling-symlinks =
+      mkTest "skips-dangling-symlinks"
+      (isSha256Hex (traceSource.registerTrackedInputs ./fixtures/symlinks));
 
-    trace-source-fingerprint-tracks-binary-contents =
-      mkTest "fingerprint-tracks-binary-contents" (binaryA != binaryB);
-
-    # Pins the RETURN VALUE only: `tracedPath` must hand back a path, because
-    # `ai.skills` needs one. It does NOT pin the `builtins.seq` that forces the
-    # trace, and no pure-Nix assertion can. Forcing is observable only as an
-    # abort, and `builtins.tryEval` does not catch the I/O errors `readDir` and
-    # `hashFile` raise (measured 2026-09-22) — so a `tracedPath = src: src`
-    # mutant, which makes the module a no-op at every call site, passes this
-    # whole suite. Do not read it as covering that.
-    trace-source-traced-path-returns-src =
-      mkTest "traced-path-returns-src"
-      (traceSource.tracedPath ./fixtures/binary-a == ./fixtures/binary-a);
+    trace-source-tracks-binary-contents =
+      mkTest "tracks-binary-contents" (binaryA != binaryB);
   };
+
+  # NOT COVERED, and no pure-Nix assertion can cover it: that the caller FORCES
+  # the returned digest. Forcing is observable only as an abort or as a direnv
+  # reload, and `builtins.tryEval` does not catch the I/O errors `readDir` and
+  # `hashFile` raise (measured 2026-09-22). A call site that computes the value
+  # and drops it makes the module a no-op there and still passes this suite.
+  # The consumer comment in
+  # packages/stacked-workflows/packages/stacked-workflows-content/package.nix
+  # carries that warning where a reader would act on it.
 }

@@ -419,19 +419,21 @@ in {
         devName = "dev-${name}";
       in
         lib.nameValuePair devName (prefixSkill name value));
-      traceSource = import ./lib/traceSource.nix {inherit lib;};
     in
       # stacked-workflows: re-key the deref'd, self-contained stack-* skill
       # dirs (real reference files bundled inside each) as dev-stack-*.
       prefixDev pkgs.stacked-workflows-content.passthru.skills
       // {
-        # Dev skills (repo-local tooling, not published packages). Wrapped in
-        # traceSource.tracedPath so devenv/direnv track their source CONTENTS
-        # (a bare `./dir` handed to ai.skills is copied, never read inside, so
-        # an edit would otherwise be served from a stale eval cache).
-        index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
-        pr-review-loop = traceSource.tracedPath ./dev/skills/pr-review-loop;
-        repo-review = traceSource.tracedPath ./dev/skills/repo-review;
+        # Dev skills (repo-local tooling, not published packages). Handed over
+        # as bare paths: `ai.skills` walks each directory with `readDir` and
+        # emits one per-file source entry, so every leaf is already read during
+        # evaluation and already on direnv's watch list. Measured 2026-09-22 —
+        # bare and `lib/traceSource.nix`-wrapped arms reloaded identically,
+        # 3/3 each, with an attribution control confirming nothing else walks
+        # `dev/skills/`.
+        index-repo-docs = ./dev/skills/index-repo-docs;
+        pr-review-loop = ./dev/skills/pr-review-loop;
+        repo-review = ./dev/skills/repo-review;
       };
   };
 
