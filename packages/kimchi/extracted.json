@@ -74,11 +74,26 @@
         ],
         "path": ["kimchi", "cursor"],
         "flags": [
-          { "names": ["--global"], "scope": "subcommand" },
-          { "names": ["--project"], "scope": "subcommand" },
-          { "names": ["--scope"], "scope": "subcommand" },
-          { "names": ["--scope=global"], "scope": "subcommand" },
-          { "names": ["--scope=project"], "scope": "subcommand" }
+          {
+            "names": ["--global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--project"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=project"],
+            "scope": "subcommand"
+          }
         ]
       },
       "kimchi gsd2": {
@@ -91,11 +106,26 @@
         ],
         "path": ["kimchi", "gsd2"],
         "flags": [
-          { "names": ["--global"], "scope": "subcommand" },
-          { "names": ["--project"], "scope": "subcommand" },
-          { "names": ["--scope"], "scope": "subcommand" },
-          { "names": ["--scope=global"], "scope": "subcommand" },
-          { "names": ["--scope=project"], "scope": "subcommand" }
+          {
+            "names": ["--global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--project"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=project"],
+            "scope": "subcommand"
+          }
         ]
       },
       "kimchi install": {
@@ -152,11 +182,26 @@
         ],
         "path": ["kimchi", "openclaw"],
         "flags": [
-          { "names": ["--global"], "scope": "subcommand" },
-          { "names": ["--project"], "scope": "subcommand" },
-          { "names": ["--scope"], "scope": "subcommand" },
-          { "names": ["--scope=global"], "scope": "subcommand" },
-          { "names": ["--scope=project"], "scope": "subcommand" }
+          {
+            "names": ["--global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--project"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=project"],
+            "scope": "subcommand"
+          }
         ]
       },
       "kimchi opencode": {
@@ -169,11 +214,26 @@
         ],
         "path": ["kimchi", "opencode"],
         "flags": [
-          { "names": ["--global"], "scope": "subcommand" },
-          { "names": ["--project"], "scope": "subcommand" },
-          { "names": ["--scope"], "scope": "subcommand" },
-          { "names": ["--scope=global"], "scope": "subcommand" },
-          { "names": ["--scope=project"], "scope": "subcommand" }
+          {
+            "names": ["--global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--project"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=project"],
+            "scope": "subcommand"
+          }
         ]
       },
       "kimchi remove": {
@@ -195,8 +255,14 @@
         ],
         "path": ["kimchi", "resources"],
         "flags": [
-          { "names": ["--help"], "scope": "subcommand" },
-          { "names": ["-h"], "scope": "subcommand" }
+          {
+            "names": ["--help"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["-h"],
+            "scope": "subcommand"
+          }
         ]
       },
       "kimchi setup": {
@@ -219,15 +285,30 @@
         ],
         "path": ["kimchi", "setup-tools"],
         "flags": [
-          { "names": ["--global"], "scope": "subcommand" },
+          {
+            "names": ["--global"],
+            "scope": "subcommand"
+          },
           {
             "names": ["--inject"],
             "scope": "subcommand"
           },
-          { "names": ["--project"], "scope": "subcommand" },
-          { "names": ["--scope"], "scope": "subcommand" },
-          { "names": ["--scope=global"], "scope": "subcommand" },
-          { "names": ["--scope=project"], "scope": "subcommand" }
+          {
+            "names": ["--project"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=global"],
+            "scope": "subcommand"
+          },
+          {
+            "names": ["--scope=project"],
+            "scope": "subcommand"
+          }
         ]
       },
       "kimchi uninstall": {
@@ -785,13 +866,13 @@
         "project": true
       },
       "gitTokens": {
+        "optional": true,
         "type": "object",
         "typeExpression": "Record<string, string>",
         "additionalProperties": {
           "typeExpression": "string",
           "type": "string"
         },
-        "optional": true,
         "project": false
       },
       "llmEndpoint": {
@@ -805,8 +886,8 @@
         "type": "number",
         "optional": true,
         "inert": true,
-        "project": true,
-        "warning": "read only to detect obsolete configuration; it has no runtime effect"
+        "warning": "read only to detect obsolete configuration; it has no runtime effect",
+        "project": true
       },
       "mcpSearch": {
         "typeExpression": "{ strategy?: \"bm25\" | \"regex\"; bm25K1?: number; bm25B?: number; fieldWeights?: { name: number; description: number; schemaKey: number; }; }",
@@ -850,16 +931,16 @@
         },
         "optional": true,
         "inert": true,
-        "project": true,
-        "warning": "read only to detect obsolete configuration; it has no runtime effect"
+        "warning": "read only to detect obsolete configuration; it has no runtime effect",
+        "project": true
       },
       "mcpSearchLimit": {
         "typeExpression": "number",
         "type": "number",
         "optional": true,
         "inert": true,
-        "project": true,
-        "warning": "read only to detect obsolete configuration; it has no runtime effect"
+        "warning": "read only to detect obsolete configuration; it has no runtime effect",
+        "project": true
       },
       "migrationState": {
         "typeExpression": "\"done\" | \"skip-forever\"",
@@ -933,6 +1014,7 @@
         "project": true
       },
       "surveys": {
+        "optional": true,
         "type": "object",
         "typeExpression": "Record<string, SurveyConfig>",
         "additionalProperties": {
@@ -946,10 +1028,10 @@
             }
           }
         },
-        "optional": true,
         "project": false
       },
       "telemetry": {
+        "optional": true,
         "type": "object",
         "typeExpression": "TelemetryConfig",
         "properties": {
@@ -978,10 +1060,10 @@
             "optional": true
           }
         },
-        "optional": true,
         "project": false
       },
       "teleport": {
+        "optional": true,
         "type": "object",
         "typeExpression": "{ compactHint?: { enabled?: boolean } }",
         "properties": {
@@ -998,7 +1080,6 @@
             }
           }
         },
-        "optional": true,
         "project": false
       }
     },
@@ -1021,6 +1102,21 @@
   },
   "environment": {
     "variables": {
+      "CASTAI_API_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "Cast AI API key fallback for the stats command when config.json and KIMCHI_API_KEY provide none"
+      },
+      "DIFF_THEME": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "syntax-highlighting theme for rendered diffs (default github-dark)"
+      },
+      "JS_DEBUG_PATH": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "js-debug DAP server script used by the debugger extension"
+      },
       "KIMCHI_ACTIVE_FERMENT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -1048,9 +1144,14 @@
       },
       "KIMCHI_CODING_AGENT_DIR": {
         "consumerOverridable": false,
-        "readBy": ["kimchi"],
-        "controls": "Kimchi harness configuration directory",
+        "readBy": ["kimchi", "pi"],
+        "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)",
         "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
+      },
+      "KIMCHI_CODING_AGENT_SESSION_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "pi session storage directory (pi's ENV_SESSION_DIR, named from Kimchi's piConfig.name)"
       },
       "KIMCHI_DAP_BINARIES": {
         "consumerOverridable": true,
@@ -1229,6 +1330,21 @@
         "readBy": ["kimchi"],
         "controls": "Kimchi web application base URL"
       },
+      "LLAMA_BASE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "default llama.cpp server URL offered by pi's llama provider login"
+      },
+      "MCP_OAUTH_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "legacy MCP OAuth token directory read during keyring migration (default <harness>/mcp-oauth)"
+      },
+      "OLLAMA_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "Ollama endpoint; takes precedence over KIMCHI_OLLAMA_HOST"
+      },
       "PI_CACHE_RETENTION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
@@ -1241,14 +1357,9 @@
       },
       "PI_CODING_AGENT_DIR": {
         "consumerOverridable": false,
-        "readBy": ["kimchi", "pi"],
-        "controls": "pi agent configuration directory",
+        "readBy": ["kimchi"],
+        "controls": "inherited pi agent directory, preserved as KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR",
         "reason": "entry.ts overwrites it with ~/.config/kimchi/harness"
-      },
-      "PI_CODING_AGENT_SESSION_DIR": {
-        "consumerOverridable": true,
-        "readBy": ["pi"],
-        "controls": "pi session storage directory"
       },
       "PI_EXPERIMENTAL": {
         "consumerOverridable": true,
@@ -1360,6 +1471,11 @@
         "consumerOverridable": true,
         "readBy": ["pi"],
         "controls": "raw TUI ANSI output log path"
+      },
+      "SKILLS_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "skills-manager skills directory (default <cwd>/skills)"
       }
     }
   },
@@ -1533,6 +1649,12 @@
         "source": "pi",
         "typeExpression": "number",
         "type": "number",
+        "optional": true
+      },
+      "autoDefaultApplied": {
+        "source": "kimchi",
+        "typeExpression": "boolean",
+        "type": "boolean",
         "optional": true
       },
       "branchSummary": {
@@ -1788,8 +1910,8 @@
           "builder": {
             "typeExpression": "string | string[]",
             "type": "union",
-            "optional": true,
-            "description": "Code implementation model(s)."
+            "description": "Code implementation model(s).",
+            "optional": true
           },
           "compactor": {
             "typeExpression": "string",
@@ -1800,38 +1922,38 @@
           "explorer": {
             "typeExpression": "string | string[]",
             "type": "union",
-            "optional": true,
-            "description": "Codebase exploration model(s)."
+            "description": "Codebase exploration model(s).",
+            "optional": true
           },
           "judge": {
             "typeExpression": "string | string[]",
             "type": "union",
-            "optional": true,
-            "description": "Ferment judge model(s): verification triage and final grading calls."
+            "description": "Ferment judge model(s): verification triage and final grading calls.",
+            "optional": true
           },
           "orchestrator": {
             "typeExpression": "string",
             "type": "string",
-            "optional": true,
-            "description": "Main model: runs the orchestrator loop, delegates work to other roles."
+            "description": "Main model: runs the orchestrator loop, delegates work to other roles.",
+            "optional": true
           },
           "planner": {
             "typeExpression": "string | string[]",
             "type": "union",
-            "optional": true,
-            "description": "Planning model(s): designs the approach, writes specs."
+            "description": "Planning model(s): designs the approach, writes specs.",
+            "optional": true
           },
           "researcher": {
             "typeExpression": "string | string[]",
             "type": "union",
-            "optional": true,
-            "description": "Research model(s): research beyond codebase — web search, documentation lookup, external sources."
+            "description": "Research model(s): research beyond codebase — web search, documentation lookup, external sources.",
+            "optional": true
           },
           "reviewer": {
             "typeExpression": "string | string[]",
             "type": "union",
-            "optional": true,
-            "description": "Code review model(s)."
+            "description": "Code review model(s).",
+            "optional": true
           }
         },
         "optional": true
@@ -2056,7 +2178,7 @@
   },
   "provenance": {
     "extractorSchema": 2,
-    "kimchiVersion": "1.1.28",
+    "kimchiVersion": "1.1.30",
     "piVersion": "0.85.1"
   }
 }
