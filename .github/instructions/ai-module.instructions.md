@@ -13,7 +13,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > `ai.claude.agentsDir` to `.claude/agents/<name>.md`. File content at
 > `mkDefault` enables its entry; `content.enable = false` suppresses every
 > content form. Native file settings live under `ai.<runtime>.native`. Upstream
-> delegation aliases the content field's own definitions.
+> delegation aliases the content field's own definitions. Ledger-owned copies
+> whose files nothing else retracts opt into `runWhenDisabled`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -117,12 +118,16 @@ The one bounded exception is an `activation` writer with
 and only writers with that explicit opt-in; ordinary command and owned writers
 remain gated. An opted-in owned writer therefore receives empty targets, so
 ordinary retraction removes only what the previous generation's ledger recorded
-and then drops the ledger. It cannot emit product files while disabled. Kiro's
-one-shot steering-copy retirement is the current sole caller, and on Home
-Manager it is a PAIR of entries: the prune phase deletes the real files before
-`checkLinkTargets`, the write phase unlinks the drained ledger. It derives the
-old target from the current `configDir`, so a custom directory must remain
-unchanged for that retirement generation; change or remove it only after one
+and then drops the ledger. It cannot emit product files while disabled. The
+callers are writers whose files nothing else retracts: Claude's devenv rules
+copies, Codex's execpolicy copies, and Kiro's one-shot steering-copy retirement.
+A ledger-owned copy outlives a disable unless its writer opts in, because Home
+Manager's generation diff and `devenv:files:cleanup` only remove links. On Home
+Manager a directory writer is a PAIR of entries: the prune phase deletes the
+real files before `checkLinkTargets`, the write phase unlinks the drained
+ledger. Kiro's retirement and Codex's Home Manager writer derive the target from
+the current `configDir`, so a custom directory must remain unchanged for the
+generation that disables or retires; change or remove it only after one
 activation/shell entry has drained the old ledger.
 
 ### Why there's no master switch
@@ -1139,8 +1144,9 @@ path types".
 > backend; Claude, Codex, Copilot and Kiro describe delivery once, and the
 > delivery matrix is generated from the layer with Kimchi's off-layer files
 > hand-authored. Normalized pools carry only a text-source record's winning arm.
-> Claude's devenv rules and Codex's execpolicy rules are read-only copies.
-> Native file settings live under `ai.<runtime>.native`.
+> Claude's devenv rules and Codex's execpolicy rules are read-only copies whose
+> writers survive a disable. Native file settings live under
+> `ai.<runtime>.native`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1281,18 +1287,22 @@ path types".
   setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
   the store is never read. User scope passes true. The rules entry therefore
   states `facts.symlinkReadable = {devenv = false; hm = true;}`: devenv resolves
-  `copy-ro` through the `ai:claude:materialize-rules` directory ledger, declared
-  on devenv only and kept through N→0, while Home Manager keeps its link.
+  `copy-ro` through the `ai:claude:materialize-rules` directory ledger, while
+  Home Manager keeps its link. The writer is declared on devenv only, from
+  `migrationConfig` with `runWhenDisabled = true`, so both N→0 and disabling
+  Claude retract the copies.
 - **Codex execpolicy rules are read-only copies on both backends.** Codex keeps
   a `rules/*.rules` entry only when `DirEntry::file_type().is_file()`, which
   does not follow symlinks, so a linked rule is skipped silently (codex
   0.156.0). Each rule states `facts.symlinkReadable = false` and is claimed file
   by file through the `materialize/codex-execpolicy.manifest` directory ledger:
   Codex writes its own `rules/default.rules` beside them, which the ledger never
-  records and so never touches. The writer is declared while enabled, so N→0
-  retracts the copies.
+  records and so never touches. The writer is declared from `migrationConfig`
+  with `runWhenDisabled = true`, so both N→0 and disabling Codex retract the
+  copies; an `allow` policy must not outlive its declaration.
 - **Retirement can survive disable explicitly.** Kiro's migration callback
-  declares its unclaimed steering ledger with `runWhenDisabled = true`. The
+  declares its unclaimed steering ledger with `runWhenDisabled = true`, and the
+  Claude rules and Codex execpolicy writers declare theirs the same way. The
   adapter strips every file claim and ordinary writer while disabled; the
   opted-in writer keeps both HM phases or the existing devenv task. A directory
   ledger's unit basenames must be unique; the router rejects collisions before a
