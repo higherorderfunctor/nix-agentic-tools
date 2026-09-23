@@ -282,6 +282,34 @@ in {
           instructions._sourceWins && instructions.source == source) [evalHm evalDevenv]
     );
 
+    # Claude's scoped-rule loader never follows a project `.claude/rules`
+    # symlink out of the tree (includeExternal is hard-wired false at Project
+    # scope, claude-code 2.1.280), while User scope does. So devenv copies each
+    # rule through the directory ledger and HM keeps its link — with no
+    # `method` override, which is the default path nothing else covers.
+    module-delivery-claude-rules-copy-on-devenv-link-on-hm = mkTest "delivery-claude-rules-copy-on-devenv-link-on-hm" (
+      let
+        config.ai = {
+          claude.enable = true;
+          rules.probe.text = "PROBE-RULE";
+        };
+        devenv = evalDevenv config;
+        hm = evalHm config;
+        emptied = evalDevenv {ai.claude.enable = true;};
+        target = evaluated: lib.head (ownPlan "claude" "ai:claude:materialize-rules" evaluated).targets;
+      in
+        (target devenv).path
+        == ".claude/rules"
+        && lib.attrNames (target devenv).units == ["probe.md"]
+        && lib.hasInfix "PROBE-RULE" (target devenv).units."probe.md".text
+        && !(devenv.config.files ? ".claude/rules/probe.md")
+        && devenv.config.tasks ? "ai:claude:materialize-rules"
+        # N→0 keeps the writer, whose empty target retracts the last copies.
+        && (target emptied).units == {}
+        && emptied.config.tasks ? "ai:claude:materialize-rules"
+        && lib.hasInfix "PROBE-RULE" hm.config.home.file.".claude/rules/probe.md".text
+    );
+
     module-delivery-normalized-rule-extension-reaches-files = mkTest "delivery-normalized-rule-extension-reaches-files" (
       lib.all (
         evaluate: let
