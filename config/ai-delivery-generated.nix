@@ -570,12 +570,12 @@
     {
       additionalWriters = [
         {
-          primitive = "ownPathDeclarative";
-          pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+          primitive = "ownPathManaged";
+          pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$DEVENV_ROOT/.codex/rules/<name>.rules";
           writerAttr = [
-            "files"
-            ".codex/rules/probe.rules"
+            "tasks"
+            "ai:codex:materialize-execpolicy"
           ];
         }
       ];
@@ -593,13 +593,23 @@
     {
       additionalWriters = [
         {
-          primitive = "ownPathDeclarative";
-          pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.codex/rules/<name>.rules";
           writerAttr = [
             "home"
-            "file"
-            ".codex/rules/probe.rules"
+            "activation"
+            "materialize-codex-execpolicy-write"
+          ];
+        }
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.codex/rules/<name>.rules";
+          writerAttr = [
+            "home"
+            "activation"
+            "materialize-codex-execpolicy-prune"
           ];
         }
       ];
