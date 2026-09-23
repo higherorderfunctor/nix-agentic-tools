@@ -8,15 +8,6 @@ import { pathToFileURL } from "node:url";
 
 const EXTRACTOR_SCHEMA = 2;
 
-// pi derives these names from mutable host branding at module evaluation time,
-// so importing config.js cannot answer for the Kimchi host without running its
-// entire bootstrap. The AST still proves each constant is used as an actual
-// process.env key; this map records pi's published/default spellings.
-const DYNAMIC_ENVIRONMENT_NAMES = {
-  ENV_AGENT_DIR: "PI_CODING_AGENT_DIR",
-  ENV_SESSION_DIR: "PI_CODING_AGENT_SESSION_DIR",
-};
-
 function fail(message) {
   throw new Error(`kimchi-extract: ${message}`);
 }
@@ -314,64 +305,231 @@ function membersOfDeclaration(declaration, checker, ts, deep = false) {
   return membersOfTypeNode(declaration, checker, ts, deep);
 }
 
+// The JSON files config.ts reads, by the basename its readFileSync path ends
+// in. Every parse must land in exactly one of these; config.ts reading any
+// other file is a new surface and stops the extraction.
+const CONFIG_TS_PARSE_TARGETS = {
+  "config.json": "config",
+  "settings.json": "harness",
+};
+
+// A path parameter of an exported config.ts function stands for a caller's
+// override (tests, alternate homes). It never decides which file is read.
+const CALLER_OVERRIDE = Symbol("caller override");
+
+function unwrapExpression(expression, ts) {
+  while (
+    ts.isAsExpression(expression) ||
+    ts.isNonNullExpression(expression) ||
+    ts.isParenthesizedExpression(expression) ||
+    ts.isSatisfiesExpression(expression)
+  ) {
+    expression = expression.expression;
+  }
+  return expression;
+}
+
+// Attribute each parsed object in config.ts to the file it was read from by
+// following the parse argument back to readFileSync's path, then the path
+// through constants, defaults, `??`/`||` fallbacks, and in-file call sites.
+// Kimchi 1.1.30 parses harness/settings.json in config.ts
+// (readAutoDefaultApplied), so "every JSON.parse here is config.json" no
+// longer holds; an unattributable parse fails rather than being guessed.
 function discoverConfigKeys(sourceFile, checker, ts) {
-  const parsedSymbols = new Set();
-  const updateParameters = new Set();
-  function identify(node) {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      ts.isCallExpression(node.initializer)
-    ) {
-      const called = node.initializer.expression;
-      if (
-        (ts.isPropertyAccessExpression(called) &&
-          called.expression.getText() === "JSON" &&
-          called.name.text === "parse") ||
-        (ts.isIdentifier(called) && called.text === "readConfigObject")
-      ) {
-        const symbol = checker.getSymbolAtLocation(node.name);
-        if (symbol) parsedSymbols.add(symbol);
+  const location = (node) => {
+    const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+    return `config.ts:${line + 1}`;
+  };
+  const symbolOf = (node) => {
+    let symbol = checker.getSymbolAtLocation(node);
+    if (symbol && symbol.flags & ts.SymbolFlags.Alias)
+      symbol = checker.getAliasedSymbol(symbol);
+    return symbol;
+  };
+  const callSites = new Map();
+  function indexCalls(node) {
+    if (ts.isCallExpression(node)) {
+      const symbol = symbolOf(node.expression);
+      if (symbol) {
+        if (!callSites.has(symbol)) callSites.set(symbol, []);
+        callSites.get(symbol).push(node);
       }
     }
+    ts.forEachChild(node, indexCalls);
+  }
+  indexCalls(sourceFile);
+
+  const pathCache = new Map();
+  function pathTargets(expression, seen = new Set()) {
+    expression = unwrapExpression(expression, ts);
+    if (ts.isStringLiteralLike(expression))
+      return new Set([expression.text.split("/").pop()]);
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "updateConfigFile"
+      ts.isBinaryExpression(expression) &&
+      [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(
+        expression.operatorToken.kind,
+      )
     ) {
-      const callback = node.arguments.find(
-        (argument) =>
-          ts.isArrowFunction(argument) || ts.isFunctionExpression(argument),
+      return new Set([
+        ...pathTargets(expression.left, seen),
+        ...pathTargets(expression.right, seen),
+      ]);
+    }
+    if (
+      ts.isCallExpression(expression) &&
+      ["join", "resolve"].includes(
+        ts.isPropertyAccessExpression(expression.expression)
+          ? expression.expression.name.text
+          : expression.expression.getText(),
+      ) &&
+      expression.arguments.length > 0
+    ) {
+      return pathTargets(expression.arguments.at(-1), seen);
+    }
+    if (ts.isPropertyAccessExpression(expression)) {
+      const root = pathTargets(expression.expression, seen);
+      return root.size === 1 && root.has(CALLER_OVERRIDE) ? root : new Set();
+    }
+    if (!ts.isIdentifier(expression)) return new Set();
+    const symbol = symbolOf(expression);
+    if (!symbol || seen.has(symbol)) return new Set();
+    if (pathCache.has(symbol)) return pathCache.get(symbol);
+    const nextSeen = new Set([...seen, symbol]);
+    const targets = new Set();
+    for (const declaration of symbol.declarations ?? []) {
+      if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+        for (const target of pathTargets(declaration.initializer, nextSeen))
+          targets.add(target);
+      } else if (ts.isParameter(declaration)) {
+        const owner = declaration.parent;
+        if (declaration.initializer) {
+          for (const target of pathTargets(declaration.initializer, nextSeen))
+            targets.add(target);
+        }
+        if (!ts.isFunctionDeclaration(owner) || !owner.name) continue;
+        if (ts.getCombinedModifierFlags(owner) & ts.ModifierFlags.Export)
+          targets.add(CALLER_OVERRIDE);
+        const index = owner.parameters.indexOf(declaration);
+        for (const call of callSites.get(symbolOf(owner.name)) ?? []) {
+          const argument = call.arguments[index];
+          if (!argument) continue;
+          for (const target of pathTargets(argument, nextSeen))
+            targets.add(target);
+        }
+      }
+    }
+    if (seen.size === 0) pathCache.set(symbol, targets);
+    return targets;
+  }
+  function surfaceOfPath(pathExpression, node) {
+    const files = [...pathTargets(pathExpression)].filter(
+      (target) => target !== CALLER_OVERRIDE,
+    );
+    const surface =
+      files.length === 1 ? CONFIG_TS_PARSE_TARGETS[files[0]] : undefined;
+    if (!surface) {
+      fail(
+        `cannot attribute the JSON read at ${location(node)} (${node.getText()}) to config.json or harness/settings.json; it resolves to ${JSON.stringify(files.sort())}`,
       );
-      const parameter = callback?.parameters[0]?.name;
-      if (parameter && ts.isIdentifier(parameter)) {
-        const symbol = checker.getSymbolAtLocation(parameter);
-        if (symbol) updateParameters.add(symbol);
+    }
+    return surface;
+  }
+  // JSON.parse's argument is the file text: readFileSync(path, ...) directly
+  // or through a local bound to it.
+  function readPath(expression, seen = new Set()) {
+    expression = unwrapExpression(expression, ts);
+    if (
+      ts.isCallExpression(expression) &&
+      expression.expression.getText() === "readFileSync" &&
+      expression.arguments[0]
+    ) {
+      return expression.arguments[0];
+    }
+    if (!ts.isIdentifier(expression)) return undefined;
+    const symbol = symbolOf(expression);
+    if (!symbol || seen.has(symbol)) return undefined;
+    for (const declaration of symbol.declarations ?? []) {
+      if (ts.isVariableDeclaration(declaration) && declaration.initializer)
+        return readPath(declaration.initializer, new Set([...seen, symbol]));
+    }
+    return undefined;
+  }
+  function boundSymbol(call) {
+    const parent = call.parent;
+    if (
+      ts.isVariableDeclaration(parent) &&
+      parent.initializer === call &&
+      ts.isIdentifier(parent.name)
+    )
+      return symbolOf(parent.name);
+    if (
+      ts.isBinaryExpression(parent) &&
+      parent.right === call &&
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(parent.left)
+    )
+      return symbolOf(parent.left);
+    fail(
+      `the JSON read at ${location(call)} is not bound to a local, so its keys cannot be counted`,
+    );
+  }
+
+  const parsedSymbols = new Map();
+  function identify(node) {
+    if (ts.isCallExpression(node)) {
+      const called = node.expression;
+      let pathExpression;
+      if (
+        ts.isPropertyAccessExpression(called) &&
+        called.expression.getText() === "JSON" &&
+        called.name.text === "parse"
+      ) {
+        pathExpression = readPath(node.arguments[0]);
+        if (!pathExpression)
+          fail(
+            `cannot follow the JSON.parse argument at ${location(node)} back to a readFileSync path`,
+          );
+      } else if (
+        ts.isIdentifier(called) &&
+        called.text === "readConfigObject"
+      ) {
+        pathExpression = node.arguments[0];
+      }
+      if (pathExpression) {
+        const surface = surfaceOfPath(pathExpression, node);
+        parsedSymbols.set(boundSymbol(node), surface);
+      }
+      if (ts.isIdentifier(called) && called.text === "updateConfigFile") {
+        const surface = surfaceOfPath(node.arguments[0], node);
+        const callback = node.arguments.find(
+          (argument) =>
+            ts.isArrowFunction(argument) || ts.isFunctionExpression(argument),
+        );
+        const parameter = callback?.parameters[0]?.name;
+        if (parameter && ts.isIdentifier(parameter))
+          parsedSymbols.set(symbolOf(parameter), surface);
       }
     }
     ts.forEachChild(node, identify);
   }
   identify(sourceFile);
-  const found = new Set();
+  const found = { config: new Set(), harness: new Set() };
   function visit(node) {
+    let name;
     if (
       ts.isPropertyAccessExpression(node) &&
       ts.isIdentifier(node.expression)
     ) {
-      const symbol = checker.getSymbolAtLocation(node.expression);
-      if (symbol && (parsedSymbols.has(symbol) || updateParameters.has(symbol)))
-        found.add(node.name.text);
-    }
-    if (
+      name = node.name.text;
+    } else if (
       ts.isElementAccessExpression(node) &&
       ts.isIdentifier(node.expression) &&
       ts.isStringLiteralLike(node.argumentExpression)
     ) {
-      const symbol = checker.getSymbolAtLocation(node.expression);
-      if (symbol && (parsedSymbols.has(symbol) || updateParameters.has(symbol)))
-        found.add(node.argumentExpression.text);
+      name = node.argumentExpression.text;
     }
+    const surface = name && parsedSymbols.get(symbolOf(node.expression));
+    if (surface) found[surface].add(name);
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
@@ -432,19 +590,8 @@ function runtimeValidationKinds(node, ts, initialAliases = {}) {
   const aliases = new Map(
     Object.entries(initialAliases).map(([name, path]) => [name, path]),
   );
-  function unwrap(expression) {
-    while (
-      ts.isAsExpression(expression) ||
-      ts.isNonNullExpression(expression) ||
-      ts.isParenthesizedExpression(expression) ||
-      ts.isSatisfiesExpression(expression)
-    ) {
-      expression = expression.expression;
-    }
-    return expression;
-  }
   function pathFor(expression) {
-    expression = unwrap(expression);
+    expression = unwrapExpression(expression, ts);
     if (ts.isIdentifier(expression)) return aliases.get(expression.text);
     if (ts.isPropertyAccessExpression(expression)) {
       const parent = pathFor(expression.expression);
@@ -549,7 +696,14 @@ function validateRuntimeDescriptor(
   }
 }
 
-function extractConfig(sourceFile, declarations, annotations, checker, ts) {
+function extractConfig(
+  sourceFile,
+  discovered,
+  declarations,
+  annotations,
+  checker,
+  ts,
+) {
   const readExtras = requireDeclaration(
     declarations,
     "readConfigExtras",
@@ -629,7 +783,6 @@ function extractConfig(sourceFile, declarations, annotations, checker, ts) {
     ),
   };
 
-  const discovered = discoverConfigKeys(sourceFile, checker, ts);
   const extrasValidation = runtimeValidationKinds(readExtras, ts, {
     parsed: [],
   });
@@ -787,7 +940,13 @@ function extractDefaultProjectTrust(sourceFile, declarations, ts) {
   return fallback;
 }
 
-function extractHarness(declarations, settingsManagerSource, checker, ts) {
+function extractHarness(
+  declarations,
+  settingsManagerSource,
+  configTsHarnessReads,
+  checker,
+  ts,
+) {
   const settings = requireDeclaration(
     declarations,
     "Settings",
@@ -870,6 +1029,14 @@ function extractHarness(declarations, settingsManagerSource, checker, ts) {
     true,
   );
   const additions = {
+    // config.ts readAutoDefaultApplied: a one-shot marker, true once Kimchi
+    // installed Auto as the saved default.
+    autoDefaultApplied: descriptorForType(
+      checker.getBooleanType(),
+      ferment,
+      checker,
+      ts,
+    ),
     fermentV2: {
       type: "object",
       typeExpression: "FermentV2Settings",
@@ -926,6 +1093,31 @@ function extractHarness(declarations, settingsManagerSource, checker, ts) {
       "harness/settings.json Kimchi additions validation shape changed: modelRoles.orchestrator is no longer a string",
     );
   }
+  let autoDefaultMarker = false;
+  function findAutoDefaultMarker(node) {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
+      ts.isPropertyAccessExpression(node.left) &&
+      node.left.name.text === "autoDefaultApplied" &&
+      node.right.kind === ts.SyntaxKind.TrueKeyword
+    ) {
+      autoDefaultMarker = true;
+    }
+    ts.forEachChild(node, findAutoDefaultMarker);
+  }
+  findAutoDefaultMarker(
+    requireDeclaration(
+      declarations,
+      "readAutoDefaultApplied",
+      ts.isFunctionDeclaration,
+    ),
+  );
+  if (!autoDefaultMarker) {
+    fail(
+      "harness/settings.json Kimchi additions validation shape changed: readAutoDefaultApplied no longer reads autoDefaultApplied === true",
+    );
+  }
   additions.statusLine.properties.command = descriptorForType(
     checker.getStringType(),
     statusLine,
@@ -949,6 +1141,14 @@ function extractHarness(declarations, settingsManagerSource, checker, ts) {
     fail("pi modelThinkingLevels value type was not resolved");
   for (const [name, descriptor] of Object.entries(additions))
     keys[name] = { source: "kimchi", ...descriptor };
+  const unknownHarnessReads = [...configTsHarnessReads]
+    .filter((name) => !keys[name])
+    .sort();
+  if (unknownHarnessReads.length) {
+    fail(
+      `config.ts reads harness/settings.json keys that are neither pi Settings nor Kimchi additions: ${JSON.stringify(unknownHarnessReads)}`,
+    );
+  }
   return {
     definitions: sortObject(definitions),
     keys: sortObject(keys),
@@ -1447,24 +1647,48 @@ function extractCli(
   };
 }
 
-function stringConstant(
-  expression,
-  checker,
-  ts,
-  declarations,
-  seen = new Set(),
-) {
+// pi names two of its variables after the host application:
+//   APP_NAME = piConfigName || "pi"   (piConfigName = pkg.piConfig?.name)
+//   ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`
+// pkg is the package.json under PI_PACKAGE_DIR, which Kimchi's entry.ts points
+// at its own share/kimchi before pi loads, so the host is Kimchi's piConfig.name
+// (the context's appName). Any other APP_NAME shape stops the extraction.
+function hostAppName(declaration, context) {
+  const { appName, checker, ts } = context;
+  const initializer = unwrapExpression(declaration.initializer, ts);
+  const brandingSource = (identifier) => {
+    const initializer = checker
+      .getSymbolAtLocation(identifier)
+      ?.declarations?.find(ts.isVariableDeclaration)?.initializer;
+    return (
+      initializer &&
+      ts.isPropertyAccessExpression(initializer) &&
+      initializer.name.text === "name" &&
+      ts.isPropertyAccessExpression(initializer.expression) &&
+      initializer.expression.name.text === "piConfig"
+    );
+  };
+  if (
+    !ts.isBinaryExpression(initializer) ||
+    initializer.operatorToken.kind !== ts.SyntaxKind.BarBarToken ||
+    !ts.isIdentifier(initializer.left) ||
+    !brandingSource(initializer.left) ||
+    !ts.isStringLiteralLike(initializer.right)
+  ) {
+    fail(
+      `pi APP_NAME in ${declaration.getSourceFile().fileName} is no longer piConfig.name || "<default>": ${initializer.getText()}`,
+    );
+  }
+  return appName || initializer.right.text;
+}
+
+function stringConstant(expression, context, seen = new Set()) {
+  const { checker, declarations, ts } = context;
   if (ts.isStringLiteralLike(expression)) return expression.text;
   if (ts.isTemplateExpression(expression)) {
     let value = expression.head.text;
     for (const span of expression.templateSpans) {
-      const part = stringConstant(
-        span.expression,
-        checker,
-        ts,
-        declarations,
-        seen,
-      );
+      const part = stringConstant(span.expression, context, seen);
       if (part === undefined) return undefined;
       value += part + span.literal.text;
     }
@@ -1478,13 +1702,15 @@ function stringConstant(
   ) {
     return stringConstant(
       expression.expression.expression,
-      checker,
-      ts,
-      declarations,
+      context,
       seen,
     )?.toUpperCase();
   }
   if (!ts.isIdentifier(expression)) return undefined;
+  const fromDeclaration = (declaration) =>
+    declaration.name.getText() === "APP_NAME"
+      ? hostAppName(declaration, context)
+      : stringConstant(declaration.initializer, context, seen);
   let symbol = checker.getSymbolAtLocation(expression);
   if (symbol) {
     if (symbol.flags & ts.SymbolFlags.Alias)
@@ -1493,26 +1719,13 @@ function stringConstant(
     seen.add(symbol);
     for (const declaration of symbol.declarations ?? []) {
       if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
-        const value = stringConstant(
-          declaration.initializer,
-          checker,
-          ts,
-          declarations,
-          seen,
-        );
+        const value = fromDeclaration(declaration);
         if (value !== undefined) return value;
       }
     }
   }
   const declaration = declarations.get(expression.text);
-  if (declaration?.initializer)
-    return stringConstant(
-      declaration.initializer,
-      checker,
-      ts,
-      declarations,
-      seen,
-    );
+  if (declaration?.initializer) return fromDeclaration(declaration);
   return undefined;
 }
 
@@ -1528,38 +1741,10 @@ function isWriteOnly(node, ts) {
   return false;
 }
 
-function environmentReads(sourceFile, checker, ts, declarations) {
+function environmentReads(sourceFile, context) {
+  const { checker, ts } = context;
   const found = new Set();
   const environmentSymbols = new Set();
-  function containsProcessEnvironment(node) {
-    let foundEnvironment = false;
-    function inspect(child) {
-      if (
-        ts.isPropertyAccessExpression(child) &&
-        ts.isIdentifier(child.expression) &&
-        child.expression.text === "process" &&
-        child.name.text === "env"
-      ) {
-        foundEnvironment = true;
-      }
-      if (!foundEnvironment) ts.forEachChild(child, inspect);
-    }
-    inspect(node);
-    return foundEnvironment;
-  }
-  function identifyAliases(node) {
-    if (
-      (ts.isVariableDeclaration(node) || ts.isParameter(node)) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      containsProcessEnvironment(node.initializer)
-    ) {
-      const symbol = checker.getSymbolAtLocation(node.name);
-      if (symbol) environmentSymbols.add(symbol);
-    }
-    ts.forEachChild(node, identifyAliases);
-  }
-  identifyAliases(sourceFile);
   function isEnvironmentExpression(node) {
     if (
       ts.isPropertyAccessExpression(node) &&
@@ -1575,6 +1760,34 @@ function environmentReads(sourceFile, checker, ts, declarations) {
     }
     return false;
   }
+  // An alias holds the environment object itself (`env = process.env`,
+  // `env = options.env ?? process.env`), not a value read from it and not a
+  // derived child environment (`{ ...process.env, X: ... }`): member reads on
+  // those are not reads of this process's environment.
+  function isEnvironmentValue(node) {
+    node = unwrapExpression(node, ts);
+    if (isEnvironmentExpression(node)) return true;
+    return (
+      ts.isBinaryExpression(node) &&
+      [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(
+        node.operatorToken.kind,
+      ) &&
+      (isEnvironmentValue(node.left) || isEnvironmentValue(node.right))
+    );
+  }
+  function identifyAliases(node) {
+    if (
+      (ts.isVariableDeclaration(node) || ts.isParameter(node)) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      isEnvironmentValue(node.initializer)
+    ) {
+      const symbol = checker.getSymbolAtLocation(node.name);
+      if (symbol) environmentSymbols.add(symbol);
+    }
+    ts.forEachChild(node, identifyAliases);
+  }
+  identifyAliases(sourceFile);
   function visit(node) {
     let name;
     if (
@@ -1583,7 +1796,7 @@ function environmentReads(sourceFile, checker, ts, declarations) {
       node.expression.text === "getProviderEnvValue" &&
       node.arguments[0]
     ) {
-      name = stringConstant(node.arguments[0], checker, ts, declarations);
+      name = stringConstant(node.arguments[0], context);
     }
     if (
       ts.isPropertyAccessExpression(node) &&
@@ -1594,16 +1807,9 @@ function environmentReads(sourceFile, checker, ts, declarations) {
       ts.isElementAccessExpression(node) &&
       isEnvironmentExpression(node.expression)
     ) {
-      name = stringConstant(node.argumentExpression, checker, ts, declarations);
-      if (!name && ts.isIdentifier(node.argumentExpression))
-        name = DYNAMIC_ENVIRONMENT_NAMES[node.argumentExpression.text];
+      name = stringConstant(node.argumentExpression, context);
     }
-    if (
-      name &&
-      (name.startsWith("KIMCHI_") || name.startsWith("PI_")) &&
-      !isWriteOnly(node, ts)
-    )
-      found.add(name);
+    if (name && !isWriteOnly(node, ts)) found.add(name);
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
@@ -1623,17 +1829,17 @@ async function extractEnvironment(
   piSourceFiles,
   patchPaths,
   annotations,
-  checker,
-  ts,
-  declarations,
+  ignored,
+  context,
 ) {
+  const { ts } = context;
   const reads = { kimchi: new Set(), pi: new Set() };
   for (const sourceFile of kimchiSourceFiles) {
-    for (const name of environmentReads(sourceFile, checker, ts, declarations))
+    for (const name of environmentReads(sourceFile, context))
       reads.kimchi.add(name);
   }
   for (const sourceFile of piSourceFiles) {
-    for (const name of environmentReads(sourceFile, checker, ts, declarations))
+    for (const name of environmentReads(sourceFile, context))
       reads.pi.add(name);
   }
   for (const path of patchPaths) {
@@ -1643,16 +1849,35 @@ async function extractEnvironment(
       ts.ScriptTarget.Latest,
       true,
     );
-    for (const name of environmentReads(sourceFile, checker, ts, declarations))
+    for (const name of environmentReads(sourceFile, context))
       reads.pi.add(name);
   }
+  // The census runs over every resolved read, not a KIMCHI_/PI_ subset: a
+  // name is either published (annotations) or ignored with a reason, and
+  // both lists must match what the sources actually read.
   const discovered = new Set([...reads.kimchi, ...reads.pi]);
   const expected = new Set(Object.keys(annotations));
-  const unknown = [...discovered].filter((name) => !expected.has(name)).sort();
+  // Ignored names are grouped under one shared reason, but each is an exact
+  // name: a prefix or pattern would reopen the blind spot the census closes.
+  const ignoredList = Object.entries(ignored).flatMap(([group, entry]) => {
+    if (!entry.reason || !Array.isArray(entry.names))
+      fail(`environmentIgnored.${group} needs a reason and a names list`);
+    return entry.names;
+  });
+  const ignoredNames = new Set(ignoredList);
+  if (ignoredNames.size !== ignoredList.length)
+    fail("environmentIgnored lists a name in more than one group");
+  const unknown = [...discovered]
+    .filter((name) => !expected.has(name) && !ignoredNames.has(name))
+    .sort();
   const missing = [...expected].filter((name) => !discovered.has(name)).sort();
-  if (unknown.length || missing.length)
+  const staleIgnored = [...ignoredNames]
+    .filter((name) => !discovered.has(name))
+    .sort();
+  const both = [...expected].filter((name) => ignoredNames.has(name)).sort();
+  if (unknown.length || missing.length || staleIgnored.length || both.length)
     fail(
-      `environment census changed; new=${JSON.stringify(unknown)}, missing=${JSON.stringify(missing)}`,
+      `environment census changed; new=${JSON.stringify(unknown)}, missing=${JSON.stringify(missing)}, staleIgnored=${JSON.stringify(staleIgnored)}, annotatedAndIgnored=${JSON.stringify(both)}`,
     );
   const variables = {};
   for (const [name, annotation] of Object.entries(annotations)) {
@@ -1774,6 +1999,8 @@ async function main() {
     );
   }
 
+  const configSource = requireSource(join(kimchiRoot, "src/config.ts"));
+  const configTsReads = discoverConfigKeys(configSource, checker, ts);
   const result = {
     cli: extractCli(
       declarations,
@@ -1804,7 +2031,8 @@ async function main() {
       ts,
     ),
     config: extractConfig(
-      requireSource(join(kimchiRoot, "src/config.ts")),
+      configSource,
+      configTsReads.config,
       declarations,
       annotations.config,
       checker,
@@ -1821,13 +2049,19 @@ async function main() {
       ),
       patchPaths,
       annotations.environment,
-      checker,
-      ts,
-      declarations,
+      annotations.environmentIgnored ??
+        fail("annotations lack environmentIgnored"),
+      {
+        appName: kimchiPackage.piConfig?.name,
+        checker,
+        declarations,
+        ts,
+      },
     ),
     harness: extractHarness(
       declarations,
       requireSource(join(piRoot, "dist/core/settings-manager.js")),
+      configTsReads.harness,
       checker,
       ts,
     ),

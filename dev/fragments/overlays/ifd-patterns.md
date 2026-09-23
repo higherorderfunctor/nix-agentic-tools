@@ -1,6 +1,9 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-22 — Kiro settings extraction validates its materialized TUI registry and workspace merge with AST checks; Kimchi measures hash-pinned source and pi declaration inputs without reading the derivation at evaluation time.
+> **Last verified:** 2026-09-22 — Kiro settings extraction validates its
+> materialized TUI registry and workspace merge with AST checks; Kimchi
+> attributes every config.ts JSON read to the file it reads and censuses every
+> resolved environment read.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -193,9 +196,17 @@ extractor reads the hash-pinned release source, exact pi npm package, and the
 three pi declaration packages imported by its settings type through nixpkgs'
 pinned TypeScript compiler API. The checker supplies declared settings keys and
 types; syntax-tree queries supply CLI, validation, and environment access sites.
-It measures both native settings files, both CLI layers, and both environment
-namespaces without unpacking the Bun executable or pattern-matching TypeScript
-text.
+It measures both native settings files, both CLI layers, and every environment
+read it can resolve without unpacking the Bun executable or pattern-matching
+TypeScript text. Two measurements are attribution, not collection. A
+`JSON.parse` in `config.ts` counts toward `config.json` only when its
+`readFileSync` path resolves there; 1.1.30 also parses `harness/settings.json`
+in that file, and a read that resolves to neither fails the extraction. The
+environment census compares every resolved name against the published
+annotations plus an exact-name ignore list with reasons, in both directions; the
+former `KIMCHI_`/`PI_` prefix filter ran before the census, so the census could
+never report an unprefixed read. pi's own variable names come from Kimchi's
+`piConfig.name` the way pi derives them, not from pi's `PI_` default.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
@@ -293,43 +304,24 @@ allowance: releases before 0.149.0 require `untrusted`, while 0.149.0 and newer
 reject it, matching upstream's explicit removal. When you add a key or category,
 add its shape assertion in the same commit.
 
-#### But sometimes an empty capture is the ANSWER, not a dead anchor
+#### Kiro settings must come from the shipped TUI source
 
-The rule above says a non-empty guard is worthless. It does not say every
-extractor must demand a non-empty result, and kiro's
-`workspaceOverridableSettings` is the case that separates the two.
+Kiro 2.23.0 stopped exposing its TUI JavaScript as plaintext in the chat
+executable. An ELF byte scan therefore lost the registry even though the
+registry still exists in the compressed source materialized on first launch. The
+extractor requires a sandboxed Nix build with fake KAS and isolated state; CI
+explicitly enables and checks the sandbox on both platforms. It checks the
+materialized SHA-256, then parses the actual source. HOME/XDG isolation alone is
+insufficient: native credential discovery can reach host facilities outside
+those directories.
 
-That field lists the `cli.json` keys a project-local settings file may override.
-The mechanism is NEW in kiro-cli 2.21.1: measured across the store, 2.18.1,
-2.19.0, 2.20.2 and 2.21.0 carry no such set and no workspace-merge code at all,
-so for those releases the honest answer is "this kiro honors no workspace
-override" — an empty list, not a failure. Hard-failing there would wedge the
-update pipeline the first time upstream reverted a release-old mechanism, which
-is a merge-blocking liability rather than a signal.
-
-So when a captured category can legitimately be absent, assert on the thing that
-proves the probe COULD have answered, and let the category itself be empty:
-
-- kiro's probe fails if the bundle's `SCREAMING -> "dotted.key"` settings
-  registry has no `CHAT_DEFAULT_MODEL` entry. That registry is what the members
-  resolve through, so its absence means the JS payload is not what we think it
-  is and "no allowlist" would be a guess.
-- It fails on MORE than one candidate set (ambiguous — the extract describes
-  one), mirroring `kiroLocateChatScript`'s own ambiguity refusal.
-- It fails on a member that resolves to nothing or to two different keys. A
-  PARTIAL allowlist is worse than none here, because the module uses it to
-  REJECT keys: a short list rejects settings kiro actually honors.
-
-The distinction to keep is the same one the locator draws between a location
-failure and a content failure. "Upstream does not have this" and "we can no
-longer tell what upstream has" are different findings, and an extractor that
-collapses them into one empty list is the dead-anchor failure wearing a
-different hat.
-
-One consumer-side consequence, worth stating because it is where the empty case
-actually lands: an empty allowlist makes EVERY key invalid at that scope, so the
-assertion that reads it must say "this kiro honors no workspace override at all"
-rather than listing the allowed keys and printing nothing.
+The TypeScript AST probe requires one settings registry and either a candidate
+workspace allowlist with a merge that consults that very set, or neither set nor
+merge. It evaluates their validated expressions and the selected merge helper
+with inert loaders in an isolated JavaScript VM. The paired absence yields `[]`,
+as it did for versions before 2.21.1 with no workspace merge. A one-sided
+absence or an ambiguous set fails: an unreadable allowlist would reject
+legitimate workspace settings.
 
 #### An anchor can lose its TYPE information without losing its match
 
