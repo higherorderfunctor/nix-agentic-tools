@@ -373,7 +373,14 @@
         hm = codexConfig // {probe = probe ["ai" "codex" "nativeSettings" "permissions"] {probe.network.enabled = false;} {};};
       };
       copilot = both (absent "No permissions option or translation exists; arbitrary nativeSettings keys do not establish a permissions contract.");
-      kimchi = both (absent "No permissions option or translation exists.");
+      # Kimchi rewrites whichever file `/permissions … save` targets, so the
+      # declared keys reconcile by leaf. The user path is hard-coded upstream.
+      kimchi = let
+        declaration = probe ["ai" "kimchi" "permissions"] {allow = ["probe"];} {};
+      in {
+        devenv = devenvLeaves "ai:kimchi:permissions-merge" "$DEVENV_ROOT/.kimchi/permissions.json" declaration;
+        hm = leaves ownRetraction "kimchiPermissionsMerge" "$HOME/.config/kimchi/harness/permissions.json" declaration;
+      };
       kiro = {
         # NOT a parity gap, and the label used to invite "closing" it: Kiro
         # never looks in a project .kiro/ for permissions, so a devenv writer
@@ -515,8 +522,8 @@
   inputOptions = surface: ecosystem:
     if surface == "permissions"
     then
-      if ecosystem == "kiro"
-      then [["ai" "kiro" "permissions"]]
+      if builtins.elem ecosystem ["kimchi" "kiro"]
+      then [["ai" ecosystem "permissions"]]
       else if builtins.elem ecosystem ["claude" "codex"]
       then [["ai" ecosystem "nativeSettings" "permissions"]]
       else []

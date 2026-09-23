@@ -177,6 +177,7 @@
       || aiCommon.filterNulls cfg.harnessSettings != {}
       || mergedServers != {}
       || mergedAgents != {}
+      || aiCommon.filterNulls cfg.permissions != {}
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
@@ -224,6 +225,14 @@
       if isDevenv
       then ".kimchi"
       else harness;
+    # Kimchi 1.1.30 hard-codes the user file to
+    # resolve(homedir(), ".config", "kimchi", "harness", "permissions.json")
+    # (src/extensions/permissions/config.ts:35), so unlike the rest of the
+    # harness it does not follow configDir even under a package override.
+    permissionsPath =
+      if isDevenv
+      then ".kimchi/permissions.json"
+      else ".config/kimchi/harness/permissions.json";
     # Kimchi 1.1.30 loads `<agentDir>/agents/*.md` and a trusted project's
     # `.kimchi/agents/*.md` (src/extensions/agents/personas/custom-agents.ts:21-35).
     agentsDir =
@@ -350,6 +359,16 @@
               path = mcpPath;
             };
           };
+          kimchiPermissionsMerge = {
+            entry = {
+              devenv = "ai:kimchi:permissions-merge";
+              hm = "kimchiPermissionsMerge";
+            };
+            ledgers.${ledgerFor "permissions" permissionsPath} = {
+              codec = "json";
+              path = permissionsPath;
+            };
+          };
           # A directory of whole files; Home Manager needs the second entry
           # that deletes a retired real file before checkLinkTargets.
           kimchiAgents = {
@@ -404,6 +423,17 @@
         value = lib.optionalAttrs (mergedServers != {}) {
           mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
         };
+      })
+
+      # permissions.json — `/permissions … save user|project` rewrites the
+      # file it targets with writeFileSync (src/extensions/permissions/
+      # commands.ts:234-237, config.ts:153), so the declared keys are owned by
+      # leaf like the other three documents.
+      (document {
+        entry = "kimchiPermissionsMerge";
+        ledger = ledgerFor "permissions" permissionsPath;
+        path = permissionsPath;
+        value = aiCommon.filterNulls cfg.permissions;
       })
 
       # User harness context stays runtime-owned. Project context joins the one
@@ -525,6 +555,55 @@ in
         type = lib.types.nullOr aiCommon.dirOptionType;
         default = null;
         description = "Directory of Kimchi-native `.md` agent files, expanded into `ai.kimchi.agents` keyed by basename minus `.md`.";
+      };
+
+      permissions = lib.mkOption {
+        # No freeform keys: Kimchi validates the file with a `.strict()` zod
+        # schema (src/extensions/permissions/config.ts:11-19), so one unknown
+        # key would invalidate the whole file.
+        type = lib.types.submodule {
+          options = {
+            allow = lib.mkOption {
+              type = lib.types.nullOr (lib.types.listOf lib.types.str);
+              default = null;
+              example = ["bash(git status)"];
+              description = "Permission rules Kimchi allows without asking.";
+            };
+            classifierMaxTotalMs = lib.mkOption {
+              type = lib.types.nullOr lib.types.ints.positive;
+              default = null;
+              description = "Total time budget for the auto-mode risk classifier, in milliseconds.";
+            };
+            classifierTimeoutMs = lib.mkOption {
+              type = lib.types.nullOr lib.types.ints.positive;
+              default = null;
+              description = "Per-call timeout for the auto-mode risk classifier, in milliseconds.";
+            };
+            defaultMode = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum ["auto" "default" "plan" "yolo"]);
+              default = null;
+              description = "Permission mode a session starts in.";
+            };
+            deny = lib.mkOption {
+              type = lib.types.nullOr (lib.types.listOf lib.types.str);
+              default = null;
+              description = "Permission rules Kimchi refuses.";
+            };
+          };
+        };
+        default = {};
+        description = ''
+          Kimchi's permissions file, mirroring its schema key for key. Home
+          Manager reconciles `~/.config/kimchi/harness/permissions.json`,
+          which Kimchi hard-codes and which therefore ignores `configDir`;
+          devenv reconciles `.kimchi/permissions.json`, read in a trusted
+          project from the exact devenv root. Only the keys set here are
+          owned, so values Kimchi writes elsewhere in the file survive. A list
+          is owned whole: a rule `/permissions … save` appends to a declared
+          `allow` or `deny` is dropped at the next activation or shell entry.
+          `allow` and `deny` concatenate across user and project files; for
+          the scalars the project value wins.
+        '';
       };
 
       configDir = lib.mkOption {

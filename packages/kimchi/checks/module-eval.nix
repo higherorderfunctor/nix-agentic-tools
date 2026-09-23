@@ -469,6 +469,68 @@ in {
         && (evalHm {ai.kimchi.enable = true;}).config.warnings == []
     );
 
+    # Kimchi 1.1.30 reads a hard-coded user permissions.json and a trusted
+    # project's .kimchi/permissions.json, validates both with a `.strict()`
+    # schema, and rewrites whichever one `/permissions … save` targets
+    # (src/extensions/permissions/config.ts:11-37,153; commands.ts:234-237).
+    # So both backends reconcile the declared keys by leaf, the HM path
+    # ignores configDir, an empty declaration still reaches the writer, and
+    # the option refuses any key or value the schema would reject.
+    module-kimchi-permissions = mkTest "kimchi-permissions" (
+      let
+        permissions = {
+          allow = ["bash(git status)"];
+          defaultMode = "plan";
+        };
+        hm = evalHm {
+          ai.kimchi = {
+            inherit permissions;
+            configDir = "custom/kimchi";
+            enable = true;
+          };
+        };
+        devenv = evalDevenv {
+          ai.kimchi = {
+            inherit permissions;
+            enable = true;
+          };
+        };
+        hmDocument = kimchiDocument ".config/kimchi/harness/permissions.json";
+        projectDocument = kimchiDocument ".kimchi/permissions.json";
+        emptyHm = evalHm {ai.kimchi.enable = true;};
+        emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
+        accepts = value:
+          (builtins.tryEval (builtins.deepSeq
+            (evalHm {
+              ai.kimchi = {
+                enable = true;
+                permissions = value;
+              };
+            }).config.ai.kimchi.permissions
+            true)).success;
+      in
+        (hmDocument hm).value
+        == permissions
+        && lib.hasPrefix "json-settings/kimchi-permissions-" (hmDocument hm).ledger
+        && hm.config.home.activation ? kimchiPermissionsMerge
+        && !(hm.config.home.file ? ".config/kimchi/harness/permissions.json")
+        && (projectDocument devenv).value == permissions
+        && devenv.config.tasks ? "ai:kimchi:permissions-merge"
+        && !(devenv.config.files ? ".kimchi/permissions.json")
+        && (hmDocument emptyHm).value == {}
+        && emptyHm.config.home.activation ? kimchiPermissionsMerge
+        && (projectDocument emptyDevenv).value == {}
+        && emptyDevenv.config.tasks ? "ai:kimchi:permissions-merge"
+        && accepts {
+          classifierMaxTotalMs = 1;
+          classifierTimeoutMs = 1;
+          deny = [];
+        }
+        && !(accepts {extra = true;})
+        && !(accepts {defaultMode = "ask";})
+        && !(accepts {classifierTimeoutMs = 0;})
+    );
+
     # Kimchi reads `<agentDir>/agents/*.md` and a trusted project's
     # `.kimchi/agents/*.md`, and its /agents commands write both in place
     # (src/extensions/agents/index.ts:2556-2874). So each agent is an OWNED,
@@ -633,6 +695,9 @@ in {
         })
         (mkDevenvKimchiPackage {
           ai.kimchi.agents.native = nativeAgent;
+        })
+        (mkDevenvKimchiPackage {
+          ai.kimchi.permissions.defaultMode = "plan";
         })
       ];
       # Nothing exact-cwd is declared, so nothing is missed from a
