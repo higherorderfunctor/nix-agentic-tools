@@ -7,9 +7,10 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — the builder entry point is
-> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
-> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-23 — Claude devenv now delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`. The builder entry point
+> is `lib.ai.app.mkRuntime`. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Authored prose and final delivery share one
 > priority-aware text-source record with enable semantics.
 >
@@ -291,14 +292,18 @@ enabled ecosystem whose native model preserves the option's semantics):
   allowlist; `null` and `[]` both omit the header. Codex deliberately omits it
   because its standalone agent format has no equivalent field. Codex fails
   loudly on a legacy raw entry instead of pretending Markdown is a valid agent
-  config. Legacy Nix paths stay path-valued for Claude's native option but are
-  read into text for Copilot's file writer. Kiro remains excluded, but NOT
-  because its agents are untyped JSON — `ai.kiro.agents` is a typed record
-  modelling Kiro's v3 agent schema, and its `prompt` uses the same
-  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
-  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
-  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
-  table, not a pass-through. Add one and the exclusion can be revisited.
+  config. Claude HM hands entries to `programs.claude-code.agents`; Claude
+  devenv writes `.claude/agents/<name>.md` itself through the same renderer,
+  because upstream devenv `claude.code.agents` requires typed description/prompt
+  fields and cannot carry a raw Markdown or path entry. Legacy Nix paths stay
+  path-valued for Claude (a devenv file `source`) but are read into text for
+  Copilot's file writer. Kiro remains excluded, but NOT because its agents are
+  untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's v3 agent
+  schema, and its `prompt` uses the same `text`/`source` content shape. The
+  blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
+  tool names (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`,
+  `@mcp`), so lowering needs a translation table, not a pass-through. Add one
+  and the exclusion can be revisited.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex

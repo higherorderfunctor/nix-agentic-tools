@@ -234,6 +234,17 @@
   # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
   # defaults UNDER the consumer's pool.
+  # L2b → L3: expand `ai.claude.agentsDir` into per-CLI `ai.claude.agents`,
+  # shared by both projections. mkDefault lets explicit
+  # `ai.claude.agents.<name>` entries win within this layer; the resulting
+  # per-runtime entry replaces a same-key root agent.
+  agentsDirEntries = cfg:
+    lib.mkIf (cfg.agentsDir != null) {
+      ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
+        (import ../../../lib/ai/dir-helpers.nix {inherit lib;}).agentsFromDir cfg.agentsDir
+      );
+    };
+
   shellSettings = {
     resolvedShell,
     moduleEnvironmentVariables,
@@ -456,10 +467,10 @@ in
         description = ''
           Claude-specific agent Markdown or portable semantic records. Entries
           replace top-level `ai.agents` at the same key; null suppresses an
-          inherited agent. Routed to
-          `programs.claude-code.agents`; upstream writes them under
-          `~/.claude/agents/<name>.md`. HM only — upstream devenv
-          `claude.code` has no agents surface.
+          inherited agent. Home Manager routes them to
+          `programs.claude-code.agents`, which writes
+          `~/.claude/agents/<name>.md`; devenv writes project
+          `.claude/agents/<name>.md` itself.
         '';
       };
       agentsDir = lib.mkOption {
@@ -730,15 +741,7 @@ in
             ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
           })
           (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
-          # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
-          # `ai.claude.agents`. mkDefault lets explicit
-          # `ai.claude.agents.<name>` entries win within this layer; the
-          # resulting per-runtime entry replaces a same-key root agent.
-          (lib.mkIf (cfg.agentsDir != null) {
-            ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
-              dirHelpers.agentsFromDir cfg.agentsDir
-            );
-          })
+          (agentsDirEntries cfg)
           # L2b → L3: expand `ai.claude.hookScriptsDir` into
           # `ai.claude.hookScripts`. Content is `readFile`'d into
           # `lib.types.lines` via hooksFromDir.
@@ -879,6 +882,7 @@ in
         mergedServers,
         mergedSkills,
         mergedRules,
+        mergedAgents,
         moduleEnvironmentVariables,
         resolvedShell,
         mergedContext,
@@ -923,6 +927,7 @@ in
             ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
           })
           (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
+          (agentsDirEntries cfg)
           # L2b → L3: expand `ai.claude.hookScriptsDir` into
           # `ai.claude.hookScripts` (parity with HM side). The devenv
           # factory merges `cfg.hookScripts` into `claude.code.hooks`
@@ -1035,6 +1040,27 @@ in
               })
             mergedRules;
           })
+          # ai.agents / ai.claude.agents → .claude/agents/<name>.md, rendered by
+          # the same renderer as HM's `programs.claude-code.agents`. Written
+          # here rather than handed to upstream `claude.code.agents`: that
+          # option requires typed description/prompt fields, so it cannot
+          # carry a raw Markdown or path entry without parsing it.
+          {
+            ai.claude.files = lib.mapAttrs' (name: value: let
+              rendered = agent.renderClaude name value;
+            in
+              lib.nameValuePair ".claude/agents/${name}.md" {
+                content = lib.mkDefault (
+                  {enable = true;}
+                  // (
+                    if builtins.isPath rendered
+                    then {source = rendered;}
+                    else {text = rendered;}
+                  )
+                );
+              })
+            mergedAgents;
+          }
           # Skills — devenv has no upstream skills option on claude.code
           # (cachix/devenv#2441), so the tree is described as a delivery
           # entry and the router walks it into per-leaf `files.*` entries.
