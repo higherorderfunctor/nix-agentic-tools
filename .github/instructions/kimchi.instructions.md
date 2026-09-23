@@ -13,8 +13,9 @@ applyTo: "packages/kimchi/**"
 > reconcile by leaf through the shared delivery router; agents are owned
 > writable copies; portable hooks reach `.kimchi/hooks.json` on devenv only, and
 > their exclusions are silent for the shared pool; a project permissions file
-> resets the user's scalars, and its emptied retraction is deleted; root
-> reasoning effort makes the devenv harness file exist. Full lineage:
+> resets the user's scalars, and its emptied retraction is deleted; the trust
+> writer takes pi's `trust.json.lock`; root reasoning effort makes the devenv
+> harness file exist. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
@@ -173,11 +174,17 @@ and the document declares `content.run` rather than `value`:
 `lib/project-trust.py` canonicalizes each key with `os.path.realpath` when the
 writer runs, since evaluation cannot see the filesystem, and fails the writer
 when two keys resolve to one directory with different answers. Prompted
-decisions are unowned siblings and survive. Devenv rejects the option with an
-assertion: pi reads trust only from the user store, so that a project cannot
-trust itself, and devenv writes only inside the project. Locked by
-`module-kimchi-project-trust` and `module-kimchi-project-trust-runtime`, which
-runs the real writer against a symlinked fixture.
+decisions are unowned siblings and survive. pi does that read-modify-write under
+proper-lockfile's `trust.json.lock` directory (`withTrustFileLock`,
+`dist/core/trust-manager.js:105-142, 187-200`) and writes in place, so the
+ledger declares `lock` and `lib/ai/own.py` takes the same lock around every read
+and write of the file: a prompt answered during a switch is neither lost nor
+parsed half-written. A lock older than proper-lockfile's 10 s `stale` is broken,
+as pi breaks it. Devenv rejects the option with an assertion: pi reads trust
+only from the user store, so that a project cannot trust itself, and devenv
+writes only inside the project. Locked by `module-kimchi-project-trust` and
+`module-kimchi-project-trust-runtime`, which runs the real writer against a
+symlinked fixture, a held lock and a stale one.
 
 The devenv module rejects every `harnessSettings` key Kimchi reads only from
 user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
