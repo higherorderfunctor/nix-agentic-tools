@@ -8,18 +8,18 @@
   inherit (import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) ai devenvStubs factoryProxyServer hmStubs mkProxyTestRecord mkTest;
 in {
   checks = {
-    # ── mkAiApp tests ───────────────────────────────────────────────
-    factory-mkAiApp-hmTransform-exists = mkTest "mkAiApp-hmTransform-exists" (
+    # ── mkRuntime tests ───────────────────────────────────────────────
+    factory-mkRuntime-hmTransform-exists = mkTest "mkRuntime-hmTransform-exists" (
       builtins.isFunction ai.app.hmTransform
     );
 
-    factory-mkAiApp-devenvTransform-exists = mkTest "mkAiApp-devenvTransform-exists" (
+    factory-mkRuntime-devenvTransform-exists = mkTest "mkRuntime-devenvTransform-exists" (
       builtins.isFunction ai.app.devenvTransform
     );
 
-    factory-mkAiApp-returns-record = mkTest "mkAiApp-returns-record" (
+    factory-mkRuntime-returns-record = mkTest "mkRuntime-returns-record" (
       let
-        record = ai.app.mkAiApp {
+        record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
           transformers.markdown = ai.transformers.claude;
@@ -35,9 +35,9 @@ in {
         && record.supportedPools == []
     );
 
-    factory-mkAiApp-builds-option-tree = mkTest "mkAiApp-builds-option-tree" (
+    factory-mkRuntime-builds-option-tree = mkTest "mkRuntime-builds-option-tree" (
       let
-        record = ai.app.mkAiApp {
+        record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = ["mcpServers"];
           transformers.markdown = ai.transformers.claude;
@@ -60,9 +60,9 @@ in {
         && evaluated.config.ai.testapp.mcpServers == {}
     );
 
-    factory-mkAiApp-custom-options-merged = mkTest "mkAiApp-custom-options-merged" (
+    factory-mkRuntime-custom-options-merged = mkTest "mkRuntime-custom-options-merged" (
       let
-        record = ai.app.mkAiApp {
+        record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
           transformers.markdown = ai.transformers.claude;
@@ -87,15 +87,15 @@ in {
         evaluated.config.ai.testapp.turboMode
     );
 
-    factory-mkAiApp-fanout-merges-shared-servers = mkTest "mkAiApp-fanout-merges-shared-servers" (
+    factory-mkRuntime-fanout-merges-shared-servers = mkTest "mkRuntime-fanout-merges-shared-servers" (
       let
-        record = ai.app.mkAiApp {
+        record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = ["mcpServers"];
           transformers.markdown = ai.transformers.claude;
           defaults = {package = pkgs.hello;};
           options = {
-            # Synthetic introspection option — NOT part of the real mkAiApp contract,
+            # Synthetic introspection option — NOT part of the real mkRuntime contract,
             # only used here to prove mergedServers is computed and accessible to
             # the config callback.
             _mergedServerCount = lib.mkOption {
@@ -140,10 +140,10 @@ in {
         evaluated.config.ai.testapp._mergedServerCount == 2
     );
 
-    # Public mkAiApp records participate in centralized proxy ownership without
+    # Public mkRuntime records participate in centralized proxy ownership without
     # appearing in the repo's first-party runtime registry. A used inherited
     # owner must therefore materialize once and lower for the custom client.
-    factory-mkAiApp-custom-runtime-uses-shared-proxy-owner = mkTest "mkAiApp-custom-runtime-uses-shared-proxy-owner" (
+    factory-mkRuntime-custom-runtime-uses-shared-proxy-owner = mkTest "mkRuntime-custom-runtime-uses-shared-proxy-owner" (
       let
         record = mkProxyTestRecord "testapp";
         evaluated = lib.evalModules {
@@ -167,7 +167,7 @@ in {
 
     # A custom runtime-scoped declaration is a direct owner, exactly like a
     # first-party record, rather than merely a lowered dead-loopback client.
-    factory-mkAiApp-custom-runtime-emits-direct-proxy-owner = mkTest "mkAiApp-custom-runtime-emits-direct-proxy-owner" (
+    factory-mkRuntime-custom-runtime-emits-direct-proxy-owner = mkTest "mkRuntime-custom-runtime-emits-direct-proxy-owner" (
       let
         record = mkProxyTestRecord "testapp";
         evaluated = lib.evalModules {
@@ -191,7 +191,7 @@ in {
 
     # Dynamic registration also closes the security boundary across arbitrary
     # records: two direct owners cannot silently route through one daemon.
-    factory-mkAiApp-custom-runtime-proxy-key-reuse-fails = mkTest "mkAiApp-custom-runtime-proxy-key-reuse-fails" (
+    factory-mkRuntime-custom-runtime-proxy-key-reuse-fails = mkTest "mkRuntime-custom-runtime-proxy-key-reuse-fails" (
       let
         evaluated = lib.evalModules {
           specialArgs = {inherit pkgs;};
@@ -220,7 +220,7 @@ in {
 
     # Custom devenv runtimes fail closed at the same explicit lifecycle boundary
     # as first-party ones; a lowered client entry cannot silently survive alone.
-    factory-mkAiApp-custom-runtime-devenv-proxy-rejected = mkTest "mkAiApp-custom-runtime-devenv-proxy-rejected" (
+    factory-mkRuntime-custom-runtime-devenv-proxy-rejected = mkTest "mkRuntime-custom-runtime-devenv-proxy-rejected" (
       let
         record = mkProxyTestRecord "testapp";
         evaluated = lib.evalModules {
@@ -249,9 +249,9 @@ in {
     # Same-named native options are independent when a normalized pool is not in
     # supportedPools. Proxy discovery keys on the internal capability marker, not
     # the public option name, so an arbitrary native shape remains untouched.
-    factory-mkAiApp-unsupported-native-mcp-option-not-registered = mkTest "mkAiApp-unsupported-native-mcp-option-not-registered" (
+    factory-mkRuntime-unsupported-native-mcp-option-not-registered = mkTest "mkRuntime-unsupported-native-mcp-option-not-registered" (
       let
-        record = ai.app.mkAiApp {
+        record = ai.app.mkRuntime {
           inherit pkgs;
           name = "testapp";
           supportedPools = [];
@@ -281,7 +281,7 @@ in {
 
     factory-hmTransform-applies-to-record = mkTest "hmTransform-applies-to-record" (
       let
-        record = ai.app.mkAiApp {
+        record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
           transformers.markdown = ai.transformers.claude;
@@ -305,7 +305,7 @@ in {
 
     factory-devenvTransform-applies-to-record = mkTest "devenvTransform-applies-to-record" (
       let
-        record = ai.app.mkAiApp {
+        record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
           transformers.markdown = ai.transformers.claude;

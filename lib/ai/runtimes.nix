@@ -1,4 +1,4 @@
-# The AI runtime registry — every harness that goes through `mkAiApp`.
+# The AI runtime registry — every harness that goes through `mkRuntime`.
 #
 # PLAIN DATA ON PURPOSE. No module, no function, no arguments: `import` it and
 # you have the list. That shape is a hard requirement rather than a style

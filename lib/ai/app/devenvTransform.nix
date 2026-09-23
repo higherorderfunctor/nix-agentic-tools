@@ -1,6 +1,6 @@
 # Devenv backend transformer.
 #
-# Takes a backend-agnostic app record produced by `mkAiApp` and
+# Takes a backend-agnostic app record produced by `mkRuntime` and
 # returns a devenv module function that writes the appropriate
 # `files.*` / `claude.code.*` / `<ecosystem>.*` attributes for the
 # devenv backend.

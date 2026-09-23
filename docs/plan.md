@@ -248,7 +248,7 @@ specific to how Claude Code spawns them.
 
 Factory rollout + ideal-architecture gate COMPLETE (2026-04-08/09).
 All 24 binary packages under `pkgs.ai.*`. Factory primitives at
-`lib/ai/app/{mkAiApp,hmTransform,devenvTransform}.nix`. Three CLI
+`lib/ai/app/{mkRuntime,hmTransform,devenvTransform}.nix`. Three CLI
 factories absorbed full fanout:
 - Claude: delegates to upstream `programs.claude-code.*` (HM) /
   `claude.code.*` (devenv) + gap writes; buddy activation ported
@@ -328,7 +328,7 @@ High confidence, small scope. Good for review sessions.
       - overlay grouping: every binary package under `pkgs.ai`, including
         `pkgs.ai.{devTools,generic,gitTools,lspServers,mcpServers}`, plus agnix
         mainProgram overrides
-      - factory composition: mkAiApp record + hmTransform/devenvTransform
+      - factory composition: mkRuntime record + hmTransform/devenvTransform
         (see `memory/project_factory_architecture.md`)
       - Claude delegation model: upstream programs.claude-code.* for
         HM capabilities, direct writes for gaps

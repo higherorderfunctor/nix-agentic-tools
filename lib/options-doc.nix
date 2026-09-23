@@ -207,7 +207,7 @@
       # devenv eval context these would be type errors; the stubs absorb
       # the writes silently so the options-doc walker can enumerate the
       # same option tree for the devenv module output. Future work:
-      # mkAiApp should dispatch HM vs devenv backends and write to the
+      # mkRuntime should dispatch HM vs devenv backends and write to the
       # appropriate option path (home.file for HM, files.* for devenv).
       home = {
         file = lib.mkOption {

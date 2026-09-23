@@ -1,7 +1,7 @@
 # Declares cross-app options (ai.context, ai.mcpServers,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks).
 #
-# Imported by every mkAiApp module so per-app layers
+# Imported by every mkRuntime module so per-app layers
 # (ai.<name>.mcpServers, etc.) compose with these top-level pools. Scalar
 # defaults allow per-app overrides, lists concatenate, and named attrset pools
 # use shallow per-runtime replacement. Nullable pools use null tombstones;
@@ -30,7 +30,7 @@
   # runtime inherits it. Runtime-scoped declarations own their units directly;
   # their lifetime follows the declaration, matching the pre-existing contract.
   # Discover MCP-capable runtimes from the evaluated OPTION tree rather than
-  # the first-party registry. mkAiApp is public, and every transformed record
+  # the first-party registry. mkRuntime is public, and every transformed record
   # declares an internal per-runtime capability marker with its normalized MCP
   # option. The marker distinguishes that pool from an independent same-named
   # native option and avoids introducing a package-written root option.
