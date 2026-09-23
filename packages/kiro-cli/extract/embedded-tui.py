@@ -12,6 +12,27 @@ import time
 from pathlib import Path
 
 
+def signal_group(child, sig):
+    """Signal the child's process group, treating an exited group as gone.
+
+    Darwin's killpg answers EPERM, not ESRCH, while every member of the group
+    is a zombie -- here, a leader that exited but is not reaped yet. EPERM is
+    accepted only once poll() has reaped that leader and a retry agrees the
+    group is gone; while the leader lives, EPERM is a real failure and raises.
+    """
+    try:
+        os.killpg(child.pid, sig)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if child.poll() is None:
+            raise
+        try:
+            os.killpg(child.pid, sig)
+        except ProcessLookupError:
+            pass
+
+
 binary, destination, fake_kas, cert_file = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="kiro-tui-") as root:
     root = Path(root)
@@ -76,15 +97,9 @@ with tempfile.TemporaryDirectory(prefix="kiro-tui-") as root:
                 f"isolated TUI candidates: {paths}"
             )
     finally:
-        try:
-            os.killpg(child.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        signal_group(child, signal.SIGTERM)
         time.sleep(0.2)
-        try:
-            os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        signal_group(child, signal.SIGKILL)
         child.wait()
         os.close(master)
 
