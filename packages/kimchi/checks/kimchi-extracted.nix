@@ -79,8 +79,6 @@
           'const envOverride = process.env.OPENCODE_CONFIG' 'const envOverride = undefined'
         mutant "$kimchi" environment-unlisted src/extensions/skills-manager/skill-manager.ts \
           'process.env.SKILLS_DIR ??' 'process.env.SKILLS_DIR ?? process.env.UNLISTED_PROBE_DIR ??'
-        mutant "$kimchi" flags-shape src/commands/help.ts \
-          'Object.entries(CLI_OPTIONS).map' 'Object.values(CLI_OPTIONS).map'
         mutant "$kimchi" harness-auto-default src/config.ts \
           'return parsed.autoDefaultApplied === true' 'return parsed.autoDefaultApplied === "yes"'
         mutant "$kimchi" harness-shape src/extensions/orchestration/model-roles.ts \
@@ -136,8 +134,6 @@
           'staleIgnored=["OPENCODE_CONFIG"]' >> "$TMPDIR/proof"
         expect_rejection environment-unlisted "$TMPDIR/environment-unlisted-source" \
           'environment census changed; new=["UNLISTED_PROBE_DIR"]' >> "$TMPDIR/proof"
-        expect_rejection flags-shape "$TMPDIR/flags-shape-source" \
-          "KIMCHI_FLAGS is no longer CLI help derived from CLI_OPTIONS" >> "$TMPDIR/proof"
         expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
         expect_rejection harness-auto-default "$TMPDIR/harness-auto-default-source" \

@@ -4,6 +4,7 @@
     ./checks/kimchi-docs-links.nix
     ./checks/kimchi-extracted.nix
     ./checks/module-eval.nix
+    ./checks/native-options.nix
   ];
   testing.homeManagerAiPackages.kimchi = pkgs.writeShellScriptBin "kimchi" ''
     set -euETo pipefail
