@@ -8,6 +8,10 @@
   ecosystems = import ../lib/ai/runtimes.nix;
   modes = ["devenv" "hm"];
   surfaces = ["agents" "context" "environmentVariables" "hooks" "lspServers" "mcpServers" "permissions" "rules" "settings" "skills"];
+  # Pools whose root entries a runtime can withdraw one name at a time
+  # (`ai.<runtime>.<pool>.<name> = null`). The others compose root and
+  # per-runtime values, so a root request for them has no per-runtime remedy.
+  keyedSurfaces = ["agents" "environmentVariables" "lspServers" "mcpServers" "rules" "skills"];
   primitives = ["notApplicable" "ownLeaves" "ownPathDeclarative" "ownPathManaged" "ownWrapper" "upstream"];
   imperativePrimitives = ["ownLeaves" "ownPathManaged"];
   both = value: {
@@ -322,11 +326,12 @@
       };
       codex = paths ".codex/hooks.json" ".codex/hooks.json";
       copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
-      # Kimchi reads lifecycle hooks only from a trusted project's
-      # .kimchi/hooks.json and .kimchi/hooks.local.json, never from user scope.
+      # Kimchi's own lifecycle reader takes only a trusted project's
+      # .kimchi/hooks.json and .kimchi/hooks.local.json; its user-scope routes
+      # are not sinks Home Manager can own (the hm reason says why).
       kimchi = {
         devenv = declarative "devenv" ".kimchi/hooks.json";
-        hm = absent "Kimchi reads lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). Its one user-scope route is a configured pi package's hooks/hooks.json, which would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`; the bash-hook directory filters the bash tool only and is not a lifecycle sink.";
+        hm = absent "Kimchi reads its own lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). It has two user-scope routes, and neither is a sink Home Manager can own. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:75-80) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
       };
       kiro = lib.genAttrs modes kiroHooks;
     };
@@ -582,6 +587,6 @@
   rows = validateRows (flatten definitions);
 in
   builtins.seq rows {
-    inherit definitions ecosystems imperativePrimitives key modes primitives rows surfaces validateRows writersOf;
+    inherit definitions ecosystems imperativePrimitives key keyedSurfaces modes primitives rows surfaces validateRows writersOf;
     imperativeWriters = lib.filter (writer: builtins.elem writer.primitive imperativePrimitives) (lib.concatMap writersOf rows);
   }

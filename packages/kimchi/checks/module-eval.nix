@@ -397,8 +397,12 @@ in {
     # (src/extensions/kimchi-hooks/definition.ts:25-37,
     # src/extensions/hook-adapters/discovery.ts:130-190), and never writes it.
     # Its event set has no PermissionRequest, so that event is left out of the
-    # file and warned about rather than written as bytes nothing reads. Home
-    # Manager has no user-scope lifecycle file: it writes nothing and warns.
+    # file rather than written as bytes nothing reads. Home Manager has no
+    # user-scope lifecycle file it can own: it writes nothing. Only the
+    # per-runtime ai.kimchi.hooks warns there; the shared pool composes with it,
+    # so nothing Kimchi-scoped could silence a root warning, and both root
+    # exclusions stay silent. Each silence sits beside a warning from the same
+    # evaluation, so an evaluation that stopped producing warnings fails.
     module-kimchi-hooks = mkTest "kimchi-hooks" (
       let
         config.ai = {
@@ -426,6 +430,12 @@ in {
         onlyPermissionRequest = evalDevenv {
           ai = {
             hooks.PermissionRequest = [{hooks = [{command = "never";}];}];
+            kimchi.enable = true;
+          };
+        };
+        hmRootOnly = evalHm {
+          ai = {
+            inherit (config.ai) hooks;
             kimchi.enable = true;
           };
         };
@@ -459,13 +469,15 @@ in {
             ];
           };
         }
-        && mentions "ai.hooks.PermissionRequest" devenv.config.warnings
+        && !mentions "ai.hooks" devenv.config.warnings
         && !(onlyPermissionRequest.config.files ? ".kimchi/hooks.json")
-        && mentions "ai.hooks.PermissionRequest" onlyPermissionRequest.config.warnings
+        && onlyPermissionRequest.config.warnings == []
         && !((evalDevenv {ai.kimchi.enable = true;}).config.files ? ".kimchi/hooks.json")
         && hmHookPaths == []
-        && mentions "ai.hooks is set but hm does not deliver it to kimchi" hm.config.warnings
+        && !mentions "ai.hooks is set" hm.config.warnings
         && mentions "ai.kimchi.hooks is set but hm does not deliver it to kimchi" hm.config.warnings
+        && mentions "claude-code-hook-adapter" hm.config.warnings
+        && hmRootOnly.config.warnings == []
         && (evalHm {ai.kimchi.enable = true;}).config.warnings == []
     );
 
