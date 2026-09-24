@@ -197,6 +197,7 @@ def wiring(script):
     # it, never to whichever runtime sorts first.
     assert "ai.kiro." in desired["KIRO.md"]["option"], desired["KIRO.md"]
     assert "ai.codex." not in desired["KIRO.md"]["option"], desired["KIRO.md"]
+    assert "ai.codex." in desired.get("CODEX.md", {}).get("option", ""), desired
     # Provenance is exact: a consumer file under a runtime config directory is
     # not an ai.* delivery and must not be observed as one.
     assert ".custom-kiro/consumer-owned.md" not in desired
