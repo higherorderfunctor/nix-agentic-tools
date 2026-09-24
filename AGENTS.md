@@ -45,8 +45,10 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
 
 - **`ai-module`**
   - Match: `checks/*/module-eval.nix`, `checks/module-provenance/**`,
-    `lib/ai/agent.nix`, `lib/ai/ai-common.nix`, `lib/ai/app/**`,
-    `lib/ai/default.nix`, `lib/ai/hooks.nix`, `lib/ai/mkSkillPackageModule.nix`,
+    `lib/ai/adapters/**`, `lib/ai/agent.nix`, `lib/ai/ai-common.nix`,
+    `lib/ai/app/**`, `lib/ai/default.nix`, `lib/ai/deliver.nix`,
+    `lib/ai/delivery-options.nix`, `lib/ai/deliveryMethod.nix`,
+    `lib/ai/formats.nix`, `lib/ai/hooks.nix`, `lib/ai/mkSkillPackageModule.nix`,
     `lib/ai/own.nix`, `lib/ai/own.py`, `lib/ai/program.nix`,
     `lib/ai/runtime-files.nix`, `lib/ai/runtimes.nix`,
     `lib/ai/sharedOptions.nix`, `lib/testing/module-harness.nix`,

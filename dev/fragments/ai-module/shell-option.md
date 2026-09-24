@@ -1,15 +1,18 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-16 — resolves #877: Kiro's FHS root supplies bash
-> but hides a host zsh, and that does not justify a runtime-specific implicit
-> shell default. `ai.shell` stays null; see below for the standing decision and
-> the override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-23 — the builder entry point is
+> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
+> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Resolves #877: Kiro's FHS root supplies bash but
+> hides a host zsh, and that does not justify a runtime-specific implicit shell
+> default. `ai.shell` stays null; see below for the standing decision and the
+> override rule it shares with normalized `settings`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
 ### One record is the capability source
 
-Every `mkAiApp` record declares the normalized pools its runtime exposes in
+Every `mkRuntime` record declares the normalized pools its runtime exposes in
 `supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
 places:
 
@@ -30,7 +33,7 @@ it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
 A same-named native option does not imply normalized-pool support.
-Runtime-shaped passthrough now lives under `nativeSettings`, independently of
+Runtime-shaped passthrough now lives under `native.settings`, independently of
 the capability list. Normalized `settings` is the deliberate uniform exception:
 all five runtimes list it so the same closed schema is available at every
 runtime scope, even when a particular field currently has a lossless native
@@ -53,9 +56,9 @@ Normalized settings use that helper per field. For example,
 `ai.claude.settings.reasoningEffort = "low"` overrides a root
 `ai.settings.reasoningEffort = "high"` for Claude only; Codex still inherits
 `"high"`. A null runtime value inherits the root. This is distinct from
-`nativeSettings`, which carries runtime-shaped passthrough and typed-native keys
-and participates in native option-priority rules only after normalized values
-have been resolved.
+`native.settings`, which carries runtime-shaped passthrough and typed-native
+keys and participates in native option-priority rules only after normalized
+values have been resolved.
 
 `lib.ai.program.mkProgram` applies the same rule to every leaf of a program
 specification. Root declarations retain their ordinary types and defaults;
@@ -74,16 +77,16 @@ feature default without replacing unrelated leaves.
 only when `shell` appears in the app record's `supportedPools`. There is no
 sibling shell-specific capability flag.
 
-| runtime | knob                       | delivery                               |
-| ------- | -------------------------- | -------------------------------------- |
-| Claude  | `CLAUDE_CODE_SHELL`        | `nativeSettings.env` → `settings.json` |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`               |
-| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`              |
-| Copilot | **unknown — verified gap** | excluded                               |
-| Kimchi  | unassessed                 | excluded                               |
+| runtime | knob                       | delivery                                |
+| ------- | -------------------------- | --------------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`        | `native.settings.env` → `settings.json` |
+| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                |
+| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`               |
+| Copilot | **unknown — verified gap** | excluded                                |
+| Kimchi  | unassessed                 | excluded                                |
 
-Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
-because the issue that requested this never mentioned it.
+Four runtimes were asked for; five go through `mkRuntime`. Kimchi is easy to
+miss because the issue that requested this never mentioned it.
 
 ### Kiro's FHS root does not change the shell default
 
@@ -177,7 +180,7 @@ three runtimes demonstrably do not perform.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
-  has no wrapper here and `nativeSettings.env` is its native equivalent.
+  has no wrapper here and `native.settings.env` is its native equivalent.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more

@@ -7,7 +7,14 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
-  inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringFiles;
+  inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
+
+  # `aiCommon.contentFileEntry` returns the delivery record wrapped in
+  # `lib.mkDefault`, so a consumer can override what a factory contributed.
+  # These assertions are about the arbitrated CONTENT, not the override
+  # priority carrying it, so unwrap before comparing. Comparing the wrapper
+  # directly would make every assertion below depend on the priority value.
+  entryContent = entry: entry.content.content;
 in {
   checks = {
     module-context-content-record-rejects-two-sources = mkTest "context-content-record-rejects-two-sources" (!(builtins.tryEval (let
@@ -85,7 +92,11 @@ in {
         rule.source
         == ../../lib/ai/types.nix
         && rule.text == "Consumer rule."
-        && aiCommon.contentFileEntry rule == {text = "Consumer rule.";}
+        && entryContent (aiCommon.contentFileEntry rule)
+        == {
+          enable = true;
+          text = "Consumer rule.";
+        }
     );
 
     module-rule-disable-omits-every-runtime-output = mkTest "rule-disable-omits-every-runtime-output" (
@@ -192,7 +203,11 @@ in {
         value.text
         == "Consumer text."
         && aiCommon.hasContent value
-        && aiCommon.contentFileEntry value == {text = "Consumer text.";}
+        && entryContent (aiCommon.contentFileEntry value)
+        == {
+          enable = true;
+          text = "Consumer text.";
+        }
     );
 
     module-rule-rejects-empty-content = mkTest "rule-rejects-empty-content" (!(builtins.tryEval (let
@@ -325,7 +340,7 @@ in {
           };
         };
       in
-        (kiroSteeringFiles result) ? "alpha.md"
+        (kiroSteeringContent result) ? "alpha.md"
     );
 
     # Top-level `ai.skillsDir` fans out to every enabled CLI.
@@ -384,6 +399,12 @@ in {
         && !(result.config.ai.kimchi ? rules)
     );
 
+    # A REAL directory, not `../fixtures`, which never existed. Both probes
+    # used to pass on laziness alone: nothing forced the fanout, so the
+    # accepted arm proved only that `home.packages` did not read it. Hosting a
+    # delivery `upstream` sink under `programs` made that read eager — see the
+    # `upstreamRoots` table in lib/ai/deliver.nix — and the arm started
+    # failing on the missing path rather than on its own claim.
     module-ai-rules-dir-accepted-for-claude = mkTest "ai-rules-dir-accepted-for-claude" (
       let
         probe =
@@ -391,7 +412,7 @@ in {
           (evalHm {
             ai.claude = {
               enable = true;
-              rulesDir = ../fixtures;
+              rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
             };
           })
       .config.home.packages;
@@ -406,7 +427,7 @@ in {
           (evalHm {
             ai.kimchi = {
               enable = true;
-              rulesDir = ../fixtures;
+              rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
             };
           })
       .config.home.packages;

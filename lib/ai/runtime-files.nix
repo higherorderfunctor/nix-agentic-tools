@@ -1,65 +1,11 @@
-# Shared literal-file option and backend lowering.
+# Validation and native lowering for `ai.<runtime>.files`.
 #
-# This is the final static output seam for every `ai.<runtime>.files` map:
-# generators contribute whole entries at `mkDefault` priority, consumers may
-# replace or tombstone them, and the surviving entries lower one-way into the
-# active backend's native file sink. Nothing in this layer feeds back into a
-# normalized input pool.
+# The option's TYPE lives in `lib/ai/delivery-options.nix` beside the writer
+# submodule, because the two describe one layer. What is left here is the
+# `apply` that rejects a malformed map before anything reads it, and the
+# lowering of a symlinked entry into the shape both backends' file sinks take.
 {lib}: let
-  hasExactlyOneContent = entry:
-    ((entry.text or null) == null) != ((entry.source or null) == null);
-  entrySubmodule =
-    lib.types.addCheck (lib.types.submodule {
-      options = {
-        executable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = "Whether the materialized file should be executable.";
-        };
-        source = lib.mkOption {
-          type = lib.types.nullOr lib.types.path;
-          default = null;
-          description = "Store-backed source for the file. Mutually exclusive with text.";
-        };
-        text = lib.mkOption {
-          type = lib.types.nullOr lib.types.str;
-          default = null;
-          description = "Literal file content. Mutually exclusive with source.";
-        };
-      };
-    })
-    hasExactlyOneContent;
-
-  nullableEntry = lib.types.nullOr entrySubmodule;
-
-  # An attrsOf-submodule normally merges fields independently. A final output
-  # registry needs the opposite contract: priority selects one WHOLE entry.
-  # Normalize each surviving same-priority definition through the submodule,
-  # deduplicate byte-identical values, and reject divergent values.
-  mkAtomicEntry = nullableType:
-    lib.types.mkOptionType rec {
-      name = "atomicLiteralFile";
-      inherit (nullableType) description descriptionClass;
-      check = value:
-        value
-        == null
-        || (entrySubmodule.check value && hasExactlyOneContent value);
-      merge = loc: defs: let
-        normalize = definition:
-          if check definition.value
-          then nullableType.merge loc [definition]
-          else throw "The option `${lib.showOption loc}` must set exactly one of `text` or `source`";
-        values = lib.unique (map normalize defs);
-      in
-        if builtins.length values == 1
-        then builtins.head values
-        else throw "The option `${lib.showOption loc}` has divergent whole-file definitions at the same priority";
-      inherit (nullableType) emptyValue getSubModules getSubOptions;
-      substSubModules = modules: mkAtomicEntry (nullableType.substSubModules modules);
-      nestedTypes.elemType = nullableType;
-    };
-  atomicEntry = mkAtomicEntry nullableEntry;
-
+  aiTypes = import ./types.nix {inherit lib;};
   targetIsNormalized = target: let
     segments = lib.splitString "/" target;
   in
@@ -68,15 +14,42 @@
     && !(lib.hasPrefix "/" target)
     && lib.all (segment: segment != "" && segment != "." && segment != "..") segments;
 in rec {
-  fileEntryType = atomicEntry;
-  fileMapType = lib.types.attrsOf fileEntryType;
+  # One live entry as the native sink wants it. `executable` is stated unless
+  # it is null, because both backends default it themselves and a silent
+  # divergence between the two is what this seam exists to prevent — while a
+  # null means "leave the source's mode alone" and has to reach the sink as an
+  # ABSENT attribute, which is how a tree of source files keeps its modes.
+  # `recursive` is stated only when true: Home Manager reads its absence as
+  # false and the devenv adapter has no such option at all.
+  sinkEntry = entry:
+    lib.optionalAttrs (entry.executable != null) {inherit (entry) executable;}
+    // lib.optionalAttrs entry.recursive {recursive = true;}
+    // aiTypes.textSourceFile entry.content;
+  # Whether an entry is delivered. A DEFINED `content.enable = false` omits
+  # the file whatever supplies its bytes: it is the one suppression lever, so
+  # it has to reach `run` and `value` documents too, not only text/source.
+  # Otherwise text/source are live when enabled, and `run`/`value` whenever
+  # they are set, since nothing enables them.
+  isLive = entry:
+    entry.content.enable
+    || (!entry.content._enableDefined
+      && (entry.content.run != null || entry.content.value != null));
 
   validateFiles = runtime: files: let
     invalidTargets = builtins.filter (target: !targetIsNormalized target) (builtins.attrNames files);
-    invalidEntries = builtins.attrNames (lib.filterAttrs (
-        _target: entry: entry != null && !hasExactlyOneContent entry
-      )
-      files);
+    contentKinds = entry:
+      lib.optional entry.content.enable "text or source"
+      ++ lib.optional (entry.content.run != null) "run"
+      ++ lib.optional (entry.content.value != null) "value";
+    # An entry with no content and no `enable` definition would silently
+    # write nothing. That is what an empty `text` is, because empty inline
+    # text is not content; a `content.enable = false` at any priority is the
+    # deliberate way to have an entry that delivers nothing.
+    malformed = lib.filterAttrs (_target: entry: let
+      count = builtins.length (contentKinds entry);
+    in
+      count > 1 || (count == 0 && !entry.content._enableDefined))
+    files;
   in
     if invalidTargets != []
     then
@@ -85,25 +58,21 @@ in rec {
         without absolute roots, empty segments, or `.`/`..` traversal segments;
         invalid target(s): ${lib.concatStringsSep ", " invalidTargets}
       ''
-    else if invalidEntries == []
+    else if malformed == {}
     then files
     else
       throw ''
-        ai.${runtime}.files entries must set exactly one of `text` or `source`;
-        invalid target(s): ${lib.concatStringsSep ", " invalidEntries}
+        ai.${runtime}.files entries must enable exactly one content form:
+        `text`/`source`, `run`, or `value`. Empty `text` is not content:
+        spell an empty file as a `source`, or omit the entry with
+        `content.enable = false`. Invalid entries:
+        ${lib.concatStringsSep ", " (builtins.attrNames malformed)}
       '';
 
+  # The shared repository AGENTS.md map lowers through here rather than
+  # through the router: it is one arbitrated target rather than a runtime's
+  # delivery description, and it has no methods, facts or writers.
   liveFiles = files:
-    lib.mapAttrs (_target: lib.filterAttrs (_field: value: value != null))
-    (lib.filterAttrs (_target: entry: entry != null) files);
-
-  mkBackendSink = {
-    backend,
-    files,
-  }:
-    if backend == "hm"
-    then {home.file = liveFiles files;}
-    else if backend == "devenv"
-    then {files = liveFiles files;}
-    else throw "runtime-files: unsupported backend `${backend}`";
+    lib.mapAttrs (_target: sinkEntry)
+    (lib.filterAttrs (_target: isLive) files);
 }

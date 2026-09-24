@@ -8,8 +8,8 @@
   enabled = harness.evalDevenv {
     ai.codex = {
       enable = true;
-      files."probe".text = "probe";
-      nativeSettings.model = "probe";
+      files."probe".content.text = "probe";
+      native.settings.model = "probe";
     };
     ai.kiro = {
       configDir = ".custom-kiro";

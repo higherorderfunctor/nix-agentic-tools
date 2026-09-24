@@ -783,7 +783,7 @@
     finalText =
       if finalEntry == null
       then null
-      else finalEntry.text or null;
+      else aiTypes.textSourceInlineText finalEntry.content;
     renderedBytes =
       if finalText == null
       then 0
@@ -791,7 +791,7 @@
   in {
     # Store-backed sources stay lazy: reading a derivation output here would
     # introduce IFD. Inline generated/replacement content is checked after B7
-    # arbitration; tombstones and source entries do not force discarded text.
+    # arbitration; disabled and source entries do not force discarded text.
     assertion = finalText == null || renderedBytes <= cfg.projectDocMaxBytes;
     message = ''
       Codex AGENTS.md renders to ${toString renderedBytes} bytes, exceeding
@@ -801,8 +801,8 @@
     '';
   };
 in
-  lib.ai.app.mkAiApp {
-    # Carried as DATA, not a module argument — see mkAiApp.nix.
+  lib.ai.app.mkRuntime {
+    # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "codex";
     contextFilename = "AGENTS.md";
@@ -885,7 +885,7 @@ in
       };
       # `profiles` (removed 2026-09-19): a whole-file `codex --profile <name>`
       # layer, distinct from the mergeable `[permissions.<name>]` tables in
-      # nativeSettings. It was locked out by assertion from the day it landed
+      # native.settings. It was locked out by assertion from the day it landed
       # — a named profile silently overrides legacy sandbox settings beneath
       # it — which made the option and its HM/devenv materializer unreachable
       # dead code. It is not reinstated here because a Codex profile cannot
@@ -902,7 +902,7 @@ in
           before Codex can silently truncate content beyond this limit.
         '';
       };
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = codexSettingsType {
           model = "gpt-6-astra";
           model_reasoning_effort = "xhigh";
@@ -938,9 +938,9 @@ in
       agentsMdTarget = "${cfg.configDir}/${cfg.context.filename}";
       configFile = "${cfg.configDir}/config.toml";
       finalAgentsMdEntry = cfg.files.${agentsMdTarget} or null;
-      hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
+      hasNativeMcpServers = cfg.native.settings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
-      settings = helpers.filterNulls ((applyIntegrationRoots cfg.nativeSettings cfg.internal._integration_writable_roots)
+      settings = helpers.filterNulls ((applyIntegrationRoots cfg.native.settings cfg.internal._integration_writable_roots)
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
@@ -958,7 +958,12 @@ in
         inherit pkgs;
       };
       codexSkillNames = builtins.attrNames mergedSkills;
-      codexSkills = normalizeCodexSkills mergedSkills;
+      # An unsafe skill name is reported by `mkSkillNameAssertions`, and
+      # keeping it OUT of the file map is what lets that assertion be the
+      # diagnostic: a traversing name reaches the map's own path validation
+      # first otherwise, and that throw names neither the skill nor the option
+      # that set it.
+      codexSkills = normalizeCodexSkills (lib.filterAttrs (name: _source: skillNameSafe name) mergedSkills);
       skillBackupRoot = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/codex-skill-layout-b";
     in {
       # Codex has no named Markdown rule surface, so context and rules are
@@ -966,15 +971,45 @@ in
       # as one replaceable default.
       ai.codex = {
         inherit (ownedSettings.ai.codex) _ownPlans;
-        files = lib.mkIf hasAgentsMdContent {
-          ${agentsMdTarget} = lib.mkDefault (
-            if agentsMd == ""
-            then null
-            else {text = agentsMd;}
-          );
-        };
+        files = lib.mkMerge [
+          (lib.mkIf hasAgentsMdContent {
+            # The ONE generated entry whose priority stays on the whole entry
+            # rather than moving onto `content`. Deciding between enabled and
+            # empty generated content reads the COMPOSED body, and the body may
+            # come from a store source a consumer has already replaced. The
+            # `mkDefault` wrapper lets priority filtering discard that source
+            # unread. A consumer defining only a sibling field therefore must
+            # also restate content; validation diagnoses an empty survivor.
+            ${agentsMdTarget} = lib.mkDefault (
+              if agentsMd == ""
+              then {
+                content = {
+                  enable = false;
+                  text = agentsMd;
+                };
+              }
+              else {
+                content = {
+                  enable = true;
+                  text = agentsMd;
+                };
+              }
+            );
+          })
+          # Codex discovers a skill when the skill DIRECTORY is itself a
+          # symlink, and not when the backend creates a real directory of
+          # symlinked leaves — a measured consumer fact, and the whole reason
+          # this one runtime delivers a directory source with `recursive` off.
+          # `normalizeCodexSkills` has already wrapped a single-file skill into
+          # a directory, so every entry here has one.
+          (helpers.mkSkillFiles {
+            configDir = ".agents";
+            recursive = false;
+            skills = codexSkills;
+          })
+        ];
         internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter ["${config.xdg.cacheHome}/nix"]);
-        nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+        native.settings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
           model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
         };
       };
@@ -989,18 +1024,18 @@ in
           })
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
-            message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+            message = "ai.codex.native.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            inherit (mkSandboxModelAssertion "ai.codex.nativeSettings" cfg.nativeSettings) assertion message;
+            inherit (mkSandboxModelAssertion "ai.codex.native.settings" cfg.native.settings) assertion message;
           }
           {
             assertion = !(cfg.execpolicyRules ? default);
             message = "ai.codex.execpolicyRules.default is reserved in Home Manager because Codex writes user allow-list decisions to rules/default.rules; choose another rule filename";
           }
           {
-            assertion = effectiveHooks == {} || !(cfg.nativeSettings ? hooks);
-            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.nativeSettings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+            assertion = effectiveHooks == {} || !(cfg.native.settings ? hooks);
+            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.native.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
           }
         ];
       home = {
@@ -1034,7 +1069,6 @@ in
         # readable. A name that stops matching the helper's is an eval error.
         activation.codexSettingsReconcile = ownedSettings.home.activation.codexSettingsReconcile;
         file = lib.mkMerge [
-          (helpers.mkSkillDirectoryEntries ".agents" codexSkills)
           (mkAgentEntries cfg.configDir mergedAgents)
           (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
           (lib.mkIf (effectiveHooks != {}) {
@@ -1058,7 +1092,7 @@ in
       resolvedSettings,
       ...
     }: let
-      hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
+      hasNativeMcpServers = cfg.native.settings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       configuredGitRoot = lib.attrByPath ["git" "root"] null config;
       gitRoot =
@@ -1066,7 +1100,7 @@ in
         then configuredGitRoot
         else config.devenv.root;
       gitCommonDir = resolveGitCommonDir gitRoot;
-      legacySettings = applyWorkspaceWriteRoots cfg.nativeSettings ["${config.devenv.root}/.git"];
+      legacySettings = applyWorkspaceWriteRoots cfg.native.settings ["${config.devenv.root}/.git"];
       integrationSettings = applyIntegrationRoots legacySettings cfg.internal._integration_writable_roots;
       permissionSettings = applyNamedPermissionRoots integrationSettings (lib.optional (gitCommonDir != null) gitCommonDir);
       settings = helpers.filterNulls (permissionSettings
@@ -1092,16 +1126,34 @@ in
         else null;
       agentsMdRules = lib.mapAttrs mkRuleBody mergedRules;
       codexSkillTargets = skillTargets "${config.devenv.root}/.agents/skills" mergedSkills;
-      codexSkills = normalizeCodexSkills mergedSkills;
+      # An unsafe skill name is reported by `mkSkillNameAssertions`, and
+      # keeping it OUT of the file map is what lets that assertion be the
+      # diagnostic: a traversing name reaches the map's own path validation
+      # first otherwise, and that throw names neither the skill nor the option
+      # that set it.
+      codexSkills = normalizeCodexSkills (lib.filterAttrs (name: _source: skillNameSafe name) mergedSkills);
       skillBackupRoot = "${config.devenv.state}/nix-agentic-tools/codex-skill-layout-b";
     in {
       ai = {
-        codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
-          lib.optional (nixCacheRoot != null) nixCacheRoot
-          ++ lib.optional (treefmtCacheRoot != null) treefmtCacheRoot
-        ));
-        codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
-          model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+        codex = {
+          # Codex discovers a skill when the skill DIRECTORY is itself a
+          # symlink, and not when the backend creates a real directory of
+          # symlinked leaves — a measured consumer fact, and the whole reason
+          # this one runtime delivers a directory source with `recursive` off.
+          # `normalizeCodexSkills` has already wrapped a single-file skill into
+          # a directory, so every entry here has one.
+          files = helpers.mkSkillFiles {
+            configDir = ".agents";
+            recursive = false;
+            skills = codexSkills;
+          };
+          internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
+            lib.optional (nixCacheRoot != null) nixCacheRoot
+            ++ lib.optional (treefmtCacheRoot != null) treefmtCacheRoot
+          ));
+          native.settings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+            model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+          };
         };
         internal.agentsMd.${cfg.context.filename} =
           {
@@ -1120,26 +1172,25 @@ in
         ++ [
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
-            message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+            message = "ai.codex.native.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            inherit (mkSandboxModelAssertion "ai.codex.nativeSettings" cfg.nativeSettings) assertion message;
+            inherit (mkSandboxModelAssertion "ai.codex.native.settings" cfg.native.settings) assertion message;
           }
           {
             assertion = ignoredSettings == [];
             message = ''
-              ai.codex.nativeSettings contains keys Codex ignores in project config:
+              ai.codex.native.settings contains keys Codex ignores in project config:
               ${lib.concatStringsSep ", " ignoredSettings}. Move them to the
               Home Manager user-level configuration.
             '';
           }
           {
-            assertion = effectiveHooks == {} || !(cfg.nativeSettings ? hooks);
-            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.nativeSettings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+            assertion = effectiveHooks == {} || !(cfg.native.settings ? hooks);
+            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.native.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
           }
         ];
       files = lib.mkMerge [
-        (helpers.mkSkillDirectoryEntries ".agents" codexSkills)
         (mkAgentEntries ".codex" mergedAgents)
         (mkExecpolicyEntries ".codex" cfg.execpolicyRules)
         (lib.mkIf (effectiveHooks != {}) {

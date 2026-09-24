@@ -54,7 +54,7 @@
   rowCase = row: let
     path =
       if row.surface == "settings"
-      then ["ai" row.ecosystem "nativeSettings"]
+      then ["ai" row.ecosystem "native" "settings"]
       else if row.surface == "permissions"
       then ["ai" row.ecosystem "permissions"]
       else ["ai" row.surface];
@@ -178,17 +178,12 @@
     ++ [
       {
         runtime = "claude";
-        path = ["ai" "claude" "agentsDir"];
-        value = ../../packages/claude-code/checks/fixtures/claude-agents;
-      }
-      {
-        runtime = "claude";
-        path = ["ai" "claude" "nativeSettings" "mcpServers"];
+        path = ["ai" "claude" "native" "settings" "mcpServers"];
         value.probe.command = "probe";
       }
       {
         runtime = "kimchi";
-        path = ["ai" "kimchi" "harnessSettings"];
+        path = ["ai" "kimchi" "native" "harnessSettings"];
         value.resources.probe = true;
       }
       {

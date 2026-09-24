@@ -1,7 +1,7 @@
 # Declares cross-app options (ai.context, ai.mcpServers,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks).
 #
-# Imported by every mkAiApp module so per-app layers
+# Imported by every mkRuntime module so per-app layers
 # (ai.<name>.mcpServers, etc.) compose with these top-level pools. Scalar
 # defaults allow per-app overrides, lists concatenate, and named attrset pools
 # use shallow per-runtime replacement. Nullable pools use null tombstones;
@@ -30,7 +30,7 @@
   # runtime inherits it. Runtime-scoped declarations own their units directly;
   # their lifetime follows the declaration, matching the pre-existing contract.
   # Discover MCP-capable runtimes from the evaluated OPTION tree rather than
-  # the first-party registry. mkAiApp is public, and every transformed record
+  # the first-party registry. mkRuntime is public, and every transformed record
   # declares an internal per-runtime capability marker with its normalized MCP
   # option. The marker distinguishes that pool from an independent same-named
   # native option and avoids introducing a package-written root option.
@@ -246,7 +246,7 @@ in {
         Claude `effortLevel` and Codex `model_reasoning_effort`; the enum is
         their exact persisted semantic intersection. Set a runtime's native
         key, including an explicit null, under
-        `ai.<runtime>.nativeSettings` to arbitrate against the derived default.
+        `ai.<runtime>.native.settings` to arbitrate against the derived default.
         Runtime-specific identifiers and lossy translations are deliberately
         excluded.
       '';
@@ -360,7 +360,7 @@ in {
         Codex itself runs with.
 
         Claude does NOT consume this pool — it has no wrapper here, and
-        `ai.claude.nativeSettings.env` is its native equivalent (upstream writes
+        `ai.claude.native.settings.env` is its native equivalent (upstream writes
         it into `~/.claude/settings.json`).
       '';
     };

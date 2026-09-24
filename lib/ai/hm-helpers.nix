@@ -13,105 +13,54 @@ in rec {
 
   # ── File entry builders ──────────────────────────────────────────────
 
-  mkSourceEntry = content:
-    if lib.isPath content
-    then {source = content;}
-    else {text = content;};
-
-  mkMarkdownEntries = configDir: subdir: attrs:
-    lib.mapAttrs' (name: content:
-      lib.nameValuePair "${configDir}/${subdir}/${name}.md"
-      (mkSourceEntry content))
-    attrs;
-
-  # Accepts both Nix path literals and absolute string paths for
-  # the directory case (via `builtins.readFileType`). Guarding on
-  # `lib.isPath` alone would short-circuit string-interpolated
-  # paths like `"${pkg}/share/skill"` to the file fallback, which
-  # uses `mkSourceEntry` and writes the path text as SKILL.md
-  # content — matching the upstream HM `mkSkillEntry` bug.
-  mkSkillEntries = configDir: attrs:
-    lib.mapAttrs' (name: content:
-      if
-        (builtins.isPath content || builtins.isString content)
-        && (builtins.readFileType content) == "directory"
-      then
-        lib.nameValuePair "${configDir}/skills/${name}" {
-          source = content;
-          recursive = true;
-        }
-      else
-        lib.nameValuePair "${configDir}/skills/${name}/SKILL.md"
-        (mkSourceEntry content))
-    attrs;
-
-  # Codex discovers a skill when the skill directory itself is a symlink, but
-  # not when Home Manager/devenv create a real directory containing symlinked
-  # leaves. Keep this separate from mkSkillEntries: Claude, Copilot, Kimchi and
-  # Kiro still need the composable recursive layout that helper provides.
-  mkSkillDirectoryEntries = configDir: attrs:
-    lib.mapAttrs' (name: content:
-      assert lib.assertMsg ((builtins.readFileType content) == "directory")
-      "mkSkillDirectoryEntries: skill '${name}' must resolve to a directory";
-        lib.nameValuePair "${configDir}/skills/${name}" {
-          source = content;
-        })
-    attrs;
-
-  # Recursively enumerate a skill source directory at eval time
-  # and emit devenv-compatible
-  # `files."<prefix>/<relpath>".source = <file>;` entries for
-  # every leaf file. Mirrors HM `recursive = true` in user space
-  # because devenv's `files.<name>.source = path` option only
-  # creates a single dir symlink (Layout A) and has no recursive
-  # walk of its own.
+  # One skill tree as DELIVERY entries, for every runtime and both backends.
   #
-  # Accepts both Nix path literals (e.g. `./path/to/skill`) and
-  # absolute string paths (e.g. `"${pkg}/share/skill"`) — uses
-  # `builtins.readFileType` which is type-agnostic.
+  # A directory skill is one entry with a directory source: Home Manager
+  # expands it natively and the router walks it for devenv, which is the single
+  # walk that replaced three hand-written ones. A single-file skill becomes its
+  # own `SKILL.md`.
   #
-  # Usage:
-  #   mkDevenvSkillEntries ".claude" { skillName = ./path/to/skill; }
-  # Returns:
-  #   {
-  #     ".claude/skills/skillName/SKILL.md".source =
-  #       ./path/to/skill/SKILL.md;
-  #     ".claude/skills/skillName/supporting.md".source =
-  #       ./path/to/skill/supporting.md;
-  #     ...
-  #   }
+  # `recursive = false` with a directory source is Codex's shape, and it is a
+  # measured consumer fact rather than a preference: Codex discovers a skill
+  # when the skill DIRECTORY is itself a symlink, and not when the backend
+  # creates a real directory of symlinked leaves.
   #
-  # Nested subdirectories inside a skill dir are preserved in the
-  # resulting path keys (e.g.
-  # `.claude/skills/foo/references/bar.md`).
+  # `executable = null` is load-bearing everywhere: a skill tree may ship a
+  # script, and stating a mode here would clear its executable bit at link
+  # time.
   #
-  # For single-file skills (path points to a regular file, not a
-  # dir), falls back to a single
-  # `{configDir}/skills/{name}/SKILL.md` entry mirroring how
-  # `mkSkillEntries` handles the same case.
-  mkDevenvSkillEntries = configDir: attrs: let
-    walkDir = prefix: dir:
-      lib.concatMapAttrs (
-        name: kind:
-          if kind == "directory"
-          then walkDir "${prefix}/${name}" (dir + "/${name}")
-          else if kind == "regular" || kind == "symlink"
-          then {"${prefix}/${name}".source = dir + "/${name}";}
-          else {} # skip unknown entries
-      )
-      (builtins.readDir dir);
-  in
-    lib.concatMapAttrs (
-      skillName: skillPath:
-      # `builtins.readFileType` accepts both Nix paths and
-      # absolute string paths, so this handles skill sources
-      # from both `./rel/path` literals and `"${pkg}/share"`
-      # interpolation results uniformly.
-        if (builtins.readFileType skillPath) == "directory"
-        then walkDir "${configDir}/skills/${skillName}" skillPath
-        else {"${configDir}/skills/${skillName}/SKILL.md".source = skillPath;}
+  # `builtins.readFileType` rather than `lib.isPath`, because a skill that
+  # comes from a package is an interpolated STRING, and treating that as a
+  # single file writes the path itself as the file's content — the bug the
+  # upstream skill helper has.
+  mkSkillFiles = {
+    configDir,
+    recursive ? true,
+    skills,
+  }:
+    lib.mapAttrs' (
+      name: source:
+        if (builtins.readFileType source) == "directory"
+        then
+          lib.nameValuePair "${configDir}/skills/${name}" {
+            content.source = source;
+            executable = null;
+            inherit recursive;
+          }
+        else
+          assert lib.assertMsg recursive
+          "mkSkillFiles: skill '${name}' must resolve to a directory";
+            lib.nameValuePair "${configDir}/skills/${name}/SKILL.md" {
+              # ALWAYS `source`, never a path-vs-string test. A skill that
+              # comes from a package is an interpolated STRING holding a store
+              # path, and routing that to `text` writes the PATH as the file's
+              # body — the same upstream bug the directory branch above avoids,
+              # reached through the single-file branch instead.
+              content.source = source;
+              executable = null;
+            }
     )
-    attrs;
+    skills;
 
   # ── MCP server transformation ───────────────────────────────────────
 

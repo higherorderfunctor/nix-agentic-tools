@@ -231,7 +231,7 @@ in {
         base = {
           ai.codex = {
             enable = true;
-            nativeSettings.sandbox_mode = "workspace-write";
+            native.settings.sandbox_mode = "workspace-write";
           };
           glab = {
             enable = true;

@@ -175,10 +175,11 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-12 — devenv's `createFileScript` is now a
-> `copyMode` dispatcher, not the symlink writer this fragment used to quote. The
-> quoted body is `createSymlinkScript`; `createCopyScript` is the other branch
-> and it DOES recurse.
+> **Last verified:** 2026-09-19 — the user-space recursive walk is the delivery
+> router's `lib/ai/formats.nix:walk`, shared by every runtime. devenv's
+> `createFileScript` is a `copyMode` dispatcher, not the symlink writer this
+> fragment used to quote: the quoted body is `createSymlinkScript`, and
+> `createCopyScript` is the other branch, which DOES recurse.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -305,7 +306,7 @@ symlinks** — never real files or directories. This is another reason Layout A 
 B transitions get stuck: orphan cleanup can't clear a real dir that a previous
 generation laid down.
 
-### The user-space walker (`mkDevenvSkillEntries`)
+### The user-space walker (the delivery router's one walk)
 
 To produce Layout B (a directory containing per-file symlinks) via the `files`
 option, split one logical "skill directory" into N
@@ -327,20 +328,24 @@ Key behaviors:
   dirs.
 - Does NOT need IFD. It's pure `readDir` on paths the flake already tracks.
 
-The implementation lives in `lib/hm-helpers.nix:mkDevenvSkillEntries` and is the
-recommended fix when a runtime requires the HM-style recursive layout.
+The implementation lives in `lib/ai/formats.nix:walk`, called by
+`lib/ai/deliver.nix` for any delivery entry with `recursive = true` on the
+devenv backend. A factory therefore declares the tree ONCE, with a directory
+source, and each backend expands it its own way — this walk, or Home Manager's
+native recursion. It replaced three hand-written copies of the same recursion
+(the skill helper, its devenv twin, and kiro's inline agents-directory walker).
 
 Codex is the exception. Its 0.147.0 scanner ignores a real skill directory
 containing symlinked leaves but discovers a symlinked skill directory. Codex
-therefore uses `mkSkillDirectoryEntries`, whose directory source maps directly
-onto devenv's identity behavior. The `ai:codex:migrate-skill-links` task runs
-after `devenv:files:cleanup` and before `devenv:files`. It validates the whole
-target set first, rejects unsafe names and non-store or non-directory content,
-and refuses symlinked `.agents` or `skills` parents before moving each legacy
-tree intact under the devenv state directory. Existing store-backed top-level
-links are unlinked so devenv cannot follow them while updating the target. The
-backup preserves even empty directories for recovery; unexpected content fails
-the migration loudly before anything changes.
+therefore declares `recursive = false` with a directory source, which maps
+directly onto devenv's identity behavior. The `ai:codex:migrate-skill-links`
+task runs after `devenv:files:cleanup` and before `devenv:files`. It validates
+the whole target set first, rejects unsafe names and non-store or non-directory
+content, and refuses symlinked `.agents` or `skills` parents before moving each
+legacy tree intact under the devenv state directory. Existing store-backed
+top-level links are unlinked so devenv cannot follow them while updating the
+target. The backup preserves even empty directories for recovery; unexpected
+content fails the migration loudly before anything changes.
 
 ### How HM produces Layout B
 
@@ -349,9 +354,10 @@ HM's `home.file.<name>` submodule has a `recursive` field
 `recursive = true`, HM's activation script walks the directory and creates
 per-file symlinks inside a real subdirectory at `<name>`, with state tracking
 per file. Upstream `programs.claude-code.skills` uses this via `mkSkillEntry`.
-Our own `lib/hm-helpers.nix:mkSkillEntries` mirrors the pattern for direct
-Layout B consumers. Codex deliberately uses a non-recursive Home Manager source
-instead, producing the same whole-directory link as devenv.
+Our own delivery entries mirror the pattern for direct Layout B consumers: the
+adapter passes `recursive` straight through to `home.file`. Codex deliberately
+uses a non-recursive Home Manager source instead, producing the same
+whole-directory link as devenv.
 
 devenv chose a simpler, flatter model without recursive support. Not a bug; a
 deliberate design difference. The user-space walker restores parity at the cost

@@ -30,16 +30,16 @@
     permission, it does not oblige you to delegate.
   '';
 
-  # The `nativeSettings` option surface: one option per path in the packaged
+  # The `native.settings` option surface: one option per path in the packaged
   # binary's own settings schema, merged with the hand-authored exceptions.
   # `.report` is what packages/claude-code/checks/claude-settings-schema.nix asserts on, so an
   # exception aimed at a key the binary no longer declares fails CI rather than
   # sitting here unnoticed.
-  nativeSettingsSurface = import ./nativeSettingsOptions.nix {
+  nativeFileSurface = import ./nativeOptions.nix {
     inherit extracted lib pkgs;
   };
 
-  # Guard for the freeform `nativeSettings` tail: every key the packaged
+  # Guard for the freeform `native.settings` tail: every key the packaged
   # binary's own extracted settings schema does not declare is a hard failure
   # unless `allowUnrecognizedSettings` names it. Claude ignores an unknown
   # settings key SILENTLY, so without this a misspelling looks applied and does
@@ -55,17 +55,17 @@
   #
   # `cfg.package.version` is read ONLY inside message strings, so a passing
   # assertion never forces the package (and never triggers overlay IFD).
-  nativeSettingsAssertions = cfg:
+  nativeFileAssertions = cfg:
     unrecognizedSettings.mkAssertions {
       declared = extracted.settings or null;
       # The tree actually written — identical to the HM
-      # `settings = aiCommon.filterNulls cfg.nativeSettings` write below.
+      # `settings = aiCommon.filterNulls cfg.native.settings` write below.
       # Filtering FIRST is load-bearing: a typed sub-option sitting at its
       # `null` default would otherwise report itself the day upstream renames
       # that key, for every consumer, including ones who never set it.
-      settings = aiCommon.filterNulls cfg.nativeSettings;
+      settings = aiCommon.filterNulls cfg.native.settings;
       allowed = cfg.allowUnrecognizedSettings;
-      optionPath = "ai.claude.nativeSettings";
+      optionPath = "ai.claude.native.settings";
       allowOptionPath = "ai.claude.allowUnrecognizedSettings";
       version = cfg.package.version or null;
       # Keys THIS MODULE writes are reported against the option that writes
@@ -214,9 +214,9 @@
   # pool cannot implement this option and a typed one is needed.
   #
   # `env` is not a normalized settings key — it rides the native freeform
-  # JSON tail — so this composes with a consumer's other `nativeSettings.env` entries rather
+  # JSON tail — so this composes with a consumer's other `native.settings.env` entries rather
   # than replacing the attrset. mkDefault keeps an explicit
-  # `ai.claude.nativeSettings.env.CLAUDE_CODE_SHELL` winning over the option.
+  # `ai.claude.native.settings.env.CLAUDE_CODE_SHELL` winning over the option.
   #
   # NOTE for anyone debugging a shell that did not take effect: Claude
   # SILENTLY falls back when the path is not executable — no warning, exit
@@ -231,26 +231,37 @@
   # into settings.json. Both the typed shell and the module-contributed
   # sandbox-safe SSH command ride it.
   #
-  # mkDefault keeps an explicit `ai.claude.nativeSettings.env.<KEY>` winning, which
+  # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
   # defaults UNDER the consumer's pool.
+  # L2b → L3: expand `ai.claude.agentsDir` into per-CLI `ai.claude.agents`,
+  # shared by both projections. mkDefault lets explicit
+  # `ai.claude.agents.<name>` entries win within this layer; the resulting
+  # per-runtime entry replaces a same-key root agent.
+  agentsDirEntries = cfg:
+    lib.mkIf (cfg.agentsDir != null) {
+      ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
+        (import ../../../lib/ai/dir-helpers.nix {inherit lib;}).agentsFromDir cfg.agentsDir
+      );
+    };
+
   shellSettings = {
     resolvedShell,
     moduleEnvironmentVariables,
   }:
     lib.mkMerge [
       (lib.mkIf (resolvedShell != null) {
-        ai.claude.nativeSettings.env.CLAUDE_CODE_SHELL =
+        ai.claude.native.settings.env.CLAUDE_CODE_SHELL =
           lib.mkDefault (lib.getExe resolvedShell);
       })
       {
-        ai.claude.nativeSettings.env =
+        ai.claude.native.settings.env =
           lib.mapAttrs (_: lib.mkDefault) moduleEnvironmentVariables;
       }
     ];
 in
-  lib.ai.app.mkAiApp {
-    # Carried as DATA, not a module argument — see mkAiApp.nix.
+  lib.ai.app.mkRuntime {
+    # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "claude";
     contextFilename = "CLAUDE.md";
@@ -304,12 +315,12 @@ in
           }
         '';
       };
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           # Generated from the packaged binary's own settings schema, merged
-          # with the hand-authored exceptions — see nativeSettingsOptions.nix.
-          inherit (nativeSettingsSurface) options;
+          # with the hand-authored exceptions — see nativeOptions.nix.
+          inherit (nativeFileSurface) options;
         };
         default = {};
         description = ''
@@ -336,10 +347,10 @@ in
         default = [];
         example = ["someBrandNewKey"];
         description = ''
-          Dotted paths under `nativeSettings` that may be written even though
+          Dotted paths under `native.settings` that may be written even though
           the packaged claude-code binary does not declare them.
 
-          The freeform tail of `nativeSettings` exists so a key upstream ships
+          The freeform tail of `native.settings` exists so a key upstream ships
           today is settable today. Its cost is that a TYPO is shaped exactly
           like a brand-new key — and Claude ignores an unknown settings key
           silently, so a misspelling looks applied and does nothing. Every key
@@ -348,7 +359,7 @@ in
           HARD FAILURE unless it is listed here:
 
           ```nix
-          ai.claude.nativeSettings.someBrandNewKey = true;
+          ai.claude.native.settings.someBrandNewKey = true;
           ai.claude.allowUnrecognizedSettings = ["someBrandNewKey"];
           ```
 
@@ -392,7 +403,7 @@ in
           (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
           When true, writes `settings.ultracode = true` (⚠ see caveat) and
           `settings.enableWorkflows = true` via mkDefault, so an explicit
-          `ai.claude.nativeSettings.*` still wins. Does NOT set effortLevel —
+          `ai.claude.native.settings.*` still wins. Does NOT set effortLevel —
           ultracode implies xhigh unconditionally.
 
           ⚠ CAVEAT: the `ultracode` settings key is UNDOCUMENTED and
@@ -456,10 +467,10 @@ in
         description = ''
           Claude-specific agent Markdown or portable semantic records. Entries
           replace top-level `ai.agents` at the same key; null suppresses an
-          inherited agent. Routed to
-          `programs.claude-code.agents`; upstream writes them under
-          `~/.claude/agents/<name>.md`. HM only — upstream devenv
-          `claude.code` has no agents surface.
+          inherited agent. Home Manager routes them to
+          `programs.claude-code.agents`, which writes
+          `~/.claude/agents/<name>.md`; devenv writes project
+          `.claude/agents/<name>.md` itself.
         '';
       };
       agentsDir = lib.mkOption {
@@ -723,22 +734,14 @@ in
         effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       in
         lib.mkMerge [
-          # Unrecognized-key guard for the freeform nativeSettings tail. One
-          # builder, both backends — see nativeSettingsAssertions.
-          {assertions = nativeSettingsAssertions cfg;}
+          # Unrecognized-key guard for the freeform native.settings tail. One
+          # builder, both backends — see nativeFileAssertions.
+          {assertions = nativeFileAssertions cfg;}
           (lib.mkIf (resolvedSettings.reasoningEffort != null) {
-            ai.claude.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+            ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
           })
           (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
-          # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
-          # `ai.claude.agents`. mkDefault lets explicit
-          # `ai.claude.agents.<name>` entries win within this layer; the
-          # resulting per-runtime entry replaces a same-key root agent.
-          (lib.mkIf (cfg.agentsDir != null) {
-            ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
-              dirHelpers.agentsFromDir cfg.agentsDir
-            );
-          })
+          (agentsDirEntries cfg)
           # L2b → L3: expand `ai.claude.hookScriptsDir` into
           # `ai.claude.hookScripts`. Content is `readFile`'d into
           # `lib.types.lines` via hooksFromDir.
@@ -765,12 +768,12 @@ in
           # Meta option: ultracode on at every launch. Writes the
           # (undocumented, officially session-only) `ultracode` key plus the
           # `enableWorkflows` master toggle via mkDefault so an explicit
-          # `ai.claude.nativeSettings.*` still wins. This is the single place the
+          # `ai.claude.native.settings.*` still wins. This is the single place the
           # off-label `ultracode` key is written (its risk is disclosed in the
           # ultracodeOnLaunch description). No effortLevel — ultracode implies
           # xhigh. No workflowKeywordTriggerEnabled — orthogonal per-turn key.
           (lib.mkIf cfg.ultracodeOnLaunch {
-            ai.claude.nativeSettings = {
+            ai.claude.native.settings = {
               ultracode = lib.mkDefault true;
               enableWorkflows = lib.mkDefault true;
             };
@@ -778,7 +781,7 @@ in
           # Typed event map → programs.claude-code.settings.hooks (shared helper;
           # HM has no typed hook backend to ride, so we generate the JSON). A
           # separate mkMerge entry so it composes with the freeform
-          # `settings = filterNulls cfg.nativeSettings` write below — same-event lists
+          # `settings = filterNulls cfg.native.settings` write below — same-event lists
           # merge, so the legacy settings.hooks escape hatch and the typed map
           # coexist rather than clobber.
           (lib.mkIf (effectiveHooks != {}) {
@@ -810,7 +813,7 @@ in
               # receives `effortLevel = null` / `model = null`; arbitrary
               # non-typed keys (permissions, env, outputStyle, …) pass
               # through the submodule's freeform JSON type unchanged.
-              settings = aiCommon.filterNulls cfg.nativeSettings;
+              settings = aiCommon.filterNulls cfg.native.settings;
               # Render typed ai.mcpServers / ai.claude.mcpServers entries
               # into the freeform shape upstream's HM module expects.
               mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
@@ -835,10 +838,10 @@ in
           # Final always-on context enters the runtime file registry before the
           # generic backend sink. This replaces upstream's direct CLAUDE.md
           # writer so generated and consumer-authored files share one override
-          # and tombstone boundary.
+          # and enable/override boundary.
           (lib.mkIf hasMergedContext {
             ai.claude.files.".claude/${cfg.context.filename}" =
-              lib.mkDefault (aiCommon.contentFileEntry mergedContext);
+              aiCommon.contentFileEntry mergedContext;
           })
           # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
           # Each entry becomes one file, translated through claudeTransformer
@@ -848,13 +851,16 @@ in
             inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
           in {
             ai.claude.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair ".claude/rules/${name}.md" (lib.mkDefault {
-                text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                    paths = rule.matcher;
-                  });
-              }))
+              lib.nameValuePair ".claude/rules/${name}.md" {
+                content = lib.mkDefault {
+                  enable = true;
+                  text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                    // {
+                      text = resolveRuleText rule;
+                      paths = rule.matcher;
+                    });
+                };
+              })
             mergedRules;
           })
           # Auto-set ENABLE_LSP_TOOL=1 when MCP servers are present.
@@ -876,6 +882,7 @@ in
         mergedServers,
         mergedSkills,
         mergedRules,
+        mergedAgents,
         moduleEnvironmentVariables,
         resolvedShell,
         mergedContext,
@@ -889,7 +896,7 @@ in
 
         contextEntry = aiCommon.contentFileEntry mergedContext;
 
-        # Translate cfg.nativeSettings → backend surfaces.
+        # Translate cfg.native.settings → backend surfaces.
         #
         # - `hooks` is handled separately (the dedicated legacy escape-hatch
         #   write below routes it to settings.json.hooks, composing with the
@@ -908,18 +915,19 @@ in
         separatelyHandledSettingsKeys = ["hooks" "mcpServers"];
         gapSettings =
           aiCommon.filterNulls
-          (removeAttrs cfg.nativeSettings separatelyHandledSettingsKeys);
+          (removeAttrs cfg.native.settings separatelyHandledSettingsKeys);
         hasGapSettings = gapSettings != {};
         effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       in
         lib.mkMerge [
-          # Unrecognized-key guard for the freeform nativeSettings tail. One
-          # builder, both backends — see nativeSettingsAssertions.
-          {assertions = nativeSettingsAssertions cfg;}
+          # Unrecognized-key guard for the freeform native.settings tail. One
+          # builder, both backends — see nativeFileAssertions.
+          {assertions = nativeFileAssertions cfg;}
           (lib.mkIf (resolvedSettings.reasoningEffort != null) {
-            ai.claude.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+            ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
           })
           (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
+          (agentsDirEntries cfg)
           # L2b → L3: expand `ai.claude.hookScriptsDir` into
           # `ai.claude.hookScripts` (parity with HM side). The devenv
           # factory merges `cfg.hookScripts` into `claude.code.hooks`
@@ -946,11 +954,11 @@ in
           # Meta option: ultracode on at every launch (parity with HM side).
           # Writes the (undocumented, officially session-only) `ultracode` key
           # plus the `enableWorkflows` master toggle via mkDefault so an
-          # explicit `ai.claude.nativeSettings.*` still wins. Flows through the
+          # explicit `ai.claude.native.settings.*` still wins. Flows through the
           # gap-write below into .claude/settings.json. Risk disclosed in the
           # ultracodeOnLaunch description.
           (lib.mkIf cfg.ultracodeOnLaunch {
-            ai.claude.nativeSettings = {
+            ai.claude.native.settings = {
               ultracode = lib.mkDefault true;
               enableWorkflows = lib.mkDefault true;
             };
@@ -989,12 +997,12 @@ in
           # `null != {}` is true for every consumer who set no hooks at all.
           # That wrote `json.hooks = null`, which both conjured a settings.json
           # nobody asked for and collided with devenv's own non-null definition
-          # of the same attr. Any future `cfg.nativeSettings.<key> or <default>`
+          # of the same attr. Any future `cfg.native.settings.<key> or <default>`
           # has the same trap: declaring a key changes what `or` means.
           (lib.mkIf
-            (cfg.nativeSettings.hooks != null && cfg.nativeSettings.hooks != {})
+            (cfg.native.settings.hooks != null && cfg.native.settings.hooks != {})
             {
-              files.".claude/settings.json".json.hooks = cfg.nativeSettings.hooks;
+              files.".claude/settings.json".json.hooks = cfg.native.settings.hooks;
             })
           # Script bodies → standalone hook files (greenfield; mirrors HM's
           # programs.claude-code.hooks path, which devenv's claude.code lacks).
@@ -1004,7 +1012,7 @@ in
               (name: body: lib.nameValuePair ".claude/hooks/${name}" {text = body;})
               cfg.hookScripts;
           })
-          # Gap write — everything in cfg.nativeSettings that upstream doesn't
+          # Gap write — everything in cfg.native.settings that upstream doesn't
           # already handle. Uses `.json` format so module-system merges
           # our attrs with upstream's hook-only write into a single
           # settings.json on disk.
@@ -1012,7 +1020,7 @@ in
             files.".claude/settings.json".json = gapSettings;
           })
           (lib.mkIf hasMergedContext {
-            ai.claude.files.".claude/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.claude.files.".claude/${cfg.context.filename}" = contextEntry;
           })
           # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
           (let
@@ -1020,24 +1028,51 @@ in
             inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
           in {
             ai.claude.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair ".claude/rules/${name}.md" (lib.mkDefault {
-                text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                    paths = rule.matcher;
-                  });
-              }))
+              lib.nameValuePair ".claude/rules/${name}.md" {
+                content = lib.mkDefault {
+                  enable = true;
+                  text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                    // {
+                      text = resolveRuleText rule;
+                      paths = rule.matcher;
+                    });
+                };
+              })
             mergedRules;
           })
-          # Skills — devenv has no upstream skills option on
-          # claude.code (cachix/devenv#2441), so we write per-leaf
-          # files.* entries via the mkDevenvSkillEntries walker. The
-          # walker mirrors HM `recursive = true` in user space because
+          # ai.agents / ai.claude.agents → .claude/agents/<name>.md, rendered by
+          # the same renderer as HM's `programs.claude-code.agents`. Written
+          # here rather than handed to upstream `claude.code.agents`: that
+          # option requires typed description/prompt fields, so it cannot
+          # carry a raw Markdown or path entry without parsing it.
+          {
+            ai.claude.files = lib.mapAttrs' (name: value: let
+              rendered = agent.renderClaude name value;
+            in
+              lib.nameValuePair ".claude/agents/${name}.md" {
+                content = lib.mkDefault (
+                  {enable = true;}
+                  // (
+                    if agent.isPathLike rendered
+                    then {source = rendered;}
+                    else {text = rendered;}
+                  )
+                );
+              })
+            mergedAgents;
+          }
+          # Skills — devenv has no upstream skills option on claude.code
+          # (cachix/devenv#2441), so the tree is described as a delivery
+          # entry and the router walks it into per-leaf `files.*` entries.
+          # That walk mirrors HM `recursive = true` in user space, because
           # devenv `files.*.source` cannot recurse a directory itself.
           (let
             helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
           in {
-            files = helpers.mkDevenvSkillEntries ".claude" mergedSkills;
+            ai.claude.files = helpers.mkSkillFiles {
+              configDir = ".claude";
+              skills = mergedSkills;
+            };
           })
         ];
     };

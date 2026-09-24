@@ -7,29 +7,11 @@
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
   contentType = enableDefault:
-    aiTypes.extendSubmodule
-    (aiTypes.optionalTextSource {
+    aiTypes.optionalTextSource {
       description = "Markdown content";
       inherit enableDefault;
-    })
-    ({
-      config,
-      options,
-      ...
-    }: {
-      options._sourceWins = lib.mkOption {
-        type = lib.types.bool;
-        default =
-          config.source
-          != null
-          && options.source.highestPrio < options.text.highestPrio;
-        description = "Whether source supplies the effective Markdown content.";
-        internal = true;
-        readOnly = true;
-      };
-    });
-  contentUsesSource = value:
-    value._sourceWins or (!(value ? text) && (value.source or null) != null);
+    };
+  contentUsesSource = aiTypes.textSourceUsesSource;
   hasContent = value:
     value
     != null
@@ -176,12 +158,20 @@ in {
       then null
       else {text = lib.concatStringsSep "\n\n" bodies;};
 
-  contentFileEntry = value:
-    if value == null
-    then null
-    else if contentUsesSource value
-    then {inherit (value) source;}
-    else {inherit (value) text;};
+  # One generated file entry, with the generator's priority on the CONTENT
+  # option alone. `filterOverrides` runs before a type merges, so a whole-entry
+  # `mkDefault` is DISCARDED by any consumer definition at ordinary priority —
+  # including one that only sets a sibling field like `method`, which then
+  # survives with no bytes at all. Putting the priority one level down is what
+  # makes "change how this lands, keep what is in it" expressible.
+  #
+  # Callers gate this on the STRUCTURAL `hasMergedContext`, so the entry shape
+  # does not inspect rendered bytes. Everything that depends on the value sits
+  # INSIDE `mkDefault`, where `filterOverrides` can drop a discarded source
+  # unread. Generated content explicitly enables its shared text-source record.
+  contentFileEntry = value: {
+    content = lib.mkDefault (aiTypes.textSourceFile value // {enable = true;});
+  };
 
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags
@@ -361,7 +351,7 @@ in {
   # ── Settings utilities ──────────────────────────────────────────────
 
   # Closed normalized settings shared by the root and every runtime scope.
-  # Native settings live in each factory's separate `nativeSettings` option.
+  # Native settings live in each factory's separate `native.settings` option.
   normalizedSettingsType = lib.types.submodule {
     options.reasoningEffort = lib.mkOption {
       type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
@@ -369,7 +359,7 @@ in {
       description = ''
         Portable reasoning effort across runtimes that persist the same
         semantic values. Runtime-specific values belong in
-        `ai.<runtime>.nativeSettings`.
+        `ai.<runtime>.native.settings`.
       '';
     };
   };

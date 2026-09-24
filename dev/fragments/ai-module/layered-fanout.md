@@ -1,7 +1,9 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-21 — context and rules use shared text-source
-> `enable` gates and arbitrate `text` against `source` by module priority.
+> **Last verified:** 2026-09-22 — native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Context and rules retain text-source priority and
+> enable semantics; L5 is the delivery router plus one adapter per backend.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -92,7 +94,7 @@
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
   may support only a subset of fields. Runtime-shaped passthrough is separate
-  under `nativeSettings` and is not a normalized pool.
+  under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -122,8 +124,10 @@
   single-owner map → `lib/ai/app/sharedAgentsMd.nix`
 - B7 public file-option declaration and runtime enable gate →
   `lib/ai/app/mkBackendTransform.nix`
-- L5 generic backend lowering → `lib/ai/runtime-files.nix`, called from
-  `lib/ai/app/mkBackendTransform.nix`
+- L5 generic backend lowering → `lib/ai/deliver.nix` (the router) and
+  `lib/ai/adapters/{hm,devenv}.nix`, called from
+  `lib/ai/app/mkBackendTransform.nix`. `lib/ai/runtime-files.nix` keeps the
+  map's validation and the shape one entry takes in a native file sink.
 
 ### Adding a new concern X
 
@@ -137,9 +141,10 @@
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's customConfig. Lifecycle-owned non-literal outputs remain explicit
    exceptions rather than bypassing the static map silently.
-5. Let the existing L5 sink lower the surviving entry; change
-   `runtime-files.nix` only when the common literal-file contract itself
-   changes.
+5. Let the existing L5 router lower the surviving entry; change
+   `lib/ai/deliver.nix` or an adapter only when the delivery contract itself
+   changes, and never write `home.file`, `home.activation`, `files` or `tasks`
+   from a factory — `module-delivery-no-new-direct-sink-writes` scans for it.
 6. Wire L2↔L3 through `mergePool`, add the pool to the package-provenance guard,
    or document and test the concern's intentional non-pool composition rule
    (hooks append per-event lists).

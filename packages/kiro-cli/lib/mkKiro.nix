@@ -462,8 +462,7 @@
   # by BOTH backends. Typed wins on a key collision. A raw `hooksJson` value may
   # be a PATH (read its contents) or a string; resolve to string CONTENT here so
   # both backends write the file body — devenv's `writeText` would otherwise embed
-  # the path string, and HM's `mkSourceEntry` handles paths but resolving keeps
-  # them identical.
+  # the path string, and resolving keeps the two backends identical.
   mkAllHookFiles = cfg:
     lib.mapAttrs (_: c:
       if builtins.isPath c
@@ -711,7 +710,12 @@
       if sharedAgentsMd
       then lib.filterAttrs (_name: rule: !(isSharedRule rule)) mergedRules
       else mergedRules;
-    mkEntry = text: lib.mkDefault {inherit text;};
+    mkEntry = text: {
+      content = lib.mkDefault {
+        enable = true;
+        inherit text;
+      };
+    };
   in [
     # Attrs-shape ai.rules / ai.kiro.rules → `<name>.md` entries,
     # translated through kiroTransformer (inclusion: +
@@ -731,7 +735,7 @@
     # frontmatter; root context precedes per-CLI context.
     (lib.mkIf (hasContext && !sharedAgentsMd) {
       ai.kiro.files."${cfg.configDir}/steering/${cfg.context.filename}" =
-        lib.mkDefault (aiCommon.contentFileEntry mergedContext);
+        aiCommon.contentFileEntry mergedContext;
     })
   ];
 
@@ -851,13 +855,13 @@
   # as a rejected key when the real fault was the flattener walking past it;
   # `flattenKiroSettings` stops at a known key, so the written key is now the
   # setting key and the two agree.
-  nativeSettingsDotKeys = cfg:
-    builtins.attrNames (flattenKiroSettings (aiCommon.filterNulls cfg.nativeSettings));
+  nativeSettingKeys = cfg:
+    builtins.attrNames (flattenKiroSettings (aiCommon.filterNulls cfg.native.settings));
 
   # devenv-ONLY. Never add this to `mkAssertions`: under Home Manager these same
   # keys are correct, and asserting there would reject a working config.
   mkDevenvWorkspaceSettingsAssertions = cfg: let
-    written = nativeSettingsDotKeys cfg;
+    written = nativeSettingKeys cfg;
     dropped = builtins.filter (k: !(builtins.elem k workspaceOverridableSettings)) written;
     listed = lib.concatStringsSep ", " dropped;
   in
@@ -865,7 +869,7 @@
       assertion = false;
       message =
         ''
-          ai.kiro: devenv writes `nativeSettings` to the PROJECT-LOCAL
+          ai.kiro: devenv writes `native.settings` to the PROJECT-LOCAL
           ${cfg.configDir}/settings/cli.json, and kiro honors only an allowlist
           of keys there. These keys would be written and then
           silently discarded at runtime: ${listed}
@@ -876,7 +880,7 @@
 
             The pinned kiro honors NO workspace override at all — its TUI has no
             workspace merge — so no key belongs in this file. Set these under
-            home-manager (`ai.kiro.nativeSettings`, which writes the global
+            home-manager (`ai.kiro.native.settings`, which writes the global
             ~/.kiro/settings/cli.json), or with
             `kiro-cli settings <key> <value>`.
           ''
@@ -886,7 +890,7 @@
             ${lib.concatStringsSep ", " workspaceOverridableSettings}
 
             Anything else is global-only: set it under home-manager
-            (`ai.kiro.nativeSettings`, which writes the global
+            (`ai.kiro.native.settings`, which writes the global
             ~/.kiro/settings/cli.json), or with
             `kiro-cli settings <key> <value>`.
 
@@ -905,7 +909,7 @@
   # upstream, so unlocking the feature without it is silently inert — the third
   # such trap on this one option, see the `v3` assertion in `mkAssertions` and
   # packages/kiro-cli/docs/workflow-gating.md. Implied together, `mkDefault` so an explicit
-  # `ai.kiro.nativeSettings.chat.enableWorkflows` still wins.
+  # `ai.kiro.native.settings.chat.enableWorkflows` still wins.
   #
   # HOME MANAGER ONLY, deliberately. The key is absent from
   # `workspaceOverridableSettings`, so contributing it on the devenv backend
@@ -914,7 +918,7 @@
   # never wrote. devenv consumers set it globally; the assertion says so.
   workflowsSettingImplication = cfg:
     lib.mkIf (builtins.elem "workflows" cfg.unlockedRolloutFeatures) {
-      ai.kiro.nativeSettings.chat.enableWorkflows = lib.mkDefault true;
+      ai.kiro.native.settings.chat.enableWorkflows = lib.mkDefault true;
     };
 
   # `null` means auto: the reminder is meaningless without the feature, and the
@@ -1224,8 +1228,8 @@
       identityMaterializer = resolveIdentityMaterializer cfg;
     };
 in
-  lib.ai.app.mkAiApp {
-    # Carried as DATA, not a module argument — see mkAiApp.nix.
+  lib.ai.app.mkRuntime {
+    # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
     contextFilename = "AGENTS.md";
@@ -1280,9 +1284,9 @@ in
           defaults to false. Under home-manager this module implies that setting via
           `mkDefault` when `workflows` is unlocked, so the pair stays
           consistent and an explicit
-          `nativeSettings.chat.enableWorkflows` still wins. Under devenv the
+          `native.settings.chat.enableWorkflows` still wins. Under devenv the
           setting is global-only and must be set outside the project — see
-          `nativeSettings`.
+          `native.settings`.
         '';
       };
       identity = lib.mkOption {
@@ -1388,7 +1392,7 @@ in
       # knobs. Consumed by the settings/cli.json leaf reconciler in
       # `hm.config` (retire Nix leaves and preserve native siblings) and by
       # the static write in `devenv.config`.
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {
@@ -1818,7 +1822,7 @@ in
           sharedAgentsMd = false;
         };
 
-        filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
+        filteredSettings = aiCommon.filterNulls cfg.native.settings;
         # Kiro cli.json uses flat dot-notation keys ("chat.enableTangentMode")
         # not nested JSON. Flatten so consumers can write clean Nix:
         #   settings.chat.enableTangentMode = true;
@@ -1908,11 +1912,13 @@ in
             (lib.mkIf (cfg.agents != {}) {
               home.file = agentEntries;
             })
-            # External agents directory — symlinked wholesale via
-            # `recursive = true` (Layout B).
+            # External agents directory — one recursive entry on both
+            # backends: Home Manager expands it natively and the router walks
+            # it for devenv.
             (lib.mkIf (cfg.agentsDir != null) {
-              home.file."${cfg.configDir}/agents" = {
-                source = cfg.agentsDir;
+              ai.kiro.files."${cfg.configDir}/agents" = {
+                content.source = cfg.agentsDir;
+                executable = null;
                 recursive = true;
               };
             })
@@ -1952,11 +1958,14 @@ in
               targets = [(mkHookTarget cfg)];
               inherit pkgs;
             })
-            # Skills fanout via mkSkillEntries, which uses
-            # `recursive = true` to produce Layout B (a real directory with
-            # per-file symlinks) and is path-type-agnostic.
+            # Skills fanout: one entry per skill with a directory source and
+            # `recursive`, which Home Manager expands natively into Layout B (a
+            # real directory of per-file symlinks).
             {
-              home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
+              ai.kiro.files = helpers.mkSkillFiles {
+                inherit (cfg) configDir;
+                skills = mergedSkills;
+              };
             }
             # Reconcile settings/cli.json leaves, including retirement when
             # settings become empty. An empty first generation leaves externally
@@ -2026,7 +2035,7 @@ in
           && ((rule.inclusion or null) == null || rule.inclusion == "always"))
         mergedRules;
 
-        filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
+        filteredSettings = aiCommon.filterNulls cfg.native.settings;
         flatSettings = flattenKiroSettings filteredSettings;
 
         # Resolve credential http headers → `${env:VAR}` placeholders in
@@ -2087,22 +2096,15 @@ in
                 })
                 cfg.agents;
             })
-            # External agents directory — devenv's `files.*.source`
-            # can't recurse, so we walk the directory at eval time.
-            (lib.mkIf (cfg.agentsDir != null) (let
-              walkDir = prefix: dir:
-                lib.concatMapAttrs (
-                  name: kind:
-                    if kind == "directory"
-                    then walkDir "${prefix}/${name}" (dir + "/${name}")
-                    else if kind == "regular" || kind == "symlink"
-                    then {"${prefix}/${name}".source = dir + "/${name}";}
-                    else {}
-                )
-                (builtins.readDir dir);
-            in {
-              files = walkDir "${cfg.configDir}/agents" cfg.agentsDir;
-            }))
+            # External agents directory — the same recursive entry Home
+            # Manager gets. The walk that used to live here is the router's.
+            (lib.mkIf (cfg.agentsDir != null) {
+              ai.kiro.files."${cfg.configDir}/agents" = {
+                content.source = cfg.agentsDir;
+                executable = null;
+                recursive = true;
+              };
+            })
             # Hook JSON files — written as REAL files, NOT devenv `files.*`
             # (which symlinks into /nix/store). The 2.18.1 spike changed only
             # steering evidence; hooks retain their measured real-file
@@ -2136,11 +2138,14 @@ in
               targets = [(mkHookTarget cfg)];
               inherit pkgs;
             })
-            # Skills via the user-space walker. devenv's `files.*.source`
-            # cannot walk a directory recursively, so we enumerate leaves
-            # at eval time via `mkDevenvSkillEntries`.
+            # Skills: the same declaration as Home Manager. devenv's
+            # `files.*.source` cannot recurse, so the router walks the tree and
+            # emits one entry per leaf.
             {
-              files = helpers.mkDevenvSkillEntries cfg.configDir mergedSkills;
+              ai.kiro.files = helpers.mkSkillFiles {
+                inherit (cfg) configDir;
+                skills = mergedSkills;
+              };
             }
             # settings/cli.json — devenv does NOT support HM-style
             # activation scripts. Devenv projects are project-local, so

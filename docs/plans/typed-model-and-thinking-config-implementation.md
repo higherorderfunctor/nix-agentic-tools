@@ -2,7 +2,7 @@
 
 > **Status:** **COMPLETED 2026-06-18; historical execution record.** Do not
 > execute these unchecked task boxes. Runtime-native paths in the record were
-> refreshed for the 2026-08-15 `nativeSettings` split; the closing execution
+> refreshed for the 2026-08-15 `native.settings` split; the closing execution
 > status remains authoritative for what landed.
 
 **Goal:** Make Claude's `settings.effortLevel` actually stick (defeat the
@@ -408,15 +408,15 @@ In `packages/copilot-cli/lib/mkCopilot.nix`, add a `helpers` import to the HM
 ```
 
 Then replace the inline activation block (the
-`(lib.mkIf (cfg.nativeSettings != {}) (let settingsJsonText = …; in { home.activation.copilotSettingsMerge = … ''…''; }))`
+`(lib.mkIf (cfg.native.settings != {}) (let settingsJsonText = …; in { home.activation.copilotSettingsMerge = … ''…''; }))`
 at lines ~315-338) with:
 
 ```nix
-        (lib.mkIf (cfg.nativeSettings != {}) {
+        (lib.mkIf (cfg.native.settings != {}) {
           home.activation.copilotSettingsMerge =
             lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/settings.json";
-              settingsJson = builtins.toJSON cfg.nativeSettings;
+              settingsJson = builtins.toJSON cfg.native.settings;
               jq = "${pkgs.jq}/bin/jq";
               coreutils = pkgs.coreutils;
             });
@@ -783,7 +783,7 @@ non-deprecated set the user actually selects):
 - [ ] **Step 2: Add eval-pure reads to the top of `mkClaude.nix`**
 
 `packages/claude-code/lib/mkClaude.nix` currently goes straight into
-`lib.ai.app.mkAiApp { … }`. Wrap it in a `let` that reads the committed source
+`lib.ai.app.mkRuntime { … }`. Wrap it in a `let` that reads the committed source
 JSONs (IFD-free — git-tracked files, never derivation outputs):
 
 ```nix
@@ -799,13 +799,13 @@ JSONs (IFD-free — git-tracked files, never derivation outputs):
   knownClaudeModels =
     builtins.fromJSON (builtins.readFile ../models.json);
 in
-  lib.ai.app.mkAiApp {
+  lib.ai.app.mkRuntime {
     name = "claude";
     # … rest unchanged …
 ```
 
-(Close the `let` by ensuring the final `}` of `mkAiApp { … }` ends the file with
-no trailing change.)
+(Close the `let` by ensuring the final `}` of `mkRuntime { … }` ends the file
+with no trailing change.)
 
 - [ ] **Step 3: Replace the `settings` option with a typed submodule**
 
@@ -876,11 +876,11 @@ In the HM `config` block, `aiCommon` is already imported. Change the delegation
 
 ```nix
             # was: inherit (cfg) settings;
-            settings = aiCommon.filterNulls cfg.nativeSettings;
+            settings = aiCommon.filterNulls cfg.native.settings;
 ```
 
 (The devenv side already does
-`aiCommon.filterNulls (removeAttrs cfg.nativeSettings …)` — no change needed
+`aiCommon.filterNulls (removeAttrs cfg.native.settings …)` — no change needed
 there. The `ENABLE_LSP_TOOL` env block remains a separate module-merge
 contribution and composes with the filtered settings.)
 
@@ -902,8 +902,8 @@ other `module-claude-hm-*` tests):
             };
           };
         in
-          builtins.deepSeq ev.config.ai.claude.nativeSettings.effortLevel
-          ev.config.ai.claude.nativeSettings.effortLevel
+          builtins.deepSeq ev.config.ai.claude.native.settings.effortLevel
+          ev.config.ai.claude.native.settings.effortLevel
       );
     in
       attempt.success == false
@@ -1145,7 +1145,7 @@ probe-confirmed available):
 
 - [ ] **Step 2: Read the list in `mkKiro.nix`**
 
-Wrap the `lib.ai.app.mkAiApp { … }` in a `let` (mirroring Task 4 Step 2):
+Wrap the `lib.ai.app.mkRuntime { … }` in a `let` (mirroring Task 4 Step 2):
 
 ```nix
 {
@@ -1156,7 +1156,7 @@ Wrap the `lib.ai.app.mkAiApp { … }` in a `let` (mirroring Task 4 Step 2):
   # Eval-pure read of the committed source list (no IFD).
   knownKiroModels = builtins.fromJSON (builtins.readFile ../models.json);
 in
-  lib.ai.app.mkAiApp {
+  lib.ai.app.mkRuntime {
     name = "kiro";
     # … rest unchanged …
 ```

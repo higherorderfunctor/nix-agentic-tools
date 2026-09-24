@@ -4,7 +4,7 @@
 # deduplicated equal definitions and rejected divergent definitions for a key.
 # Applicable public final-file entries from enabled Codex/Kiro runtimes
 # arbitrate here too, before the single native sink, so replacement and
-# tombstones cannot bypass ownership or their runtime's sole enable gate.
+# disabled content cannot bypass ownership or their runtime's sole enable gate.
 {
   config,
   lib,
@@ -15,6 +15,8 @@
     lib.hasAttrByPath ["devenv" "root"] options
     && lib.hasAttrByPath ["files"] options;
   agentsmd = import ../transformers/agentsmd.nix {inherit lib;};
+  aiTypes = import ../types.nix {inherit lib;};
+  deliveryOptions = import ../delivery-options.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   deduplicatingType = {
     name,
@@ -85,10 +87,12 @@
   sizeAssertions =
     lib.mapAttrsToList (filename: value: let
       finalEntry = config.ai.internal.files.${filename} or null;
+      # A source-backed final entry is not measured: reading it would build a
+      # derivation during evaluation. Only inline bytes are size-checked.
       finalText =
         if finalEntry == null
         then null
-        else finalEntry.text or null;
+        else aiTypes.textSourceInlineText finalEntry.content;
       size =
         if finalText == null
         then null
@@ -104,16 +108,29 @@
     })
     config.ai.internal.agentsMd;
   sharedRuntimeNames = ["codex" "kiro"];
+  projectEntry = entry:
+    entry
+    // {
+      # `enable` is forwarded only where the runtime entry defines it: a
+      # restated default `false` would read as a deliberate disable here and
+      # suppress a `run` or `value` entry.
+      content =
+        lib.optionalAttrs entry.content._enableDefined {inherit (entry.content) enable;}
+        // lib.optionalAttrs entry.content.enable (aiTypes.textSourceFile entry.content)
+        // lib.optionalAttrs (entry.content.run != null) {inherit (entry.content) run;}
+        // lib.optionalAttrs (entry.content.value != null) {inherit (entry.content) value;};
+    };
   sharedOverrideDefinitions = map (runtime: let
     enabled = lib.attrByPath ["ai" runtime "enable"] false config;
     files = lib.attrByPath ["ai" runtime "files"] {} config;
   in
     lib.mkIf enabled {
-      ai.internal.files =
+      ai.internal.files = lib.mapAttrs (_filename: projectEntry) (
         lib.filterAttrs (
           filename: _entry: builtins.hasAttr filename config.ai.internal.agentsMd
         )
-        files;
+        files
+      );
     })
   sharedRuntimeNames;
 in {
@@ -125,7 +142,7 @@ in {
     description = "Repository-local keyed AGENTS.md compositions shared across runtimes.";
   };
   options.ai.internal.files = lib.mkOption {
-    type = runtimeFiles.fileMapType;
+    type = deliveryOptions.fileMapType;
     default = {};
     apply = runtimeFiles.validateFiles "internal";
     internal = true;
@@ -140,11 +157,25 @@ in {
         # Do not inspect rendered bytes to discover whether a target exists.
         # The separate boolean inventory lets priority arbitration discard this
         # lazy default without forcing source-backed generated content.
+        # Whole-entry priority keeps the rendered-body test lazy. A public
+        # replacement or disable can discard this definition before a
+        # store-backed body is read; a sibling-only override is diagnosed as an
+        # empty entry and must restate content.
         ai.internal.files = lib.mapAttrs (_filename: text:
           lib.mkDefault (
             if text == ""
-            then null
-            else {inherit text;}
+            then {
+              content = {
+                enable = false;
+                inherit text;
+              };
+            }
+            else {
+              content = {
+                enable = true;
+                inherit text;
+              };
+            }
           ))
         generatedRendered;
       })

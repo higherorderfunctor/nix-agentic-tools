@@ -14,7 +14,7 @@
 # even though both run the SAME merge code. Unifying on the fuller
 # text makes the devenv option docs correct rather than terse.
 #
-# Input record shape (from mkAiApp):
+# Input record shape (from mkRuntime):
 #   {
 #     name;
 #     transformers;
@@ -47,14 +47,20 @@
   options,
   ...
 }: let
+  adapters = import ../adapters {
+    inherit lib;
+    inherit (appRecord) pkgs;
+  };
   aiCommon = import ../ai-common.nix {inherit lib;};
+  deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
+  deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
   # `_module.args`, which requires `config` and deadlocks against any
   # factory whose options use `pkgs.formats.json` as a freeform type —
-  # see the note on `pkgs` in mkAiApp.nix.
+  # see the note on `pkgs` in mkRuntime.nix.
   mcpProxy = import ../mcpProxy.nix {
     inherit lib;
     inherit (appRecord) pkgs;
@@ -112,7 +118,7 @@
 
   # Normalized settings narrow the root one field at a time. This is a
   # translation input only: factories render supported fields into their
-  # nativeSettings option at mkDefault priority, and native option merging
+  # native.settings option at mkDefault priority, and native option merging
   # arbitrates against consumer-authored values.
   resolvedSettings =
     if supportsPool "settings"
@@ -140,7 +146,7 @@
   contextValues = [config.ai.context cfg.context];
   # Presence must stay structural. `composeContent` reads source-backed bytes
   # when two values compose, so using `mergedContext != null` as a generator
-  # gate would force a discarded default before B7 replacement or tombstone
+  # gate would force a discarded default before B7 replacement or disable
   # arbitration.
   hasMergedContext =
     if supportsPool "context"
@@ -175,7 +181,7 @@
   # Repository AGENTS.md targets have one cross-runtime owner. Codex and Kiro
   # public file entries for those paths arbitrate inside sharedAgentsMd.nix;
   # letting their ordinary sinks lower the same target independently would
-  # bypass whole-entry replacement and null tombstones at B7.
+  # bypass whole-entry replacement and explicit disable at B7.
   sharedAgentsMdTargets =
     if backend == "devenv" && builtins.elem appRecord.name ["codex" "kiro"]
     then
@@ -251,18 +257,60 @@ in {
         # refers to a store path.
         description = "Reconciliation plans this generation owns, keyed by the writer's entry name.";
       };
+      activation = lib.mkOption {
+        type = deliveryOptions.writerMapType;
+        default = {};
+        description = ''
+          The writers that materialize ${appRecord.name}'s owned files, keyed
+          by a name of your choosing. Each one declares the literal activation
+          entry or devenv task it becomes, where it sits in that backend's
+          ordering, and every ledger it has ever owned — so a surface that
+          drops to zero files still emits the writer that retracts what the
+          previous generation wrote. A writer that owns no files at all
+          declares a `command` instead.
+        '';
+      };
       enable = lib.mkEnableOption appRecord.name;
       files = lib.mkOption {
-        type = runtimeFiles.fileMapType;
+        type = deliveryOptions.fileMapType;
         default = {};
         apply = runtimeFiles.validateFiles appRecord.name;
         description = ''
           Final static files owned by ${appRecord.name}, keyed by a path relative
           to the active backend root (HOME for Home Manager, project root for
-          devenv). Each non-null entry must set exactly one of inline `text` or a
-          store-backed `source`; `null` suppresses a generated default. Generated
-          entries use whole-file `mkDefault` priority, so an ordinary consumer
-          entry replaces the complete file.
+          devenv), and described rather than lowered: each entry says what
+          bytes it carries, the consumer facts that decide how it lands, and
+          which writer owns it if it is not a symlink. Setting
+          `content.enable = false` omits the file whatever supplies its bytes,
+          while retaining the record for inspection and later overrides.
+
+          Generated `content.text` and `content.source` are contributed at
+          `mkDefault` priority with every sibling field at ordinary priority,
+          so a consumer can replace the bytes, change the method, or do one
+          without the other. A `content.value` document is contributed at
+          ordinary priority or one `mkDefault` per leaf instead: a default on
+          the whole value, or on the whole content, is discarded outright by a
+          consumer's single leaf. See the `content` option's own description.
+        '';
+      };
+      methodFor = lib.mkOption {
+        type = lib.types.functionTo (lib.types.enum deliveryMethod.methods);
+        default = deliveryMethod.byRule;
+        defaultText = lib.literalExpression "lib.ai.deliveryMethod.byRule";
+        description = ''
+          Resolves how a file lands for every entry of
+          `ai.${appRecord.name}.files` that states no `method` of its own. It
+          receives `{backend, path, facts, default}`, where `default` is the
+          standard rule, so a replacement can override one case and DELEGATE
+          the rest rather than restating the rule. Replacing it never means
+          reimplementing ownership, deletion or pruning: those live below it,
+          in the router and the reconciler, which this function never names.
+          Replace it rather than add to it, with `lib.mkForce`; composing a
+          per-file exception is what `method` on the entry is for. Two
+          definitions are not a merge error in themselves — `functionTo`
+          merges the RESULTS, so two that agree are fine — but two that
+          disagree fail where the ROUTER calls the function rather than where
+          they were written.
         '';
       };
       package = lib.mkOption {
@@ -312,7 +360,7 @@ in {
           the matching `ai.settings` default for this runtime; null inherits
           the root value. Supported fields translate into native keys at
           `mkDefault` priority. Set the corresponding key under
-          `ai.${appRecord.name}.nativeSettings`, including an explicit null,
+          `ai.${appRecord.name}.native.settings`, including an explicit null,
           to arbitrate against the derived value.
         '';
       };
@@ -417,9 +465,17 @@ in {
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig
       customConfig
-      (runtimeFiles.mkBackendSink {
-        inherit backend;
-        files = runtimeSinkFiles;
+      # The delivery layer's one lowering seam. Everything a runtime declares
+      # about how its files land is read HERE, by the backend's adapter, so no
+      # factory writes `home.file`, `home.activation`, `files` or `tasks`
+      # itself.
+      #
+      # The adapter reads `cfg.files`, so the shared-AGENTS.md arbitration
+      # hands it the stripped map rather than filtering behind its back.
+      (adapters.${backend} {
+        cfg = cfg // {files = runtimeSinkFiles;};
+        inherit config options;
+        runtime = appRecord.name;
       })
     ]))
   ];

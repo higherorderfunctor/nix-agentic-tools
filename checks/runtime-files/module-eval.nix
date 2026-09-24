@@ -30,10 +30,10 @@ in {
               enable = true;
               files = {
                 ${textTarget} = {
+                  content.text = "${runtime}-TEXT";
                   executable = true;
-                  text = "${runtime}-TEXT";
                 };
-                ${sourceTarget}.source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+                ${sourceTarget}.content.source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
               };
             };
           };
@@ -41,8 +41,8 @@ in {
           devenv = (evalDevenv config).config;
         in
           hm.home.file.${textTarget}.text
-          == hm.ai.${runtime}.files.${textTarget}.text
-          && devenv.files.${textTarget}.text == devenv.ai.${runtime}.files.${textTarget}.text
+          == hm.ai.${runtime}.files.${textTarget}.content.text
+          && devenv.files.${textTarget}.text == devenv.ai.${runtime}.files.${textTarget}.content.text
           && hm.home.file.${textTarget}.executable
           && devenv.files.${textTarget}.executable
           && hm.home.file.${sourceTarget}.source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
@@ -56,11 +56,11 @@ in {
     module-runtime-files-disabled-runtime-does-not-emit = mkTest "runtime-files-disabled-runtime-does-not-emit" (
       let
         target = "literal/disabled.txt";
-        config.ai.claude.files.${target}.text = "DECLARED-BUT-DISABLED";
+        config.ai.claude.files.${target}.content.text = "DECLARED-BUT-DISABLED";
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
       in
-        hm.ai.claude.files.${target}.text
+        hm.ai.claude.files.${target}.content.text
         == "DECLARED-BUT-DISABLED"
         && !(hm.home.file ? ${target})
         && !(devenv.files ? ${target})
@@ -71,7 +71,7 @@ in {
         rejected = target: let
           attempt = builtins.tryEval (let
             evaluated = evalHm {
-              ai.claude.files.${target}.text = "invalid";
+              ai.claude.files.${target}.content.text = "invalid";
             };
           in
             builtins.deepSeq evaluated.config.ai.claude.files true);
@@ -83,6 +83,10 @@ in {
 
     module-runtime-files-content-shape-rejected = mkTest "runtime-files-content-shape-rejected" (
       let
+        disabled =
+          (evalHm {
+            ai.claude.files."literal/disabled".content.enable = false;
+          }).config.ai.claude.files."literal/disabled";
         rejected = entry: let
           attempt = builtins.tryEval (let
             evaluated = evalHm {
@@ -93,27 +97,49 @@ in {
         in
           !attempt.success;
       in
-        rejected {}
+        # An explicit enable flag is the disabled shape, not a null sentinel.
+        !disabled.content.enable
+        # Equal-priority text and source are rejected by the shared
+        # priority-aware text-source type.
         && rejected {
-          source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
-          text = "both";
+          content = {
+            source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+            text = "both";
+          };
         }
+        # Delivery-specific alternatives remain exclusive with text/source and
+        # with each other after the attrTag representation is removed.
+        && rejected {
+          content = {
+            run = "printf probe";
+            text = "both";
+          };
+        }
+        && rejected {
+          content = {
+            run = "printf probe";
+            value.probe = true;
+          };
+        }
+        # The retired flat shape must not quietly keep working: an entry that
+        # still says `text` at the top level has not been migrated, and
+        # accepting it would deliver a file with no bytes.
+        && rejected {text = "flat";}
     );
 
-    module-runtime-files-generated-default-tombstone = mkTest "runtime-files-generated-default-tombstone" (
+    module-runtime-files-generated-default-disable = mkTest "runtime-files-generated-default-disable" (
       let
         target = ".claude/CLAUDE.md";
         config.ai.claude = {
           enable = true;
           context.text = "GENERATED-CONTEXT";
-          files.${target} = null;
+          files.${target}.content.enable = false;
         };
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
       in
-        hm.ai.claude.files.${target}
-        == null
-        && devenv.ai.claude.files.${target} == null
+        !hm.ai.claude.files.${target}.content.enable
+        && !devenv.ai.claude.files.${target}.content.enable
         && !(hm.home.file ? ${target})
         && !(devenv.files ? ${target})
     );
@@ -154,7 +180,7 @@ in {
         && devenvConfig.ai.kimchi.files ? ".config/kimchi/harness/AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
-        && devenvConfig.ai.internal.files."AGENTS.md".text == devenvConfig.files."AGENTS.md".text
+        && devenvConfig.ai.internal.files."AGENTS.md".content.text == devenvConfig.files."AGENTS.md".text
         && !(devenvConfig.files."AGENTS.md" ? source)
     );
 
@@ -168,29 +194,29 @@ in {
           };
         };
         replaced = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".text = "CONSUMER-REPLACEMENT";
+          ai.codex.files."AGENTS.md".content.text = "CONSUMER-REPLACEMENT";
         });
         suppressed = evalDevenv (lib.recursiveUpdate base {
-          ai.kiro.files."AGENTS.md" = null;
+          ai.kiro.files."AGENTS.md".content.enable = false;
         });
         deduplicated = evalDevenv (lib.recursiveUpdate base {
-          ai.codex.files."AGENTS.md".text = "SHARED-CONSUMER";
-          ai.kiro.files."AGENTS.md".text = "SHARED-CONSUMER";
+          ai.codex.files."AGENTS.md".content.text = "SHARED-CONSUMER";
+          ai.kiro.files."AGENTS.md".content.text = "SHARED-CONSUMER";
         });
         divergent = builtins.tryEval (let
           evaluated = evalDevenv (lib.recursiveUpdate base {
-            ai.codex.files."AGENTS.md".text = "CODEX-CONSUMER";
-            ai.kiro.files."AGENTS.md".text = "KIRO-CONSUMER";
+            ai.codex.files."AGENTS.md".content.text = "CODEX-CONSUMER";
+            ai.kiro.files."AGENTS.md".content.text = "KIRO-CONSUMER";
           });
         in
           builtins.deepSeq evaluated.config.ai.internal.files."AGENTS.md" true);
       in
-        replaced.config.ai.internal.files."AGENTS.md".text
+        replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
         && replaced.config.files."AGENTS.md".text == "CONSUMER-REPLACEMENT"
-        && suppressed.config.ai.internal.files."AGENTS.md" == null
+        && !suppressed.config.ai.internal.files."AGENTS.md".content.enable
         && !(suppressed.config.files ? "AGENTS.md")
-        && deduplicated.config.ai.internal.files."AGENTS.md".text == "SHARED-CONSUMER"
+        && deduplicated.config.ai.internal.files."AGENTS.md".content.text == "SHARED-CONSUMER"
         && deduplicated.config.files."AGENTS.md".text == "SHARED-CONSUMER"
         && !divergent.success
     );
@@ -213,7 +239,7 @@ in {
           (withDormantEntry {
             activeRuntime = "codex";
             dormantRuntime = "kiro";
-            entry.text = "DORMANT-KIRO";
+            entry.content.text = "DORMANT-KIRO";
           })
           (withDormantEntry {
             activeRuntime = "codex";
@@ -223,7 +249,7 @@ in {
           (withDormantEntry {
             activeRuntime = "kiro";
             dormantRuntime = "codex";
-            entry.text = "DORMANT-CODEX";
+            entry.content.text = "DORMANT-CODEX";
           })
           (withDormantEntry {
             activeRuntime = "kiro";
@@ -246,15 +272,15 @@ in {
           ai.codex = {
             context.text = oversized;
             enable = true;
-            files.".codex/AGENTS.md".text = "short";
+            files.".codex/AGENTS.md".content.text = "short";
             projectDocMaxBytes = 8;
           };
         };
-        hmTombstone = evalHm {
+        hmDisabled = evalHm {
           ai.codex = {
             context.text = oversized;
             enable = true;
-            files.".codex/AGENTS.md" = null;
+            files.".codex/AGENTS.md".content.enable = false;
             projectDocMaxBytes = 8;
           };
         };
@@ -262,17 +288,17 @@ in {
           ai = {
             codex = {
               enable = true;
-              files."AGENTS.md".text = "short";
+              files."AGENTS.md".content.text = "short";
               projectDocMaxBytes = 8;
             };
             context.text = oversized;
           };
         };
-        devenvTombstone = evalDevenv {
+        devenvDisabled = evalDevenv {
           ai = {
             codex = {
               enable = true;
-              files."AGENTS.md" = null;
+              files."AGENTS.md".content.enable = false;
               projectDocMaxBytes = 8;
             };
             context.text = oversized;
@@ -280,13 +306,13 @@ in {
         };
       in
         builtins.all (assertion: assertion.assertion) hmReplacement.config.assertions
-        && builtins.all (assertion: assertion.assertion) hmTombstone.config.assertions
+        && builtins.all (assertion: assertion.assertion) hmDisabled.config.assertions
         && builtins.all (assertion: assertion.assertion) devenvReplacement.config.assertions
-        && builtins.all (assertion: assertion.assertion) devenvTombstone.config.assertions
+        && builtins.all (assertion: assertion.assertion) devenvDisabled.config.assertions
         && hmReplacement.config.home.file.".codex/AGENTS.md".text == "short"
-        && !(hmTombstone.config.home.file ? ".codex/AGENTS.md")
+        && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
         && devenvReplacement.config.files."AGENTS.md".text == "short"
-        && !(devenvTombstone.config.files ? "AGENTS.md")
+        && !(devenvDisabled.config.files ? "AGENTS.md")
     );
 
     module-runtime-files-discarded-codex-source-stays-lazy = mkTest "runtime-files-discarded-codex-source-stays-lazy" (
@@ -300,17 +326,17 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".codex/AGENTS.md".text = "HM-REPLACEMENT";
+              files.".codex/AGENTS.md".content.text = "HM-REPLACEMENT";
             };
           };
         };
-        hmTombstone = evalHm {
+        hmDisabled = evalHm {
           ai = {
             context = {inherit source;};
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".codex/AGENTS.md" = null;
+              files.".codex/AGENTS.md".content.enable = false;
             };
           };
         };
@@ -320,48 +346,48 @@ in {
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files."AGENTS.md".text = "DEVENV-REPLACEMENT";
+              files."AGENTS.md".content.text = "DEVENV-REPLACEMENT";
             };
           };
         };
-        devenvTombstone = evalDevenv {
+        devenvDisabled = evalDevenv {
           ai = {
             context = {inherit source;};
             codex = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files."AGENTS.md" = null;
+              files."AGENTS.md".content.enable = false;
             };
           };
         };
-        hmKiroTombstone = evalHm {
+        hmKiroDisabled = evalHm {
           ai = {
             context = {inherit source;};
             kiro = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".kiro/steering/AGENTS.md" = null;
+              files.".kiro/steering/AGENTS.md".content.enable = false;
             };
           };
         };
-        devenvKiroTombstone = evalDevenv {
+        devenvKiroDisabled = evalDevenv {
           ai = {
             context = {inherit source;};
             kiro = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files."AGENTS.md" = null;
+              files."AGENTS.md".content.enable = false;
             };
           };
         };
       in
         hmReplacement.config.home.file.".codex/AGENTS.md".text
         == "HM-REPLACEMENT"
-        && !(hmTombstone.config.home.file ? ".codex/AGENTS.md")
+        && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
         && devenvReplacement.config.files."AGENTS.md".text == "DEVENV-REPLACEMENT"
-        && !(devenvTombstone.config.files ? "AGENTS.md")
-        && !(hmKiroTombstone.config.home.file ? ".kiro/steering/AGENTS.md")
-        && !(devenvKiroTombstone.config.files ? "AGENTS.md")
+        && !(devenvDisabled.config.files ? "AGENTS.md")
+        && !(hmKiroDisabled.config.home.file ? ".kiro/steering/AGENTS.md")
+        && !(devenvKiroDisabled.config.files ? "AGENTS.md")
     );
 
     module-runtime-files-generated-empty-codex-source-omitted = mkTest "runtime-files-generated-empty-codex-source-omitted" (
@@ -385,17 +411,142 @@ in {
             kiro.enable = true;
           };
         };
-        explicitEmpty = evalDevenv {
-          ai.codex = {
-            enable = true;
-            files."AGENTS.md".text = "";
-          };
-        };
       in
         !(hmCodex.config.home.file ? ".codex/AGENTS.md")
         && !(devenvCodex.config.files ? "AGENTS.md")
         && !(devenvKiro.config.files ? "AGENTS.md")
-        && explicitEmpty.config.files."AGENTS.md".text == ""
+    );
+
+    # Content at `mkDefault` is still content: the leaf-default idiom a
+    # downstream module uses for an overridable file must deliver it, not
+    # leave a record that nothing writes and nothing reports.
+    module-runtime-files-default-priority-content-delivers = mkTest "runtime-files-default-priority-content-delivers" (
+      let
+        source = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
+        config.ai.claude = {
+          enable = true;
+          files = {
+            "literal/default-source.md".content.source = lib.mkDefault source;
+            "literal/default-text.md".content.text = lib.mkDefault "DEFAULT-TEXT";
+          };
+        };
+        delivered = sink: let
+          field = target: name: (sink.${target} or {}).${name} or null;
+        in
+          field "literal/default-text.md" "text"
+          == "DEFAULT-TEXT"
+          && field "literal/default-source.md" "source" == source;
+      in
+        delivered (evalHm config).config.home.file
+        && delivered (evalDevenv config).config.files
+    );
+
+    # Empty inline text is not content. An entry left with nothing else is
+    # rejected rather than silently written as nothing; `enable = false` is
+    # the deliberate way to keep an entry that delivers nothing.
+    module-runtime-files-empty-text-rejected = mkTest "runtime-files-empty-text-rejected" (
+      let
+        attempt = evaluate: runtime: target: content:
+          builtins.tryEval (builtins.deepSeq
+            (lib.getAttrFromPath ["ai" runtime "files"]
+              (evaluate {
+                ai.${runtime} = {
+                  enable = true;
+                  files.${target}.content = content;
+                };
+              }).config)
+            true);
+        rejected = evaluate: runtime: target: content:
+          !(attempt evaluate runtime target content).success;
+        disabled = evalDevenv {
+          ai.codex = {
+            enable = true;
+            files."AGENTS.md".content = {
+              enable = false;
+              text = "";
+            };
+          };
+        };
+      in
+        rejected evalHm "claude" "literal/empty.md" {text = "";}
+        && rejected evalDevenv "claude" "literal/empty.md" {text = "";}
+        && rejected evalHm "claude" "literal/empty.md" {text = lib.mkDefault "";}
+        && rejected evalDevenv "codex" "AGENTS.md" {text = "";}
+        # Control: the same entry with content evaluates.
+        && (attempt evalHm "claude" "literal/empty.md" {text = "PRESENT";}).success
+        && !(disabled.config.files ? "AGENTS.md")
+    );
+
+    # `content.enable = false` is the one suppression lever, so it must reach
+    # every content form. A `value` document or a `run` body that ignored it
+    # would be written while the consumer's disable is accepted in silence.
+    module-runtime-files-disable-suppresses-every-form = mkTest "runtime-files-disable-suppresses-every-form" (
+      let
+        runtimeFiles = import ../../lib/ai/runtime-files.nix {inherit lib;};
+        target = ".kiro/probe.json";
+        valueEntry = contents:
+          lib.mkMerge ([
+              {
+                ai.kiro = {
+                  enable = true;
+                  files.${target}.format = "json";
+                };
+              }
+            ]
+            ++ map (content: {ai.kiro.files.${target}.content = content;}) contents);
+        delivered = config:
+          (evalHm config).config.home.file
+          ? ${target}
+          && (evalDevenv config).config.files ? ${target};
+        suppressed = config:
+          !((evalHm config).config.home.file ? ${target})
+          && !((evalDevenv config).config.files ? ${target});
+        runEntry = extra:
+          (evalHm {
+            ai.kiro = {
+              enable = true;
+              files.".kiro/probe.run".content = {run = "printf probe";} // extra;
+            };
+          }).config.ai.kiro.files.".kiro/probe.run";
+      in
+        # Control: an ordinary value document is delivered.
+        delivered (valueEntry [{value.a = true;}])
+        && suppressed (valueEntry [
+          {
+            enable = false;
+            value.a = true;
+          }
+        ])
+        # A generated leaf default, disabled by a separate consumer module.
+        && suppressed (valueEntry [
+          {value.a = lib.mkDefault true;}
+          {enable = false;}
+        ])
+        && runtimeFiles.isLive (runEntry {})
+        && !runtimeFiles.isLive (runEntry {enable = false;})
+    );
+
+    # A store-backed replacement of the shared AGENTS.md stays lazy: it is not
+    # read to be measured against a size limit, which would build it during
+    # evaluation. The source is a derivation that fails to build.
+    module-runtime-files-shared-agentsmd-source-stays-lazy = mkTest "runtime-files-shared-agentsmd-source-stays-lazy" (
+      let
+        source = pkgs.runCommand "shared-agents-md-source-must-not-build" {} ''
+          exit 1
+        '';
+        evaluated = evalDevenv {
+          ai = {
+            codex = {
+              enable = true;
+              files."AGENTS.md".content.source = source;
+              projectDocMaxBytes = 8;
+            };
+            context.text = "SHARED-CONTEXT";
+          };
+        };
+      in
+        builtins.all (assertion: assertion.assertion) evaluated.config.assertions
+        && toString evaluated.config.files."AGENTS.md".source == toString source
     );
 
     module-runtime-files-discarded-composed-context-stays-lazy = mkTest "runtime-files-discarded-composed-context-stays-lazy" (
@@ -409,7 +560,7 @@ in {
             claude = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".claude/CLAUDE.md".text = "CLAUDE-REPLACEMENT";
+              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
             };
           };
         };
@@ -419,7 +570,7 @@ in {
             claude = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".claude/CLAUDE.md".text = "CLAUDE-REPLACEMENT";
+              files.".claude/CLAUDE.md".content.text = "CLAUDE-REPLACEMENT";
             };
           };
         };
@@ -429,7 +580,7 @@ in {
             copilot = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".github/copilot-instructions.md".text = "COPILOT-REPLACEMENT";
+              files.".github/copilot-instructions.md".content.text = "COPILOT-REPLACEMENT";
             };
           };
         };
@@ -439,7 +590,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".config/kimchi/harness/AGENTS.md".text = "KIMCHI-REPLACEMENT";
+              files.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };
@@ -449,7 +600,7 @@ in {
             kimchi = {
               context.text = "RUNTIME-CONTEXT";
               enable = true;
-              files.".config/kimchi/harness/AGENTS.md".text = "KIMCHI-REPLACEMENT";
+              files.".config/kimchi/harness/AGENTS.md".content.text = "KIMCHI-REPLACEMENT";
             };
           };
         };

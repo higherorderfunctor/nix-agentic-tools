@@ -1,7 +1,8 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-09-19 — skill-package callbacks receive the runtime
-> being written, so one factory import can render different content per runtime.
+> **Last verified:** 2026-09-21 — runtime-aware skill-package callbacks reach
+> each backend through `helpers.mkSkillFiles` and the delivery router's one
+> walk.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -14,13 +15,13 @@ its scanner discovers Layout A, where the skill directory itself is a symlink.
 
 ### Backend pattern
 
-| Branch  | HM route                           | Native directory  | Layout |
-| ------- | ---------------------------------- | ----------------- | ------ |
-| Claude  | `programs.claude-code.skills`      | `.claude/skills`  | B      |
-| Codex   | `mkSkillDirectoryEntries` directly | `.agents/skills`  | A      |
-| Copilot | `mkSkillEntries` directly          | `.copilot/skills` | B      |
-| Kimchi  | `mkSkillEntries` directly          | `harness/skills`  | B      |
-| Kiro    | `programs.kiro-cli.skills`         | `.kiro/skills`    | B      |
+| Branch  | HM route                             | Native directory  | Layout |
+| ------- | ------------------------------------ | ----------------- | ------ |
+| Claude  | `programs.claude-code.skills`        | `.claude/skills`  | B      |
+| Codex   | `mkSkillFiles` (`recursive = false`) | `.agents/skills`  | A      |
+| Copilot | `mkSkillFiles`                       | `.copilot/skills` | B      |
+| Kimchi  | `mkSkillFiles`                       | `harness/skills`  | B      |
+| Kiro    | `mkSkillFiles`                       | `.kiro/skills`    | B      |
 
 Codex 0.147.0 was probed with both shapes: a whole-directory symlink appeared in
 `skills/list`, while a real directory whose `SKILL.md` was a symlink did not.
@@ -57,8 +58,9 @@ replace them without following the old link.
 ### How to apply
 
 - Use an upstream recursive skills option where one exists. Otherwise call
-  `mkSkillEntries` for Layout B and `mkSkillDirectoryEntries` for Codex's Layout
-  A.
+  `helpers.mkSkillFiles`, which writes DELIVERY entries into
+  `ai.<runtime>.files` for both backends: `recursive = true` is Layout B, and
+  `recursive = false` with a directory source is Codex's Layout A.
 - Do not add a second writer for a native skills path.
 - Keep module-eval coverage for both root and per-runtime skill contributions.
 
@@ -73,11 +75,18 @@ devenv emits project-root `.agents/skills`; neither destination is derived from
 
 ### Devenv counterpart
 
-`devenv.files.*.source` is structurally incapable of recursive walks. Factories
-that require Layout B use `mkDevenvSkillEntries`, which enumerates each leaf at
-evaluation time and preserves nested relative paths. Codex instead relies on
-devenv's identity behavior: one directory source creates the exact Layout A link
-its scanner requires at project-root `.agents/skills/<name>`.
+`devenv.files.*.source` is structurally incapable of recursive walks, so the
+DELIVERY ROUTER walks a `recursive` entry at evaluation time and emits one
+devenv entry per leaf, preserving nested relative paths. That walk is shared: it
+replaced the per-backend skill helpers and kiro's inline agents-directory copy
+of the same recursion, so a factory declares the tree once and both backends
+expand it. Codex instead relies on devenv's identity behavior: one directory
+source creates the exact Layout A link its scanner requires at project-root
+`.agents/skills/<name>`.
+
+A skill entry states `executable = null`, which reaches the sink as an absent
+attribute and leaves every file's mode alone. Stating a mode there would clear
+the executable bit on a script a skill ships.
 
 ### Skill-package program gating
 

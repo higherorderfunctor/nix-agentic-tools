@@ -10,55 +10,43 @@
   pkgs,
   ...
 }: let
-  fileType = lib.types.submodule ({name, ...}: {
-    options = {
-      text = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Text content to write to the file.";
+  aiTypes = import ../lib/ai/types.nix {inherit lib;};
+  fileType =
+    aiTypes.extendSubmodule
+    (aiTypes.optionalTextSource {
+      description = "project file content";
+      enableOnMkDefault = true;
+      textType = lib.types.str;
+    })
+    ({
+      config,
+      name,
+      ...
+    }: {
+      options = {
+        file = lib.mkOption {
+          type = lib.types.path;
+          readOnly = true;
+          description = "The resolved store path for this file.";
+        };
+
+        onChange = lib.mkOption {
+          type = lib.types.lines;
+          default = "";
+          description = "Shell commands to run when this file changes.";
+        };
       };
 
-      json = lib.mkOption {
-        type = lib.types.nullOr lib.types.anything;
-        default = null;
-        description = "JSON value to serialize to the file.";
-      };
+      config.file =
+        if config._sourceWins
+        then config.source
+        else pkgs.writeText name config.text;
+    });
 
-      source = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
-        default = null;
-        description = "Path to a file to symlink.";
-      };
-
-      file = lib.mkOption {
-        type = lib.types.path;
-        readOnly = true;
-        description = "The resolved store path for this file.";
-      };
-
-      onChange = lib.mkOption {
-        type = lib.types.lines;
-        default = "";
-        description = "Shell commands to run when this file changes.";
-      };
-    };
-
-    config.file = let
-      jsonFile = pkgs.writeText name (builtins.toJSON config.files.${name}.json);
-      textFile = pkgs.writeText name config.files.${name}.text;
-    in
-      if config.files.${name}.source != null
-      then config.files.${name}.source
-      else if config.files.${name}.json != null
-      then jsonFile
-      else if config.files.${name}.text != null
-      then textFile
-      else builtins.throw "File '${name}' must have one of: text, json, or source.";
-  });
-
-  enabledFiles = lib.filterAttrs (_: f:
-    f.text != null || f.json != null || f.source != null)
-  config.files;
+  enabledFiles = lib.filterAttrs (_: file: file.enable) config.files;
+  # An entry that is neither enabled nor switched off would silently
+  # materialize nothing; empty `text` is not content.
+  emptyFiles = builtins.attrNames (lib.filterAttrs (_: file: !file.enable && !file._enableDefined) config.files);
 
   # Generate the shell hook that materializes files
   materializeHook = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: file: ''
@@ -106,8 +94,18 @@ in {
     '';
   };
 
-  config.shellHook = lib.mkAfter ''
-    ${cleanupHook}
-    ${materializeHook}
-  '';
+  config.shellHook =
+    if emptyFiles == []
+    then
+      lib.mkAfter ''
+        ${cleanupHook}
+        ${materializeHook}
+      ''
+    else
+      throw ''
+        files entries must carry non-empty `text` or a `source`. Empty `text`
+        is not content: spell an empty file as a `source`, or omit the entry
+        with `enable = false`. Invalid entries:
+        ${lib.concatStringsSep ", " emptyFiles}
+      '';
 }

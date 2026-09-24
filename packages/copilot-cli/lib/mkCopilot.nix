@@ -64,8 +64,8 @@
       environmentVariables = moduleEnvironmentVariables // mergedEnvironmentVariables;
     };
 in
-  lib.ai.app.mkAiApp {
-    # Carried as DATA, not a module argument — see mkAiApp.nix.
+  lib.ai.app.mkRuntime {
+    # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "copilot";
     contextFilename = "copilot-instructions.md";
@@ -127,7 +127,7 @@ in
       # integration, telemetry, typed model selection) is tracked in
       # docs/plan.md "Ideal architecture gate → Absorption backlog" under
       # the copilot-cli absorption item.
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
         description = "Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).";
@@ -245,9 +245,8 @@ in
             home.file."${cfg.configDir}/lsp-config.json".text =
               builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
           })
-          # Inline agent .md files. Mirrors the legacy
-          # `mkMarkdownEntries` shape — one entry per agent, written
-          # under `${configDir}/agents/<name>.md`.
+          # Inline agent .md files — one entry per agent, written under
+          # `${configDir}/agents/<name>.md`.
           (lib.mkIf (mergedAgents != {}) {
             home.file = lib.mapAttrs' (name: content:
               lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
@@ -269,14 +268,17 @@ in
               mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
             };
           })
-          # Skills fanout — copilot has no upstream HM skills option, so
-          # we write `home.file."${configDir}/skills/<name>"` entries
-          # directly via `mkSkillEntries`, which uses `recursive = true`
-          # to produce Layout B (a real directory with per-file
-          # symlinks) and is path-type-agnostic (accepts both Nix path
-          # literals and absolute string paths).
+          # Skills fanout — copilot has no upstream HM skills option, so the
+          # tree is DESCRIBED as a delivery entry under
+          # `${configDir}/skills/<name>` and the adapter lowers it.
+          # `recursive = true` is Layout B (a real directory with per-file
+          # symlinks): Home Manager expands the directory source itself, and
+          # the router walks it for devenv.
           {
-            home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
+            ai.copilot.files = helpers.mkSkillFiles {
+              inherit (cfg) configDir;
+              skills = mergedSkills;
+            };
           }
           # Reconcile settings.json leaves while preserving native state such
           # as trusted_folders. Always emit the writer so empty settings retract
@@ -289,7 +291,7 @@ in
             path = "${cfg.configDir}/settings.json";
             python = pkgs.python3;
             runtime = "copilot";
-            value = cfg.nativeSettings;
+            value = cfg.native.settings;
             inherit pkgs;
           })
         ];
@@ -398,15 +400,19 @@ in
           })
           # agentsDir handled at L2b→L3 above — expansion runs
           # through the existing per-file agents emission.
-          # Skills via the user-space walker. devenv's `files.*.source`
-          # cannot walk a directory recursively (see the devenv files
-          # internals fragment), so we enumerate leaves at eval time
-          # via `mkDevenvSkillEntries`. Produces one `files.<path>`
-          # entry per leaf file under `${projectDir}/skills/<skill>/`.
+          # Skills — the same declaration as Home Manager, against the
+          # project directory. devenv's `files.*.source` cannot walk a
+          # directory recursively (see the devenv files internals fragment),
+          # so the delivery router enumerates the leaves at eval time and
+          # emits one `files.<path>` entry per leaf under
+          # `${projectDir}/skills/<skill>/`.
           (let
             helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
           in {
-            files = helpers.mkDevenvSkillEntries cfg.projectDir mergedSkills;
+            ai.copilot.files = helpers.mkSkillFiles {
+              configDir = cfg.projectDir;
+              skills = mergedSkills;
+            };
           })
           # mcp-config.json — static write of the merged MCP server
           # pool. Inlined as `text` for consistency with the HM side.
@@ -421,18 +427,21 @@ in
             inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
           in {
             ai.copilot.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" (lib.mkDefault {
-                text = fragmentsLib.mkRenderer copilotTransformer {} (rule
-                  // {
-                    paths = rule.matcher;
-                    text = aiCommon.readContent rule;
-                  });
-              }))
+              lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
+                content = lib.mkDefault {
+                  enable = true;
+                  text = fragmentsLib.mkRenderer copilotTransformer {} (rule
+                    // {
+                      paths = rule.matcher;
+                      text = aiCommon.readContent rule;
+                    });
+                };
+              })
             mergedRules;
           })
           # Repository context consumed by github.com's Copilot reviewer.
           (lib.mkIf hasMergedContext {
-            ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" = contextEntry;
           })
           # settings.json — devenv does NOT support HM-style activation
           # scripts, so the runtime-merge story is different. Devenv
@@ -446,7 +455,7 @@ in
           # non-empty requests receive the delivery policy's eval warning.
           {
             files."${cfg.configDir}/settings.json".text =
-              builtins.toJSON cfg.nativeSettings;
+              builtins.toJSON cfg.native.settings;
           }
         ];
     };

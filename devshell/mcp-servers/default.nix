@@ -70,7 +70,7 @@ in {
   };
 
   config = lib.mkIf (enabledServers != {}) {
-    files.".mcp.json".json = {
+    files.".mcp.json".text = builtins.toJSON {
       mcpServers = mcpConfig;
     };
 

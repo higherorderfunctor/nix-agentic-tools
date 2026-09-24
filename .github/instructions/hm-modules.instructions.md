@@ -7,7 +7,9 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-21 — generation-owned documents and directories
+> **Last verified:** 2026-09-22 — native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Generation-owned documents and directories
 > reconcile through `lib/ai/own.{nix,py}`, document targets may enforce modes,
 > and the delivery-path parity example uses `ai.codex.execpolicyRules`.
 >
@@ -38,11 +40,11 @@ lives flat.
 
 **Keep normalized and native settings separate.** `ai.<runtime>.settings` is a
 closed normalized submodule shared by every runtime. Runtime-shaped passthrough
-belongs under `ai.<runtime>.nativeSettings`; when wrapping a CLI's native
+belongs under `ai.<runtime>.native.settings`; when wrapping a CLI's native
 settings file, use `freeformType = jsonFormat.type` plus explicit `mkOption`
-declarations for known typed keys (for example, `nativeSettings.model` and
-`nativeSettings.telemetry`). Unknown native keys flow through freely; known keys
-get type-checked. Do not add runtime-native keys to normalized `settings`.
+declarations for known typed keys (for example, `native.settings.model` and
+`native.settings.telemetry`). Unknown native keys flow through freely; known
+keys get type-checked. Do not add runtime-native keys to normalized `settings`.
 
 **Defaults via `mkOption { default = ...; }`**, not `mkDefault` in the
 declaration. Reserve `mkDefault` for fanout values in the config block (so
@@ -244,10 +246,12 @@ nothing about what a writer will assert is visible in its activation body.
 `helpers.mkOwnBundle` therefore records the whole plan on the internal
 `ai.<runtime>._ownPlans.<write entry>` option, which is what module-eval checks
 read (`harness.ownPlan` for the plan, `harness.ownedDocument` for one document's
-ledger and value). Reading the plan FILE back would be import-from-derivation,
-and `builtins.fromJSON` refuses a string that refers to a store path, so the
-value a document declares is recorded beside the plan rather than recovered from
-it.
+ledger and value). The delivery router builds that bundle's INPUT — one target
+per ledger a writer declares, whether or not a file claims it this generation,
+which is how a path is released — and never its behavior. Reading the plan FILE
+back would be import-from-derivation, and `builtins.fromJSON` refuses a string
+that refers to a store path, so the value a document declares is recorded beside
+the plan rather than recovered from it.
 
 Do not generalize this to every TOML file or every runtime. Static ownership is
 still preferred when no required native writer shares the artifact. That is why
@@ -270,7 +274,7 @@ while the ecosystem is enabled, whatever the declaration says. An empty
 declaration is not "nothing to do", it is the RETRACTION path: empty settings
 plus no prior ledger is a strict no-op, while empty settings plus a prior ledger
 must run so a later generation retracts the leaves it used to own without
-erasing native state. A `mkIf (cfg.nativeSettings != {})` around one of these
+erasing native state. A `mkIf (cfg.native.settings != {})` around one of these
 writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on it —
 it evaluates every imperative writer under a populated AND an empty declaration.
 
@@ -478,21 +482,20 @@ This matters when passing values to options that gate on `lib.isPath` or
   `/nix/store/abc-skills/stack-fix` instead of real YAML frontmatter, so Claude
   couldn't load the skill.
 
-- Our `lib/hm-helpers.nix:mkSkillEntries` had the same bug until commit
-  `1f1ad35`. It now uses `(isPath || isString) && (readFileType == "directory")`
-  to handle both types correctly.
-
-- Our `mkDevenvSkillEntries` walker (commit `8655130`) also uses
-  `builtins.readFileType` — agnostic to path vs string.
+- Our own skill helper had the same bug until commit `1f1ad35`. Both backends go
+  through `lib/ai/hm-helpers.nix:mkSkillFiles` now, which asks
+  `builtins.readFileType` — agnostic to path versus string — and the devenv walk
+  in `lib/ai/formats.nix` does the same.
 
 **How to apply.** For **skills** on a modern HM pin either form works (path
 literal OR store-path string), so the skill packages deliberately use strings.
 But the type distinction still bites for values flowing into sinks that gate on
-the STRICT `lib.isPath` — `mkSourceEntry` (e.g. rule/instruction `source =`) and
-`cfg.context` both write a string as **text**, not a symlink — and for older HM
-pins. When the sink's tolerance is unknown, the safe form is a `./` path literal
-(introduce a module-relative one in the `let` block so filtering doesn't coerce
-it to a string):
+the STRICT `lib.isPath` — `cfg.context` writes a string as **text**, not a
+symlink — and for older HM pins. (`mkSourceEntry`, the helper this used to name
+first, is deleted: its last caller was the single-file skill branch, which now
+states `content.source` unconditionally.) When the sink's tolerance is unknown,
+the safe form is a `./` path literal (introduce a module-relative one in the
+`let` block so filtering doesn't coerce it to a string):
 
 ```nix
 { ... }: let
@@ -518,9 +521,8 @@ written as text) for weeks. Worked around in commit `5a14a0c` with a
 module-relative `skillsRepo` path literal; the root cause is gone now that
 upstream `mkSkillEntry` uses `isPathLike` (above).
 
-**Both our helpers and modern upstream are string-tolerant.** Our
-`mkSkillEntries` / `mkDevenvSkillEntries` and modern upstream `mkSkillEntry` all
-accept path-typed values AND store-path strings. A generated store-path string
-remains a supported, deliberate pattern even though this repository no longer
-ships a first-party producer. Reserve the `./`-literal discipline for the
-strict-`isPath` sinks noted above.
+**Both our helper and modern upstream are string-tolerant.** Our `mkSkillFiles`
+and modern upstream `mkSkillEntry` both accept path-typed values AND store-path
+strings. A generated store-path string remains a supported, deliberate pattern
+even though this repository no longer ships a first-party producer. Reserve the
+`./`-literal discipline for the strict-`isPath` sinks noted above.

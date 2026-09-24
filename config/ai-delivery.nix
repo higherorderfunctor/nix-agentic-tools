@@ -130,7 +130,7 @@
   };
   env = executable: lib.genAttrs modes (mode: wrapper mode executable);
   mcpProbe = ecosystem: probe ["ai" ecosystem "mcpServers"] {probe.command = "true";} {};
-  settingsProbe = ecosystem: probe ["ai" ecosystem "nativeSettings"] {model = "probe";} {};
+  settingsProbe = ecosystem: probe ["ai" ecosystem "native" "settings"] {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
   kiroManaged = pruneTrigger: mode: name: target: declaration: {
     inherit pruneTrigger target;
@@ -205,7 +205,7 @@
   definitions = {
     agents = {
       claude = {
-        devenv = absent "Parity gap: mergedAgents is not consumed by mkClaude.devenv.config, although the option exists.";
+        devenv = declarative "devenv" ".claude/agents/<name>.md";
         hm = delegated "hm" "agents" "$HOME/.claude/agents/<name>.md";
       };
       codex = paths ".codex/agents/<name>.toml" ".codex/agents/<name>.toml";
@@ -260,7 +260,7 @@
         });
     };
     environmentVariables = {
-      claude = both (absent "Claude excludes the environmentVariables pool; nativeSettings.env is delivered through settings instead.");
+      claude = both (absent "Claude excludes the environmentVariables pool; native.settings.env is delivered through settings instead.");
       codex = env "codex";
       copilot = env "copilot";
       kimchi = env "kimchi";
@@ -281,7 +281,7 @@
       };
       codex = paths ".codex/hooks.json" ".codex/hooks.json";
       copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
-      kimchi = both (absent "Kimchi's supportedPools excludes hooks; harnessSettings resource toggles are settings, not hook definitions.");
+      kimchi = both (absent "Kimchi's supportedPools excludes hooks; native.harnessSettings resource toggles are settings, not hook definitions.");
       kiro = lib.genAttrs modes kiroHooks;
     };
     lspServers = {
@@ -318,9 +318,9 @@
       };
       codex = {
         devenv = declarative "devenv" ".codex/config.toml";
-        hm = codexConfig // {probe = probe ["ai" "codex" "nativeSettings" "permissions"] {probe.network.enabled = false;} {};};
+        hm = codexConfig // {probe = probe ["ai" "codex" "native" "settings" "permissions"] {probe.network.enabled = false;} {};};
       };
-      copilot = both (absent "No permissions option or translation exists; arbitrary nativeSettings keys do not establish a permissions contract.");
+      copilot = both (absent "No permissions option or translation exists; arbitrary native.settings keys do not establish a permissions contract.");
       kimchi = both (absent "No permissions option or translation exists.");
       kiro = {
         # NOT a parity gap, and the label used to invite "closing" it: Kiro
@@ -400,14 +400,14 @@
           };
         hm =
           (leaves ownRetraction "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
-            (probe ["ai" "kimchi" "nativeSettings"] {
+            (probe ["ai" "kimchi" "native" "settings"] {
               llmEndpoint = "https://example.invalid";
               skillPaths = ["probe"];
             } {}))
           // {
             additionalWriters = [
               (leaves ownRetraction "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json"
-                (probe ["ai" "kimchi" "harnessSettings"] {resources.probe = true;} {}))
+                (probe ["ai" "kimchi" "native" "harnessSettings"] {resources.probe = true;} {}))
             ];
           };
       };
@@ -419,7 +419,7 @@
           };
         hm =
           leaves ownRetraction "kiroSettingsMerge" "$HOME/.kiro/settings/cli.json"
-          (probe ["ai" "kiro" "nativeSettings"] {chat.defaultModel = "probe";} {});
+          (probe ["ai" "kiro" "native" "settings"] {chat.defaultModel = "probe";} {});
       };
     };
     skills = {
@@ -458,10 +458,10 @@
       if ecosystem == "kiro"
       then [["ai" "kiro" "permissions"]]
       else if builtins.elem ecosystem ["claude" "codex"]
-      then [["ai" ecosystem "nativeSettings" "permissions"]]
+      then [["ai" ecosystem "native" "settings" "permissions"]]
       else []
     else if surface == "settings"
-    then [["ai" ecosystem "nativeSettings"]] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "harnessSettings"]
+    then [["ai" ecosystem "native" "settings"]] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "native" "harnessSettings"]
     else if ecosystem == "kiro" && builtins.elem surface ["agents" "hooks"]
     then [["ai" "kiro" surface] ["ai" "kiro" "${surface}Dir"]] ++ lib.optional (surface == "hooks") ["ai" "kiro" "hooksJson"]
     else [["ai" surface] ["ai" ecosystem surface]];

@@ -71,8 +71,8 @@
     };
   in {
     inherit contextEntry;
-    filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
-    filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
+    filteredSettings = aiCommon.filterNulls cfg.native.settings;
+    filteredHarnessSettings = aiCommon.filterNulls cfg.native.harnessSettings;
     package =
       if wrapArgs != []
       then wrappedPackage
@@ -93,8 +93,8 @@
   }:
     (mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;}).package;
 in
-  lib.ai.app.mkAiApp {
-    # Carried as DATA, not a module argument — see mkAiApp.nix.
+  lib.ai.app.mkRuntime {
+    # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kimchi";
     contextFilename = "AGENTS.md";
@@ -117,7 +117,7 @@ in
         description = "Config directory relative to HOME / devenv root.";
       };
 
-      nativeSettings = lib.mkOption {
+      native.settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {
@@ -163,7 +163,7 @@ in
         '';
       };
 
-      harnessSettings = lib.mkOption {
+      native.harnessSettings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {
@@ -282,12 +282,16 @@ in
 
           # harness/AGENTS.md — orientation context.
           (lib.mkIf hasMergedContext {
-            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
           })
 
-          # harness/skills/ — Layout B via mkSkillEntries.
+          # harness/skills/ — Layout B: one delivery entry per skill tree,
+          # expanded by Home Manager natively and by the router for devenv.
           (lib.mkIf (mergedSkills != {}) {
-            home.file = helpers.mkSkillEntries "${cfg.configDir}/harness" mergedSkills;
+            ai.kimchi.files = helpers.mkSkillFiles {
+              configDir = "${cfg.configDir}/harness";
+              skills = mergedSkills;
+            };
           })
         ];
     };
@@ -328,12 +332,15 @@ in
 
           # harness/AGENTS.md.
           (lib.mkIf hasMergedContext {
-            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = lib.mkDefault contextEntry;
+            ai.kimchi.files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
           })
 
           # harness/skills/ — devenv recursive walk.
           (lib.mkIf (mergedSkills != {}) {
-            files = helpers.mkDevenvSkillEntries "${cfg.configDir}/harness" mergedSkills;
+            ai.kimchi.files = helpers.mkSkillFiles {
+              configDir = "${cfg.configDir}/harness";
+              skills = mergedSkills;
+            };
           })
         ];
     };
