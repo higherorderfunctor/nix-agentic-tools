@@ -144,6 +144,14 @@ in {
     then null
     else value.text;
 
+  # An optional text source lowered to its text when enabled, or to null so a
+  # renderer's null-pruning drops the key. The type rejects enabled empty
+  # text, so this only decides whether the value is enabled.
+  enabledTextOrNull = value:
+    if value.enable
+    then value.text
+    else null;
+
   textSourceFile = value:
     if textSourceUsesSource value
     then {inherit (value) source;}
