@@ -41,6 +41,13 @@
     || (builtins.isString value && lib.hasPrefix "${builtins.storeDir}/" value)
     || lib.isDerivation value;
 
+  # A rendered agent as file content: a path-like value is copied as a
+  # `source`, anything else is the file's `text`.
+  fileContent = rendered:
+    if isPathLike rendered
+    then {source = rendered;}
+    else {text = rendered;};
+
   renderMarkdown = {
     includeName,
     name,
@@ -64,7 +71,7 @@
       inherit name;
     };
 in {
-  inherit isPathLike isSemantic mkSemanticAgentType renderCodex semanticAgentType;
+  inherit fileContent isPathLike isSemantic mkSemanticAgentType renderCodex semanticAgentType;
 
   agentType = lib.types.either (lib.types.either lib.types.lines lib.types.path) semanticAgentType;
 

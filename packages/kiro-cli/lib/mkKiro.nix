@@ -411,9 +411,7 @@
   mkAgentEntry = attrName: value:
     if isTypedAgent value
     then {text = renderAgent attrName value;}
-    else if agent.isPathLike value
-    then {source = value;}
-    else {text = value;};
+    else agent.fileContent value;
 
   # Render one typed record → its v3 hook object (an element of an envelope's
   # `hooks` list). `name` = the attr key; null optionals dropped (record +
@@ -688,32 +686,24 @@
     hasMergedContext,
     sharedAgentsMd,
   }: let
-    fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-    inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
     hasContext = hasMergedContext;
+    # The shared AGENTS.md carries the unscoped always-on rules on devenv.
     steeringRules =
       if sharedAgentsMd
       then lib.filterAttrs (_name: rule: !(isSharedRule rule)) mergedRules
       else mergedRules;
-    mkEntry = text: {
-      content = lib.mkDefault {
-        enable = true;
-        inherit text;
-      };
-    };
   in [
     # Attrs-shape ai.rules / ai.kiro.rules → `<name>.md` entries,
     # translated through kiroTransformer (inclusion: +
     # fileMatchPattern: frontmatter). Source-backed rules resolve to text at
     # eval through aiCommon.readContent.
     {
-      ai.kiro.files = lib.mapAttrs' (name: rule:
-        lib.nameValuePair "${cfg.configDir}/steering/${name}.md" (mkEntry (fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
-          // {
-            paths = rule.matcher;
-            text = aiCommon.readContent rule;
-          }))))
-      steeringRules;
+      ai.kiro.files = aiCommon.mkRuleFiles {
+        context = name: {inherit name;};
+        path = name: "${cfg.configDir}/steering/${name}.md";
+        rules = steeringRules;
+        transformer = lib.ai.transformers.kiro.kiroTransformer;
+      };
     }
     # Global context → `<contextFilename>` (default AGENTS.md — Kiro
     # reads it natively as always-included content). Written without
