@@ -339,9 +339,10 @@ would widen the agent and translating it would fail silently), and root Markdown
 model id). Markdown under `ai.kimchi.agents` or `ai.kimchi.agentsDir` is
 Kimchi's own and lands verbatim. A path-like entry, a store-path string such as
 a flake input's `"${src}/a.md"` included, is copied from that source by
-`lib.ai.agent.isPathLike`; `builtins.isPath` alone would write the path itself
-as the agent's text. Locked by `module-kimchi-agents-rejected` and, for the
-string form on both backends, `module-kimchi-agents`.
+`lib.ai.agent.fileContent`, which tests `isPathLike`; `builtins.isPath` alone
+would write the path itself as the agent's text. Locked by
+`module-kimchi-agents-rejected` and, for the string form on both backends,
+`module-kimchi-agents`.
 
 ## Hooks: project `hooks.json` only
 

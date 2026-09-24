@@ -460,17 +460,11 @@
       # backs an edited file up and restores the declaration; a file Kimchi
       # created is an unowned sibling and is never touched.
       {
-        ai.kimchi.files = lib.mapAttrs' (name: value: let
-          rendered = lib.ai.agent.renderKimchi name value;
-        in
+        ai.kimchi.files = lib.mapAttrs' (name: value:
           lib.nameValuePair "${agentsDir}/${name}.md" {
             # A store-path string, as a flake input yields, is a source too;
             # `builtins.isPath` alone would write the path as the agent's text.
-            content = lib.mkDefault (
-              if lib.ai.agent.isPathLike rendered
-              then {source = rendered;}
-              else {text = rendered;}
-            );
+            content = lib.mkDefault (lib.ai.agent.fileContent (lib.ai.agent.renderKimchi name value));
             entry = "kimchiAgents";
             ledger = agentsLedger;
             method = lib.mkDefault "copy-ro";
