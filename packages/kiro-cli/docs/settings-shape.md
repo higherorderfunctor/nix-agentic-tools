@@ -4,7 +4,8 @@
 > registry and workspace allowlist after sandboxed source materialization;
 > native file settings live under `ai.<runtime>.native` (`native.settings`;
 > Kimchi also `native.harnessSettings`). Kiro excludes the normalized settings
-> pool, so `ai.kiro.settings` does not exist.
+> pool, so `ai.kiro.settings` does not exist and a root effort is ignored
+> without a warning.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -117,7 +118,8 @@ exist. Kiro has no global persisted effort key: lowering one portable scalar
 would mean choosing a model, or writing it into every model's record. Both
 change what the user asked for. So the factory leaves `settings` out of its
 `supportedPools`, and an unsupported pool declares no per-runtime option. The
-root `ai.settings.reasoningEffort` still warns for Kiro. Use
+root `ai.settings.reasoningEffort` is ignored for Kiro without a warning, as any
+unsupported pool's root value is: no per-runtime option could silence one. Use
 `ai.kiro.native.settings.chat.modelDefaults.<model>.effort` for the native
 per-model value, or Kiro's session-only `--effort` flag when persistence is not
 wanted.
