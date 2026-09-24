@@ -25,7 +25,8 @@ applyTo: "packages/kimchi/**"
 > writable copies, copied from a store-path string as from a path; portable
 > hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
 > `trust.json.lock`; an ungated HM `kimchiConfigMode` writer narrows the
-> credential-bearing user `config.json` to owner-only. Full lineage:
+> credential-bearing user `config.json` to owner-only; `mkPrep` builds only the
+> launcher. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -427,10 +428,10 @@ not apply to it.
 
 ## Shared prep
 
-`mkPrep` (top-level `let`) computes the backend-agnostic values (filtered
-settings, effective env, agency text, and the wrapped package). The shared
-delivery function and the `installPackage` hook each call it rather than
-duplicating that logic.
+`mkPrep` (top-level `let`) builds the wrapped launcher from the effective env,
+the credential export and, on devenv, the exact-cwd guard. Both `installPackage`
+hooks call it; the delivery function computes its own filtered settings and
+context entry, because it never installs the package.
 
 ## Source packaging
 
