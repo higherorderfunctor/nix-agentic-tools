@@ -90,9 +90,12 @@
     if (cfg.settings.reasoningEffort or null) != null
     then ["ai" runtime "settings" "reasoningEffort"]
     else ["ai" "settings" "reasoningEffort"];
+  # Effort follows the `present` doctrine above: a runtime without the
+  # normalized settings pool (Kiro) has no per-runtime remedy, so a bare root
+  # value stays silent and the exclusion lives in the pool's description.
   effortWarnings =
     lib.optional
-    (!(builtins.elem runtime ["claude" "codex" "copilot" "kimchi"]) && get effortPath != null)
+    (supports "settings" && !(builtins.elem runtime ["claude" "codex" "copilot" "kimchi"]) && get effortPath != null)
     (message effortPath "No lossless native reasoning-effort translation exists for this runtime.");
   entries = pool:
     (lib.mapAttrsToList (name: value: {
@@ -170,6 +173,23 @@
         else "This HTTP MCP field is not rendered for stdio."
       ))
     ignored) (entries "mcpServers");
+  # Copilot's devenv settings land in the repository settings file, whose
+  # reach is narrower than the user file Home Manager writes. Copilot resolves
+  # it against the git root of the directory it runs in, so a devenv root
+  # below the git root writes a file Copilot never opens. And only the
+  # interactive session reads a repository `effortLevel`; `-p`, `--acp` and
+  # `--server` read effort from the user file alone (copilot-cli 1.0.88
+  # app.js). Each warning names a per-runtime remedy: withhold the native
+  # value with null.
+  copilotRepositorySettings = lib.filterAttrs (_: value: value != null) (cfg.native.settings or {});
+  gitRoot = get ["git" "root"];
+  devenvRoot = get ["devenv" "root"];
+  copilotWarnings = lib.optionals (runtime == "copilot" && backend == "devenv") (
+    lib.optional (copilotRepositorySettings != {} && gitRoot != null && devenvRoot != null && gitRoot != devenvRoot)
+    (message ["ai" "copilot" "native" "settings"] "Copilot reads .github/copilot/settings.json from the git root (${toString gitRoot}), but devenv writes it under the devenv root (${toString devenvRoot}). Run devenv from the git root, or set the keys, including a lowered effortLevel, to null.")
+    ++ lib.optional (get effortPath != null && copilotRepositorySettings ? effortLevel)
+    "${lib.showOption effortPath} reaches copilot through devenv in interactive sessions only (reason: devenv delivers it as the repository effortLevel, which copilot -p, --acp and --server ignore; they read effort from the user settings file). Set ai.copilot.native.settings.effortLevel = null to withhold it."
+  );
   claudeWarnings = lib.optionals (runtime == "claude" && backend == "devenv") (
     lib.optional (nonEmpty (cfg.native.settings.mcpServers or null))
     (message ["ai" "claude" "native" "settings" "mcpServers"] "MCP belongs under ai.claude.mcpServers; this key is removed from settings.json.")
@@ -183,4 +203,4 @@ in
   then []
   else
     lib.unique
-    (rowWarnings ++ effortWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings)
+    (rowWarnings ++ effortWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings)

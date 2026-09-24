@@ -6,12 +6,12 @@
 > from the layer for every runtime's files. Normalized pools carry only a
 > text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
 > rules are read-only copies whose writers survive a disable. Copilot reconciles
-> settings.json on HM only; its devenv settings are a static write to
-> `.github/copilot/settings.json`. Kiro excludes the normalized `settings` pool.
-> Native file settings live under `ai.<runtime>.native`. Each devenv factory
-> publishes its shared AGENTS.md key in `ai.internal.agentsMdTargets`. Claude's
-> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
-> ledger.
+> its user settings.json on HM and the repository
+> `.github/copilot/settings.json` on devenv. Kiro excludes the normalized
+> `settings` pool. Native file settings live under `ai.<runtime>.native`. Each
+> devenv factory publishes its shared AGENTS.md key in
+> `ai.internal.agentsMdTargets`. Claude's `.claude.json` has an ungated
+> mode-narrowing command writer beside its unpin ledger.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -129,11 +129,11 @@
   `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
   `enterTest`. Empty declarations retain their writers so prior leaves can be
   retracted. Existing file modes and unowned leaves survive; a new file is 0600.
-  The fact is per backend when the CLI writes only one copy. Copilot's user
-  settings.json has an HM-only writer; devenv writes the repository file
-  `.github/copilot/settings.json` statically, omitted when nothing is declared.
-  Codex's project config remains a static source because its native writer is
-  user-scoped.
+  The fact is per backend when the CLI writes only one copy. Copilot writes both
+  of its settings copies (`/model`, `/settings` and their `--repo` forms), so
+  one writer, `copilotSettingsMerge`, reconciles the user settings.json on HM
+  and the repository `.github/copilot/settings.json` on devenv. Codex's project
+  config remains a static source because its native writer is user-scoped.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON/TOML ledger, even without a
