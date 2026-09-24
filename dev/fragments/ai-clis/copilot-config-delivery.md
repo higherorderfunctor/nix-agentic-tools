@@ -1,8 +1,12 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-09-23 — LSP config is delivered at repository scope
-> through `<projectDir>/lsp.json` (copilot-cli 1.0.88), so only `settings.json`
-> remains inert under `configDir`; server names Copilot rejects throw at eval.
+> **Last verified:** 2026-09-24 — devenv reconciles settings into the fixed
+> repository file `.github/copilot/settings.json` and writes LSP config to
+> `<projectDir>/lsp.json` (both measured at copilot-cli 1.0.88), so `configDir`
+> holds only the wrapper-aimed `mcp-config.json`. The repository file is read
+> from the git root, and its `effortLevel` by the interactive session only;
+> devenv warns on both. Keys and value kinds outside the repository schema, and
+> LSP server names Copilot rejects, throw at eval.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -21,7 +25,7 @@ directories look redundant when they are not.
 
 | consumer                                | reads                                                                                      | committed?        |
 | --------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------- |
-| **copilot-cli** (local agent harness)   | `$HOME/.copilot/*`, plus `--additional-mcp-config`                                         | no — `$HOME`      |
+| **copilot-cli** (local agent harness)   | `$HOME/.copilot/*`, `.github/copilot/settings.json`, plus `--additional-mcp-config`        | mixed             |
 | **github.com Copilot code review** (CI) | `projectDir` = `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` | **yes, required** |
 
 So: do not "consolidate" the two directories, and do not move reviewer content
@@ -43,7 +47,9 @@ An earlier revision of this fragment said flatly that "`configDir`
 look there." That is correct about the devenv default and **false about the HM
 one**, where `configDir` is precisely where the CLI looks. The devenv default is
 gitignored, so the server-side reviewer cannot see it even in principle, and it
-exists solely as a target for CLI wrapper flags.
+exists solely as a target for CLI wrapper flags. Repository settings use neither
+`configDir` nor `projectDir`: Copilot reads the fixed
+`.github/copilot/settings.json`.
 
 Read a `configDir` cite with the backend attached, or the two collapse into a
 statement that is wrong half the time.
@@ -168,6 +174,66 @@ character outside ASCII letters, digits, `_` and `-` ("LSP server name must only
 contain alphanumeric characters, underscores, and hyphens"; probed against
 `settingsParseLspServersConfig` in the 1.0.88 `runtime.node`).
 
+### Repository settings (copilot-cli 1.0.88)
+
+The 1.0.78 trace also predates repository settings. At 1.0.88 Copilot opens
+`<git root>/.github/copilot/settings.json` and then `settings.local.json` beside
+it, but **only when the folder is trusted**. The same `-p` run in an untrusted
+folder never touches either path, which is how the 1.0.78 trace came to see
+nothing. Measured 2026-09-24 by `strace` in a scratch repository, once untrusted
+and once trusted, with an isolated `$HOME`. Trust is not a settings key: Copilot
+records it as `trustedFolders` in `~/.copilot/config.json`, whose header says
+the file is managed automatically (`folderTrustAddTrusted`, probed against the
+1.0.88 `runtime.node`). A `trustedFolders` or `trusted_folders` key in
+`settings.json` is reported as unknown and ignored.
+
+**Git root, not devenv root.** Copilot resolves the file against the git root of
+the directory it runs in (`gitFindRootWithOptionalWorktreeResolutionAsync`,
+which answers a linked worktree's own top level), falling back to that directory
+outside git. devenv writes under `$DEVENV_ROOT`, so a devenv root below the git
+root writes a file Copilot never opens. The module compares devenv's `git.root`
+with `devenv.root` and warns on `ai.copilot.native.settings` when they differ.
+
+**Interactive sessions only, for effort.** `effortLevel` is a repository key,
+and its values are the normalized enum verbatim, so
+`ai.settings.reasoningEffort` lowers to it at `mkDefault` on both backends. But
+only the interactive TUI feeds
+`repoReasoningEffort: <repo settings>.effortLevel` into its startup model
+overlay. `copilot -p` reads `configReasoningEffort` from `userSettingsLoad`, and
+ACP's `resolveInitialReasoningEffort` does the same: user file only. The `-p`
+strace above opened the repository file through the plugin, skill and hook
+loaders, not the effort path. So Home Manager, which writes the user file,
+reaches every mode, and devenv reaches the interactive session only. devenv
+warns whenever the lowered value lands in the repository file, and
+`ai.copilot.native.settings.effortLevel = null` withholds it. That the value
+then reaches a model request was not observed: the probe account had no quota
+left.
+
+**The schema, and what a mistake costs.** `runtime.node` reports the repository
+schema directly: `userSettingsGovernanceKeys().repo` names fifteen keys and
+`userSettingsMetadata()` gives each one's kind. `mkCopilot.nix` carries them as
+`repositorySettingKinds`. Probing `repoSettingsLoadWithWarning` showed two
+failure modes:
+
+- A name outside the schema (`theme`, a typo) is dropped on its own; the rest of
+  the file loads. So is an `autoTier` outside its enum.
+- A known key with a value of the wrong kind (`respectGitignore = "yes"`,
+  `contextTier = "huge"`) makes Copilot ignore the WHOLE file: "Settings config
+  error: …".
+
+devenv fails evaluation on both, because either one is a write Copilot does not
+honor. Nested records (a marketplace `source`, a hook entry) are checked only as
+far as their kind; Copilot validates them further. Home Manager's user file
+stays unrestricted.
+
+**Reconciled, not linked.** Copilot writes this file itself: `/settings --repo`
+and `/model --repo` call `repoSettingsWriteKey` on it. So devenv states
+`facts.harnessWrites` and reconciles the declared leaves at shell entry through
+the `ai:copilot:settings-merge` task, exactly as Home Manager does for the user
+file. Leaves Copilot or a teammate wrote survive, a dropped declaration
+retracts, and a committed team file keeps its own keys. A read-only store
+symlink here made the in-CLI write fail with `Permission denied`.
+
 ### Why not `COPILOT_HOME`
 
 `COPILOT_HOME` **does** work — verified: setting it moves `mcp-config.json`
@@ -222,29 +288,20 @@ contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
 MCP-less devenv project no longer keeps the bare package. Home Manager still
 does, since it states that default in Git's own config instead.
 
-### Where LSP goes, and why `settings.json` is written but not delivered
+### Where LSP and settings go
 
-LSP servers are delivered at repository scope: the devenv module writes
-`<projectDir>/lsp.json` (default `.github/lsp.json`), and Home Manager writes
-the user-scope `~/.copilot/lsp-config.json`. Nothing LSP-related lives under
+Both are delivered at repository scope on devenv. LSP servers go to
+`<projectDir>/lsp.json` (default `.github/lsp.json`); settings are reconciled
+into the fixed `.github/copilot/settings.json`. Home Manager writes the
+user-scope `~/.copilot/lsp-config.json` and reconciles
+`~/.copilot/settings.json`. Nothing but `mcp-config.json` lives under the devenv
 `configDir` any more.
 
-There is no settings equivalent of `--additional-mcp-config` — the flag surface
-has exactly one config injector — so `settings.json` cannot be delivered at
-project scope at all. It is still written, and this is deliberate on three
-counts:
-
-1. Option-surface parity with the HM module, which the config-parity rule wants.
-2. Zero cost — gitignored, and it becomes live for free if upstream ever grows
-   project-scope discovery.
-3. Removing them buys nothing a user can observe.
-
-**They are NOT an assertion**, and that is the load-bearing part. Shared pools
-fan out to several runtimes, so asserting on one because a single runtime cannot
-deliver it would hard-fail a project that legitimately targets another runtime
-with it. The exclusion is therefore documented (option description + this
-fragment), matching how Codex's missing LSP surface is handled — excluded and
-documented, not asserted.
+The repository-settings schema assertions are scoped to
+`ai.copilot.native.settings`, which only Copilot reads, so they cannot hard-fail
+a project that targets another runtime. Shared pools are different: asserting on
+one because a single runtime cannot deliver it would, which is why shared-pool
+exclusions are documented and warned about rather than asserted.
 
 The two LSP throws are different in kind: a server Copilot receives with empty
 `extensions`, or with a name its validator rejects (a quoted attribute such as
@@ -254,8 +311,13 @@ Each names a fixable entry (set `extensions` or rename the server, or
 
 ### What would change this decision
 
-- Upstream adds project-scope settings discovery, or a second injection flag →
-  drop the inert-file caveat and deliver `settings.json` properly.
+- Upstream widens or narrows the repository settings schema → update
+  `repositorySettingKinds` in `mkCopilot.nix` from `userSettingsGovernanceKeys`
+  and `userSettingsMetadata` in the new `runtime.node`.
+- Upstream reads repository settings in untrusted folders, or stops reading them
+  → the trust caveat above changes.
+- Prompt mode or ACP starts reading the repository `effortLevel` → drop the
+  devenv effort warning in `lib/ai/delivery-warnings.nix`.
 - Upstream splits auth/session out of `COPILOT_HOME` → the env-var route becomes
   viable and would remove the wrapper.
 - Copilot stops accepting `@`-prefixed paths → the whole delivery mechanism

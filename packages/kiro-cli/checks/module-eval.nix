@@ -118,6 +118,30 @@ in {
       && !(evalDevenv {}).config.ai.kiro.enable
     );
 
+    # Kiro persists effort only inside per-model `chat.modelDefaults` records,
+    # so it has no lossless target for the normalized settings pool, and an
+    # unsupported pool has no per-runtime option. Claude is the identical-shape
+    # positive control, so an unrelated harness failure cannot make the
+    # exclusion pass.
+    module-kiro-settings-pool-excluded = mkTest "kiro-settings-pool-excluded" (
+      let
+        declares = evaluate: runtime:
+          (builtins.tryEval
+            (evaluate {
+              ai.${runtime} = {
+                enable = true;
+                settings.reasoningEffort = "high";
+              };
+            })
+          .config)
+          .success;
+      in
+        !declares evalHm "kiro"
+        && !declares evalDevenv "kiro"
+        && declares evalHm "claude"
+        && declares evalDevenv "claude"
+    );
+
     # Kiro HM keeps context in the `AGENTS.md` steering entry and emits each keyed
     # rule as `<name>.md` through the common runtime file map.
     module-kiro-hm-context-and-rules = mkTest "kiro-hm-context-and-rules" (

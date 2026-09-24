@@ -187,22 +187,149 @@ in {
         && (settingsDocument result).value.model == "gpt-4"
     );
 
-    # The project copy is a static write, not a reconciled document: Copilot
-    # never opens a project-scope settings.json, so a shell-entry reconciler
-    # there would maintain bytes nothing reads. The consumer is warned instead.
-    module-copilot-devenv-settings-stay-static = mkTest "copilot-devenv-settings-stay-static" (
+    # Copilot 1.0.88 reads repository settings from the fixed
+    # `.github/copilot/settings.json` (in a trusted folder), not from
+    # `configDir` and not from a configurable `projectDir`. Its own
+    # `/settings --repo` and `/model --repo` write that file, so devenv
+    # reconciles the declared leaves at shell entry instead of linking a
+    # read-only store copy. The writer stays declared with nothing declared,
+    # so a dropped leaf retracts. The old wrapper-dir path must stay empty, or
+    # a consumer reading it would believe it was delivered.
+    module-copilot-devenv-reconciles-repository-settings = mkTest "copilot-devenv-reconciles-repository-settings" (
       let
         result = evalDevenv {
           ai.copilot.enable = true;
           ai.copilot.native.settings.model = "gpt-4";
         };
-        path = ".config/github-copilot/settings.json";
+        empty = evalDevenv {ai.copilot.enable = true;};
+        path = ".github/copilot/settings.json";
+        document = ownedDocument "copilot" path result;
       in
-        builtins.fromJSON (result.config.files.${path}.text or "null")
+        document.value
         == {model = "gpt-4";}
-        && result.config.ai.copilot._ownPlans == {}
-        && !(result.config.tasks ? "ai:copilot:settings-merge")
-        && lib.any (lib.hasPrefix "ai.copilot.native.settings is set but devenv does not deliver it") result.config.warnings
+        && document.ledger == "json-settings/copilot-repository-settings.json"
+        && (ownedDocument "copilot" path empty).value == {}
+        && lib.hasInfix "--phase all" result.config.tasks."ai:copilot:settings-merge".exec
+        && !(result.config.files ? ${path})
+        && !(result.config.files ? ".config/github-copilot/settings.json")
+        && !lib.any (lib.hasInfix "ai.copilot.native.settings") result.config.warnings
+    );
+
+    # The normalized setting reaches Copilot's persisted `effortLevel` on both
+    # backends. The native override is the priority control: the derived
+    # mkDefault must not replace a consumer-authored native value, and an
+    # explicit native null suppresses it on both. A custom `projectDir` must
+    # not move the repository settings file.
+    module-copilot-normalized-reasoning-effort = mkTest "copilot-normalized-reasoning-effort" (
+      let
+        path = ".github/copilot/settings.json";
+        withEffort = copilot: {
+          ai = {
+            copilot = {enable = true;} // copilot;
+            settings.reasoningEffort = "high";
+          };
+        };
+        repository = evaluated: (ownedDocument "copilot" path evaluated).value;
+        customProjectDir = evalDevenv (withEffort {projectDir = ".custom-github";});
+      in
+        (settingsDocument (evalHm (withEffort {}))).value
+        == {effortLevel = "high";}
+        && repository (evalDevenv (withEffort {})) == {effortLevel = "high";}
+        && repository (evalDevenv (withEffort {native.settings.effortLevel = "low";})) == {effortLevel = "low";}
+        && repository customProjectDir == {effortLevel = "high";}
+        && !(customProjectDir.config.files ? ".custom-github/copilot/settings.json")
+        && (settingsDocument (evalHm (withEffort {native.settings.effortLevel = null;}))).value == {}
+        && repository (evalDevenv (withEffort {native.settings.effortLevel = null;})) == {}
+    );
+
+    # The repository schema, as copilot-cli 1.0.88's `runtime.node` reports
+    # it (`userSettingsGovernanceKeys().repo` for the names,
+    # `userSettingsMetadata()` for the value kinds). Copilot drops a name
+    # outside it one key at a time, and ignores the WHOLE file when a known
+    # key has a value of the wrong type. devenv rejects both at evaluation:
+    # every schema key with a valid value passes, `autoTier` included, while
+    # a user-only name and a mistyped value each fail naming the key. Home
+    # Manager's user file is not restricted.
+    module-copilot-repository-settings-schema = mkTest "copilot-repository-settings-schema" (
+      let
+        failures = settings:
+          map (assertion: assertion.message)
+          (lib.filter (assertion: !assertion.assertion)
+            (evalDevenv {
+              ai.copilot = {
+                enable = true;
+                native.settings = settings;
+              };
+            })
+            .config
+            .assertions);
+        rejects = key: settings: let
+          messages = failures settings;
+        in
+          messages != [] && lib.all (message: lib.hasInfix "repository settings" message && lib.hasInfix key message) messages;
+        valid = {
+          autoTier = "balance";
+          companyAnnouncements = ["Read CONTRIBUTING.md"];
+          contextTier = "long_context";
+          deniedUrls = ["https://example.invalid"];
+          disableAllHooks = false;
+          disabledMcpServers = ["probe"];
+          disabledSkills = ["probe"];
+          effortLevel = "high";
+          enabledPlugins.probe = true;
+          extraKnownMarketplaces.probe.source = {
+            repo = "owner/repo";
+            source = "github";
+          };
+          hooks.sessionStart = [];
+          includeCoAuthoredBy = true;
+          mergeStrategy = "rebase";
+          model = "gpt-5";
+          respectGitignore = true;
+        };
+      in
+        failures valid
+        == []
+        && rejects "theme" {theme = "github";}
+        && rejects "contextTier" {contextTier = "huge";}
+        && rejects "respectGitignore" {respectGitignore = "yes";}
+        && rejects "enabledPlugins" {enabledPlugins.probe = "yes";}
+        && rejects "hooks" {hooks.sessionStart = "echo";}
+        && rejects "effortLevel" {effortLevel = 5;}
+        && (settingsDocument (evalHm {
+          ai.copilot = {
+            enable = true;
+            native.settings.theme = "github";
+          };
+        }))
+        .value
+        == {theme = "github";}
+    );
+
+    # Copilot resolves the repository settings path against the git root of
+    # the directory it runs in (`gitFindRootWithOptionalWorktreeResolution`,
+    # which answers a linked worktree's own top level). A devenv root below
+    # the git root therefore writes a file Copilot never opens, so the
+    # module warns, naming the option. Equal roots, and a project devenv
+    # reports no git root for, stay silent.
+    module-copilot-devenv-warns-below-git-root = mkTest "copilot-devenv-warns-below-git-root" (
+      let
+        warnings = extra:
+          (evalDevenv ({
+              ai.copilot = {
+                enable = true;
+                native.settings.model = "gpt-5";
+              };
+              devenv.root = "/repo/services/api";
+            }
+            // extra))
+          .config
+          .warnings;
+        named = lib.any (warning: lib.hasInfix "ai.copilot.native.settings" warning && lib.hasInfix "/repo/services/api" warning);
+      in
+        named (warnings {git.root = "/repo";})
+        && !named (warnings {git.root = "/repo/services/api";})
+        && !named (warnings {git.root = null;})
     );
 
     module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (

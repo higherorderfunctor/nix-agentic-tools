@@ -247,30 +247,71 @@
         suffix = ".action.prompt";
       }
     ]
-    ++ lib.concatMap (runtime: [
-      {
-        inherit runtime;
-        path = ["ai" "settings" "reasoningEffort"];
-        value = "high";
-      }
-      {
-        inherit runtime;
-        path = ["ai" runtime "settings" "reasoningEffort"];
-        value = "high";
-      }
-    ]) ["copilot" "kiro"];
-  # Runtimes that lower reasoning effort natively must stay silent about it on
-  # both backends: a warning there would claim a gap the factory closes.
-  loweredEffortSilent = lib.all (mode:
-    lib.all (runtime:
-      lib.all (path:
-        evaluate mode (lib.recursiveUpdate {ai.${runtime}.enable = true;} (lib.setAttrByPath path "high"))
-        == [])
-      [
+    # Copilot's devenv delivery is partial: the repository `effortLevel` it
+    # lowers to reaches only the interactive session, because `-p`, `--acp`
+    # and `--server` read effort from the user settings file. So the request
+    # warns at whichever path supplied it.
+    ++ map (path: {
+      runtime = "copilot";
+      inherit path;
+      value = "high";
+    }) [
+      ["ai" "settings" "reasoningEffort"]
+      ["ai" "copilot" "settings" "reasoningEffort"]
+    ];
+  # Effort stays silent wherever the factory closes the gap or the runtime has
+  # no per-runtime remedy. Kimchi lowers losslessly on both backends, and
+  # Copilot on Home Manager, whose user file every mode reads. Copilot on
+  # devenv is silent once the consumer withholds the native value, which is
+  # the remedy its warning names. Kiro persists effort only per model, so it
+  # declares no normalized settings pool, and a bare root value for an
+  # unsupported pool does not warn (packages/kiro-cli/checks:
+  # kiro-settings-pool-excluded).
+  effortSilent = lib.all ({
+    runtime,
+    modes,
+    paths,
+    extra ? {},
+  }:
+    lib.all (mode:
+      lib.all (path: let
+        enabled = lib.recursiveUpdate {ai.${runtime}.enable = true;} extra;
+      in
+        evaluate mode (lib.recursiveUpdate enabled (lib.setAttrByPath path "high"))
+        == evaluate mode enabled)
+      paths)
+    modes) [
+    {
+      runtime = "copilot";
+      modes = ["hm"];
+      paths = [
         ["ai" "settings" "reasoningEffort"]
-        ["ai" runtime "settings" "reasoningEffort"]
-      ])
-    ["kimchi"]) ["devenv" "hm"];
+        ["ai" "copilot" "settings" "reasoningEffort"]
+      ];
+    }
+    {
+      runtime = "copilot";
+      modes = ["devenv"];
+      paths = [
+        ["ai" "settings" "reasoningEffort"]
+        ["ai" "copilot" "settings" "reasoningEffort"]
+      ];
+      extra.ai.copilot.native.settings.effortLevel = null;
+    }
+    {
+      runtime = "kimchi";
+      modes = ["devenv" "hm"];
+      paths = [
+        ["ai" "settings" "reasoningEffort"]
+        ["ai" "kimchi" "settings" "reasoningEffort"]
+      ];
+    }
+    {
+      runtime = "kiro";
+      modes = ["devenv" "hm"];
+      paths = [["ai" "settings" "reasoningEffort"]];
+    }
+  ];
   # Copilot and Kiro both render an LSP server's `extensions` (Copilot as
   # `fileExtensions`, Kiro as `file_extensions`), on both backends and at both
   # the root and the per-runtime path, so no warning may name that field: it
@@ -386,7 +427,7 @@ in {
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
-      && lib.assertMsg loweredEffortSilent "a runtime that lowers reasoning effort natively still warns about it"
+      && lib.assertMsg effortSilent "reasoning effort warns where the factory closes the gap or no per-runtime remedy exists"
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
     );
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (

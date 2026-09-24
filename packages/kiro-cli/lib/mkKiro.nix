@@ -1171,13 +1171,17 @@ in
     name = "kiro";
     contextFilename = "AGENTS.md";
     ruleModule = aiCommon.kiroRuleModule;
+    # No "settings": Kiro persists effort only inside per-model
+    # `chat.modelDefaults` records, so the normalized pool has no lossless
+    # target and declares no `ai.kiro.settings` (see docs/settings-shape.md).
+    # Like any unsupported pool, the root `ai.settings.reasoningEffort` is
+    # ignored for Kiro without a warning: nothing per-runtime could silence it.
     supportedPools = [
       "context"
       "environmentVariables"
       "lspServers"
       "mcpServers"
       "rules"
-      "settings"
       "shell"
       "skills"
     ];

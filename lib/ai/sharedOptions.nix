@@ -242,10 +242,15 @@ in {
       description = ''
         Typed settings whose values preserve the same meaning across multiple
         AI runtimes. Each `ai.<runtime>.settings` field narrows this root
-        default when non-null. The current `reasoningEffort` field lowers to
-        Claude `effortLevel`, Codex `model_reasoning_effort` and Kimchi
-        `defaultThinkingLevel`; the enum is their exact persisted semantic
-        intersection. On devenv, Kimchi's value lands in the project
+        default when non-null; Kiro declares none, because it persists effort
+        only per model, and ignores the root value without a warning. The current `reasoningEffort` field lowers to
+        Claude `effortLevel`, Codex `model_reasoning_effort`, Copilot
+        `effortLevel` and Kimchi `defaultThinkingLevel`; the enum is their
+        exact persisted semantic intersection. On devenv, Copilot's value
+        lands in the repository `.github/copilot/settings.json`, which
+        Copilot reads from the git root, only in a trusted folder, and whose
+        `effortLevel` reaches interactive sessions but not `copilot -p`,
+        `--acp` or `--server`; the module warns there. Kimchi's lands in the project
         `.config/kimchi/harness/settings.json`, so setting it here makes Kimchi
         project-trust-gated for that setting and makes the devenv wrapper
         refuse launches below the devenv root, exactly as any declared
