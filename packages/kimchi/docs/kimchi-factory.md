@@ -422,9 +422,9 @@ transforms do not apply to it.
 ## Shared prep
 
 `mkPrep` (top-level `let`) builds the wrapped launcher from the effective env,
-the credential export and, on devenv, the exact-cwd guard. Both `installPackage`
-hooks call it; the delivery function computes its own filtered settings and
-context entry, because it never installs the package.
+the credential export and, on devenv, the exact-cwd guard. The one record-level
+`installPackage` calls it; the delivery function computes its own filtered
+settings and context entry, because it never installs the package.
 
 ## Source packaging
 
