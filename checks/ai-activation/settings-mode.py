@@ -202,12 +202,64 @@ def race(parent, repeated):
             fail(label, f"the retry dropped the declared leaf: {document}")
 
 
+def activate(home, label):
+    """Run the gate-closed activation entries of the real modules."""
+    result = subprocess.run(
+        [TOOLS["bash"], TOOLS["gateClosed"]],
+        env=home.environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        fail(label, f"activation exited {result.returncode}: {result.stderr}")
+
+
+def gate_closed(parent):
+    """5. A credential file an earlier generation widened to 0644 must be
+    narrowed even when no merge runs. Runtimes preserve the existing mode on
+    rewrite, so nothing else would ever close it again."""
+    home = Home(parent, "gate-closed")
+    files = {
+        ".claude.json": '{"oauthAccount":"token"}',
+        TOOLS["kimchiConfig"]: '{"apiKey":"secret"}',
+    }
+    for name, content in files.items():
+        path = home.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        path.chmod(0o644)
+    activate(home, "gate closed")
+    for name, content in files.items():
+        path = home.root / name
+        if mode_of(path) != 0o600:
+            fail("gate closed", f"~/{name} left at mode {mode_of(path):o}, expected 600")
+        # Narrowing must not rewrite what the runtime wrote.
+        if path.read_text() != content:
+            fail("gate closed", f"~/{name} was rewritten: {path.read_text()!r}")
+
+
+def guarded(parent):
+    """6. The narrowing is guarded: a missing file must not fail activation,
+    and a symlink (a Home Manager store link, say) is not ours to chmod."""
+    home = Home(parent, "guarded")
+    linked = home.root / "linked.json"
+    linked.write_text("{}")
+    linked.chmod(0o644)
+    (home.root / ".claude.json").symlink_to("linked.json")
+    activate(home, "guards")
+    if mode_of(linked) != 0o644:
+        fail("symlink", f"activation changed a symlink target's mode to {mode_of(linked):o}")
+
+
 def main():
     with tempfile.TemporaryDirectory() as parent:
         for case in (created, existing, discrimination):
             case(parent)
         for repeated in (False, True):
             race(parent, repeated)
+        gate_closed(parent)
+        guarded(parent)
     print("PASS: ai-activation settings mode")
 
 

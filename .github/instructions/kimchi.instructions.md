@@ -7,7 +7,7 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-23 — the package builds from the release source
+> **Last verified:** 2026-09-24 — the package builds from the release source
 > that the extractor also reads, one pin for both, with pinned pnpm and Go
 > dependencies; `ai.kimchi.native.settings` and `native.harnessSettings` are
 > closed option trees generated from `extracted.json` by `lib/extracted.nix`;
@@ -23,7 +23,8 @@ applyTo: "packages/kimchi/**"
 > reconcile by leaf through the shared delivery router; agents are owned
 > writable copies, copied from a store-path string as from a path; portable
 > hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
-> `trust.json.lock`. Full lineage:
+> `trust.json.lock`; an ungated HM `kimchiConfigMode` writer narrows the
+> credential-bearing user `config.json` to owner-only. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -206,13 +207,19 @@ All four files, and `trust.json` on Home Manager, state
 `facts.harnessWrites = true`, and every writer survives an empty declaration on
 either backend, so removing the last MCP server retracts it. HM uses `$HOME` and
 XDG state; devenv uses `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`. New
-documents are 0600 and existing regular files retain their modes. Empty settings
-on either document release all owned leaves: every typed sub-option defaults to
-null or `{}`, and `filterNulls` recurses. `skillPaths` in particular defaults to
-null, because 1.1.30 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
-(`src/config.ts:526`), so a project `[]` would replace the user's global skill
-paths; an explicit list, empty included, still lands. Locked by
-`module-kimchi-skill-paths-inherit`.
+documents are 0600 and existing regular files retain their modes. The user
+`config.json` holds `apiKey` and `gitTokens`, and the merge writer touches it
+only while it declares a leaf, so a file an earlier generation widened to 0644
+would stay that way under empty settings. HM therefore also declares
+`kimchiConfigMode`, a `command` writer from `helpers.mkCredentialModeWriter`
+that strips group and other access from a regular file on every activation
+(skipping a symlink or a missing file). Locked by `ai-activation-settings-mode`
+(gate-closed and guard cases). Empty settings on either document release all
+owned leaves: every typed sub-option defaults to null or `{}`, and `filterNulls`
+recurses. `skillPaths` in particular defaults to null, because 1.1.30 reads
+`projectExtras.skillPaths ?? globalExtras.skillPaths` (`src/config.ts:526`), so
+a project `[]` would replace the user's global skill paths; an explicit list,
+empty included, still lands. Locked by `module-kimchi-skill-paths-inherit`.
 
 `ai.kimchi.permissions` mirrors Kimchi's `.strict()` zod schema key for key
 (`src/extensions/permissions/config.ts:11-19`) with no freeform tail, because

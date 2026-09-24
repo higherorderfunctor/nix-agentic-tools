@@ -8,7 +8,8 @@
 > rules are read-only copies whose writers survive a disable. Copilot reconciles
 > settings.json on HM only. Native file settings live under
 > `ai.<runtime>.native`. Each devenv factory publishes its shared AGENTS.md key
-> in `ai.internal.agentsMdTargets`.
+> in `ai.internal.agentsMdTargets`. Claude's `.claude.json` has an ungated
+> mode-narrowing command writer beside its unpin ledger.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -101,7 +102,10 @@
   devenv's `claude.code.mcpServers` integration is outside those roots and
   retains its native delegation. Claude's user-global `.claude.json` instead
   claims the existing JSON ledger under `claudeUnpinLaunchEffort`; its writer
-  survives empty declarations and remains Home Manager only.
+  survives empty declarations and remains Home Manager only. Because that writer
+  touches the file only while it declares a flag, an ungated `claudeConfigMode`
+  command writer narrows the token-bearing file to owner-only on every
+  activation.
 - **Writers belong beside the file map.** Codex's user `config.toml` claims a
   TOML ledger because the trust prompt writes native state there; project config
   remains a generated source. Its skill-link migrator owns no ledger and uses

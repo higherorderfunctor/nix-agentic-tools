@@ -728,6 +728,8 @@ in
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       isHm = backend == "hm";
+      # Claude's own state file, holding account tokens beside the unpin flags.
+      claudeJson = ".claude.json";
       unpinLedger = "json-settings/claude-unpin-launch-effort.json";
       upstream = path: sink: value: {
         ai.claude.files.${path} = {
@@ -878,11 +880,18 @@ in
           {
             ai.claude.activation.claudeUnpinLaunchEffort.ledgers.${unpinLedger} = {
               codec = "json";
-              path = ".claude.json";
+              path = claudeJson;
+            };
+            # The unpin writer touches the file only while it declares a flag,
+            # so this narrows a file an earlier generation widened to 0644
+            # even when the flag map is empty.
+            ai.claude.activation.claudeConfigMode = helpers.mkCredentialModeWriter {
+              inherit (pkgs) coreutils;
+              path = claudeJson;
             };
           }
           {
-            ai.claude.files.".claude.json" = {
+            ai.claude.files.${claudeJson} = {
               content.value = cfg.unpinLaunchEffort;
               entry = "claudeUnpinLaunchEffort";
               facts.harnessWrites = true;
