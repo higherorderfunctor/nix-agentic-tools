@@ -815,10 +815,10 @@
       primitive = "ownPathDeclarative";
       pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
       surface = "settings";
-      target = "$DEVENV_ROOT/.config/github-copilot/settings.json";
+      target = "$DEVENV_ROOT/.github/copilot/settings.json";
       writerAttr = [
         "files"
-        ".config/github-copilot/settings.json"
+        ".github/copilot/settings.json"
       ];
     }
     {

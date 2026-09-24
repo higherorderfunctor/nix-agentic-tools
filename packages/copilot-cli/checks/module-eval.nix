@@ -187,22 +187,67 @@ in {
         && (settingsDocument result).value.model == "gpt-4"
     );
 
-    # The project copy is a static write, not a reconciled document: Copilot
-    # never opens a project-scope settings.json, so a shell-entry reconciler
-    # there would maintain bytes nothing reads. The consumer is warned instead.
-    module-copilot-devenv-settings-stay-static = mkTest "copilot-devenv-settings-stay-static" (
+    # Copilot 1.0.88 reads repository settings from the fixed
+    # `.github/copilot/settings.json` (in a trusted folder), not from
+    # `configDir` and not from a configurable `projectDir`. The devenv copy is
+    # a static write: no reconciler, no warning, and no file when nothing is
+    # declared. The old wrapper-dir path must stay empty, or a consumer reading
+    # it would believe it was delivered.
+    module-copilot-devenv-writes-repository-settings = mkTest "copilot-devenv-writes-repository-settings" (
       let
         result = evalDevenv {
           ai.copilot.enable = true;
           ai.copilot.native.settings.model = "gpt-4";
         };
-        path = ".config/github-copilot/settings.json";
+        empty = evalDevenv {ai.copilot.enable = true;};
+        path = ".github/copilot/settings.json";
       in
         builtins.fromJSON (result.config.files.${path}.text or "null")
         == {model = "gpt-4";}
+        && !(result.config.files ? ".config/github-copilot/settings.json")
+        && !(empty.config.files ? ${path})
         && result.config.ai.copilot._ownPlans == {}
         && !(result.config.tasks ? "ai:copilot:settings-merge")
-        && lib.any (lib.hasPrefix "ai.copilot.native.settings is set but devenv does not deliver it") result.config.warnings
+        && !lib.any (lib.hasInfix "ai.copilot.native.settings") result.config.warnings
+    );
+
+    # The normalized setting reaches Copilot's persisted `effortLevel` on both
+    # backends. The native override is the priority control: the derived
+    # mkDefault must not replace a consumer-authored native value, and an
+    # explicit native null suppresses it on both. A custom `projectDir` must
+    # not move the repository settings file, and a key Copilot does not accept
+    # at repository scope fails evaluation rather than being written ignored.
+    module-copilot-normalized-reasoning-effort = mkTest "copilot-normalized-reasoning-effort" (
+      let
+        path = ".github/copilot/settings.json";
+        withEffort = copilot: {
+          ai = {
+            copilot = {enable = true;} // copilot;
+            settings.reasoningEffort = "high";
+          };
+        };
+        repository = evaluated: builtins.fromJSON (evaluated.config.files.${path}.text or "null");
+        customProjectDir = evalDevenv (withEffort {projectDir = ".custom-github";});
+        unsupported = evalDevenv {
+          ai.copilot = {
+            enable = true;
+            native.settings.theme = "github";
+          };
+        };
+      in
+        (settingsDocument (evalHm (withEffort {}))).value
+        == {effortLevel = "high";}
+        && repository (evalDevenv (withEffort {})) == {effortLevel = "high";}
+        && repository (evalDevenv (withEffort {native.settings.effortLevel = "low";})) == {effortLevel = "low";}
+        && repository customProjectDir == {effortLevel = "high";}
+        && !(customProjectDir.config.files ? ".custom-github/copilot/settings.json")
+        && (settingsDocument (evalHm (withEffort {native.settings.effortLevel = null;}))).value == {}
+        && !((evalDevenv (withEffort {native.settings.effortLevel = null;})).config.files ? ${path})
+        && builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "repository settings" assertion.message
+          && lib.hasInfix "theme" assertion.message)
+        unsupported.config.assertions
     );
 
     module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (
