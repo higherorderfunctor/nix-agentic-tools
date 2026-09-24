@@ -117,9 +117,6 @@
   agentWarnings =
     lib.optionals (runtime == "codex") (lib.concatMap (entry:
         fieldWarning entry "tools" "Codex agents have no equivalent tool allowlist field.") (entries "agents"));
-  lspWarnings =
-    lib.optionals (runtime == "kiro") (lib.concatMap (entry:
-        fieldWarning entry "extensions" "Kiro has no LSP extension-to-language mapping surface.") (entries "lspServers"));
   ruleWarnings = lib.optionals (runtime == "kiro") (lib.concatMap (entry:
     lib.optional ((entry.value.inclusion or null) == "manual")
     (message (entry.path ++ ["inclusion"]) "Kiro CLI does not load manual steering; this mode only works in IDE clients.")) (entries "rules"));
@@ -186,4 +183,4 @@ in
   then []
   else
     lib.unique
-    (rowWarnings ++ effortWarnings ++ agentWarnings ++ lspWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings)
+    (rowWarnings ++ effortWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings)
