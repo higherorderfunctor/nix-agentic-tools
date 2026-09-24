@@ -102,10 +102,10 @@
   devenv's `claude.code.mcpServers` integration is outside those roots and
   retains its native delegation. Claude's user-global `.claude.json` instead
   claims the existing JSON ledger under `claudeUnpinLaunchEffort`; its writer
-  survives empty declarations and remains Home Manager only. Because that writer
-  touches the file only while it declares a flag, an ungated `claudeConfigMode`
-  command writer narrows the token-bearing file to owner-only on every
-  activation.
+  survives empty declarations and remains Home Manager only. That writer keeps
+  whatever mode it finds, whether or not it rewrites the file, so an ungated
+  `claudeConfigMode` command writer is the only thing that narrows the
+  token-bearing file to owner-only, on every activation.
 - **Writers belong beside the file map.** Codex's user `config.toml` claims a
   TOML ledger because the trust prompt writes native state there; project config
   remains a generated source. Its skill-link migrator owns no ledger and uses

@@ -159,12 +159,13 @@ in rec {
 
   # Strip group and other access from a runtime credential document, UNGATED.
   #
-  # `own.py` creates a document 0600 and then keeps whatever mode it finds, and
-  # it touches the file only when the writer declares at least one leaf. A
-  # file an earlier generation's merge widened to 0644 therefore stays 0644
-  # for as long as the declaration is empty, and the runtimes preserve the mode
-  # on every rewrite of their own. Declare this writer for every document that
-  # carries credentials, whatever its settings.
+  # `own.py` creates a document 0600 and then keeps whatever mode it finds,
+  # whether it rewrites the file (a non-empty declaration) or leaves it alone
+  # (an empty one). A file an earlier generation's merge widened to 0644
+  # therefore stays 0644 under every declaration, and the runtimes preserve the
+  # mode on every rewrite of their own, so this writer is the only thing that
+  # narrows it. Declare it for every document that carries credentials, and
+  # never gate it on the declaration.
   #
   # A symlink is skipped: it is Home Manager's or the user's to own, and a
   # store target would make chmod fail and abort activation. Home Manager only:

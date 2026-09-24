@@ -202,18 +202,20 @@ All four files, and `trust.json` on Home Manager, state
 either backend, so removing the last MCP server retracts it. HM uses `$HOME` and
 XDG state; devenv uses `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`. New
 documents are 0600 and existing regular files retain their modes. The user
-`config.json` holds `apiKey` and `gitTokens`, and the merge writer touches it
-only while it declares a leaf, so a file an earlier generation widened to 0644
-would stay that way under empty settings. HM therefore also declares
-`kimchiConfigMode`, a `command` writer from `helpers.mkCredentialModeWriter`
-that strips group and other access from a regular file on every activation
-(skipping a symlink or a missing file). Locked by `ai-activation-settings-mode`
-(gate-closed and guard cases). Empty settings on either document release all
-owned leaves: every typed sub-option defaults to null or `{}`, and `filterNulls`
-recurses. `skillPaths` in particular defaults to null, because 1.1.30 reads
-`projectExtras.skillPaths ?? globalExtras.skillPaths` (`src/config.ts:526`), so
-a project `[]` would replace the user's global skill paths; an explicit list,
-empty included, still lands. Locked by `module-kimchi-skill-paths-inherit`.
+`config.json` holds `apiKey` and `gitTokens`, and the merge writer keeps an
+existing file's mode whether or not it rewrites it, so a file an earlier
+generation widened to 0644 would stay that way with or without settings. HM
+therefore also declares `kimchiConfigMode`, a `command` writer from
+`helpers.mkCredentialModeWriter` that strips group and other access from a
+regular file on every activation (skipping a symlink or a missing file). It is
+the only thing that narrows the file. Locked by `ai-activation-settings-mode`
+(both gate states and the guard case). Empty settings on either document release
+all owned leaves: every typed sub-option defaults to null or `{}`, and
+`filterNulls` recurses. `skillPaths` in particular defaults to null, because
+1.1.30 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
+(`src/config.ts:526`), so a project `[]` would replace the user's global skill
+paths; an explicit list, empty included, still lands. Locked by
+`module-kimchi-skill-paths-inherit`.
 
 `ai.kimchi.permissions` mirrors Kimchi's `.strict()` zod schema key for key
 (`src/extensions/permissions/config.ts:11-19`) with no freeform tail, because

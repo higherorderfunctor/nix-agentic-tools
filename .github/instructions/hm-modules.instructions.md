@@ -279,16 +279,18 @@ moves no bytes. Exactly one target states one (kiro's merge-mode
 `settings/mcp.json`, whose file a sibling target in the same bundle also
 writes); everything else leaves the field out.
 
-A document that carries credentials needs more than that. A writer touches its
-document only while it declares a leaf, so a file an earlier generation widened
-to 0644 stays 0644 for as long as the declaration is empty, and the runtimes
-keep the mode on their own rewrites. So each such document also gets an ungated
-`command` writer from `helpers.mkCredentialModeWriter`, which strips group and
-other access from a regular file on every activation and skips a symlink or a
-missing file: `claudeConfigMode` for `~/.claude.json`, `kimchiConfigMode` for
-Kimchi's user `config.json`. Home Manager only. Locked by
-`ai-activation-settings-mode`, which renders the real modules with both
-declarations empty.
+A document that carries credentials needs more than that. Because an existing
+file keeps its mode, a file an earlier generation widened to 0644 stays 0644
+whether the writer rewrites it (a non-empty declaration) or leaves it alone (an
+empty one), and the runtimes keep the mode on their own rewrites. So each such
+document also gets an ungated `command` writer from
+`helpers.mkCredentialModeWriter`, the only thing that narrows it: it strips
+group and other access from a regular file on every activation and skips a
+symlink or a missing file. `claudeConfigMode` covers `~/.claude.json`, and
+`kimchiConfigMode` covers Kimchi's user `config.json`. Home Manager only. Locked
+by `ai-activation-settings-mode`, which renders the real modules in both gate
+states, a non-empty declaration and an empty one, so a writer gated on either
+fails.
 
 Every target, unit, mode, ledger name and byte of content travels as DATA in a
 store-resident plan, so none of it is interpolated into generated shell — and
