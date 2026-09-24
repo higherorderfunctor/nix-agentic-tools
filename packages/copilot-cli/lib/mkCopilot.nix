@@ -338,25 +338,18 @@ in
         # ownership it leaves an externally managed file untouched — which is
         # what a consumer enabling Copilot purely for MCP or skills fanout
         # needs, and what keeps a committed team file intact.
-        {
-          ai.copilot.activation.copilotSettingsMerge = {
-            entry = {
-              devenv = "ai:copilot:settings-merge";
-              hm = "copilotSettingsMerge";
-            };
-            ledgers.${settingsLedger} = {
-              codec = "json";
-              path = settingsPath;
-            };
+        (helpers.mkReconciledDocument {
+          content.value = settings;
+          entry = {
+            devenv = "ai:copilot:settings-merge";
+            hm = "copilotSettingsMerge";
           };
-          ai.copilot.files.${settingsPath} = {
-            content.value = settings;
-            entry = "copilotSettingsMerge";
-            facts.harnessWrites = true;
-            format = "json";
-            ledger = settingsLedger;
-          };
-        }
+          format = "json";
+          ledger = settingsLedger;
+          path = settingsPath;
+          runtime = "copilot";
+          writer = "copilotSettingsMerge";
+        })
 
         # The repository schema is narrower than the user one. A name outside
         # it has no effect and a mistyped value voids the whole file, so both

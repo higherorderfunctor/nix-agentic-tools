@@ -1,7 +1,7 @@
 # Shared helpers for AI CLI modules (copilot-cli, kiro-cli, devenv).
 #
-# Provides skill delivery entries and the `own` bundle builder that records
-# reconciliation plans.
+# Provides skill delivery entries, reconciled documents, and the `own` bundle
+# builder that records reconciliation plans.
 {lib}: let
   own = import ./own.nix {inherit lib;};
 in {
@@ -105,6 +105,42 @@ in {
     else
       record
       // {inherit (owned.config) enterTest tasks;};
+
+  # One reconciled document: the writer owning its ledger plus the file entry
+  # claiming it. Both are emitted for empty content too, because the ledger on
+  # the writer is what retracts the previous generation's leaves. `entry` and
+  # `ledger` are upgrade contracts: callers pass literals, nothing is derived.
+  # `content` (`value` or `run`) never states `enable`, whose `false` would
+  # suppress the whole entry. `format` is also the ledger codec; a null
+  # `entry` takes the writer's key.
+  mkReconciledDocument = {
+    content,
+    entry ? null,
+    format,
+    ledger,
+    lock ? null,
+    path,
+    runtime,
+    writer,
+  }: {
+    ai.${runtime} = {
+      activation.${writer} =
+        lib.optionalAttrs (entry != null) {inherit entry;}
+        // {
+          ledgers.${ledger} =
+            {
+              codec = format;
+              inherit path;
+            }
+            // lib.optionalAttrs (lock != null) {inherit lock;};
+        };
+      files.${path} = {
+        inherit content format ledger;
+        entry = writer;
+        facts.harnessWrites = true;
+      };
+    };
+  };
 
   # Strip group and other access from a runtime credential document, UNGATED.
   #

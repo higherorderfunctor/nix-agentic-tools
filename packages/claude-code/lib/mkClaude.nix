@@ -845,28 +845,23 @@ in
             };
           }
           # Claude writes native state (including OAuth tokens) here. Own
-          # only the unpin leaves and retain the writer when they are empty.
-          # This user-global operation never runs from a project shell.
+          # only the unpin leaves. This user-global operation never runs from
+          # a project shell.
+          (helpers.mkReconciledDocument {
+            content.value = cfg.unpinLaunchEffort;
+            format = "json";
+            ledger = unpinLedger;
+            path = claudeJson;
+            runtime = "claude";
+            writer = "claudeUnpinLaunchEffort";
+          })
           {
-            ai.claude.activation.claudeUnpinLaunchEffort.ledgers.${unpinLedger} = {
-              codec = "json";
-              path = claudeJson;
-            };
             # The unpin writer keeps an existing file's mode whether or not it
             # rewrites it, so this is the only thing that narrows a file an
             # earlier generation widened to 0644, with or without flags.
             ai.claude.activation.claudeConfigMode = helpers.mkCredentialModeWriter {
               inherit (pkgs) coreutils;
               path = claudeJson;
-            };
-          }
-          {
-            ai.claude.files.${claudeJson} = {
-              content.value = cfg.unpinLaunchEffort;
-              entry = "claudeUnpinLaunchEffort";
-              facts.harnessWrites = true;
-              format = "json";
-              ledger = unpinLedger;
             };
           }
         ]))
