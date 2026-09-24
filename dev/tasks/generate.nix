@@ -184,7 +184,8 @@ in {
     # from shell entry, so keeping this materializer idempotent is what makes
     # instruction freshness cheap enough to retain on every activation.
     #
-    # after devenv:files:cleanup — cleanup deletes paths dropped from
+    # after devenv:files — AGENTS.md is seeded from the same source before
+    # this materializer updates it. Cleanup deletes paths dropped from
     # files.*, so running after it repairs any such deletion within the
     # same shell entry. The migration can never leave the tree short a
     # gitignored file.
@@ -198,7 +199,7 @@ in {
     # staying true, and the content is already a treefmt fixed point.
     "generate:instructions:materialize" = {
       description = "Materialize generated instruction files on shell entry";
-      after = ["devenv:files:cleanup"];
+      after = ["devenv:files"];
       before = ["devenv:enterShell"];
       exec = materialize "all";
     };

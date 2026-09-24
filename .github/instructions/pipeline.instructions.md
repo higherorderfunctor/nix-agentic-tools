@@ -428,10 +428,9 @@ validation.
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-20 — the root instruction composition includes the
-> delegate-sizing stub alongside the published coding and workflow rules. The
-> Codex named-profile materializer cited below was removed as unreachable dead
-> code.
+> **Last verified:** 2026-09-23 — repository AGENTS.md registers native seed
+> ownership before atomic materialization, and redundant module projections are
+> suppressed.
 
 Content is generated via Nix derivations wrapped in devenv tasks, organized by
 scope:
@@ -479,7 +478,11 @@ tasks are separate from the repository instruction generator described here.
 
 Repository-generated instruction projections are the exception: they are
 **copies**, not symlinks, materialized on every shell entry by
-`generate:instructions:materialize` (`before = ["devenv:enterShell"]`).
+`generate:instructions:materialize` after `devenv:files` and before shell entry.
+AGENTS.md also registers `copyMode = "seed"` from the same generated source,
+preserving existing regular files while handing off the old symlink delivery
+ledger. The materializer still owns updates and directory pruning;
+project-specific final-file content disables suppress redundant module output.
 Git-tracked outputs cannot be symlinks, since a store symlink commits as an
 absolute `/nix/store` path. This is separate from consumer module delivery:
 normalized runtime context/rules enter `ai.<runtime>.files` and lower to
