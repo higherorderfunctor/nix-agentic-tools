@@ -27,7 +27,10 @@
         text = "kiro probe";
       };
       enable = true;
-      lspServers.probe.command = "probe";
+      lspServers.probe = {
+        command = "probe";
+        extensions = ["nix"];
+      };
     };
     # Consumer-declared, inside a runtime's own config directory. The delivery
     # manifest must not claim it.

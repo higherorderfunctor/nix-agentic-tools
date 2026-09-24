@@ -333,7 +333,18 @@
     if lib.length hits == 1
     then lib.head hits
     else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
+  # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
+  # Null unless `envelope` is the file's ONLY top-level key, so a bare
+  # per-server map (which Copilot and Kiro both reject) never matches.
+  # `fromJSON` refuses a string carrying store-path context, which a
+  # `package`-resolved command adds.
+  lspEntryOf = envelope: file: server: let
+    json = builtins.fromJSON (builtins.unsafeDiscardStringContext file.text);
+  in
+    if file != null && lib.attrNames json == [envelope]
+    then json.${envelope}.${server} or null
+    else null;
 in {
-  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmStubs mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   inherit testing;
 }

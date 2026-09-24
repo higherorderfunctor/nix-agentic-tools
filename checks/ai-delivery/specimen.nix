@@ -12,7 +12,10 @@
         context.text = "probe";
         environmentVariables.PROBE = "value";
         hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-        lspServers.probe.command = "true";
+        lspServers.probe = {
+          command = "true";
+          extensions = ["nix"];
+        };
         mcpServers.probe.command = "true";
         rules.probe.text = "probe";
         rules.scoped = {
