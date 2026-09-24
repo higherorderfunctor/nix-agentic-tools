@@ -19,13 +19,13 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, and Kimchi; authored prose
-> and final delivery share one priority-aware text-source record with enable
-> semantics. Upstream delegation aliases the content field's own definitions.
-> Ledger-owned copies whose files nothing else retracts opt into
-> `runWhenDisabled`. `ai.lspServers` renders whole files with each runtime's
-> envelope, Copilot/Kiro require `extensions`, and Copilot constrains server
-> names.
+> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
+> declares no normalized settings pool; authored prose and final delivery share
+> one priority-aware text-source record with enable semantics. Upstream
+> delegation aliases the content field's own definitions. Ledger-owned copies
+> whose files nothing else retracts opt into `runWhenDisabled`. `ai.lspServers`
+> renders whole files with each runtime's envelope, Copilot/Kiro require
+> `extensions`, and Copilot constrains server names.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -289,16 +289,20 @@ The ai module fans out TWO kinds of configuration:
 enabled ecosystem whose native model preserves the option's semantics):
 
 - `ai.settings.reasoningEffort` — the root portable `low` / `medium` / `high` /
-  `xhigh` value. Every runtime exposes the same field at
-  `ai.<runtime>.settings.reasoningEffort`; a non-null per-runtime value wins for
-  only that runtime, while null inherits the root through `resolveOverride`.
-  Claude, Codex, and Kimchi lower the resolved value to native `effortLevel`,
-  `model_reasoning_effort`, and harness `defaultThinkingLevel`, respectively;
-  runtimes without a lossless lowering emit no native key, and
-  `lib/ai/delivery-warnings.nix` warns that the value is inert there. Values
-  that only one runtime persists remain under that runtime's native settings. An
-  explicit native effort key still has normal option priority over the derived
-  normalized default, and a native null excludes that runtime from emission.
+  `xhigh` value. Every runtime that supports the normalized `settings` pool
+  exposes the same field at `ai.<runtime>.settings.reasoningEffort`; a non-null
+  per-runtime value wins for only that runtime, while null inherits the root
+  through `resolveOverride`. Claude, Codex, Copilot and Kimchi lower the
+  resolved value to native `effortLevel`, `model_reasoning_effort`,
+  `effortLevel` and harness `defaultThinkingLevel`, respectively. Kiro has no
+  lossless target, so it declares no pool and ignores the root value without a
+  warning, like any unsupported pool. Copilot's devenv lowering is the one
+  partial delivery: the repository `effortLevel` reaches only its interactive
+  session, so `lib/ai/delivery-warnings.nix` warns there until the native value
+  is withheld with null. Values that only one runtime persists remain under that
+  runtime's native settings. An explicit native effort key still has normal
+  option priority over the derived normalized default, and a native null
+  excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
@@ -1191,10 +1195,11 @@ path types".
 > from the layer for every runtime's files. Normalized pools carry only a
 > text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
 > rules are read-only copies whose writers survive a disable. Copilot reconciles
-> settings.json on HM only; its devenv settings are a static write to
-> `.github/copilot/settings.json`. Kiro excludes the normalized `settings` pool.
-> Native file settings live under `ai.<runtime>.native`. Each devenv factory
-> publishes its shared AGENTS.md key in `ai.internal.agentsMdTargets`.
+> its user settings.json on HM and the repository
+> `.github/copilot/settings.json` on devenv. Kiro excludes the normalized
+> `settings` pool. Native file settings live under `ai.<runtime>.native`. Each
+> devenv factory publishes its shared AGENTS.md key in
+> `ai.internal.agentsMdTargets`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1309,11 +1314,11 @@ path types".
   `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
   `enterTest`. Empty declarations retain their writers so prior leaves can be
   retracted. Existing file modes and unowned leaves survive; a new file is 0600.
-  The fact is per backend when the CLI writes only one copy. Copilot's user
-  settings.json has an HM-only writer; devenv writes the repository file
-  `.github/copilot/settings.json` statically, omitted when nothing is declared.
-  Codex's project config remains a static source because its native writer is
-  user-scoped.
+  The fact is per backend when the CLI writes only one copy. Copilot writes both
+  of its settings copies (`/model`, `/settings` and their `--repo` forms), so
+  one writer, `copilotSettingsMerge`, reconciles the user settings.json on HM
+  and the repository `.github/copilot/settings.json` on devenv. Codex's project
+  config remains a static source because its native writer is user-scoped.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON/TOML ledger, even without a

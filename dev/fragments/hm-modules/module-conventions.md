@@ -5,13 +5,12 @@
 > `native.harnessSettings`). Shared documents, each declared by
 > `facts.harnessWrites` (no factory calls `helpers.mkOwnedDocument`), reconcile
 > owned leaves through `lib/ai/own.{nix,py}` on HM activation and devenv shell
-> entry where the CLI writes that copy (Copilot's user settings.json on HM only;
-> devenv writes its repository settings statically), a fully retracted empty
-> document is deleted, a document may name its native writer's lock, document
-> targets may enforce modes, and the delivery-path parity example uses
-> `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile` /
-> `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
-> (one entry).
+> entry where the CLI writes that copy (Copilot's user settings.json on HM, its
+> repository settings on devenv), a fully retracted empty document is deleted, a
+> document may name its native writer's lock, document targets may enforce
+> modes, and the delivery-path parity example uses `ai.codex.execpolicyRules`.
+> The shared LSP producers are `mkKiroLspFile` / `mkCopilotLspFile` (whole
+> files, envelope included) and `mkClaudeLspConfig` (one entry).
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -219,15 +218,14 @@ reconciles the leaves it owns. A factory says so by stating
 `facts.harnessWrites` on the file and naming the `ai.<runtime>.activation`
 writer whose ledger claims it; the rule resolves that to `shared` and
 `lib/ai/deliver.nix` builds the `lib/ai/own.nix` bundle that `lib/ai/own.py`
-runs. Kiro declares its settings writer on both backends: HM emits activation
-entries, while devenv emits tasks under `$DEVENV_ROOT` with ledgers under
-`$DEVENV_STATE/nix-agentic-tools`. Copilot's is HM-only: devenv delivers its
-settings to the repository file `.github/copilot/settings.json` as a static
-write, omitted when nothing is declared. Declared leaves are asserted, a leaf
-the previous generation declared and this one DROPPED is retracted, and every
-unowned sibling — a runtime-written `trusted_folders`, an oauth token — is left
-alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no way to
-tell a native key from a Nix key that was deleted.
+runs. Kiro and Copilot declare their settings writers on both backends: HM emits
+activation entries, while devenv emits tasks under `$DEVENV_ROOT` with ledgers
+under `$DEVENV_STATE/nix-agentic-tools`. Copilot's devenv copy is the repository
+file `.github/copilot/settings.json`, which its `--repo` commands also write.
+Declared leaves are asserted, a leaf the previous generation declared and this
+one DROPPED is retracted, and every unowned sibling — a model or theme picked
+inside the CLI — is left alone. A blind `jq -s '.[0] * .[1]'` cannot do the
+middle one: it has no way to tell a native key from a Nix key that was deleted.
 
 A target that stops declaring anything deletes its document when the retraction
 leaves it serializing to an empty object: every byte was ours. Leaving `{}`

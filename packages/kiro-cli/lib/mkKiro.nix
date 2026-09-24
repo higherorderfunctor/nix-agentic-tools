@@ -1174,7 +1174,8 @@ in
     # No "settings": Kiro persists effort only inside per-model
     # `chat.modelDefaults` records, so the normalized pool has no lossless
     # target and declares no `ai.kiro.settings` (see docs/settings-shape.md).
-    # The root `ai.settings.reasoningEffort` still warns for Kiro.
+    # Like any unsupported pool, the root `ai.settings.reasoningEffort` is
+    # ignored for Kiro without a warning: nothing per-runtime could silence it.
     supportedPools = [
       "context"
       "environmentVariables"
