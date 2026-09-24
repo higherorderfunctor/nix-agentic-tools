@@ -6,9 +6,16 @@
 # are shared namespaces: a consumer may declare `files.".codex/notes.md"` of
 # their own, and classifying it by prefix made this module report a retention
 # warning naming an `ai.*` option that never wrote the file. The managed set is
-# therefore the runtime's own file registry, the shared AGENTS.md registry, and
-# the literal targets the delivery policy declares — plus, for the templated
-# `<name>` targets, only the directory stem the policy itself claims.
+# therefore the runtime's own file registry and the literal targets the
+# delivery policy declares — plus, for the templated `<name>` targets, only the
+# directory stem the policy itself claims.
+#
+# The shared AGENTS.md owner (`ai.internal.files`) is not read here. Each
+# runtime's own key already arrives through its policy `AGENTS.md` writer,
+# rebased onto `context.filename`, and a public override on it is already in
+# the runtime's `files`. Reading the whole owner per runtime attributed every
+# runtime's key to the first one listed, so Kiro's context file was reported
+# as `ai.codex.files`.
 {
   config,
   lib,
@@ -75,7 +82,6 @@
         ++ ["ai.${runtime}.files.${builtins.toJSON name}"]);
     names =
       builtins.attrNames (cfg.files or {})
-      ++ lib.optionals (builtins.elem runtime ["codex" "kiro"]) (builtins.attrNames config.ai.internal.files)
       ++ map (entry: entry.target) (lib.filter (entry: !(templated entry)) targets);
   in
     lib.optionals (cfg.enable or false) (map (name: {
