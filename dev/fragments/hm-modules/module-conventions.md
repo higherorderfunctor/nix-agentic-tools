@@ -8,8 +8,9 @@
 > entry where the CLI writes that copy (Copilot's settings.json on HM only), a
 > fully retracted empty document is deleted, a document may name its native
 > writer's lock, document targets may enforce modes, a document is published by
-> compare-and-swap against unlocked runtime writers, and the delivery-path
-> parity example uses `ai.codex.execpolicyRules`.
+> compare-and-swap against unlocked runtime writers, credential documents get an
+> ungated mode-narrowing command writer, and the delivery-path parity example
+> uses `ai.codex.execpolicyRules`.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -270,6 +271,17 @@ target states a `mode`, which is then imposed on every write and on the run that
 moves no bytes. Exactly one target states one (kiro's merge-mode
 `settings/mcp.json`, whose file a sibling target in the same bundle also
 writes); everything else leaves the field out.
+
+A document that carries credentials needs more than that. A writer touches its
+document only while it declares a leaf, so a file an earlier generation widened
+to 0644 stays 0644 for as long as the declaration is empty, and the runtimes
+keep the mode on their own rewrites. So each such document also gets an ungated
+`command` writer from `helpers.mkCredentialModeWriter`, which strips group and
+other access from a regular file on every activation and skips a symlink or a
+missing file: `claudeConfigMode` for `~/.claude.json`, `kimchiConfigMode` for
+Kimchi's user `config.json`. Home Manager only. Locked by
+`ai-activation-settings-mode`, which renders the real modules with both
+declarations empty.
 
 Every target, unit, mode, ledger name and byte of content travels as DATA in a
 store-resident plan, so none of it is interpolated into generated shell — and
