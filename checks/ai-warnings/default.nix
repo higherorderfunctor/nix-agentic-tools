@@ -247,18 +247,18 @@
         suffix = ".action.prompt";
       }
     ]
-    ++ lib.concatMap (runtime: [
+    ++ [
       {
-        inherit runtime;
+        runtime = "kiro";
         path = ["ai" "settings" "reasoningEffort"];
         value = "high";
       }
       {
-        inherit runtime;
-        path = ["ai" runtime "settings" "reasoningEffort"];
+        runtime = "kiro";
+        path = ["ai" "kiro" "settings" "reasoningEffort"];
         value = "high";
       }
-    ]) ["copilot" "kiro"];
+    ];
   # Runtimes that lower reasoning effort natively must stay silent about it on
   # both backends: a warning there would claim a gap the factory closes.
   loweredEffortSilent = lib.all (mode:
@@ -270,7 +270,7 @@
         ["ai" "settings" "reasoningEffort"]
         ["ai" runtime "settings" "reasoningEffort"]
       ])
-    ["kimchi"]) ["devenv" "hm"];
+    ["copilot" "kimchi"]) ["devenv" "hm"];
   # Copilot and Kiro both render an LSP server's `extensions` (Copilot as
   # `fileExtensions`, Kiro as `file_extensions`), on both backends and at both
   # the root and the per-runtime path, so no warning may name that field: it

@@ -44,6 +44,32 @@
 }: let
   dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
   wrapCopilotPackage = import ./wrapPackage.nix {inherit lib pkgs;};
+  # Copilot reads repository settings from this fixed path, whatever
+  # `projectDir` says: copilot-cli 1.0.88 opens it (and
+  # `settings.local.json` beside it) from the git root of a trusted folder.
+  repositorySettingsPath = ".github/copilot/settings.json";
+  # The keys Copilot's repository settings schema carries. Measured against
+  # 1.0.88: a file giving every documented user key a boolean value is
+  # rejected on exactly the ten non-boolean members of this list, and the
+  # whole file is then ignored. User-only keys (`theme`, `banner`, …) have no
+  # effect there, so devenv rejects them at evaluation instead of writing
+  # values nothing reads. See dev/fragments/ai-clis/copilot-config-delivery.md.
+  repositorySettingKeys = [
+    "companyAnnouncements"
+    "contextTier"
+    "deniedUrls"
+    "disableAllHooks"
+    "disabledMcpServers"
+    "disabledSkills"
+    "effortLevel"
+    "enabledPlugins"
+    "extraKnownMarketplaces"
+    "hooks"
+    "includeCoAuthoredBy"
+    "mergeStrategy"
+    "model"
+    "respectGitignore"
+  ];
   # Both backends install the IDENTICAL wrapper; only the root variable it
   # interpolates differs (`$HOME` vs `$DEVENV_ROOT`). Derived once here and
   # handed to the shared transform's `installPackage` hook, which owns the
@@ -119,18 +145,18 @@ in
           placement.
         '';
       };
-      # Copilot-specific freeform settings. Consumed by the `settings.json`
-      # entry: Home Manager reconciles exactly these leaves on activation,
-      # retracting one this generation drops and leaving a runtime-written
-      # sibling such as `trusted_folders` alone; devenv writes the project
-      # copy statically, which Copilot does not read. Full typed surface
-      # (editor integration, telemetry, typed model selection) is tracked in
-      # docs/plan.md "Ideal architecture gate → Absorption backlog" under
-      # the copilot-cli absorption item.
+      # Copilot-specific freeform settings. Home Manager reconciles exactly
+      # these leaves into the user `settings.json` on activation, retracting
+      # one this generation drops and leaving a runtime-written sibling such
+      # as `trusted_folders` alone. devenv writes them to the repository
+      # settings file Copilot reads. Full typed surface (editor integration,
+      # telemetry, typed model selection) is tracked in docs/plan.md "Ideal
+      # architecture gate → Absorption backlog" under the copilot-cli
+      # absorption item.
       native.settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
-        description = "Freeform settings for Copilot's `settings.json` under `configDir`. Home Manager reconciles the declared leaves into it on activation and leaves Copilot's own keys alone. devenv writes a static project copy for option parity; Copilot never reads a project-scope settings.json, and the module warns when this is set there.";
+        description = "Freeform Copilot settings; null leaves are dropped. Home Manager reconciles the declared leaves into `settings.json` under `configDir` on activation and leaves Copilot's own keys alone. devenv writes them to `.github/copilot/settings.json`, the fixed repository settings path Copilot reads in a trusted folder (independent of `projectDir`), omits the file when nothing is declared, and rejects keys Copilot does not accept at repository scope. `ai.settings.reasoningEffort` lowers to `effortLevel` here at default priority.";
       };
       # Typed LSP server definitions, merged with the shared
       # `ai.lspServers` pool and rendered by `mkCopilotLspFile`.
@@ -187,6 +213,7 @@ in
       mergedRules,
       mergedServers,
       mergedSkills,
+      resolvedSettings,
       ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -201,6 +228,10 @@ in
       # A LITERAL at the declaration site, hashed from the config directory so
       # two configured roots never share ownership records.
       settingsLedger = "json-settings/copilot-settings-${builtins.hashString "sha256" cfg.configDir}.json";
+      # A null leaf is how a consumer withholds a key (including the lowered
+      # `effortLevel`), so neither backend writes it.
+      settings = aiCommon.filterNulls cfg.native.settings;
+      unsupportedRepositorySettings = lib.subtractLists repositorySettingKeys (builtins.attrNames settings);
     in
       lib.mkMerge [
         # `projectDir` is shared for option-tree parity and discoverability, but
@@ -262,8 +293,7 @@ in
         })
 
         # mcp-config.json — the wrapper points `--additional-mcp-config` at this
-        # exact path on both backends, which is what makes it LIVE where the
-        # project settings.json is not.
+        # exact path on both backends, which is what makes it LIVE.
         (lib.mkIf (mergedServers != {}) {
           ai.copilot.files."${cfg.configDir}/mcp-config.json" = {
             content.value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
@@ -308,6 +338,14 @@ in
           })
         ]))
 
+        # Copilot's persisted `effortLevel` takes the normalized enum
+        # verbatim ("low" | "medium" | "high" | "xhigh") at user and
+        # repository scope, so the lowering is lossless on both backends. It
+        # is a default: an explicit native value, null included, wins.
+        (lib.mkIf ((resolvedSettings.reasoningEffort or null) != null) {
+          ai.copilot.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
+        })
+
         # settings.json — on Home Manager, Copilot rewrites it while it runs
         # (`trusted_folders`, the oauth record), so HM owns only the leaves
         # declared here and leaves every native sibling alone. The writer is
@@ -315,33 +353,46 @@ in
         # RETRACTS what the previous generation owned, and with no prior
         # ownership it leaves an externally managed file untouched — which is
         # what a consumer enabling Copilot purely for MCP or skills fanout needs.
-        #
-        # The fact is keyed by backend because the project copy has no such
-        # writer: Copilot never opens a project-scope settings.json (see the
-        # devenv `configDir` note below), so nothing rewrites it and nothing
-        # reads it. It stays a static write for option parity, and the
-        # delivery diagnostics warn when a consumer sets it. A shell-entry
-        # reconciler there would maintain bytes nothing reads. The writer is
-        # HM-only for the same reason — a writer with ledgers and no claiming
-        # file lowers to a task that retracts nothing.
         (lib.optionalAttrs isHm {
           ai.copilot.activation.copilotSettingsMerge.ledgers.${settingsLedger} = {
             codec = "json";
             path = "${cfg.configDir}/settings.json";
           };
-        })
-        {
           ai.copilot.files."${cfg.configDir}/settings.json" = {
-            content.value = cfg.native.settings;
+            content.value = settings;
             entry = "copilotSettingsMerge";
-            facts.harnessWrites = {
-              devenv = false;
-              hm = true;
-            };
+            facts.harnessWrites = true;
             format = "json";
             ledger = settingsLedger;
           };
-        }
+        })
+
+        # Repository settings — the committed-scope file Copilot reads from
+        # the git root, at a path `projectDir` does not move. A static write:
+        # nothing is declared, nothing is written. Copilot ignores the WHOLE
+        # file when one value fails its schema, so a key outside that schema
+        # is an evaluation error here rather than a silently dead write.
+        (lib.optionalAttrs (!isHm) (lib.mkMerge [
+          {
+            assertions = [
+              {
+                assertion = unsupportedRepositorySettings == [];
+                message = ''
+                  ai.copilot.native.settings sets keys Copilot does not accept in
+                  repository settings (${repositorySettingsPath}):
+                  ${lib.concatStringsSep ", " unsupportedRepositorySettings}.
+                  Set user-only keys through the Home Manager module instead.
+                '';
+              }
+            ];
+          }
+          (lib.mkIf (settings != {}) {
+            ai.copilot.files.${repositorySettingsPath} = {
+              content.value = settings;
+              format = "json";
+            };
+          })
+        ]))
       ];
 
     devenv = {
@@ -351,11 +402,11 @@ in
       #
       # Copilot reads MCP config from exactly two places: `$HOME/.copilot/
       # mcp-config.json`, and whatever `--additional-mcp-config` points at.
-      # It reads NOTHING from a project-local config dir. Measured by
-      # syscall trace against 1.0.78: inside the project it touches only
-      # `.github/copilot-instructions.md`, `.github/allowed_models.txt` and
-      # `.git`, while `<project>/.config/github-copilot/{mcp,lsp}-config.json`
-      # and `settings.json` are never opened or even stat'd. See
+      # It reads nothing from the wrapper-aimed config dir: a 1.0.78 syscall
+      # trace never opened or stat'd
+      # `<project>/.config/github-copilot/{mcp,lsp}-config.json` or
+      # `settings.json`. What it does read at repository scope sits under
+      # `.github/` (`lsp.json`, `copilot/settings.json`). See
       # dev/fragments/ai-clis/copilot-config-delivery.md for the measured
       # discovery behavior and the rejected COPILOT_HOME alternative.
       #
@@ -372,16 +423,10 @@ in
       installPackage = copilotInstallPackageFor "DEVENV_ROOT";
       options = {
         # Wrapper-aimed config dir. `mcp-config.json` here is LIVE — the
-        # `packages` wrapper points `--additional-mcp-config` at it.
-        # `settings.json` is INERT: Copilot does not read it at project scope
-        # and offers no flag to inject it (measured, see
-        # dev/fragments/ai-clis/copilot-config-delivery.md). It remains
-        # declared for HM option parity; the shared delivery diagnostics warn
-        # whenever a consumer supplies it. Project-scope files Copilot DOES
-        # read live under `projectDir` (default `.github`) instead, LSP config
-        # (`lsp.json`) included — that is also the surface github.com's
-        # Copilot code review consumes, and it is a different consumer from
-        # this CLI.
+        # `packages` wrapper points `--additional-mcp-config` at it — and it is
+        # the only file devenv writes here. Project-scope files Copilot reads
+        # live under `.github/` instead: LSP config under `projectDir`, and
+        # repository settings at the fixed `.github/copilot/settings.json`.
         configDir = lib.mkOption {
           type = lib.types.str;
           default = ".config/github-copilot";
@@ -390,10 +435,9 @@ in
             `mcp-config.json`, which the wrapped `copilot` is pointed at via
             `--additional-mcp-config`.
 
-            Also holds `settings.json`, which Copilot does NOT read at
-            project scope and provides no flag to inject; it is written for
-            option parity with Home Manager but is not delivered. LSP servers
-            are delivered through `<projectDir>/lsp.json` instead.
+            Settings are not written here: devenv delivers them to the
+            repository settings file `.github/copilot/settings.json`, and LSP
+            servers to `<projectDir>/lsp.json`.
 
             This is NOT the directory github.com's Copilot code review reads —
             that consumes committed files under `projectDir` (`.github`), and

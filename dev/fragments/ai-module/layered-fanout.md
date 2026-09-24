@@ -6,7 +6,8 @@
 > from the layer for every runtime's files. Normalized pools carry only a
 > text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
 > rules are read-only copies whose writers survive a disable. Copilot reconciles
-> settings.json on HM only. Native file settings live under
+> settings.json on HM only; its devenv settings are a static write to
+> `.github/copilot/settings.json`. Native file settings live under
 > `ai.<runtime>.native`. Each devenv factory publishes its shared AGENTS.md key
 > in `ai.internal.agentsMdTargets`. Claude's `.claude.json` has an ungated
 > mode-narrowing command writer beside its unpin ledger.
@@ -127,10 +128,9 @@
   `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
   `enterTest`. Empty declarations retain their writers so prior leaves can be
   retracted. Existing file modes and unowned leaves survive; a new file is 0600.
-  The fact is per backend when the CLI writes only one copy. Copilot's
-  settings.json is `{devenv = false; hm = true;}` with an HM-only writer:
-  Copilot never opens the project copy, so a devenv reconciler would maintain
-  bytes nothing reads, and the delivery warning covers the consumer instead.
+  The fact is per backend when the CLI writes only one copy. Copilot's user
+  settings.json has an HM-only writer; devenv writes the repository file
+  `.github/copilot/settings.json` statically, omitted when nothing is declared.
   Codex's project config remains a static source because its native writer is
   user-scoped.
 - **A document ledger reserves its path against symlink delivery.** Both
