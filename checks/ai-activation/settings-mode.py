@@ -11,6 +11,7 @@ import importlib.util
 import io
 import json
 import os
+import signal
 import stat
 import subprocess
 import sys
@@ -20,6 +21,8 @@ from pathlib import Path
 TOOLS = json.loads(Path(sys.argv[1]).read_text())
 DOCUMENT = ".natcreds/config.json"
 DECLARED = {"declared": "from-nix"}
+# The bound on one in-process run of own.py against a racing writer.
+RETRY_BOUND_SECONDS = 10
 
 
 def fail(label, message):
@@ -118,60 +121,116 @@ def discrimination(parent):
 
 
 def load_own():
-    """own.py as a module, so a case can interpose on its compare step."""
+    """own.py as a module, so a case can interpose on the calls it makes."""
     spec = importlib.util.spec_from_file_location("own", TOOLS["own"])
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def race(parent, repeated):
-    """4. One racing write must survive a successful retry. Continuous writes
-    must exhaust the bound loudly without replacing runtime data.
+class Unbounded(BaseException):
+    """The alarm's exception. A BaseException, so neither own.py's error
+    handler nor the SystemExit handler below can swallow it."""
 
-    The runtime's write lands at the compare step itself: own.py has already
-    merged the old runtime values into a complete temporary, but has not yet
-    renamed it over the destination. That is the lost-update window.
+
+def runtime_write(document, value):
+    """A runtime's own write: a sibling temporary renamed over the document.
+
+    It keeps the timestamps it replaces, so an mtime-based identity cannot see
+    it, and it takes none of own.py's locks, as neither Claude Code nor Kimchi
+    does.
     """
-    label = f"{'repeated' if repeated else 'once'} race"
-    home = Home(parent, label.replace(" ", "-"))
-    home.seed({"deviceId": "device-0", "gitTokens": {"host": "token-0"}}, 0o600)
-    own = load_own()
-    identity = own.file_identity
-    writes = 0
+    handle, sibling = tempfile.mkstemp(dir=document.parent, prefix=f"{document.name}.writer.")
+    with os.fdopen(handle, "w") as stream:
+        json.dump(value, stream)
+    before = document.stat()
+    os.utime(sibling, ns=(before.st_atime_ns, before.st_mtime_ns))
+    os.replace(sibling, document)
 
-    def racing_identity(path):
-        nonlocal writes
-        if path == home.document and (writes == 0 or repeated):
-            writes += 1
-            # Same size and timestamps, different content and inode: this
-            # models a runtime's sibling-temporary rename, and discriminates
-            # against an mtime-based identity.
-            handle, sibling = tempfile.mkstemp(
-                dir=home.document.parent, prefix=f"{home.document.name}.writer."
-            )
-            with os.fdopen(handle, "w") as stream:
-                json.dump({"deviceId": f"device-{writes}", "gitTokens": {"host": f"token-{writes}"}}, stream)
-            before = home.document.stat()
-            os.utime(sibling, ns=(before.st_atime_ns, before.st_mtime_ns))
-            os.replace(sibling, home.document)
-        return identity(path)
 
-    own.file_identity = racing_identity
-    arguments = ["own.py", "--plan", str(home.plan({"text": json.dumps(DECLARED)}))]
+def publishing(document, descriptor):
+    """Whether `descriptor` is open on one of own.py's reserved temporaries for
+    `document`: the `.nat-tmp.` name its sweep, and this check's leftover
+    assertion, already rely on."""
+    opened = os.fstat(descriptor)
+    return any(
+        os.path.samestat(opened, candidate.stat())
+        for candidate in document.parent.glob(f".{document.name}.nat-tmp.*")
+    )
+
+
+def own_in_process(own, home, units, label, interpose):
+    """Run own.py's main in this process with `interpose` applied.
+
+    `interpose` is a list of `(owner, name, make)`: `owner.name` is replaced by
+    `make(original)` for the run and restored after it. The run is bounded by
+    an alarm, because against a writer that never stops, a retry loop without
+    a bound would hang the build instead of failing it by name. Returns
+    `(status, stderr)`.
+    """
     stderr = io.StringIO()
     status = 0
     with contextlib.ExitStack() as scope:
+        for owner, name, make in interpose:
+            original = getattr(owner, name)
+            setattr(owner, name, make(original))
+            scope.callback(setattr, owner, name, original)
         scope.enter_context(contextlib.redirect_stderr(stderr))
         saved = dict(os.environ), sys.argv
         scope.callback(lambda: (os.environ.clear(), os.environ.update(saved[0])))
         scope.callback(setattr, sys, "argv", saved[1])
         os.environ.update(home.environment)
-        sys.argv = arguments
+        sys.argv = ["own.py", "--plan", str(home.plan(units))]
+
+        def expire(_signal, _frame):
+            raise Unbounded
+
+        scope.callback(signal.signal, signal.SIGALRM, signal.signal(signal.SIGALRM, expire))
+        signal.alarm(RETRY_BOUND_SECONDS)
+        scope.callback(signal.alarm, 0)
         try:
             own.main()
         except SystemExit as exit_:
             status = exit_.code or 0
+        except Unbounded:
+            fail(label, f"own.py was still publishing after {RETRY_BOUND_SECONDS} s against a writer that never stops: its retry is unbounded")
+    return status, stderr.getvalue()
+
+
+def race(parent, repeated):
+    """4. One racing write must survive a successful retry. Continuous writes
+    must exhaust the bound loudly without replacing runtime data.
+
+    The runtime's write lands in the lost-update window: own.py has merged the
+    old runtime values into a complete temporary and synced it, but has not yet
+    renamed it over the destination. It is injected at that fsync, a call the
+    writer makes with or without a compare step. So a writer with no compare
+    shows the lost update itself, and so does one that compares anywhere
+    earlier than just before the rename.
+    """
+    label = f"{'repeated' if repeated else 'once'} race"
+    home = Home(parent, label.replace(" ", "-"))
+    home.seed({"deviceId": "device-0", "gitTokens": {"host": "token-0"}}, 0o600)
+    own = load_own()
+    writes = 0
+
+    def racing_fsync(fsync):
+        def hooked(descriptor):
+            nonlocal writes
+            fsync(descriptor)
+            if (writes == 0 or repeated) and publishing(home.document, descriptor):
+                writes += 1
+                # Same size, different content and inode.
+                runtime_write(
+                    home.document,
+                    {"deviceId": f"device-{writes}", "gitTokens": {"host": f"token-{writes}"}},
+                )
+
+        return hooked
+
+    status, stderr = own_in_process(
+        own, home, {"text": json.dumps(DECLARED)}, label, [(os, "fsync", racing_fsync)]
+    )
 
     document = home.read()
     if document.get("deviceId") != f"device-{writes}" or document.get("gitTokens") != {"host": f"token-{writes}"}:
@@ -189,17 +248,60 @@ def race(parent, repeated):
             f"own: {home.document} changed during all 3 attempts; refusing to "
             "overwrite concurrent runtime changes; retry activation\n"
         )
-        if status != 1 or writes != 3 or stderr.getvalue() != expected:
-            fail(label, f"expected a loud refusal after 3 attempts, got status {status}, {writes} writes, stderr {stderr.getvalue()!r}")
+        if status != 1 or writes != 3 or stderr != expected:
+            fail(label, f"expected a loud refusal after 3 attempts, got status {status}, {writes} writes, stderr {stderr!r}")
         if "declared" in document:
             fail(label, "activation overwrote the runtime's final write")
         if ledger.exists():
             fail(label, "the ledger claims a leaf that never landed")
     else:
         if status != 0 or writes != 1:
-            fail(label, f"expected one retry to succeed, got status {status}, {writes} writes, stderr {stderr.getvalue()!r}")
+            fail(label, f"expected one retry to succeed, got status {status}, {writes} writes, stderr {stderr!r}")
         if document.get("declared") != "from-nix":
             fail(label, f"the retry dropped the declared leaf: {document}")
+
+
+def retiring_race(parent):
+    """7. Retiring a document must not delete a runtime's write.
+
+    The document holds only the leaf the ledger owns, and the declaration is
+    now empty, so own.py retracts that leaf and deletes the file, which is all
+    ours. The runtime adds a token after the load and before the delete: the
+    file is no longer all ours, and deleting it would take the token with it.
+    The write is injected at the sweep of the document's directory, the call
+    own.py makes on its way to the delete whether or not it compares first.
+    """
+    label = "retiring race"
+    home = Home(parent, "retiring-race")
+    home.seed(DECLARED, 0o600)
+    ledger = home.state / "json-settings/natcreds.json"
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text(json.dumps({"managed_paths": [list(DECLARED)], "version": 1}))
+    own = load_own()
+    token = {"gitTokens": {"host": "token-1"}}
+    writes = 0
+
+    def racing_sweep(sweep):
+        def hooked(directory):
+            nonlocal writes
+            if writes == 0 and directory == home.document.parent:
+                writes += 1
+                runtime_write(home.document, {**DECLARED, **token})
+            sweep(directory)
+
+        return hooked
+
+    status, stderr = own_in_process(own, home, {}, label, [(own, "sweep", racing_sweep)])
+
+    if writes != 1:
+        fail(label, f"the runtime's write was never injected ({writes} writes)")
+    if not home.document.exists():
+        fail(label, "activation deleted the document a runtime had just rewritten, and its token with it")
+    if status != 0 or home.read() != token:
+        fail(label, f"expected the owned leaf retracted and the token kept, got status {status}, {home.read()}, stderr {stderr!r}")
+    assert_mode(home.document, 0o600, label)
+    if ledger.exists():
+        fail(label, "the ledger still claims the retracted leaf")
 
 
 def activate(home, gate, label):
@@ -276,6 +378,7 @@ def main():
         for gate in ("open", "closed"):
             widened(parent, gate)
         guarded(parent)
+        retiring_race(parent)
     print("PASS: ai-activation settings mode")
 
 
