@@ -334,6 +334,10 @@
       ],
       "reason": "debug, test-runner and feature switches inside bundled libraries (graceful-fs, minimatch, undici, ws, AWS Lambda runtime, debug) or Kimchi's own test guards; no user-facing behavior"
     },
+    "mem0Telemetry": {
+      "names": ["MEM0_TELEMETRY"],
+      "reason": "mem0's own telemetry switch; Kimchi's memory backend defaults it to 'false' only when unset (src/extensions/memory/backend.ts, disableMem0Telemetry), so a value the user sets reaches mem0 unchanged; owned and documented by mem0, not Kimchi"
+    },
     "platform": {
       "names": [
         "APPDATA",
@@ -426,11 +430,10 @@
         "HF_HOME",
         "HF_TOKEN",
         "HF_TOKEN_PATH",
-        "MEM0_TELEMETRY",
         "OPENCODE_CONFIG",
         "VISUAL"
       ],
-      "reason": "another tool's own variable (POSIX editor, HuggingFace, mem0, opencode) that Kimchi or pi honors for interoperability; owned and documented by that tool"
+      "reason": "another tool's own variable (POSIX editor, HuggingFace, opencode) that Kimchi or pi honors for interoperability; owned and documented by that tool"
     }
   }
 }
