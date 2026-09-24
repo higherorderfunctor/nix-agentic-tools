@@ -45,16 +45,6 @@
   kiroExtracted =
     builtins.fromJSON (builtins.readFile ../extracted.json);
 
-  # Typed hook wiring (northbound), mirroring the Claude slice. S1: an
-  # `action.command` accepts a package, coerced to its executable path so
-  # supporting files ride the /nix/store closure at absolute, cwd-independent
-  # paths (Kiro runs hooks with cwd = project root). meta.mainProgram → getExe; a
-  # bare-file derivation → its outPath; a string passes through.
-  pkgToCommand = p:
-    if lib.isDerivation p && (p.meta.mainProgram or null) != null
-    then lib.getExe p
-    else "${p}";
-
   # A hook action: `command` (subprocess) or `agent` (inline prompt appended to
   # the model context). `command` is S1 store-backed; extra fields round-trip via
   # the freeform JSON tail.
@@ -66,8 +56,13 @@
         default = "command";
         description = "`command` runs a subprocess; `agent` appends `prompt` to the model context (no subprocess, ignores timeout).";
       };
+      # Typed hook wiring (northbound), shared with Claude and Codex. S1: a
+      # package coerces to its executable store path, so supporting files ride
+      # the closure at absolute, cwd-independent paths (Kiro runs hooks with
+      # cwd = project root): meta.mainProgram → getExe, a `pname` →
+      # bin/<pname>, a bare-file derivation → its outPath; a string passes.
       command = lib.mkOption {
-        type = lib.types.nullOr (lib.types.coercedTo lib.types.package pkgToCommand lib.types.str);
+        type = lib.types.nullOr lib.ai.hooks.commandType;
         default = null;
         description = "For type=command: a package (coerced to its getExe path — companion files ride the store closure) or a string.";
       };
@@ -542,17 +537,9 @@
     };
   };
 
-  hookNameAssertion = cfg: let
-    bad =
-      builtins.filter (n: !hookNameSafe n)
-      (builtins.attrNames cfg.hooks ++ builtins.attrNames cfg.hooksJson);
-  in {
-    assertion = bad == [];
-    message = "ai.kiro: hook names must match ${hookNameRegex} (no path separators, whitespace, or quotes); offending: ${lib.concatStringsSep ", " bad}";
-  };
-
   # Shared assertion set for both backends: mutually exclusive inline/dir
-  # pairs, hook-name charset, package composition, and native option guards.
+  # pairs, hook file-name charset, package composition, and native option
+  # guards.
   # Steering entry shape/path validation now belongs to runtime-files.nix.
   mkAssertions = cfg: let
     # Assertion evaluation must not call a missing custom-package rollout
@@ -603,7 +590,6 @@
         assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
         message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
       }
-      (hookNameAssertion cfg)
       {
         # The splice reassembles the literal as `replacement + " " + tail`. If
         # the replacement does not close its own final sentence it MERGES into
@@ -667,11 +653,13 @@
         '';
       }
     ]
-    # `hookNameAssertion` above covers only the INLINE surfaces' attr keys;
-    # this is what catches a `hooksDir` whose filenames are unsafe. The other
-    # three guards the materializer's entry assertions carried — exactly one
-    # content field, a render command only for a copy, an octal mode — are
-    # structural in `own` and refused there, so only the names need saying.
+    # One charset check over every hook FILE, whichever surface produced it:
+    # `hooksJson` keys and typed records' file keys become `<name>.json`, which
+    # matches exactly when `<name>` does, and `hooksDir` files keep their own
+    # names. The other three guards the materializer's entry assertions
+    # carried — exactly one content field, a render command only for a copy,
+    # an octal mode — are structural in `own` and refused there, so only the
+    # names need saying.
     ++ [
       (
         let
@@ -683,16 +671,16 @@
       )
     ];
 
-  # Steering emitters route first, render second, and contribute the final
-  # native files to `ai.kiro.files` at default priority. The current pinned
-  # Kiro (2.18.1) follows steering symlinks in both project and Home
-  # Manager-like layouts, so ordinary backend file delivery is sufficient.
   # An unscoped always-on rule, which AGENTS.md carries when Kiro shares it.
   isSharedRule = rule:
     rule.matcher
     == null
     && ((rule.inclusion or null) == null || rule.inclusion == "always");
 
+  # Steering emitters route first, render second, and contribute the final
+  # native files to `ai.kiro.files` at default priority. The current pinned
+  # Kiro (2.18.1) follows steering symlinks in both project and Home
+  # Manager-like layouts, so ordinary backend file delivery is sufficient.
   mkSteeringEmitters = {
     cfg,
     mergedRules,
