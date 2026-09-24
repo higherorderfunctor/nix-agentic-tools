@@ -7,7 +7,8 @@
 > Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
 > a runtime-specific implicit shell default. `ai.shell` stays null; see below
 > for the standing decision and the override rule it shares with normalized
-> `settings`.
+> `settings`. The builder merges every launcher's process environment once, as
+> `launcherEnvironment`; Codex and Copilot wrap through `lib.ai.mkLauncher`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -85,6 +86,15 @@ sibling shell-specific capability flag.
 | Kiro    | `SHELL` (own process env)  | launcher wrapper `export`               |
 | Copilot | **unknown — verified gap** | excluded                                |
 | Kimchi  | unassessed                 | excluded                                |
+
+The launcher runtimes do not merge `SHELL` themselves. The builder hands every
+`installPackage` and `config` callback one `launcherEnvironment`: module
+defaults, then `SHELL` from the resolved shell, then the consumer's
+`environmentVariables` LAST, so an explicit `environmentVariables.SHELL` wins
+everywhere. Codex once applied the typed shell last instead; that was defensible
+in isolation and wrong in aggregate, because the same two-key config then
+resolved differently per runtime. Copilot and Kimchi do not support `shell`, so
+for them it is module defaults under the consumer pool.
 
 Four runtimes were asked for; five go through `mkRuntime`. Kimchi is easy to
 miss because the issue that requested this never mentioned it.
@@ -167,10 +177,10 @@ three runtimes demonstrably do not perform.
   polite defaults a user may override (`TERM`, `GH_TELEMETRY`). A configured
   shell must beat the ambient environment. For Codex this matters more than it
   looks, because "unset" is not neutral — it lands on the passwd shell.
-- **Codex had no wrapper before this option.**
-  `packages/chatgpt-codex/lib/wrapPackage.nix` is new; the wrapper is skipped
-  entirely when its env set is empty, so a Codex with nothing to deliver still
-  gets the bare upstream path.
+- **Codex had no wrapper before this option.** It now installs
+  `lib.ai.mkLauncher` (`lib/ai/launcher.nix`), which Copilot's wrapper also
+  calls. The wrapper is skipped entirely when it has nothing to bake in, so a
+  Codex with nothing to deliver still gets the bare upstream path.
 - **On devenv that empty case is unreachable in practice.** devenv has no
   `programs.git`, so the sandbox-safe Git SSH default (`gitSshConfigWorkaround`,
   on by default) lands in Codex's `environmentVariables` — which means enabling

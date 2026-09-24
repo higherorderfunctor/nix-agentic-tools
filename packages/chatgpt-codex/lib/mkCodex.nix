@@ -12,45 +12,25 @@
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-  # Launcher wrapper — see ./wrapPackage.nix for why Codex needs one at all.
-  wrapCodexPackage = import ./wrapPackage.nix {inherit lib pkgs;};
-
-  # Everything destined for Codex's own process environment: the merged
-  # `environmentVariables` pool plus `ai.shell`. Codex reads `SHELL` from its
-  # process environment and has no config key for it — `shell_environment_policy`
-  # governs what SPAWNED commands inherit, which is a different thing.
-  #
-  # Ordering is the contract, and it is the same one Claude and Kiro use:
-  # module-contributed defaults first, the consumer's own pool LAST, so an
-  # explicit `environmentVariables.SHELL` wins.
-  #
-  # This previously applied `resolvedShell` last, on the reasoning that the
-  # typed option is the more specific surface. That was defensible in
-  # isolation and wrong in aggregate: Claude (`settings.env`, mkDefault) and
-  # Kiro both let the explicit entry win, so the same two-key config resolved
-  # differently depending on which runtime the consumer happened to name.
-  # One rule everywhere beats a better rule in one place.
-  codexPackageFor = cfg: moduleEnvironmentVariables: mergedEnvironmentVariables: resolvedShell:
-    wrapCodexPackage {
-      inherit (cfg) package;
-      environmentVariables =
-        moduleEnvironmentVariables
-        // lib.optionalAttrs (resolvedShell != null) {
-          SHELL = lib.getExe resolvedShell;
-        }
-        // mergedEnvironmentVariables;
-    };
-  # Adapter onto the shared transform's `installPackage` hook, which hands
-  # every backend the same callback args as `config`. Both backends install
-  # the identical wrapper, so it is derived once here.
+  # Codex's launcher, installed identically by both backends. Codex takes its
+  # command shell from `SHELL` in its OWN process environment (via
+  # `portable_pty`) and has no config key for it: `shell_environment_policy`
+  # filters what SPAWNED commands inherit, which is a different thing. So the
+  # launcher is the only declarative place for it and for the rest of the
+  # environment pool. When `SHELL` is unset or not executable Codex falls back
+  # to the PASSWORD-DATABASE shell, so leaving it unset is not neutral. With
+  # nothing to bake in, the bare upstream package is installed.
   codexInstallPackage = {
     cfg,
-    moduleEnvironmentVariables,
-    mergedEnvironmentVariables,
-    resolvedShell,
+    launcherEnvironment,
     ...
   }:
-    codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;
+    lib.ai.mkLauncher pkgs {
+      environmentVariables = launcherEnvironment;
+      exe = "codex";
+      name = "chatgpt-codex-wrapped";
+      inherit (cfg) package;
+    };
   jsonFormat = pkgs.formats.json {};
   tomlFormat = pkgs.formats.toml {};
 
@@ -858,7 +838,7 @@ in
       "skills"
     ];
     defaults.package = pkgs.ai.chatgpt-codex;
-    # The builder declares `environmentVariables` (baked into ./wrapPackage.nix,
+    # The builder declares `environmentVariables` (baked into the launcher,
     # never the project shell) and `agents`, typed here with the Codex extension.
     poolOptions.agents = {
       type = lib.types.attrsOf (lib.types.nullOr codexAgentType);

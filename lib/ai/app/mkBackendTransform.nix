@@ -269,9 +269,21 @@
   # never reads this, but a surface one backend genuinely does not have — a
   # document only Home Manager reconciles, a path only the project tree has —
   # has to be able to say so.
+  #
+  # `launcherEnvironment` is everything a launcher bakes into its runtime's
+  # own process, merged in ONE order for every runtime: module defaults, then
+  # `SHELL` from the resolved shell, then the consumer's pool LAST, so an
+  # explicit entry (`environmentVariables.SHELL` included) wins. Claude has
+  # no launcher and lowers the parts into `settings.env` instead.
   callbackArgs = {
     inherit backend cfg config moduleEnvironmentVariables;
     inherit (cfg) normalized;
+    launcherEnvironment =
+      moduleEnvironmentVariables
+      // lib.optionalAttrs (callbackArgs.resolvedShell != null) {
+        SHELL = lib.getExe callbackArgs.resolvedShell;
+      }
+      // callbackArgs.mergedEnvironmentVariables;
     hasMergedContext = normalizedHasContext;
     mergedAgents = normalizedPool "agents" {};
     mergedContext = normalizedPool "context" null;
