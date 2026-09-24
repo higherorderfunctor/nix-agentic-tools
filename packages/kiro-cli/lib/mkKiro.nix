@@ -1164,6 +1164,9 @@ in
     defaults = {
       package = pkgs.ai.kiro-cli;
     };
+    # The builder declares `environmentVariables` (baked into the launcher on
+    # both backends) and `lspServers`.
+    poolOptions.lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
     options = {
       # Dark-shipped upstream features, unlocked by patching the rollout
       # manifest the chat binary carries in rodata (see
@@ -1446,22 +1449,6 @@ in
           only difference is whether the on-disk file is Nix-owned
           (overwrite) or co-owned with the user (merge).
         '';
-      };
-      # Typed LSP server definitions for settings/lsp.json. Freeform
-      # attrs-of-anything matching the legacy `attrsOf jsonFormat.type`.
-      lspServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
-        default = {};
-        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
-      };
-      # Env vars baked into the symlinkJoin launcher on BOTH backends. devenv used to
-      # populate its native `env` attrset instead, which exported them into
-      # the project shell rather than into Kiro. `attrsOf str` — matching the
-      # legacy surface.
-      environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-        default = {};
-        description = "Environment variables baked into the kiro launcher wrapper. Scoped to the Kiro process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
       };
       extraPackages = lib.mkOption {
         type = lib.types.listOf lib.types.package;

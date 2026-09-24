@@ -11,7 +11,9 @@
 > `settings` pool. Native file settings live under `ai.<runtime>.native`. Each
 > devenv factory publishes its shared AGENTS.md key in
 > `ai.internal.agentsMdTargets`. Claude's `.claude.json` has an ungated
-> mode-narrowing command writer beside its unpin ledger.
+> mode-narrowing command writer beside its unpin ledger. The builder declares
+> the per-runtime `agents`, `environmentVariables` and `lspServers` options and
+> an opt-in `agentsDir`; a record's `poolOptions` carries only what differs.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -303,8 +305,11 @@ Kimchi supplied.
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
   `lib/ai/app/mkBackendTransform.nix` (`lib/ai/app/default.nix` selects it once
-  per backend)
-- L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
+  per backend). That includes `agentsDir`, declared only for a record whose
+  `poolOptions` names it: Codex consumes `agents` with no directory form.
+  `poolOptions.<pool>` is merged over the builder's declaration, so a runtime
+  states only its own description or a native type (Codex's agents).
+- L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
   the rule enable filter)
@@ -325,9 +330,9 @@ Kimchi supplied.
 ### Adding a new concern X
 
 1. Add L2 option `ai.<X>` in `lib/ai/sharedOptions.nix`.
-2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline (if every
-   supported CLI handles it the same way) or in each per-CLI factory (if the
-   shape differs).
+2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
+   pool, with a `poolOptions` override slot for per-runtime descriptions or
+   types. Declare it in each per-CLI factory only when the shape itself differs.
 3. Add `X` to `supportedPools` only on app records whose delivery `config`
    consumes it. The normalized `settings` pool follows the same rule: a runtime
    with no lossless target for any field (Kiro) leaves it out, and one that

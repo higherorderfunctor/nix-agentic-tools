@@ -522,9 +522,6 @@
       # stated per file: an owned copy the user can write. The next activation
       # backs an edited file up and restores the declaration; a file Kimchi
       # created is an unowned sibling and is never touched.
-      (lib.mkIf (cfg.agentsDir != null) {
-        ai.kimchi.agents = lib.mapAttrs (_: lib.mkDefault) (lib.ai.agentsFromDir cfg.agentsDir);
-      })
       {
         ai.kimchi.files = lib.mapAttrs' (name: value: let
           rendered = lib.ai.agent.renderKimchi name value;
@@ -592,30 +589,29 @@ in
       "skills"
     ];
     defaults.package = pkgs.ai.kimchi;
+    # The builder declares these pool options and expands `agentsDir`.
+    poolOptions = {
+      agents.description = ''
+        Kimchi agents, one `<name>.md` each: Home Manager writes
+        `<configDir>/harness/agents/`, devenv a trusted project's
+        `.kimchi/agents/`. A portable `{ description, instructions }` record
+        renders to Kimchi frontmatter plus body; Markdown here is Kimchi's
+        own and lands verbatim. Entries replace root `ai.agents` at the same
+        key and null suppresses one. Root Markdown and a record's
+        Claude/Copilot `tools` list have no Kimchi reading and fail
+        evaluation, naming this option as the remedy. Each file is a real,
+        writable copy so Kimchi's /agents commands can edit it; the next
+        activation backs such an edit up and restores the declaration.
+      '';
+      agentsDir.description = "Directory of Kimchi-native `.md` agent files, expanded into `ai.kimchi.agents` keyed by basename minus `.md`.";
+      environmentVariables.description = ''
+        Environment variables exported when launching kimchi. Null suppresses
+        a root entry at the same key. A variable Kimchi overwrites at launch
+        (listed with its reason in packages/kimchi/extracted.json) fails
+        evaluation, because a value set for it is never read.
+      '';
+    };
     options = {
-      agents = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.ai.agent.agentType);
-        default = {};
-        description = ''
-          Kimchi agents, one `<name>.md` each: Home Manager writes
-          `<configDir>/harness/agents/`, devenv a trusted project's
-          `.kimchi/agents/`. A portable `{ description, instructions }` record
-          renders to Kimchi frontmatter plus body; Markdown here is Kimchi's
-          own and lands verbatim. Entries replace root `ai.agents` at the same
-          key and null suppresses one. Root Markdown and a record's
-          Claude/Copilot `tools` list have no Kimchi reading and fail
-          evaluation, naming this option as the remedy. Each file is a real,
-          writable copy so Kimchi's /agents commands can edit it; the next
-          activation backs such an edit up and restores the declaration.
-        '';
-      };
-
-      agentsDir = lib.mkOption {
-        type = lib.types.nullOr aiCommon.dirOptionType;
-        default = null;
-        description = "Directory of Kimchi-native `.md` agent files, expanded into `ai.kimchi.agents` keyed by basename minus `.md`.";
-      };
-
       permissions = lib.mkOption {
         # No freeform keys: Kimchi validates the file with a `.strict()` zod
         # schema (src/extensions/permissions/config.ts:11-19), so one unknown
@@ -731,17 +727,6 @@ in
           or .config/kimchi/harness/settings.json on devenv shell entry. Kimchi
           mutates the user file at runtime, so both backends preserve unowned
           settings and retract retired leaves.
-        '';
-      };
-
-      environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-        default = {};
-        description = ''
-          Environment variables exported when launching kimchi. Null suppresses
-          a root entry at the same key. A variable Kimchi overwrites at launch
-          (listed with its reason in packages/kimchi/extracted.json) fails
-          evaluation, because a value set for it is never read.
         '';
       };
 

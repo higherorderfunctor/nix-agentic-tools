@@ -1101,9 +1101,10 @@ root/runtime precedence.
 
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-08-15 — directory-generated per-runtime entries
+> **Last verified:** 2026-09-24 — directory-generated per-runtime entries
 > replace or null-suppress same-key root entries under the normalized keyed-pool
-> contract; see "Consumer patterns" below. Full lineage:
+> contract; see "Consumer patterns" below. The builder expands every per-runtime
+> Dir option, `agentsDir` included, outside the enable gate. Full lineage:
 > `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
 
 ### The helpers
@@ -1115,7 +1116,8 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 - `skillsFromDir` — directory-of-directories → `attrsOf path`. Key is the subdir
   name unchanged.
 - `agentsFromDir` — directory of `.md` files → `attrsOf path`. Key is basename
-  minus `.md`. Claude + Copilot only.
+  minus `.md`. Expanded by the builder for Claude, Copilot and Kimchi, the
+  records that name `agentsDir` in `poolOptions`.
 - `hooksFromDir` — directory of regular files → `attrsOf lines` (via
   `readFile`). Key is the filename unchanged (hooks are typically extensionless
   shell scripts). Claude-only.
@@ -1209,7 +1211,9 @@ path types".
 > `settings` pool. Native file settings live under `ai.<runtime>.native`. Each
 > devenv factory publishes its shared AGENTS.md key in
 > `ai.internal.agentsMdTargets`. Claude's `.claude.json` has an ungated
-> mode-narrowing command writer beside its unpin ledger.
+> mode-narrowing command writer beside its unpin ledger. The builder declares
+> the per-runtime `agents`, `environmentVariables` and `lspServers` options and
+> an opt-in `agentsDir`; a record's `poolOptions` carries only what differs.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1501,8 +1505,11 @@ Kimchi supplied.
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
   `lib/ai/app/mkBackendTransform.nix` (`lib/ai/app/default.nix` selects it once
-  per backend)
-- L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
+  per backend). That includes `agentsDir`, declared only for a record whose
+  `poolOptions` names it: Codex consumes `agents` with no directory form.
+  `poolOptions.<pool>` is merged over the builder's declaration, so a runtime
+  states only its own description or a native type (Codex's agents).
+- L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
   the rule enable filter)
@@ -1523,9 +1530,9 @@ Kimchi supplied.
 ### Adding a new concern X
 
 1. Add L2 option `ai.<X>` in `lib/ai/sharedOptions.nix`.
-2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline (if every
-   supported CLI handles it the same way) or in each per-CLI factory (if the
-   shape differs).
+2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline, gated on the
+   pool, with a `poolOptions` override slot for per-runtime descriptions or
+   types. Declare it in each per-CLI factory only when the shape itself differs.
 3. Add `X` to `supportedPools` only on app records whose delivery `config`
    consumes it. The normalized `settings` pool follows the same rule: a runtime
    with no lossless target for any field (Kiro) leaves it out, and one that
