@@ -7,6 +7,13 @@
   reminder = (import ../../packages/kiro-cli/lib/workflowReminder.nix {inherit lib pkgs;}).mkVendorReminder {cliVersion = "1.0.0";};
   enabled = harness.evalDevenv {
     ai.codex = {
+      # Not the default AGENTS.md: the observer's fallback for a runtime that
+      # publishes no ai.internal.agentsMdTargets entry, which would otherwise
+      # pass for Codex without the entry.
+      context = {
+        filename = "CODEX.md";
+        text = "codex probe";
+      };
       enable = true;
       files."probe".content.text = "probe";
       native.settings.model = "probe";
