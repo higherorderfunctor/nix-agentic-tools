@@ -786,29 +786,22 @@ in
         # survives. Its writer is `claudeRulesWriterConfig`, declared whether
         # or not a rule is and whether or not Claude is enabled, so both N→0
         # and a disable retract the copies.
-        (let
-          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-          inherit (lib.ai.transformers.claude) claudeTransformer;
-        in {
-          ai.claude.files = lib.mapAttrs' (name: rule:
-            lib.nameValuePair ".claude/rules/${name}.md" {
-              content = lib.mkDefault {
-                enable = true;
-                text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
-                  // {
-                    text = aiCommon.readContent rule;
-                    paths = rule.matcher;
-                  });
-              };
+        {
+          ai.claude.files = aiCommon.mkRuleFiles {
+            context = name: {package = name;};
+            fields = {
               entry = rulesWriter;
               facts.symlinkReadable = {
                 devenv = false;
                 hm = true;
               };
               ledger = rulesLedger;
-            })
-          mergedRules;
-        })
+            };
+            path = name: ".claude/rules/${name}.md";
+            rules = mergedRules;
+            transformer = lib.ai.transformers.claude.claudeTransformer;
+          };
+        }
 
         (lib.optionalAttrs isHm (lib.mkMerge [
           # The upstream Home Manager module owns these surfaces, including
@@ -888,18 +881,9 @@ in
           # option requires typed description/prompt fields, so it cannot
           # carry a raw Markdown or path entry without parsing it.
           {
-            ai.claude.files = lib.mapAttrs' (name: value: let
-              rendered = agent.renderClaude name value;
-            in
+            ai.claude.files = lib.mapAttrs' (name: value:
               lib.nameValuePair ".claude/agents/${name}.md" {
-                content = lib.mkDefault (
-                  {enable = true;}
-                  // (
-                    if agent.isPathLike rendered
-                    then {source = rendered;}
-                    else {text = rendered;}
-                  )
-                );
+                content = lib.mkDefault ({enable = true;} // agent.fileContent (agent.renderClaude name value));
               })
             mergedAgents;
           }

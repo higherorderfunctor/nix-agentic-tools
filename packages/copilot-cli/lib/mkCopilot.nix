@@ -297,18 +297,11 @@ in
         # rather than writing a HOME copy nothing reads.
         (lib.optionalAttrs (!isHm) (lib.mkMerge [
           {
-            ai.copilot.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
-                content = lib.mkDefault {
-                  enable = true;
-                  text = lib.ai.transformers.copilot.render (rule
-                    // {
-                      paths = rule.matcher;
-                      text = aiCommon.readContent rule;
-                    });
-                };
-              })
-            mergedRules;
+            ai.copilot.files = aiCommon.mkRuleFiles {
+              path = name: "${cfg.projectDir}/instructions/${name}.instructions.md";
+              rules = mergedRules;
+              transformer = lib.ai.transformers.copilot.copilotTransformer;
+            };
           }
           (lib.mkIf hasMergedContext {
             ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" =
