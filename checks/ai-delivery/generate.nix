@@ -31,10 +31,12 @@
     ) (specimen.config mode runtime strategy);
     inherit (evaluated) config options;
     cfg = config.ai.${runtime};
-    # The existing shared owner holds these typed entries before step 16.
-    # It is still the delivery layer, not a guessed backend file sink.
+    # The shared AGENTS.md owner holds these typed entries on devenv. It is
+    # still the delivery layer, not a guessed backend file sink. Membership is
+    # not listed here: like sharedAgentsMd.nix, the owner is empty for any
+    # runtime that contributes no shared context.
     shared =
-      if mode == "devenv" && builtins.elem runtime ["codex" "kimchi" "kiro"]
+      if mode == "devenv"
       then config.ai.internal.files
       else {};
     files = lib.filterAttrs (_: entry: entry != null) (cfg.files // shared);
