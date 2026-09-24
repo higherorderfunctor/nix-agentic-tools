@@ -83,9 +83,13 @@ in {
 
     # A runtime record outside this repository may support the normalized
     # `settings` pool without lowering reasoning effort. No generic warning
-    # speaks for it any more: the runtime's own description and delivery rows
-    # own that disclosure. The control is that the root value did reach the
-    # runtime's normalized settings, so the silence is not an unread value.
+    # speaks for it any more: the old one fired for every such runtime whether
+    # or not it lowered effort. Disclosure belongs to the runtime's own
+    # delivery `config`, which is merged into module config and can emit
+    # `warnings` for the fields it drops. The repository's delivery rows cannot
+    # do it, because they cover only this repository's runtimes. The control
+    # is that the root value did reach the runtime's normalized settings, so
+    # the silence is not an unread value.
     factory-mkRuntime-no-generic-effort-warning = mkTest "mkRuntime-no-generic-effort-warning" (
       let
         record = ai.app.mkRuntime {
