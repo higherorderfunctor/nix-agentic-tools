@@ -117,19 +117,10 @@
     };
   };
   # One matcher block within an event: an optional matcher + its handlers.
-  hookMatcherBlock = lib.types.submodule {
-    options = {
-      matcher = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Tool-name matcher (exact name or JS regex). Null for events that take no matcher (Stop, UserPromptSubmit, …).";
-      };
-      hooks = lib.mkOption {
-        type = lib.types.listOf hookHandler;
-        default = [];
-        description = "Handlers that fire for this matcher block.";
-      };
-    };
+  hookMatcherBlock = sharedHooks.mkMatcherBlockType {
+    handler = hookHandler;
+    hooks = "Handlers that fire for this matcher block.";
+    matcher = "Tool-name matcher (exact name or JS regex). Null for events that take no matcher (Stop, UserPromptSubmit, …).";
   };
   # heron_brook delegation clamp — the opt-in mitigation's hook pair.
   #
