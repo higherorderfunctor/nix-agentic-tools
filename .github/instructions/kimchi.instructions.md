@@ -27,8 +27,9 @@ applyTo: "packages/kimchi/**"
 > `trust.json.lock`; an ungated HM `kimchiConfigMode` writer narrows the
 > credential-bearing user `config.json` to owner-only; `mkPrep` builds only the
 > launcher, from the builder's `launcherEnvironment`, and one record-level
-> `config` and `installPackage` serve both backends. Full lineage:
-> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> `config` and `installPackage` serve both backends; the builder publishes
+> devenv context to the shared root `AGENTS.md` from `sharedAgentsMd`. Full
+> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -255,7 +256,8 @@ Everything else Kimchi delivers except agents (below) is immutable and
 symlink-readable, so it takes both defaults and states no fact at all.
 Normalized context renders into the `ai.kimchi.files` map on Home Manager.
 Devenv context joins the single root `AGENTS.md` owner shared with Codex and
-Kiro. In either backend, the generated body is a default on the entry's
+Kiro, through the record's `sharedAgentsMd`, which names that fixed key and no
+rules. In either backend, the generated body is a default on the entry's
 `content` option, so a consumer can replace or suppress it. When root and
 Kimchi-specific context are both configured, their bodies concatenate
 root-first. Home Manager honors `ai.kimchi.context.filename`; devenv always

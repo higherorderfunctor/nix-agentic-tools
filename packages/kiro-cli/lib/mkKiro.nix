@@ -1659,9 +1659,6 @@ in
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       isHm = backend == "hm";
-      # The shared repository AGENTS.md key devenv writes this runtime's
-      # context and always-on rules into.
-      projectContextKey = cfg.context.filename;
       settingsDir = "${cfg.configDir}/settings";
       configHash = builtins.hashString "sha256" cfg.configDir;
       settingsLedger = "json-settings/kiro-settings-${configHash}.json";
@@ -1679,7 +1676,6 @@ in
       };
       flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.native.settings);
       permissionRules = mkPermissionRules cfg;
-      sharedRules = lib.filterAttrs (_name: isSharedRule) mergedRules;
       steeringEmitters = mkSteeringEmitters {
         inherit cfg mergedContext hasMergedContext mergedRules;
         sharedAgentsMd = !isHm;
@@ -1691,19 +1687,6 @@ in
           {ai.kiro.hooks = workflowReminderHooks cfg;}
           (lib.mkIf isHm (workflowsSettingImplication cfg))
           {assertions = mkAssertions cfg ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);}
-          # Published for observers such as file-warnings.nix, whether or not
-          # the key has content this evaluation.
-          (lib.mkIf (!isHm) {ai.internal.agentsMdTargets.kiro = projectContextKey;})
-          (lib.mkIf (!isHm && (hasMergedContext || sharedRules != {})) {
-            ai.internal.agentsMd.${projectContextKey} =
-              {
-                hasContent = true;
-                rules = lib.mapAttrs (_name: aiCommon.readContent) sharedRules;
-              }
-              // lib.optionalAttrs hasMergedContext {
-                context = aiCommon.readContent mergedContext;
-              };
-          })
           {
             # Writer identities survive empty declarations: N→0 must retract
             # earlier files and leaves, including when the final hook disappears.
@@ -1852,4 +1835,13 @@ in
         ++ steeringEmitters);
     installPackage = kiroInstallPackage;
     migrationConfig = kiroMigrationConfig;
+    # Only unscoped always-on rules; steering carries the rest.
+    sharedAgentsMd = {
+      cfg,
+      mergedRules,
+      ...
+    }: {
+      key = cfg.context.filename;
+      rules = lib.mapAttrs (_name: aiCommon.readContent) (lib.filterAttrs (_name: isSharedRule) mergedRules);
+    };
   }

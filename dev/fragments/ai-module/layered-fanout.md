@@ -8,13 +8,14 @@
 > Codex's execpolicy rules are read-only copies whose writers survive a disable.
 > Copilot reconciles its user settings.json on HM and the repository
 > `.github/copilot/settings.json` on devenv. Kiro excludes the normalized
-> `settings` pool. Native file settings live under `ai.<runtime>.native`. Each
-> devenv factory publishes its shared AGENTS.md key in
-> `ai.internal.agentsMdTargets`. Claude's `.claude.json` has an ungated
-> mode-narrowing command writer beside its unpin ledger. The builder declares
-> the per-runtime `agents`, `environmentVariables` and `lspServers` options and
-> an opt-in `agentsDir`; a record's `poolOptions` carries only what differs.
-> Every reconciled document is one `helpers.mkReconciledDocument` call.
+> `settings` pool. Native file settings live under `ai.<runtime>.native`. The
+> builder publishes each record's devenv shared AGENTS.md contribution, and its
+> key in `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`.
+> Claude's `.claude.json` has an ungated mode-narrowing command writer beside
+> its unpin ledger. The builder declares the per-runtime `agents`,
+> `environmentVariables` and `lspServers` options and an opt-in `agentsDir`; a
+> record's `poolOptions` carries only what differs. Every reconciled document is
+> one `helpers.mkReconciledDocument` call.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -298,12 +299,12 @@ copy the printed output to `config/ai-delivery-generated.nix`, then run
 regenerates and requires byte identity. `file-warnings.nix` continues rebasing
 the matrix's default directories onto consumer configuration; neither warning
 reader imports an evaluator. The matrix's project `AGENTS.md` writer is rebased
-onto the key the runtime's factory publishes in `ai.internal.agentsMdTargets`,
-never onto `context.filename`: Kimchi's names its Home Manager harness file,
-while its devenv factory always writes the project-root `AGENTS.md`. Codex,
-Kimchi and Kiro all default to that one path, so the manifest folds every
-writer's options per path; a first-wins map named only `ai.codex.*` for text
-Kimchi supplied.
+onto the key the runtime's record declares in `sharedAgentsMd`, which the
+builder publishes in `ai.internal.agentsMdTargets`, never onto
+`context.filename`: Kimchi's names its Home Manager harness file, while its
+devenv factory always writes the project-root `AGENTS.md`. Codex, Kimchi and
+Kiro all default to that one path, so the manifest folds every writer's options
+per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 
 ### Layer location map
 
@@ -323,6 +324,12 @@ Kimchi supplied.
 - per-scope package ownership guard → `checks/module-provenance/helpers.nix`
 - L4 per-runtime routing/rendering into `ai.<runtime>.files` →
   `packages/<pkg>/lib/mk<Cli>.nix`
+- L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
+  which returns the key, the rules under that runtime's own policy (Codex every
+  rule, scope-prefixed; Kiro only unscoped always-on rules; Kimchi none) and an
+  optional `maxBytes`; the builder adds the merged context and publishes it on
+  devenv. A limit is published even without content, because the runtime reads
+  the file whoever wrote it.
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
   single-owner map → `lib/ai/app/sharedAgentsMd.nix`
 - B7 public file-option declaration and runtime enable gate →

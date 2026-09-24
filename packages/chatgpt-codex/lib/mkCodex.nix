@@ -774,31 +774,6 @@
       context = aiCommon.readContent mergedContext;
       rules = lib.mapAttrs mkRuleBody mergedRules;
     };
-
-  mkSizeAssertion = {
-    cfg,
-    finalEntry,
-  }: let
-    finalText =
-      if finalEntry == null
-      then null
-      else aiTypes.textSourceInlineText finalEntry.content;
-    renderedBytes =
-      if finalText == null
-      then 0
-      else builtins.stringLength finalText;
-  in {
-    # Store-backed sources stay lazy: reading a derivation output here would
-    # introduce IFD. Inline generated/replacement content is checked after B7
-    # arbitration; disabled and source entries do not force discarded text.
-    assertion = finalText == null || renderedBytes <= cfg.projectDocMaxBytes;
-    message = ''
-      Codex AGENTS.md renders to ${toString renderedBytes} bytes, exceeding
-      ai.codex.projectDocMaxBytes (${toString cfg.projectDocMaxBytes} bytes).
-      Trim or replace the final inline content, or raise
-      ai.codex.projectDocMaxBytes.
-    '';
-  };
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -901,6 +876,16 @@ in
 
     installPackage = codexInstallPackage;
     migrationConfig = codexExecpolicyWriterConfig;
+    # Every rule, scope-prefixed, under Codex's size limit.
+    sharedAgentsMd = {
+      cfg,
+      mergedRules,
+      ...
+    }: {
+      key = cfg.context.filename;
+      maxBytes = cfg.projectDocMaxBytes;
+      rules = lib.mapAttrs mkRuleBody mergedRules;
+    };
     config = {
       backend,
       cfg,
@@ -916,9 +901,6 @@ in
       ...
     }: let
       isHm = backend == "hm";
-      # The shared repository AGENTS.md key devenv writes this runtime's
-      # context and rules into.
-      projectContextKey = cfg.context.filename;
       nativeDir = nativeDirFor backend cfg;
       configFile = "${nativeDir}/config.toml";
       # The TOML ledger directory and name are a live migration contract: every
@@ -1012,9 +994,16 @@ in
               }
             ]
             ++ lib.optionals isHm [
-              (mkSizeAssertion {
-                inherit cfg;
-                finalEntry = finalAgentsMdEntry;
+              # Checked after B7 arbitration, on the final inline content.
+              (aiCommon.sizeAssertion {
+                entry = finalAgentsMdEntry;
+                maxBytes = cfg.projectDocMaxBytes;
+                message = size: ''
+                  Codex AGENTS.md renders to ${toString size} bytes, exceeding
+                  ai.codex.projectDocMaxBytes (${toString cfg.projectDocMaxBytes} bytes).
+                  Trim or replace the final inline content, or raise
+                  ai.codex.projectDocMaxBytes.
+                '';
               })
               {
                 assertion = !(cfg.execpolicyRules ? default);
@@ -1132,26 +1121,12 @@ in
           })
         ]))
         (lib.optionalAttrs (!isHm) {
-          ai = {
-            codex.files.${configFile} = lib.mkIf (settings != {}) {
-              # Project config stays wholly Nix-owned: it is already trust-gated,
-              # and no project-local Codex writer has been observed. Preserve the
-              # generator name as well as the bytes so its store path stays fixed.
-              content = lib.mkDefault {source = tomlFormat.generate "codex-project-config.toml" settings;};
-              executable = null;
-            };
-            # The key this factory writes, published for observers such as
-            # file-warnings.nix, whether or not it has content this evaluation.
-            internal.agentsMdTargets.codex = projectContextKey;
-            internal.agentsMd.${projectContextKey} =
-              {
-                hasContent = lib.mkDefault hasAgentsMdContent;
-                maxBytes = cfg.projectDocMaxBytes;
-                rules = lib.mapAttrs mkRuleBody mergedRules;
-              }
-              // lib.optionalAttrs hasMergedContext {
-                context = aiCommon.readContent mergedContext;
-              };
+          ai.codex.files.${configFile} = lib.mkIf (settings != {}) {
+            # Project config stays wholly Nix-owned: it is already trust-gated,
+            # and no project-local Codex writer has been observed. Preserve the
+            # generator name as well as the bytes so its store path stays fixed.
+            content = lib.mkDefault {source = tomlFormat.generate "codex-project-config.toml" settings;};
+            executable = null;
           };
         })
       ];
