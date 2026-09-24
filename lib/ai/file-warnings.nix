@@ -15,9 +15,9 @@
 # rebased onto the key its factory declares in `ai.internal.agentsMdTargets`,
 # and a public override on it is already in the runtime's `files`. The key is
 # read from the factory, not from `context.filename`: Kimchi's names its Home
-# Manager harness file while its devenv factory always writes AGENTS.md. Reading the whole owner per runtime attributed every
-# runtime's key to the first one listed, so Kiro's context file was reported
-# as `ai.codex.files`.
+# Manager harness file while its devenv factory always writes AGENTS.md.
+# Reading the whole owner per runtime attributed every runtime's key to the
+# first one listed, so Kiro's context file was reported as `ai.codex.files`.
 {
   config,
   lib,
