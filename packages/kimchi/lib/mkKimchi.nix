@@ -423,6 +423,19 @@
         value = filteredSettings;
       })
 
+      # The user config.json holds `apiKey` and `gitTokens`. The merge writer
+      # keeps an existing file's mode whether or not it rewrites it, so this is
+      # the only thing that narrows a file an earlier generation widened to
+      # 0644, with or without settings. Home Manager only, the scope this writer
+      # was introduced with: a value Nix declares into the devenv project file
+      # is already world-readable in the store.
+      (lib.mkIf (!isDevenv) {
+        ai.kimchi.activation.kimchiConfigMode = helpers.mkCredentialModeWriter {
+          inherit (pkgs) coreutils;
+          path = configPath;
+        };
+      })
+
       (document {
         entry = "kimchiHarnessSettingsMerge";
         ledger = ledgerFor "harness-settings" harnessSettingsPath;
