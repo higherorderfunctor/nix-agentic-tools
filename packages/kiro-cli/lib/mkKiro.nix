@@ -1757,16 +1757,6 @@ in
                 };
                 pruneEntry.hm = "materialize-kiro-settings-prune";
               };
-              kiroSettingsMerge = {
-                entry = {
-                  devenv = "ai:kiro:settings-merge";
-                  hm = "kiroSettingsMerge";
-                };
-                ledgers.${settingsLedger} = {
-                  codec = "json";
-                  path = "${settingsDir}/cli.json";
-                };
-              };
               materialize-kiro-hooks-write = {
                 entry = {
                   devenv = "ai:kiro:materialize-hooks";
@@ -1780,18 +1770,23 @@ in
               };
             };
           }
+          # Kiro writes model selections and toggles here. Flattening stops at
+          # each known dotted key, preserving object-valued keys.
+          (helpers.mkReconciledDocument {
+            content.value = flatSettings;
+            entry = {
+              devenv = "ai:kiro:settings-merge";
+              hm = "kiroSettingsMerge";
+            };
+            format = "json";
+            ledger = settingsLedger;
+            path = "${settingsDir}/cli.json";
+            runtime = "kiro";
+            writer = "kiroSettingsMerge";
+          })
           {
             ai.kiro.files = lib.mkMerge [
               {
-                # Kiro writes model selections and toggles here. Flattening
-                # stops at each known dotted key, preserving object-valued keys.
-                "${settingsDir}/cli.json" = {
-                  content.value = flatSettings;
-                  entry = "kiroSettingsMerge";
-                  facts.harnessWrites = true;
-                  format = "json";
-                  ledger = settingsLedger;
-                };
                 # Kiro reads `<workspace>/.kiro/settings/lsp.json`, so the
                 # Home Manager copy is live only when the workspace is $HOME
                 # (a case kiro-cli 2.22.1 itself calls a mistake). Written
