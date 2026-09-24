@@ -36,7 +36,6 @@
     && (!(writer ? absentWriter) || (nonBlank (writer.absentWriter.reason or "") && nonBlank (writer.absentWriter.evidence or "")))
     && !(writer ? absentWriter && writer ? exemption)
     && (!(writer ? constantGate) || nonBlank writer.constantGate)
-    && (!(writer ? offLayer) || nonBlank writer.offLayer)
     && (!(writer ? declarationIndependent) || nonBlank writer.declarationIndependent)
     && (!(writer ? exemption) || (nonBlank (writer.exemption.reason or "") && nonBlank (writer.exemption.evidence or "")));
   expectedKeys = lib.concatMap (surface: lib.concatMap (ecosystem: map (mode: "${surface}/${ecosystem}/${mode}") modes) ecosystems) surfaces;

@@ -34,7 +34,7 @@
     # The existing shared owner holds these typed entries before step 16.
     # It is still the delivery layer, not a guessed backend file sink.
     shared =
-      if mode == "devenv" && builtins.elem runtime ["codex" "kiro"]
+      if mode == "devenv" && builtins.elem runtime ["codex" "kimchi" "kiro"]
       then config.ai.internal.files
       else {};
     files = lib.filterAttrs (_: entry: entry != null) (cfg.files // shared);

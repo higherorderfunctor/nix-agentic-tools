@@ -64,6 +64,43 @@
       ];
     }
     {
+      ecosystem = "kimchi";
+      mode = "devenv";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      surface = "agents";
+      target = "$DEVENV_ROOT/.kimchi/agents/<name>.md";
+      writerAttr = [
+        "tasks"
+        "ai:kimchi:agents"
+      ];
+    }
+    {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.config/kimchi/harness/agents/<name>.md";
+          writerAttr = [
+            "home"
+            "activation"
+            "kimchiAgentsPrune"
+          ];
+        }
+      ];
+      ecosystem = "kimchi";
+      mode = "hm";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      surface = "agents";
+      target = "$HOME/.config/kimchi/harness/agents/<name>.md";
+      writerAttr = [
+        "home"
+        "activation"
+        "kimchiAgents"
+      ];
+    }
+    {
       ecosystem = "kiro";
       mode = "devenv";
       primitive = "ownPathDeclarative";
@@ -156,10 +193,10 @@
       primitive = "ownPathDeclarative";
       pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
       surface = "context";
-      target = "$DEVENV_ROOT/.config/kimchi/harness/AGENTS.md";
+      target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
         "files"
-        ".config/kimchi/harness/AGENTS.md"
+        "AGENTS.md"
       ];
     }
     {
@@ -279,6 +316,18 @@
         "home"
         "file"
         ".codex/hooks.json"
+      ];
+    }
+    {
+      ecosystem = "kimchi";
+      mode = "devenv";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      surface = "hooks";
+      target = "$DEVENV_ROOT/.kimchi/hooks.json";
+      writerAttr = [
+        "files"
+        ".kimchi/hooks.json"
       ];
     }
     {
@@ -419,6 +468,31 @@
       ];
     }
     {
+      ecosystem = "kimchi";
+      mode = "devenv";
+      primitive = "ownLeaves";
+      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      surface = "mcpServers";
+      target = "$DEVENV_ROOT/.kimchi/mcp.json";
+      writerAttr = [
+        "tasks"
+        "ai:kimchi:mcp-merge"
+      ];
+    }
+    {
+      ecosystem = "kimchi";
+      mode = "hm";
+      primitive = "ownLeaves";
+      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      surface = "mcpServers";
+      target = "$HOME/.config/kimchi/harness/mcp.json";
+      writerAttr = [
+        "home"
+        "activation"
+        "kimchiMcpMerge"
+      ];
+    }
+    {
       additionalWriters = [
         {
           condition = "ai.kiro.mcpWriteMode = \"merge\"";
@@ -527,6 +601,31 @@
         "home"
         "activation"
         "codexSettingsReconcile"
+      ];
+    }
+    {
+      ecosystem = "kimchi";
+      mode = "devenv";
+      primitive = "ownLeaves";
+      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      surface = "permissions";
+      target = "$DEVENV_ROOT/.kimchi/permissions.json";
+      writerAttr = [
+        "tasks"
+        "ai:kimchi:permissions-merge"
+      ];
+    }
+    {
+      ecosystem = "kimchi";
+      mode = "hm";
+      primitive = "ownLeaves";
+      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      surface = "permissions";
+      target = "$HOME/.config/kimchi/harness/permissions.json";
+      writerAttr = [
+        "home"
+        "activation"
+        "kimchiPermissionsMerge"
       ];
     }
     {
@@ -736,6 +835,54 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownLeaves";
+          pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          target = "$DEVENV_ROOT/.config/kimchi/harness/settings.json";
+          writerAttr = [
+            "tasks"
+            "ai:kimchi:harness-settings-merge"
+          ];
+        }
+      ];
+      ecosystem = "kimchi";
+      mode = "devenv";
+      primitive = "ownLeaves";
+      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      surface = "settings";
+      target = "$DEVENV_ROOT/.kimchi/config.json";
+      writerAttr = [
+        "tasks"
+        "ai:kimchi:config-merge"
+      ];
+    }
+    {
+      additionalWriters = [
+        {
+          primitive = "ownLeaves";
+          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          target = "$HOME/.config/kimchi/harness/settings.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "kimchiHarnessSettingsMerge"
+          ];
+        }
+      ];
+      ecosystem = "kimchi";
+      mode = "hm";
+      primitive = "ownLeaves";
+      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      surface = "settings";
+      target = "$HOME/.config/kimchi/config.json";
+      writerAttr = [
+        "home"
+        "activation"
+        "kimchiConfigMerge"
+      ];
+    }
+    {
       ecosystem = "kiro";
       mode = "devenv";
       primitive = "ownLeaves";
@@ -828,10 +975,10 @@
       primitive = "ownPathDeclarative";
       pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
       surface = "skills";
-      target = "$DEVENV_ROOT/.config/kimchi/harness/skills/<name>/<leaf>";
+      target = "$DEVENV_ROOT/.kimchi/skills/<name>/<leaf>";
       writerAttr = [
         "files"
-        ".config/kimchi/harness/skills/probe/SKILL.md"
+        ".kimchi/skills/probe/SKILL.md"
       ];
     }
     {
