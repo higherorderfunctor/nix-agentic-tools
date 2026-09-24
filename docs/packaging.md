@@ -81,7 +81,9 @@ composed registry and ninja DAG:
   `passthru.fixPnpmDepsHash`, which `fix_sidecar_hashes` discovers — a pnpm
   package WITHOUT that attr still has no automatic repair, which is the
   remaining half of the Mode D gap in
-  `docs/update-pipeline-transitive-hash-gap.md`.
+  `docs/update-pipeline-transitive-hash-gap.md`. Its `pnpmDeps` and `src` FODs
+  carry the version in their names, so a bump that forgets a hash fails the
+  fetch instead of substituting the previous release's cached output.
 - **Go toolchain gaps** (`gluetun`, `oh-my-posh`): declare the package's go.mod
   floor and let `vu.goToolchainForFloor` DERIVE the toolchain — `ourPkgs.go`
   while our pin satisfies the floor, otherwise the lowest `go-bin`

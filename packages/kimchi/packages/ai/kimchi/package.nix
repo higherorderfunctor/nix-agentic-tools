@@ -24,10 +24,22 @@
     fetchzip {
       inherit (source) hash url;
     };
+  # A fixed-output store path is a function of its name and declared hash
+  # only. fetchzip defaults to the unversioned name "source" and
+  # fetchPnpmDeps to "<pname>-pnpm-deps", so a bump that leaves a hash
+  # untouched resolves to the previous release's cached output and is never
+  # re-verified. Putting the version in the name moves the path on every
+  # bump, forcing a fetch that checks the hash. The Go vendor FOD needs
+  # nothing: buildGoModule already names it <pname>-<version>-go-modules.
+  versionedName = "kimchi-${sources.version}";
+
   # The release source is pinned ONCE, under `extraction.kimchiSource`: the
   # build compiles it and the extractor reads it, so the two can never be
   # pointed at different trees.
-  kimchiSource = fetchExtraction extraction.kimchiSource;
+  kimchiSource = fetchzip {
+    name = "${versionedName}-source";
+    inherit (extraction.kimchiSource) hash url;
+  };
   piAgentCorePackage = fetchExtraction extraction.piAgentCorePackage;
   piAiPackage = fetchExtraction extraction.piAiPackage;
   piPackage = fetchExtraction extraction.piPackage;
@@ -170,7 +182,9 @@ in
     src = kimchiSource;
 
     pnpmDeps = ourPkgs.fetchPnpmDeps {
-      inherit (finalAttrs) pname src version;
+      # fetchPnpmDeps derives its name from pname alone; see versionedName.
+      pname = versionedName;
+      inherit (finalAttrs) src version;
       inherit pnpm;
       fetcherVersion = 3;
       hash = sources.pnpmDepsHash or lib.fakeHash;
