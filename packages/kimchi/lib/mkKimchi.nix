@@ -73,8 +73,7 @@
   # runtime secret export and, on devenv, the exact-cwd guard.
   mkPrep = {
     cfg,
-    mergedEnvironmentVariables,
-    moduleEnvironmentVariables ? {},
+    launcherEnvironment,
     requiredProjectRoot ? null,
   }: let
     # Non-secret env vars — baked into the wrapper via `--set`.
@@ -86,10 +85,11 @@
           then "1"
           else "0";
       };
-    # Module-contributed defaults (e.g. the sandbox-safe GIT_SSH_COMMAND) sit
-    # UNDER the consumer's pool, matching every other harness. `kimchiEnvVars`
-    # stays last: those are derived from typed options, not free-form entries.
-    effectiveEnvVars = moduleEnvironmentVariables // mergedEnvironmentVariables // kimchiEnvVars;
+    # The builder's `launcherEnvironment` keeps module defaults (e.g. the
+    # sandbox-safe GIT_SSH_COMMAND) under the consumer's pool, as for every
+    # harness. `kimchiEnvVars` stays last: those are derived from typed
+    # options, not free-form entries.
+    effectiveEnvVars = launcherEnvironment // kimchiEnvVars;
 
     # The Cast AI key is a secret: read it from its decrypted file (or
     # helper) at launch via the repo's shared credential snippet, so it is
@@ -119,6 +119,8 @@
       ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}"
       ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
 
+    # Not `lib.ai.mkLauncher`: that one writes `wrapProgram` on one line, and
+    # moving this continued form onto it would change the wrapper's store path.
     wrappedPackage = pkgs.symlinkJoin {
       name = "kimchi-wrapped";
       paths = [cfg.package];
@@ -143,10 +145,9 @@
     backend,
     cfg,
     config,
+    launcherEnvironment,
     mergedAgents,
-    mergedEnvironmentVariables,
     mergedServers,
-    moduleEnvironmentVariables,
     topHooks,
     ...
   }: let
@@ -160,7 +161,7 @@
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
-      inherit cfg mergedEnvironmentVariables moduleEnvironmentVariables;
+      inherit cfg launcherEnvironment;
       requiredProjectRoot =
         if backend == "devenv" && hasExactCwdProjectFiles
         then config.devenv.root
