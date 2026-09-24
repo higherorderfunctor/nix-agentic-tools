@@ -188,6 +188,14 @@ in {
   # ── Binary Cache ──────────────────────────────────────────────────────
   cachix.pull = ["nix-agentic-tools"];
 
+  # Register the generator's real-file ownership with devenv and its delivery
+  # observer. Seed leaves existing bytes/mtime alone; the ordered instruction
+  # materializer remains responsible for updates and atomic replacement.
+  files."AGENTS.md" = {
+    copyMode = "seed";
+    source = "${instr.agents}/AGENTS.md";
+  };
+
   # ── Packages ──────────────────────────────────────────────────────────
   packages = with pkgs;
     [
@@ -260,6 +268,8 @@ in {
 
     claude = {
       enable = true;
+      # The repository generator embeds this rule in CLAUDE.md.
+      files.".claude/rules/delegate-sizing-router.md" = null;
       programs.delegate-sizing = {
         extraRuntimes = ["codex"];
         manualExternalDelegates = ["kiro"];
@@ -267,6 +277,8 @@ in {
     };
     codex = {
       enable = true;
+      # The repository generator owns the complete, portable AGENTS.md.
+      files."AGENTS.md" = null;
       # Semble stays outside the manual diagnostic closure but is pinned by
       # this flake for every interactive shell. The extra parsers cover files
       # Semble recognizes but its upstream bundled grammar archive does not

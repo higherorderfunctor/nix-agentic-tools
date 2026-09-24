@@ -1,9 +1,8 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-12 — devenv's `createFileScript` is now a
-> `copyMode` dispatcher, not the symlink writer this fragment used to quote. The
-> quoted body is `createSymlinkScript`; `createCopyScript` is the other branch
-> and it DOES recurse.
+> **Last verified:** 2026-09-23 — repository AGENTS.md uses native seed
+> ownership alongside the atomic instruction materializer; redundant module
+> projections are suppressed.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -95,8 +94,9 @@ The other branch does recurse. `createCopyScript` drops a previous
 store-symlink, then materializes with `cp -RL` followed by `chmod -R u+w`, so a
 directory source is copied through and the result is WRITABLE. `copyMode`
 accepts `symlink` (default), `seed` (create only when absent, preserving user
-edits) and `copy` (overwrite every entry). This repo sets `copyMode` nowhere —
-see the rejection recorded further down, which still holds.
+edits) and `copy` (overwrite every entry). This repo uses `seed` only for the
+generated `AGENTS.md` ownership handoff described below. Repeated overwrite mode
+remains rejected.
 
 ### Silent-fail behavior (important)
 
@@ -194,7 +194,8 @@ the user-space walker is a viable fix while waiting for upstream.
 `devenv.nix` imports `dev/instructions.nix` as `instr` — the same import
 `flake.nix` uses, so both render identical bytes. It exposes the four
 `instructions-*` derivations; the working tree is materialized from them by a
-shell-entry task, **not** by `files.*`:
+shell-entry task. `AGENTS.md` additionally has a native `files.*` seed
+declaration pointing at the exact same derivation source:
 
 ```nix
 instr = import ./dev/instructions.nix {
@@ -205,13 +206,31 @@ instr = import ./dev/instructions.nix {
 
 `lib/materialize-repo-instructions.nix` packages the copier.
 `dev/tasks/generate.nix` invokes that helper from
-`generate:instructions:materialize` with `before = ["devenv:enterShell"]`, so
-every `devenv shell`, `direnv reload`, `devenv up`, `devenv reload`, and manual
-`devenv test` copies `CLAUDE.md`, `.claude/rules/*.md`, `AGENTS.md`,
-`.github/copilot-instructions.md`, `.github/instructions/*.md` and
-`.kiro/steering/*.md` into place as **real files**.
+`generate:instructions:materialize` after `devenv:files` and before
+`devenv:enterShell`, so every `devenv shell`, `direnv reload`, `devenv up`,
+`devenv reload`, and manual `devenv test` copies `CLAUDE.md`,
+`.claude/rules/*.md`, `AGENTS.md`, `.github/copilot-instructions.md`,
+`.github/instructions/*.md` and `.kiro/steering/*.md` into place as **real
+files**.
 
-Why copies rather than `files.*`:
+The repository tombstones `ai.codex.files."AGENTS.md"` and
+`ai.claude.files.".claude/rules/delegate-sizing-router.md"`: the delegate-sizing
+rule is already composed into AGENTS.md and CLAUDE.md. Without those tombstones,
+the module writer requests a short AGENTS.md symlink while the generator
+replaces it with the full real file, and the directory mirror prunes the
+standalone router. Ordering cannot reconcile incompatible owners.
+
+Native `files."AGENTS.md".copyMode = "seed"` records the deliberate real-file
+handoff using existing devenv semantics. It preserves existing regular files and
+mtime, seeds missing files from the same generated source, and migrates old
+store symlinks. The subsequent atomic materializer owns updates. Delivery
+inspection records seed ownership instead of retaining the old symlink
+expectation; unrelated conflict and retention warnings remain active. No manual
+file or ledger cleanup is needed. `instruction-ownership` exercises this
+migration and repeated activation with the pinned upstream file tasks and the
+actual warning observer.
+
+Why portable copies rather than `files.*` symlinks:
 
 - **The tracked outputs cannot be symlinks at all.** A store symlink commits as
   mode `120000` holding an absolute `/nix/store` path — meaningless in any other
