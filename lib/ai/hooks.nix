@@ -27,20 +27,30 @@
     };
   };
 
-  portableMatcherBlockType = lib.types.submodule {
-    options = {
-      hooks = lib.mkOption {
-        type = lib.types.listOf portableHandlerType;
-        default = [];
-        description = "Command handlers fired by this matcher group.";
-      };
-      matcher = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Optional matcher passed unchanged to each runtime.";
+  # One matcher group: an optional matcher and its handlers. A runtime with
+  # native handlers (Claude's handler types, Codex's extra fields) passes its
+  # own handler type and, where its semantics differ, its own descriptions.
+  mkMatcherBlockType = {
+    handler,
+    hooks ? "Command handlers fired by this matcher group.",
+    matcher ? "Optional matcher passed unchanged to each runtime.",
+  }:
+    lib.types.submodule {
+      options = {
+        hooks = lib.mkOption {
+          type = lib.types.listOf handler;
+          default = [];
+          description = hooks;
+        };
+        matcher = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = matcher;
+        };
       };
     };
-  };
+
+  portableMatcherBlockType = mkMatcherBlockType {handler = portableHandlerType;};
 
   portableEvents = [
     "PermissionRequest"
@@ -84,5 +94,5 @@
       lib.optionalAttrs (block.matcher != null) {inherit (block) matcher;}
       // {hooks = map (lib.filterAttrs (_: value: value != null)) block.hooks;}));
 in {
-  inherit commandType hooksType merge mkHooksType packageToCommand portableEvents render;
+  inherit commandType hooksType merge mkHooksType mkMatcherBlockType packageToCommand portableEvents portableHandlerType render;
 }

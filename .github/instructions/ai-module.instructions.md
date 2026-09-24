@@ -11,9 +11,10 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > `mkRuntime`'s record-level `config`, and `mkRuntime` rejects a backend spec
 > carrying anything but `installPackage`, `migrationConfig` and `options`. Kiro
 > hook commands resolve packages through the shared `commandType`. Launchers
-> bake the builder's one `launcherEnvironment`. Claude devenv delivers
-> `ai.agents` and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw
-> agent writer (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a
+> bake the builder's one `launcherEnvironment`. Claude's and Codex's hook
+> matcher groups share `mkMatcherBlockType`. Claude devenv delivers `ai.agents`
+> and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent
+> writer (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a
 > store-path string is a file, never a body naming its own path. File content at
 > `mkDefault` enables its entry; `content.enable = false` suppresses every
 > content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
@@ -281,13 +282,16 @@ The ai module fans out TWO kinds of configuration:
   the typed `ai.codex.native.settings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
   appended after portable `ai.hooks` groups and emitted in adjacent
-  `hooks.json`. Typed native additions include `commandWindows`,
-  `statusMessage`, and `additionalContextLimit`; a JSON-compatible tail remains
-  for forward compatibility. Typed hooks cannot coexist with inline
-  `ai.codex.native.settings.hooks` at one layer because Codex loads both
-  additively and warns rather than applying normal config precedence. Nix
-  ownership does not make these native-policy hooks: Codex still requires
-  `/hooks` review and hash-based trust before user/project handlers run.
+  `hooks.json`. The handler extends the portable command handler, so the two
+  share `command`, `timeout` and `type`; typed native additions include
+  `commandWindows`, `statusMessage`, and `additionalContextLimit`, and a
+  JSON-compatible tail remains for forward compatibility. Claude's and Codex's
+  matcher groups both come from `lib.ai.hooks.mkMatcherBlockType`. Typed hooks
+  cannot coexist with inline `ai.codex.native.settings.hooks` at one layer
+  because Codex loads both additively and warns rather than applying normal
+  config precedence. Nix ownership does not make these native-policy hooks:
+  Codex still requires `/hooks` review and hash-based trust before user/project
+  handlers run.
 - `ai.copilot.projectDir` — the project-native `.github` root used by devenv for
   context, rules, agents, and skills. It is declared identically in both
   backends so generated option discovery and types cannot drift, but only devenv
