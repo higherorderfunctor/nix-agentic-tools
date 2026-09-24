@@ -177,7 +177,7 @@ in
       writer.ledgers;
     # `own` already orders itself after the backend's file node, so passing the
     # `files` token again would name that node twice.
-    bundleAfterEdges = writer: edges afterTokens (lib.filter (token: token != "files") writer.after) ++ writer.afterNodes.${backend};
+    bundleAfterEdges = writer: edges afterTokens (lib.filter (token: token != "files") writer.after);
     owningWriters = lib.filterAttrs (_name: writer: writer.command == null && writer.ledgers != {}) cfg.activation;
     ownsDirectory = writer: lib.any (ledger: ledger.codec == "dir") (lib.attrValues writer.ledgers);
     # A `dir` ledger is two Home Manager entries, because a real file this
@@ -278,7 +278,7 @@ in
     # still collecting the definitions it is made of.
     mergeBundles = path: lib.foldl' (merged: bundle: merged // lib.attrByPath path {} bundle) {} bundles;
   in {
-    afterEdges = writer: edges afterTokens writer.after ++ writer.afterNodes.${backend};
+    afterEdges = writer: edges afterTokens writer.after;
     beforeEdges = writer: edges beforeTokens writer.before;
 
     # A bespoke body is spliced into one script the backend also fills with

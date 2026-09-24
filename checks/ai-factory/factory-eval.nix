@@ -52,6 +52,44 @@ in {
         && record.supportedPools == []
     );
 
+    # A runtime record outside this repository may support the normalized
+    # `settings` pool without lowering reasoning effort. No generic warning
+    # speaks for it any more: the runtime's own description and delivery rows
+    # own that disclosure. The control is that the root value did reach the
+    # runtime's normalized settings, so the silence is not an unread value.
+    factory-mkRuntime-no-generic-effort-warning = mkTest "mkRuntime-no-generic-effort-warning" (
+      let
+        record = ai.app.mkRuntime {
+          inherit pkgs;
+          name = "testapp";
+          supportedPools = ["settings"];
+          defaults.package = pkgs.hello;
+        };
+        evaluated = lib.evalModules {
+          modules = [
+            ai.sharedOptions
+            hmStubs
+            {
+              options.warnings = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [];
+              };
+            }
+            (ai.app.hmTransform record)
+            {
+              config.ai = {
+                settings.reasoningEffort = "high";
+                testapp.enable = true;
+              };
+            }
+          ];
+        };
+      in
+        evaluated.config.ai.testapp.normalized.settings.reasoningEffort
+        == "high"
+        && !(lib.any (lib.hasInfix "reasoningEffort") evaluated.config.warnings)
+    );
+
     factory-mkRuntime-builds-option-tree = mkTest "mkRuntime-builds-option-tree" (
       let
         record = ai.app.mkRuntime {
