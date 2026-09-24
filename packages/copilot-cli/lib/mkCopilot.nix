@@ -42,7 +42,6 @@
   pkgs,
   ...
 }: let
-  dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
   wrapCopilotPackage = import ./wrapPackage.nix {inherit lib pkgs;};
   # Copilot reads repository settings from this fixed path, whatever
   # `projectDir` says: copilot-cli 1.0.88 opens it (and
@@ -279,7 +278,7 @@ in
         # are not mutually exclusive, they feed one pool.
         (lib.mkIf (cfg.agentsDir != null) {
           ai.copilot.agents = lib.mapAttrs (_: lib.mkDefault) (
-            dirHelpers.agentsFromDir cfg.agentsDir
+            lib.ai.agentsFromDir cfg.agentsDir
           );
         })
 
@@ -338,15 +337,12 @@ in
         # CLI has no equivalent for, so Home Manager stays deliberately inert
         # rather than writing a HOME copy nothing reads.
         (lib.optionalAttrs (!isHm) (lib.mkMerge [
-          (let
-            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-            inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
-          in {
+          {
             ai.copilot.files = lib.mapAttrs' (name: rule:
               lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
                 content = lib.mkDefault {
                   enable = true;
-                  text = fragmentsLib.mkRenderer copilotTransformer {} (rule
+                  text = lib.ai.transformers.copilot.render (rule
                     // {
                       paths = rule.matcher;
                       text = aiCommon.readContent rule;
@@ -354,7 +350,7 @@ in
                 };
               })
             mergedRules;
-          })
+          }
           (lib.mkIf hasMergedContext {
             ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" =
               aiCommon.contentFileEntry mergedContext;
@@ -369,7 +365,7 @@ in
         # reads a repository `effortLevel`: `-p`, `--acp` and `--server`
         # take effort from the user file alone. So devenv delivery is
         # partial, and lib/ai/delivery-warnings.nix says so.
-        (lib.mkIf ((resolvedSettings.reasoningEffort or null) != null) {
+        (lib.mkIf (resolvedSettings.reasoningEffort != null) {
           ai.copilot.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
 
