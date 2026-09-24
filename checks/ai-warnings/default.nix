@@ -271,18 +271,30 @@
         ["ai" runtime "settings" "reasoningEffort"]
       ])
     ["kimchi"]) ["devenv" "hm"];
-  # Copilot and Kiro both deliver an LSP server's `extensions` (Copilot as
+  # Copilot and Kiro both render an LSP server's `extensions` (Copilot as
   # `fileExtensions`, Kiro as `file_extensions`), on both backends and at both
-  # the root and the per-runtime path, so a populated server must stay silent.
-  # A warning here would claim a gap the factory closes.
+  # the root and the per-runtime path, so no warning may name that field: it
+  # would claim a gap the factory closes.
+  #
+  # Beyond that field, a cell warns exactly when the policy records a gap for
+  # it. rowCase owns the cells that record one; here, a cell that records none
+  # must stay silent. That silence says the warnings match the policy, NOT that
+  # every file is read: Kiro's Home Manager copy lands at
+  # $HOME/.kiro/settings/lsp.json and is live only when the workspace is $HOME
+  # (mkKiro.nix), yet `lspServers/kiro/hm` records no gap. Recording one moves
+  # that cell to rowCase rather than failing this assertion.
   deliveredLspSilent = lib.all (mode:
-    lib.all (runtime:
-      lib.all (path:
-        evaluate mode (lib.recursiveUpdate {ai.${runtime}.enable = true;} (lib.setAttrByPath path {
+    lib.all (runtime: let
+      recordedGap = lib.any (row: row.surface == "lspServers" && row.ecosystem == runtime && row.mode == mode) gaps;
+    in
+      lib.all (path: let
+        messages = evaluate mode (lib.recursiveUpdate {ai.${runtime}.enable = true;} (lib.setAttrByPath path {
           command = "probe";
           extensions = ["nix"];
-        }))
-        == [])
+        }));
+      in
+        !contains (lib.showOption (path ++ ["extensions"])) messages
+        && (recordedGap || messages == []))
       [
         ["ai" "lspServers" "probe"]
         ["ai" runtime "lspServers" "probe"]
@@ -375,7 +387,7 @@ in {
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
       && lib.assertMsg loweredEffortSilent "a runtime that lowers reasoning effort natively still warns about it"
-      && lib.assertMsg deliveredLspSilent "a runtime that delivers LSP extensions still warns about them"
+      && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
     );
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
       let
