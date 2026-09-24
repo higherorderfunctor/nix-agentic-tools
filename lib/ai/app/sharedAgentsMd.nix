@@ -15,6 +15,7 @@
     lib.hasAttrByPath ["devenv" "root"] options
     && lib.hasAttrByPath ["files"] options;
   agentsmd = import ../transformers/agentsmd.nix {inherit lib;};
+  aiCommon = import ../ai-common.nix {inherit lib;};
   aiTypes = import ../types.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
@@ -85,29 +86,18 @@
       filename: _text: config.ai.internal.agentsMd.${filename}.hasContent
     )
     allRendered;
-  sizeAssertions =
-    lib.mapAttrsToList (filename: value: let
-      finalEntry = config.ai.internal.files.${filename} or null;
-      # A source-backed final entry is not measured: reading it would build a
-      # derivation during evaluation. Only inline bytes are size-checked.
-      finalText =
-        if finalEntry == null
-        then null
-        else aiTypes.textSourceInlineText finalEntry.content;
-      size =
-        if finalText == null
-        then null
-        else builtins.stringLength finalText;
-    in {
-      assertion = value.maxBytes == null || size == null || size <= value.maxBytes;
-      message = ''
+  sizeAssertions = lib.mapAttrsToList (filename: value:
+    aiCommon.sizeAssertion {
+      entry = config.ai.internal.files.${filename} or null;
+      inherit (value) maxBytes;
+      message = size: ''
         ${filename} renders to ${toString size} bytes, exceeding its configured
         limit (${toString value.maxBytes} bytes). Trim the contributing context
         or rules, replace the final inline file, or raise the runtime's
         document-size limit.
       '';
     })
-    config.ai.internal.agentsMd;
+  config.ai.internal.agentsMd;
   # Discover public app records from their option shape, including downstream
   # runtimes absent from this repository's first-party registry.
   runtimeNames = builtins.attrNames (lib.filterAttrs (_name: runtime:
