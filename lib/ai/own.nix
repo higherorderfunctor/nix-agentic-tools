@@ -64,7 +64,7 @@
   targetErrors = target: let
     label = "target '${target.path or "<unnamed>"}'";
     missing = builtins.filter (field: !(target ? ${field})) ["codec" "ledger" "path" "units"];
-    extra = builtins.filter (field: !builtins.elem field ["codec" "ledger" "path" "units"]) (builtins.attrNames target);
+    extra = builtins.filter (field: !builtins.elem field ["codec" "ledger" "lock" "path" "units"]) (builtins.attrNames target);
   in
     if missing != [] || extra != []
     then
@@ -75,6 +75,10 @@
       "${label} has unknown codec '${toString target.codec}' (expected ${lib.concatStringsSep "/" codecs})"
       ++ lib.optional (traverses target.path) "${label} path must be relative and must not traverse"
       ++ lib.optional (traverses target.ledger) "${label} ledger '${target.ledger}' must be relative and must not traverse"
+      # A native writer's lock guards one document's read-modify-write; a
+      # directory's units are published one atomic file at a time.
+      ++ lib.optional (target ? lock && target.codec == "dir") "${label} lock is for document targets only"
+      ++ lib.optional (target ? lock && (!builtins.isString target.lock || traverses target.lock)) "${label} lock must be relative and must not traverse"
       ++ (
         if target.codec == "dir"
         then

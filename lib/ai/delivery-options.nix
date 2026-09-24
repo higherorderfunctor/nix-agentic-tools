@@ -308,6 +308,19 @@
               type = lib.types.enum ["dir" "json" "toml"];
               description = "Which container `lib/ai/own.py` owns units inside: whole files in a directory, or leaves of a JSON or TOML document.";
             };
+            lock = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              example = ".config/kimchi/harness/trust.json.lock";
+              description = ''
+                A document's NATIVE writer lock, relative to the backend root:
+                the directory a proper-lockfile writer creates with `mkdir`
+                around its own read-modify-write. The reconciler takes the same
+                lock around every read and write of this document, so neither
+                side loses the other's update or parses a half-written file.
+                Documents only; null when the native writer takes no lock.
+              '';
+            };
             path = lib.mkOption {
               type = lib.types.str;
               description = "The container's path, relative to the backend root (HOME for Home Manager, the project root for devenv).";

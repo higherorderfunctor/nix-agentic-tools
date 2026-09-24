@@ -8,13 +8,17 @@ applyTo: "checks/*/module-eval.nix,checks/module-provenance/**,lib/ai/adapters/*
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-23 — Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`, choosing `source` by Home
-> Manager's `isPathLike`. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Authored prose and final delivery share one
-> priority-aware text-source record with enable semantics.
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; Claude and Kimchi choose
+> an agent's `source` by Home Manager's `isPathLike`. File content at
+> `mkDefault` enables its entry; `content.enable = false` suppresses every
+> content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
+> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). A root request nothing per-runtime can withdraw
+> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
+> owned writable copies and portable hooks reach its project `hooks.json` on
+> devenv. Reasoning effort lowers to Claude, Codex, and Kimchi; authored prose
+> and final delivery share one priority-aware text-source record with enable
+> semantics.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -276,11 +280,12 @@ enabled ecosystem whose native model preserves the option's semantics):
   `xhigh` value. Every runtime exposes the same field at
   `ai.<runtime>.settings.reasoningEffort`; a non-null per-runtime value wins for
   only that runtime, while null inherits the root through `resolveOverride`.
-  Claude and Codex lower the resolved value to native `effortLevel` and
-  `model_reasoning_effort`; runtimes without a lossless lowering retain the
-  normalized value without emitting a native key. Values that only one runtime
-  persists remain under that runtime's `native.settings`. An explicit native
-  Claude/Codex effort key still has normal option priority over the derived
+  Claude, Codex, and Kimchi lower the resolved value to native `effortLevel`,
+  `model_reasoning_effort`, and harness `defaultThinkingLevel`, respectively;
+  runtimes without a lossless lowering emit no native key, and
+  `lib/ai/delivery-warnings.nix` warns that the value is inert there. Values
+  that only one runtime persists remain under that runtime's native settings. An
+  explicit native effort key still has normal option priority over the derived
   normalized default, and a native null excludes that runtime from emission.
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
@@ -300,22 +305,34 @@ enabled ecosystem whose native model preserves the option's semantics):
   fields and cannot carry a raw Markdown or path entry. A path-like legacy entry
   — a Nix path, a store-path string such as a flake input's `"${src}/a.md"`, or
   a derivation, i.e. upstream Home Manager's `isPathLike` — stays a file
-  `source` for Claude on both backends (`agent.isPathLike`), but is read into
-  text for Copilot's file writer. Kiro remains excluded, but NOT because its
-  agents are untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's
-  v3 agent schema, and its `prompt` uses the same `text`/`source` content shape.
-  The blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
-  tool names (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`,
-  `@mcp`), so lowering needs a translation table, not a pass-through. Add one
-  and the exclusion can be revisited.
+  `source` for Claude and Kimchi on both backends (`agent.isPathLike`), but is
+  read into text for Copilot's file writer. Kiro remains excluded, but NOT
+  because its agents are untyped JSON — `ai.kiro.agents` is a typed record
+  modelling Kiro's v3 agent schema, and its `prompt` uses the same
+  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
+  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
+  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
+  table, not a pass-through. Add one and the exclusion can be revisited. Kimchi
+  takes semantic records as frontmatter plus body with no `name:`, and rejects a
+  non-empty `tools` (its lowercase builtin names differ) and root Markdown (it
+  misreads Claude's `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries
+  Kimchi-native Markdown. Its files are the one Markdown surface a harness
+  rewrites (the /agents commands), so they state `method = "copy-ro"` with
+  `mode = "0644"`: `shared` needs a leaf container and a symlink or read-only
+  copy would refuse the write.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex
   subset understood by both runtimes. Non-portable events fail with a diagnostic
   and belong under `ai.claude.hooks` or `ai.codex.hooks`. Command packages with
   a `meta.mainProgram` or conventional `pname` resolve to their package
-  executable; bare-file derivations remain direct output paths. Kiro's v3
-  trigger records remain native-only.
+  executable; bare-file derivations remain direct output paths. Kimchi reads the
+  same Claude shape from a trusted project's `.kimchi/hooks.json`, so devenv
+  writes shared plus `ai.kimchi.hooks` groups there; PermissionRequest is not a
+  Kimchi event and is left out silently. Kimchi has no user-scope lifecycle file
+  Home Manager can own, so its Home Manager row is an explicit exclusion: silent
+  for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
+  remain native-only.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
   when both are present. The strictly higher-priority definition supplies the
@@ -416,14 +433,19 @@ Kimchi is the sharp example: it supports `context`, `environmentVariables`,
 assertion with a supported-runtime positive control so harness failure cannot
 masquerade as correct exclusion.
 
-A non-empty ROOT request for an excluded pool is SILENT — no assertion, and no
-activation warning either. The remedy a warning would ask for does not exist:
-`ai.kimchi.rules` is an unknown option by design, so nothing the consumer can
-write would silence it and it would repeat on every activation forever. The
-exclusion is recorded in the pool's option description and in the delivery
-matrix instead. A PER-RUNTIME request a backend cannot deliver does warn
-(`lib/ai/delivery-warnings.nix`), because that one the consumer wrote directly
-and can delete.
+A non-empty ROOT request is SILENT whenever nothing per-runtime can withdraw it
+— no assertion, and no activation warning either. That covers an excluded pool
+(`ai.kimchi.rules` is an unknown option by design) and a non-keyed pool
+(`context`, `hooks`), whose root and per-runtime values compose, so a pool a
+runtime supports on one backend and not the other (Kimchi's `ai.hooks` on Home
+Manager) stays silent too. A warning there would repeat on every activation
+forever, and the only remedy would be taking the shared value away from every
+other runtime. The exclusion is recorded in the pool's option description and in
+the delivery matrix instead. A root KEYED pool warns only for names the runtime
+has not withdrawn with `ai.<runtime>.<pool>.<name> = null`
+(`config/ai-delivery.nix` `keyedSurfaces`). A PER-RUNTIME request a backend
+cannot deliver does warn (`lib/ai/delivery-warnings.nix`), because that one the
+consumer wrote directly and can delete.
 
 ### Assertion semantics
 
@@ -510,12 +532,13 @@ delivery router (`lib/ai/deliver.nix`) plus one adapter per backend
 `home.file`, `home.activation`, devenv `files`, `tasks` or `enterTest`. Claude
 context/rules, Codex user AGENTS.md, Copilot's repository context/instructions,
 Kimchi harness AGENTS.md, and Kiro Home Manager context/steering all use the
-runtime maps. Repository-local Codex/Kiro AGENTS.md retains one
+runtime maps. Repository-local Codex/Kimchi/Kiro AGENTS.md retains one
 divergence-checking owner and enters the same architecture through hidden
-`ai.internal.files`, never through competing runtime writers. Public Codex/Kiro
-entries for a shared target arbitrate inside that owner before its single native
-sink: equal entries deduplicate, divergence fails, an ordinary entry replaces
-the generated default, and `content.enable = false` suppresses it.
+`ai.internal.files`, never through competing runtime writers. Public
+Codex/Kimchi/Kiro entries for a shared target arbitrate inside that owner before
+its single native sink: equal entries deduplicate, divergence fails, an ordinary
+entry replaces the generated default, and `content.enable = false` suppresses
+it.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
 values and runtime state keep their existing typed lifecycle owners, and a
@@ -957,14 +980,14 @@ lowering. Package callbacks may render entries into the runtime map but must not
 read that map to define normalized inputs; keeping the edge one-way is what
 makes the module fixed point evaluable.
 
-Repository-local Codex/Kiro `AGENTS.md` is the shared-target exception, not a B7
-exception. `sharedAgentsMd.nix` admits applicable public entries from enabled
-runtimes into its hidden final map before the one native sink; a disabled
-runtime's declared map remains inert. The generated composition is a lazy
-default there, so ordinary replacements and disabled records arbitrate at B7
-without reading discarded source-backed generator content; equal runtime entries
-deduplicate and divergent ones fail. Size guards read only the surviving inline
-final entry. A surviving store-backed `source` remains lazy and is not
+Repository-local Codex/Kimchi/Kiro `AGENTS.md` is the shared-target exception,
+not a B7 exception. `sharedAgentsMd.nix` admits applicable public entries from
+enabled runtimes into its hidden final map before the one native sink; a
+disabled runtime's declared map remains inert. The generated composition is a
+lazy default there, so ordinary replacements and disabled records arbitrate at
+B7 without reading discarded source-backed generator content; equal runtime
+entries deduplicate and divergent ones fail. Size guards read only the surviving
+inline final entry. A surviving store-backed `source` remains lazy and is not
 size-checked at eval, avoiding IFD.
 
 ### Adding a normalized pool
@@ -1182,6 +1205,8 @@ path types".
   runtime's `context.filename`; `enable = false` omits either record. A
   structural `hasMergedContext` bit gates the generated default without reading
   composed sources; rendered bytes remain lazy until that default survives B7.
+  Repository-local Codex, Kimchi, and Kiro targets contribute to the shared L4
+  owner instead of creating competing runtime writers.
 - **Rule matchers lower only before L4.** `matcher = null` is always-on; a
   non-empty glob list becomes native routing metadata where one exists and
   explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,

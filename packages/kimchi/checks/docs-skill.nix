@@ -11,7 +11,10 @@
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
 
+  # Home Manager delivers the skill to the user harness; devenv delivers it to
+  # the project's `.kimchi/skills`, the native project-scope root.
   skillDir = ".config/kimchi/harness/skills/kimchi-docs";
+  devenvSkillDir = ".kimchi/skills/kimchi-docs";
 
   runtimesOn = {
     ai.claude.enable = true;
@@ -25,7 +28,7 @@
   devenvOn = evalDevenv enable;
 
   devenvSkillKeys = result:
-    lib.filter (name: lib.hasPrefix "${skillDir}/" name)
+    lib.filter (name: lib.hasPrefix "${devenvSkillDir}/" name)
     (builtins.attrNames result.config.files);
 
   # Deliver the skill to Claude under three semble shapes and read the SKILL.md
@@ -141,7 +144,7 @@ in {
       && hmOn.config.ai.claude.skills ? kimchi-docs
       && hmOn.config.home.file.${skillDir}.recursive
       && lib.sort lib.lessThan (devenvSkillKeys devenvOn)
-      == ["${skillDir}/SKILL.md" "${skillDir}/snapshot"]
+      == ["${devenvSkillDir}/SKILL.md" "${devenvSkillDir}/snapshot"]
     );
 
     # Asserts: a per-runtime `false` suppresses exactly that runtime.

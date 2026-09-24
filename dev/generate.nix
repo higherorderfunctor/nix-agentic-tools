@@ -649,13 +649,47 @@
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths |
     | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
-    | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex) | Same |
-    | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
-    | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same |
+    | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Kimchi) | Same; Kimchi's lands in its project harness settings (see below) |
+    | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi) | Same; project-native paths |
+    | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
     | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Same; Codex has no native LSP registry |
     | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
     | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
+
+    ### Kimchi project delivery
+
+    | Pool | devenv delivery | Boundary |
+    | ---- | --------------- | -------- |
+    | Context | root `AGENTS.md` | Available without project trust; reader walks ancestors, but the wrapper remains root-only |
+    | MCP servers | `.kimchi/mcp.json` | Requires project trust and launch from the devenv root |
+    | Kimchi settings | `.kimchi/config.json` | Requires project trust and launch from the devenv root |
+    | Skills | `.kimchi/skills` | Requires project trust; nearest ancestor wins, but the wrapper remains root-only |
+    | Project harness settings | `.config/kimchi/harness/settings.json` | Requires project trust and launch from the devenv root; user-scope-only keys are rejected during evaluation. `ai.settings.reasoningEffort` lands here as `defaultThinkingLevel`, so setting it alone creates the file |
+    | Agents | `.kimchi/agents/<name>.md` | Requires project trust and launch from the devenv root; each file is an owned, writable copy that Kimchi's /agents commands may edit until the next shell entry restores it |
+    | Permissions | `.kimchi/permissions.json` | Requires project trust and launch from the devenv root; declared keys reconcile by leaf |
+    | Hooks | `.kimchi/hooks.json` | Requires project trust and launch from the devenv root; PermissionRequest is not a Kimchi event and is left out. Home Manager has no user-scope hook file it can own, so shared `ai.hooks` do not reach Kimchi there (silently) and `ai.kimchi.hooks` warns |
+
+    devenv rejects Kimchi's user-scope-only harness settings:
+    `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`, `modelMetadata`,
+    `modelRoles`, `multiModel`, `resources`,
+    `shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set those with Home
+    Manager or through Kimchi itself. Both backends reconcile `config.json`,
+    `harness/settings.json`, `mcp.json` and `permissions.json` by owned leaf
+    because Kimchi writes them at runtime.
+
+    Project settings, MCP servers, harness settings, permissions, agents, and
+    hooks resolve under the exact working directory. The devenv wrapper rejects descendant launches
+    instead of silently missing them. Context and skills walk ancestors, so a
+    devenv that declares none of the exact-cwd files leaves the launch directory
+    unrestricted.
+    `skillPaths` defaults to unset: Kimchi reads the project list in place of
+    the user's global one, so only an explicit list, empty included, replaces
+    it.
+
+    Trust gates every project-scope reader except root `AGENTS.md`. Grant trust
+    interactively, set user-scope `defaultProjectTrust = "always"`, or pass
+    `--approve` for CLI and TUI runs. ACP resolves trust separately.
 
     ## Configuration
 

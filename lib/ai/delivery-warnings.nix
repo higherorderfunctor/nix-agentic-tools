@@ -33,7 +33,7 @@
     else if builtins.isString value
     then value != ""
     else true;
-  keyed = ["agents" "environmentVariables" "lspServers" "mcpServers" "rules" "skills"];
+  keyed = policy.keyedSurfaces;
   rootRemaining = surface:
     builtins.removeAttrs (live surface (config.ai.${surface} or {}))
     (
@@ -46,13 +46,17 @@
     value = get path;
   in
     # A bare root pool is a FAN-OUT request whose documented behavior is to
-    # degrade for a runtime that cannot consume it. There is no per-runtime
-    # option to tombstone it with — declaring one for an unsupported pool is an
-    # unknown-option error by design — so a warning here has no consumer remedy
-    # and would repeat on every activation forever. The exclusion is recorded in
-    # this policy's row and in the pool's own option description. A per-runtime
-    # path always reports: that one the consumer wrote directly and can delete.
-    if builtins.length path == 2 && !supports surface
+    # degrade for a runtime that cannot consume it. A root warning needs a
+    # per-runtime remedy, or it repeats on every activation forever. Only a
+    # keyed pool the runtime supports has one: `ai.<runtime>.<pool>.<name> =
+    # null` tombstones that name, which is what `rootRemaining` subtracts. An
+    # unsupported pool has no per-runtime option at all (declaring one is an
+    # unknown-option error by design), and a non-keyed pool (`context`, `hooks`)
+    # composes root and per-runtime values, so nothing per-runtime withdraws
+    # the root one. Those exclusions are recorded in this policy's row and in
+    # the pool's own option description instead. A per-runtime path always
+    # reports: that one the consumer wrote directly and can delete.
+    if builtins.length path == 2 && !(supports surface && builtins.elem surface keyed)
     then false
     else if builtins.elem surface keyed
     then
@@ -69,10 +73,6 @@
       != {}
     else if surface == "context"
     then value != null && ((value.source or null) != null || (value.text or "") != null && (value.text or "") != "")
-    else if path == ["ai" "hooks"]
-    # `value` is null whenever the shared pool is not declared in this
-    # composition at all, the same case the keyed and context arms guard.
-    then value != null && lib.any (blocks: lib.any (block: block.hooks != []) blocks) (builtins.attrValues value)
     else nonEmpty value;
   message = path: reason: "${lib.showOption path} is set but ${backend} does not deliver it to ${runtime} (reason: ${reason})";
   rowWarnings = lib.concatMap (row:
@@ -92,7 +92,7 @@
     else ["ai" "settings" "reasoningEffort"];
   effortWarnings =
     lib.optional
-    (!(builtins.elem runtime ["claude" "codex"]) && get effortPath != null)
+    (!(builtins.elem runtime ["claude" "codex" "kimchi"]) && get effortPath != null)
     (message effortPath "No lossless native reasoning-effort translation exists for this runtime.");
   entries = pool:
     (lib.mapAttrsToList (name: value: {

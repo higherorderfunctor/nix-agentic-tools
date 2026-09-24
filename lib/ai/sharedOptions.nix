@@ -243,10 +243,15 @@ in {
         Typed settings whose values preserve the same meaning across multiple
         AI runtimes. Each `ai.<runtime>.settings` field narrows this root
         default when non-null. The current `reasoningEffort` field lowers to
-        Claude `effortLevel` and Codex `model_reasoning_effort`; the enum is
-        their exact persisted semantic intersection. Set a runtime's native
-        key, including an explicit null, under
-        `ai.<runtime>.native.settings` to arbitrate against the derived default.
+        Claude `effortLevel`, Codex `model_reasoning_effort` and Kimchi
+        `defaultThinkingLevel`; the enum is their exact persisted semantic
+        intersection. On devenv, Kimchi's value lands in the project
+        `.config/kimchi/harness/settings.json`, so setting it here makes Kimchi
+        project-trust-gated for that setting and makes the devenv wrapper
+        refuse launches below the devenv root, exactly as any declared
+        harness setting does. Set a runtime's native key, including an explicit null,
+        under `ai.<runtime>.native.settings` (Kimchi: `native.harnessSettings`) to
+        arbitrate against the derived default.
         Runtime-specific identifiers and lossy translations are deliberately
         excluded.
       '';
@@ -272,15 +277,20 @@ in {
       description = ''
         Agent definitions fanned out to Claude and Copilot. Portable semantic
         records (`{ description, instructions, tools?, codex? }`) also fan out
-        to Codex; `tools` is rendered only for Claude and Copilot because Codex
-        has no equivalent agent field. Legacy Markdown/path values remain
-        Claude/Copilot-only and cause a clear assertion when Codex is enabled.
-        Each entry becomes a file:
+        to Codex and Kimchi; `tools` is rendered only for Claude and Copilot
+        because Codex has no equivalent agent field, and Kimchi rejects a
+        non-empty one because its tool names differ. Legacy Markdown/path
+        values remain Claude/Copilot-only and cause a clear assertion when
+        Codex or Kimchi is enabled; `ai.kimchi.agents` takes Kimchi-native
+        Markdown. Each entry becomes a file:
         - Claude  → ~/.claude/agents/<name>.md
         - Copilot → .github/agents/<name>.agent.md (devenv) or
                     ~/.copilot/agents/<name>.md (HM)
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
                     .codex/agents/<name>.toml (devenv)
+        - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
+                    .kimchi/agents/<name>.md (devenv), as a writable owned
+                    copy because Kimchi's /agents commands edit it
         Kiro intentionally excluded, but no longer because its agents are
         untyped JSON — `ai.kiro.agents` is a typed record now. The blocker is
         the tool vocabulary: this pool's `tools` list uses Claude/Copilot tool
@@ -298,9 +308,14 @@ in {
       description = ''
         Directory of legacy `.md` agent files fanned out to Claude and
         Copilot. Each file becomes one entry in `ai.agents` keyed by the
-        basename minus `.md`. Codex is excluded because it requires semantic
-        records rendered as standalone TOML; use explicit `ai.agents` records
-        for three-runtime fanout. Kiro is excluded because these are Markdown
+        basename minus `.md`. Codex and Kimchi do not take these files, and
+        they are NOT skipped silently: enabling either one with a non-empty
+        `agentsDir` fails evaluation, because Codex needs a semantic record
+        (standalone TOML) and Kimchi misreads Claude Markdown (`model:` and
+        `tools:` mean something else to it). Withdraw each name with
+        `ai.codex.agents.<name> = null` or `ai.kimchi.agents.<name> = null`,
+        use explicit `ai.agents` records for wider fanout, or
+        `ai.kimchi.agentsDir` for Kimchi-native files. Kiro is excluded because these are Markdown
         files while Kiro's agents are JSON, and because its tool tags are a
         different vocabulary from the Claude/Copilot tool names this pool
         carries; use `ai.kiro.agentsDir` for that ecosystem.
@@ -313,12 +328,19 @@ in {
       default = {};
       apply = lib.filterAttrs (_event: blocks: blocks != []);
       description = ''
-        Portable command hooks fanned out to Claude and Codex. The event set is
-        their exact lifecycle intersection: ${lib.concatStringsSep ", " hooks.portableEvents}.
+        Portable command hooks fanned out to Claude and Codex, and to Kimchi on
+        devenv. The event set is Claude and Codex's exact lifecycle
+        intersection: ${lib.concatStringsSep ", " hooks.portableEvents}.
         Matcher strings pass through unchanged, so use regex syntax supported
-        by both runtimes. Per-runtime hook maps append after these shared
-        matcher groups. Kiro is excluded because its v3 trigger schema is not
-        semantically interchangeable.
+        by every runtime. Per-runtime hook maps append after these shared
+        matcher groups. Kimchi reads the same shape from a trusted project's
+        `.kimchi/hooks.json` and has no PermissionRequest event, so that event
+        is left out for it. Kimchi has no user-scope lifecycle file Home
+        Manager can own, so Home Manager delivers nothing to it; its opt-in
+        Claude Code hook adapter reads `~/.claude/settings.json` instead. Both
+        exclusions are silent: a shared pool has no per-runtime remedy, so a
+        warning would repeat on every activation. Kiro is excluded because its
+        v3 trigger schema is not semantically interchangeable.
       '';
     };
 

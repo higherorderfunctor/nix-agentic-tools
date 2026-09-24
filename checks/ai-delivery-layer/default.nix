@@ -62,13 +62,16 @@
   # `SNAPSHOT-NATIVE` leaves an inline entry, or the store path of a file that
   # embeds it (a TOML config, an activation's ownership plan) changes. Kiro's
   # `chat.defaultModel` is in the pinned workspace allowlist, so devenv writes
-  # it too.
+  # it too. Kimchi's harness key must be one a PROJECT file can carry, because
+  # the devenv sections take it as well: a user-scope-only key such as
+  # `resources` fails devenv's assertions (`hideThinkingBlock` is the key
+  # config/ai-delivery.nix probes for the same reason).
   native = {
     claude.native.settings.model = "SNAPSHOT-NATIVE";
     codex.native.settings.model = "SNAPSHOT-NATIVE";
     copilot.native.settings.model = "SNAPSHOT-NATIVE";
     kimchi = {
-      native.harnessSettings.resources.SNAPSHOT-NATIVE = true;
+      native.harnessSettings.hideThinkingBlock = true;
       native.settings.llmEndpoint = "SNAPSHOT-NATIVE";
     };
     kiro.native.settings.chat.defaultModel = "SNAPSHOT-NATIVE";
@@ -91,13 +94,21 @@
       lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "files ${builtins.toJSON path}" entry) config.files)
       + lib.concatStrings (lib.mapAttrsToList (name: task: renderEntry "tasks ${builtins.toJSON name}" task) config.tasks)
       + renderEntry "enterTest" config.enterTest;
-  snapshotSection = backend: label: runtimes:
-    "== ${backend} ${label} ==\n"
-    + renderSink backend ((
+  # A section is only evidence when its configuration is one the modules
+  # accept. The bare evaluation never enforces `assertions`, so a fixture a
+  # backend rejects would still render an ownership plan no consumer can
+  # reach, and a diff over it would compare bytes nothing reads.
+  snapshotSection = backend: label: runtimes: let
+    evaluated = (
       if backend == "hm"
       then evalHm
       else evalDevenv
-    ) (snapshotConfig runtimes));
+    ) (snapshotConfig runtimes);
+    failed = map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
+  in
+    if failed != []
+    then throw "ai-delivery-snapshot: the ${backend} ${label} fixture fails module assertions:\n${lib.concatStringsSep "\n" failed}"
+    else "== ${backend} ${label} ==\n" + renderSink backend evaluated;
   snapshot = lib.concatStrings (lib.concatMap (backend:
     map (runtime: snapshotSection backend runtime [runtime]) harnessNames
     ++ [(snapshotSection backend "<all>" harnessNames)])
@@ -112,8 +123,9 @@
   # An entry is removed when its factory stops writing sinks directly, and the
   # check fails in BOTH directions — a new writer anywhere under
   # `packages/*/lib/` fails it, and so does an entry the scan can no longer
-  # reproduce. The list is empty when the migration is done, and then this
-  # check is what keeps it empty.
+  # reproduce. The capstone replaces this transitional census before the list
+  # would become empty; an explicit guard below makes that handoff
+  # self-retiring.
   #
   # What the scan CANNOT see is a bundle a helper returns —
   # `lib.mkMerge [(helpers.mkOwnedDocument …)]` writes `home.activation`,
@@ -128,7 +140,6 @@
     "packages/chatgpt-codex/lib/mkCodex.nix" = "skill/agent/execpolicy/hooks entries and the two skill-link migrators";
     "packages/claude-code/lib/mkClaude.nix" = "the devenv settings.json deep merges and the skill walker";
     "packages/copilot-cli/lib/mkCopilot.nix" = "lsp, mcp and settings documents, rules, agents and skills";
-    "packages/kimchi/lib/mkKimchi.nix" = "config.json, harness settings and mcp.json, and skills";
     "packages/kiro-cli/lib/mkKiro.nix" = "permissions, lsp, cli.json, agents, the agents-dir walker and skills";
   };
 
@@ -407,7 +418,7 @@ in {
           sibling = fact;
         };
         kimchiContext = withSibling {
-          evaluate = evalDevenv;
+          evaluate = evalHm;
           path = ".config/kimchi/harness/AGENTS.md";
           runtime = "kimchi";
           sibling = fact;
@@ -960,10 +971,25 @@ in {
         test -s "$work/corpus"
         echo "scanned $(tr -d -c '\0' < "$work/corpus" | wc -c) factory library files"
 
-        xargs -0 -r grep -lE -e "$anchored" -e "$nested" < "$work/corpus" | sort > "$work/actual" || true
+        : > "$work/actual"
+        while IFS= read -r -d $'\0' path; do
+          if grep -lE -e "$anchored" -e "$nested" "$path" >> "$work/actual"; then
+            :
+          else
+            rc=$?
+            test "$rc" -eq 1 || exit "$rc"
+          fi
+        done < "$work/corpus"
+        sort -o "$work/actual" "$work/actual"
         {
+          :
           ${lib.concatMapStringsSep "\n          " (path: "echo ${lib.escapeShellArg path}") (lib.attrNames sinkWriters)}
         } | sort > "$work/allowed"
+
+        if test ! -s "$work/allowed"; then
+          echo "delivery: the transitional direct-sink census is empty; land the capstone zero-writer contract instead of carrying this migration check." >&2
+          exit 1
+        fi
 
         if ! diff -u "$work/allowed" "$work/actual" > "$work/sink-writers.diff"; then
           echo "delivery: the set of files writing a native sink directly has changed." >&2

@@ -1,12 +1,17 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-09-23 — the builder entry point is
-> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
-> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Both runtime-writable documents reconcile their
-> owned leaves through `lib/ai/own.py`, one bundle and one activation entry
-> each, and the context entry defaults its `content` option rather than the
-> whole entry. Full lineage:
+> `lib.ai.app.mkRuntime`, and Kimchi's native files are declared under
+> `ai.kimchi.native` (`native.settings`, `native.harnessSettings`). Home Manager
+> keeps Kimchi's user paths and devenv its project paths; the mutable JSON
+> documents (`config.json`, harness `settings.json`, `mcp.json`,
+> `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
+> shared delivery router; agents are owned writable copies, copied from a
+> store-path string as from a path; portable hooks reach `.kimchi/hooks.json` on
+> devenv only, and their exclusions are silent for the shared pool; a project
+> permissions file resets the user's scalars, and its emptied retraction is
+> deleted; the trust writer takes pi's `trust.json.lock`; root reasoning effort
+> makes the devenv harness file exist. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -14,47 +19,247 @@ closest in shape to `mkKiro` (dual config trees + activation-merge for the
 mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
 / `devenvTransform` to the record.
 
-The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings`. The
-closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
-may be present there before Kimchi has a lossless native lowering, in which case
-it remains declarative data rather than being guessed into either native file.
+Its shared local delivery function describes each file: its bytes, consumer
+facts, and writer if it is not a symlink. Both backend callbacks use that same
+function with the merged pools supplied by `mkBackendTransform.nix`, and
+`lib/ai/deliver.nix` decides how each entry lands. The other runtimes retain
+their existing callbacks during the staged migration.
 
-## Two config trees (the load-bearing fact)
+The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings` and
+`ai.kimchi.native.harnessSettings`. The closed `ai.kimchi.settings` submodule is
+the shared normalized surface. Its `reasoningEffort` field lowers losslessly to
+`native.harnessSettings.defaultThinkingLevel` at `mkDefault` priority, so an
+explicit native harness value wins: pi 0.85.1's `ThinkingLevel` is a superset of
+the normalized enum, and pi reads the key from the merged user and project
+harness settings. Locked by `module-kimchi-normalized-reasoning-effort`. On
+devenv the key lands in the project harness `settings.json`, so a root effort
+alone creates that exact-cwd, trust-gated file: Kimchi applies it only in a
+trusted project, and the wrapper refuses launches below the devenv root. That is
+the uniform consequence of any project harness setting, and the only way to
+deliver effort at project scope.
 
-Kimchi splits config across two roots under `<configDir>` (default
-`.config/kimchi`):
+## User and project paths (the load-bearing fact)
 
-- `config.json` — account/CLI settings (`telemetry`, `llmEndpoint`,
-  `skillPaths`, `preferences`). Ordinary **nested** JSON.
-- `harness/` — agent runtime: `settings.json` (`modelRoles`, `resources`),
-  `mcp.json`, `AGENTS.md`, `skills/`.
+`ai.kimchi.configDir` controls the Home Manager output root (default
+`.config/kimchi`). It does not control devenv project paths. The backend split
+is:
+
+| pool             | Home Manager user path                            | devenv project path                    |
+| ---------------- | ------------------------------------------------- | -------------------------------------- |
+| context          | `<configDir>/harness/AGENTS.md`                   | root `AGENTS.md`                       |
+| MCP servers      | `<configDir>/harness/mcp.json`                    | `.kimchi/mcp.json`                     |
+| skills           | `<configDir>/harness/skills/<name>`               | `.kimchi/skills/<name>`                |
+| Kimchi settings  | `<configDir>/config.json`                         | `.kimchi/config.json`                  |
+| harness settings | `<configDir>/harness/settings.json`               | `.config/kimchi/harness/settings.json` |
+| permissions      | `.config/kimchi/harness/permissions.json` (fixed) | `.kimchi/permissions.json`             |
+| agents           | `<configDir>/harness/agents/<name>.md`            | `.kimchi/agents/<name>.md`             |
+| hooks            | none (explicit exclusion)                         | `.kimchi/hooks.json`                   |
+| project trust    | `<configDir>/harness/trust.json`                  | none (rejected: user scope)            |
+
+Project Kimchi settings, MCP servers, harness settings, permissions, agents, and
+hooks are exact-cwd readers. The devenv wrapper rejects launches below the
+devenv root instead of silently missing them. It does not `cd` to the root
+instead, because that would also change the working directory Kimchi's tools
+see. Context and skills walk ancestors, so a devenv that declares none of the
+exact-cwd files leaves the launch directory unrestricted. Locked by
+`module-kimchi-devenv-exact-cwd-guard`, which checks both arms.
+
+The project harness directory is deliberately fixed. pi derives
+`CONFIG_DIR_NAME` from Kimchi's packaged
+`piConfig.configDir = ".config/kimchi/harness"`; its project settings watcher
+resolves `<cwd>/<CONFIG_DIR_NAME>/settings.json`. This namespace does not follow
+`ai.kimchi.configDir`.
+
+Kimchi settings are ordinary **nested** JSON (`telemetry`, `llmEndpoint`,
+`skillPaths`, `preferences`). The user harness contains runtime settings, MCP,
+context, and skills.
 
 The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json`
-(`/multi-model`, `kimchi resources`) and downloads vendor content into it. So
-`config.json` and `harness/settings.json` each go through
-`helpers.mkOwnedDocument` on HM — one `lib/ai/own.nix` bundle and one activation
-entry per document, reconciling only the leaves Nix declares against a
-per-document ledger — and a static write on devenv, never a raw
-symlink-to-store. The two are separate bundles on purpose: nothing orders them
-against each other, and each entry name is a consumer-visible contract.
-Immutable artifacts ultimately use static `home.file` / `files.*`, but
-normalized context first renders into the final `ai.kimchi.files` map and only
-then reaches that generic sink. This makes `harness/AGENTS.md` a consumer
-replacement point: the generated body is a default on the entry's `content`
-option alone, so a consumer replaces the bytes, changes how the file lands, or
-suppresses it with `null`, independently; `mcp.json` and skills retain their
-existing typed owners. When both root and Kimchi-specific context are
-configured, their bodies concatenate root-first; `ai.kimchi.context.filename`
-controls the artifact name.
+(`/multi-model`, `kimchi resources`) and downloads vendor content into it.
+`mcp.json` is written too, on both backends, and always by renaming a temporary
+over the path, which silently replaces a store symlink: 1.1.30's first-run
+migration (`src/setup-wizard.ts:117-137`) and ACP import
+(`src/modes/acp/ext-methods/import-apply.ts:289`) write the user file, and
+`/mcp enable|disable` writes the project file through the patched pi-mcp-adapter
+2.34.0 (`config.ts:1142-1147`). `/permissions … save user|project` rewrites
+`permissions.json` with `writeFileSync`
+(`src/extensions/permissions/commands.ts:234-237`, `config.ts:153`). So
+`config.json`, `harness/settings.json`, `mcp.json` and `permissions.json` each
+state `facts.harnessWrites` and name an `ai.kimchi.activation` writer that
+declares their ledger: the rule resolves them to `shared`, and the router builds
+one `lib/ai/own.nix` bundle and one activation entry or devenv task per
+document, reconciling only the leaves Nix declares against a per-document
+ledger. A migrated server or a `disabled` toggle Kimchi adds is an unowned
+sibling the reconciler keeps. The four are separate writers on purpose: nothing
+orders them against each other, and each entry name is a consumer-visible
+contract. Devenv requires namespaced task names, so each writer uses
+backend-keyed `entry`: `ai:kimchi:config-merge`,
+`ai:kimchi:harness-settings-merge`, `ai:kimchi:mcp-merge` and
+`ai:kimchi:permissions-merge` on devenv, with `kimchiConfigMerge`,
+`kimchiHarnessSettingsMerge`, `kimchiMcpMerge` and `kimchiPermissionsMerge` on
+HM. Locked by `module-kimchi-hm-mcp-reconciled`,
+`module-kimchi-devenv-project-paths`, `module-kimchi-permissions` and the
+`ai-delivery` policy rows. Home Manager ledger names continue to hash
+`configDir`, preserving ownership from generations before project-path delivery;
+devenv's new ledgers hash their actual project document paths.
+
+All four files, and `trust.json` on Home Manager, state
+`facts.harnessWrites = true`, and every writer survives an empty declaration on
+either backend, so removing the last MCP server retracts it. HM uses `$HOME` and
+XDG state; devenv uses `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`. New
+documents are 0600 and existing regular files retain their modes. Empty settings
+on either document release all owned leaves: every typed sub-option defaults to
+null or `{}`, and `filterNulls` recurses. `skillPaths` in particular defaults to
+null, because 1.1.30 reads `projectExtras.skillPaths ?? globalExtras.skillPaths`
+(`src/config.ts:526`), so a project `[]` would replace the user's global skill
+paths; an explicit list, empty included, still lands. Locked by
+`module-kimchi-skill-paths-inherit`.
+
+`ai.kimchi.permissions` mirrors Kimchi's `.strict()` zod schema key for key
+(`src/extensions/permissions/config.ts:11-19`) with no freeform tail, because
+one unknown key invalidates the whole file. The user file is hard-coded to
+`~/.config/kimchi/harness/permissions.json` (`config.ts:35`), so its HM path
+ignores `configDir`. A list leaf is owned whole: a rule `/permissions … save`
+appends to a declared `allow` or `deny` is dropped on the next activation, the
+same trade Claude's reconciled permissions make.
+
+The scalars do not inherit per key. Kimchi fills `defaultMode` and
+`classifierTimeoutMs` with its defaults for any project file that exists, and
+the project value wins (`config.ts:56-60,98-101`); only `classifierMaxTotalMs`
+falls through to the user file. So any devenv permissions declaration resets a
+user's `defaultMode` inside that project, which the option description states.
+Retracting the last key deletes the emptied file (`lib/ai/own.py`
+`DocContainer.commit`), so a `{}` never outlives the declaration.
+
+`native.harnessSettings.modelRoles` values are provider/model strings, or for
+delegable roles a non-empty list of them; `orchestrator` and `compactor` take
+one string, and role names are 1.1.30's eight. Any other shape is discarded with
+a runtime warning (`src/extensions/orchestration/model-roles.ts:117-181`), so
+the type and two module assertions reject it at evaluation. Locked by
+`module-kimchi-model-roles-shape`.
+
+Everything else Kimchi delivers except agents (below) is immutable and
+symlink-readable, so it takes both defaults and states no fact at all.
+Normalized context renders into the `ai.kimchi.files` map on Home Manager.
+Devenv context joins the single root `AGENTS.md` owner shared with Codex and
+Kiro. In either backend, the generated body is a default on the entry's
+`content` option, so a consumer can replace or suppress it. When root and
+Kimchi-specific context are both configured, their bodies concatenate
+root-first. Home Manager honors `ai.kimchi.context.filename`; devenv always
+writes `AGENTS.md`.
+
+Project config, MCP, skills, and harness settings remain inert until project
+trust is established. Interactive trust persists in the user's harness
+`trust.json`; headless and ACP sessions honor that decision or the user-global
+`defaultProjectTrust`. `--approve` is a run-scoped override for CLI and TUI
+only: ACP resolves trust again for each session without it
+(`src/modes/acp/server.ts:2166-2173`), so an unattended ACP client needs the
+persisted decision or `defaultProjectTrust`. Root `AGENTS.md` is the upstream
+exception: Kimchi's context loader walks ancestors directly without consulting
+the project-scope gate.
+
+`ai.kimchi.projectTrust` (absolute path → bool) is the persisted decision,
+declared. pi 0.85.1 keeps it in `<agentDir>/trust.json`, which Kimchi pins to
+its harness directory, and looks it up under `realpath(cwd)` and then each
+parent, reading keys verbatim (`findNearestTrustEntry`,
+`dist/core/trust-manager.js:20-33`). So one entry covers every project beneath
+it, `false` denies a subtree, and a key reached through a symlink never matches.
+The trust prompt rewrites the file (`setMany` → `writeFileSync`), so Home
+Manager reconciles it by leaf through its own `kimchiProjectTrustMerge` writer,
+and the document declares `content.run` rather than `value`:
+`lib/project-trust.py` canonicalizes each key with `os.path.realpath` when the
+writer runs, since evaluation cannot see the filesystem, and fails the writer
+when two keys resolve to one directory with different answers. Prompted
+decisions are unowned siblings and survive. pi does that read-modify-write under
+proper-lockfile's `trust.json.lock` directory (`withTrustFileLock`,
+`dist/core/trust-manager.js:105-142, 187-200`) and writes in place, so the
+ledger declares `lock` and `lib/ai/own.py` takes the same lock around every read
+and write of the file: a prompt answered during a switch is neither lost nor
+parsed half-written. A lock older than proper-lockfile's 10 s `stale` is broken,
+as pi breaks it. Devenv rejects the option with an assertion: pi reads trust
+only from the user store, so that a project cannot trust itself, and devenv
+writes only inside the project. Locked by `module-kimchi-project-trust` and
+`module-kimchi-project-trust-runtime`, which runs the real writer against a
+symlinked fixture, a held lock and a stale one.
+
+The devenv module rejects every `native.harnessSettings` key Kimchi reads only
+from user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
+`modelMetadata`, `modelRoles`, `multiModel`, `resources`,
+`shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set these with Home
+Manager or through Kimchi itself. Home Manager and devenv reconcile the mutable
+JSON documents by owned leaf, preserving runtime-written siblings.
+
+## Agents: owned, writable copies
+
+Kimchi 1.1.30 loads `<agentDir>/agents/*.md` and a trusted project's
+`.kimchi/agents/*.md`, naming each agent by its filename
+(`src/extensions/agents/personas/custom-agents.ts:21-85`). Its /agents commands
+write those same files: Edit, Disable and Enable `writeFileSync` in place, and
+Create and Eject add new ones (`src/extensions/agents/index.ts:2556-2874`). A
+store symlink would make each of those fail with EROFS, and the layer's default
+read-only copy with EACCES. The rule's harness-writes answer, `shared`, owns
+leaves inside a JSON or TOML container, which Markdown lacks. So each agent file
+states `method = "copy-ro"` and `mode = "0644"`, at `mkDefault`: one real,
+writable file per agent in a real directory, owned by the `kimchiAgents`
+writer's `dir` ledger (`ai:kimchi:agents` on devenv, plus `kimchiAgentsPrune` on
+HM). An edit works until the next activation, which backs it up and restores the
+declaration; a file Kimchi created is an unowned sibling and is never touched.
+To turn a declared agent off, set it to null. Locked by `module-kimchi-agents`
+and `module-kimchi-agents-runtime`, which runs the real writers and edits the
+file.
+
+A portable record renders as `description:` frontmatter plus the instructions
+body, with no `name:`. Two inputs fail evaluation, naming `ai.kimchi.agents` as
+the remedy: a record with a non-empty `tools` list (Claude/Copilot names; Kimchi
+matches its lowercase builtins exactly, `agent-types.ts:12`, so dropping it
+would widen the agent and translating it would fail silently), and root Markdown
+(written for Claude, and Kimchi ignores `name:` and reads `model: sonnet` as a
+model id). Markdown under `ai.kimchi.agents` or `ai.kimchi.agentsDir` is
+Kimchi's own and lands verbatim. A path-like entry, a store-path string such as
+a flake input's `"${src}/a.md"` included, is copied from that source by
+`lib.ai.agent.isPathLike`; `builtins.isPath` alone would write the path itself
+as the agent's text. Locked by `module-kimchi-agents-rejected` and, for the
+string form on both backends, `module-kimchi-agents`.
+
+## Hooks: project `hooks.json` only
+
+Kimchi 1.1.30 has four hook loaders (`src/cli.ts:707-731`). The one that fits
+`ai.hooks` is kimchi-hooks: it reads `.kimchi/hooks.json` and `hooks.local.json`
+in the Claude shape, timeouts in seconds, from a trusted project only, and never
+writes them (`src/extensions/kimchi-hooks/definition.ts:25-37`). So devenv
+writes the shared groups followed by `ai.kimchi.hooks` (typed over Kimchi's own
+20 events) into `.kimchi/hooks.json`, rendered by `lib/ai/hooks.nix`'s `render`,
+the same one Claude's settings use. It takes the default facts and lands as a
+symlink. PermissionRequest is not a Kimchi event and the reader skips unknown
+events silently, so the factory leaves it out. Home Manager has no lifecycle
+sink it can own. A configured pi package's `hooks/hooks.json` would make Home
+Manager own `packages` in harness `settings.json` and clobber `kimchi install`.
+The opt-in Claude Code hook adapter (`extensions.claude-code-hook-adapter`,
+`defaultEnabled: false`, `src/resources/definitions.ts:75-80`) reads
+`~/.claude/settings.json`
+(`src/extensions/claude-code-hook-adapter/definition.ts:25-28`), which Claude's
+own delivery already writes. The policy row is `absent` with that reason. Both
+shared-pool exclusions are silent, because `ai.hooks` composes with
+`ai.kimchi.hooks` and nothing Kimchi-scoped can withdraw it: a warning would
+repeat on every activation (the root-pool rule in the ai-module fanout
+fragment). A non-empty `ai.kimchi.hooks` still warns on Home Manager. Locked by
+`module-kimchi-hooks`.
+
+The bash-hook directory (`harness/hooks/bash`, `.kimchi/hooks/bash`) is
+deliberately not a sink: those scripts filter or rewrite the bash tool only, a
+different contract from lifecycle events. If a user enables Kimchi's opt-in
+Claude Code hook adapter, a shared hook that also reaches
+`.claude/settings.json` fires twice.
 
 ## Normalized pool capability boundary
 
-The app record's `supportedPools` is exactly `context`, `environmentVariables`,
-`mcpServers`, `settings`, and `skills`. Kimchi has no native path-scoped rules,
-portable agents, LSP, portable hooks, or shell-selection landing key. Those
+The app record's `supportedPools` is exactly `agents`, `context`,
+`environmentVariables`, `hooks`, `mcpServers`, `settings`, and `skills`. Kimchi
+has no native path-scoped rules, LSP, or shell-selection landing key. Those
 per-runtime normalized options are absent; root values for them remain valid and
 silently degrade for Kimchi. `settings` is the uniform closed normalized
-namespace; its current field has no Kimchi-native lowering.
+namespace; its current field lowers to `defaultThinkingLevel` in the mutable
+harness settings document.
 
 The three keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`, and
 `skills`) follow the shared atomic replacement rule. A Kimchi-specific same-key
@@ -98,12 +303,14 @@ devenv stay at parity by construction. Locked by `module-kimchi-wrapper-builds`.
 
 `defaults.outputPath = null` and
 `transformers.markdown = lib.ai.transformers.agentsmd`: Kimchi takes a flat,
-always-injected `harness/AGENTS.md` (orientation tier, like Codex). It has
-**no** path-scoped steering (no Claude `rules/` or Kiro `steering/` equivalent),
-so the scoped-fragment transforms do not apply to it.
+always-injected user `harness/AGENTS.md` or project-root `AGENTS.md`
+(orientation tier, like Codex). It has **no** path-scoped steering (no Claude
+`rules/` or Kiro `steering/` equivalent), so the scoped-fragment transforms do
+not apply to it.
 
 ## Shared prep
 
 `mkPrep` (top-level `let`) computes the backend-agnostic values (filtered
-settings, effective env, agency text, the wrapped package) once; the `hm` and
-`devenv` config closures each call it rather than duplicating the logic.
+settings, effective env, agency text, and the wrapped package). The shared
+delivery function and the `installPackage` hook each call it rather than
+duplicating that logic.

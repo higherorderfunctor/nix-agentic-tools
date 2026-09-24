@@ -8,6 +8,10 @@
   ecosystems = import ../lib/ai/runtimes.nix;
   modes = ["devenv" "hm"];
   surfaces = ["agents" "context" "environmentVariables" "hooks" "lspServers" "mcpServers" "permissions" "rules" "settings" "skills"];
+  # Pools whose root entries a runtime can withdraw one name at a time
+  # (`ai.<runtime>.<pool>.<name> = null`). The others compose root and
+  # per-runtime values, so a root request for them has no per-runtime remedy.
+  keyedSurfaces = ["agents" "environmentVariables" "lspServers" "mcpServers" "rules" "skills"];
   primitives = ["notApplicable" "ownLeaves" "ownPathDeclarative" "ownPathManaged" "ownWrapper" "upstream"];
   imperativePrimitives = ["ownLeaves" "ownPathManaged"];
   both = value: {
@@ -119,6 +123,12 @@
     writerAttr = ["home" "activation" activation];
     probe = declaration;
   };
+  devenvLeaves = entry: target: declaration:
+    (leaves ownRetraction entry target declaration)
+    // {
+      pruneTrigger = "On shell entry, lib/ai/own.py retracts the leaves recorded by the prior generation, reasserts this declaration, and preserves unowned siblings.";
+      writerAttr = ["tasks" entry];
+    };
   wrapper = mode: executable: {
     primitive = "ownWrapper";
     target = "${executable} process environment (store launcher)";
@@ -132,7 +142,7 @@
   mcpProbe = ecosystem: probe ["ai" ecosystem "mcpServers"] {probe.command = "true";} {};
   settingsProbe = ecosystem: probe ["ai" ecosystem "native" "settings"] {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
-  kiroManaged = pruneTrigger: mode: name: target: declaration: {
+  managed = pruneTrigger: mode: name: target: declaration: {
     inherit pruneTrigger target;
     primitive = "ownPathManaged";
     writerAttr =
@@ -143,7 +153,7 @@
   };
   kiroMcp = mode: let
     primary =
-      kiroManaged (ownFiles (retractionMoment mode)) mode (
+      managed (ownFiles (retractionMoment mode)) mode (
         if mode == "hm"
         then "kiroMcpJson"
         else "ai:kiro:materialize-mcp"
@@ -174,28 +184,48 @@
             role = "Retire merge leaves and prune retired whole paths before the write phase.";
           });
     };
-  kiroHooks = mode: let
+  # A writer owning a directory of whole files. Home Manager runs it as two
+  # entries — the prune phase before checkLinkTargets, the write phase after
+  # linkGeneration — and both must survive an empty declaration.
+  managedDir = {
+    devenvEntry,
+    hmEntry,
+    hmPruneEntry,
+    path,
+    probe,
+  }: mode: let
     primary =
-      kiroManaged (ownFiles (retractionMoment mode)) mode (
+      managed (ownFiles (retractionMoment mode)) mode (
         if mode == "hm"
-        then "materialize-kiro-hooks-write"
-        else "ai:kiro:materialize-hooks"
+        then hmEntry
+        else devenvEntry
       )
       "${
         if mode == "hm"
         then "$HOME"
         else "$DEVENV_ROOT"
-      }/.kiro/hooks/<name>.json"
-      hookProbe;
+      }/${
+        if lib.isAttrs path
+        then path.${mode}
+        else path
+      }"
+      probe;
   in
     primary
     // {
       additionalWriters = lib.optional (mode == "hm") (primary
         // {
-          writerAttr = ["home" "activation" "materialize-kiro-hooks-prune"];
+          writerAttr = ["home" "activation" hmPruneEntry];
           role = "Prune phase must survive an empty declaration as well as the write phase.";
         });
     };
+  kiroHooks = managedDir {
+    devenvEntry = "ai:kiro:materialize-hooks";
+    hmEntry = "materialize-kiro-hooks-write";
+    hmPruneEntry = "materialize-kiro-hooks-prune";
+    path = ".kiro/hooks/<name>.json";
+    probe = hookProbe;
+  };
   codexConfig = leaves ownRetraction "codexSettingsReconcile" "$HOME/.codex/config.toml" (settingsProbe "codex");
   copilotInert = "Factory documents this project file as undelivered: Copilot offers no flag or discovery for it. Presence is not proof of application consumption.";
 
@@ -210,7 +240,22 @@
       };
       codex = paths ".codex/agents/<name>.toml" ".codex/agents/<name>.toml";
       copilot = paths ".copilot/agents/<name>.md" ".github/agents/<name>.agent.md";
-      kimchi = both (absent "Kimchi's supportedPools excludes agents and no native agent writer exists.");
+      # Owned, writable copies: Kimchi's /agents commands rewrite them in place.
+      kimchi = lib.genAttrs modes (managedDir {
+        devenvEntry = "ai:kimchi:agents";
+        hmEntry = "kimchiAgents";
+        hmPruneEntry = "kimchiAgentsPrune";
+        path = {
+          devenv = ".kimchi/agents/<name>.md";
+          hm = ".config/kimchi/harness/agents/<name>.md";
+        };
+        probe = probe ["ai" "kimchi" "agents"] {
+          probe = {
+            description = "probe";
+            instructions.text = "probe";
+          };
+        } {};
+      });
       kiro = paths ".kiro/agents/<name>.json" ".kiro/agents/<name>.json";
     };
     context = {
@@ -220,7 +265,7 @@
         devenv = declarative "devenv" ".github/copilot-instructions.md";
         hm = absent "Home Manager context is deliberately inert: the .github context surface is project-scoped.";
       };
-      kimchi = paths ".config/kimchi/harness/AGENTS.md" ".config/kimchi/harness/AGENTS.md";
+      kimchi = paths ".config/kimchi/harness/AGENTS.md" "AGENTS.md";
       kiro = lib.genAttrs modes (mode:
         (declarative mode (
           if mode == "hm"
@@ -230,7 +275,7 @@
         // {
           additionalWriters = let
             retirement = name: role:
-              (kiroManaged (ownFiles (retractionMoment mode)) mode name
+              (managed (ownFiles (retractionMoment mode)) mode name
                 "${
                   if mode == "hm"
                   then "$HOME"
@@ -281,7 +326,13 @@
       };
       codex = paths ".codex/hooks.json" ".codex/hooks.json";
       copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
-      kimchi = both (absent "Kimchi's supportedPools excludes hooks; native.harnessSettings resource toggles are settings, not hook definitions.");
+      # Kimchi's own lifecycle reader takes only a trusted project's
+      # .kimchi/hooks.json and .kimchi/hooks.local.json; its user-scope routes
+      # are not sinks Home Manager can own (the hm reason says why).
+      kimchi = {
+        devenv = declarative "devenv" ".kimchi/hooks.json";
+        hm = absent "Kimchi reads its own lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). It has two user-scope routes, and neither is a sink Home Manager can own. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:75-80) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";
+      };
       kiro = lib.genAttrs modes kiroHooks;
     };
     lspServers = {
@@ -308,7 +359,13 @@
         hm = codexConfig // {probe = mcpProbe "codex";};
       };
       copilot = paths ".copilot/mcp-config.json" ".config/github-copilot/mcp-config.json";
-      kimchi = paths ".config/kimchi/harness/mcp.json" ".config/kimchi/harness/mcp.json";
+      # Kimchi renames a temporary over both files at runtime (first-run
+      # migration and ACP import write the user file; `/mcp enable|disable`
+      # writes the project one), so they reconcile by leaf, never symlink.
+      kimchi = {
+        devenv = devenvLeaves "ai:kimchi:mcp-merge" "$DEVENV_ROOT/.kimchi/mcp.json" (mcpProbe "kimchi");
+        hm = leaves ownRetraction "kimchiMcpMerge" "$HOME/.config/kimchi/harness/mcp.json" (mcpProbe "kimchi");
+      };
       kiro = lib.genAttrs modes kiroMcp;
     };
     permissions = {
@@ -321,7 +378,14 @@
         hm = codexConfig // {probe = probe ["ai" "codex" "native" "settings" "permissions"] {probe.network.enabled = false;} {};};
       };
       copilot = both (absent "No permissions option or translation exists; arbitrary native.settings keys do not establish a permissions contract.");
-      kimchi = both (absent "No permissions option or translation exists.");
+      # Kimchi rewrites whichever file `/permissions … save` targets, so the
+      # declared keys reconcile by leaf. The user path is hard-coded upstream.
+      kimchi = let
+        declaration = probe ["ai" "kimchi" "permissions"] {allow = ["probe"];} {};
+      in {
+        devenv = devenvLeaves "ai:kimchi:permissions-merge" "$DEVENV_ROOT/.kimchi/permissions.json" declaration;
+        hm = leaves ownRetraction "kimchiPermissionsMerge" "$HOME/.config/kimchi/harness/permissions.json" declaration;
+      };
       kiro = {
         # NOT a parity gap, and the label used to invite "closing" it: Kiro
         # never looks in a project .kiro/ for permissions, so a devenv writer
@@ -394,9 +458,17 @@
       };
       kimchi = {
         devenv =
-          (declarative "devenv" ".config/kimchi/config.json")
+          (devenvLeaves "ai:kimchi:config-merge" "$DEVENV_ROOT/.kimchi/config.json"
+            (probe ["ai" "kimchi" "native" "settings"] {
+              llmEndpoint = "https://example.invalid";
+              skillPaths = ["probe"];
+            } {}))
           // {
-            additionalWriters = [(declarative "devenv" ".config/kimchi/harness/settings.json")];
+            additionalWriters = [
+              (devenvLeaves "ai:kimchi:harness-settings-merge" "$DEVENV_ROOT/.config/kimchi/harness/settings.json"
+                (probe ["ai" "kimchi" "native" "harnessSettings"] {hideThinkingBlock = true;} {}))
+            ];
+            deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys reconcile into the fixed project harness path.";
           };
         hm =
           (leaves ownRetraction "kimchiConfigMerge" "$HOME/.config/kimchi/config.json"
@@ -429,7 +501,7 @@
       };
       codex = paths ".agents/skills/<name>" ".agents/skills/<name>";
       copilot = paths ".copilot/skills/<name>" ".github/skills/<name>/<leaf>";
-      kimchi = paths ".config/kimchi/harness/skills/<name>" ".config/kimchi/harness/skills/<name>/<leaf>";
+      kimchi = paths ".config/kimchi/harness/skills/<name>" ".kimchi/skills/<name>/<leaf>";
       kiro = paths ".kiro/skills/<name>" ".kiro/skills/<name>/<leaf>";
     };
   };
@@ -455,8 +527,8 @@
   inputOptions = surface: ecosystem:
     if surface == "permissions"
     then
-      if ecosystem == "kiro"
-      then [["ai" "kiro" "permissions"]]
+      if builtins.elem ecosystem ["kimchi" "kiro"]
+      then [["ai" ecosystem "permissions"]]
       else if builtins.elem ecosystem ["claude" "codex"]
       then [["ai" ecosystem "native" "settings" "permissions"]]
       else []
@@ -470,9 +542,6 @@
       lib.concatMap (ecosystem:
         lib.mapAttrsToList (mode: writer:
           writer
-          // lib.optionalAttrs (ecosystem == "kimchi" && mode == "devenv" && builtins.elem surface ["context" "mcpServers" "settings" "skills"]) {
-            deliveryGap = "Kimchi reads its HOME config directory; these project-local files have no discovery or additive launcher flag.";
-          }
           // {
             inherit ecosystem mode surface;
             evidence = source packages.${ecosystem};
@@ -518,6 +587,6 @@
   rows = validateRows (flatten definitions);
 in
   builtins.seq rows {
-    inherit definitions ecosystems imperativePrimitives key modes primitives rows surfaces validateRows writersOf;
+    inherit definitions ecosystems imperativePrimitives key keyedSurfaces modes primitives rows surfaces validateRows writersOf;
     imperativeWriters = lib.filter (writer: builtins.elem writer.primitive imperativePrimitives) (lib.concatMap writersOf rows);
   }
