@@ -187,6 +187,24 @@ in {
         && (settingsDocument result).value.model == "gpt-4"
     );
 
+    # The project copy is a static write, not a reconciled document: Copilot
+    # never opens a project-scope settings.json, so a shell-entry reconciler
+    # there would maintain bytes nothing reads. The consumer is warned instead.
+    module-copilot-devenv-settings-stay-static = mkTest "copilot-devenv-settings-stay-static" (
+      let
+        result = evalDevenv {
+          ai.copilot.enable = true;
+          ai.copilot.native.settings.model = "gpt-4";
+        };
+        path = ".config/github-copilot/settings.json";
+      in
+        builtins.fromJSON (result.config.files.${path}.text or "null")
+        == {model = "gpt-4";}
+        && result.config.ai.copilot._ownPlans == {}
+        && !(result.config.tasks ? "ai:copilot:settings-merge")
+        && lib.any (lib.hasPrefix "ai.copilot.native.settings is set but devenv does not deliver it") result.config.warnings
+    );
+
     module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (
       let
         result = evalHm {
@@ -660,6 +678,32 @@ in {
         agentFile
         != null
         && lib.hasInfix "Reviewer" (agentFile.text or "")
+    );
+
+    # A store-path STRING is a file, not Markdown: a flake input's
+    # "${src}/agent.md", or an agentsDir given as a string (whose entries are
+    # then strings too). Both backends must deliver the file's contents, not a
+    # file whose body is the literal /nix/store path.
+    module-copilot-store-string-agent-both-backends = mkTest "copilot-store-string-agent-both-backends" (
+      let
+        fixtureDir = "${../../claude-code/checks/fixtures/claude-agents}";
+        expected = builtins.readFile ../../claude-code/checks/fixtures/claude-agents/agent-one.md;
+        config.ai.copilot = {
+          enable = true;
+          agents.store-string = "${fixtureDir}/agent-one.md";
+          agentsDir = {
+            path = fixtureDir;
+            filter = name: name == "agent-one.md";
+          };
+        };
+        hmFiles = (evalHm config).config.home.file;
+        devenvFiles = (evalDevenv config).config.files;
+        delivered = file: (file.text or null) == expected;
+      in
+        delivered hmFiles.".copilot/agents/store-string.md"
+        && delivered hmFiles.".copilot/agents/agent-one.md"
+        && delivered devenvFiles.".github/agents/store-string.agent.md"
+        && delivered devenvFiles.".github/agents/agent-one.agent.md"
     );
 
     # Copilot parity (HM side).

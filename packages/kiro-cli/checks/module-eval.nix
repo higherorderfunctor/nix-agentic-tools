@@ -1232,7 +1232,7 @@ in {
             native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
-        text = (result.config.files.".kiro/settings/cli.json" or {}).text or "";
+        text = (builtins.head (harness.ownPlan "kiro" "ai:kiro:settings-merge" result).targets).units.text;
       in
         lib.hasInfix ''"chat.modelDefaults":{"claude-opus-5":{"effort":"high"}}'' text
         && !lib.hasInfix "chat.modelDefaults.claude-opus-5" text
@@ -1270,7 +1270,7 @@ in {
             native.settings.chat.enableTangentMode = true;
           };
         };
-        text = (result.config.files.".kiro/settings/cli.json" or {}).text or "";
+        text = (builtins.head (harness.ownPlan "kiro" "ai:kiro:settings-merge" result).targets).units.text;
       in
         lib.hasInfix ''"chat.enableTangentMode":true'' text
         && !lib.hasInfix ''"chat":{'' text
@@ -2209,6 +2209,26 @@ in {
         resolves hmEntry && resolves devenvEntry
     );
 
+    # A store-path STRING — a flake input's "${src}/agent.json" — is a file too.
+    # The option's `lines` arm accepts it, so the writer must route it to
+    # `source` like a path, or both backends write a file whose body is the
+    # literal /nix/store path.
+    module-kiro-store-string-agent-both-backends = mkTest "kiro-store-string-agent-both-backends" (
+      let
+        storeString = "${./fixtures/kiro-agent-raw.json}";
+        mod = {
+          ai.kiro = {
+            enable = true;
+            agents.store-string = storeString;
+          };
+        };
+        hmEntry = (evalHm mod).config.home.file.".kiro/agents/store-string.json";
+        devenvEntry = (evalDevenv mod).config.files.".kiro/agents/store-string.json";
+        resolves = e: toString (e.source or "") == storeString && (e.text or null) == null;
+      in
+        resolves hmEntry && resolves devenvEntry
+    );
+
     # `agents` and `agentsDir` are mutually exclusive; the assertion existed but
     # nothing exercised it.
     module-kiro-agents-dir-exclusive = mkTest "kiro-agents-dir-exclusive" (
@@ -2827,7 +2847,7 @@ in {
         needles = ["KIRO_LOG_LEVEL" "debug"];
       };
 
-    # Devenv: settings/cli.json static write.
+    # Devenv: settings/cli.json reconciles the flattened workspace settings.
     module-kiro-devenv-writes-settings-json = mkTest "kiro-devenv-writes-settings-json" (
       let
         result = evalDevenv {
@@ -2841,11 +2861,11 @@ in {
             native.settings.chat.enableTangentMode = true;
           };
         };
-        settingsFile = result.config.files.".kiro/settings/cli.json" or null;
       in
-        settingsFile
-        != null
-        && lib.hasInfix "chat.enableTangentMode" (settingsFile.text or "")
+        (cliDocument result).value."chat.enableTangentMode"
+        == true
+        && lib.hasInfix "--phase all" result.config.tasks."ai:kiro:settings-merge".exec
+        && !(result.config.files ? ".kiro/settings/cli.json")
     );
 
     # Devenv: Kiro context joins the shared repository-root AGENTS.md.
@@ -3054,6 +3074,11 @@ in {
       in
         hm.config.ai.kiro.files
         == {}
+        && dv.config.ai.kiro.files == {}
+        && hm.config.ai.kiro.activation.retireSteering.runWhenDisabled
+        && dv.config.ai.kiro.activation.retireSteering.runWhenDisabled
+        && builtins.attrNames hm.config.ai.kiro._ownPlans == ["retire-materialize-kiro-steering-ledger"]
+        && builtins.attrNames dv.config.ai.kiro._ownPlans == ["ai:kiro:retire-steering-copies"]
         && target.units == {}
         && target.path == ".kiro/steering"
         && target.ledger == "materialize/kiro-steering.manifest"

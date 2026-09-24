@@ -7,18 +7,53 @@
   reminder = (import ../../packages/kiro-cli/lib/workflowReminder.nix {inherit lib pkgs;}).mkVendorReminder {cliVersion = "1.0.0";};
   enabled = harness.evalDevenv {
     ai.codex = {
+      # Not the default AGENTS.md: the observer's fallback for a runtime that
+      # publishes no ai.internal.agentsMdTargets entry, which would otherwise
+      # pass for Codex without the entry.
+      context = {
+        filename = "CODEX.md";
+        text = "codex probe";
+      };
       enable = true;
       files."probe".content.text = "probe";
       native.settings.model = "probe";
     };
     ai.kiro = {
       configDir = ".custom-kiro";
+      # A second shared-owner key. Codex contributes AGENTS.md, Kiro this one;
+      # each must be attributed to the runtime whose context it is.
+      context = {
+        filename = "KIRO.md";
+        text = "kiro probe";
+      };
       enable = true;
       lspServers.probe.command = "probe";
     };
     # Consumer-declared, inside a runtime's own config directory. The delivery
     # manifest must not claim it.
     files.".custom-kiro/consumer-owned.md".text = "consumer";
+  };
+  # Kimchi's context.filename names the Home Manager harness file only; devenv
+  # always writes the project-root AGENTS.md. Evaluated alone so no other
+  # runtime's AGENTS.md writer can stand in for Kimchi's.
+  kimchi = harness.evalDevenv {
+    ai.kimchi = {
+      context = {
+        filename = "custom.md";
+        text = "kimchi probe";
+      };
+      enable = true;
+    };
+  };
+  # Codex, Kimchi and Kiro all write the project-root AGENTS.md by default, and
+  # Codex publishes its key even with no content. Codex sorts first, so a
+  # first-wins manifest named only ai.codex.* for Kimchi's text.
+  sharedAgentsMd = harness.evalDevenv {
+    ai.codex.enable = true;
+    ai.kimchi = {
+      context.text = "kimchi only";
+      enable = true;
+    };
   };
   stubBin = pkgs.writeShellScript "kiro-warning-stub" ''
     set -euETo pipefail
@@ -56,7 +91,9 @@ in {
         ${lib.getExe reminder} \
         ${wrappers} \
         ${../../packages/claude-code/lib/delegation-clamp.sh} \
-        ${pkgs.writeText "warning-observer-shell" enabled.config.enterShell}
+        ${pkgs.writeText "warning-observer-shell" enabled.config.enterShell} \
+        ${pkgs.writeText "kimchi-warning-observer-shell" kimchi.config.enterShell} \
+        ${pkgs.writeText "shared-agents-md-observer-shell" sharedAgentsMd.config.enterShell}
       touch "$out"
     '';
   checks.ai-warnings-files-wired = harness.mkTest "ai-warnings-files-wired" (

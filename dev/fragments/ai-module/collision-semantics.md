@@ -1,9 +1,11 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-23 — the builder entry point is
-> `lib.ai.app.mkRuntime`, renamed from its old app name. Rules and context use
-> entry-local `enable` suppression, and Semble's CLI rule uses text-source
-> priority arbitration. Delivery entries default `content` alone, and
+> **Last verified:** 2026-09-24 — merged pools are public
+> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
+> text-source record crosses into them with only its winning arm. Path claims
+> fail across runtimes except the shared AGENTS.md target, matched on each
+> factory's declared key. Rules and context use entry-local `enable`
+> suppression; delivery entries default `content` alone, and
 > `content.enable = false` suppresses every content form.
 >
 > **Settled — do not relitigate.** Full lineage:
@@ -187,6 +189,11 @@ Two consequences follow.
   `lib/ai/app/sharedAgentsMd.nix`) keep whole-entry `mkDefault` and say so at
   the site.
 
+Structured documents instead contribute ordinary `content.value` leaves (or
+per-leaf defaults). A default on the whole content or value drops every
+generated leaf when a consumer adds one, silently retiring previously owned
+siblings.
+
 Always-on process defaults such as the sandbox-safe SSH command still use the
 internal callback channel instead of writing a hidden normalized-pool
 definition. That keeps module plumbing out of the consumer-owned override pool
@@ -213,8 +220,13 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
-every supported pool, then additionally filters disabled rules, and hands only
-the surviving `merged*` values to package callbacks. For MCP,
+every supported pool, additionally filters disabled rules, and contributes the
+result as per-key defaults beneath `ai.<runtime>.normalized.<pool>`, whose
+option default is `{}`. Ordinary extensions retain unrelated inherited keys;
+whole-pool `mkForce` replaces the merged input. Package callbacks and
+transformer arguments read those public options. A text-source record crosses
+into its normalized pool carrying only its winning arm, `text` or `source`, so
+the copy never reads a source to recompute a priority. For MCP,
 `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
 scope while preserving null tombstones; only those client views cross the
 root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
@@ -239,15 +251,26 @@ lowering. Package callbacks may render entries into the runtime map but must not
 read that map to define normalized inputs; keeping the edge one-way is what
 makes the module fixed point evaluable.
 
-Repository-local Codex/Kimchi/Kiro `AGENTS.md` is the shared-target exception,
-not a B7 exception. `sharedAgentsMd.nix` admits applicable public entries from
-enabled runtimes into its hidden final map before the one native sink; a
-disabled runtime's declared map remains inert. The generated composition is a
-lazy default there, so ordinary replacements and disabled records arbitrate at
-B7 without reading discarded source-backed generator content; equal runtime
-entries deduplicate and divergent ones fail. Size guards read only the surviving
-inline final entry. A surviving store-backed `source` remains lazy and is not
-size-checked at eval, avoiding IFD.
+Runtime delivery options, including downstream app records, define the path
+claim inventory. Two enabled runtimes claiming the same live file path fail
+evaluation on both backends, even if their bytes match. Disabled entries (the
+same `runtimeFiles.isLive` rule the router uses) and disabled runtimes do not
+participate. A shared repository context target is the sole exception: each
+claimant's devenv factory must declare that target as its key in
+`ai.internal.agentsMdTargets` (not `context.filename`, which for Kimchi names
+the Home Manager harness file while devenv always writes `AGENTS.md`), and all
+claimants must select the same method. The aggregate's native owner uses
+`symlink`; a public override cannot silently select an owned-file method.
+
+Repository-local `AGENTS.md` is the shared-target exception, not a B7 exception.
+`sharedAgentsMd.nix` admits applicable public entries from enabled runtimes
+discovered from their delivery options into its hidden final map before the one
+native sink; a disabled runtime's declared map remains inert. The generated
+composition is a lazy default there, so ordinary replacements and disabled
+records arbitrate at B7 without reading discarded source-backed generator
+content; equal runtime entries deduplicate and divergent ones fail. Size guards
+read only the surviving inline final entry. A surviving store-backed `source`
+remains lazy and is not size-checked at eval, avoiding IFD.
 
 ### Adding a normalized pool
 

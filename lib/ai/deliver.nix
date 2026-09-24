@@ -88,7 +88,7 @@ in
     # Disabled records are not files; everything below sees live entries only.
     live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
 
-    # The ONE place a method is resolved. Not at type level and not in an
+    # Resolve through the shared rule after merging. Not at type level or in an
     # `apply`: both would read a sibling option while the option they belong to
     # is still merging, and `ai.<runtime>.files` carries an `apply` of its own.
     # Here `cfg` is finished, so `mkForce` on `method` and on `methodFor` both
@@ -97,15 +97,10 @@ in
       entry
       // {
         inherit path;
-        method =
-          if entry.method != null
-          then entry.method
-          else
-            cfg.methodFor {
-              inherit backend path;
-              inherit (entry) facts;
-              default = deliveryMethod.byRule;
-            };
+        method = deliveryMethod.resolve {
+          inherit backend entry path;
+          inherit (cfg) methodFor;
+        };
         # Structured content becomes bytes once, here. The ORIGINAL content
         # stays: a reconciled document declares the VALUE it owns leaves of,
         # and that value cannot be recovered from the bytes.
@@ -128,9 +123,10 @@ in
     # A writer that owns files is a bundle of TARGETS, one per ledger it has
     # ever declared — not one per file that exists this generation. A ledger no
     # file claims lowers to an EMPTY target, which is how the reconciler
-    # releases a path: the retirement of a surface, the last file leaving a
-    # directory, and a document handed between two write modes are all the same
-    # ordinary reconcile, with no retirement-specific code anywhere.
+    # retires ownership: the retirement of a surface, the last file leaving a
+    # directory, and a document handed between owned write modes use the same
+    # ordinary reconcile. Document retirement preserves native leaves and the
+    # regular file, so it cannot hand that path to a symlink writer.
     owningEntries =
       lib.filter (entry: entry.entry != null && entry.ledger != null)
       (lib.attrValues (lib.filterAttrs (_path: entry: lib.elem entry.method owningMethods) resolved));
@@ -242,12 +238,41 @@ in
     # VALUE travels, never the rendered bytes: the option that owns the file
     # owns how it is written, which is the whole point of delegating it.
     sunk = lib.attrValues (bucket "upstream");
-    upstreamValue = entry:
-      if entry.content.value != null
-      then entry.content.value
-      else if aiTypes.textSourceUsesSource entry.content
-      then entry.content.source
-      else entry.content.text;
+    upstreamValue = entry: let
+      contentOption = options.ai.${runtime}.files.valueMeta.attrs.${entry.path}.configuration.options.content;
+      field =
+        if entry.content.value != null
+        then "value"
+        else if aiTypes.textSourceUsesSource entry.content
+        then "source"
+        else "text";
+      # The FIELD's own option, not `content.${field}` of each raw content
+      # definition. Its definitions have had their top-level properties
+      # discharged and priority-filtered, so `content.value = mkForce {…}`,
+      # `mkDefault {…}` or `mkIf c {…}` arrives as the value it wraps. The raw
+      # field would get a second override wrapped around the first; the host
+      # strips only the outer one, and the inner property lands in the
+      # document as literal `_type`/`priority`/`content` keys.
+      fieldOption = contentOption.valueMeta.configuration.options.${field};
+      # The content option's filter left only definitions at its winning
+      # priority and stripped that wrapper before the submodule saw them, so
+      # the field option cannot report it. Outer wins, as when the module
+      # system pushes a property down an attribute path: a non-default content
+      # priority is every survivor's, and otherwise the field's own is.
+      priority =
+        if contentOption.highestPrio == lib.modules.defaultOverridePriority
+        then fieldOption.highestPrio
+        else contentOption.highestPrio;
+    in
+      # Moving the evaluated VALUE makes defaults ordinary definitions in the
+      # host module: a generated `mkDefault` leaf would then conflict with a
+      # consumer's own definition of it, and `mkBefore`/`mkAfter` list order
+      # would be lost. Alias the surviving field definitions instead, which
+      # keeps the entry's priority and the nested leaf/list properties for the
+      # host option's own merge.
+      builtins.seq entry.content.${field} (
+        lib.modules.mkAliasAndWrapDefsWithPriority lib.id (fieldOption // {highestPrio = priority;})
+      );
     # Merged into CONSTANT attribute paths: a list of fragments whose length
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
@@ -322,8 +347,7 @@ in
     # `upstreamRoots` table above for what happens otherwise.
     upstreamRoots = upstreamRoots.${backend};
     upstreamUnder = root:
-      lib.foldl' lib.recursiveUpdate {}
-      (map (entry: lib.setAttrByPath (lib.tail entry.sink) (upstreamValue entry))
+      lib.mkMerge (map (entry: lib.setAttrByPath (lib.tail entry.sink) (upstreamValue entry))
         (lib.filter (entry: entry.sink != [] && lib.head entry.sink == root) sunk));
 
     owned = {
@@ -346,6 +370,14 @@ in
         '';
       })
       resolved
+      # Check declared document paths even when no file claims their ledgers:
+      # the empty target still writes after retirement and can replace a link
+      # or obstruct the backend's link writer with a regular native document.
+      ++ lib.concatMap (claim:
+        lib.mapAttrsToList (path: _entry: {
+          assertion = path != claim.declaration.path;
+          message = ''ai.${runtime}.files."${path}" resolves to `symlink`, but ai.${runtime}.activation.${claim.name}.ledgers."${claim.ledger}" still declares this ${claim.declaration.codec} document path. Empty document retirement preserves a regular file and native leaves; it cannot hand this path to symlink delivery.'';
+        }) (bucket "symlink")) (lib.filter (claim: claim.declaration.codec != "dir") ledgerClaims)
       # `recursive` delivers the LEAVES of a directory source. Home Manager
       # takes the flag for anything and links a single file under a directory
       # name; only the devenv walk refuses it, and then only on that backend.
@@ -434,6 +466,28 @@ in
           the writer so that a ledger no file claims still releases its path.
         '';
       }) (lib.filter (entry: cfg.activation ? ${entry.entry}) owningEntries)
+      # The ledger selects the actual write path and codec. Accepting a
+      # contradictory file description would silently redirect its output or
+      # turn a requested read-only copy into writable leaf reconciliation.
+      ++ lib.concatMap (entry:
+        lib.concatMap (ledger:
+          [
+            {
+              assertion = entry.method != "copy-ro" || ledger.codec == "dir";
+              message = ''ai.${runtime}.files."${entry.path}" uses `copy-ro`, which requires a directory ledger; `${entry.ledger}` has codec `${ledger.codec}`. A document ledger reconciles leaves and cannot own a read-only copy.'';
+            }
+          ]
+          ++ lib.optionals (ledger.codec != "dir") [
+            {
+              assertion = entry.path == ledger.path;
+              message = ''ai.${runtime}.files."${entry.path}" claims document ledger `${entry.ledger}` at `${ledger.path}`. A document claimant must use its ledger's exact path.'';
+            }
+            {
+              assertion = entry.format == ledger.codec;
+              message = ''ai.${runtime}.files."${entry.path}" has format `${entry.format}`, but document ledger `${entry.ledger}` uses codec `${ledger.codec}`. The document format must match its ledger codec.'';
+            }
+          ]) (declaredLedger entry))
+      owningEntries
       ++ map (entry: {
         assertion = entry.method != "shared" || formats.table.${entry.format}.sharedOk;
         message = ''

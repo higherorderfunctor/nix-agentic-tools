@@ -1,8 +1,11 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; Claude and Kimchi choose
-> an agent's `source` by Home Manager's `isPathLike`. File content at
+> **Last verified:** 2026-09-23 — Claude, Codex, Copilot and Kiro describe
+> delivery once through `mkRuntime`'s record-level `config`; Kimchi reaches the
+> same delivery layer from its per-backend callbacks. Claude devenv delivers
+> `ai.agents` and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw
+> agent writer (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a
+> store-path string is a file, never a body naming its own path. File content at
 > `mkDefault` enables its entry; `content.enable = false` suppresses every
 > content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
 > settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
@@ -11,7 +14,9 @@
 > owned writable copies and portable hooks reach its project `hooks.json` on
 > devenv. Reasoning effort lowers to Claude, Codex, and Kimchi; authored prose
 > and final delivery share one priority-aware text-source record with enable
-> semantics.
+> semantics. Upstream delegation aliases the content field's own definitions.
+> Ledger-owned copies whose files nothing else retracts opt into
+> `runWhenDisabled`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -109,18 +114,23 @@ in one profile fails activation with a `buildEnv` conflicting-subpath error.
 `checks/ai-fanout/module-eval.nix`'s `every-runtime-installs-package` pins each
 runtime's delivery channel per backend, so that exemption cannot silently widen.
 
-The one bounded exception is `migrationConfig`: ownership-safe retirement may
-run outside the enable gate when the generation that disables a runtime must
-remove files recorded by an older implementation. A retirement is not a
-mechanism — it is an `own` target that declares NO units, so the ordinary
-retraction removes what the previous generation's ledger recorded and then drops
-the ledger, which is what makes it inert afterwards and what keeps it from
-emitting product content. Kiro's one-shot steering-copy retirement is the
-current sole caller, and on Home Manager it is a PAIR of entries: the prune
-phase deletes the real files before `checkLinkTargets`, the write phase unlinks
-the drained ledger. It derives the old target from the current `configDir`, so a
-custom directory must remain unchanged for that retirement generation; change or
-remove it only after one activation/shell entry has drained the old ledger.
+The one bounded exception is an `activation` writer with
+`runWhenDisabled = true`, declared outside the product gate by
+`migrationConfig`. The adapter still runs when disabled, but receives no files
+and only writers with that explicit opt-in; ordinary command and owned writers
+remain gated. An opted-in owned writer therefore receives empty targets, so
+ordinary retraction removes only what the previous generation's ledger recorded
+and then drops the ledger. It cannot emit product files while disabled. The
+callers are writers whose files nothing else retracts: Claude's devenv rules
+copies, Codex's execpolicy copies, and Kiro's one-shot steering-copy retirement.
+A ledger-owned copy outlives a disable unless its writer opts in, because Home
+Manager's generation diff and `devenv:files:cleanup` only remove links. On Home
+Manager a directory writer is a PAIR of entries: the prune phase deletes the
+real files before `checkLinkTargets`, the write phase unlinks the drained
+ledger. Kiro's retirement and Codex's Home Manager writer derive the target from
+the current `configDir`, so a custom directory must remain unchanged for the
+generation that disables or retires; change or remove it only after one
+activation/shell entry has drained the old ledger.
 
 ### Why there's no master switch
 
@@ -298,15 +308,18 @@ enabled ecosystem whose native model preserves the option's semantics):
   fields and cannot carry a raw Markdown or path entry. A path-like legacy entry
   — a Nix path, a store-path string such as a flake input's `"${src}/a.md"`, or
   a derivation, i.e. upstream Home Manager's `isPathLike` — stays a file
-  `source` for Claude and Kimchi on both backends (`agent.isPathLike`), but is
-  read into text for Copilot's file writer. Kiro remains excluded, but NOT
-  because its agents are untyped JSON — `ai.kiro.agents` is a typed record
-  modelling Kiro's v3 agent schema, and its `prompt` uses the same
-  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
-  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
-  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
-  table, not a pass-through. Add one and the exclusion can be revisited. Kimchi
-  takes semantic records as frontmatter plus body with no `name:`, and rejects a
+  `source` for Claude and Kimchi on both backends (`agent.isPathLike`), and is
+  read into text by `renderCopilot` for Copilot's file writer; an `agentsDir`
+  given as a string yields string entries, so every writer must test
+  `isPathLike`, never `builtins.isPath`. Raw `ai.kiro.agents` entries route the
+  same way to `source`. Kiro remains excluded from this pool, but NOT because
+  its agents are untyped JSON — `ai.kiro.agents` is a typed record modelling
+  Kiro's v3 agent schema, and its `prompt` uses the same `text`/`source` content
+  shape. The blocker is the tool VOCABULARY: this pool's `tools` carries
+  Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes capability tags
+  (`shell`, `read`, `@mcp`), so lowering needs a translation table, not a
+  pass-through. Add one and the exclusion can be revisited. Kimchi takes
+  semantic records as frontmatter plus body with no `name:`, and rejects a
   non-empty `tools` (its lowercase builtin names differ) and root Markdown (it
   misreads Claude's `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries
   Kimchi-native Markdown. Its files are the one Markdown surface a harness
@@ -516,7 +529,8 @@ whole-entry contract:
 
 How a file lands is a METHOD — `symlink`, `copy-ro`, `shared`, `upstream` —
 resolved by `ai.<runtime>.methodFor` from the facts, or stated per file as the
-light exception. A runtime states facts, never a method and never a reason.
+light exception. A runtime normally states facts; upstream delegation explicitly
+states its method and sink. Reasons belong in comments.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
@@ -534,17 +548,31 @@ entry replaces the generated default, and `content.enable = false` suppresses
 it.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
-values and runtime state keep their existing typed lifecycle owners, and a
-surface another module owns is DESCRIBED here — `method = "upstream"` plus the
-`sink` that owns it — rather than written here. Skills go through the map now:
-one entry per tree, expanded by Home Manager natively and walked by the router
-for devenv. Kiro steering uses ordinary symlinks after live 2.18.1 spikes
-confirmed startup discovery and same-session replacement reload in both global
-and project layouts; Kiro hooks stay real-file reconciled (`lib/ai/own.nix`, a
-`dir` target) because hook symlink behavior was not part of that result — the v3
-scan keeps only `isFile()` entries. An enable-independent one-shot retirement,
-the same reconciler with a target that declares nothing, drains only the
-steering copies a legacy ledger records and then removes it.
+files use `content.run` in an owned writer, runtime state keeps its typed
+lifecycle owners, and a surface another module owns is DESCRIBED here —
+`method = "upstream"` plus the `sink` that owns it — rather than written here.
+The router aliases the surviving definitions of the content FIELD
+(`content.value`, `.source` or `.text`), including their priorities, instead of
+copying the merged value: copying strips `mkDefault` and breaks ordinary
+upstream overrides. It reads them from the field's own option, whose merge has
+already discharged a property wrapped around the field
+(`content.value = mkForce {…}`, `mkIf c {…}`). Taking `content.${field}` from
+the raw content definitions instead nests that property inside the alias's
+override, and the host writes it into the document as literal
+`_type`/`priority`/`content` keys. A non-default priority on the whole `content`
+wins over the field's. The suppressible entry type preserves submodule option
+metadata for that alias. Definitions combine through `mkMerge` below each
+adapter's literal hosted root, so the host retains its own deep-merge and
+list-ordering semantics. Dynamic top-level roots remain forbidden because they
+recurse during option collection. Skills go through the map now: one entry per
+tree, expanded by Home Manager natively and walked by the router for devenv.
+Kiro steering uses ordinary symlinks after live 2.18.1 spikes confirmed startup
+discovery and same-session replacement reload in both global and project
+layouts; Kiro hooks stay real-file reconciled (`lib/ai/own.nix`, a `dir` target)
+because hook symlink behavior was not part of that result — the v3 scan keeps
+only `isFile()` entries. An enable-independent one-shot retirement, the same
+reconciler with a target that declares nothing, drains only the steering copies
+a legacy ledger records and then removes it.
 
 ### Documentation parity is capability parity
 
@@ -606,10 +634,12 @@ Contributing in one and expecting the other to pick it up will silently fail —
 the contribution just doesn't land in the other eval. A program option tree can
 make enablement structural without changing that per-evaluation ownership.
 
-This is a different discipline from the AI CLI factories (`mkRuntime`), which
-have structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that
-force per-backend separation by construction. Plain modules have no such
-guardrail — authors must decide scope consciously.
+AI CLI factories (`mkRuntime`) may instead share one record-level `config`
+callback, which receives `backend` for intentional scope differences. Claude,
+Codex, Copilot and Kiro do; Kimchi still keeps per-backend `hm.config` /
+`devenv.config` blocks. Backend specs retain package installation and migration
+callbacks. Each backend still evaluates that configuration independently;
+sharing code never shares option values.
 
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option

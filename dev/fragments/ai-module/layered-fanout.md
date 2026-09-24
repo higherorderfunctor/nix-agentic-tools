@@ -1,9 +1,14 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Context and rules retain text-source priority and
-> enable semantics; L5 is the delivery router plus one adapter per backend.
+> **Last verified:** 2026-09-24 — L5 is the delivery router plus one adapter per
+> backend; Claude, Codex, Copilot and Kiro describe delivery once, Kimchi
+> reaches the layer from its callbacks, and the delivery matrix is generated
+> from the layer for every runtime's files. Normalized pools carry only a
+> text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
+> rules are read-only copies whose writers survive a disable. Copilot reconciles
+> settings.json on HM only. Native file settings live under
+> `ai.<runtime>.native`. Each devenv factory publishes its shared AGENTS.md key
+> in `ai.internal.agentsMdTargets`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -39,12 +44,16 @@
 │   - null or itemModule.enable suppresses by pool contract   │
 └────────────────────────────────────────────────────────────┘
                              │
+                             ▼  root-to-runtime fold
+                  ai.<cli>.normalized.<pool>
+                  ordinary option; per-key fold defaults
+                             │
                              ▼  routing + native rendering
 ┌────────────────────────────────────────────────────────────┐
 │ L4: Final runtime output map                               │
-│   ai.<cli>.files = attrsOf (nullOr { text|source; ... })    │
-│   - generated whole entries use mkDefault                  │
-│   - ordinary entries replace; null suppresses              │
+│   ai.<cli>.files = attrsOf (nullOr { content; ... })       │
+│   - text/source default; structured leaves compose         │
+│   - sibling fields compose; null suppresses entries       │
 └────────────────────────────────────────────────────────────┘
                              │
                              ▼  generic backend lowering
@@ -63,6 +72,106 @@
   proxy ownership: `sharedOptions.nix` aggregates proxy declaration scopes and
   emits unique active systemd units, while only lowered client entries traverse
   this five-stage pipeline.
+- **One owner per physical path.** Enabled runtime file maps supply claims on
+  both backends. Only shared repository context targets arbitrate multiple
+  runtime claims; contributors are discovered from their context target and
+  delivery options, without a runtime-name list. Public overrides and disabled
+  entries enter the aggregate before lowering, and claimants must agree with its
+  symlink method. All three readers use `deliveryMethod.resolve`, so an explicit
+  method beats `methodFor` consistently after option merging. Kimchi's devenv
+  project context is one of those claimants; its user context stays under its
+  harness directory.
+- **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
+  writer decide whether a file exists by reading composed content. Deferring
+  that read until priority arbitration keeps replaced store sources lazy.
+- **Structured documents contribute ordinary leaves.** Codex HM settings and
+  Copilot MCP/LSP use `content.value` at ordinary priority. Adding one leaf
+  keeps generated siblings, including leaves already recorded by Codex's ledger;
+  defaulting the whole content would silently retire those siblings. Text and
+  source content retain their whole-content defaults.
+- **Delegated surfaces still have delivery entries.** Claude's Home Manager
+  agents, hook scripts, skills, LSP and MCP maps use `method = "upstream"` with
+  sinks under `programs.claude-code`. Settings, permissions and typed hooks
+  share the `.claude/settings.json` entry. On devenv that entry delegates to
+  `files.".claude/settings.json".json`, so upstream's hooks still merge into the
+  same document. The router aliases definitions so upstream overrides still beat
+  generated defaults and the host owns list merging. Declare each sink path
+  once: repeating a list-valued `sink` on every content contribution
+  concatenates the path segments. The backend's supported roots remain explicit;
+  devenv's `claude.code.mcpServers` integration is outside those roots and
+  retains its native delegation. Claude's user-global `.claude.json` instead
+  claims the existing JSON ledger under `claudeUnpinLaunchEffort`; its writer
+  survives empty declarations and remains Home Manager only.
+- **Writers belong beside the file map.** Codex's user `config.toml` claims a
+  TOML ledger because the trust prompt writes native state there; project config
+  remains a generated source. Its skill-link migrator owns no ledger and uses
+  `activation.<name>.command`: HM needs `after = []` and
+  `before = ["linkCheck"]`, while devenv uses the default file/shell edges.
+  Commands omit a final newline because the router supplies it, along with
+  strict mode and a scoped subshell. Directory skill sources keep
+  `recursive = false` because Codex discovers directory symlinks. Named profiles
+  retain their lockout assertion and user-layer destination: HM describes
+  whole-file sources in the delivery map, while devenv retains its guarded
+  host-directory materializer through a command writer named
+  `ai:codex:materialize-profiles`. The materializer still owns its
+  Git-common-directory manifest and lock.
+- **Shared documents reconcile where the CLI writes them.** Kiro's cli.json
+  states `facts.harnessWrites = true` and declares its writer unconditionally
+  while enabled. The adapter runs the same bundle on HM activation or devenv
+  shell entry. Backend-keyed `entry` preserves HM names while giving devenv its
+  required namespace, such as `ai:kiro:settings-merge`. Devenv uses
+  `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
+  `enterTest`. Empty declarations retain their writers so prior leaves can be
+  retracted. Existing file modes and unowned leaves survive; a new file is 0600.
+  The fact is per backend when the CLI writes only one copy. Copilot's
+  settings.json is `{devenv = false; hm = true;}` with an HM-only writer:
+  Copilot never opens the project copy, so a devenv reconciler would maintain
+  bytes nothing reads, and the delivery warning covers the consumer instead.
+  Codex's project config remains a static source because its native writer is
+  user-scoped.
+- **A document ledger reserves its path against symlink delivery.** Both
+  `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
+  symlink destination still has a declared JSON/TOML ledger, even without a
+  claimant. Empty retirement preserves the regular document and native siblings;
+  it cannot safely hand that path to a link writer. Ordinary empty retirement
+  and Kiro's transitions between owned MCP modes remain supported.
+- **Owned entries must agree with their ledgers.** `copy-ro` requires a
+  directory ledger. A document claimant's path and format must exactly match its
+  JSON/TOML ledger: the ledger controls the actual destination and codec, so a
+  mismatch would redirect output or silently change its ownership semantics.
+- **Kiro keeps one MCP writer for both modes.** Both historical ledgers are
+  declared together; the selected file claims one and the other retracts. Merge
+  keeps `content.run` even with zero servers; empty overwrite has no claimant.
+  URL-secret modes remain 0400/0600, otherwise 0444/0644. Only this writer waits
+  for secrets. The devenv renderer keeps its project-root anchor for relative
+  secret readers. Hooks state `facts.symlinkReadable = false` because the v3
+  scan keeps only `isFile()` entries, and their writer survives N→0. Permissions
+  remain HM-only because Kiro never reads them from project `.kiro/`.
+- **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
+  (`paths:`) loader passes `includeExternal: false` at Project scope, with no
+  setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
+  the store is never read. User scope passes true. The rules entry therefore
+  states `facts.symlinkReadable = {devenv = false; hm = true;}`: devenv resolves
+  `copy-ro` through the `ai:claude:materialize-rules` directory ledger, while
+  Home Manager keeps its link. The writer is declared on devenv only, from
+  `migrationConfig` with `runWhenDisabled = true`, so both N→0 and disabling
+  Claude retract the copies.
+- **Codex execpolicy rules are read-only copies on both backends.** Codex keeps
+  a `rules/*.rules` entry only when `DirEntry::file_type().is_file()`, which
+  does not follow symlinks, so a linked rule is skipped silently (codex
+  0.156.0). Each rule states `facts.symlinkReadable = false` and is claimed file
+  by file through the `materialize/codex-execpolicy.manifest` directory ledger:
+  Codex writes its own `rules/default.rules` beside them, which the ledger never
+  records and so never touches. The writer is declared from `migrationConfig`
+  with `runWhenDisabled = true`, so both N→0 and disabling Codex retract the
+  copies; an `allow` policy must not outlive its declaration.
+- **Retirement can survive disable explicitly.** Kiro's migration callback
+  declares its unclaimed steering ledger with `runWhenDisabled = true`, and the
+  Claude rules and Codex execpolicy writers declare theirs the same way. The
+  adapter strips every file claim and ordinary writer while disabled; the
+  opted-in writer keeps both HM phases or the existing devenv task. A directory
+  ledger's unit basenames must be unique; the router rejects collisions before a
+  claimant can disappear into the attribute map.
 - **Replacement and negation at every supported L2↔L3 boundary.** Per-runtime
   entries replace same-key root entries wholesale. Nullable pools use null to
   suppress an inherited entry after the shallow merge; rules use
@@ -92,6 +201,21 @@
   Codex contributes both unscoped rules and scoped rules degraded to prose; Kiro
   contributes only unscoped always-on rules. The keyed writer deduplicates
   byte-identical same-key contributions.
+- **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
+  for each supported pool and is public, writable with `mkForce`. Keyed pools
+  have neutral `{}` option defaults and receive the root-to-runtime fold as
+  per-key defaults: ordinary additions retain unrelated inherited keys, while
+  whole-pool `mkForce` replaces all entries. Other pools default to the complete
+  fold. Every transformer argument reads this option; the older argument names
+  are aliases of it. MCP entries are already lowered client records. Hooks carry
+  the portable root input; native event lists still append inside the runtime.
+  Default context presence uses the structural input inventory until final-file
+  arbitration keeps its content; an explicit normalized context override
+  determines its own presence. A text-source record (context, a rule, agent
+  instructions) crosses into its pool with only its WINNING arm, `text` or
+  `source`, chosen from the original record's `_sourceWins`. Carrying both lands
+  them at one priority, which the record rejects, and computing that priority
+  reads the source — a build during evaluation for a derivation.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and
@@ -106,6 +230,67 @@
   the L2 key is `foo` (the helper strips known suffixes before emitting the key,
   and the per-CLI L4 emission re-appends). This is why the `.md.md` doubled-
   extension bug from 2026-04-21 is structurally impossible now.
+
+### Delivery gate controls
+
+`checks/ai-delivery/fixtures.nix` declares typed activation writers and lowers
+through the production adapters. Gated, absent and constant commands exercise
+the production gate's body observations. Exemption and declaration-independent
+claims remain independent policy evidence, checked in both directions. Schema
+controls still reject malformed policy records; separate sink-corruption
+controls pin the body accessor for shapes the delivery types cannot emit. No
+behavioral control depends on a production row's guessed writer name.
+
+`owned-fixtures.nix`, included by that fixture suite and the delivery-layer
+checks, evaluates real runtime entries on both backends. Shared files without
+ledgers, undeclared writers, conflicting methods, copy-ro/document pairings and
+document path/format mismatches require exact diagnostics and corrected healthy
+declarations. These complement the command-body controls; they do not replace
+them or retroactively establish the order of historical matrix derivation.
+
+### Generated delivery matrix
+
+`config/ai-delivery.nix` remains a pure `{lib}` import. Its schema and consumer
+facts are hand-authored; physical writer records come from the committed
+`config/ai-delivery-generated.nix`. The partition requires every matrix cell
+exactly once across derived and hand-authored rows. Absence reasons, upstream
+contracts, package wrappers, input associations and behavioral probes remain
+independent of the observed delivery implementation.
+
+`checks/ai-delivery/generate.nix` evaluates populated specimens at default
+config directories. It reads typed files and activation ledgers, resolves
+methods with the runtime's rule, and uses the router's backend naming. Recursive
+skills use the real leaf walk. Shared devenv AGENTS.md currently comes from the
+typed `ai.internal.files` owner; Claude's native devenv MCP integration is
+observed at its existing upstream destination. Package wrappers have no file
+entry. Kimchi's `trust.json` (`ai.kimchi.projectTrust`) is a user-scope trust
+store, not a portable surface, so the specimen maps it to no cell.
+
+The production gate compares live absence against hand-authored gaps in both
+directions and verifies upstream sink correspondence. Its three body arms stay;
+derived names make the first arm's name agreement a tautology, not a stronger
+check. Empty-declaration survival and body variation still discriminate. Kiro
+MCP's two strategies keep independent probes, including both HM phases.
+
+Regeneration evaluates the check set, and the check set asserts the committed
+matrix, so a change that moves a cell (a runtime joining the layer, say) cannot
+regenerate through the check attribute alone: bypass the `ai-delivery` and
+`ai-delivery-fixtures` asserts and the partition assertion in a scratch tree,
+build the observer, and restore them before committing.
+
+Regenerate the data with
+`nix build .#checks.x86_64-linux.ai-delivery-generated.generated --no-link --print-out-paths`,
+copy the printed output to `config/ai-delivery-generated.nix`, then run
+`treefmt config/ai-delivery-generated.nix`. The `ai-delivery-generated` check
+regenerates and requires byte identity. `file-warnings.nix` continues rebasing
+the matrix's default directories onto consumer configuration; neither warning
+reader imports an evaluator. The matrix's project `AGENTS.md` writer is rebased
+onto the key the runtime's factory publishes in `ai.internal.agentsMdTargets`,
+never onto `context.filename`: Kimchi's names its Home Manager harness file,
+while its devenv factory always writes the project-root `AGENTS.md`. Codex,
+Kimchi and Kiro all default to that one path, so the manifest folds every
+writer's options per path; a first-wins map named only `ai.codex.*` for text
+Kimchi supplied.
 
 ### Layer location map
 
@@ -141,8 +326,8 @@
    The uniform normalized `settings` schema is the explicit exception: every
    runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
-   factory's customConfig. Lifecycle-owned non-literal outputs remain explicit
-   exceptions rather than bypassing the static map silently.
+   factory's `config`. Declare owned outputs' ledgers under
+   `ai.<runtime>.activation`; work that owns no files uses `command`.
 5. Let the existing L5 router lower the surviving entry; change
    `lib/ai/deliver.nix` or an adapter only when the delivery contract itself
    changes, and never write `home.file`, `home.activation`, `files` or `tasks`

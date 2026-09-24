@@ -6,7 +6,19 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm mkTest tomlFormat;
+  inherit (harness) aiStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm mkTest ownPlan tomlFormat;
+  # Execpolicy rules are read-only copies on both backends, so their bytes are
+  # in the copy writer's plan, keyed by file name, not in home.file / files.
+  execpolicyTarget = evaluated:
+    lib.head
+    (ownPlan "codex" (
+        if evaluated.config ? home
+        then "materialize-codex-execpolicy-write"
+        else "ai:codex:materialize-execpolicy"
+      )
+      evaluated)
+    .targets;
+  execpolicyUnits = evaluated: (execpolicyTarget evaluated).units;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexExtracted codexSettingsActivation hmCodexSettings;
 in {
   checks = {
@@ -1135,8 +1147,8 @@ in {
             )
           '';
         };
-        hmRule = (evalHm config).config.home.file.".codex/rules/git-read.rules".text;
-        devenvRule = (evalDevenv config).config.files.".codex/rules/git-read.rules".text;
+        hmRule = (execpolicyUnits (evalHm config))."git-read.rules".text;
+        devenvRule = (execpolicyUnits (evalDevenv config))."git-read.rules".text;
       in
         hmRule
         == devenvRule
@@ -1157,7 +1169,7 @@ in {
           '';
         };
       };
-      rule = pkgs.writeText "git-read.rules" evaluated.config.home.file.".codex/rules/git-read.rules".text;
+      rule = pkgs.writeText "git-read.rules" (execpolicyUnits evaluated)."git-read.rules".text;
     in
       pkgs.runCommand "module-test-codex-execpolicy-runs-native-checker" {} ''
         ${pkgs.ai.chatgpt-codex}/bin/codex execpolicy check --pretty \
@@ -1177,7 +1189,7 @@ in {
           };
         };
         agentsMd = evaluated.config.home.file.".codex/AGENTS.md".text;
-        execpolicy = evaluated.config.home.file.".codex/rules/command-policy.rules".text;
+        execpolicy = (execpolicyUnits evaluated)."command-policy.rules".text;
       in
         lib.hasInfix "Explain every command" agentsMd
         && !lib.hasInfix "prefix_rule" agentsMd
@@ -1191,8 +1203,8 @@ in {
           enable = true;
           execpolicyRules.string-source = "${rule}";
         };
-        hmSource = (evalHm config).config.home.file.".codex/rules/string-source.rules".source;
-        devenvSource = (evalDevenv config).config.files.".codex/rules/string-source.rules".source;
+        hmSource = (execpolicyUnits (evalHm config))."string-source.rules".store;
+        devenvSource = (execpolicyUnits (evalDevenv config))."string-source.rules".store;
       in
         hmSource
         == "${rule}"
@@ -1209,8 +1221,8 @@ in {
           enable = true;
           execpolicyRules.symlink-source = "${symlink}";
         };
-        hmSource = (evalHm config).config.home.file.".codex/rules/symlink-source.rules".source;
-        devenvSource = (evalDevenv config).config.files.".codex/rules/symlink-source.rules".source;
+        hmSource = (execpolicyUnits (evalHm config))."symlink-source.rules".store;
+        devenvSource = (execpolicyUnits (evalDevenv config))."symlink-source.rules".store;
       in
         hmSource
         == "${symlink}"
@@ -1231,7 +1243,48 @@ in {
         != null
         && lib.hasInfix "rules/default.rules" hmFailure.message
         && builtins.all (assertion: assertion.assertion) devenv.config.assertions
-        && devenv.config.files.".codex/rules/default.rules".text != ""
+        && (execpolicyUnits devenv)."default.rules".text != ""
+    );
+
+    # Codex keeps a rules/*.rules entry only when DirEntry::file_type() says
+    # regular file, and that call does not follow symlinks: a linked rule is
+    # skipped silently ("loaded 0 .rules files"; codex 0.156.0). So both
+    # backends must COPY each rule, claim it file by file, and keep the writer
+    # when the last rule goes so the copy is retracted.
+    module-codex-execpolicy-copies-not-links = mkTest "codex-execpolicy-copies-not-links" (
+      let
+        populated.ai.codex = {
+          enable = true;
+          execpolicyRules.probe = ''prefix_rule(pattern = ["git", "status"])'';
+        };
+        emptied.ai.codex.enable = true;
+        # Disabling Codex while a rule is still declared: nothing but this
+        # writer retracts a copy, so it has to survive the disable.
+        disabled = lib.recursiveUpdate populated {ai.codex.enable = false;};
+        copies = evaluate: let
+          evaluated = evaluate populated;
+          files = evaluated.config.home.file or evaluated.config.files;
+          target = execpolicyTarget evaluated;
+          off = evaluate disabled;
+          offTarget = execpolicyTarget off;
+        in
+          target.codec
+          == "dir"
+          && lib.hasSuffix "/rules" target.path
+          && lib.attrNames target.units == ["probe.rules"]
+          && !(files ? ".codex/rules/probe.rules")
+          && (execpolicyUnits (evaluate emptied)) == {}
+          # Disabled: the same ledger, no units, so only retraction runs.
+          && offTarget.units == {}
+          && offTarget.ledger == target.ledger
+          && offTarget.path == target.path
+          && (
+            if off.config ? home
+            then lib.all (entry: off.config.home.activation ? ${entry}) ["materialize-codex-execpolicy-prune" "materialize-codex-execpolicy-write"]
+            else off.config.tasks ? "ai:codex:materialize-execpolicy"
+          );
+      in
+        copies evalHm && copies evalDevenv
     );
 
     module-codex-trust-is-user-global = mkTest "codex-trust-is-user-global" (

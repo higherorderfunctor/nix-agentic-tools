@@ -170,6 +170,10 @@
           ledger's own codec and path live on the writer, so a ledger no file
           claims still produces a valid empty target — which is how a path is
           released rather than abandoned.
+
+          `copy-ro` requires a directory ledger. A JSON/TOML document claimant
+          must use the ledger's exact path and matching format, since the ledger
+          determines where and how the reconciler writes.
         '';
       };
       method = lib.mkOption {
@@ -181,6 +185,12 @@
           rule decide. An explicit value is the light per-file exception and
           beats the rule. It is resolved in the router, never at type level,
           so `lib.mkForce` on this field and on `methodFor` both work.
+
+          A resolved `symlink` destination must not remain the path of a
+          declared JSON/TOML ledger. Empty document retirement preserves a
+          regular file and native leaves, so it cannot hand the path to the
+          backend's symlink writer. Both override forms reject this combination
+          before activation; ordinary empty-document retirement remains valid.
         '';
       };
       mode = lib.mkOption {
@@ -216,7 +226,7 @@
     };
   };
 
-  # A writer's IDENTITY, declared under the runtime's `enable` gate and never
+  # A writer's IDENTITY, normally declared under the runtime's `enable` gate and never
   # inferred from the files that happen to exist this generation. That is
   # what makes taking a surface from N entries to zero correct by
   # construction: the writer, its ledgers and an EMPTY target all survive, and
@@ -347,6 +357,18 @@
           `checkLinkTargets`, and a new one may only appear after
           `linkGeneration`, so the two phases are two entries. devenv has one
           task and ignores this.
+        '';
+      };
+      runWhenDisabled = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Run this writer even when the runtime is disabled. Declare it outside
+          the runtime's enabled config, such as in `migrationConfig`, so an
+          upgrade that also disables the runtime can retire earlier ownership.
+          Files remain enable-gated: an owned writer receives empty targets
+          while disabled and can only retract its recorded units. Ordinary
+          writers keep the default and run only while the runtime is enabled.
         '';
       };
     };

@@ -15,6 +15,7 @@
 }: let
   inherit (harness) evalDevenv evalHm harnessNames hasLiteral mkTest ownPlan;
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
+  ownedControls = import ../ai-delivery/owned-fixtures.nix {inherit harness lib;};
 
   # A file that states no fact at all takes both defaults, which is the shape
   # the rule answers `symlink` for.
@@ -23,6 +24,100 @@
     symlinkReadable = true;
   };
   resolve = args: deliveryMethod.byRule ({facts = plainFacts;} // args);
+
+  codexExtension = extended:
+    evalHm {
+      ai.codex = {
+        enable = true;
+        native.settings = {
+          model = "generated-model";
+          model_reasoning_effort = "xhigh";
+        };
+        files = lib.optionalAttrs extended {
+          ".codex/config.toml".content.value.ui.theme = "dark";
+        };
+      };
+    };
+  copilotExtension = pool: filename:
+    lib.all (
+      evaluate: let
+        base.ai.copilot = {
+          configDir = ".copilot";
+          enable = true;
+          ${pool}.original.command = "original";
+        };
+        path = ".copilot/${filename}";
+        original = (evaluate base).config.ai.copilot.files.${path}.content.value;
+        added = lib.setAttrByPath (lib.optional (pool == "mcpServers") "mcpServers" ++ ["added" "command"]) "added";
+        cfg =
+          (evaluate (lib.recursiveUpdate base {
+            ai.copilot.files.${path}.content.value = added;
+          })).config;
+        files =
+          if cfg ? home
+          then cfg.home.file
+          else cfg.files;
+        expected = lib.recursiveUpdate original added;
+      in
+        cfg.ai.copilot.files.${path}.content.value
+        == expected
+        && builtins.fromJSON files.${path}.text == expected
+        && lib.all (assertion: assertion.assertion) cfg.assertions
+    ) [evalHm evalDevenv];
+
+  # A runtime whose every entry is delegated to a host `files.<name>.json`
+  # option with the host's real JSON type: the general harness's `anything`
+  # stub cannot concatenate lists. `entries` are `ai.probe.files` records,
+  # each sunk into `settings.json`; `host` is the host's own definition.
+  upstreamHost = entries: host: let
+    deliveryOptions = import ../../lib/ai/delivery-options.nix {inherit lib;};
+    adapter = import ../../lib/ai/adapters/devenv.nix {inherit lib pkgs;};
+  in
+    (lib.evalModules {
+      modules = [
+        ({
+          config,
+          options,
+          ...
+        }: {
+          options = {
+            ai.probe = {
+              _ownPlans = lib.mkOption {type = lib.types.attrsOf lib.types.anything;};
+              activation = lib.mkOption {
+                type = deliveryOptions.writerMapType;
+                default = {};
+              };
+              files = lib.mkOption {type = deliveryOptions.fileMapType;};
+              methodFor = lib.mkOption {
+                type = lib.types.functionTo lib.types.str;
+                default = deliveryMethod.byRule;
+              };
+            };
+            assertions = lib.mkOption {type = lib.types.listOf lib.types.anything;};
+            files = lib.mkOption {
+              type = lib.types.attrsOf (lib.types.submodule {
+                options.json = lib.mkOption {inherit (pkgs.formats.json {}) type;};
+              });
+            };
+          };
+          config = adapter {
+            inherit config options;
+            cfg = config.ai.probe;
+            runtime = "probe";
+          };
+        })
+        {
+          ai.probe.files = lib.mapAttrs (_: entry:
+            entry
+            // {
+              method = "upstream";
+              sink = ["files" "settings.json" "json"];
+            })
+          entries;
+        }
+        (lib.optionalAttrs (host != {}) {files."settings.json".json = host;})
+      ];
+    }).config;
 
   # ── The delivered-surface snapshot ──────────────────────────────────
   # Everything the delivery layer puts on disk, rendered as sorted text. It is
@@ -114,35 +209,6 @@
     ++ [(snapshotSection backend "<all>" harnessNames)])
   ["devenv" "hm"]);
 
-  # The factories that still write a native sink themselves, with the step of
-  # the migration that takes each one off the list. This is keyed by PATH and
-  # not by a count: the anchored patterns below see 33 of today's 36 sites, and
-  # the other three live inside codex's nested `home = {` block, which the
-  # second pattern flags as a whole rather than line by line.
-  #
-  # An entry is removed when its factory stops writing sinks directly, and the
-  # check fails in BOTH directions — a new writer anywhere under
-  # `packages/*/lib/` fails it, and so does an entry the scan can no longer
-  # reproduce. The capstone replaces this transitional census before the list
-  # would become empty; an explicit guard below makes that handoff
-  # self-retiring.
-  #
-  # What the scan CANNOT see is a bundle a helper returns —
-  # `lib.mkMerge [(helpers.mkOwnedDocument …)]` writes `home.activation`,
-  # `tasks` and `enterTest` from inside `lib/ai/own.nix`, and no anchored
-  # pattern over the caller's text will ever match it. That is not a hole to
-  # regex around: every factory that does it is on the list below for its
-  # other writes, and the direct-`own` call is exactly what the router's
-  # `copy-ro`/`shared` bucket replaces, one factory at a time. When a factory
-  # leaves this list it has stopped calling `own` directly too, and
-  # `ai.<runtime>._ownPlans` is where a check reads what its writers do.
-  sinkWriters = {
-    "packages/chatgpt-codex/lib/mkCodex.nix" = "skill/agent/execpolicy/hooks entries and the two skill-link migrators";
-    "packages/claude-code/lib/mkClaude.nix" = "the devenv settings.json deep merges and the skill walker";
-    "packages/copilot-cli/lib/mkCopilot.nix" = "lsp, mcp and settings documents, rules, agents and skills";
-    "packages/kiro-cli/lib/mkKiro.nix" = "permissions, lsp, cli.json, agents, the agents-dir walker and skills";
-  };
-
   # One writer, both backends, every ordering feature: a backend-keyed entry
   # name, a token with no devenv node (`secrets`), the literal-node escape
   # hatch, and both ends of the position.
@@ -171,6 +237,404 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    module-delivery-owned-entry-controls = mkTest "delivery-owned-entry-controls" (
+      lib.all (backend: lib.all (control: control.passed) (builtins.attrValues backend)) (builtins.attrValues ownedControls)
+    );
+
+    module-delivery-normalized-keyed-pools-extend = mkTest "delivery-normalized-keyed-pools-extend" (
+      let
+        samples = {
+          agents = {
+            description = "probe";
+            instructions.text = "probe";
+          };
+          environmentVariables = "probe";
+          lspServers.command = "probe";
+          mcpServers.command = "probe";
+          rules.text = "probe";
+          skills = ./fixtures/probe-skill;
+        };
+      in
+        lib.all (
+          evaluate:
+            lib.all (
+              pool: let
+                base.ai = {
+                  ${pool}.inherited = samples.${pool};
+                  copilot = {
+                    enable = true;
+                    ${pool}.local = samples.${pool};
+                  };
+                };
+                original = (evaluate base).config.ai.copilot.normalized.${pool};
+                extension.extra = original.inherited;
+                result = value:
+                  (evaluate (lib.recursiveUpdate base {
+                    ai.copilot.normalized.${pool} = value;
+                  })).config;
+                extended = result extension;
+                forced = result (lib.mkForce extension);
+              in
+                lib.assertMsg (
+                  builtins.attrNames extended.ai.copilot.normalized.${pool}
+                  == ["extra" "inherited" "local"]
+                  && extended.ai.copilot.normalized.${pool}.inherited == original.inherited
+                  && builtins.attrNames forced.ai.copilot.normalized.${pool} == ["extra"]
+                  && lib.all (assertion: assertion.assertion) (extended.assertions ++ forced.assertions)
+                ) "normalized ${pool}: ordinary extension must retain inherited keys and mkForce must replace the pool"
+            ) (builtins.attrNames samples)
+        ) [evalHm evalDevenv]
+    );
+
+    # The normalized pools copy text-source records, and only the winning arm
+    # may cross: a `text` carried beside a winning `source` lands at the same
+    # priority, which the record rejects ("defined at the same priority"),
+    # and computing that priority reads the source first. Context and rules
+    # are pinned by module-single-context-source-does-not-trigger-ifd,
+    # module-runtime-files-generated-empty-codex-source-omitted and
+    # module-kiro-hm-rule-path-bakes; this is the agent-instructions arm.
+    module-delivery-normalized-agent-source-crosses-alone = mkTest "delivery-normalized-agent-source-crosses-alone" (
+      let
+        source = ./fixtures/probe-skill/SKILL.md;
+      in
+        lib.all (evaluate: let
+          instructions =
+            (evaluate {
+              ai = {
+                agents.probe = {
+                  description = "probe";
+                  instructions.source = source;
+                };
+                claude.enable = true;
+              };
+            }).config.ai.claude.normalized.agents.probe.instructions;
+        in
+          instructions._sourceWins && instructions.source == source) [evalHm evalDevenv]
+    );
+
+    # Claude's scoped-rule loader never follows a project `.claude/rules`
+    # symlink out of the tree (includeExternal is hard-wired false at Project
+    # scope, claude-code 2.1.280), while User scope does. So devenv copies each
+    # rule through the directory ledger and HM keeps its link — with no
+    # `method` override, which is the default path nothing else covers.
+    module-delivery-claude-rules-copy-on-devenv-link-on-hm = mkTest "delivery-claude-rules-copy-on-devenv-link-on-hm" (
+      let
+        config.ai = {
+          claude.enable = true;
+          rules.probe.text = "PROBE-RULE";
+        };
+        devenv = evalDevenv config;
+        hm = evalHm config;
+        emptied = evalDevenv {ai.claude.enable = true;};
+        disabled = evalDevenv (lib.recursiveUpdate config {ai.claude.enable = false;});
+        target = evaluated: lib.head (ownPlan "claude" "ai:claude:materialize-rules" evaluated).targets;
+      in
+        (target devenv).path
+        == ".claude/rules"
+        && lib.attrNames (target devenv).units == ["probe.md"]
+        && lib.hasInfix "PROBE-RULE" (target devenv).units."probe.md".text
+        && !(devenv.config.files ? ".claude/rules/probe.md")
+        && devenv.config.tasks ? "ai:claude:materialize-rules"
+        # N→0 keeps the writer, whose empty target retracts the last copies.
+        && (target emptied).units == {}
+        && emptied.config.tasks ? "ai:claude:materialize-rules"
+        # So does disabling Claude: nothing else retracts a copy, and a copy
+        # left behind is still loaded by any claude on PATH.
+        && (target disabled).units == {}
+        && (target disabled).ledger == (target devenv).ledger
+        && disabled.config.tasks ? "ai:claude:materialize-rules"
+        && !(disabled.config.files ? ".claude/rules/probe.md")
+        && lib.hasInfix "PROBE-RULE" hm.config.home.file.".claude/rules/probe.md".text
+    );
+
+    module-delivery-normalized-rule-extension-reaches-files = mkTest "delivery-normalized-rule-extension-reaches-files" (
+      lib.all (
+        evaluate: let
+          cfg =
+            (evaluate {
+              ai.rules.inherited.text = "INHERITED-RULE";
+              ai.kiro = {
+                enable = true;
+                normalized.rules.extra = {
+                  matcher = ["src/**"];
+                  text = "EXTRA-RULE";
+                };
+              };
+            }).config;
+          files =
+            if cfg ? home
+            then cfg.home.file
+            else cfg.files;
+          inheritedPath =
+            if cfg ? home
+            then ".kiro/steering/inherited.md"
+            else "AGENTS.md";
+        in
+          files ? ${inheritedPath}
+          && lib.hasInfix "INHERITED-RULE" files.${inheritedPath}.text
+          && lib.hasInfix "EXTRA-RULE" files.".kiro/steering/extra.md".text
+          && lib.all (assertion: assertion.assertion) cfg.assertions
+      ) [evalHm evalDevenv]
+    );
+
+    module-delivery-document-ledger-rejects-symlink = mkTest "delivery-document-ledger-rejects-symlink" (
+      lib.all (
+        evaluate:
+          lib.all (
+            codec: let
+              path = ".kiro/probe.${codec}";
+              ledger = "documents/probe.json";
+              base.ai.kiro = {
+                enable = true;
+                activation.probeDocument.ledgers.${ledger} = {inherit codec path;};
+                files.${path} = {
+                  content.value.generated = true;
+                  entry = "probeDocument";
+                  facts.harnessWrites = true;
+                  format = codec;
+                  inherit ledger;
+                };
+              };
+              result = overlay: (evaluate {ai.kiro = lib.mkMerge [base.ai.kiro overlay];}).config;
+              failures = cfg: map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) cfg.assertions);
+              healthy = result {};
+              retired = result {files.${path}.content.enable = false;};
+              unrelated = result {files.".kiro/unrelated.json".content.text = "{}";};
+              expected = ''ai.kiro.files."${path}" resolves to `symlink`, but ai.kiro.activation.probeDocument.ledgers."${ledger}" still declares this ${codec} document path. Empty document retirement preserves a regular file and native leaves; it cannot hand this path to symlink delivery.'';
+            in
+              lib.all (overlay: failures (result overlay) == [expected]) [
+                {files.${path}.method = lib.mkForce "symlink";}
+                {
+                  methodFor = lib.mkForce ({default, ...} @ args:
+                    if args.path == path
+                    then "symlink"
+                    else default args);
+                }
+                # Path reservation does not depend on an entry still naming its
+                # old writer: removing the claim leaves the retirement target.
+                {
+                  files.${path} = lib.mkForce {
+                    content.value.replacement = true;
+                    format = codec;
+                  };
+                }
+              ]
+              && failures healthy == []
+              && failures retired == []
+              && failures unrelated == []
+              && (lib.head retired.ai.kiro._ownPlans.probeDocument.plan.targets).units == {}
+          ) ["json" "toml"]
+      ) [evalHm evalDevenv]
+    );
+
+    module-delivery-codex-content-extension-keeps-generated-leaves = mkTest "delivery-codex-content-extension-keeps-generated-leaves" (
+      let
+        evaluated = codexExtension true;
+        expected = {
+          model = "generated-model";
+          model_reasoning_effort = "xhigh";
+          ui.theme = "dark";
+        };
+      in
+        evaluated.config.ai.codex.files.".codex/config.toml".content.value
+        == expected
+        && (harness.ownedDocument "codex" ".codex/config.toml" evaluated).value == expected
+        && lib.all (assertion: assertion.assertion) evaluated.config.assertions
+    );
+
+    # Evaluate the factory twice and execute its actual writer: a dropped
+    # generated leaf otherwise looks like an intentional retirement on disk.
+    module-delivery-codex-content-extension-runtime = pkgs.runCommand "module-test-delivery-codex-content-extension-runtime" {} ''
+      export HOME="$PWD/home"
+      export XDG_STATE_HOME="$PWD/state"
+      ${(codexExtension false).config.home.activation.codexSettingsReconcile.text}
+      printf '\n[native]\nkeep = true\n' >> "$HOME/.codex/config.toml"
+      ${(codexExtension true).config.home.activation.codexSettingsReconcile.text}
+      ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
+      import pathlib
+      import sys
+      import tomllib
+
+      document = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
+      assert document.get("model") == "generated-model", "generated model retired by a content extension"
+      assert document.get("model_reasoning_effort") == "xhigh", "generated effort retired by a content extension"
+      assert document["native"]["keep"] is True
+      assert document["ui"]["theme"] == "dark"
+      PY
+      touch "$out"
+    '';
+
+    module-delivery-copilot-lsp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-lsp-content-extension-keeps-generated-leaves" (copilotExtension "lspServers" "lsp-config.json");
+
+    module-delivery-copilot-mcp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-mcp-content-extension-keeps-generated-leaves" (copilotExtension "mcpServers" "mcp-config.json");
+
+    module-delivery-method-resolver-is-shared = mkTest "delivery-method-resolver-is-shared" (
+      deliveryMethod ? resolve
+      && lib.all (path: lib.hasInfix "deliveryMethod.resolve" (builtins.readFile path)) [
+        ../ai-delivery/generate.nix
+        ../../lib/ai/app/sharedAgentsMd.nix
+        ../../lib/ai/deliver.nix
+      ]
+      && lib.all (
+        backend: let
+          args = {
+            inherit backend;
+            entry = {
+              facts = plainFacts;
+              method = null;
+            };
+            methodFor = {
+              backend,
+              default,
+              path,
+              ...
+            } @ request:
+              if path == "probe" && backend == "hm"
+              then "shared"
+              else default request;
+            path = "probe";
+          };
+        in
+          deliveryMethod.resolve args
+          == (
+            if backend == "hm"
+            then "shared"
+            else "symlink"
+          )
+          && deliveryMethod.resolve (args
+            // {
+              entry = args.entry // {method = "copy-ro";};
+              methodFor = _: throw "explicit method must bypass methodFor";
+            })
+          == "copy-ro"
+      ) ["devenv" "hm"]
+    );
+
+    module-delivery-shared-agentsmd-admits-third-claimant = mkTest "delivery-shared-agentsmd-admits-third-claimant" (
+      let
+        base.ai = {
+          codex.enable = true;
+          context.text = "GENERATED-CONTEXT";
+          kimchi.enable = true;
+          kiro.enable = true;
+        };
+        evaluate = entry:
+          evalDevenv (lib.recursiveUpdate base {
+            ai.kimchi.files."AGENTS.md" = entry;
+          });
+        replaced = (evaluate {content.text = "THIRD-CLAIMANT";}).config;
+        suppressed = (evaluate {content.enable = false;}).config;
+      in
+        replaced.ai.internal.files."AGENTS.md".content.text
+        == "THIRD-CLAIMANT"
+        && replaced.files."AGENTS.md".text == "THIRD-CLAIMANT"
+        && lib.all (assertion: assertion.assertion) replaced.assertions
+        && !suppressed.ai.internal.files."AGENTS.md".content.enable
+        && !(suppressed.files ? "AGENTS.md")
+        && lib.all (assertion: assertion.assertion) suppressed.assertions
+    );
+
+    module-delivery-runtime-path-collisions-need-one-owner = mkTest "delivery-runtime-path-collisions-need-one-owner" (
+      lib.all (
+        evaluate: let
+          base.ai = {
+            codex = {
+              enable = true;
+              files."contested.md".content.text = "SAME";
+            };
+            kimchi.enable = true;
+            kiro = {
+              enable = true;
+              files."separate.md".content.text = "SEPARATE";
+            };
+          };
+          result = entry:
+            (evaluate (lib.recursiveUpdate base {
+              ai.kimchi.files."contested.md" = entry;
+            })).config;
+          failed =
+            lib.filter (assertion: !assertion.assertion)
+            (result {content.text = "SAME";}).assertions;
+          healthy = result {content.enable = false;};
+        in
+          lib.any (assertion:
+            lib.hasInfix "codex, kimchi" assertion.message
+            && lib.hasInfix "contested.md" assertion.message
+            && lib.hasInfix "one owner" assertion.message)
+          failed
+          && lib.all (assertion: assertion.assertion) healthy.assertions
+      ) [evalHm evalDevenv]
+    );
+
+    module-delivery-shared-agentsmd-needs-one-method = mkTest "delivery-shared-agentsmd-needs-one-method" (
+      let
+        inherit
+          (evalDevenv {
+            ai = {
+              codex = {
+                enable = true;
+                files."AGENTS.md".content.text = "SAME";
+              };
+              kimchi = {
+                enable = true;
+                files."AGENTS.md".content.text = "SAME";
+                methodFor = lib.mkForce ({
+                    path,
+                    default,
+                    ...
+                  } @ args:
+                    if path == "AGENTS.md"
+                    then "copy-ro"
+                    else default args);
+              };
+              kiro = {
+                enable = true;
+                files."AGENTS.md".content.text = "SAME";
+              };
+            };
+          })
+          config
+          ;
+      in
+        lib.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "one path has one owner and one method" assertion.message)
+        config.assertions
+    );
+
+    module-delivery-normalized-rules-reach-files = mkTest "delivery-normalized-rules-reach-files" (
+      lib.all (
+        evaluate: let
+          evaluated = evaluate {
+            ai.rules.inherited.text = "INHERITED-RULE";
+            ai.kiro = {
+              enable = true;
+              rules.local.text = "LOCAL-RULE";
+              normalized.rules = lib.mkForce {
+                forced = {
+                  text = "FORCED-RULE";
+                  matcher = ["src/**"];
+                };
+              };
+            };
+          };
+          cfg = evaluated.config;
+          files =
+            if cfg ? home
+            then cfg.home.file
+            else cfg.files;
+          option = evaluated.options.ai.kiro.normalized.rules;
+        in
+          builtins.attrNames cfg.ai.kiro.normalized.rules
+          == ["forced"]
+          && lib.hasInfix "FORCED-RULE" files.".kiro/steering/forced.md".text
+          && !(files ? ".kiro/steering/inherited.md")
+          && !(files ? ".kiro/steering/local.md")
+          && !option.internal
+          && !option.readOnly
+      ) [evalHm evalDevenv]
+    );
+
     module-delivery-command-writer-lowers-to-both-backends = mkTest "delivery-command-writer-lowers-to-both-backends" (
       let
         # Kiro declares no devenv files when bare-enabled, so the task's edge
@@ -240,6 +704,70 @@ in {
         == ["devenv:enterShell" "devenv:files"]
         && withoutFiles.files == {}
         && withoutFiles.tasks.probeDefaults.before == ["devenv:enterShell"]
+    );
+
+    # The opt-in must not accidentally activate ordinary command writers,
+    # owned writers, file claims or packages when the runtime is disabled.
+    module-delivery-disabled-runtime-keeps-only-opted-in-writers = mkTest "delivery-disabled-runtime-keeps-only-opted-in-writers" (
+      let
+        declaration = enable: {
+          ai.codex = {
+            inherit enable;
+            activation = {
+              ordinary.command = "printf ordinary";
+              ordinaryOwned = {
+                ledgers."materialize/ordinary.manifest" = {
+                  codec = "dir";
+                  path = ".probe/ordinary";
+                };
+                pruneEntry = "ordinaryPrune";
+              };
+              retireCommand = {
+                command = "printf retired";
+                runWhenDisabled = true;
+              };
+              retireOwned = {
+                ledgers."materialize/retired.manifest" = {
+                  codec = "dir";
+                  path = ".probe/retired";
+                };
+                pruneEntry = "retirePrune";
+                runWhenDisabled = true;
+              };
+            };
+            files = {
+              ".probe/plain".content.text = "plain";
+              ".probe/retired/owned" = {
+                content.text = "owned";
+                entry = "retireOwned";
+                facts.symlinkReadable = false;
+                ledger = "materialize/retired.manifest";
+              };
+            };
+          };
+        };
+        hm = evalHm (declaration false);
+        dv = evalDevenv (declaration false);
+        enabled = evalHm (declaration true);
+        retired = evaluated: builtins.head (ownPlan "codex" "retireOwned" evaluated).targets;
+      in
+        hm.config.home.file
+        == {}
+        && hm.config.home.packages == []
+        && dv.config.files == {}
+        && dv.config.packages == []
+        && !(hm.config.home.activation ? ordinary)
+        && !(hm.config.home.activation ? ordinaryOwned)
+        && !(dv.config.tasks ? ordinary)
+        && !(dv.config.tasks ? ordinaryOwned)
+        && strict hm.config.home.activation.retireCommand.text
+        && strict dv.config.tasks.retireCommand.exec
+        && (retired hm).units == {}
+        && (retired dv).units == {}
+        && enabled.config.home.activation ? ordinary
+        && enabled.config.home.activation ? ordinaryOwned
+        && enabled.config.home.file.".probe/plain".text == "plain"
+        && (retired enabled).units.owned.text == "owned"
     );
 
     module-delivery-method-rule = mkTest "delivery-method-rule" (
@@ -914,6 +1442,55 @@ in {
         })
     );
 
+    # Definitions must reach the host's type with their priorities and
+    # ordering intact, even when two entries share a sink.
+    module-delivery-upstream-preserves-host-merge = mkTest "delivery-upstream-preserves-host-merge" (
+      let
+        evaluated =
+          upstreamHost {
+            "first.json".content.value = {
+              defaultLeaf = lib.mkDefault "generated";
+              list = lib.mkBefore ["first"];
+            };
+            "second.json".content.value.list = lib.mkAfter ["last"];
+          } {
+            defaultLeaf = "consumer";
+            list = ["middle"];
+          };
+      in
+        evaluated.files."settings.json".json
+        == {
+          defaultLeaf = "consumer";
+          list = ["first" "middle" "last"];
+        }
+        && lib.all (a: a.assertion) evaluated.assertions
+    );
+
+    # A property wrapped around the FIELD — not a leaf inside it, and not the
+    # whole `content` — is the entry's own, and must reach the host as that
+    # entry's priority or condition. Forwarded raw, the host strips one
+    # override and merges the inner property as an ordinary attrset: the
+    # document gains `_type`/`priority`/`content` keys, the settings nest
+    # under `content`, and `mkIf false` still delivers.
+    module-delivery-upstream-discharges-field-properties = mkTest "delivery-upstream-discharges-field-properties" (
+      let
+        sole = value: host: (upstreamHost {"probe.json".content.value = value;} host).files."settings.json".json;
+        consumer.leaf = "consumer";
+      in
+        sole (lib.mkForce {leaf = "forced";}) {}
+        == {leaf = "forced";}
+        && sole (lib.mkDefault {leaf = "generated";}) {} == {leaf = "generated";}
+        && sole (lib.mkIf true {leaf = "kept";}) {} == {leaf = "kept";}
+        && sole (lib.mkMerge [(lib.mkIf false {dropped = true;}) {leaf = "kept";}]) {} == {leaf = "kept";}
+        # The priority survives as the entry's, against the host's own
+        # ordinary definition, in both directions.
+        && sole (lib.mkForce {leaf = "forced";}) consumer == {leaf = "forced";}
+        && sole (lib.mkDefault {leaf = "generated";}) consumer == consumer
+        # A property on the whole content still reaches the host.
+        && (upstreamHost {"probe.json".content = lib.mkDefault {value.leaf = "generated";};} consumer).files."settings.json".json
+        == consumer
+    );
+
     # What the adapter puts in `tasks` is exactly the runtime's writers, and
     # nothing when it declares none. The other half of the claim — that the
     # DEFINITION is only made where the backend declares the option — is
@@ -940,10 +1517,15 @@ in {
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
+    # It cannot see a bundle a helper returns: `helpers.mkOwnedDocument`
+    # writes `home.activation`, `tasks` and `enterTest` from inside
+    # `lib/ai/own.nix`, where no pattern over a factory's text matches. No
+    # factory calls it today; `ai.<runtime>._ownPlans` is where a check reads
+    # what owned writers do.
     module-delivery-no-new-direct-sink-writes =
       pkgs.runCommandLocal "delivery-no-new-direct-sink-writes" {
         src = ../..;
-        nativeBuildInputs = [pkgs.coreutils pkgs.diffutils pkgs.findutils pkgs.gnugrep];
+        nativeBuildInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -962,7 +1544,7 @@ in {
         anchored='^[[:space:]]*(home\.file|home\.activation|files|tasks|enterTest)([."[]|[[:space:]]*=)'
         # The nested form: a `home = {` block whose body writes `file` and
         # `activation` at a depth the anchored pattern cannot see. Flagging the
-        # block is enough, because this list is keyed by file.
+        # block itself is a forbidden direct sink owner.
         nested='^[[:space:]]*home[[:space:]]*=[[:space:]]*\{'
 
         find packages -mindepth 3 -path 'packages/*/lib/*' -type f -name '*.nix' -print0 \
@@ -971,36 +1553,24 @@ in {
         test -s "$work/corpus"
         echo "scanned $(tr -d -c '\0' < "$work/corpus" | wc -c) factory library files"
 
+        # Zero direct writers, with no exemption mechanism. Distinguish grep's
+        # ordinary no-match status from an unreadable or malformed corpus.
         : > "$work/actual"
         while IFS= read -r -d $'\0' path; do
-          if grep -lE -e "$anchored" -e "$nested" "$path" >> "$work/actual"; then
+          if grep -nHE -e "$anchored" -e "$nested" "$path" >> "$work/actual"; then
             :
           else
             rc=$?
             test "$rc" -eq 1 || exit "$rc"
           fi
         done < "$work/corpus"
-        sort -o "$work/actual" "$work/actual"
-        {
-          :
-          ${lib.concatMapStringsSep "\n          " (path: "echo ${lib.escapeShellArg path}") (lib.attrNames sinkWriters)}
-        } | sort > "$work/allowed"
-
-        if test ! -s "$work/allowed"; then
-          echo "delivery: the transitional direct-sink census is empty; land the capstone zero-writer contract instead of carrying this migration check." >&2
+        if test -s "$work/actual"; then
+          echo "delivery: expected ZERO direct native sink writes; route them through ai.<runtime>.files or ai.<runtime>.activation." >&2
+          cat "$work/actual" >&2
           exit 1
         fi
 
-        if ! diff -u "$work/allowed" "$work/actual" > "$work/sink-writers.diff"; then
-          echo "delivery: the set of files writing a native sink directly has changed." >&2
-          echo "A '+' line writes home.file/home.activation/files/tasks itself; route it" >&2
-          echo "through ai.<runtime>.files or ai.<runtime>.activation instead. A '-' line" >&2
-          echo "no longer does; drop it from sinkWriters in this check." >&2
-          cat "$work/sink-writers.diff" >&2
-          exit 1
-        fi
-
-        echo "PASS: ${toString (lib.length (lib.attrNames sinkWriters))} recorded factories write a native sink directly; no others do" > "$out"
+        echo "PASS: zero factory library files write a native sink directly" > "$out"
       '';
 
     # A single-file skill whose source is a package-interpolated STRING. Both

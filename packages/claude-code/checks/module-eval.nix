@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest ownedDocument;
+  inherit (harness) evalDevenv evalHm mkTest ownPlan ownedDocument;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasClampHook hasGuardHook;
   delegationClampMitigationDefaultProse = ''
     Standing request from me, the user: you have my permission to use subagents
@@ -157,14 +157,15 @@ in {
           };
         };
         composed = (evaluated.config.files.".claude/CLAUDE.md" or {}).text or "";
-        ruleFile = evaluated.config.files.".claude/rules/named-rule.md" or null;
+        # Project rules are read-only copies, not links: see mkClaude's rules
+        # entry. The copy writer's plan is where their bytes are.
+        rules = (lib.head (ownPlan "claude" "ai:claude:materialize-rules" evaluated).targets).units;
       in
         lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
         && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." composed)
         && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." composed)
-        && ruleFile != null
-        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
-        && evaluated.config.files ? ".claude/rules/unnamed.md"
+        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (rules."named-rule.md".text or "")
+        && rules ? "unnamed.md"
     );
 
     # ── Task 3 (A2): Claude HM/devenv fanout absorption ────────────
@@ -177,10 +178,8 @@ in {
         result.config.programs.claude-code.enable or false
     );
 
-    # HM: ai.claude.native.settings.<key> reaches programs.claude-code.settings.<key>
-    # via the transitional raw-inherit in mkClaude.nix. Regression guard for
-    # the inherit; will update to assert translation semantics when HM migrates
-    # to the devenv pattern.
+    # HM: native settings reach the upstream settings option through the
+    # delivery entry, including nested permission leaves.
     module-claude-hm-settings-reach-upstream = mkTest "claude-hm-settings-reach-upstream" (
       let
         result = evalHm {
@@ -436,6 +435,72 @@ in {
         };
       in
         result.config.programs.claude-code.skills ? stack-fix
+    );
+
+    # Settings carries the settings, permissions and typed-hook surfaces;
+    # script hooks have their own upstream option. None may gain a second
+    # writer in home.file when the factory moves onto the delivery layer.
+    module-claude-hm-delivery-delegates-upstream-surfaces = mkTest "claude-hm-delivery-delegates-upstream-surfaces" (
+      let
+        result =
+          (evalHm {
+            ai = {
+              agents.probe = "probe agent";
+              claude = {
+                enable = true;
+                hookScripts.probe = "probe script";
+                native.settings.permissions.allow = ["Read"];
+              };
+              hooks.PreToolUse = [{hooks = [{command = "true";}];}];
+              lspServers.probe.command = "probe";
+              mcpServers.probe.command = "probe";
+              skills.probe = ./fixtures/claude-skills/skill-a;
+            };
+          }).config;
+        delegated = {
+          ".claude/agents" = "agents";
+          ".claude/hooks" = "hooks";
+          ".claude/settings.json" = "settings";
+          ".claude/skills" = "skills";
+          ".claude/skills/claude-code-home-manager/.lsp.json" = "lspServers";
+          ".claude/skills/claude-code-home-manager/.mcp.json" = "mcpServers";
+        };
+      in
+        lib.all (path: let
+          entry = result.ai.claude.files.${path};
+        in
+          entry.method
+          == "upstream"
+          && entry.sink == ["programs" "claude-code" delegated.${path}]
+          && entry.content.value == result.programs.claude-code.${delegated.${path}}
+          && !(result.home.file ? ${path}))
+        (lib.attrNames delegated)
+        && result.programs.claude-code.settings.permissions.allow == ["Read"]
+        && handlerCommands result.programs.claude-code.settings.hooks.PreToolUse == ["true"]
+    );
+
+    module-claude-hm-upstream-overrides-generated-defaults = mkTest "claude-hm-upstream-overrides-generated-defaults" (
+      let
+        result =
+          (evalHm {
+            ai = {
+              claude.enable = true;
+              mcpServers.probe.command = "probe";
+              skills = {
+                kept = ./fixtures/claude-skills/skill-a;
+                replaced = ./fixtures/claude-skills/skill-a;
+              };
+            };
+            programs.claude-code = {
+              settings.env.ENABLE_LSP_TOOL = "0";
+              skills.replaced = ./fixtures/claude-skills/skill-b;
+            };
+          }).config.programs.claude-code;
+      in
+        result.settings.env.ENABLE_LSP_TOOL
+        == "0"
+        && result.skills.kept == ./fixtures/claude-skills/skill-a
+        && result.skills.replaced == ./fixtures/claude-skills/skill-b
     );
 
     module-claude-devenv-delegates-claude-code = mkTest "claude-devenv-delegates-claude-code" (
@@ -702,8 +767,8 @@ in {
         (unpinDocument result).value.unpinOpus48LaunchEffort == false
     );
 
-    # One runtime corpus covers the document codec directly plus actual Claude
-    # and Kiro module output. Every empty generation is evaluated and executed,
+    # One runtime corpus covers the document codec plus actual HM activations
+    # and devenv tasks. Every empty generation is evaluated and executed,
     # so a missing writer cannot satisfy the N-to-0 check.
     #
     # `harness.hmLib` rather than `lib`: `own` places its entry with
@@ -713,6 +778,24 @@ in {
       mkCase = name: configFile: first: second: native: render: {
         inherit configFile first name native second;
         scripts = map render [first second {}];
+      };
+      mkDevenvCase = {
+        configFile,
+        entry,
+        first,
+        native,
+        option,
+        runtime,
+        second,
+      }: let
+        render = extra:
+          (evalDevenv (lib.recursiveUpdate {ai.${runtime}.enable = true;} extra)).config.tasks.${entry}.exec;
+      in {
+        inherit configFile first native second;
+        backend = "devenv";
+        name = "${runtime}-${lib.concatStringsSep "-" option}-devenv";
+        scripts =
+          map (settings: render {ai.${runtime} = lib.setAttrByPath option settings;}) [first second {}];
       };
       cases = [
         (mkCase "document" ".settings with spaces/config.json" {
@@ -780,6 +863,21 @@ in {
                 };
               };
             }).config.home.activation.kiroSettingsMerge.text))
+        (mkDevenvCase {
+          configFile = ".kiro/settings/cli.json";
+          entry = "ai:kiro:settings-merge";
+          first = {
+            "chat.enableTangentMode" = true;
+            "chat.modelDefaults"."claude-opus-4.8".effort = "high";
+          };
+          native = {
+            "chat.modelDefaults".native.effort = "low";
+            "native.setting" = "survives";
+          };
+          option = ["native" "settings"];
+          runtime = "kiro";
+          second."chat.enableTangentMode" = false;
+        })
       ];
     in
       pkgs.runCommand "module-test-json-settings-reconciliation" {} ''

@@ -51,10 +51,13 @@
     inherit lib;
     inherit (appRecord) pkgs;
   };
+  agent = import ../agent.nix {inherit lib;};
   aiCommon = import ../ai-common.nix {inherit lib;};
+  aiTypes = import ../types.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
+  hooks = import ../hooks.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
@@ -143,6 +146,22 @@
     GIT_SSH_COMMAND = sandboxSshCommand;
   };
 
+  # A text-source record becomes the DEFAULT of a public normalized option,
+  # so every field it carries becomes a definition at one priority. Two
+  # consequences: its computed read-only fields would be defined twice, and
+  # carrying both `text` and `source` would tie them — which throws, and
+  # before throwing forces `text`, whose `apply` already read the source.
+  # So only the winning arm crosses, chosen from the ORIGINAL record's
+  # `_sourceWins`, which compares priorities without reading any bytes.
+  toNormalizedTextSource = value:
+    removeAttrs value (
+      ["_enableDefined" "_sourceWins" "_textSourceType"]
+      ++ (
+        if aiTypes.textSourceUsesSource value
+        then ["text"]
+        else ["source"]
+      )
+    );
   contextValues = [config.ai.context cfg.context];
   # Presence must stay structural. `composeContent` reads source-backed bytes
   # when two values compose, so using `mergedContext != null` as a generator
@@ -156,15 +175,97 @@
     if supportsPool "context"
     then aiCommon.composeContent contextValues
     else null;
+  # A submodule value includes its computed read-only fields. When that value
+  # becomes the default of the public normalized option, its type recomputes
+  # those fields; carrying them across would define each read-only option twice.
+  normalizedContext =
+    if mergedContext == null
+    then null
+    else removeAttrs (toNormalizedTextSource mergedContext) ["filename"];
   topHooks =
     if supportsPool "hooks"
     then config.ai.hooks
     else {};
 
+  normalizedAgents = lib.mapAttrs (_: value:
+    if agent.isSemantic value
+    then value // {instructions = toNormalizedTextSource value.instructions;}
+    else value)
+  mergedAgents;
+  normalizedRules = lib.mapAttrs (_: toNormalizedTextSource) mergedRules;
+
+  # A whole-pool option default disappears when a consumer adds just one key.
+  # Keep these folds as per-key definitions, so ordinary additions preserve
+  # unrelated entries while a whole-pool mkForce still replaces everything.
+  normalizedKeyedPools = {
+    agents = normalizedAgents;
+    environmentVariables = mergedEnvironmentVariables;
+    lspServers = mergedLspServers;
+    mcpServers = mergedServers;
+    rules = normalizedRules;
+    skills = mergedSkills;
+  };
+  normalizedPools = {
+    agents = {
+      type = lib.types.attrsOf agent.agentType;
+    };
+    context = {
+      default = normalizedContext;
+      type = lib.types.nullOr aiCommon.optionalContentModule;
+    };
+    environmentVariables = {
+      type = lib.types.attrsOf lib.types.str;
+    };
+    hooks = {
+      apply = lib.filterAttrs (_event: blocks: blocks != []);
+      default = topHooks;
+      type = hooks.hooksType;
+    };
+    lspServers = {
+      type = lib.types.attrsOf aiCommon.lspServerModule;
+    };
+    # Proxy entries are already lowered here; applying the declaration schema
+    # again would add defaults to the credential-free client record.
+    mcpServers = {
+      type = lib.types.attrsOf lib.types.raw;
+    };
+    rules = {
+      type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
+    };
+    settings = {
+      default = resolvedSettings;
+      type = aiCommon.normalizedSettingsType;
+    };
+    shell = {
+      default = resolvedShell;
+      type = lib.types.nullOr lib.types.package;
+    };
+    skills = {
+      type = lib.types.attrsOf lib.types.path;
+    };
+  };
+  normalizedPool = name: neutral:
+    if supportsPool name
+    then cfg.normalized.${name}
+    else neutral;
+  # A default context can compose source bytes. Keep its presence structural
+  # until final-file priority arbitration has kept that generated content.
+  # An explicit normalized override instead supplies its own presence.
+  normalizedHasContext =
+    if !supportsPool "context"
+    then false
+    else if options.ai.${appRecord.name}.normalized.context.highestPrio == 1500
+    then hasMergedContext
+    else aiCommon.hasContent cfg.normalized.context;
+
   backendSpec = appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
   backendDefaults = backendSpec.defaults or {};
-  backendConfigFn = backendSpec.config or (_: {});
+  # A runtime that describes its delivery rather than lowering it needs ONE
+  # callback, so the record may carry it directly. A backend spec's own
+  # `config` still wins, which is what lets a runtime move one backend at a
+  # time while the other keeps its existing body.
+  backendConfigFn = backendSpec.config or appRecord.config or (_: {});
   migrationConfigFn = backendSpec.migrationConfig or (_: {});
 
   defaults = appRecord.defaults or {};
@@ -173,18 +274,35 @@
   # `config` rides along so callbacks can observe sibling backend
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
+  #
+  # `backend` rides along for the one callback shared by both: a runtime whose
+  # delivery differs only in a consumer FACT states the fact per backend and
+  # never reads this, but a surface one backend genuinely does not have — a
+  # document only Home Manager reconciles, a path only the project tree has —
+  # has to be able to say so.
   callbackArgs = {
-    inherit cfg config mergedServers mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents mergedContext hasMergedContext resolvedSettings resolvedShell topHooks;
+    inherit backend cfg config moduleEnvironmentVariables;
+    inherit (cfg) normalized;
+    hasMergedContext = normalizedHasContext;
+    mergedAgents = normalizedPool "agents" {};
+    mergedContext = normalizedPool "context" null;
+    mergedEnvironmentVariables = normalizedPool "environmentVariables" {};
+    mergedLspServers = normalizedPool "lspServers" {};
+    mergedRules = normalizedPool "rules" {};
+    mergedServers = normalizedPool "mcpServers" {};
+    mergedSkills = normalizedPool "skills" {};
+    resolvedSettings = normalizedPool "settings" {};
+    resolvedShell = normalizedPool "shell" null;
+    topHooks = normalizedPool "hooks" {};
   };
   customConfig = backendConfigFn callbackArgs;
   migrationConfig = migrationConfigFn callbackArgs;
-  # Repository AGENTS.md targets have one cross-runtime owner. Codex, Kimchi,
-  # and Kiro public file entries for those paths arbitrate inside
-  # sharedAgentsMd.nix;
+  # Repository AGENTS.md targets have one cross-runtime owner. Public file
+  # entries for those paths arbitrate inside sharedAgentsMd.nix;
   # letting their ordinary sinks lower the same target independently would
   # bypass whole-entry replacement and explicit disable at B7.
   sharedAgentsMdTargets =
-    if backend == "devenv" && builtins.elem appRecord.name ["codex" "kimchi" "kiro"]
+    if backend == "devenv"
     then
       builtins.attrNames (
         lib.attrByPath ["ai" "internal" "agentsMd"] {} config
@@ -268,7 +386,8 @@ in {
           ordering, and every ledger it has ever owned — so a surface that
           drops to zero files still emits the writer that retracts what the
           previous generation wrote. A writer that owns no files at all
-          declares a `command` instead.
+          declares a `command` instead. Writers run only while the runtime is
+          enabled, unless declared outside that gate with `runWhenDisabled`.
         '';
       };
       enable = lib.mkEnableOption appRecord.name;
@@ -314,6 +433,26 @@ in {
           they were written.
         '';
       };
+      normalized = lib.mapAttrs (pool: spec:
+        lib.mkOption (spec
+          // {
+            default = spec.default or {};
+            defaultText = lib.literalExpression (
+              if normalizedKeyedPools ? ${pool}
+              then "{}"
+              else "the root-to-runtime ${pool} fold"
+            );
+            internal = false;
+            readOnly = false;
+            description = ''
+              Merged ${pool} consumed by ${appRecord.name}'s transformer. The
+              supported root-to-runtime fold supplies per-key defaults after
+              replacement and tombstone filtering for keyed pools, so ordinary
+              additions preserve unrelated inherited keys. Other pools default
+              to the fold as a whole. Use `lib.mkForce` on this ordinary option
+              to replace the transformer's input.
+            '';
+          })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools);
       package = lib.mkOption {
         type = lib.types.package;
         default = package;
@@ -446,6 +585,11 @@ in {
     # that option still see diagnostics when they force the installed packages.
     (lib.optionalAttrs (options ? warnings) {warnings = deliveryWarnings;})
     {_module.args.aiTransformers = appRecord.transformers;}
+    {
+      ai.${appRecord.name}.normalized =
+        lib.mapAttrs (_: pool: lib.mapAttrs (_: lib.mkDefault) pool)
+        (lib.filterAttrs (pool: _: supportsPool pool) normalizedKeyedPools);
+    }
     # Narrow compatibility cleanup may need to run on the generation that
     # disables a runtime. Product output remains solely inside cfg.enable.
     migrationConfig
@@ -466,18 +610,24 @@ in {
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig
       customConfig
-      # The delivery layer's one lowering seam. Everything a runtime declares
-      # about how its files land is read HERE, by the backend's adapter, so no
-      # factory writes `home.file`, `home.activation`, `files` or `tasks`
-      # itself.
-      #
-      # The adapter reads `cfg.files`, so the shared-AGENTS.md arbitration
-      # hands it the stripped map rather than filtering behind its back.
-      (adapters.${backend} {
-        cfg = cfg // {files = runtimeSinkFiles;};
-        inherit config options;
-        runtime = appRecord.name;
-      })
     ]))
+    # Lower once, including retirement writers declared by migrationConfig.
+    # Disabling a runtime removes every file claim and every ordinary writer;
+    # only explicit runWhenDisabled writers can drain prior ownership.
+    # Keep the selection inside VALUES so collecting module keys never forces
+    # the file or writer definitions it is still collecting.
+    (adapters.${backend} {
+      cfg =
+        cfg
+        // {
+          activation = lib.filterAttrs (_name: writer: cfg.enable || writer.runWhenDisabled) cfg.activation;
+          files =
+            if cfg.enable
+            then runtimeSinkFiles
+            else {};
+        };
+      inherit config options;
+      runtime = appRecord.name;
+    })
   ];
 }

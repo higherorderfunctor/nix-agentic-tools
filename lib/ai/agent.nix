@@ -1,9 +1,5 @@
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
-  resolveText = value:
-    if builtins.isPath value
-    then builtins.readFile value
-    else value;
 
   mkSemanticAgentType = codexType:
     lib.types.submodule {
@@ -87,9 +83,13 @@ in {
       inherit name value;
     };
 
+  # A file entry is read, not rendered: `isPathLike` rather than
+  # `builtins.isPath`, so a store-path string (a flake input's
+  # `"${src}/agent.md"`, or any entry of an `agentsDir` given as a string)
+  # delivers the file's contents instead of its path as the body.
   renderCopilot = name: value:
-    if !isSemantic value && builtins.isPath value
-    then resolveText value
+    if !isSemantic value && isPathLike value
+    then builtins.readFile value
     else
       renderMarkdown {
         includeName = false;

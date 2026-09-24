@@ -6,9 +6,23 @@
 # are shared namespaces: a consumer may declare `files.".codex/notes.md"` of
 # their own, and classifying it by prefix made this module report a retention
 # warning naming an `ai.*` option that never wrote the file. The managed set is
-# therefore the runtime's own file registry, the shared AGENTS.md registry, and
-# the literal targets the delivery policy declares — plus, for the templated
-# `<name>` targets, only the directory stem the policy itself claims.
+# therefore the runtime's own file registry and the literal targets the
+# delivery policy declares — plus, for the templated `<name>` targets, only the
+# directory stem the policy itself claims.
+#
+# The shared AGENTS.md owner (`ai.internal.files`) is not read here. Each
+# runtime's own key already arrives through its policy `AGENTS.md` writer,
+# rebased onto the key its factory declares in `ai.internal.agentsMdTargets`,
+# and a public override on it is already in the runtime's `files`. The key is
+# read from the factory, not from `context.filename`: Kimchi's names its Home
+# Manager harness file while its devenv factory always writes AGENTS.md.
+# Reading the whole owner per runtime attributed every runtime's key to the
+# first one listed, so Kiro's context file was reported as `ai.codex.files`.
+#
+# Several runtimes can still write one path: Codex, Kimchi and Kiro all default
+# to the project-root AGENTS.md, and Codex publishes its key even with no
+# content. Each path therefore names every writer's options, folded across
+# runtimes. A first-wins map named only `ai.codex.*` for Kimchi's text.
 {
   config,
   lib,
@@ -40,7 +54,7 @@
       else if runtime == "copilot" && lib.hasPrefix "${defaultProjectPrefix}/" original
       then projectPrefix + lib.removePrefix defaultProjectPrefix original
       else if original == "AGENTS.md"
-      then cfg.context.filename or original
+      then ai.internal.agentsMdTargets.${runtime} or original
       else original;
   in
     map (writer: {
@@ -70,22 +84,19 @@
         || (templated entry
           && lib.hasPrefix (builtins.head (lib.splitString "<" entry.target)) name))
       targets;
-    option = name:
-      lib.concatStringsSep ", " (lib.unique (map lib.showOption (lib.concatMap (entry: entry.inputOptions) (matching name)))
-        ++ ["ai.${runtime}.files.${builtins.toJSON name}"]);
+    options = name:
+      map lib.showOption (lib.concatMap (entry: entry.inputOptions) (matching name))
+      ++ ["ai.${runtime}.files.${builtins.toJSON name}"];
     names =
       builtins.attrNames (cfg.files or {})
-      ++ lib.optionals (builtins.elem runtime ["codex" "kiro"]) (builtins.attrNames config.ai.internal.files)
       ++ map (entry: entry.target) (lib.filter (entry: !(templated entry)) targets);
   in
-    lib.optionals (cfg.enable or false) (map (name: {
-        inherit name;
-        value = option name;
-      })
-      (lib.unique names));
+    lib.optionalAttrs (cfg.enable or false) (lib.genAttrs (lib.unique names) options);
   # Name -> the consumer options that write it. Shared with the snapshot task,
   # so the ledger bootstrap and the delivery report agree on what is managed.
-  owned = builtins.listToAttrs (lib.concatMap ownedFor runtimes);
+  owned =
+    lib.mapAttrs (_: lists: lib.concatStringsSep ", " (lib.unique (lib.concatLists lists)))
+    (lib.zipAttrs (map ownedFor runtimes));
   desired =
     lib.mapAttrs (name: file: {
       mode = file.copyMode or "symlink";
