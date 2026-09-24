@@ -1,0 +1,439 @@
+{
+  "config": {
+    "apiKey": {},
+    "api_key": {
+      "aliasFor": "apiKey"
+    },
+    "deviceId": {},
+    "device_id": {
+      "aliasFor": "deviceId"
+    },
+    "gitTokens": {},
+    "llmEndpoint": {},
+    "maxToolResultChars": {},
+    "mcpSearch": {},
+    "mcpSearchLimit": {},
+    "memoryEmbedding": {},
+    "memoryExtraction": {},
+    "migrationState": {},
+    "onboarding": {},
+    "preferences": {},
+    "redaction": {},
+    "skillPaths": {},
+    "surveys": {},
+    "telemetry": {},
+    "teleport": {}
+  },
+  "environment": {
+    "CASTAI_API_KEY": {
+      "controls": "Cast AI API key fallback for the stats command when config.json and KIMCHI_API_KEY provide none"
+    },
+    "DIFF_THEME": {
+      "controls": "syntax-highlighting theme for rendered diffs (default github-dark)"
+    },
+    "JS_DEBUG_PATH": {
+      "controls": "js-debug DAP server script used by the debugger extension"
+    },
+    "KIMCHI_ACTIVE_FERMENT": {
+      "controls": "active ferment identifier inherited by worker processes"
+    },
+    "KIMCHI_AGENT_PERSONA": {
+      "controls": "persona selected for an agent worker"
+    },
+    "KIMCHI_API_KEY": {
+      "controls": "Kimchi API authentication; overrides config.json"
+    },
+    "KIMCHI_AUTO_GIT_INIT": {
+      "controls": "automatic git initialization for ferment work"
+    },
+    "KIMCHI_CLIPBOARD_FORCE": {
+      "controls": "clipboard backend override"
+    },
+    "KIMCHI_CODING_AGENT_DIR": {
+      "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)"
+    },
+    "KIMCHI_CODING_AGENT_SESSION_DIR": {
+      "controls": "pi session storage directory (pi's ENV_SESSION_DIR, named from Kimchi's piConfig.name)"
+    },
+    "KIMCHI_CONTEXT_DATE": {
+      "controls": "prompt context date shown in place of the wall-clock date"
+    },
+    "KIMCHI_DAP_BINARIES": {
+      "controls": "DAP adapter binary overrides"
+    },
+    "KIMCHI_DEBUG_PROMPTS": {
+      "controls": "prompt debugging output"
+    },
+    "KIMCHI_DEBUG_SESSION": {
+      "controls": "session debugging output"
+    },
+    "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
+      "controls": "suppression of pi built-in providers"
+    },
+    "KIMCHI_ENABLE_RESOURCES": {
+      "controls": "transient comma-separated resource enablement"
+    },
+    "KIMCHI_FERMENTS_DIR": {
+      "controls": "ferment state directory"
+    },
+    "KIMCHI_FERMENT_DISABLE_PARALLEL": {
+      "controls": "parallel ferment execution"
+    },
+    "KIMCHI_FERMENT_LOCK_DIR": {
+      "controls": "ferment lock directory"
+    },
+    "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": {
+      "controls": "ferment stale-lock age"
+    },
+    "KIMCHI_IDE_LOCKFILE_DIR": {
+      "controls": "IDE lock-file directory"
+    },
+    "KIMCHI_INFRA_BREAKER_THRESHOLD": {
+      "controls": "infrastructure circuit-breaker failure threshold"
+    },
+    "KIMCHI_LSP_BINARIES": {
+      "controls": "LSP server binary overrides"
+    },
+    "KIMCHI_MCP_E2E_KEYRING_DIR": {
+      "controls": "MCP end-to-end test keyring directory"
+    },
+    "KIMCHI_MEMORY_CAPTURE": {
+      "controls": "memory capture kill-switch ('off' disables capture)"
+    },
+    "KIMCHI_MEMORY_DRAIN_CONCURRENCY": {
+      "controls": "memory capture drain concurrency"
+    },
+    "KIMCHI_NO_PROXY": {
+      "controls": "explicit proxy bypass list"
+    },
+    "KIMCHI_NO_UPDATE_CHECK": {
+      "controls": "background Kimchi update check"
+    },
+    "KIMCHI_OAUTH_TEMPLATE_DIR": {
+      "controls": "OAuth result-page template directory"
+    },
+    "KIMCHI_OLLAMA_HOST": {
+      "controls": "Ollama host URL"
+    },
+    "KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR": {
+      "controls": "preserved inherited pi agent directory"
+    },
+    "KIMCHI_PARENT_SESSION_ID": {
+      "controls": "parent session identity for subagents"
+    },
+    "KIMCHI_PERMISSIONS": {
+      "controls": "initial permission mode"
+    },
+    "KIMCHI_PROXY": {
+      "controls": "HTTP and HTTPS proxy override"
+    },
+    "KIMCHI_PROXY_HELPER": {
+      "controls": "SSH proxy helper executable"
+    },
+    "KIMCHI_REDACTION_ENABLED": {
+      "controls": "PII redaction override"
+    },
+    "KIMCHI_REMOTE_ENDPOINT": {
+      "controls": "remote execution endpoint"
+    },
+    "KIMCHI_REMOTE_RUN": {
+      "controls": "remote execution mode"
+    },
+    "KIMCHI_REVIEW_LOG": {
+      "controls": "session-review log path"
+    },
+    "KIMCHI_REVIEW_THRESHOLD": {
+      "controls": "session-review threshold"
+    },
+    "KIMCHI_ROUTER_ENDPOINT": {
+      "controls": "model router endpoint"
+    },
+    "KIMCHI_SANDBOX": {
+      "controls": "sandbox detection override"
+    },
+    "KIMCHI_SESSION_REVIEW": {
+      "controls": "session-review enablement"
+    },
+    "KIMCHI_STREAM_IDLE_TIMEOUT_MS": {
+      "controls": "outbound HTTP stream idle timeout"
+    },
+    "KIMCHI_SUBAGENT": {
+      "controls": "subagent process marker"
+    },
+    "KIMCHI_TAGS": {
+      "controls": "tags attached to LLM requests"
+    },
+    "KIMCHI_TELEMETRY_DEBUG": {
+      "controls": "telemetry debugging output"
+    },
+    "KIMCHI_TELEMETRY_ENABLED": {
+      "controls": "telemetry enablement override"
+    },
+    "KIMCHI_WEB_APP_URL": {
+      "controls": "Kimchi web application base URL"
+    },
+    "LLAMA_BASE_URL": {
+      "controls": "default llama.cpp server URL offered by pi's llama provider login"
+    },
+    "MCP_OAUTH_DIR": {
+      "controls": "legacy MCP OAuth token directory read during keyring migration (default <harness>/mcp-oauth)"
+    },
+    "OLLAMA_HOST": {
+      "controls": "Ollama endpoint; takes precedence over KIMCHI_OLLAMA_HOST"
+    },
+    "PI_CACHE_RETENTION": {
+      "controls": "provider prompt-cache retention"
+    },
+    "PI_CLEAR_ON_SHRINK": {
+      "controls": "terminal clearing when content shrinks"
+    },
+    "PI_CODING_AGENT_DIR": {
+      "controls": "pi agent directory the caller inherited; entry.ts copies it to KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR (unless that is set) before pointing pi at the Kimchi harness, and pi package lookup reads that copy"
+    },
+    "PI_EXPERIMENTAL": {
+      "controls": "pi experimental features"
+    },
+    "PI_HARDWARE_CURSOR": {
+      "controls": "terminal hardware cursor"
+    },
+    "PI_HYPERLINKS": {
+      "controls": "terminal hyperlink capability"
+    },
+    "PI_IMAGE_PROTOCOL": {
+      "controls": "terminal image protocol"
+    },
+    "PI_INSTALLER_API_BASE": {
+      "controls": "managed installer API base URL"
+    },
+    "PI_MANAGED_INSTALL_ROOT": {
+      "controls": "managed pi installation root"
+    },
+    "PI_MCP_ADAPTER_KEYRING_RECOVERY_HELPER": {
+      "controls": "MCP keyring recovery helper executable"
+    },
+    "PI_MCP_ADAPTER_KEYRING_RECOVERY_NODE": {
+      "controls": "MCP keyring recovery Node.js executable"
+    },
+    "PI_OAUTH_CALLBACK_HOST": {
+      "controls": "OAuth callback bind host"
+    },
+    "PI_OFFLINE": {
+      "controls": "pi startup network operations"
+    },
+    "PI_PACKAGE_DIR": {
+      "controls": "pi package and runtime asset directory"
+    },
+    "PI_SHARE_VIEWER_URL": {
+      "controls": "shared-session viewer base URL"
+    },
+    "PI_SKIP_VERSION_CHECK": {
+      "controls": "pi version check"
+    },
+    "PI_STARTUP_BENCHMARK": {
+      "controls": "interactive startup benchmark"
+    },
+    "PI_TELEMETRY": {
+      "controls": "pi install telemetry"
+    },
+    "PI_TIMING": {
+      "controls": "startup timing instrumentation"
+    },
+    "PI_TRUE_COLOR": {
+      "controls": "terminal true-color capability"
+    },
+    "PI_TUI_DEBUG": {
+      "controls": "TUI debug logging"
+    },
+    "PI_TUI_DEBUG_REDRAW": {
+      "controls": "TUI redraw logging"
+    },
+    "PI_TUI_ESC_TIMEOUT": {
+      "controls": "TUI escape-sequence timeout"
+    },
+    "PI_TUI_NO_CLEAR_SCROLLBACK": {
+      "controls": "scrollback clearing in Kimchi's pi-tui patch"
+    },
+    "PI_TUI_WRITE_LOG": {
+      "controls": "raw TUI ANSI output log path"
+    },
+    "SKILLS_DIR": {
+      "controls": "skills-manager skills directory (default <cwd>/skills)"
+    }
+  },
+  "environmentIgnored": {
+    "awsSdk": {
+      "names": [
+        "AWS_ACCESS_KEY_ID",
+        "AWS_ACCOUNT_ID",
+        "AWS_CONTAINER_AUTHORIZATION_TOKEN",
+        "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+        "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        "AWS_CREDENTIAL_EXPIRATION",
+        "AWS_CREDENTIAL_SCOPE",
+        "AWS_DEFAULT_REGION",
+        "AWS_EC2_METADATA_DISABLED",
+        "AWS_EC2_METADATA_SERVICE_ENDPOINT",
+        "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE",
+        "AWS_LOGIN_CACHE_DIRECTORY",
+        "AWS_NEW_RETRIES_2026",
+        "AWS_PROFILE",
+        "AWS_REGION",
+        "AWS_ROLE_ARN",
+        "AWS_ROLE_SESSION_NAME",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_WEB_IDENTITY_TOKEN_FILE",
+        "SMITHY_NEW_RETRIES_2026"
+      ],
+      "reason": "AWS SDK credential, region, metadata and retry chain in pi's bundled Bedrock client and pi-ai's Bedrock credential detection; configured the AWS way, not a Kimchi setting"
+    },
+    "googleAuth": {
+      "names": [
+        "CLOUDSDK_CONFIG",
+        "CLOUD_RUN_JOB",
+        "DETECT_GCP_RETRIES",
+        "FUNCTION_NAME",
+        "FUNCTION_TARGET",
+        "GAE_MODULE_NAME",
+        "GAE_SERVICE",
+        "GCE_METADATA_HOST",
+        "GCE_METADATA_IP",
+        "GCLOUD_PROJECT",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_CLOUD_QUOTA_PROJECT",
+        "GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES",
+        "K_CONFIGURATION",
+        "K_SERVICE",
+        "METADATA_SERVER_DETECTION",
+        "gcloud_project",
+        "google_application_credentials",
+        "google_cloud_project"
+      ],
+      "reason": "Google auth library project, credential and metadata-server detection in pi's bundled Vertex client; configured the Google Cloud way, not a Kimchi setting"
+    },
+    "libraryInternals": {
+      "names": [
+        "AWS_LAMBDA_BENCHMARK_MODE",
+        "AWS_LAMBDA_NODEJS_NO_GLOBAL_AWSLAMBDA",
+        "AWS_SDK_JS_NODE_VERSION_SUPPORT_WARNING_DISABLED",
+        "CI",
+        "DEBUG",
+        "DEBUG_AUTH",
+        "GRACEFUL_FS_PLATFORM",
+        "JEST_WORKER_ID",
+        "NODE_DEBUG",
+        "NODE_ENV",
+        "TEST_GRACEFUL_FS_GLOBAL_PATCH",
+        "UNDICI_NO_WASM_SIMD",
+        "VITEST",
+        "WS_NO_BUFFER_UTIL",
+        "WS_NO_UTF_8_VALIDATE",
+        "__MINIMATCH_TESTING_PLATFORM__"
+      ],
+      "reason": "debug, test-runner and feature switches inside bundled libraries (graceful-fs, minimatch, undici, ws, AWS Lambda runtime, debug) or Kimchi's own test guards; no user-facing behavior"
+    },
+    "mem0Telemetry": {
+      "names": ["MEM0_TELEMETRY"],
+      "reason": "mem0's own telemetry switch; Kimchi's memory backend defaults it to 'false' only when unset (src/extensions/memory/backend.ts, disableMem0Telemetry), so a value the user sets reaches mem0 unchanged; owned and documented by mem0, not Kimchi"
+    },
+    "platform": {
+      "names": [
+        "APPDATA",
+        "ComSpec",
+        "HOME",
+        "HOMEBREW_PREFIX",
+        "OSTYPE",
+        "PATH",
+        "PATHEXT",
+        "PNPM_HOME",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "SHELL",
+        "SystemRoot",
+        "USER",
+        "USERNAME",
+        "USERPROFILE",
+        "WINDIR",
+        "XDG_CACHE_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "comspec"
+      ],
+      "reason": "operating-system and user-session state (home, PATH, shell, user, XDG and Windows directories, package-manager prefixes) read to locate files; set by the host, not a Kimchi setting"
+    },
+    "providerClients": {
+      "names": [
+        "AWS_BEARER_TOKEN_BEDROCK",
+        "AWS_BEDROCK_FORCE_CACHE",
+        "AWS_BEDROCK_FORCE_HTTP1",
+        "AWS_BEDROCK_SKIP_AUTH",
+        "AZURE_OPENAI_API_VERSION",
+        "AZURE_OPENAI_BASE_URL",
+        "AZURE_OPENAI_DEPLOYMENT_NAME_MAP",
+        "AZURE_OPENAI_ENDPOINT",
+        "AZURE_OPENAI_RESOURCE_NAME",
+        "GOOGLE_CLOUD_LOCATION",
+        "KIMI_CODE_OAUTH_HOST",
+        "KIMI_OAUTH_HOST"
+      ],
+      "reason": "third-party model-provider client settings (Azure OpenAI, Bedrock, Kimi) read by pi-ai's bundled provider clients through getProviderEnvValue; documented by that provider, not by Kimchi"
+    },
+    "proxy": {
+      "names": [
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy"
+      ],
+      "reason": "the de-facto HTTP proxy convention honored by Kimchi's and pi's HTTP dispatchers; set for the whole user environment, not per tool"
+    },
+    "terminal": {
+      "names": [
+        "COLORFGBG",
+        "COLORTERM",
+        "COLUMNS",
+        "DISPLAY",
+        "GHOSTTY_RESOURCES_DIR",
+        "ITERM_SESSION_ID",
+        "KITTY_WINDOW_ID",
+        "LINES",
+        "MOSH_CONNECTION",
+        "SSH_CLIENT",
+        "SSH_CONNECTION",
+        "SSH_TTY",
+        "STY",
+        "TERM",
+        "TERMINAL_EMULATOR",
+        "TERMUX_VERSION",
+        "TERM_PROGRAM",
+        "TMUX",
+        "WARP_SESSION_ID",
+        "WARP_TERMINAL_SESSION_UUID",
+        "WAYLAND_DISPLAY",
+        "WEZTERM_PANE",
+        "WSLENV",
+        "WSL_DISTRO_NAME",
+        "WSL_INTEROP",
+        "WT_SESSION",
+        "XDG_SESSION_TYPE",
+        "ZELLIJ"
+      ],
+      "reason": "terminal, display-server, multiplexer, remote-session and WSL detection; describes the host the TUI runs in"
+    },
+    "toolConventions": {
+      "names": [
+        "EDITOR",
+        "HF_HOME",
+        "HF_TOKEN",
+        "HF_TOKEN_PATH",
+        "OPENCODE_CONFIG",
+        "VISUAL"
+      ],
+      "reason": "another tool's own variable (POSIX editor, HuggingFace, opencode) that Kimchi or pi honors for interoperability; owned and documented by that tool"
+    }
+  }
+}

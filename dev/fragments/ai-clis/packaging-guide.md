@@ -1,7 +1,7 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-09-13 — native shard exclusions and input-worker cache
-> filters protect patched variants.
+> **Last verified:** 2026-09-22 — Kimchi version bumps refresh its pinned source
+> and declaration inputs alongside the compiler-extracted sidecar.
 
 ### Overview
 
@@ -61,7 +61,10 @@ These packages pin versions inline (binary CLIs via a per-platform
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   GitHub release and prefetches per-platform binaries
 - `kimchi` — per-platform `sources.json` + `mkUpdateScript` fetches the latest
-  GitHub release tag and prefetches per-platform tarballs
+  GitHub release tag and prefetches per-platform tarballs; the same update pins
+  the matching release source, exact pi npm package, and pi declaration
+  dependencies, then regenerates `extracted.json` with nixpkgs' TypeScript
+  compiler API
 - `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   version from AWS manifest endpoint
 - `kiro-gateway` — inline `rev` + `hash` with `mkGitRevUpdateScript` for

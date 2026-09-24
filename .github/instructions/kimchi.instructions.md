@@ -7,18 +7,21 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-23 — the builder entry point is
-> `lib.ai.app.mkRuntime`, and Kimchi's native files are declared under
-> `ai.kimchi.native` (`native.settings`, `native.harnessSettings`). Home Manager
-> keeps Kimchi's user paths and devenv its project paths; the mutable JSON
-> documents (`config.json`, harness `settings.json`, `mcp.json`,
+> **Last verified:** 2026-09-23 — `ai.kimchi.native.settings` and
+> `native.harnessSettings` are closed option trees generated from
+> `extracted.json` by `lib/extracted.nix`; devenv rejects user-scope
+> `config.json` keys and both backends reject environment variables Kimchi
+> overwrites, both read from the sidecar, and the overwrite and inert flags are
+> derived from the sources, as is each harness key's project scope, declarations
+> resolve by reference or fail on ambiguity, and the extractor's own
+> hand-written parts are listed with their guards, and pi's declaration packages
+> follow Kimchi's lockfile; the builder entry point is `lib.ai.app.mkRuntime`.
+> Home Manager keeps Kimchi's user paths and devenv its project paths; the
+> mutable JSON documents (`config.json`, harness `settings.json`, `mcp.json`,
 > `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
 > shared delivery router; agents are owned writable copies, copied from a
 > store-path string as from a path; portable hooks reach `.kimchi/hooks.json` on
-> devenv only, and their exclusions are silent for the shared pool; a project
-> permissions file resets the user's scalars, and its emptied retraction is
-> deleted; the trust writer takes pi's `trust.json.lock`; root reasoning effort
-> makes the devenv harness file exist. Full lineage:
+> devenv only; the trust writer takes pi's `trust.json.lock`. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -44,6 +47,93 @@ alone creates that exact-cwd, trust-gated file: Kimchi applies it only in a
 trusted project, and the wrapper refuses launches below the devenv root. That is
 the uniform consequence of any project harness setting, and the only way to
 deliver effort at project scope.
+
+`packages/kimchi/extracted.json` measures the two native settings surfaces and
+the environment variables Kimchi and pi read, and `lib/extracted.nix` is its
+only reader. It generates the closed `native.settings` (from `config.*`) and
+`native.harnessSettings` (from `harness.*`, resolving `harness.definitions`)
+option trees: scalars and enums map directly, objects with properties become
+closed submodules, `additionalProperties` becomes `attrsOf`, and arrays keep
+untyped elements unless they are scalars, because `filterNulls` does not recurse
+into lists. So a key upstream adds to pi's `Settings` or to config.ts's
+`readConfigExtras` becomes an option at the next re-extraction, and a key it
+removes fails its consumer as an unknown option instead of writing bytes nothing
+reads. Every option is `nullOr` with a null default. Alias keys (`aliasFor`, the
+only hand annotation left on config keys) and inert keys have no option. A key
+is inert when upstream tags its `KimchiConfig` member `@deprecated` and no
+Kimchi code consumes it: nothing reads the loaded member, and nothing outside
+`config.ts` reads the raw `readConfigExtras` member, while `config.ts` still
+parses it to warn that it is obsolete. A release that consumes it again clears
+the flag, and the key becomes an option. The option generator keeps three hand
+tables: one exclusion (`apiKey`, a secret delivered by `ai.kimchi.apiKey`), one
+refinement (`modelRoles`, whose role names and single-string roles come from the
+sidecar while the non-blank and non-empty checks do not), and one description
+note. `report.stale*` lists any row whose path the sidecar lost, and
+`checks/native-options.nix` fails on it.
+
+The extractor has hand-written parts of its own, each guarded only as far as
+stated. Kimchi's harness additions (`autoDefaultApplied`, `fermentV2`,
+`modelRoles` and the rest, each typed from a named declaration) are a hand list
+in `extract.mjs`. Two censuses check it: every harness key config.ts parses, and
+every constant key passed to config/settings.ts's `readConfigSetting`,
+`readConfigSettingAsync`, `writeConfigSetting` and `writeConfigSettingAsync`
+anywhere in `src/`, must be a pi `Settings` key or an addition. Other direct
+readers of the harness file are not censused (in 1.1.30,
+`telemetry/config-snapshot.ts` reads `model` and `provider` for telemetry), so a
+key upstream adds there meets the closed submodule as an unknown option with no
+drift signal. The config.json shapes of `teleport`, `gitTokens` and the
+`surveys` record have no declared type, so they are written by hand and pinned
+both ways to their readers' runtime guards (`readTeleportCompactHintEnabled`,
+`readGitToken`, `readSurveyConfig`): every scalar leaf must be `typeof`-guarded
+as its type, and every guarded path must be in the shape. That check also runs
+the generator over a fixture sidecar with a key added, a key removed and an enum
+widened, and requires the option surface to move with it.
+
+The sidecar also drives two rejections and one lookup. Devenv rejects
+`native.settings` keys whose `project` flag is false, because Kimchi merges only
+its project-honored keys from `.kimchi/config.json`. Both backends reject an
+environment variable the sidecar marks not `consumerOverridable`, because
+Kimchi's entry point overwrites it before anything reads it. That flag is
+derived, not annotated: the extractor walks `src/entry.ts`'s top-level
+statements in order and marks a variable fixed when a statement assigns it on
+every path and no earlier statement reads it, counting what a callee handed
+`process.env` reads from it. `PI_CODING_AGENT_DIR` is assigned too, but read and
+preserved first, so it stays settable. The analysis fails instead of guessing
+when a module entry.ts statically imports reads the same name, or when an
+assignment follows entry.ts's first `await` or `import()`. Every variable the
+factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_NO_UPDATE_CHECK`,
+`KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
+evaluation if the pinned Kimchi no longer reads it or starts overwriting it.
+
+Every resolved environment name is either published from an annotation (a
+`controls` description and nothing else) or listed, with a reason, under
+`environmentIgnored` in `extract/annotations.json`; pi's own names follow
+Kimchi's `piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_`
+default). The extractor uses the TypeScript compiler's checker for declared keys
+and types and syntax tree queries for environment access sites, while config
+queries cross-check compiler types against top-level, nested, and array-element
+runtime validation guards. A declaration is never taken by bare name when a
+reference can pick it: config.ts's functions and interfaces resolve in
+config.ts's own scope (Kimchi 1.1.30 has a second `loadConfig`), pi's `Settings`
+comes from `settings-manager.d.ts`'s exports, and the harness `definitions` are
+the interfaces `Settings` references, collected through the checker (pi also
+declares an all-required `CompactionSettings` in `compaction.d.ts`). The Kimchi
+harness schemas still looked up by name must match exactly one declaration among
+the modules reachable from `src/entry.ts`, so the dead
+`model-catalog/model-metadata.ts` is ignored, and a second live
+`ModelCustomMetadataSchema` stops the extraction instead of narrowing the
+option. Same-named constants back a constant only where the checker finds no
+initializer, and only when they all agree. Three additional hash-pinned pi
+declaration packages resolve the settings type's external imports; unresolved
+named leaves fail extraction. Their versions are the ones Kimchi's
+`pnpm-lock.yaml` resolves pi's dependencies to, which is what the release binary
+bundles, not the floor of pi's caret ranges: the update job reads them from the
+lockfile, and the extractor (handed the lockfile as JSON through `yq`) fails
+when a supplied package differs from it. The extractor also checks that the
+hash-pinned source URL names the same release tag recorded in provenance;
+Kimchi's source `package.json` intentionally retains the `0.0.0` development
+placeholder. It no longer extracts the CLI: the wrapper passes no flags, so that
+surface had no reader.
 
 ## User and project paths (the load-bearing fact)
 
@@ -139,10 +229,11 @@ Retracting the last key deletes the emptied file (`lib/ai/own.py`
 `DocContainer.commit`), so a `{}` never outlives the declaration.
 
 `native.harnessSettings.modelRoles` values are provider/model strings, or for
-delegable roles a non-empty list of them; `orchestrator` and `compactor` take
-one string, and role names are 1.1.30's eight. Any other shape is discarded with
-a runtime warning (`src/extensions/orchestration/model-roles.ts:117-181`), so
-the type and two module assertions reject it at evaluation. Locked by
+delegable roles a non-empty list of them. The role names, and which roles take
+one string (`orchestrator` and `compactor` in 1.1.30), come from the sidecar's
+`modelRoles` properties. Any other shape is discarded with a runtime warning
+(`src/extensions/orchestration/model-roles.ts:117-181`), so the option type
+rejects it at evaluation: an unknown role is an unknown option. Locked by
 `module-kimchi-model-roles-shape`.
 
 Everything else Kimchi delivers except agents (below) is immutable and
@@ -189,12 +280,19 @@ writes only inside the project. Locked by `module-kimchi-project-trust` and
 `module-kimchi-project-trust-runtime`, which runs the real writer against a
 symlinked fixture, a held lock and a stale one.
 
-The devenv module rejects every `native.harnessSettings` key Kimchi reads only
-from user scope: `defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`,
-`modelMetadata`, `modelRoles`, `multiModel`, `resources`,
-`shellProfileApiKeyMigrationDismissed`, and `statusLine`. Set these with Home
-Manager or through Kimchi itself. Home Manager and devenv reconcile the mutable
-JSON documents by owned leaf, preserving runtime-written siblings.
+The devenv module rejects every `native.harnessSettings` key whose sidecar
+`project` flag is false, the list `userScopeHarnessKeys` in `lib/extracted.nix`.
+The extractor derives the flag: a pi key honors the project file only if pi
+reads it through SettingsManager's merged `this.settings`, so keys read only
+through `this.globalSettings` or `getGlobalSettings()` (`defaultProjectTrust`,
+`httpProxy` in pi 0.85.1) are user scope, and a key it sees read neither way
+stops the extraction. Every Kimchi addition is user scope, because Kimchi reads
+them itself from `~/.config/kimchi/harness/settings.json`, never through pi's
+merged manager. It likewise rejects every `native.settings` key whose sidecar
+`project` flag is false (`gitTokens`, `onboarding`, `preferences`, `surveys`,
+`telemetry`, `teleport` in 1.1.30). Set these with Home Manager or through
+Kimchi itself. Home Manager and devenv reconcile the mutable JSON documents by
+owned leaf, preserving runtime-written siblings.
 
 ## Agents: owned, writable copies
 

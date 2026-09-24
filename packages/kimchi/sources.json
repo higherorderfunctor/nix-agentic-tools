@@ -1,4 +1,30 @@
 {
+  "extraction": {
+    "kimchiSource": {
+      "hash": "sha256-ZBIOMoivyi8ogNoWmHgyhmTP9i8vegNFG0JMP6KP0HU=",
+      "url": "https://github.com/getkimchi/kimchi/archive/refs/tags/v1.1.33.tar.gz"
+    },
+    "piAgentCorePackage": {
+      "hash": "sha256-jL8Ea5JqgwJ1qDSVLT+nfNMUiG6CpglKmoNwSvLK/r0=",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-0.85.1.tgz",
+      "version": "0.85.1"
+    },
+    "piAiPackage": {
+      "hash": "sha256-KzewhtP1DRFDIOrJ4wN9bKwG3EioQW7eTsipK5AJ2z8=",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-0.85.1.tgz",
+      "version": "0.85.1"
+    },
+    "piPackage": {
+      "hash": "sha256-5Nv8jh83a+gxIBMbgaXDndMqbiyRZ0uETGwAFlI+83U=",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-0.85.1.tgz",
+      "version": "0.85.1"
+    },
+    "piTuiPackage": {
+      "hash": "sha256-4j4pfgUr+kK5v7WKMzsE13uNXXofeq73Tt3j55wTcW0=",
+      "url": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-0.85.1.tgz",
+      "version": "0.85.1"
+    }
+  },
   "version": "1.1.33",
   "aarch64-darwin": {
     "url": "https://github.com/getkimchi/kimchi/releases/download/v1.1.33/kimchi_darwin_arm64.tar.gz",

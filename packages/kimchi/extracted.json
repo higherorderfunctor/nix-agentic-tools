@@ -1,0 +1,1455 @@
+{
+  "config": {
+    "keys": {
+      "api_key": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "aliasFor": "apiKey",
+        "project": true
+      },
+      "apiKey": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "device_id": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "aliasFor": "deviceId",
+        "project": true
+      },
+      "deviceId": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "gitTokens": {
+        "optional": true,
+        "type": "object",
+        "typeExpression": "Record<string, string>",
+        "additionalProperties": {
+          "typeExpression": "string",
+          "type": "string"
+        },
+        "project": false
+      },
+      "llmEndpoint": {
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "maxToolResultChars": {
+        "typeExpression": "number",
+        "type": "number",
+        "optional": true,
+        "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
+        "inert": true,
+        "project": true
+      },
+      "mcpSearch": {
+        "typeExpression": "{ strategy?: \"bm25\" | \"regex\"; bm25K1?: number; bm25B?: number; fieldWeights?: { name: number; description: number; schemaKey: number; }; }",
+        "type": "object",
+        "properties": {
+          "bm25B": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
+          },
+          "bm25K1": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
+          },
+          "fieldWeights": {
+            "typeExpression": "{ name: number; description: number; schemaKey: number; }",
+            "type": "object",
+            "properties": {
+              "description": {
+                "typeExpression": "number",
+                "type": "number"
+              },
+              "name": {
+                "typeExpression": "number",
+                "type": "number"
+              },
+              "schemaKey": {
+                "typeExpression": "number",
+                "type": "number"
+              }
+            },
+            "optional": true
+          },
+          "strategy": {
+            "typeExpression": "\"bm25\" | \"regex\"",
+            "type": "enum",
+            "enum": ["bm25", "regex"],
+            "optional": true
+          }
+        },
+        "optional": true,
+        "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
+        "inert": true,
+        "project": true
+      },
+      "mcpSearchLimit": {
+        "typeExpression": "number",
+        "type": "number",
+        "optional": true,
+        "deprecated": "Parsed only so upgrades can identify obsolete MCP configuration.",
+        "inert": true,
+        "project": true
+      },
+      "memoryEmbedding": {
+        "typeExpression": "{ model?: string; dims?: number; }",
+        "type": "object",
+        "properties": {
+          "dims": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
+          },
+          "model": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": true
+      },
+      "memoryExtraction": {
+        "typeExpression": "{ model?: string; }",
+        "type": "object",
+        "properties": {
+          "model": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": true
+      },
+      "migrationState": {
+        "typeExpression": "\"done\" | \"skip-forever\"",
+        "type": "enum",
+        "enum": ["done", "skip-forever"],
+        "optional": true,
+        "project": true
+      },
+      "onboarding": {
+        "typeExpression": "OnboardingConfig",
+        "type": "object",
+        "properties": {
+          "hideSessionModeDialog": {
+            "typeExpression": "boolean",
+            "type": "boolean",
+            "optional": true
+          },
+          "sessionModeWizardSeenAt": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          },
+          "studioOnboardingSeenAt": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          },
+          "teleportHelpSeenAt": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": false
+      },
+      "preferences": {
+        "typeExpression": "PreferencesConfig",
+        "type": "object",
+        "properties": {
+          "hideTips": {
+            "typeExpression": "boolean",
+            "type": "boolean",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": false
+      },
+      "redaction": {
+        "typeExpression": "{ enabled?: boolean; }",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "typeExpression": "boolean",
+            "type": "boolean",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": true
+      },
+      "skillPaths": {
+        "typeExpression": "string[]",
+        "type": "array",
+        "items": {
+          "typeExpression": "string",
+          "type": "string"
+        },
+        "optional": true,
+        "project": true
+      },
+      "surveys": {
+        "optional": true,
+        "type": "object",
+        "typeExpression": "Record<string, SurveyConfig>",
+        "additionalProperties": {
+          "type": "object",
+          "typeExpression": "SurveyConfig",
+          "properties": {
+            "seenAt": {
+              "typeExpression": "string",
+              "type": "string",
+              "optional": true
+            }
+          }
+        },
+        "project": false
+      },
+      "telemetry": {
+        "optional": true,
+        "type": "object",
+        "typeExpression": "TelemetryConfig",
+        "properties": {
+          "enabled": {
+            "typeExpression": "boolean",
+            "type": "boolean",
+            "optional": true
+          },
+          "endpoint": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          },
+          "headers": {
+            "typeExpression": "{ [x: string]: string; }",
+            "type": "object",
+            "additionalProperties": {
+              "typeExpression": "string",
+              "type": "string"
+            },
+            "optional": true
+          },
+          "metricsEndpoint": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          }
+        },
+        "project": false
+      },
+      "teleport": {
+        "optional": true,
+        "type": "object",
+        "typeExpression": "{ compactHint?: { enabled?: boolean } }",
+        "properties": {
+          "compactHint": {
+            "optional": true,
+            "type": "object",
+            "typeExpression": "{ enabled?: boolean }",
+            "properties": {
+              "enabled": {
+                "typeExpression": "boolean",
+                "type": "boolean",
+                "optional": true
+              }
+            }
+          }
+        },
+        "project": false
+      }
+    },
+    "projectTier": {
+      "gatedByProjectTrust": true,
+      "honoredKeys": [
+        "apiKey",
+        "api_key",
+        "deviceId",
+        "device_id",
+        "llmEndpoint",
+        "maxToolResultChars",
+        "mcpSearch",
+        "mcpSearchLimit",
+        "memoryEmbedding",
+        "memoryExtraction",
+        "migrationState",
+        "redaction",
+        "skillPaths"
+      ]
+    }
+  },
+  "environment": {
+    "variables": {
+      "CASTAI_API_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "Cast AI API key fallback for the stats command when config.json and KIMCHI_API_KEY provide none"
+      },
+      "DIFF_THEME": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "syntax-highlighting theme for rendered diffs (default github-dark)"
+      },
+      "JS_DEBUG_PATH": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "js-debug DAP server script used by the debugger extension"
+      },
+      "KIMCHI_ACTIVE_FERMENT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "active ferment identifier inherited by worker processes"
+      },
+      "KIMCHI_AGENT_PERSONA": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "persona selected for an agent worker"
+      },
+      "KIMCHI_API_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "Kimchi API authentication; overrides config.json"
+      },
+      "KIMCHI_AUTO_GIT_INIT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "automatic git initialization for ferment work"
+      },
+      "KIMCHI_CLIPBOARD_FORCE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "clipboard backend override"
+      },
+      "KIMCHI_CODING_AGENT_DIR": {
+        "consumerOverridable": false,
+        "readBy": ["kimchi", "pi"],
+        "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)",
+        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+      },
+      "KIMCHI_CODING_AGENT_SESSION_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "pi session storage directory (pi's ENV_SESSION_DIR, named from Kimchi's piConfig.name)"
+      },
+      "KIMCHI_CONTEXT_DATE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "prompt context date shown in place of the wall-clock date"
+      },
+      "KIMCHI_DAP_BINARIES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "DAP adapter binary overrides"
+      },
+      "KIMCHI_DEBUG_PROMPTS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "prompt debugging output"
+      },
+      "KIMCHI_DEBUG_SESSION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "session debugging output"
+      },
+      "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
+        "consumerOverridable": false,
+        "readBy": ["pi"],
+        "controls": "suppression of pi built-in providers",
+        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+      },
+      "KIMCHI_ENABLE_RESOURCES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "transient comma-separated resource enablement"
+      },
+      "KIMCHI_FERMENT_DISABLE_PARALLEL": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "parallel ferment execution"
+      },
+      "KIMCHI_FERMENT_LOCK_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "ferment lock directory"
+      },
+      "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "ferment stale-lock age"
+      },
+      "KIMCHI_FERMENTS_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "ferment state directory"
+      },
+      "KIMCHI_IDE_LOCKFILE_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "IDE lock-file directory"
+      },
+      "KIMCHI_INFRA_BREAKER_THRESHOLD": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "infrastructure circuit-breaker failure threshold"
+      },
+      "KIMCHI_LSP_BINARIES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "LSP server binary overrides"
+      },
+      "KIMCHI_MCP_E2E_KEYRING_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "MCP end-to-end test keyring directory"
+      },
+      "KIMCHI_MEMORY_CAPTURE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "memory capture kill-switch ('off' disables capture)"
+      },
+      "KIMCHI_MEMORY_DRAIN_CONCURRENCY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "memory capture drain concurrency"
+      },
+      "KIMCHI_NO_PROXY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "explicit proxy bypass list"
+      },
+      "KIMCHI_NO_UPDATE_CHECK": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "background Kimchi update check"
+      },
+      "KIMCHI_OAUTH_TEMPLATE_DIR": {
+        "consumerOverridable": false,
+        "readBy": ["kimchi"],
+        "controls": "OAuth result-page template directory",
+        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+      },
+      "KIMCHI_OLLAMA_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "Ollama host URL"
+      },
+      "KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "preserved inherited pi agent directory"
+      },
+      "KIMCHI_PARENT_SESSION_ID": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "parent session identity for subagents"
+      },
+      "KIMCHI_PERMISSIONS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "initial permission mode"
+      },
+      "KIMCHI_PROXY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "HTTP and HTTPS proxy override"
+      },
+      "KIMCHI_PROXY_HELPER": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "SSH proxy helper executable"
+      },
+      "KIMCHI_REDACTION_ENABLED": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "PII redaction override"
+      },
+      "KIMCHI_REMOTE_ENDPOINT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "remote execution endpoint"
+      },
+      "KIMCHI_REMOTE_RUN": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "remote execution mode"
+      },
+      "KIMCHI_REVIEW_LOG": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "session-review log path"
+      },
+      "KIMCHI_REVIEW_THRESHOLD": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "session-review threshold"
+      },
+      "KIMCHI_ROUTER_ENDPOINT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "model router endpoint"
+      },
+      "KIMCHI_SANDBOX": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "sandbox detection override"
+      },
+      "KIMCHI_SESSION_REVIEW": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "session-review enablement"
+      },
+      "KIMCHI_STREAM_IDLE_TIMEOUT_MS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "outbound HTTP stream idle timeout"
+      },
+      "KIMCHI_SUBAGENT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "subagent process marker"
+      },
+      "KIMCHI_TAGS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "tags attached to LLM requests"
+      },
+      "KIMCHI_TELEMETRY_DEBUG": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "telemetry debugging output"
+      },
+      "KIMCHI_TELEMETRY_ENABLED": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "telemetry enablement override"
+      },
+      "KIMCHI_WEB_APP_URL": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "Kimchi web application base URL"
+      },
+      "LLAMA_BASE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "default llama.cpp server URL offered by pi's llama provider login"
+      },
+      "MCP_OAUTH_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "legacy MCP OAuth token directory read during keyring migration (default <harness>/mcp-oauth)"
+      },
+      "OLLAMA_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "Ollama endpoint; takes precedence over KIMCHI_OLLAMA_HOST"
+      },
+      "PI_CACHE_RETENTION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "provider prompt-cache retention"
+      },
+      "PI_CLEAR_ON_SHRINK": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "terminal clearing when content shrinks"
+      },
+      "PI_CODING_AGENT_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "pi agent directory the caller inherited; entry.ts copies it to KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR (unless that is set) before pointing pi at the Kimchi harness, and pi package lookup reads that copy"
+      },
+      "PI_EXPERIMENTAL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "pi experimental features"
+      },
+      "PI_HARDWARE_CURSOR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "terminal hardware cursor"
+      },
+      "PI_HYPERLINKS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "terminal hyperlink capability"
+      },
+      "PI_IMAGE_PROTOCOL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "terminal image protocol"
+      },
+      "PI_INSTALLER_API_BASE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "managed installer API base URL"
+      },
+      "PI_MANAGED_INSTALL_ROOT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "managed pi installation root"
+      },
+      "PI_MCP_ADAPTER_KEYRING_RECOVERY_HELPER": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "MCP keyring recovery helper executable"
+      },
+      "PI_MCP_ADAPTER_KEYRING_RECOVERY_NODE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "MCP keyring recovery Node.js executable"
+      },
+      "PI_OAUTH_CALLBACK_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "OAuth callback bind host"
+      },
+      "PI_OFFLINE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "pi startup network operations"
+      },
+      "PI_PACKAGE_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "controls": "pi package and runtime asset directory"
+      },
+      "PI_SHARE_VIEWER_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "shared-session viewer base URL"
+      },
+      "PI_SKIP_VERSION_CHECK": {
+        "consumerOverridable": false,
+        "readBy": ["pi"],
+        "controls": "pi version check",
+        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+      },
+      "PI_STARTUP_BENCHMARK": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "interactive startup benchmark"
+      },
+      "PI_TELEMETRY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "pi install telemetry"
+      },
+      "PI_TIMING": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "startup timing instrumentation"
+      },
+      "PI_TRUE_COLOR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "terminal true-color capability"
+      },
+      "PI_TUI_DEBUG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "TUI debug logging"
+      },
+      "PI_TUI_DEBUG_REDRAW": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "TUI redraw logging"
+      },
+      "PI_TUI_ESC_TIMEOUT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "TUI escape-sequence timeout"
+      },
+      "PI_TUI_NO_CLEAR_SCROLLBACK": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "scrollback clearing in Kimchi's pi-tui patch"
+      },
+      "PI_TUI_WRITE_LOG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "controls": "raw TUI ANSI output log path"
+      },
+      "SKILLS_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "skills-manager skills directory (default <cwd>/skills)"
+      }
+    }
+  },
+  "harness": {
+    "definitions": {
+      "BranchSummarySettings": {
+        "reserveTokens": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "skipPrompt": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        }
+      },
+      "CompactionSettings": {
+        "enabled": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        },
+        "keepRecentTokens": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "reserveTokens": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        }
+      },
+      "ImageSettings": {
+        "autoResize": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        },
+        "blockImages": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        }
+      },
+      "MarkdownSettings": {
+        "codeBlockIndent": {
+          "typeExpression": "string",
+          "type": "string",
+          "optional": true
+        },
+        "mermaid": {
+          "typeExpression": "\"off\" | \"final\" | \"streaming\"",
+          "type": "enum",
+          "enum": ["off", "final", "streaming"],
+          "optional": true
+        }
+      },
+      "ProviderRetrySettings": {
+        "maxRetries": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "maxRetryDelayMs": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "timeoutMs": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        }
+      },
+      "RetrySettings": {
+        "baseDelayMs": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "enabled": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        },
+        "maxRetries": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "provider": {
+          "typeExpression": "ProviderRetrySettings",
+          "type": "object",
+          "optional": true
+        }
+      },
+      "TerminalSettings": {
+        "clearOnShrink": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        },
+        "hyperlinks": {
+          "typeExpression": "boolean | \"auto\"",
+          "type": "enum",
+          "enum": [false, true, "auto"],
+          "optional": true
+        },
+        "images": {
+          "typeExpression": "false | \"auto\" | \"kitty\" | \"iterm2\"",
+          "type": "enum",
+          "enum": [false, "auto", "kitty", "iterm2"],
+          "optional": true
+        },
+        "imageWidthCells": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "showImages": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        },
+        "showTerminalProgress": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        },
+        "trueColor": {
+          "typeExpression": "boolean | \"auto\"",
+          "type": "enum",
+          "enum": [false, true, "auto"],
+          "optional": true
+        }
+      },
+      "ThinkingBudgetsSettings": {
+        "high": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "low": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "medium": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        },
+        "minimal": {
+          "typeExpression": "number",
+          "type": "number",
+          "optional": true
+        }
+      },
+      "WarningSettings": {
+        "anthropicExtraUsage": {
+          "typeExpression": "boolean",
+          "type": "boolean",
+          "optional": true
+        }
+      }
+    },
+    "keys": {
+      "autocompleteMaxVisible": {
+        "source": "pi",
+        "typeExpression": "number",
+        "type": "number",
+        "optional": true,
+        "project": true
+      },
+      "autoDefaultApplied": {
+        "source": "kimchi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": false
+      },
+      "branchSummary": {
+        "source": "pi",
+        "typeExpression": "BranchSummarySettings",
+        "type": "object",
+        "optional": true,
+        "project": true
+      },
+      "collapseChangelog": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "compaction": {
+        "source": "pi",
+        "typeExpression": "CompactionSettings",
+        "type": "object",
+        "optional": true,
+        "project": true
+      },
+      "defaultModel": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "defaultProjectTrust": {
+        "source": "pi",
+        "typeExpression": "\"ask\" | \"always\" | \"never\"",
+        "type": "enum",
+        "enum": ["ask", "always", "never"],
+        "optional": true,
+        "default": "ask",
+        "project": false
+      },
+      "defaultProvider": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "defaultThinkingLevel": {
+        "source": "pi",
+        "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\"",
+        "type": "enum",
+        "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+        "optional": true,
+        "project": true
+      },
+      "defaultTools": {
+        "source": "pi",
+        "typeExpression": "string[]",
+        "type": "array",
+        "optional": true,
+        "project": true
+      },
+      "doubleEscapeAction": {
+        "source": "pi",
+        "typeExpression": "\"fork\" | \"tree\" | \"none\"",
+        "type": "enum",
+        "enum": ["fork", "tree", "none"],
+        "optional": true,
+        "project": true
+      },
+      "editorPaddingX": {
+        "source": "pi",
+        "typeExpression": "number",
+        "type": "number",
+        "optional": true,
+        "project": true
+      },
+      "enableAnalytics": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "enabledModels": {
+        "source": "pi",
+        "typeExpression": "string[]",
+        "type": "array",
+        "optional": true,
+        "project": true
+      },
+      "enableInstallTelemetry": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "enableSkillCommands": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "extensions": {
+        "source": "pi",
+        "typeExpression": "string[]",
+        "type": "array",
+        "optional": true,
+        "project": true
+      },
+      "externalEditor": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "fermentV2": {
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "FermentV2Settings",
+        "properties": {
+          "autoResume": {
+            "typeExpression": "boolean",
+            "type": "boolean",
+            "optional": true
+          },
+          "defaultTokenBudget": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
+          },
+          "evaluationTimeoutMs": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
+          },
+          "maxConsecutiveErrors": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
+          },
+          "maxUnchangedContinuations": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": false
+      },
+      "followUpMode": {
+        "source": "pi",
+        "typeExpression": "\"all\" | \"one-at-a-time\"",
+        "type": "enum",
+        "enum": ["all", "one-at-a-time"],
+        "optional": true,
+        "project": true
+      },
+      "fullscreenCopyOnSelect": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "fullscreenExitOutput": {
+        "source": "pi",
+        "typeExpression": "\"transcript\" | \"resume-hint\"",
+        "type": "enum",
+        "enum": ["transcript", "resume-hint"],
+        "optional": true,
+        "project": true
+      },
+      "fullscreenScrollbar": {
+        "source": "pi",
+        "typeExpression": "\"auto\" | \"always\" | \"hidden\"",
+        "type": "enum",
+        "enum": ["auto", "always", "hidden"],
+        "optional": true,
+        "project": true
+      },
+      "hidePhaseChanges": {
+        "source": "kimchi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": false
+      },
+      "hideThinkingBlock": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "httpIdleTimeoutMs": {
+        "source": "pi",
+        "typeExpression": "number",
+        "type": "number",
+        "optional": true,
+        "project": true
+      },
+      "httpProxy": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": false
+      },
+      "images": {
+        "source": "pi",
+        "typeExpression": "ImageSettings",
+        "type": "object",
+        "optional": true,
+        "project": true
+      },
+      "lastChangelogVersion": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "lastTerminalWarnings": {
+        "source": "kimchi",
+        "typeExpression": "{ [x: string]: string; }",
+        "type": "object",
+        "additionalProperties": {
+          "typeExpression": "string",
+          "type": "string"
+        },
+        "optional": true,
+        "project": false
+      },
+      "markdown": {
+        "source": "pi",
+        "typeExpression": "MarkdownSettings",
+        "type": "object",
+        "optional": true,
+        "project": true
+      },
+      "modelMetadata": {
+        "source": "kimchi",
+        "additionalProperties": {
+          "properties": {
+            "description": {
+              "type": "string",
+              "typeExpression": "string",
+              "optional": true
+            },
+            "reasoning": {
+              "type": "boolean",
+              "typeExpression": "boolean",
+              "optional": true
+            },
+            "tier": {
+              "enum": ["light", "standard", "heavy"],
+              "type": "enum",
+              "typeExpression": "\"light\" | \"standard\" | \"heavy\"",
+              "optional": true
+            },
+            "vision": {
+              "type": "boolean",
+              "typeExpression": "boolean",
+              "optional": true
+            }
+          },
+          "type": "object",
+          "typeExpression": "object"
+        },
+        "type": "object",
+        "typeExpression": "Record<string, ModelCustomMetadata>",
+        "optional": true,
+        "project": false
+      },
+      "modelRoles": {
+        "source": "kimchi",
+        "type": "object",
+        "typeExpression": "ModelRoles",
+        "properties": {
+          "builder": {
+            "typeExpression": "string | string[]",
+            "type": "union",
+            "description": "Code implementation model(s).",
+            "optional": true
+          },
+          "compactor": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true,
+            "description": "Context summarization model."
+          },
+          "explorer": {
+            "typeExpression": "string | string[]",
+            "type": "union",
+            "description": "Codebase exploration model(s).",
+            "optional": true
+          },
+          "judge": {
+            "typeExpression": "string | string[]",
+            "type": "union",
+            "description": "Ferment judge model(s): verification triage and final grading calls.",
+            "optional": true
+          },
+          "orchestrator": {
+            "typeExpression": "string",
+            "type": "string",
+            "description": "Main model: runs the orchestrator loop, delegates work to other roles.",
+            "optional": true
+          },
+          "planner": {
+            "typeExpression": "string | string[]",
+            "type": "union",
+            "description": "Planning model(s): designs the approach, writes specs.",
+            "optional": true
+          },
+          "researcher": {
+            "typeExpression": "string | string[]",
+            "type": "union",
+            "description": "Research model(s): research beyond codebase — web search, documentation lookup, external sources.",
+            "optional": true
+          },
+          "reviewer": {
+            "typeExpression": "string | string[]",
+            "type": "union",
+            "description": "Code review model(s).",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": false
+      },
+      "modelThinkingLevels": {
+        "source": "pi",
+        "typeExpression": "{ [x: string]: ThinkingLevel; }",
+        "type": "object",
+        "additionalProperties": {
+          "typeExpression": "\"off\" | \"minimal\" | \"low\" | \"medium\" | \"high\" | \"xhigh\" | \"max\"",
+          "type": "enum",
+          "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+        },
+        "optional": true,
+        "project": true
+      },
+      "multiModel": {
+        "source": "kimchi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": false
+      },
+      "npmCommand": {
+        "source": "pi",
+        "typeExpression": "string[]",
+        "type": "array",
+        "optional": true,
+        "project": true
+      },
+      "outputPad": {
+        "source": "pi",
+        "typeExpression": "0 | 1",
+        "type": "enum",
+        "enum": [0, 1],
+        "optional": true,
+        "project": true
+      },
+      "packages": {
+        "source": "pi",
+        "typeExpression": "PackageSource[]",
+        "type": "array",
+        "optional": true,
+        "project": true
+      },
+      "prompts": {
+        "source": "pi",
+        "typeExpression": "string[]",
+        "type": "array",
+        "optional": true,
+        "project": true
+      },
+      "quietStartup": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "resources": {
+        "source": "kimchi",
+        "typeExpression": "{ [x: `hooks.${string}`]: boolean; [x: `extensions.${string}`]: boolean; [x: `tools.${string}`]: boolean; [x: `plugins.${string}`]: boolean; }",
+        "type": "object",
+        "additionalProperties": {
+          "typeExpression": "boolean",
+          "type": "boolean"
+        },
+        "optional": true,
+        "project": false
+      },
+      "retry": {
+        "source": "pi",
+        "typeExpression": "RetrySettings",
+        "type": "object",
+        "optional": true,
+        "project": true
+      },
+      "sessionDir": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "shellCommandPrefix": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "shellPath": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "shellProfileApiKeyMigrationDismissed": {
+        "source": "kimchi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": false
+      },
+      "showCacheMissNotices": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "showHardwareCursor": {
+        "source": "pi",
+        "typeExpression": "boolean",
+        "type": "boolean",
+        "optional": true,
+        "project": true
+      },
+      "skills": {
+        "source": "pi",
+        "typeExpression": "string[]",
+        "type": "array",
+        "optional": true,
+        "project": true
+      },
+      "statusLine": {
+        "source": "kimchi",
+        "typeExpression": "{ pinned: StatusLineElementId[]; }",
+        "type": "object",
+        "properties": {
+          "pinned": {
+            "typeExpression": "StatusLineElementId[]",
+            "type": "array",
+            "items": {
+              "typeExpression": "\"permissions\" | \"model\" | \"thinking\" | \"ferment\" | \"agents\" | \"context\" | \"usage\" | \"phase\" | \"tags\" | \"team\" | \"credits\" | \"budget\"",
+              "type": "enum",
+              "enum": [
+                "permissions",
+                "model",
+                "thinking",
+                "ferment",
+                "agents",
+                "context",
+                "usage",
+                "phase",
+                "tags",
+                "team",
+                "credits",
+                "budget"
+              ]
+            },
+            "optional": true
+          },
+          "command": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": false
+      },
+      "steeringMode": {
+        "source": "pi",
+        "typeExpression": "\"all\" | \"one-at-a-time\"",
+        "type": "enum",
+        "enum": ["all", "one-at-a-time"],
+        "optional": true,
+        "project": true
+      },
+      "terminal": {
+        "source": "pi",
+        "typeExpression": "TerminalSettings",
+        "type": "object",
+        "optional": true,
+        "project": true
+      },
+      "theme": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "themes": {
+        "source": "pi",
+        "typeExpression": "string[]",
+        "type": "array",
+        "optional": true,
+        "project": true
+      },
+      "thinkingBudgets": {
+        "source": "pi",
+        "typeExpression": "ThinkingBudgetsSettings",
+        "type": "object",
+        "optional": true,
+        "project": true
+      },
+      "trackingId": {
+        "source": "pi",
+        "typeExpression": "string",
+        "type": "string",
+        "optional": true,
+        "project": true
+      },
+      "transport": {
+        "source": "pi",
+        "typeExpression": "\"sse\" | \"websocket\" | \"websocket-cached\" | \"auto\"",
+        "type": "enum",
+        "enum": ["sse", "websocket", "websocket-cached", "auto"],
+        "optional": true,
+        "project": true
+      },
+      "treeFilterMode": {
+        "source": "pi",
+        "typeExpression": "\"all\" | \"default\" | \"no-tools\" | \"user-only\" | \"labeled-only\"",
+        "type": "enum",
+        "enum": ["all", "default", "no-tools", "user-only", "labeled-only"],
+        "optional": true,
+        "project": true
+      },
+      "tuiMode": {
+        "source": "pi",
+        "typeExpression": "\"regular\" | \"fullscreen\"",
+        "type": "enum",
+        "enum": ["regular", "fullscreen"],
+        "optional": true,
+        "project": true
+      },
+      "warnings": {
+        "source": "pi",
+        "typeExpression": "WarningSettings",
+        "type": "object",
+        "optional": true,
+        "project": true
+      },
+      "websocketConnectTimeoutMs": {
+        "source": "pi",
+        "typeExpression": "number",
+        "type": "number",
+        "optional": true,
+        "project": true
+      }
+    }
+  },
+  "provenance": {
+    "extractorSchema": 3,
+    "kimchiVersion": "1.1.33",
+    "piVersion": "0.85.1"
+  }
+}

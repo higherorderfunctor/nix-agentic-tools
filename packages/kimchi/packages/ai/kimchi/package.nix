@@ -23,12 +23,122 @@
   ...
 }: let
   ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl lib autoPatchelfHook stdenv;
+  inherit (ourPkgs) autoPatchelfHook fetchurl fetchzip lib stdenv;
   inherit (ourPkgs.stdenv.hostPlatform) system;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
+  extraction = sources.extraction or (throw "kimchi: missing extraction source pins");
   platformSrc = sources.${system} or (throw "kimchi: unsupported system ${system}");
+
+  fetchExtraction = source:
+    fetchzip {
+      inherit (source) hash url;
+    };
+  kimchiSource = fetchExtraction extraction.kimchiSource;
+  piAgentCorePackage = fetchExtraction extraction.piAgentCorePackage;
+  piAiPackage = fetchExtraction extraction.piAiPackage;
+  piPackage = fetchExtraction extraction.piPackage;
+  piTuiPackage = fetchExtraction extraction.piTuiPackage;
+
+  extracted =
+    ourPkgs.runCommand "kimchi-extracted.json" {
+      nativeBuildInputs = [ourPkgs.nodejs ourPkgs.typescript_5];
+    } ''
+      ${ourPkgs.yq-go}/bin/yq -o=json '.' ${kimchiSource}/pnpm-lock.yaml > kimchi-lock.json
+      ${ourPkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
+        --annotations ${../../../extract/annotations.json} \
+        --kimchi-lock kimchi-lock.json \
+        --kimchi-source ${kimchiSource} \
+        --kimchi-source-url ${lib.escapeShellArg extraction.kimchiSource.url} \
+        --kimchi-version ${sources.version} \
+        --out "$out" \
+        --pi-agent-core-package ${piAgentCorePackage} \
+        --pi-ai-package ${piAiPackage} \
+        --pi-package ${piPackage} \
+        --pi-tui-package ${piTuiPackage} \
+        --typescript ${ourPkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
+    '';
+
+  # The release binary does not contain dependable source metadata. Refresh
+  # both hash-verified source inputs immediately after mkUpdateScript replaces
+  # the platform pins, then regenerate the measured sidecar from those inputs.
+  refreshExtraction = ''
+    kimchi_source_url="https://github.com/getkimchi/kimchi/archive/refs/tags/v$latest.tar.gz"
+    kimchi_source_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$kimchi_source_url")
+    kimchi_source_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$kimchi_source_json")
+    kimchi_source_path=$(${ourPkgs.jq}/bin/jq -er '.storePath' <<< "$kimchi_source_json")
+
+    pi_version=$(${ourPkgs.jq}/bin/jq -er \
+      '.dependencies["@earendil-works/pi-coding-agent"] | strings | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+      "$kimchi_source_path/package.json")
+    pi_package_url="https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-$pi_version.tgz"
+    pi_package_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$pi_package_url")
+    pi_package_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$pi_package_json")
+
+    # pi's declaration packages at the versions Kimchi's lockfile resolves
+    # pi's dependencies to, which is what the release binary bundles.
+    kimchi_lock_json=$(${ourPkgs.yq-go}/bin/yq -o=json '.' "$kimchi_source_path/pnpm-lock.yaml")
+    pi_reference=$(${ourPkgs.jq}/bin/jq -er \
+      '.importers["."].dependencies["@earendil-works/pi-coding-agent"].version | strings' \
+      <<< "$kimchi_lock_json")
+
+    prefetch_pi_dependency() {
+      local dependency_name="$1"
+      local variable_prefix="$2"
+      local dependency_version
+      local dependency_url
+      local dependency_json
+      local dependency_hash
+      dependency_version=$(${ourPkgs.jq}/bin/jq -er \
+        --arg reference "@earendil-works/pi-coding-agent@$pi_reference" \
+        --arg name "@earendil-works/$dependency_name" \
+        '.snapshots[$reference].dependencies[$name] | strings | sub("\\(.*$"; "") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+        <<< "$kimchi_lock_json")
+      dependency_url="https://registry.npmjs.org/@earendil-works/$dependency_name/-/$dependency_name-$dependency_version.tgz"
+      dependency_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$dependency_url")
+      dependency_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$dependency_json")
+      printf -v "''${variable_prefix}_hash" '%s' "$dependency_hash"
+      printf -v "''${variable_prefix}_url" '%s' "$dependency_url"
+      printf -v "''${variable_prefix}_version" '%s' "$dependency_version"
+    }
+    prefetch_pi_dependency pi-agent-core pi_agent_core
+    prefetch_pi_dependency pi-ai pi_ai
+    prefetch_pi_dependency pi-tui pi_tui
+
+    extraction_tmp=$(${ourPkgs.coreutils}/bin/mktemp)
+    ${ourPkgs.jq}/bin/jq \
+      --arg kh "$kimchi_source_hash" \
+      --arg ku "$kimchi_source_url" \
+      --arg pi_agent_core_hash "$pi_agent_core_hash" \
+      --arg pi_agent_core_url "$pi_agent_core_url" \
+      --arg pi_agent_core_version "$pi_agent_core_version" \
+      --arg pi_ai_hash "$pi_ai_hash" \
+      --arg pi_ai_url "$pi_ai_url" \
+      --arg pi_ai_version "$pi_ai_version" \
+      --arg ph "$pi_package_hash" \
+      --arg pu "$pi_package_url" \
+      --arg pv "$pi_version" \
+      --arg pth "$pi_tui_hash" \
+      --arg ptu "$pi_tui_url" \
+      --arg ptv "$pi_tui_version" \
+      '. + {extraction: {
+        kimchiSource: {hash: $kh, url: $ku},
+        piAgentCorePackage: {hash: $pi_agent_core_hash, url: $pi_agent_core_url, version: $pi_agent_core_version},
+        piAiPackage: {hash: $pi_ai_hash, url: $pi_ai_url, version: $pi_ai_version},
+        piPackage: {hash: $ph, url: $pu, version: $pv},
+        piTuiPackage: {hash: $pth, url: $ptu, version: $ptv}
+      }}' \
+      ${repoPath ../../../sources.json} > "$extraction_tmp"
+    ${ourPkgs.coreutils}/bin/mv "$extraction_tmp" ${repoPath ../../../sources.json}
+    ${ourPkgs.nix}/bin/nix fmt -- ${repoPath ../../../sources.json}
+
+    ${vu.mkExtractRegen {
+      attr = "kimchi";
+      dest = repoPath ../../../extracted.json;
+      pkgs = ourPkgs;
+    }}
+  '';
 in
   ourPkgs.stdenv.mkDerivation {
     pname = "kimchi";
@@ -76,6 +186,15 @@ in
     '';
 
     passthru = {
+      inherit extracted;
+      extractionSources = {
+        kimchi = kimchiSource;
+        pi = piPackage;
+        piAgentCore = piAgentCorePackage;
+        piAi = piAiPackage;
+        piTui = piTuiPackage;
+      };
+      extractionSourceUrls.kimchi = extraction.kimchiSource.url;
       updateScript = vu.mkUpdateScript {
         sourcesFile = repoPath ../../../sources.json;
 
@@ -88,6 +207,7 @@ in
           "x86_64-linux" = ver: "https://github.com/getkimchi/kimchi/releases/download/v${ver}/kimchi_linux_amd64.tar.gz";
           "aarch64-darwin" = ver: "https://github.com/getkimchi/kimchi/releases/download/v${ver}/kimchi_darwin_arm64.tar.gz";
         };
+        extraExtract = refreshExtraction;
         pkgs = ourPkgs;
       };
     };
@@ -96,7 +216,7 @@ in
       description = "Kimchi — coding agent CLI powered by Cast AI";
       homepage = "https://github.com/getkimchi/kimchi";
       license = lib.licenses.asl20;
-      platforms = builtins.attrNames (builtins.removeAttrs sources ["version"]);
+      platforms = builtins.attrNames (builtins.removeAttrs sources ["extraction" "version"]);
       mainProgram = "kimchi";
     };
   }
