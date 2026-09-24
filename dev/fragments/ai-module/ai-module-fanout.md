@@ -1,6 +1,6 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-23 — Claude, Codex, Copilot and Kiro describe
+> **Last verified:** 2026-09-24 — Claude, Codex, Copilot and Kiro describe
 > delivery once through `mkRuntime`'s record-level `config`; Kimchi reaches the
 > same delivery layer from its per-backend callbacks. Claude devenv delivers
 > `ai.agents` and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw
@@ -16,7 +16,8 @@
 > and final delivery share one priority-aware text-source record with enable
 > semantics. Upstream delegation aliases the content field's own definitions.
 > Ledger-owned copies whose files nothing else retracts opt into
-> `runWhenDisabled`.
+> `runWhenDisabled`. `ai.lspServers` renders whole files with each runtime's
+> envelope, and Copilot/Kiro require `extensions`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -401,7 +402,14 @@ enabled ecosystem whose native model preserves the option's semantics):
 - `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
   Kiro native config. Codex is deliberately excluded: its current public config
   reference and pinned CLI expose no LSP-server registration surface, so
-  pretending to fan out this pool would silently discard the declaration.
+  pretending to fan out this pool would silently discard the declaration. The
+  Copilot and Kiro producers (`mkCopilotLspFile`, `mkKiroLspFile`) emit the
+  WHOLE file, envelope included (`lspServers` / `languages`): both CLIs reject a
+  bare per-server map, which is what shipped until 2026-09-23 while substring
+  checks stayed green. Both route files to servers by extension alone, so a
+  server they receive with empty `extensions` throws at eval rather than render
+  an entry that never starts; drop it for that runtime with
+  `ai.<runtime>.lspServers.<name> = null`.
 - `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
   of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`

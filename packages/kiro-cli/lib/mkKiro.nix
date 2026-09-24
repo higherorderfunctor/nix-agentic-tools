@@ -33,7 +33,7 @@
 
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
 
-  # Shared AI helpers (filterNulls, mkLspConfig, flattenDotKeysUntil, …). Hoisted to
+  # Shared AI helpers (filterNulls, mkKiroLspFile, flattenDotKeysUntil, …). Hoisted to
   # the top-level `let` so option TYPES and renderers can reach it too — both
   # backend blocks previously imported it separately.
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -1474,7 +1474,7 @@ in
       lspServers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
         default = {};
-        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkLspConfig` into settings/lsp.json on emission.";
+        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
       };
       # Env vars exported when launching kiro. In HM they're baked into
       # Baked into the symlinkJoin launcher on BOTH backends. devenv used to
@@ -1834,8 +1834,13 @@ in
                   format = "json";
                   ledger = settingsLedger;
                 };
+                # Kiro reads `<workspace>/.kiro/settings/lsp.json`, so the
+                # Home Manager copy is live only when the workspace is $HOME
+                # (a case kiro-cli 2.22.1 itself calls a mistake). Written
+                # anyway and NOT asserted: `ai.lspServers` is a shared pool,
+                # and the devenv backend is the one that delivers per project.
                 "${settingsDir}/lsp.json" = lib.mkIf (mergedLspServers != {}) {
-                  content.value = lib.mapAttrs aiCommon.mkLspConfig mergedLspServers;
+                  content.value = aiCommon.mkKiroLspFile mergedLspServers;
                   executable = null;
                   format = "json";
                 };

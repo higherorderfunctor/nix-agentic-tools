@@ -38,17 +38,24 @@
         };
       };
     };
-  copilotExtension = pool: filename:
+  # Both files carry their pool under an envelope key of the same name. The
+  # LSP file lives at a different path per backend: the CLI's user-level
+  # `lsp-config.json` on Home Manager, the repository-level
+  # `<projectDir>/lsp.json` on devenv.
+  copilotExtension = pool: paths:
     lib.all (
-      evaluate: let
+      {
+        evaluate,
+        path,
+      }: let
         base.ai.copilot = {
           configDir = ".copilot";
           enable = true;
-          ${pool}.original.command = "original";
+          # Copilot requires `fileExtensions`, so an LSP server needs one.
+          ${pool}.original = {command = "original";} // lib.optionalAttrs (pool == "lspServers") {extensions = ["nix"];};
         };
-        path = ".copilot/${filename}";
         original = (evaluate base).config.ai.copilot.files.${path}.content.value;
-        added = lib.setAttrByPath (lib.optional (pool == "mcpServers") "mcpServers" ++ ["added" "command"]) "added";
+        added = lib.setAttrByPath [pool "added" "command"] "added";
         cfg =
           (evaluate (lib.recursiveUpdate base {
             ai.copilot.files.${path}.content.value = added;
@@ -63,7 +70,16 @@
         == expected
         && builtins.fromJSON files.${path}.text == expected
         && lib.all (assertion: assertion.assertion) cfg.assertions
-    ) [evalHm evalDevenv];
+    ) [
+      {
+        evaluate = evalHm;
+        path = paths.hm;
+      }
+      {
+        evaluate = evalDevenv;
+        path = paths.devenv;
+      }
+    ];
 
   # A runtime whose every entry is delegated to a host `files.<name>.json`
   # option with the host's real JSON type: the general harness's `anything`
@@ -138,7 +154,10 @@
     context.text = "SNAPSHOT-CONTEXT";
     environmentVariables.PROBE = "value";
     hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-    lspServers.probe.command = "probe";
+    lspServers.probe = {
+      command = "probe";
+      extensions = ["nix"];
+    };
     mcpServers.probe.command = "probe";
     rules.probe.text = "SNAPSHOT-RULE";
     settings.reasoningEffort = "high";
@@ -249,7 +268,10 @@ in {
             instructions.text = "probe";
           };
           environmentVariables = "probe";
-          lspServers.command = "probe";
+          lspServers = {
+            command = "probe";
+            extensions = ["nix"];
+          };
           mcpServers.command = "probe";
           rules.text = "probe";
           skills = ./fixtures/probe-skill;
@@ -464,9 +486,15 @@ in {
       touch "$out"
     '';
 
-    module-delivery-copilot-lsp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-lsp-content-extension-keeps-generated-leaves" (copilotExtension "lspServers" "lsp-config.json");
+    module-delivery-copilot-lsp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-lsp-content-extension-keeps-generated-leaves" (copilotExtension "lspServers" {
+      devenv = ".github/lsp.json";
+      hm = ".copilot/lsp-config.json";
+    });
 
-    module-delivery-copilot-mcp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-mcp-content-extension-keeps-generated-leaves" (copilotExtension "mcpServers" "mcp-config.json");
+    module-delivery-copilot-mcp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-mcp-content-extension-keeps-generated-leaves" (copilotExtension "mcpServers" {
+      devenv = ".copilot/mcp-config.json";
+      hm = ".copilot/mcp-config.json";
+    });
 
     module-delivery-method-resolver-is-shared = mkTest "delivery-method-resolver-is-shared" (
       deliveryMethod ? resolve

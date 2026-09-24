@@ -36,7 +36,10 @@
     context.text = "probe";
     environmentVariables.PROBE = "value";
     hooks.PreToolUse = [{hooks = [{command = "true";}];}];
-    lspServers.probe = {command = "probe";};
+    lspServers.probe = {
+      command = "probe";
+      extensions = ["nix"];
+    };
     mcpServers.probe.command = "probe";
     permissions = [
       {
@@ -118,15 +121,6 @@
         path = ["ai" "agents" "probe"];
         value = sample.agents.probe // {tools = ["Read"];};
         suffix = ".tools";
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "lspServers" "probe"];
-        value = {
-          command = "probe";
-          extensions = ["nix"];
-        };
-        suffix = ".extensions";
       }
       {
         runtime = "claude";
@@ -277,6 +271,23 @@
         ["ai" runtime "settings" "reasoningEffort"]
       ])
     ["kimchi"]) ["devenv" "hm"];
+  # Copilot and Kiro both deliver an LSP server's `extensions` (Copilot as
+  # `fileExtensions`, Kiro as `file_extensions`), on both backends and at both
+  # the root and the per-runtime path, so a populated server must stay silent.
+  # A warning here would claim a gap the factory closes.
+  deliveredLspSilent = lib.all (mode:
+    lib.all (runtime:
+      lib.all (path:
+        evaluate mode (lib.recursiveUpdate {ai.${runtime}.enable = true;} (lib.setAttrByPath path {
+          command = "probe";
+          extensions = ["nix"];
+        }))
+        == [])
+      [
+        ["ai" "lspServers" "probe"]
+        ["ai" runtime "lspServers" "probe"]
+      ])
+    ["copilot" "kiro"]) ["devenv" "hm"];
   casePass = case: let
     mode = case.mode or "devenv";
     input = lib.setAttrByPath case.path case.value;
@@ -364,6 +375,7 @@ in {
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
       && lib.assertMsg loweredEffortSilent "a runtime that lowers reasoning effort natively still warns about it"
+      && lib.assertMsg deliveredLspSilent "a runtime that delivers LSP extensions still warns about them"
     );
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
       let
