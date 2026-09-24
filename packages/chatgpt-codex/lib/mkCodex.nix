@@ -170,17 +170,15 @@
   approvalPolicyNames = rootFlagValues "--ask-for-approval";
   sandboxModeNames = rootFlagValues "--sandbox";
   codexAgentType = agent.mkSemanticAgentType tomlFormat.type;
-  codexHookHandlerType = lib.types.submodule {
+  # The portable command handler plus Codex's own fields; other JSON fields
+  # remain a native escape hatch through the freeform tail.
+  codexHookHandlerType = aiTypes.extendSubmodule sharedHooks.portableHandlerType {
     freeformType = jsonFormat.type;
     options = {
       additionalContextLimit = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.unsigned;
         default = null;
         description = "Approximate token threshold for large additionalContext output; zero disables truncation.";
-      };
-      command = lib.mkOption {
-        type = sharedHooks.commandType;
-        description = "Command executed for this hook; packages resolve to their executable store path.";
       };
       commandWindows = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -195,31 +193,12 @@
         default = {};
         description = "Optional status text displayed while the hook runs.";
       };
-      timeout = lib.mkOption {
-        type = lib.types.nullOr lib.types.ints.positive;
-        default = null;
-        description = "Per-handler timeout in seconds.";
-      };
-      type = lib.mkOption {
-        type = lib.types.enum ["command"];
-        default = "command";
-        description = "Codex currently executes command handlers only.";
-      };
     };
   };
-  codexHookMatcherBlockType = lib.types.submodule {
-    options = {
-      hooks = lib.mkOption {
-        type = lib.types.listOf codexHookHandlerType;
-        default = [];
-        description = "Command handlers Codex runs for this matcher group.";
-      };
-      matcher = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Optional regular-expression matcher restricting this hook group.";
-      };
-    };
+  codexHookMatcherBlockType = sharedHooks.mkMatcherBlockType {
+    handler = codexHookHandlerType;
+    hooks = "Command handlers Codex runs for this matcher group.";
+    matcher = "Optional regular-expression matcher restricting this hook group.";
   };
   approvalPolicyType =
     lib.types.either
