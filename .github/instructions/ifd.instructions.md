@@ -7,10 +7,11 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-23 — Kiro settings extraction validates its
-> materialized TUI registry and workspace merge with AST checks; Kimchi
-> attributes every config.ts JSON read to the file it reads, censuses every
-> resolved environment read, and no longer extracts a CLI surface nothing read.
+> **Last verified:** 2026-09-23 — `fix_sidecar_hashes` also repairs
+> `pnpmDepsHash`; Kiro settings extraction validates its materialized TUI
+> registry and workspace merge with AST checks; Kimchi attributes every
+> config.ts JSON read to the file it reads, censuses every resolved environment
+> read, and no longer extracts a CLI surface nothing read.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -257,9 +258,10 @@ spliced into `mkUpdateScript`'s `commitCandidate`, immediately after the sidecar
   hand-regeneration case — the command is in each check's failure message.
 - Do not confuse this with the OTHER self-heal in this repo.
   `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) re-derives a
-  `vendorHash` / `npmDepsHash` invalidated by a nixpkgs or toolchain bump at an
-  unchanged version, through `passthru.fixVendorHash` and friends. Hashes have
-  that standalone escape hatch; extracts deliberately do not, because a changed
+  `vendorHash`, `npmDepsHash` or `pnpmDepsHash` invalidated by a nixpkgs or
+  toolchain bump at an unchanged version, through `passthru.fixVendorHash`,
+  `passthru.fixNpmDepsHash` and `passthru.fixPnpmDepsHash`. Hashes have that
+  standalone escape hatch; extracts deliberately do not, because a changed
   extract means someone edited the extractor and should look at the diff.
 
 Debugging entry points when a bump PR still goes red:
