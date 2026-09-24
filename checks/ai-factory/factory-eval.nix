@@ -12,19 +12,48 @@ in {
     # The per-backend seam is retired: delivery is ONE record-level `config`,
     # and a backend spec takes only installPackage, migrationConfig and
     # options. A record still written against the seam must fail loudly
-    # rather than evaluate to a runtime that delivers nothing. The record-level
-    # `config` is the positive control.
+    # rather than evaluate to a runtime that delivers nothing, both where the
+    # record is built and where a transform reads it: the exported records are
+    # plain attrsets, so an override (`r // {hm = …;}`) or a hand-built record
+    # reaches `hmTransform` / `devenvTransform` without passing `mkRuntime`.
+    # The record-level `config` and the untouched record are the positive
+    # controls.
     factory-mkRuntime-rejects-backend-seam = mkTest "mkRuntime-rejects-backend-seam" (
       let
         base = {
+          inherit pkgs;
           name = "testapp";
           defaults.package = pkgs.hello;
         };
+        built = ai.app.mkRuntime base;
         rejected = record: !(builtins.tryEval (ai.app.mkRuntime record)).success;
+        transformed = backend: record:
+          builtins.tryEval
+          (lib.evalModules {
+            modules = [
+              ai.sharedOptions
+              (
+                if backend == "hm"
+                then hmStubs
+                else devenvStubs
+              )
+              (ai.app.${backend + "Transform"} record)
+              {config.ai.testapp.enable = true;}
+            ];
+          })
+          .config
+          .ai
+          .testapp
+          .enable;
+        rejectedByTransform = backend: record: !(transformed backend record).success;
       in
         lib.all (backend:
           rejected (base // {${backend}.config = _: {};})
-          && rejected (base // {${backend}.defaults.package = pkgs.hello;}))
+          && rejected (base // {${backend}.defaults.package = pkgs.hello;})
+          && rejectedByTransform backend (built // {${backend} = built.${backend} // {config = _: {};};})
+          && rejectedByTransform backend (built // {${backend} = built.${backend} // {defaults.package = pkgs.hello;};})
+          && rejectedByTransform backend (built // {defaults = built.defaults // {outputPath = null;};})
+          && (transformed backend built).success)
         ["devenv" "hm"]
         && rejected (base // {defaults.outputPath = null;})
         && (builtins.tryEval (ai.app.mkRuntime (base // {config = _: {};}))).success

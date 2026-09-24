@@ -4,10 +4,13 @@
 # normalized options, package installation and delivery lowering, and the
 # runtime supplies one delivery callback shared by both backends.
 #
-# Input record shape: see mkRuntime.nix, which owns it and rejects a backend
-# spec carrying anything but `installPackage`, `migrationConfig` and
-# `options`. This body reads `<backend>` for those three, each falling back
-# to the record-level field, and ignores the other backend's spec.
+# Input record shape: see mkRuntime.nix, which owns it. `checkRecord.nix`
+# rejects a backend spec carrying anything but `installPackage`,
+# `migrationConfig` and `options`, both there and here, because a record can
+# reach this transform without passing mkRuntime. This body reads `<backend>`
+# for those three and ignores the other backend's spec: `installPackage` and
+# `migrationConfig` fall back to the record-level field, while `options` is
+# merged over the record's shared `options` rather than replacing them.
 #
 # Returns: a module function `{config, ...}: { options; config; }`
 # that can be imported into `lib.evalModules` alongside
@@ -232,7 +235,12 @@
     then hasMergedContext
     else aiCommon.hasContent cfg.normalized.context;
 
-  backendSpec = appRecord.${backend} or {};
+  # A record can reach this transform without passing mkRuntime (an override
+  # of an exported record, or a hand-built one), so its closed fields are
+  # checked again here. Every backend-specific read goes through
+  # `backendSpec`, and `backendOptions` is forced by every evaluation.
+  backendSpec = assert import ./checkRecord.nix {inherit lib;} appRecord;
+    appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
   # Delivery is described once, on the record. Installation and migration
   # default to the record too, and a backend spec overrides either one.

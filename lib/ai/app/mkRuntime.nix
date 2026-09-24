@@ -40,9 +40,9 @@
 #
 # A backend spec carries no delivery callback and no defaults: delivery is
 # described once, and a runtime states a per-backend difference by reading
-# `backend`. The assertion below rejects any other backend key, so a record
-# written against the retired per-backend seam fails instead of silently
-# delivering nothing.
+# `backend`. `checkRecord.nix` rejects any other backend key, here and again in
+# the transform, so a record written against the retired per-backend seam fails
+# instead of silently delivering nothing.
 #
 # The callbacks receive ONE attrset, assembled in exactly one place —
 # `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
@@ -85,26 +85,15 @@
   # Optional so a record built without it still evaluates; features that
   # need it must degrade rather than throw.
   pkgs ? null,
-} @ args: let
-  backendKeys = ["installPackage" "migrationConfig" "options"];
-  checkBackend = backend: spec: let
-    unknown = lib.subtractLists backendKeys (builtins.attrNames spec);
-  in
-    lib.assertMsg (unknown == [])
-    "mkRuntime ${name}: ${backend} spec carries ${lib.concatStringsSep ", " unknown}; a backend spec takes only ${lib.concatStringsSep ", " backendKeys}. Describe delivery once in the record-level `config`, which receives `backend`.";
-  unknownDefaults = lib.subtractLists ["package"] (builtins.attrNames defaults);
-in
-  assert checkBackend "hm" hm;
-  assert checkBackend "devenv" devenv;
-  assert lib.assertMsg (unknownDefaults == [])
-  "mkRuntime ${name}: defaults carries ${lib.concatStringsSep ", " unknownDefaults}; it takes only `package`.";
-    {
-      inherit name defaults options supportedPools hm devenv pkgs;
-    }
-    // lib.optionalAttrs (config != null) {inherit config;}
-    // lib.optionalAttrs (args ? installPackage) {inherit installPackage;}
-    // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
-    // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
-    // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
-    // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
-    // lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}
+} @ args:
+assert import ./checkRecord.nix {inherit lib;} {inherit name defaults hm devenv;};
+  {
+    inherit name defaults options supportedPools hm devenv pkgs;
+  }
+  // lib.optionalAttrs (config != null) {inherit config;}
+  // lib.optionalAttrs (args ? installPackage) {inherit installPackage;}
+  // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
+  // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
+  // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
+  // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
+  // lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}

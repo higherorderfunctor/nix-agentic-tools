@@ -1,16 +1,17 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-24 — every runtime describes delivery once through
-> `mkRuntime`'s record-level `config`, and `mkRuntime` rejects a backend spec
-> carrying anything but `installPackage`, `migrationConfig` and `options`. Kiro
-> hook commands resolve packages through the shared `commandType`. Claude devenv
-> delivers `ai.agents` and `ai.claude.agentsDir` to `.claude/agents/<name>.md`;
-> every raw agent writer (Claude, Copilot, Kimchi, Kiro) tests
-> `agent.isPathLike`, so a store-path string is a file, never a body naming its
-> own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
+> transforms reject a backend spec carrying anything but `installPackage`,
+> `migrationConfig` and `options`, since an overridden or hand-built record
+> reaches a transform without the constructor. Kiro hook commands resolve
+> packages through the shared `commandType`. Claude devenv delivers `ai.agents`
+> and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent
+> writer (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a
+> store-path string is a file, never a body naming its own path. File content at
+> `mkDefault` enables its entry; `content.enable = false` suppresses every
+> content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
+> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
