@@ -5,10 +5,11 @@
 > transforms reject a backend spec carrying anything but `installPackage`,
 > `migrationConfig` and `options`, since an overridden or hand-built record
 > reaches a transform without the constructor. Kiro hook commands resolve
-> packages through the shared `commandType`. Claude devenv delivers `ai.agents`
-> and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent
-> writer (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a
-> store-path string is a file, never a body naming its own path. File content at
+> packages through the shared `commandType`. Launchers bake the builder's one
+> `launcherEnvironment`. Claude devenv delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
+> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a store-path
+> string is a file, never a body naming its own path. File content at
 > `mkDefault` enables its entry; `content.enable = false` suppresses every
 > content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
 > settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
@@ -199,9 +200,11 @@ The ai module fans out TWO kinds of configuration:
   installed by the shared backend transform. Four supply an `installPackage`
   callback that wraps the selected package when the runtime needs env or flag
   injection and installs it bare otherwise — wrapping is conditional, not
-  automatic (`wrapPackage.nix` returns the bare package when `wrapArgs == []`).
-  `ai.claude.package` additionally feeds `programs.claude-code.package`, which
-  is what installs it on Home Manager.
+  automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's own wrappers, return
+  the bare package when there is nothing to bake in). The process environment
+  each one bakes in is the builder's `launcherEnvironment`. `ai.claude.package`
+  additionally feeds `programs.claude-code.package`, which is what installs it
+  on Home Manager.
 - `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an

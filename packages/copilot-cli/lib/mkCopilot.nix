@@ -89,16 +89,15 @@
   # predicate to keep in sync across backends.
   copilotInstallPackageFor = rootVar: {
     cfg,
+    launcherEnvironment,
     mergedServers,
-    moduleEnvironmentVariables,
-    mergedEnvironmentVariables,
     ...
   }:
     wrapCopilotPackage {
       inherit (cfg) package configDir;
       inherit rootVar;
       mcp = mergedServers != {};
-      environmentVariables = moduleEnvironmentVariables // mergedEnvironmentVariables;
+      environmentVariables = launcherEnvironment;
     };
 in
   lib.ai.app.mkRuntime {

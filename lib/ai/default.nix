@@ -9,6 +9,8 @@ in {
   # it as its default and a replacement delegates back to it.
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
+  # `mkLauncher pkgs {package, name, exe, …}`: the shared launcher wrapper.
+  mkLauncher = import ./launcher.nix;
   mcpServer = import ./mcpServer {inherit lib;};
   # ONE reconciler for everything a generation owns: whole files in a
   # directory and owned leaves in a shared document, as one plan. It replaced

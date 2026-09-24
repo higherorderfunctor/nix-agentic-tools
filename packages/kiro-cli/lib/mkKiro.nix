@@ -1064,39 +1064,14 @@
       ${assemble}
     '';
 
-  # `ai.shell` / `ai.kiro.shell` → `SHELL` in Kiro's own process
-  # environment. Kiro's v3 engine selects its command shell with
-  # `process.env.SHELL || "/bin/sh"`, so `SHELL` is the whole knob —
-  # there is no Kiro-specific variable and no config key. (`KIRO_CHAT_SHELL`
-  # exists only in the Rust binary and is absent from the v3 JS bundle,
-  # and the wrapper forces `--v3`, so it does not apply. Recorded so it is
-  # not re-chased.)
+  # `ai.shell` / `ai.kiro.shell` reach Kiro as `SHELL` in the builder's
+  # `launcherEnvironment`. Kiro's v3 engine selects its command shell with
+  # `process.env.SHELL || "/bin/sh"`, so `SHELL` is the whole knob, and `||`
+  # makes an unusable path fail loudly at spawn rather than be ignored.
+  # (`KIRO_CHAT_SHELL` exists only in the Rust binary and is absent from the
+  # v3 JS bundle, and the wrapper forces `--v3`, so it does not apply.
+  # Recorded so it is not re-chased.)
   #
-  # Everything bound for Kiro's own process environment, merged at the wrapper
-  # call site in ONE place so both backends agree.
-  #
-  # It is deliberately NOT contributed as an `ai.kiro.environmentVariables`
-  # definition. That normalized pool belongs to consumers; module-generated
-  # process defaults use the internal channel instead, keeping package
-  # provenance out of consumer override semantics. See `_sandboxSafeSshCommand`
-  # in lib/ai/sharedOptions.nix.
-  #
-  # Ordering is the contract: module defaults first, consumer pool last, so an
-  # explicit entry wins. Codex and Claude resolve the same way.
-  #
-  # Kiro selects its shell with `process.env.SHELL || "/bin/sh"`; `||` is an
-  # unset-or-empty fallback, so unlike Claude an unusable path here fails
-  # loudly at spawn rather than being silently ignored.
-  kiroEnvironment = {
-    moduleEnvironmentVariables,
-    mergedEnvironmentVariables,
-    resolvedShell,
-  }:
-    moduleEnvironmentVariables
-    // lib.optionalAttrs (resolvedShell != null) {
-      SHELL = lib.getExe resolvedShell;
-    }
-    // mergedEnvironmentVariables;
   # Both backends install the IDENTICAL wrapper — the two call sites carried
   # byte-for-byte the same argument set, duplicated once per backend. Derived
   # once here and handed to the shared transform's `installPackage` hook,
@@ -1111,16 +1086,14 @@
   # along with the `--v3` / `--trust-tools` flag injection either way.
   kiroInstallPackage = {
     cfg,
+    launcherEnvironment,
     mergedServers,
-    moduleEnvironmentVariables,
-    mergedEnvironmentVariables,
-    resolvedShell,
     ...
   }:
     wrapKiroPackage {
       inherit (cfg) extraPackages trustedMcpTools useFhsSandbox v3;
       package = resolvePackage cfg;
-      environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
+      environmentVariables = launcherEnvironment;
       inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
       secretOptionPaths =
         lib.foldl' (acc: entry:
