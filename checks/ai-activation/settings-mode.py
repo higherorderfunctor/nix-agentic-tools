@@ -6,6 +6,9 @@ whoever trips it learns which property broke rather than just "600".
 
 # cspell:ignore natcreds  (test-scaffold token, not project vocabulary)
 
+import contextlib
+import importlib.util
+import io
 import json
 import os
 import stat
@@ -114,10 +117,97 @@ def discrimination(parent):
     assert_mode(home.document, 0o644, "explicit mode must be honoured")
 
 
+def load_own():
+    """own.py as a module, so a case can interpose on its compare step."""
+    spec = importlib.util.spec_from_file_location("own", TOOLS["own"])
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def race(parent, repeated):
+    """4. One racing write must survive a successful retry. Continuous writes
+    must exhaust the bound loudly without replacing runtime data.
+
+    The runtime's write lands at the compare step itself: own.py has already
+    merged the old runtime values into a complete temporary, but has not yet
+    renamed it over the destination. That is the lost-update window.
+    """
+    label = f"{'repeated' if repeated else 'once'} race"
+    home = Home(parent, label.replace(" ", "-"))
+    home.seed({"deviceId": "device-0", "gitTokens": {"host": "token-0"}}, 0o600)
+    own = load_own()
+    identity = own.file_identity
+    writes = 0
+
+    def racing_identity(path):
+        nonlocal writes
+        if path == home.document and (writes == 0 or repeated):
+            writes += 1
+            # Same size and timestamps, different content and inode: this
+            # models a runtime's sibling-temporary rename, and discriminates
+            # against an mtime-based identity.
+            handle, sibling = tempfile.mkstemp(
+                dir=home.document.parent, prefix=f"{home.document.name}.writer."
+            )
+            with os.fdopen(handle, "w") as stream:
+                json.dump({"deviceId": f"device-{writes}", "gitTokens": {"host": f"token-{writes}"}}, stream)
+            before = home.document.stat()
+            os.utime(sibling, ns=(before.st_atime_ns, before.st_mtime_ns))
+            os.replace(sibling, home.document)
+        return identity(path)
+
+    own.file_identity = racing_identity
+    arguments = ["own.py", "--plan", str(home.plan({"text": json.dumps(DECLARED)}))]
+    stderr = io.StringIO()
+    status = 0
+    with contextlib.ExitStack() as scope:
+        scope.enter_context(contextlib.redirect_stderr(stderr))
+        saved = dict(os.environ), sys.argv
+        scope.callback(lambda: (os.environ.clear(), os.environ.update(saved[0])))
+        scope.callback(setattr, sys, "argv", saved[1])
+        os.environ.update(home.environment)
+        sys.argv = arguments
+        try:
+            own.main()
+        except SystemExit as exit_:
+            status = exit_.code or 0
+
+    document = home.read()
+    if document.get("deviceId") != f"device-{writes}" or document.get("gitTokens") != {"host": f"token-{writes}"}:
+        fail(label, f"activation lost the concurrent deviceId/gitTokens write: {document}")
+    # In the repeated race the runtime's rename lands last, so this does not
+    # re-test the temporary's mode (cases 1 and 2 do). It guards the refusal
+    # path: activation must not widen the destination before it gives up.
+    assert_mode(home.document, 0o600, label)
+    leftovers = [path.name for path in home.document.parent.iterdir() if ".nat-tmp." in path.name]
+    if leftovers:
+        fail(label, f"temporaries left behind: {leftovers}")
+    ledger = home.state / "json-settings/natcreds.json"
+    if repeated:
+        expected = (
+            f"own: {home.document} changed during all 3 attempts; refusing to "
+            "overwrite concurrent runtime changes; retry activation\n"
+        )
+        if status != 1 or writes != 3 or stderr.getvalue() != expected:
+            fail(label, f"expected a loud refusal after 3 attempts, got status {status}, {writes} writes, stderr {stderr.getvalue()!r}")
+        if "declared" in document:
+            fail(label, "activation overwrote the runtime's final write")
+        if ledger.exists():
+            fail(label, "the ledger claims a leaf that never landed")
+    else:
+        if status != 0 or writes != 1:
+            fail(label, f"expected one retry to succeed, got status {status}, {writes} writes, stderr {stderr.getvalue()!r}")
+        if document.get("declared") != "from-nix":
+            fail(label, f"the retry dropped the declared leaf: {document}")
+
+
 def main():
     with tempfile.TemporaryDirectory() as parent:
         for case in (created, existing, discrimination):
             case(parent)
+        for repeated in (False, True):
+            race(parent, repeated)
     print("PASS: ai-activation settings mode")
 
 

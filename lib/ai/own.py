@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import io
 import json
 import contextlib
 import os
@@ -65,6 +66,13 @@ LOCK = ("materialize", "lock")
 # that stops refreshing it for that long is gone, so this run breaks it too.
 FOREIGN_LOCK_STALE = 10.0
 FOREIGN_LOCK_WAIT = 10.0
+# A document's runtime writer takes neither lock above: Claude Code and Kimchi
+# rename a sibling temporary over their config whenever they like. So a
+# document is published by compare-and-swap -- re-read, re-apply, retry -- and
+# a writer that keeps winning exhausts this bound and fails the run rather
+# than being overwritten.
+PUBLISH_ATTEMPTS = 3
+MISSING = "missing"
 
 # The clobber guard, transcribed arm by arm from the shell it replaced so the
 # two can be diffed side by side. The citations are line numbers in that file,
@@ -119,6 +127,20 @@ def require_env(name: str) -> Path:
 
 def digest(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
+
+
+def file_identity(path: Path) -> str:
+    """A document's content digest, or MISSING.
+
+    Content, not mtime: a runtime that renames a sibling over the path can
+    leave the same size and the same mtime behind, which is exactly the write
+    the compare-and-swap exists to see. A byte-identical replacement needs no
+    re-merge, and this correctly calls it unchanged.
+    """
+    try:
+        return digest(path.read_bytes())
+    except FileNotFoundError:
+        return MISSING
 
 
 def witness_state(disk: str, previous: str | None) -> str:
@@ -206,8 +228,17 @@ def units_of(target: Mapping[str, Any], bash: str) -> list[tuple[Any, Any]]:
 # ── Writing ─────────────────────────────────────────────────────────
 
 
-def atomic_write(path: Path, content: bytes, mode: int) -> None:
-    """Replace a file atomically without ever following its destination link."""
+def atomic_write(
+    path: Path, content: bytes, mode: int, guard: Callable[[], bool] | None = None
+) -> bool:
+    """Replace a file atomically without ever following its destination link.
+
+    `guard` is the compare half of a compare-and-swap, asked after the
+    temporary is complete and immediately before the rename. When it answers
+    False nothing is published and this returns False. It narrows the window a
+    writer outside every lock can race into to the check-to-rename gap; it
+    cannot close that gap.
+    """
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     handle, temporary = tempfile.mkstemp(
         dir=path.parent,
@@ -220,14 +251,21 @@ def atomic_write(path: Path, content: bytes, mode: int) -> None:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
+        if guard is not None and not guard():
+            return False
         os.replace(temporary_path, path)
+        return True
     finally:
         temporary_path.unlink(missing_ok=True)
 
 
 def write_if_changed(
-    path: Path, content: bytes, mode: int, declared: int | None = None
-) -> None:
+    path: Path,
+    content: bytes,
+    mode: int,
+    declared: int | None = None,
+    guard: Callable[[], bool] | None = None,
+) -> bool:
     """Preserve an existing regular file's mode; use `mode` for a new one.
 
     A `declared` mode overrides both halves, and a document target is the only
@@ -237,6 +275,11 @@ def write_if_changed(
     earlier overwrite generation published read-only, and the run that has to
     do it usually has no other work. Absent a declared mode this never changes
     a mode at all, which is what the ledger writers below rely on.
+
+    `guard` reaches `atomic_write` unchanged, and the result is its answer:
+    False only when the guard refused the rename. Skipping identical bytes is
+    True whatever changed underneath, because the path already holds exactly
+    what this write would have published.
     """
     is_symlink = path.is_symlink()
     if declared is not None:
@@ -252,11 +295,11 @@ def write_if_changed(
                 # Impose the mode, publish nothing, keep the mtime -- the
                 # directory codec's skip arm, for the one file a document is.
                 path.chmod(mode)
-            return
+            return True
     elif not path.exists() and is_symlink:
         raise ValueError(f"refusing to replace dangling symlink {path}")
 
-    atomic_write(path, content, mode)
+    return atomic_write(path, content, mode, guard)
 
 
 def sweep(directory: Path) -> None:
@@ -406,7 +449,7 @@ class DocContainer:
             self.serialize: Callable[[Any], str] = (
                 lambda document: json.dumps(document, indent=2) + "\n"
             )
-            empty: Callable[[], MutableMapping[str, Any]] = dict
+            self.empty: Callable[[], MutableMapping[str, Any]] = dict
             self.new_table: Callable[[], MutableMapping[str, Any]] = dict
         else:
             # JSON callers need only the standard library. Keep the TOML
@@ -415,17 +458,35 @@ class DocContainer:
 
             self.parse = tomlkit.parse
             self.serialize = tomlkit.dumps
-            empty = tomlkit.document
+            self.empty = tomlkit.document
             self.new_table = tomlkit.table
 
-        # Parse before the first write. A malformed native edit must fail
-        # closed, preserving the original bytes.
-        if path.exists() or path.is_symlink():
-            self.document = self.parse(path.read_text(encoding="utf-8"))
+        # Every leaf this run sets or deletes, in order, so a document a
+        # runtime rewrote under us can be re-read and the same edit replayed
+        # onto ITS bytes rather than ours. See `commit`.
+        self.edits: list[tuple[Callable[[tuple[str, ...], Any], None], tuple[str, ...], Any]]
+        self.edits = []
+        self.load()
+
+    def load(self) -> None:
+        """Parse the document and remember the identity it was parsed at.
+
+        Parse before the first write. A malformed native edit must fail
+        closed, preserving the original bytes.
+        """
+        if self.path.exists() or self.path.is_symlink():
+            raw = self.path.read_bytes()
+            self.identity = digest(raw)
+            # Universal newlines, as `read_text` decoded before: one read
+            # feeds both the identity and the parse, so neither can describe
+            # bytes the other never saw.
+            text = io.StringIO(raw.decode("utf-8"), newline=None).read()
+            self.document = self.parse(text)
         else:
-            self.document = empty()
+            self.identity = MISSING
+            self.document = self.empty()
         if not isinstance(self.document, MutableMapping):
-            raise ValueError(f"settings must be an object at {path}")
+            raise ValueError(f"settings must be an object at {self.path}")
 
     @staticmethod
     def stale_order(addresses: set[tuple[str, ...]]) -> list[tuple[str, ...]]:
@@ -440,6 +501,14 @@ class DocContainer:
     def assert_unit(
         self, address: tuple[str, ...], unit: Any, previous: None
     ) -> None:
+        self.edits.append((self.set_leaf, address, unit))
+        self.set_leaf(address, unit)
+
+    def remove(self, address: tuple[str, ...], previous: None) -> None:
+        self.edits.append((self.delete_leaf, address, None))
+        self.delete_leaf(address, None)
+
+    def set_leaf(self, address: tuple[str, ...], unit: Any) -> None:
         """Set one owned leaf, replacing an incompatible scalar/table shape."""
         current = self.document
         for segment in address[:-1]:
@@ -450,7 +519,7 @@ class DocContainer:
             current = child
         current[address[-1]] = unit
 
-    def remove(self, address: tuple[str, ...], previous: None) -> None:
+    def delete_leaf(self, address: tuple[str, ...], _unit: None) -> None:
         """Delete one retired leaf and only the empty parent tables it leaves."""
         parents: list[tuple[MutableMapping[str, Any], str]] = []
         current = self.document
@@ -490,13 +559,41 @@ class DocContainer:
         overriding the user's `defaultMode` after the declaration is gone
         (src/extensions/permissions/config.ts:56-60,98-101). A symlink is
         someone else's publication and is left alone.
+
+        The runtime that shares the document takes none of this program's
+        locks, so publishing is a compare-and-swap. If the document no longer
+        has the identity it was parsed at, a runtime wrote it since: re-read
+        it, replay this run's edits onto the runtime's bytes and try again.
+        A runtime that keeps winning exhausts PUBLISH_ATTEMPTS, and the run
+        fails with the runtime's write intact rather than overwriting it.
+        The ledger is then not written either, so it never claims leaves that
+        did not land.
         """
+        for attempt in range(PUBLISH_ATTEMPTS):
+            if attempt:
+                self.load()
+                for edit, address, unit in self.edits:
+                    edit(address, unit)
+            if self.publish(retiring):
+                return
+        raise ValueError(
+            f"{self.path} changed during all {PUBLISH_ATTEMPTS} attempts; "
+            "refusing to overwrite concurrent runtime changes; retry activation"
+        )
+
+    def unchanged(self) -> bool:
+        return file_identity(self.path) == self.identity
+
+    def publish(self, retiring: bool) -> bool:
+        """One attempt at `commit`; False when the document moved under us."""
         if retiring and self.serialize(self.document).strip() in ("", "{}"):
             sweep(self.path.parent)
             sweep(self.ledger.parent)
             if self.path.is_file() and not self.path.is_symlink():
+                if not self.unchanged():
+                    return False
                 self.path.unlink()
-            return
+            return True
         # The reserved sweep, for the two directories this container writes
         # into. HERE rather than in the constructor, which DirContainer can use
         # because only its constructor runs under the lock: a document is also
@@ -505,11 +602,12 @@ class DocContainer:
         # exists to prevent.
         sweep(self.path.parent)
         sweep(self.ledger.parent)
-        write_if_changed(
+        return write_if_changed(
             self.path,
             self.serialize(self.document).encode(),
             NEW_FILE_MODE,
             self.mode,
+            self.unchanged,
         )
 
 
