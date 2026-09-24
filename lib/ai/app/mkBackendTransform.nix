@@ -289,6 +289,34 @@
     topHooks = normalizedPool "hooks" {};
   };
   customConfig = configFn callbackArgs;
+  # A runtime that reads the repository AGENTS.md contributes to its one
+  # owner (sharedAgentsMd.nix) on devenv: its merged context plus the rules
+  # and limit its record's `sharedAgentsMd` callback returns, each runtime
+  # keeping its own rule policy. The key is published whether or not it has
+  # content, for observers such as file-warnings.nix. A limit is published
+  # with it too, because the runtime reads the file whoever wrote it.
+  sharedAgentsMdConfig = lib.optionalAttrs (backend == "devenv" && appRecord ? sharedAgentsMd) (let
+    shared = appRecord.sharedAgentsMd callbackArgs;
+    rules = shared.rules or {};
+    hasContent = normalizedHasContext || rules != {};
+  in {
+    ai.internal.agentsMdTargets.${appRecord.name} = shared.key;
+    ai.internal.agentsMd = lib.mkIf (hasContent || shared ? maxBytes) {
+      ${shared.key} =
+        {
+          # A limit alone must yield to content another runtime supplies.
+          hasContent =
+            if hasContent
+            then true
+            else lib.mkDefault false;
+          inherit rules;
+        }
+        // lib.optionalAttrs (shared ? maxBytes) {inherit (shared) maxBytes;}
+        // lib.optionalAttrs normalizedHasContext {
+          context = aiCommon.readContent callbackArgs.mergedContext;
+        };
+    };
+  });
   migrationConfig = migrationConfigFn callbackArgs;
   # Repository AGENTS.md targets have one cross-runtime owner. Public file
   # entries for those paths arbitrate inside sharedAgentsMd.nix;
@@ -627,6 +655,7 @@ in {
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig
       customConfig
+      sharedAgentsMdConfig
     ]))
     # Lower once, including retirement writers declared by migrationConfig.
     # Disabling a runtime removes every file claim and every ordinary writer;

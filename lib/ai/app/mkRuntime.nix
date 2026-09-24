@@ -34,6 +34,8 @@
 #                                    #   transform owns the `home.packages` / `packages`
 #                                    #   lowering, so a factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
+#     sharedAgentsMd ? <absent>;     # callback (same args) → {key; rules?; maxBytes?}:
+#                                    #   the devenv repository AGENTS.md contribution
 #     hm = {                         # Home Manager only; each field overrides the
 #       installPackage ? <record>;   #   record-level one of the same name
 #       migrationConfig ? <record>;
@@ -69,6 +71,7 @@
   # is told apart from it through `args` below.
   installPackage ? null,
   migrationConfig ? null,
+  sharedAgentsMd ? null,
   hm ? {},
   devenv ? {},
   # The package set the factory was built with, carried on the record so
@@ -109,6 +112,7 @@ in
     // lib.optionalAttrs (config != null) {inherit config;}
     // lib.optionalAttrs (args ? installPackage) {inherit installPackage;}
     // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
+    // lib.optionalAttrs (sharedAgentsMd != null) {inherit sharedAgentsMd;}
     // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
     // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
     // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}

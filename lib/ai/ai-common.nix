@@ -205,6 +205,21 @@ in {
     content = lib.mkDefault (aiTypes.textSourceFile value // {enable = true;});
   };
 
+  # A final file entry's inline byte size against a limit. A source-backed
+  # or disabled entry is not measured: reading a derivation output here would
+  # build it during evaluation. `message` receives the measured size.
+  sizeAssertion = {
+    entry,
+    maxBytes,
+    message,
+  }: let
+    text = lib.mapNullable (final: aiTypes.textSourceInlineText final.content) entry;
+    size = lib.mapNullable builtins.stringLength text;
+  in {
+    assertion = maxBytes == null || size == null || size <= maxBytes;
+    message = message size;
+  };
+
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags
   # cannot outlive it.

@@ -443,24 +443,11 @@
         writer = "kimchiProjectTrustMerge";
       }))
 
-      # User harness context stays runtime-owned. Project context joins the one
-      # shared repository AGENTS.md owner used by Codex and Kiro, at a fixed
-      # key: context.filename names the Home Manager harness file only.
-      # Published for observers such as file-warnings.nix, whether or not the
-      # key has content this evaluation.
-      (lib.mkIf isDevenv {ai.internal.agentsMdTargets.kimchi = projectContextFilename;})
-      (lib.mkIf hasMergedContext (
-        if isDevenv
-        then {
-          ai.internal.agentsMd.${projectContextFilename} = {
-            context = aiCommon.readContent mergedContext;
-            hasContent = true;
-          };
-        }
-        else {
-          ai.kimchi.files."${harness}/${cfg.context.filename}" = contextEntry;
-        }
-      ))
+      # User harness context stays runtime-owned. Project context joins the
+      # shared repository AGENTS.md through the record's `sharedAgentsMd`.
+      (lib.mkIf (hasMergedContext && !isDevenv) {
+        ai.kimchi.files."${harness}/${cfg.context.filename}" = contextEntry;
+      })
 
       # agents/<name>.md — one real file per agent, in a real directory.
       # Kimchi's /agents Edit, Disable and Enable writeFileSync the file in
@@ -719,4 +706,7 @@ in
 
     config = kimchiDelivery;
     installPackage = kimchiInstallPackage;
+    # Context only, at a fixed key: context.filename names the Home Manager
+    # harness file.
+    sharedAgentsMd = _: {key = projectContextFilename;};
   }
