@@ -13,31 +13,80 @@
   pkgs,
   ...
 }: let
-  # The merge writer only touches a document while it declares a leaf. So
-  # render the REAL modules with both declarations empty and run what
-  # activation would then run. Assert that they really are empty, or a later
-  # default that fills one would turn the gate-closed case into a merge test.
-  gateClosed = harness.evalHm {
-    ai.claude = {
-      enable = true;
-      unpinLaunchEffort = lib.mkForce {};
+  # `own.py` creates a document 0600 and then keeps whatever mode it finds,
+  # whether or not it rewrites the file. So nothing in the merge ever narrows
+  # a file an earlier generation widened to 0644; the credential mode writers
+  # are the only thing that does, in both gate states. Each state renders the
+  # REAL modules and runs what activation would run:
+  #
+  #   open    a non-empty declaration, the default for every Claude user
+  #           (`unpinLaunchEffort` defaults to a non-empty map): the merge
+  #           rewrites the file and keeps its 0644.
+  #   closed  both declarations forced empty: the merge touches nothing.
+  #
+  # A mode writer gated on either state fails the other one.
+  gates = {
+    closed = {
+      evaluated = harness.evalHm {
+        ai.claude = {
+          enable = true;
+          unpinLaunchEffort = lib.mkForce {};
+        };
+        ai.kimchi.enable = true;
+      };
+      holds = declared: declared == {};
     };
-    ai.kimchi.enable = true;
+    open = {
+      evaluated = harness.evalHm {
+        ai.claude.enable = true;
+        ai.kimchi = {
+          enable = true;
+          native.settings.telemetry.enabled = false;
+        };
+      };
+      holds = declared: declared != {};
+    };
   };
-  kimchiConfig = "${gateClosed.config.ai.kimchi.configDir}/config.json";
-  closed = runtime: path:
-    lib.assertMsg ((harness.ownedDocument runtime path gateClosed).value == {})
-    "ai-activation-settings-mode: ai.${runtime} declares leaves into ${path}; the gate-closed case no longer tests a closed gate";
-  gateClosedScript = assert closed "claude" ".claude.json";
-  assert closed "kimchi" kimchiConfig;
-    pkgs.writeText "activation-gate-closed.sh" (lib.concatMapStrings
-      (name: gateClosed.config.home.activation.${name}.text + "\n")
-      ["claudeUnpinLaunchEffort" "claudeConfigMode" "kimchiConfigMerge" "kimchiConfigMode"]);
+  entries = ["claudeUnpinLaunchEffort" "claudeConfigMode" "kimchiConfigMerge" "kimchiConfigMode"];
+
+  # `{documents, script}`: what each writer declares into its credential
+  # document, keyed by path, and the activation entries in `entries`.
+  gate = name: {
+    evaluated,
+    holds,
+  }: let
+    documents = [
+      {
+        path = ".claude.json";
+        runtime = "claude";
+      }
+      {
+        path = "${evaluated.config.ai.kimchi.configDir}/config.json";
+        runtime = "kimchi";
+      }
+    ];
+    # Assert the declaration really is in the state the case names, or a later
+    # default would silently turn one case into the other.
+    declared = {
+      path,
+      runtime,
+    }: let
+      inherit (harness.ownedDocument runtime path evaluated) value;
+    in
+      assert lib.assertMsg (holds value)
+      "ai-activation-settings-mode: ai.${runtime}'s declaration into ${path} no longer holds the gate-${name} state"; value;
+    text = entry:
+      (evaluated.config.home.activation.${entry}
+        or (throw "ai-activation-settings-mode: the gate-${name} config renders no ${entry} activation entry; a credential mode writer must not be gated on the declaration"))
+      .text;
+  in {
+    documents = lib.listToAttrs (map (document: lib.nameValuePair document.path (declared document)) documents);
+    script = "${pkgs.writeText "activation-gate-${name}.sh" (lib.concatMapStrings (entry: text entry + "\n") entries)}";
+  };
 
   tools = {
     bash = "${pkgs.bash}/bin/bash";
-    gateClosed = "${gateClosedScript}";
-    inherit kimchiConfig;
+    gates = lib.mapAttrs gate gates;
     own = "${../../lib/ai/own.py}";
     python = "${pkgs.python3}/bin/python3";
   };

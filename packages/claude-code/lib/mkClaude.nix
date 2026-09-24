@@ -882,9 +882,9 @@ in
               codec = "json";
               path = claudeJson;
             };
-            # The unpin writer touches the file only while it declares a flag,
-            # so this narrows a file an earlier generation widened to 0644
-            # even when the flag map is empty.
+            # The unpin writer keeps an existing file's mode whether or not it
+            # rewrites it, so this is the only thing that narrows a file an
+            # earlier generation widened to 0644, with or without flags.
             ai.claude.activation.claudeConfigMode = helpers.mkCredentialModeWriter {
               inherit (pkgs) coreutils;
               path = claudeJson;
