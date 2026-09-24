@@ -2380,6 +2380,33 @@ in {
         lib.hasInfix ''"command":"/nix/store'' t && lib.hasInfix "/bin/hello" t
     );
 
+    # S1, the arm the shared commandType adds: a package with a `pname` and no
+    # `meta.mainProgram` resolves to `bin/<pname>`, as it does for Claude and
+    # Codex, and not to its output directory, which is not a runnable command.
+    module-kiro-hooks-command-pname-resolves-to-bin = mkTest "kiro-hooks-command-pname-resolves-to-bin" (
+      let
+        probe = pkgs.stdenvNoCC.mkDerivation {
+          pname = "kiro-hook-probe";
+          version = "1";
+          dontUnpack = true;
+          installPhase = "mkdir -p $out/bin";
+        };
+        result = evalHm {
+          ai.kiro = {
+            enable = true;
+            hooks.probe = {
+              trigger = "PostToolUse";
+              action.command = probe;
+            };
+          };
+        };
+        t = (hmHookTarget result).units."probe.json".text;
+      in
+        result.config.ai.kiro.hooks.probe.action.command
+        == "${probe}/bin/kiro-hook-probe"
+        && lib.hasInfix ''"command":"${builtins.unsafeDiscardStringContext probe.outPath}/bin/kiro-hook-probe"'' (builtins.unsafeDiscardStringContext t)
+    );
+
     # HM↔devenv: the same typed hook lands as a REAL file on both backends
     # (v3 skips symlinked hooks), through the shared materializer.
     module-kiro-hooks-typed-devenv-installs = mkTest "kiro-hooks-typed-devenv-installs" (
@@ -2492,7 +2519,9 @@ in {
     );
 
     # Hardening (PR #433 review): an unsafe hook name (path separator) fails the
-    # name-charset assertion before it can be interpolated into a hooks-dir path.
+    # file-name charset assertion before it can be interpolated into a
+    # hooks-dir path. `<name>.json` matches the charset exactly when `<name>`
+    # does, so the file-name assertion is the one that says so.
     module-kiro-hooks-rejects-unsafe-name = mkTest "kiro-hooks-rejects-unsafe-name" (
       let
         ev = evalHm {
@@ -2505,7 +2534,7 @@ in {
           };
         };
         nameAsserts =
-          builtins.filter (a: lib.hasInfix "hook names must match" a.message)
+          builtins.filter (a: lib.hasInfix "hook file names must match" a.message)
           ev.config.assertions;
       in
         nameAsserts != [] && (builtins.head nameAsserts).assertion == false
@@ -2524,7 +2553,7 @@ in {
           };
         };
         nameAsserts =
-          builtins.filter (a: lib.hasInfix "hook names must match" a.message)
+          builtins.filter (a: lib.hasInfix "hook file names must match" a.message)
           ev.config.assertions;
       in
         nameAsserts != [] && (builtins.head nameAsserts).assertion == true
@@ -3070,10 +3099,10 @@ in {
     );
 
     # A `hooksDir` filename outside the hook-name charset must fail at EVAL
-    # with a NAMED assertion. `hookNameAssertion` covers only the inline
-    # surfaces' attr keys; without this one the dir surface would reach `own`,
-    # which refuses a dot-prefixed unit address with a throw that names no
-    # option.
+    # with a NAMED assertion. The file-name assertion covers the dir surface
+    # as well as the inline ones; without it the dir surface would reach
+    # `own`, which refuses a dot-prefixed unit address with a throw that names
+    # no option.
     module-kiro-hooks-dir-rejects-unsafe-filename = mkTest "kiro-hooks-dir-rejects-unsafe-filename" (
       let
         ev = evalHm {

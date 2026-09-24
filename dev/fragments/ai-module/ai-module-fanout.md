@@ -2,11 +2,12 @@
 
 > **Last verified:** 2026-09-24 — every runtime describes delivery once through
 > `mkRuntime`'s record-level `config`, and `mkRuntime` rejects a backend spec
-> carrying anything but `installPackage`, `migrationConfig` and `options`.
-> Claude devenv delivers `ai.agents` and `ai.claude.agentsDir` to
-> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
-> Kiro) tests `agent.isPathLike`, so a store-path string is a file, never a body
-> naming its own path. File content at `mkDefault` enables its entry;
+> carrying anything but `installPackage`, `migrationConfig` and `options`. Kiro
+> hook commands resolve packages through the shared `commandType`. Claude devenv
+> delivers `ai.agents` and `ai.claude.agentsDir` to `.claude/agents/<name>.md`;
+> every raw agent writer (Claude, Copilot, Kimchi, Kiro) tests
+> `agent.isPathLike`, so a store-path string is a file, never a body naming its
+> own path. File content at `mkDefault` enables its entry;
 > `content.enable = false` suppresses every content form. The builder entry
 > point is `lib.ai.app.mkRuntime`. Native file settings live under
 > `ai.<runtime>.native` (`native.settings`; Kimchi also
@@ -351,7 +352,8 @@ enabled ecosystem whose native model preserves the option's semantics):
   Kimchi event and is left out silently. Kimchi has no user-scope lifecycle file
   Home Manager can own, so its Home Manager row is an explicit exclusion: silent
   for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
-  remain native-only.
+  remain native-only, but their `action.command` resolves a package through the
+  same shared `commandType`.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
   when both are present. The strictly higher-priority definition supplies the
