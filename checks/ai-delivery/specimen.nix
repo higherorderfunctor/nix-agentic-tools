@@ -40,7 +40,12 @@
                 llmEndpoint = "https://example.invalid";
                 skillPaths = ["probe"];
               };
-              native.harnessSettings.resources.probe = true;
+              # `resources` is user-scope-only; devenv rejects it.
+              native.harnessSettings =
+                if mode == "hm"
+                then {resources.probe = true;}
+                else {hideThinkingBlock = true;};
+              permissions.allow = ["probe"];
             };
             kiro = {
               agents.probe.prompt = {text = "probe";};
@@ -66,7 +71,11 @@
   # A file may carry several input surfaces. This is consumer knowledge;
   # methods and writer names must never enter this classification table.
   surfacesFor = runtime: path:
-    if path == ".claude.json"
+  # ai.kimchi.projectTrust is a Kimchi-only, user-scope trust store, not one
+  # of the portable surfaces; the matrix has no cell for it by design.
+    if runtime == "kimchi" && lib.hasSuffix "/harness/trust.json" path
+    then []
+    else if path == ".claude.json"
     then ["settings"]
     else if path == ".claude/settings.json"
     then ["hooks" "permissions" "settings"]
@@ -83,12 +92,14 @@
     else if lib.hasInfix "/skills/" path || lib.hasSuffix "/skills" path
     then ["skills"]
     else if path == "AGENTS.md" || path == ".codex/AGENTS.md"
-    then ["context" "rules"]
+    then
+      # Kimchi contributes its context alone; it excludes the rules pool.
+      ["context"] ++ lib.optional (runtime != "kimchi") "rules"
     else if lib.hasSuffix "/AGENTS.md" path || lib.hasSuffix "/CLAUDE.md" path || lib.hasSuffix "/copilot-instructions.md" path
     then ["context"]
     else if lib.hasInfix "/rules/" path || lib.hasInfix "/instructions/" path || lib.hasInfix "/steering/" path
     then ["rules"]
-    else if lib.hasSuffix "/permissions.yaml" path
+    else if lib.hasSuffix "/permissions.yaml" path || lib.hasSuffix "/permissions.json" path
     then ["permissions"]
     else if lib.hasSuffix "/settings.json" path || lib.hasSuffix "/config.json" path || lib.hasSuffix "/cli.json" path
     then ["settings"]
