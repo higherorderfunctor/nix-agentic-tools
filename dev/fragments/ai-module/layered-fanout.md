@@ -14,8 +14,10 @@
 > Claude's `.claude.json` has an ungated mode-narrowing command writer beside
 > its unpin ledger. The builder declares the per-runtime `agents`,
 > `environmentVariables` and `lspServers` options and an opt-in `agentsDir`; a
-> record's `poolOptions` carries only what differs. Every reconciled document is
-> one `helpers.mkReconciledDocument` call.
+> record's `poolOptions` carries only what differs. `checkRecord.nix` rejects a
+> `poolOptions` key the builder would not read and a stray field in the
+> `sharedAgentsMd` result. Every reconciled document is one
+> `helpers.mkReconciledDocument` call.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -314,7 +316,11 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   per backend). That includes `agentsDir`, declared only for a record whose
   `poolOptions` names it: Codex consumes `agents` with no directory form.
   `poolOptions.<pool>` is merged over the builder's declaration, so a runtime
-  states only its own description or a native type (Codex's agents).
+  states only its own description or a native type (Codex's agents). The builder
+  reads `poolOptions` by pool name, so `lib/ai/app/checkRecord.nix` rejects any
+  other key, in `mkRuntime` and again in the transform: a pool outside `agents`,
+  `environmentVariables` and `lspServers`, one the record's `supportedPools`
+  omits, or `agentsDir` without `agents`.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
@@ -327,9 +333,10 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex every
   rule, scope-prefixed; Kiro only unscoped always-on rules; Kimchi none) and an
-  optional `maxBytes`; the builder adds the merged context and publishes it on
-  devenv. A limit is published even without content, because the runtime reads
-  the file whoever wrote it.
+  optional `maxBytes`, and nothing else: the builder reads those by name, so
+  `checkRecord.nix` rejects a missing `key` or any other field. The builder adds
+  the merged context and publishes it on devenv. A limit is published even
+  without content, because the runtime reads the file whoever wrote it.
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
   single-owner map → `lib/ai/app/sharedAgentsMd.nix`
 - B7 public file-option declaration and runtime enable gate →

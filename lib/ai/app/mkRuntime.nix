@@ -23,7 +23,9 @@
 #     poolOptions ? {};              # {<pool> = mkOption attrs;} merged over the
 #                                    #   builder's declaration of `agents`,
 #                                    #   `environmentVariables` or `lspServers`;
-#                                    #   naming `agentsDir` opts into that option
+#                                    #   naming `agentsDir` opts into that option.
+#                                    #   Any other key, or a pool not in
+#                                    #   `supportedPools`, is rejected.
 #     config ? _: {};                # ONE delivery callback for BOTH backends; it
 #                                    #   receives `backend` and describes delivery
 #                                    #   rather than lowering it.
@@ -35,7 +37,8 @@
 #                                    #   lowering, so a factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
 #     sharedAgentsMd ? <absent>;     # callback (same args) → {key; rules?; maxBytes?}:
-#                                    #   the devenv repository AGENTS.md contribution
+#                                    #   the devenv repository AGENTS.md contribution;
+#                                    #   the transform rejects any other field
 #     hm = {                         # Home Manager only; each field overrides the
 #       installPackage ? <record>;   #   record-level one of the same name
 #       migrationConfig ? <record>;
@@ -46,8 +49,9 @@
 #
 # A backend spec carries no delivery callback and no defaults: delivery is
 # described once, and a runtime states a per-backend difference by reading
-# `backend`. `checkRecord.nix` rejects any other backend key, here and again in
-# the transform, so a record written against the retired per-backend seam fails
+# `backend`. `checkRecord.nix` rejects any other backend key, and any
+# `poolOptions` key the builder would not read, here and again in the
+# transform, so a record written against the retired per-backend seam fails
 # instead of silently delivering nothing.
 #
 # The callbacks receive ONE attrset, assembled in exactly one place —
@@ -94,7 +98,7 @@
   # need it must degrade rather than throw.
   pkgs ? null,
 } @ args:
-assert import ./checkRecord.nix {inherit lib;} {inherit name defaults hm devenv;};
+assert (import ./checkRecord.nix {inherit lib;}).record {inherit name defaults hm devenv poolOptions supportedPools;};
   {
     inherit name defaults options poolOptions supportedPools hm devenv pkgs;
   }
