@@ -54,7 +54,7 @@
   # Every built-in hook's handler command is a /nix/store path, so match on the
   # derivation name rather than on an exact string.
   handlerCommands = blocks:
-    lib.concatMap (b: map (h: h.command or "") (b.hooks or [])) blocks;
+    lib.concatMap (b: map (h: h.command) b.hooks) blocks;
   hasClampHook = blocks:
     builtins.any (lib.hasInfix "claude-delegation-clamp") (handlerCommands blocks);
   hasGuardHook = blocks:

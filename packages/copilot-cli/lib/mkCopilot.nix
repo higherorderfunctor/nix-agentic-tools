@@ -119,10 +119,11 @@ in
           placement.
         '';
       };
-      # Copilot-specific freeform settings. Consumed by the settings.json
-      # activation merge in `hm.config` (runtime-merge via `jq -s '.[0] * .[1]'`
-      # to preserve user-added `trusted_folders` across rebuilds) and by
-      # the static write in `devenv.config`. Full typed surface (editor
+      # Copilot-specific freeform settings. Consumed by the settings.json leaf
+      # reconciliation in `hm.config` (`helpers.mkOwnedDocument`, which owns
+      # exactly these leaves, retracts one this generation drops, and leaves a
+      # runtime-written sibling such as `trusted_folders` alone) and by the
+      # static write in `devenv.config`. Full typed surface (editor
       # integration, telemetry, typed model selection) is tracked in
       # docs/plan.md "Ideal architecture gate → Absorption backlog" under
       # the copilot-cli absorption item.
@@ -277,31 +278,19 @@ in
           {
             home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
           }
-          # Settings.json activation merge. Preserves user-added runtime
-          # keys (e.g. `trusted_folders`) by merging Nix-declared values
-          # on top of the existing file via `jq -s '.[0] * .[1]'`. On
-          # first activation (no existing file) the Nix-rendered JSON is
-          # written as-is. Ported from legacy
-          # modules/copilot-cli/default.nix; the devenv side uses a plain
-          # static write instead since devenv lifecycles are project-local.
-          #
-          # The settings JSON is inlined into the activation script via
-          # `builtins.toJSON` so the rendered values (e.g. `model`,
-          # `theme`) appear literally in the script text. This keeps the
-          # activation atomic — no separate store-path read required at
-          # runtime — and lets module-eval tests assert on the content.
-          #
-          # HM-only: gated on non-empty settings so consumers who enable
-          # ai.copilot just for MCP/skills fanout don't clobber an
-          # externally-managed settings.json. Matches upstream Claude HM
-          # behavior. Devenv-side is unconditional (project-local).
-          (lib.mkIf (cfg.nativeSettings != {}) {
-            home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
-              configFile = "${cfg.configDir}/settings.json";
-              settingsJson = builtins.toJSON cfg.nativeSettings;
-              jq = "${pkgs.jq}/bin/jq";
-              inherit (pkgs) coreutils;
-            });
+          # Reconcile settings.json leaves while preserving native state such
+          # as trusted_folders. Always emit the writer so empty settings retract
+          # previously owned leaves. With no prior ownership, empty settings
+          # leave an externally managed settings.json untouched, including for
+          # consumers enabling Copilot only for MCP/skills fanout.
+          (helpers.mkOwnedDocument {
+            entry = "copilotSettingsMerge";
+            ledger = "json-settings/copilot-settings-${builtins.hashString "sha256" cfg.configDir}.json";
+            path = "${cfg.configDir}/settings.json";
+            python = pkgs.python3;
+            runtime = "copilot";
+            value = cfg.nativeSettings;
+            inherit pkgs;
           })
         ];
     };

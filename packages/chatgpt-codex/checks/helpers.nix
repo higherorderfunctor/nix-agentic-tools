@@ -1,23 +1,18 @@
-{
-  lib,
-  harness,
-  ...
-}: let
-  inherit (harness) evalHm;
+{harness, ...}: let
+  inherit (harness) evalHm ownedDocument;
 
   codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
 
-  # Codex HM settings are embedded as one-line JSON in the reconciliation
-  # activation script rather than exposed as a home.file source. Keeping this
-  # extractor in the eval harness lets the semantic parity tests continue to
-  # compare the exact desired value without weakening production ownership back
-  # to an immutable store symlink.
-  hmCodexSettings = evaluated: let
-    script = evaluated.config.home.activation.codexSettingsReconcile.text;
-    beforeClosingMarker = lib.head (lib.splitString "\nNAT_TOML_SETTINGS_EOF\n" script);
-    settingsJson = lib.last (lib.splitString "\n" beforeClosingMarker);
-  in
-    builtins.fromJSON (builtins.unsafeDiscardStringContext settingsJson);
+  # Codex HM settings never become a home.file source: its user config.toml is
+  # a native write target, so Nix owns leaves rather than the whole file. The
+  # declared value therefore travels as data inside the reconciler's store
+  # plan, which is a derivation — reading it back would be
+  # import-from-derivation inside `nix flake check`. `_reconciledDocuments` is
+  # the eval-visible record of that same declaration, so the semantic parity
+  # tests still compare the exact desired value, and they compare a VALUE
+  # rather than a substring of generated shell.
+  hmCodexSettings = evaluated:
+    (ownedDocument "codex" "${evaluated.config.ai.codex.configDir}/config.toml" evaluated).value;
 
   codexSettingsActivation = config:
     (evalHm config).config.home.activation.codexSettingsReconcile.text;

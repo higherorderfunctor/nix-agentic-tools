@@ -5,10 +5,11 @@ in {
   agent = import ./agent.nix {inherit lib;};
   app = import ./app {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
-  # Strategy-driven file materializer retained for lifecycle-owned artifacts
-  # such as Kiro hooks that require ownership-safe real-file delivery.
-  materialize = import ./materialize.nix {inherit lib;};
   mcpServer = import ./mcpServer {inherit lib;};
+  # ONE reconciler for everything a generation owns: whole files in a
+  # directory and owned leaves in a shared document, as one plan. It replaced
+  # the generated-bash materializer that used to sit beside it here.
+  own = import ./own.nix {inherit lib;};
   program = import ./program.nix {inherit lib;};
   # Module function — imported unevaluated so consumers can pass it directly
   # to `lib.evalModules { modules = [ lib.ai.sharedOptions ... ]; }`.

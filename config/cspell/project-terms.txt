@@ -215,6 +215,7 @@ kanagawa
 kasdirs
 kasid
 keyspace
+killpg
 kimi
 kiro
 kirocli
@@ -262,6 +263,7 @@ metacharacter
 misattributes
 miscited
 misordered
+mkfifo
 mlen
 modelcontextprotocol
 moderations
