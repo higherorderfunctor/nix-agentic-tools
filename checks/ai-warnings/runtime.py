@@ -189,6 +189,10 @@ def wiring(script):
     assert "ai.kiro.lspServers" in desired[".custom-kiro/settings/lsp.json"]["option"]
     assert "ai.codex.native.settings" in desired[".codex/config.toml"]["option"]
     assert 'ai.codex.files."probe"' in desired["probe"]["option"]
+    # A shared AGENTS.md owner key belongs to the runtime whose context names
+    # it, never to whichever runtime sorts first.
+    assert "ai.kiro." in desired["KIRO.md"]["option"], desired["KIRO.md"]
+    assert "ai.codex." not in desired["KIRO.md"]["option"], desired["KIRO.md"]
     # Provenance is exact: a consumer file under a runtime config directory is
     # not an ai.* delivery and must not be observed as one.
     assert ".custom-kiro/consumer-owned.md" not in desired

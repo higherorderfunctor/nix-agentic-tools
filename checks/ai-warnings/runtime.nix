@@ -13,6 +13,12 @@
     };
     ai.kiro = {
       configDir = ".custom-kiro";
+      # A second shared-owner key. Codex contributes AGENTS.md, Kiro this one;
+      # each must be attributed to the runtime whose context it is.
+      context = {
+        filename = "KIRO.md";
+        text = "kiro probe";
+      };
       enable = true;
       lspServers.probe.command = "probe";
     };
