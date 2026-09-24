@@ -817,13 +817,20 @@ in {
             # any real caller declares all at once. `runtime` only decides
             # where the eval-visible record lands, and this case reads the
             # writer alone.
-              (helpers.mkOwnedDocument {
-                entry = "documentCodecTest";
-                ledger = "json-settings/document-codec-test.json";
-                path = ".settings with spaces/config.json";
+              (helpers.mkOwnBundle {
+                backend = "hm";
+                declared.".settings with spaces/config.json" = settings;
+                entryNames.write = "documentCodecTest";
                 python = pkgs.python3;
                 runtime = "claude";
-                value = settings;
+                targets = [
+                  {
+                    codec = "json";
+                    ledger = "json-settings/document-codec-test.json";
+                    path = ".settings with spaces/config.json";
+                    units.text = builtins.toJSON settings;
+                  }
+                ];
                 inherit pkgs;
               })
             .home

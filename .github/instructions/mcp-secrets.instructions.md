@@ -7,9 +7,9 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-08-15 — proxy ownership is now explicit and keyed by
-> server name, replacing an earlier version that could accidentally deduplicate
-> proxy definitions across runtimes instead of giving each owner its own daemon.
+> **Last verified:** 2026-09-24 — proxy ownership is explicit and keyed by
+> server name, so each owner gets its own daemon; every ecosystem renders
+> servers via `renderServer`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -379,9 +379,8 @@ the project so its own wrapper carries them.
 `renderServer` throws on a raw credential header/url reaching a non-Kiro path
 (Claude/Copilot/Kimchi/shared pool). The Kiro preprocessor resolves credentials
 to placeholder strings BEFORE `renderServer`; anything else that sees the raw
-attrset fails loud rather than serializing the secret's file path.
-(`transformMcpServer` in `ai-common.nix` is DEAD code — every ecosystem renders
-via `renderServer`.)
+attrset fails loud rather than serializing the secret's file path. Every
+ecosystem renders via `renderServer`; there is no second MCP transform.
 
 ### mcp.json is a real file, governed by `ai.kiro.mcpWriteMode`
 
