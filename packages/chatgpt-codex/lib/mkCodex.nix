@@ -746,9 +746,8 @@
     (lib.filterAttrs (_: agent.isSemantic) agents);
 
   # Lower Codex's typed statusMessage to its text, then render through the
-  # shared renderer, which drops a null field. Keep the presence guard for
-  # portable handlers that omit this Codex-only field. The shared type rejects
-  # enabled empty text, so this lowering only checks whether it is enabled.
+  # shared renderer, which drops a null field. A portable handler has no such
+  # field, so it lowers as a disabled one.
   renderHooks = hooks:
     sharedHooks.render (lib.mapAttrs (_event:
       map (block:
@@ -757,10 +756,7 @@
           hooks = map (handler:
             handler
             // {
-              statusMessage =
-                if handler ? statusMessage && handler.statusMessage.enable
-                then handler.statusMessage.text
-                else null;
+              statusMessage = aiTypes.enabledTextOrNull (handler.statusMessage or {enable = false;});
             })
           block.hooks;
         }))
