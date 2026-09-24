@@ -115,8 +115,8 @@ rec {
       echo "Updated rev: ${rev} -> $new_rev"
     '';
 
-  # Shared body for the sidecar hash fixers below (`mkGoVendorFix`,
-  # `mkNpmDepsFix`). Emits a bash function
+  # Shared body for sidecar hash fixers, including owner-declared pnpm
+  # repairs. Emits a bash function
   # `fix_fod_hash <attrPath> <drvPattern> <sidecarKey>` that builds
   # `<attr>.<attrPath>` through the FLAKE'S OWN `packages` output — so the
   # derivation under test is the one consumers get, overlay stack and all
@@ -536,6 +536,11 @@ rec {
       drvPattern = "-npm-deps";
       key = "npmDepsHash";
     };
+    pnpmDeps = {
+      attrPath = "pnpmDeps";
+      drvPattern = "-pnpm-deps";
+      key = "pnpmDepsHash";
+    };
     src = {
       attrPath = "src";
       drvPattern = "-source";
@@ -644,8 +649,8 @@ rec {
   # combined `fixHashes` and was silently outside that roster.
   #
   # HALF of glab's exposure is still unreachable, and that is a known gap
-  # rather than a fixed one. `fix_sidecar_hashes` discovers `fixVendorHash`
-  # and `fixNpmDepsHash` only, so `fixSrcHash` has no caller: a nixpkgs
+  # rather than a fixed one. `fix_sidecar_hashes` discovers dependency
+  # fixers only, so `fixSrcHash` has no caller: a nixpkgs
   # fetcher change that invalidates glab's `srcHash` with no version bump
   # still cannot self-heal. It presents confusingly, too — `fixVendorHash`
   # builds `.goModules`, the `-source` FOD mismatches first, and
@@ -751,12 +756,9 @@ rec {
   # that sources `fodHashFixFn`'s `fix_fod_hash` and then calls it once
   # per target, in the order given.
   #
-  # Extracted when a THIRD caller appeared. The callers today are
-  # `mkGoVendorFix`, `mkNpmDepsFix` and the src-only fixer
-  # `mkGoUpdateExtract` builds internally; they differ only in the name
-  # and in which (attrPath, drvPattern, key) triples they replay, and
-  # three copies of the same `set -euETo pipefail` + interpolate +
-  # call-in-order body is the duplication this file exists to prevent.
+  # Shared by the Go, npm, source and owner-declared pnpm repairs. Callers
+  # select the named (attrPath, drvPattern, key) targets; this helper owns
+  # strict mode and invokes the common mismatch parser for each target.
   #
   # ORDER IS SIGNIFICANT and is the caller's responsibility: a derived
   # hash (`goModules`, `npmDeps`) is computed FROM `src`, so `src` must

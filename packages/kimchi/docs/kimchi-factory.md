@@ -1,20 +1,22 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-23 — `ai.kimchi.native.settings` and
-> `native.harnessSettings` are closed option trees generated from
-> `extracted.json` by `lib/extracted.nix`; devenv rejects user-scope
-> `config.json` keys and both backends reject environment variables Kimchi
-> overwrites, both read from the sidecar, and the overwrite and inert flags are
-> derived from the sources, as is each harness key's project scope, declarations
-> resolve by reference or fail on ambiguity, and the extractor's own
-> hand-written parts are listed with their guards, and pi's declaration packages
-> follow Kimchi's lockfile; the builder entry point is `lib.ai.app.mkRuntime`.
-> Home Manager keeps Kimchi's user paths and devenv its project paths; the
-> mutable JSON documents (`config.json`, harness `settings.json`, `mcp.json`,
-> `permissions.json`, and HM-only `trust.json`) reconcile by leaf through the
-> shared delivery router; agents are owned writable copies, copied from a
-> store-path string as from a path; portable hooks reach `.kimchi/hooks.json` on
-> devenv only; the trust writer takes pi's `trust.json.lock`. Full lineage:
+> **Last verified:** 2026-09-23 — the package builds from the release source
+> that the extractor also reads, one pin for both, with pinned pnpm and Go
+> dependencies; `ai.kimchi.native.settings` and `native.harnessSettings` are
+> closed option trees generated from `extracted.json` by `lib/extracted.nix`;
+> devenv rejects user-scope `config.json` keys and both backends reject
+> environment variables Kimchi overwrites, both read from the sidecar, and the
+> overwrite and inert flags are derived from the sources, as is each harness
+> key's project scope, declarations resolve by reference or fail on ambiguity,
+> and the extractor's own hand-written parts are listed with their guards, and
+> pi's declaration packages follow Kimchi's lockfile; the builder entry point is
+> `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and devenv its
+> project paths; the mutable JSON documents (`config.json`, harness
+> `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
+> reconcile by leaf through the shared delivery router; agents are owned
+> writable copies, copied from a store-path string as from a path; portable
+> hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
+> `trust.json.lock`. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -119,7 +121,7 @@ option. Same-named constants back a constant only where the checker finds no
 initializer, and only when they all agree. Three additional hash-pinned pi
 declaration packages resolve the settings type's external imports; unresolved
 named leaves fail extraction. Their versions are the ones Kimchi's
-`pnpm-lock.yaml` resolves pi's dependencies to, which is what the release binary
+`pnpm-lock.yaml` resolves pi's dependencies to, which is what the source build
 bundles, not the floor of pi's caret ranges: the update job reads them from the
 lockfile, and the extractor (handed the lockfile as JSON through `yq`) fails
 when a supplied package differs from it. The extractor also checks that the
@@ -412,3 +414,23 @@ not apply to it.
 settings, effective env, agency text, and the wrapped package). The shared
 delivery function and the `installPackage` hook each call it rather than
 duplicating that logic.
+
+## Source packaging
+
+The package builds upstream's Bun executable and its Go proxy helper from the
+same pinned release. That source is pinned once, as `extraction.kimchiSource` in
+`sources.json`, because the extractor reads the same tree; a second copy of the
+URL and hash could drift from it. `pnpmDeps` and `proxyHelper.goModules` have
+independent hashes pinned beside it. `mkUpdateScript` records the version alone
+(`platforms = {}`); its `extraExtract` first refreshes the extraction pins and
+`extracted.json`, then `mkGoUpdateExtract` derives the new Go floor before
+rebuilding the helper vendor hash and runs the shared pnpm hash fixer. The
+standalone dependency fixers also participate in input-bump repairs. The source
+checkout reports version `0.0.0`, so upstream's `set-version.js` runs before
+compiling and staging the resources.
+
+Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
+rewriting and stripping are disabled to preserve Bun's compiled module graph.
+The install check requires the exact release version, a runnable helper, and the
+theme, export, and bundled-skill assets. Linux and Darwin builds run in CI. This
+packaging change does not alter discovery or configuration behavior.
