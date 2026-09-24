@@ -1,7 +1,8 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-09-22 — Kimchi version bumps refresh its pinned source
-> and declaration inputs alongside the compiler-extracted sidecar.
+> **Last verified:** 2026-09-23 — Kimchi builds its CLI and proxy helper from
+> the release source that its version bumps pin alongside the declaration inputs
+> and the compiler-extracted sidecar.
 
 ### Overview
 
@@ -12,8 +13,8 @@ AI coding CLI recipes live at `packages/<owner>/packages/ai/<name>/package.nix`:
 - **claude-code** — Claude Code CLI, pre-built binary
 - **copilot-cli** — GitHub Copilot CLI, pre-built SEA binary fetched from GitHub
   releases
-- **kimchi** — Kimchi coding-agent CLI (Cast AI), bun-compiled binary fetched
-  from GitHub releases
+- **kimchi** — Kimchi coding-agent CLI (Cast AI), built from release source with
+  Bun and a Go proxy helper
 - **kiro-cli** — Kiro CLI, pre-built binary fetched from AWS release channel
 - **kiro-gateway** — Python proxy API for Kiro IDE and CLI, built from source
   with a Python runtime environment
@@ -28,10 +29,10 @@ Packages live under `pkgs.ai.*` and are flattened to top-level flake outputs
 derivation to pin the version and `src` from a per-platform `sources.json`, then
 re-composes the public package through upstream's wrapper.
 
-**Standalone binary** (chatgpt-codex, copilot-cli, kimchi): there is no nixpkgs
-base to inherit, so these are fresh `stdenv.mkDerivation`s over a per-platform
-release tarball selected from `sources.json`. On Linux the dynamically-linked
-ones run `autoPatchelfHook` to repoint the interpreter/rpath at the nix glibc.
+**Standalone binary** (chatgpt-codex, copilot-cli): there is no nixpkgs base to
+inherit, so these are fresh `stdenv.mkDerivation`s over a per-platform release
+tarball selected from `sources.json`. On Linux the dynamically-linked ones run
+`autoPatchelfHook` to repoint the interpreter/rpath at the nix glibc.
 
 - chatgpt-codex unpacks to ONE flat `codex-<target-triple>` file (no wrapper
   directory, hence `sourceRoot = "."`) installed as `$out/bin/codex`. Its Linux
@@ -39,11 +40,13 @@ ones run `autoPatchelfHook` to repoint the interpreter/rpath at the nix glibc.
   neither autoPatchelfHook nor an interpreter patch. Apache-2.0 (free), so the
   unfree guard passes it through unwrapped.
 - copilot-cli installs a single SEA binary (`copilot`).
-- kimchi ships an FHS tree (`bin/kimchi` + `share/kimchi/`, including a second
-  ELF `share/kimchi/bin/proxy-helper`); the install copies the whole tree and
-  autoPatchelf patches both ELFs. The binary resolves `share/` relative to
-  itself, so the tree is preserved, not relocated. Apache-2.0 (free), so it
-  passes the unfree guard unwrapped.
+
+**Bun source build** (kimchi): `fetchPnpmDeps` supplies the locked dependencies
+to the same pnpm 10 used by the build. Upstream compiles the CLI with Bun and
+stages `bin/kimchi` plus `share/kimchi/`; a separate `buildGoModule` compiles
+`proxy-helper` from the same source. Preserve this layout and disable generic
+ELF rewriting and stripping of the compiled Bun graph. Apache-2.0 (free), so the
+result passes the unfree guard unwrapped.
 
 **Python application** (kiro-gateway): Built with `mkDerivation` using a
 `python.withPackages` environment. The source is fetched via inline `rev` +
@@ -51,20 +54,21 @@ ones run `autoPatchelfHook` to repoint the interpreter/rpath at the nix glibc.
 
 ### Version Tracking
 
-These packages pin versions inline (binary CLIs via a per-platform
-`sources.json` sidecar). Each uses an update strategy managed by
-`config.update.targets` (see owner `registry.nix`):
+These packages pin versions in their recipe or release `sources.json` sidecar.
+Each uses an update strategy managed by `config.update.targets` (see owner
+`registry.nix`):
 
 - `chatgpt-codex` — per-platform `sources.json` + `mkUpdateScript`; version via
   `ghLatestVersionCmd` with `tagPrefix = "rust-v"` (openai/codex cuts several
   tag series, so the prefix is load-bearing)
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   GitHub release and prefetches per-platform binaries
-- `kimchi` — per-platform `sources.json` + `mkUpdateScript` fetches the latest
-  GitHub release tag and prefetches per-platform tarballs; the same update pins
-  the matching release source, exact pi npm package, and pi declaration
+- `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release
+  tag; the same update pins the matching release source (shared by the source
+  build and the extractor), exact pi npm package, and pi declaration
   dependencies, then regenerates `extracted.json` with nixpkgs' TypeScript
-  compiler API
+  compiler API, derives the Go floor before the proxy-helper vendor hash, and
+  refreshes pnpm dependencies
 - `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   version from AWS manifest endpoint
 - `kiro-gateway` — inline `rev` + `hash` with `mkGitRevUpdateScript` for

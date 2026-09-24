@@ -115,8 +115,8 @@ rec {
       echo "Updated rev: ${rev} -> $new_rev"
     '';
 
-  # Shared body for the sidecar hash fixers below (`mkGoVendorFix`,
-  # `mkNpmDepsFix`). Emits a bash function
+  # Shared body for sidecar hash fixers, including owner-declared pnpm
+  # repairs. Emits a bash function
   # `fix_fod_hash <attrPath> <drvPattern> <sidecarKey>` that builds
   # `<attr>.<attrPath>` through the FLAKE'S OWN `packages` output — so the
   # derivation under test is the one consumers get, overlay stack and all
@@ -135,6 +135,22 @@ rec {
   # mismatch and never reach the deps one. Two sequential invocations,
   # each its own `nix build`, is what lets the second read the sidecar the
   # first just wrote.
+  #
+  # A successful build is read as "the recorded hash is right", and that
+  # only holds when the build actually FETCHED. A fixed-output path is a
+  # function of its name and its declared hash, so when nothing in either
+  # moved — a nixpkgs, toolchain or pnpm bump at an unchanged package
+  # version — the path is the one already in the local store or in cachix.
+  # Nix substitutes it, the build succeeds, and this reports `ok` without
+  # comparing anything. So a caller that has NOT first reset the key to
+  # `lib.fakeHash` repairs a stale hash only when the old output is not
+  # substitutable. The version-bump chain always resets it (`buildCandidate`
+  # rewrites the sidecar from scratch); `fix_sidecar_hashes` in
+  # dev/scripts/update-common.sh does not. A substituted stale output is
+  # also what the verification build consumed, so no hash mismatch was
+  # seen there either: the package builds, or it fails in its build phase
+  # and the input PR opens red. It is never committed as a silently wrong
+  # hash, but nothing here re-derives it.
   #
   # Runs from the repo root, and the sidecar must be GIT-TRACKED: a flake
   # only sees tracked files, so an untracked sidecar is invisible to the
@@ -524,7 +540,9 @@ rec {
   # The (attrPath, drvPattern, key) triples that the sidecar hash fixers
   # below compose. Declared once and named, so the derivation-name
   # patterns — which are load-bearing rather than decorative; see
-  # `fodHashFixFn` — cannot drift between the three fixers that use them.
+  # `fodHashFixFn` — cannot drift between the four consumers that replay
+  # them: `mkGoUpdateExtract`, `mkGoVendorFix`, `mkNpmDepsFix`, and an
+  # owner-declared `mkHashFix` such as kimchi's pnpm repair.
   hashFixTargets = {
     goVendor = {
       attrPath = "goModules";
@@ -535,6 +553,11 @@ rec {
       attrPath = "npmDeps";
       drvPattern = "-npm-deps";
       key = "npmDepsHash";
+    };
+    pnpmDeps = {
+      attrPath = "pnpmDeps";
+      drvPattern = "-pnpm-deps";
+      key = "pnpmDepsHash";
     };
     src = {
       attrPath = "src";
@@ -644,8 +667,8 @@ rec {
   # combined `fixHashes` and was silently outside that roster.
   #
   # HALF of glab's exposure is still unreachable, and that is a known gap
-  # rather than a fixed one. `fix_sidecar_hashes` discovers `fixVendorHash`
-  # and `fixNpmDepsHash` only, so `fixSrcHash` has no caller: a nixpkgs
+  # rather than a fixed one. `fix_sidecar_hashes` discovers dependency
+  # fixers only, so `fixSrcHash` has no caller: a nixpkgs
   # fetcher change that invalidates glab's `srcHash` with no version bump
   # still cannot self-heal. It presents confusingly, too — `fixVendorHash`
   # builds `.goModules`, the `-source` FOD mismatches first, and
@@ -751,12 +774,9 @@ rec {
   # that sources `fodHashFixFn`'s `fix_fod_hash` and then calls it once
   # per target, in the order given.
   #
-  # Extracted when a THIRD caller appeared. The callers today are
-  # `mkGoVendorFix`, `mkNpmDepsFix` and the src-only fixer
-  # `mkGoUpdateExtract` builds internally; they differ only in the name
-  # and in which (attrPath, drvPattern, key) triples they replay, and
-  # three copies of the same `set -euETo pipefail` + interpolate +
-  # call-in-order body is the duplication this file exists to prevent.
+  # Shared by the Go, npm, source and owner-declared pnpm repairs. Callers
+  # select the named (attrPath, drvPattern, key) targets; this helper owns
+  # strict mode and invokes the common mismatch parser for each target.
   #
   # ORDER IS SIGNIFICANT and is the caller's responsibility: a derived
   # hash (`goModules`, `npmDeps`) is computed FROM `src`, so `src` must

@@ -33,9 +33,10 @@ All three live in `dev/references/kimchi-surface/`.
 
 ## 1. Find every version's source tree, then identify it by hash
 
-Kimchi is packaged from a release tarball, so `nix build` yields a compiled bun
-binary and no source. Source trees from the `build/kimchi-from-source` line of
-work are realized in the store, so find those instead.
+`nix build` yields a compiled bun binary, but the package builds it from the
+release source pinned as `extraction.kimchiSource`, and the extractor reads the
+same tree. So every version this clone has built or extracted left its source
+tree in the store. Find those.
 
 ```bash
 for p in /nix/store/*-source; do
@@ -45,12 +46,13 @@ done
 ```
 
 That enumerates the trees. To put a VERSION on one, map its NAR hash against the
-`src.hash` each branch pinned. Guard the JSON read. Only the
-`build/kimchi-from-source` line of branches carries a `src` key at all; on every
-other ref this reads either non-JSON or a `sources.json` of per-platform release
-tarballs with no `src` in it. Unguarded, the ~180 refs in a working clone bury
-the handful of real lines under a couple of hundred tracebacks, and
-`2>/dev/null` silences git but not Python.
+source hash each branch pinned. That pin has lived in two places: a top-level
+`src` key on the older `build/kimchi-from-source` refs, and
+`extraction.kimchiSource` once the source build and the extractor shared one
+pin. Guard the JSON read, because older refs carry neither and some carry no
+`sources.json` at all. Unguarded, the ~180 refs in a working clone bury the
+handful of real lines under a couple of hundred tracebacks, and `2>/dev/null`
+silences git but not Python.
 
 ```bash
 git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | while read -r br; do
@@ -58,7 +60,8 @@ git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | while rea
 import json, sys
 try:
     d = json.load(sys.stdin)
-    print(d["version"], d["src"]["hash"])
+    src = d.get("src") or d["extraction"]["kimchiSource"]
+    print(d["version"], src["hash"])
 except (KeyError, TypeError, ValueError):
     pass
 '
@@ -99,9 +102,10 @@ At the time of writing the store held nine trees, covering 1.1.21, 1.1.25,
 A rescan normally starts on a version nobody has built from source, which is
 exactly the case neither loop above can help with. Realize one:
 
-1. Check out the `build/kimchi-from-source` branch.
-2. Set `version` and `src.hash` in `packages/kimchi/sources.json` to the release
-   you want.
+1. Use a checkout whose kimchi package builds from source.
+2. Set `version` and `extraction.kimchiSource` (`url` and `hash`, from
+   `nix store prefetch-file --json --unpack`) in `packages/kimchi/sources.json`
+   to the release you want.
 3. Build it. The realized `-source` path is then both the tree to read and its
    own identification — you supplied the hash, so no inference is involved.
 

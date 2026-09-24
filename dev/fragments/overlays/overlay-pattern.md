@@ -1,9 +1,10 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-23 — Bruno 4.2.0 repairs stale workspace lock
+> **Last verified:** 2026-09-24 — Bruno 4.2.0 repairs stale workspace lock
 > entries in the builder input shared with its npm dependency fetcher; Kimchi's
-> source-derived sidecar participates in the extraction loop; Go floor overrides
-> preserve each recipe's builder baseline.
+> source-derived sidecar participates in the extraction loop, Kimchi joins the
+> release-derived Go-floor update chain and declares a pnpm dependency-hash
+> fixer; Go floor overrides preserve each recipe's builder baseline.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -381,9 +382,11 @@ choice usually gets read as a question about the source shape. It mostly is not.
   does NOT self-heal a hash invalidated WITHOUT a version bump: it early-exits
   on version equality and never re-derives. An input update follows a separate
   repair path: failed verification discovers `fix_sidecar_hashes`, derives the
-  hashes through the package's passthru fixers, and retries once. An out-of-band
-  same-version change still needs the standalone fixer
-  (`passthru.fixVendorHash`, `passthru.fixNpmDepsHash`) as an explicit escape
+  hashes through the package's passthru fixers, and retries once. Those fixers
+  build against the recorded hash, so they re-derive it only when the old output
+  cannot be substituted; a cached path reports `ok`. An out-of-band same-version
+  change still needs the standalone fixer (`passthru.fixNpmDepsHash`,
+  `passthru.fixPnpmDepsHash`, `passthru.fixVendorHash`) as an explicit escape
   hatch. Hashes are derived by those fixers, never edited by hand. Inline
   re-derives every sweep and therefore self-heals without that repair path.
   **Neither shape fails silently**; do not write that one does.
@@ -469,8 +472,11 @@ PINNED src instead, so one hash covers both and the vendor set self-updates.
 Go has the same transitive-hash problem and no `importCargoLock` equivalent —
 `go.sum` records module hashes, not a Nix-fetchable vendor tree — so
 `vendorHash` must be recorded somewhere. It goes in the sidecar (`beads`, its
-nested paired Dolt, `gh`, `glab`, `gluetun`, `oh-my-posh`, `otel-tui`), never
-inline, and the mechanism is worth understanding before touching it:
+nested paired Dolt, `gh`, `glab`, `gluetun`, `kimchi`, `oh-my-posh`,
+`otel-tui`), never inline, and the mechanism is worth understanding before
+touching it. Kimchi is the odd row: the recorded hash covers its nested
+`proxy-helper` rather than a top-level Go build, and everything below still
+applies to it unchanged.
 
 - `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
   (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not itself
@@ -547,10 +553,11 @@ runs `vu.mkExtractRegen` after the hash fixer. Its extract BUILDS `src` and
 producing a schema. `chatgpt-codex` and `claude-code` fetch prebuilt binaries
 and pass `mkExtractRegen` alone. Kiro also fetches a prebuilt binary, but its
 update wrapper refreshes the public model snapshot before regeneration on EVERY
-sweep: model changes do not wait for a binary version bump. Kimchi separately
-pins its release source, exact pi npm dependency, and the three declaration
-packages that dependency's settings type imports. It refreshes all five inputs
-after a binary version bump, then runs `mkExtractRegen` against them.
+sweep: model changes do not wait for a binary version bump. Kimchi pins its
+release source ONCE, and both its source build and its extractor read that pin.
+Beside it sit its exact pi npm dependency and the three declaration packages
+that dependency's settings type imports. A version bump refreshes all five
+inputs and runs `mkExtractRegen` against them before the Go and pnpm fixers.
 
 Wiring that regeneration is not optional for an extracted package, and glab
 demonstrates the cost of missing it: it was the one such package that never had
@@ -645,12 +652,14 @@ returns `ourGo` and the seam **silently does nothing**.
 
 So the floor is extracted from the pinned source's go.mod, by mechanism:
 
-- **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `oh-my-posh`,
-  `otel-tui`)** — `vu.mkGoFloorFix` runs as `extraExtract` and writes a
-  `goFloor` key into the sidecar. Correct home for it because the floor is a
-  function of the pinned version, so it changes only when the version does —
-  unlike `vendorHash`, which can be invalidated with no version bump and
-  therefore also needs a standalone `passthru` escape hatch.
+- **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `kimchi`,
+  `oh-my-posh`, `otel-tui`)** — `vu.mkGoFloorFix` runs as `extraExtract` and
+  writes a `goFloor` key into the sidecar. Correct home for it because the floor
+  is a function of the pinned version, so it changes only when the version does
+  — unlike `vendorHash`, which can be invalidated with no version bump and
+  therefore also needs a standalone `passthru` escape hatch. Kimchi chains its
+  pnpm dependency fixer after the Go stages; input-bump repair also discovers
+  its `passthru.fixPnpmDepsHash`.
 - **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`)** — a literal
   in the overlay. These have no sidecar and are bumped by `nix-update` (`git`
   targets in owner `registry.nix`), so there is no repo-owned update script to

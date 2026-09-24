@@ -7,8 +7,10 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-23 — Kiro settings extraction validates its
-> materialized TUI registry and workspace merge with AST checks; Kimchi
+> **Last verified:** 2026-09-24 — `fix_sidecar_hashes` also re-derives
+> `pnpmDepsHash`, but only when the stale output is not substitutable; kimchi
+> versions its pnpm-deps and src FOD names; Kiro settings extraction validates
+> its materialized TUI registry and workspace merge with AST checks; Kimchi
 > attributes every config.ts JSON read to the file it reads, censuses every
 > resolved environment read, and no longer extracts a CLI surface nothing read.
 >
@@ -257,9 +259,13 @@ spliced into `mkUpdateScript`'s `commitCandidate`, immediately after the sidecar
   hand-regeneration case — the command is in each check's failure message.
 - Do not confuse this with the OTHER self-heal in this repo.
   `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) re-derives a
-  `vendorHash` / `npmDepsHash` invalidated by a nixpkgs or toolchain bump at an
-  unchanged version, through `passthru.fixVendorHash` and friends. Hashes have
-  that standalone escape hatch; extracts deliberately do not, because a changed
+  `vendorHash`, `npmDepsHash` or `pnpmDepsHash` invalidated by a nixpkgs or
+  toolchain bump at an unchanged version, through `passthru.fixVendorHash`,
+  `passthru.fixNpmDepsHash` and `passthru.fixPnpmDepsHash` — but only when the
+  old output cannot be substituted. An unchanged version leaves the FOD's name
+  and hash unchanged, so a cached path satisfies the fixer's build and it
+  reports `ok` (see the stale-`pnpmDeps` bullet below). Hashes have that
+  standalone escape hatch; extracts deliberately do not, because a changed
   extract means someone edited the extractor and should look at the diff.
 
 Debugging entry points when a bump PR still goes red:
@@ -618,6 +624,26 @@ feature maturities, and config-key extraction fail closed.
   writing a fake hash and reading `got:` — the same trick nix-update performs
   with `outputHash = ""`, which is why the sweep gets this right and a manual
   repin has to ask for it.
+
+  The structural fix is a versioned name, so every bump moves the path and the
+  fetch must verify the hash. kimchi derives one `versionedName` from its
+  `sources.json` version and passes it as `fetchPnpmDeps`' `pname` and in the
+  explicit `name` of the `fetchzip` source it shares with its extractor, whose
+  default name `source` is unversioned for the same reason. Measured 2026-09-23
+  while rebasing kimchi from 1.1.30 to 1.1.33: at the commit without versioned
+  names, the untouched 1.1.30 hash substituted the old dependency set and the
+  build died with `ERR_PNPM_NO_OFFLINE_TARBALL` on `chokidar-5.0.0`, a package
+  only 1.1.33 locks. With the names versioned, the same stale hash forces a
+  fetch whose mismatch reports the real `got:`. oxlint, context7-mcp and
+  effect-mcp still pass the bare `pname`.
+
+  A versioned name covers a VERSION bump only. A nixpkgs or pnpm bump at an
+  unchanged kimchi version moves neither the name nor the declared hash, so the
+  old path still substitutes. The build then consumes the old dependency set,
+  and `fix_sidecar_hashes` — which builds against the recorded hash — reports
+  `ok` without re-deriving it. The input PR opens red if that set no longer
+  builds; it never commits a wrong hash. A fresh `got:` still needs the
+  fake-hash trick above.
 
   `cargoDeps` cannot be masked this way: `fetchCargoVendor` names its staging
   output `${pname}-${version}-vendor-staging`, and `vu.mkVersion` puts the short
