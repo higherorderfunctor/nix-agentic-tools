@@ -16,9 +16,8 @@
 }: let
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-  dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
-  sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
+  sharedHooks = lib.ai.hooks;
   # Native option types, project-tier keys and environment names, all read
   # from the committed sidecar (never passthru.extracted: that is IFD).
   sidecar = import ./extracted.nix {
@@ -70,17 +69,14 @@
     (sharedHooks.merge topHooks cfg.hooks);
   hasHookHandlers = hooks: lib.any (lib.any (block: block.hooks != [])) (builtins.attrValues hooks);
 
-  # The delivery function and package hook need the same settings, env and
-  # context values from merged inputs; prepare them once.
+  # The launcher both install hooks share: the merged environment, the
+  # runtime secret export and, on devenv, the exact-cwd guard.
   mkPrep = {
     cfg,
     mergedEnvironmentVariables,
     moduleEnvironmentVariables ? {},
-    mergedContext,
     requiredProjectRoot ? null,
   }: let
-    contextEntry = aiCommon.contentFileEntry mergedContext;
-
     # Non-secret env vars — baked into the wrapper via `--set`.
     kimchiEnvVars =
       lib.optionalAttrs cfg.noUpdateCheck {${sidecar.environmentName "KIMCHI_NO_UPDATE_CHECK"} = "1";}
@@ -133,9 +129,6 @@
       '';
     };
   in {
-    inherit contextEntry;
-    filteredSettings = aiCommon.filterNulls cfg.native.settings;
-    filteredHarnessSettings = aiCommon.filterNulls cfg.native.harnessSettings;
     package =
       if wrapArgs != []
       then wrappedPackage
@@ -144,23 +137,19 @@
   # Both backends install the same prepared wrapper (env + the runtime secret,
   # which is cat'd at launch so it never enters the store). Handed to the
   # shared transform's `installPackage` hook, which owns the `home.packages` /
-  # `packages` lowering. The second `mkPrep` application re-evaluates (Nix caches
-  # thunks, not function applications at distinct call sites) but
-  # yields the identical derivation, so it adds no build.
+  # `packages` lowering.
   kimchiInstallPackage = {
     cfg,
-    mergedContext,
     mergedEnvironmentVariables,
     moduleEnvironmentVariables,
     ...
   }:
-    (mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;}).package;
+    (mkPrep {inherit cfg mergedEnvironmentVariables moduleEnvironmentVariables;}).package;
 
   kimchiDevenvInstallPackage = {
     cfg,
     config,
     mergedAgents,
-    mergedContext,
     mergedEnvironmentVariables,
     mergedServers,
     moduleEnvironmentVariables,
@@ -177,7 +166,7 @@
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
-      inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;
+      inherit cfg mergedEnvironmentVariables moduleEnvironmentVariables;
       requiredProjectRoot =
         if hasExactCwdProjectFiles
         then config.devenv.root
@@ -196,13 +185,13 @@
     mergedEnvironmentVariables,
     mergedServers,
     mergedSkills,
-    moduleEnvironmentVariables,
     resolvedSettings,
     topHooks,
     ...
   }: let
-    prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
-    inherit (prep) contextEntry filteredHarnessSettings filteredSettings;
+    contextEntry = aiCommon.contentFileEntry mergedContext;
+    filteredSettings = aiCommon.filterNulls cfg.native.settings;
+    filteredHarnessSettings = aiCommon.filterNulls cfg.native.harnessSettings;
     isDevenv = backend == "devenv";
     configPath =
       if isDevenv
@@ -539,7 +528,7 @@
       # backs an edited file up and restores the declaration; a file Kimchi
       # created is an unowned sibling and is never touched.
       (lib.mkIf (cfg.agentsDir != null) {
-        ai.kimchi.agents = lib.mapAttrs (_: lib.mkDefault) (dirHelpers.agentsFromDir cfg.agentsDir);
+        ai.kimchi.agents = lib.mapAttrs (_: lib.mkDefault) (lib.ai.agentsFromDir cfg.agentsDir);
       })
       {
         ai.kimchi.files = lib.mapAttrs' (name: value: let
