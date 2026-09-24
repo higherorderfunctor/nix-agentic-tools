@@ -1,11 +1,12 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-23 — merged pools are public
+> **Last verified:** 2026-09-24 — merged pools are public
 > `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
 > text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> fail across runtimes except the shared AGENTS.md target, matched on each
+> factory's declared key. Rules and context use entry-local `enable`
+> suppression; delivery entries default `content` alone, and
+> `content.enable = false` suppresses every content form.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -255,9 +256,11 @@ claim inventory. Two enabled runtimes claiming the same live file path fail
 evaluation on both backends, even if their bytes match. Disabled entries (the
 same `runtimeFiles.isLive` rule the router uses) and disabled runtimes do not
 participate. A shared repository context target is the sole exception: each
-claimant's `context.filename` must resolve to that target, and all claimants
-must select the same method. The aggregate's native owner uses `symlink`; a
-public override cannot silently select an owned-file method.
+claimant's devenv factory must declare that target as its key in
+`ai.internal.agentsMdTargets` (not `context.filename`, which for Kimchi names
+the Home Manager harness file while devenv always writes `AGENTS.md`), and all
+claimants must select the same method. The aggregate's native owner uses
+`symlink`; a public override cannot silently select an owned-file method.
 
 Repository-local `AGENTS.md` is the shared-target exception, not a B7 exception.
 `sharedAgentsMd.nix` admits applicable public entries from enabled runtimes
