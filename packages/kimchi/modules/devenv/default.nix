@@ -1,13 +1,17 @@
-# Applies the devenv transform to the kimchi app record.
+# Applies the devenv transform to the kimchi app record, alongside the shared
+# (backend-independent) kimchi modules.
 {
   lib,
   pkgs,
   ...
-} @ args: let
+}: let
   aiLib = import ../../../../lib/ai {inherit lib;};
-in
-  (aiLib.app.devenvTransform (import ../../lib/mkKimchi.nix {
-    lib = lib // {ai = aiLib;};
-    inherit pkgs;
-  }))
-  args
+in {
+  imports = [
+    ../common.nix
+    (aiLib.app.devenvTransform (import ../../lib/mkKimchi.nix {
+      lib = lib // {ai = aiLib;};
+      inherit pkgs;
+    }))
+  ];
+}
