@@ -6,8 +6,10 @@
 #
 # Input record shape: see mkRuntime.nix, which owns it. `checkRecord.nix`
 # rejects a backend spec carrying anything but `installPackage`,
-# `migrationConfig` and `options`, both there and here, because a record can
-# reach this transform without passing mkRuntime. This body reads `<backend>`
+# `migrationConfig` and `options`, and a `poolOptions` key no pool option here
+# reads, both there and here, because a record can reach this transform
+# without passing mkRuntime. It also rejects a stray field in what the
+# record's `sharedAgentsMd` callback returns. This body reads `<backend>`
 # for those three and ignores the other backend's spec: `installPackage` and
 # `migrationConfig` fall back to the record-level field, while `options` is
 # merged over the record's shared `options` rather than replacing them.
@@ -221,6 +223,7 @@
       type = lib.types.attrsOf lib.types.path;
     };
   };
+  checkRecord = import ./checkRecord.nix {inherit lib;};
   # A per-runtime pool option the builder declares for a supported pool, with
   # the record's `poolOptions.<pool>` merged over it, so a runtime states only
   # what differs: its own description, or a native type (Codex's agents).
@@ -250,7 +253,7 @@
   # of an exported record, or a hand-built one), so its closed fields are
   # checked again here. Every backend-specific read goes through
   # `backendSpec`, and `backendOptions` is forced by every evaluation.
-  backendSpec = assert import ./checkRecord.nix {inherit lib;} appRecord;
+  backendSpec = assert checkRecord.record appRecord;
     appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
   # Delivery is described once, on the record. Installation and migration
@@ -304,7 +307,11 @@
   # content, for observers such as file-warnings.nix. A limit is published
   # with it too, because the runtime reads the file whoever wrote it.
   sharedAgentsMdConfig = lib.optionalAttrs (backend == "devenv" && appRecord ? sharedAgentsMd) (let
-    shared = appRecord.sharedAgentsMd callbackArgs;
+    # Read by field, so a stray one is rejected rather than dropped.
+    shared = let
+      result = appRecord.sharedAgentsMd callbackArgs;
+    in
+      assert checkRecord.sharedAgentsMd appRecord.name result; result;
     rules = shared.rules or {};
     hasContent = normalizedHasContext || rules != {};
   in {
