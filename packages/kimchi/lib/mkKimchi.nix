@@ -497,7 +497,11 @@
       ]))
 
       # User harness context stays runtime-owned. Project context joins the one
-      # shared repository AGENTS.md owner used by Codex and Kiro.
+      # shared repository AGENTS.md owner used by Codex and Kiro, at a fixed
+      # key: context.filename names the Home Manager harness file only.
+      # Published for observers such as file-warnings.nix, whether or not the
+      # key has content this evaluation.
+      (lib.mkIf isDevenv {ai.internal.agentsMdTargets.kimchi = projectContextFilename;})
       (lib.mkIf hasMergedContext (
         if isDevenv
         then {

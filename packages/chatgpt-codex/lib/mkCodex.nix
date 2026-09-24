@@ -982,6 +982,9 @@ in
       ...
     }: let
       isHm = backend == "hm";
+      # The shared repository AGENTS.md key devenv writes this runtime's
+      # context and rules into.
+      projectContextKey = cfg.context.filename;
       nativeDir = nativeDirFor backend cfg;
       configFile = "${nativeDir}/config.toml";
       # The TOML ledger directory and name are a live migration contract: every
@@ -1211,7 +1214,10 @@ in
               content = lib.mkDefault {source = tomlFormat.generate "codex-project-config.toml" settings;};
               executable = null;
             };
-            internal.agentsMd.${cfg.context.filename} =
+            # The key this factory writes, published for observers such as
+            # file-warnings.nix, whether or not it has content this evaluation.
+            internal.agentsMdTargets.codex = projectContextKey;
+            internal.agentsMd.${projectContextKey} =
               {
                 hasContent = lib.mkDefault hasAgentsMdContent;
                 maxBytes = cfg.projectDocMaxBytes;

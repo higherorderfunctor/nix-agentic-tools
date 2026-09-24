@@ -178,20 +178,33 @@
     })
   runtimeNames;
 in {
-  options.ai.internal.agentsMd = lib.mkOption {
-    type = lib.types.attrsOf fileType;
-    default = {};
-    internal = true;
-    visible = false;
-    description = "Repository-local keyed AGENTS.md compositions shared across runtimes.";
-  };
-  options.ai.internal.files = lib.mkOption {
-    type = deliveryOptions.fileMapType;
-    default = {};
-    apply = runtimeFiles.validateFiles "internal";
-    internal = true;
-    visible = false;
-    description = "Single-owner repository files rendered from cross-runtime compositions.";
+  options.ai.internal = {
+    agentsMd = lib.mkOption {
+      type = lib.types.attrsOf fileType;
+      default = {};
+      internal = true;
+      visible = false;
+      description = "Repository-local keyed AGENTS.md compositions shared across runtimes.";
+    };
+    agentsMdTargets = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {};
+      internal = true;
+      visible = false;
+      description = ''
+        Runtime name to the `ai.internal.agentsMd` key its devenv factory
+        writes, declared whether or not that key has content. Observers read it
+        instead of inferring the key from a runtime option.
+      '';
+    };
+    files = lib.mkOption {
+      type = deliveryOptions.fileMapType;
+      default = {};
+      apply = runtimeFiles.validateFiles "internal";
+      internal = true;
+      visible = false;
+      description = "Single-owner repository files rendered from cross-runtime compositions.";
+    };
   };
 
   config = lib.mkMerge [

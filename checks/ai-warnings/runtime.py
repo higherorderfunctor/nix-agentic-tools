@@ -182,10 +182,14 @@ def clamp(script, root):
     run(argv, env=env, stdin=envelope, warning="cannot read payload")
 
 
-def wiring(script):
+def manifest(script):
     words = shlex.split(Path(script).read_text().replace("\\\n", ""))
-    manifest = next(word for word in words if word.endswith("-ai-delivery-files.json"))
-    desired = json.loads(Path(manifest).read_text())
+    path = next(word for word in words if word.endswith("-ai-delivery-files.json"))
+    return json.loads(Path(path).read_text())
+
+
+def wiring(script):
+    desired = manifest(script)
     assert "ai.kiro.lspServers" in desired[".custom-kiro/settings/lsp.json"]["option"]
     assert "ai.codex.native.settings" in desired[".codex/config.toml"]["option"]
     assert 'ai.codex.files."probe"' in desired["probe"]["option"]
@@ -198,6 +202,14 @@ def wiring(script):
     assert ".custom-kiro/consumer-owned.md" not in desired
 
 
+def kimchi_wiring(script):
+    # Kimchi's devenv context lands in the project-root AGENTS.md whatever its
+    # (Home Manager) context.filename says; the manifest must follow the file
+    # actually written, not the option.
+    desired = manifest(script)
+    assert "ai.kimchi." in desired.get("AGENTS.md", {}).get("option", ""), desired
+
+
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     files(sys.argv[1], root)
@@ -207,4 +219,5 @@ with tempfile.TemporaryDirectory() as directory:
     workflows(sys.argv[1], root / "workflows")
     clamp(sys.argv[5], root / "clamp")
     wiring(sys.argv[6])
+    kimchi_wiring(sys.argv[7])
 print("PASS: file observations and optional hook warnings have firing and silent controls")

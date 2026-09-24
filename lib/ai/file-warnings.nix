@@ -12,8 +12,10 @@
 #
 # The shared AGENTS.md owner (`ai.internal.files`) is not read here. Each
 # runtime's own key already arrives through its policy `AGENTS.md` writer,
-# rebased onto `context.filename`, and a public override on it is already in
-# the runtime's `files`. Reading the whole owner per runtime attributed every
+# rebased onto the key its factory declares in `ai.internal.agentsMdTargets`,
+# and a public override on it is already in the runtime's `files`. The key is
+# read from the factory, not from `context.filename`: Kimchi's names its Home
+# Manager harness file while its devenv factory always writes AGENTS.md. Reading the whole owner per runtime attributed every
 # runtime's key to the first one listed, so Kiro's context file was reported
 # as `ai.codex.files`.
 {
@@ -47,7 +49,7 @@
       else if runtime == "copilot" && lib.hasPrefix "${defaultProjectPrefix}/" original
       then projectPrefix + lib.removePrefix defaultProjectPrefix original
       else if original == "AGENTS.md"
-      then cfg.context.filename or original
+      then ai.internal.agentsMdTargets.${runtime} or original
       else original;
   in
     map (writer: {
