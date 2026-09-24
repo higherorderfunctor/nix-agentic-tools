@@ -1,12 +1,13 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-23 — the builder entry point is
-> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
-> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Resolves #877: Kiro's FHS root supplies bash but
-> hides a host zsh, and that does not justify a runtime-specific implicit shell
-> default. `ai.shell` stays null; see below for the standing decision and the
-> override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-24 — the builder entry point is
+> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
+> callback. Native file settings live under `ai.<runtime>.native`
+> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
+> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
+> a runtime-specific implicit shell default. `ai.shell` stays null; see below
+> for the standing decision and the override rule it shares with normalized
+> `settings`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -18,7 +19,7 @@ places:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime merging;
-- only supported root pools reach the backend callback; and
+- only supported root pools reach the delivery callback; and
 - `shell` resolution runs only when `shell` is in the list.
 
 An unsupported per-runtime write is therefore an "option does not exist" eval

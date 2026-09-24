@@ -1,39 +1,13 @@
-# Shared backend transformer body.
+# Shared backend transformer body. `lib.ai.app.hmTransform` and
+# `devenvTransform` both select it in app/default.nix; the `backend` argument
+# is the only thing that differs. One module owns the pool fold, the public
+# normalized options, package installation and delivery lowering, and the
+# runtime supplies one delivery callback shared by both backends.
 #
-# `hmTransform.nix` and `devenvTransform.nix` were ~135 near-identical
-# lines each. Every merge, every option declaration and the whole
-# `config` block were duplicated verbatim; the ONLY functional
-# difference was which key of the app record the backend-specific
-# spec is read from (`hm` vs `devenv`). That is this file's `backend`
-# argument, and nothing else differs.
-#
-# Keeping them as two copies meant every change to the shared option
-# surface had to be made twice, and the two had already drifted — the
-# devenv copy's `mcpServers`, `rules`, `skills` and `skillsDir`
-# descriptions had lost the merge semantics the HM copy documented,
-# even though both run the SAME merge code. Unifying on the fuller
-# text makes the devenv option docs correct rather than terse.
-#
-# Input record shape (from mkRuntime):
-#   {
-#     name;
-#     transformers;
-#     defaults ? {package};
-#     options ? {};            # shared across backends
-#     supportedPools ? [];      # normalized ai.* pools this runtime consumes
-#     contextDescription ? null;
-#     rulesDescription ? null;
-#     <backend> ? {
-#       options ? {};          # backend-only option additions
-#       defaults ? {};         # backend-only default overrides
-#       migrationConfig ? _: {}; # bounded cleanup emitted outside enable gate
-#       config ? _: {};        # consumer callback:
-#                              #   {cfg, config, merged*, mergedContext, topHooks,
-#                              #    resolvedSettings}
-#                              #   → module attrs
-#     };
-#     <other-backend> ? { ... };   # ignored here
-#   }
+# Input record shape: see mkRuntime.nix, which owns it and rejects a backend
+# spec carrying anything but `installPackage`, `migrationConfig` and
+# `options`. This body reads `<backend>` for those three, each falling back
+# to the record-level field, and ignores the other backend's spec.
 #
 # Returns: a module function `{config, ...}: { options; config; }`
 # that can be imported into `lib.evalModules` alongside
@@ -260,16 +234,12 @@
 
   backendSpec = appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
-  backendDefaults = backendSpec.defaults or {};
-  # A runtime that describes its delivery rather than lowering it needs ONE
-  # callback, so the record may carry it directly. A backend spec's own
-  # `config` still wins, which is what lets a runtime move one backend at a
-  # time while the other keeps its existing body.
-  backendConfigFn = backendSpec.config or appRecord.config or (_: {});
-  migrationConfigFn = backendSpec.migrationConfig or (_: {});
+  # Delivery is described once, on the record. Installation and migration
+  # default to the record too, and a backend spec overrides either one.
+  configFn = appRecord.config or (_: {});
+  migrationConfigFn = backendSpec.migrationConfig or appRecord.migrationConfig or (_: {});
 
-  defaults = appRecord.defaults or {};
-  package = backendDefaults.package or defaults.package or null;
+  package = (appRecord.defaults or {}).package or null;
 
   # `config` rides along so callbacks can observe sibling backend
   # options — e.g. the devenv materializer's conditional `devenv:files`
@@ -295,7 +265,7 @@
     resolvedShell = normalizedPool "shell" null;
     topHooks = normalizedPool "hooks" {};
   };
-  customConfig = backendConfigFn callbackArgs;
+  customConfig = configFn callbackArgs;
   migrationConfig = migrationConfigFn callbackArgs;
   # Repository AGENTS.md targets have one cross-runtime owner. Public file
   # entries for those paths arbitrate inside sharedAgentsMd.nix;
@@ -311,10 +281,10 @@
   runtimeSinkFiles = builtins.removeAttrs cfg.files sharedAgentsMdTargets;
   # ── Package installation ───────────────────────────────────────────────
   # Owned HERE, not by each factory. An enabled runtime installs SOMETHING
-  # unless its backend spec opts out EXPLICITLY.
+  # unless its record or backend spec opts out EXPLICITLY.
   #
-  # The default is load-bearing: a backend spec that says nothing about
-  # packages installs `cfg.package`. It used to be the reverse — installation
+  # The default is load-bearing: a record that says nothing about packages
+  # installs `cfg.package`. It used to be the reverse — installation
   # was a per-factory `home.packages` / `packages` write with no shared
   # requirement — and `claude` shipped with that write missing from BOTH
   # backends. Home Manager masked it (upstream's `programs.claude-code`
@@ -326,7 +296,7 @@
   # that wraps its binary derives the wrapper once and never repeats the
   # lowering. `null` is the documented opt-out and exists for exactly one
   # case — see mkClaude.nix's `hm` spec.
-  installPackageFn = backendSpec.installPackage or (_: cfg.package);
+  installPackageFn = backendSpec.installPackage or appRecord.installPackage or (_: cfg.package);
   rawInstalledPackages =
     if installPackageFn == null
     then []
@@ -584,7 +554,6 @@ in {
     # Both real backends expose warnings. Minimal evalModules callers without
     # that option still see diagnostics when they force the installed packages.
     (lib.optionalAttrs (options ? warnings) {warnings = deliveryWarnings;})
-    {_module.args.aiTransformers = appRecord.transformers;}
     {
       ai.${appRecord.name}.normalized =
         lib.mapAttrs (_: pool: lib.mapAttrs (_: lib.mkDefault) pool)

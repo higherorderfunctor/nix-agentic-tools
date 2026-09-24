@@ -135,7 +135,6 @@ in
       "settings"
       "skills"
     ];
-    transformers.markdown = lib.ai.transformers.copilot;
     defaults = {
       package = pkgs.ai.copilot-cli;
     };

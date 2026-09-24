@@ -1,12 +1,12 @@
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-09-24 — L5 is the delivery router plus one adapter per
-> backend; Claude, Codex, Copilot and Kiro describe delivery once, Kimchi
-> reaches the layer from its callbacks, and the delivery matrix is generated
-> from the layer for every runtime's files. Normalized pools carry only a
-> text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
-> rules are read-only copies whose writers survive a disable. Copilot reconciles
-> its user settings.json on HM and the repository
+> backend; every runtime describes delivery once through the record-level
+> `config`, which `mkRuntime` makes the only delivery callback, and the delivery
+> matrix is generated from the layer for every runtime's files. Normalized pools
+> carry only a text-source record's winning arm. Claude's devenv rules and
+> Codex's execpolicy rules are read-only copies whose writers survive a disable.
+> Copilot reconciles its user settings.json on HM and the repository
 > `.github/copilot/settings.json` on devenv. Kiro excludes the normalized
 > `settings` pool. Native file settings live under `ai.<runtime>.native`. Each
 > devenv factory publishes its shared AGENTS.md key in
@@ -170,7 +170,7 @@
   records and so never touches. The writer is declared from `migrationConfig`
   with `runWhenDisabled = true`, so both N→0 and disabling Codex retract the
   copies; an `allow` policy must not outlive its declaration.
-- **Retirement can survive disable explicitly.** Kiro's migration callback
+- **Retirement can survive disable explicitly.** Kiro's `migrationConfig`
   declares its unclaimed steering ledger with `runWhenDisabled = true`, and the
   Claude rules and Codex execpolicy writers declare theirs the same way. The
   adapter strips every file claim and ordinary writer while disabled; the
@@ -302,8 +302,8 @@ Kimchi supplied.
 
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
-  `lib/ai/app/mkBackendTransform.nix` (the HM/devenv transform files are thin
-  selectors)
+  `lib/ai/app/mkBackendTransform.nix` (`lib/ai/app/default.nix` selects it once
+  per backend)
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
@@ -328,10 +328,10 @@ Kimchi supplied.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline (if every
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
-3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
-   The normalized `settings` pool follows the same rule: a runtime with no
-   lossless target for any field (Kiro) leaves it out, and one that lowers only
-   some fields keeps it and warns for the rest.
+3. Add `X` to `supportedPools` only on app records whose delivery `config`
+   consumes it. The normalized `settings` pool follows the same rule: a runtime
+   with no lossless target for any field (Kiro) leaves it out, and one that
+   lowers only some fields keeps it and warns for the rest.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's `config`. Declare owned outputs' ledgers under
    `ai.<runtime>.activation`; work that owns no files uses `command`.
