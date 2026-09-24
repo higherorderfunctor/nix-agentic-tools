@@ -786,35 +786,26 @@
       })
     (lib.filterAttrs (_: agent.isSemantic) agents);
 
+  # Lower Codex's typed statusMessage to its text, then render through the
+  # shared renderer, which drops a null field. Keep the presence guard for
+  # portable handlers that omit this Codex-only field. The shared type rejects
+  # enabled empty text, so this lowering only checks whether it is enabled.
   renderHooks = hooks:
-    lib.mapAttrs (_event: blocks:
+    sharedHooks.render (lib.mapAttrs (_event:
       map (block:
-        lib.optionalAttrs (block.matcher != null) {inherit (block) matcher;}
+        block
         // {
-          hooks =
-            map (
-              handler:
-                lib.filterAttrs (_: value: value != null) (
-                  handler
-                  // {
-                    # Keep the presence guard for portable handlers that omit
-                    # this Codex-only typed field. The shared type rejects
-                    # enabled empty text, so this lowering only checks whether
-                    # it is enabled.
-                    statusMessage =
-                      if
-                        handler
-                        ? statusMessage
-                        && handler.statusMessage.enable
-                      then handler.statusMessage.text
-                      else null;
-                  }
-                )
-            )
-            block.hooks;
-        })
-      blocks)
-    hooks;
+          hooks = map (handler:
+            handler
+            // {
+              statusMessage =
+                if handler ? statusMessage && handler.statusMessage.enable
+                then handler.statusMessage.text
+                else null;
+            })
+          block.hooks;
+        }))
+    hooks);
 
   mkAgentsMd = {
     mergedContext,
