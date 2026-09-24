@@ -140,13 +140,11 @@
     kimchi = "packages/kimchi/lib/mkKimchi.nix";
     kiro = "packages/kiro-cli/lib/mkKiro.nix";
   };
-  copilotInert = "Factory documents this project file as undelivered: Copilot offers no flag or discovery for it. Presence is not proof of application consumption.";
   metadata = row:
     {
       evidence = evidence.${row.ecosystem};
       inputOptions = inputOptions row.surface row.ecosystem;
     }
-    // lib.optionalAttrs (row.ecosystem == "copilot" && row.mode == "devenv" && row.surface == "settings") {deliveryGap = copilotInert;}
     // lib.optionalAttrs (key row == "settings/kimchi/devenv") {
       deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys reconcile into the fixed project harness path.";
     }
