@@ -2,12 +2,13 @@
 
 > **Last verified:** 2026-09-23 — native file settings live under
 > `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Shared documents reconcile owned leaves through
-> `lib/ai/own.{nix,py}` on HM activation and devenv shell entry where the CLI
-> writes that copy (Copilot's settings.json on HM only), a fully retracted empty
-> document is deleted, a document may name its native writer's lock, document
-> targets may enforce modes, and the delivery-path parity example uses
-> `ai.codex.execpolicyRules`.
+> `native.harnessSettings`). Shared documents, each declared by
+> `facts.harnessWrites` (no factory calls `helpers.mkOwnedDocument`), reconcile
+> owned leaves through `lib/ai/own.{nix,py}` on HM activation and devenv shell
+> entry where the CLI writes that copy (Copilot's settings.json on HM only), a
+> fully retracted empty document is deleted, a document may name its native
+> writer's lock, document targets may enforce modes, and the delivery-path
+> parity example uses `ai.codex.execpolicyRules`.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -219,12 +220,11 @@ runs. Kiro declares its settings writer on both backends: HM emits activation
 entries, while devenv emits tasks under `$DEVENV_ROOT` with ledgers under
 `$DEVENV_STATE/nix-agentic-tools`. Copilot's is HM-only, because Copilot never
 opens a project-scope settings.json and the devenv copy stays a static write.
-(Factories not yet migrated still call `helpers.mkOwnedDocument`, which builds
-the same bundle from the caller's side.) Declared leaves are asserted, a leaf
-the previous generation declared and this one DROPPED is retracted, and every
-unowned sibling — a runtime-written `trusted_folders`, an oauth token — is left
-alone. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no way to
-tell a native key from a Nix key that was deleted.
+Declared leaves are asserted, a leaf the previous generation declared and this
+one DROPPED is retracted, and every unowned sibling — a runtime-written
+`trusted_folders`, an oauth token — is left alone. A blind `jq -s '.[0] * .[1]'`
+cannot do the middle one: it has no way to tell a native key from a Nix key that
+was deleted.
 
 A target that stops declaring anything deletes its document when the retraction
 leaves it serializing to an empty object: every byte was ours. Leaving `{}`
@@ -242,7 +242,8 @@ target.
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the
 TUI trust prompt writes ad-hoc `projects.<path>.trust_level` entries through
-`config/batchWrite`. `helpers.mkOwnedDocument` lowers it into the same
+`config/batchWrite`. Its factory declares `facts.harnessWrites` with the
+`ai.codex.activation.codexSettingsReconcile` ledger, so it lowers into the same
 `lib/ai/own.nix` bundle, and `lib/ai/own.py` records exact managed leaf paths
 under XDG state, removes only retired managed leaves, overlays current leaves,
 preserves native siblings within the same table, and publishes the whole
