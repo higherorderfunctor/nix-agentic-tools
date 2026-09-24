@@ -28,39 +28,6 @@
       then ''rg -n 'home.file|settings|personalPlugin|mcpServers|lspServers|agents|skills|hooks' "$HM_SOURCE/modules/programs/claude-code/default.nix"; home-manager build --flake "$CONSUMER_FLAKE"''
       else ''rg -n 'files|mcpServers|mcpContent' "$(nix eval --raw --expr '(builtins.getFlake (toString ./.)).inputs.devenv.outPath')/src/modules/integrations/claude.nix"'';
   };
-  # Kimchi still lowers these files in its per-backend callbacks on this
-  # branch, outside the delivery layer the observer reads, so they are stated
-  # here rather than generated. The kimchi port (#1870) moves them onto the
-  # layer and deletes these rows.
-  offLayer = "packages/kimchi/lib/mkKimchi.nix lowers this file in its hm/devenv callbacks, not through ai.kimchi.files.";
-  sinkFile = mode: path: {
-    inherit offLayer;
-    primitive = "ownPathDeclarative";
-    target =
-      (
-        if mode == "hm"
-        then "$HOME/"
-        else "$DEVENV_ROOT/"
-      )
-      + path;
-    writerAttr =
-      (
-        if mode == "hm"
-        then ["home" "file"]
-        else ["files"]
-      )
-      ++ [path];
-    pruneTrigger =
-      if mode == "hm"
-      then "Home Manager generation diff on switch; changed declarations replace the store symlink."
-      else "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
-  };
-  sinkLeaves = activation: target: {
-    inherit offLayer target;
-    primitive = "ownLeaves";
-    pruneTrigger = ownRetraction "hm";
-    writerAttr = ["home" "activation" activation];
-  };
   probe = option: nonEmpty: empty: {
     base = {};
     inherit option;
@@ -94,8 +61,8 @@
   inputOptions = surface: ecosystem:
     if surface == "permissions"
     then
-      if ecosystem == "kiro"
-      then [["ai" "kiro" "permissions"]]
+      if builtins.elem ecosystem ["kimchi" "kiro"]
+      then [["ai" ecosystem "permissions"]]
       else if builtins.elem ecosystem ["claude" "codex"]
       then [["ai" ecosystem "native" "settings" "permissions"]]
       else []
@@ -111,7 +78,6 @@
   handDefinitions = {
     agents = {
       claude = {hm = delegated "hm" "agents" "$HOME/.claude/agents/<name>.md";};
-      kimchi = both (absent "Kimchi's supportedPools excludes agents and no native agent writer exists.");
     };
     context = {
       copilot = {hm = absent "Home Manager context is deliberately inert: the .github context surface is project-scoped.";};
@@ -126,7 +92,10 @@
     hooks = {
       claude = {hm = (delegated "hm" "settings" "$HOME/.claude/settings.json (hooks)") // {additionalWriters = [(delegated "hm" "hooks" "$HOME/.claude/hooks/<name>")];};};
       copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
-      kimchi = both (absent "Kimchi's supportedPools excludes hooks; native.harnessSettings resource toggles are settings, not hook definitions.");
+      # Kimchi's own lifecycle reader takes only a trusted project's
+      # .kimchi/hooks.json and .kimchi/hooks.local.json; its user-scope routes
+      # are not sinks Home Manager can own (the reason says why).
+      kimchi = {hm = absent "Kimchi reads its own lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). It has two user-scope routes, and neither is a sink Home Manager can own. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:75-80) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";};
     };
     lspServers = {
       claude = {
@@ -141,12 +110,10 @@
         devenv = delegated "devenv" "mcpServers" "$DEVENV_ROOT/.mcp.json";
         hm = delegated "hm" "mcpServers" "$HOME/.claude/skills/claude-code-home-manager/.mcp.json";
       };
-      kimchi = lib.genAttrs modes (mode: sinkFile mode ".config/kimchi/harness/mcp.json");
     };
     permissions = {
       claude = {hm = delegated "hm" "settings" "$HOME/.claude/settings.json (permissions)";};
       copilot = both (absent "No permissions option or translation exists; arbitrary native.settings keys do not establish a permissions contract.");
-      kimchi = both (absent "No permissions option or translation exists.");
       kiro = {devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";};
     };
     rules = {
@@ -155,14 +122,6 @@
     };
     settings = {
       claude = {hm = delegated "hm" "settings" "$HOME/.claude/settings.json";};
-      kimchi = {
-        devenv =
-          (sinkFile "devenv" ".config/kimchi/config.json")
-          // {additionalWriters = [(sinkFile "devenv" ".config/kimchi/harness/settings.json")];};
-        hm =
-          (sinkLeaves "kimchiConfigMerge" "$HOME/.config/kimchi/config.json")
-          // {additionalWriters = [(sinkLeaves "kimchiHarnessSettingsMerge" "$HOME/.config/kimchi/harness/settings.json")];};
-      };
     };
     skills = {
       claude = {hm = delegated "hm" "skills" "$HOME/.claude/skills/<name>/<leaf>";};
@@ -187,10 +146,10 @@
       evidence = evidence.${row.ecosystem};
       inputOptions = inputOptions row.surface row.ecosystem;
     }
-    // lib.optionalAttrs (row.ecosystem == "kimchi" && row.mode == "devenv" && builtins.elem row.surface ["context" "mcpServers" "settings" "skills"]) {
-      deliveryGap = "Kimchi reads its HOME config directory; these project-local files have no discovery or additive launcher flag.";
-    }
     // lib.optionalAttrs (row.ecosystem == "copilot" && row.mode == "devenv" && builtins.elem row.surface ["lspServers" "settings"]) {deliveryGap = copilotInert;}
+    // lib.optionalAttrs (key row == "settings/kimchi/devenv") {
+      deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys reconcile into the fixed project harness path.";
+    }
     // lib.optionalAttrs (key row == "settings/kiro/devenv") {
       deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
     }
@@ -202,7 +161,15 @@
     overwrite = ''ai.kiro.mcpWriteMode = "overwrite" (default)'';
   };
   probeFor = row:
-    if row.surface == "context"
+    if row.surface == "agents" && row.ecosystem == "kimchi"
+    then
+      probe ["ai" "kimchi" "agents"] {
+        probe = {
+          description = "probe";
+          instructions.text = "probe";
+        };
+      } {}
+    else if row.surface == "context"
     then probe ["ai" "kiro" "context"] {text = "probe";} {}
     else if row.surface == "hooks"
     then hookProbe
@@ -215,7 +182,10 @@
           (throw "ai-delivery: Kiro MCP needs an independent strategy probe") (builtins.attrNames mcpConditions);
       }
     else if row.surface == "permissions"
-    then probe ["ai" "codex" "native" "settings" "permissions"] {probe.network.enabled = false;} {}
+    then
+      if row.ecosystem == "kimchi"
+      then probe ["ai" "kimchi" "permissions"] {allow = ["probe"];} {}
+      else probe ["ai" "codex" "native" "settings" "permissions"] {probe.network.enabled = false;} {}
     else if row.surface == "rules" && row.ecosystem == "claude"
     then probe ["ai" "rules"] {probe.text = "probe";} {}
     else if row.ecosystem == "codex" && row.surface == "rules" && lib.hasInfix "/rules/" row.target
@@ -225,7 +195,14 @@
     else if row.ecosystem == "kimchi"
     then
       if lib.hasSuffix "/harness/settings.json" row.target
-      then probe ["ai" "kimchi" "native" "harnessSettings"] {resources.probe = true;} {}
+      then
+        probe ["ai" "kimchi" "native" "harnessSettings"]
+        (
+          # `resources` is user-scope-only, so devenv rejects it.
+          if row.mode == "hm"
+          then {resources.probe = true;}
+          else {hideThinkingBlock = true;}
+        ) {}
       else
         probe ["ai" "kimchi" "native" "settings"] {
           llmEndpoint = "https://example.invalid";

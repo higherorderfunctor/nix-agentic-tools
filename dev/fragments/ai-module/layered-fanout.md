@@ -1,12 +1,13 @@
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-09-23 — L5 is the delivery router plus one adapter per
-> backend; Claude, Codex, Copilot and Kiro describe delivery once, and the
-> delivery matrix is generated from the layer with Kimchi's off-layer files
-> hand-authored. Normalized pools carry only a text-source record's winning arm.
-> Claude's devenv rules and Codex's execpolicy rules are read-only copies whose
-> writers survive a disable. Copilot reconciles settings.json on HM only. Native
-> file settings live under `ai.<runtime>.native`.
+> backend; Claude, Codex, Copilot and Kiro describe delivery once, Kimchi
+> reaches the layer from its callbacks, and the delivery matrix is generated
+> from the layer for every runtime's files. Normalized pools carry only a
+> text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
+> rules are read-only copies whose writers survive a disable. Copilot reconciles
+> settings.json on HM only. Native file settings live under
+> `ai.<runtime>.native`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -76,9 +77,9 @@
   delivery options, without a runtime-name list. Public overrides and disabled
   entries enter the aggregate before lowering, and claimants must agree with its
   symlink method. All three readers use `deliveryMethod.resolve`, so an explicit
-  method beats `methodFor` consistently after option merging. Kimchi's current
-  native context stays under its harness directory; an explicit root AGENTS.md
-  entry can participate as a third claimant.
+  method beats `methodFor` consistently after option merging. Kimchi's devenv
+  project context is one of those claimants; its user context stays under its
+  harness directory.
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
@@ -261,21 +262,14 @@ methods with the runtime's rule, and uses the router's backend naming. Recursive
 skills use the real leaf walk. Shared devenv AGENTS.md currently comes from the
 typed `ai.internal.files` owner; Claude's native devenv MCP integration is
 observed at its existing upstream destination. Package wrappers have no file
-entry.
+entry. Kimchi's `trust.json` (`ai.kimchi.projectTrust`) is a user-scope trust
+store, not a portable surface, so the specimen maps it to no cell.
 
 The production gate compares live absence against hand-authored gaps in both
 directions and verifies upstream sink correspondence. Its three body arms stay;
 derived names make the first arm's name agreement a tautology, not a stronger
 check. Empty-declaration survival and body variation still discriminate. Kiro
 MCP's two strategies keep independent probes, including both HM phases.
-
-A factory that still lowers a file in its own `hm`/`devenv` callbacks is
-invisible to the observer, so its rows are hand-authored with an `offLayer`
-reason — today Kimchi's `config.json`, `harness/settings.json` and
-`harness/mcp.json`, until its port lands. Their writers still go through the
-gate's body arms. Correspondence requires an `offLayer` cell to stay absent from
-the layer: once the factory moves the file onto `ai.<runtime>.files`, the row is
-reported stale for deletion, so the escape cannot outlive the port.
 
 Regeneration evaluates the check set, and the check set asserts the committed
 matrix, so a change that moves a cell (a runtime joining the layer, say) cannot
