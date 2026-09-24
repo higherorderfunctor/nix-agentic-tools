@@ -1173,7 +1173,6 @@ in
       "shell"
       "skills"
     ];
-    transformers.markdown = lib.ai.transformers.kiro;
     defaults = {
       package = pkgs.ai.kiro-cli;
     };
@@ -1908,12 +1907,6 @@ in
           }
         ]
         ++ steeringEmitters);
-    devenv = {
-      installPackage = kiroInstallPackage;
-      migrationConfig = kiroMigrationConfig;
-    };
-    hm = {
-      installPackage = kiroInstallPackage;
-      migrationConfig = kiroMigrationConfig;
-    };
+    installPackage = kiroInstallPackage;
+    migrationConfig = kiroMigrationConfig;
   }

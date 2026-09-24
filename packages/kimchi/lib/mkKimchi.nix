@@ -137,16 +137,10 @@
   # Both backends install the same prepared wrapper (env + the runtime secret,
   # which is cat'd at launch so it never enters the store). Handed to the
   # shared transform's `installPackage` hook, which owns the `home.packages` /
-  # `packages` lowering.
+  # `packages` lowering. Devenv adds the exact-cwd guard when it writes any
+  # project file Kimchi resolves from the working directory.
   kimchiInstallPackage = {
-    cfg,
-    mergedEnvironmentVariables,
-    moduleEnvironmentVariables,
-    ...
-  }:
-    (mkPrep {inherit cfg mergedEnvironmentVariables moduleEnvironmentVariables;}).package;
-
-  kimchiDevenvInstallPackage = {
+    backend,
     cfg,
     config,
     mergedAgents,
@@ -168,7 +162,7 @@
     (mkPrep {
       inherit cfg mergedEnvironmentVariables moduleEnvironmentVariables;
       requiredProjectRoot =
-        if hasExactCwdProjectFiles
+        if backend == "devenv" && hasExactCwdProjectFiles
         then config.devenv.root
         else null;
     }).package;
@@ -176,7 +170,8 @@
   # were near-duplicates: they differed only in which native sink each wrote,
   # which is exactly the decision the delivery layer now makes from the
   # consumer facts below.
-  kimchiDelivery = backend: {
+  kimchiDelivery = {
+    backend,
     cfg,
     config,
     hasMergedContext,
@@ -596,11 +591,7 @@ in
       "settings"
       "skills"
     ];
-    transformers.markdown = lib.ai.transformers.agentsmd;
-    defaults = {
-      package = pkgs.ai.kimchi;
-      outputPath = null;
-    };
+    defaults.package = pkgs.ai.kimchi;
     options = {
       agents = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr lib.ai.agent.agentType);
@@ -791,12 +782,6 @@ in
       };
     };
 
-    devenv = {
-      config = kimchiDelivery "devenv";
-      installPackage = kimchiDevenvInstallPackage;
-    };
-    hm = {
-      config = kimchiDelivery "hm";
-      installPackage = kimchiInstallPackage;
-    };
+    config = kimchiDelivery;
+    installPackage = kimchiInstallPackage;
   }

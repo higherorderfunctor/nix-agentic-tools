@@ -5,15 +5,14 @@
 # `devenvTransform` to the record.
 #
 # Factory-of-factory pattern: outer call supplies package-specific
-# name + shared option schemas + per-backend config callbacks.
+# name + shared option schemas + one delivery callback for both backends.
 # Returns a record that per-backend transformers project into
 # module functions consumed by the HM / devenv module systems.
 #
 # Returned record shape:
 #   {
 #     name;                          # app identifier (used for ai.<name>.* paths)
-#     transformers;                  # { markdown = <lib.ai.transformers.<ecosystem>>; }
-#     defaults ? {};                 # {package?, outputPath?} — shared across backends
+#     defaults ? {};                 # {package?} — shared across backends
 #     options ? {};                  # shared option declarations (both backends see these)
 #     supportedPools ? [];           # normalized ai.* pools the runtime consumes.
 #                                    # Unsupported per-runtime pool options are absent;
@@ -21,54 +20,38 @@
 #                                    # Same-named native options in `options` are independent.
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
-#     config ? null;                 # ONE consumer callback for BOTH backends; it
+#     config ? _: {};                # ONE delivery callback for BOTH backends; it
 #                                    #   receives `backend` and describes delivery
-#                                    #   rather than lowering it, so a runtime with
-#                                    #   no per-backend lowering writes it once. A
-#                                    #   backend spec's own `config` still wins,
-#                                    #   which is how a runtime migrates one
-#                                    #   backend at a time.
-#     hm = {
-#       installPackage ? (_: cfg.package);
-#                              # callback (same args as `config`) returning the
-#                              #   derivation to install. OMIT to install the plain
-#                              #   `cfg.package`; `null` opts out entirely. The
-#                              #   transform owns the `home.packages` / `packages`
-#                              #   lowering, so a factory never writes either.
+#                                    #   rather than lowering it.
+#     installPackage ? (_: cfg.package);
+#                                    # callback (same args as `config`) returning the
+#                                    #   derivation to install. OMIT to install the plain
+#                                    #   `cfg.package`; `null` opts out entirely. The
+#                                    #   transform owns the `home.packages` / `packages`
+#                                    #   lowering, so a factory never writes either.
+#     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
+#     hm = {                         # Home Manager only; each field overrides the
+#       installPackage ? <record>;   #   record-level one of the same name
+#       migrationConfig ? <record>;
 #       options ? {};                # HM-only option additions
-#       defaults ? {};               # HM-only default overrides
-#       migrationConfig ? _: {};     # bounded cleanup outside runtime enable
-#       config ? _: {};              # consumer callback projecting merged view → module attrs
 #     };
-#     devenv = {
-#       installPackage ? (_: cfg.package);
-#                              # callback (same args as `config`) returning the
-#                              #   derivation to install. OMIT to install the plain
-#                              #   `cfg.package`; `null` opts out entirely. The
-#                              #   transform owns the `home.packages` / `packages`
-#                              #   lowering, so a factory never writes either.
-#       options ? {};                # devenv-only option additions
-#       defaults ? {};               # devenv-only default overrides
-#       migrationConfig ? _: {};     # bounded cleanup outside runtime enable
-#       config ? _: {};              # consumer callback
-#     };
+#     devenv = { … };                # the same three fields, for devenv
 #   }
 #
-# Consumer callbacks receive ONE attrset and return module config attributes
-# (home.file.*, programs.claude-code.*, home.activation.*, files.*,
-# claude.code.*, etc.) appropriate for their backend.
+# A backend spec carries no delivery callback and no defaults: delivery is
+# described once, and a runtime states a per-backend difference by reading
+# `backend`. The assertion below rejects any other backend key, so a record
+# written against the retired per-backend seam fails instead of silently
+# delivering nothing.
 #
-# That attrset is assembled in exactly one place — `customConfig` in
-# `mkBackendTransform.nix` — and read it rather than trusting a list here.
-# It currently carries `cfg`, `config`, every `merged*` pool,
-# `resolvedSettings`, `resolvedShell`, `mergedContext`, and `topHooks`. This comment
-# used to enumerate four of them and had silently drifted from the real
-# call, which is the failure mode a second copy of the list invites; every
-# callback takes `...` anyway, so a stale list here misleads without ever
-# breaking a build.
+# The callbacks receive ONE attrset, assembled in exactly one place —
+# `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
+# trusting a list here. It carries `backend`, `cfg`, `config`, `normalized`,
+# every `merged*` pool, `resolvedSettings`, `resolvedShell`, `mergedContext`,
+# and `topHooks`; every callback takes `...`, so a stale list here would
+# mislead without ever breaking a build.
 {lib}: {
   name,
-  transformers,
   defaults ? {},
   options ? {},
   supportedPools ? [],
@@ -77,6 +60,10 @@
   ruleModule ? null,
   rulesDescription ? null,
   config ? null,
+  # Presence matters: `null` is the documented opt-out, so an absent callback
+  # is told apart from it through `args` below.
+  installPackage ? null,
+  migrationConfig ? null,
   hm ? {},
   devenv ? {},
   # The package set the factory was built with, carried on the record so
@@ -98,12 +85,26 @@
   # Optional so a record built without it still evaluates; features that
   # need it must degrade rather than throw.
   pkgs ? null,
-}:
-{
-  inherit name transformers defaults options supportedPools hm devenv pkgs;
-}
-// lib.optionalAttrs (config != null) {inherit config;}
-// lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
-// lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
-// lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
-// lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}
+} @ args: let
+  backendKeys = ["installPackage" "migrationConfig" "options"];
+  checkBackend = backend: spec: let
+    unknown = lib.subtractLists backendKeys (builtins.attrNames spec);
+  in
+    lib.assertMsg (unknown == [])
+    "mkRuntime ${name}: ${backend} spec carries ${lib.concatStringsSep ", " unknown}; a backend spec takes only ${lib.concatStringsSep ", " backendKeys}. Describe delivery once in the record-level `config`, which receives `backend`.";
+  unknownDefaults = lib.subtractLists ["package"] (builtins.attrNames defaults);
+in
+  assert checkBackend "hm" hm;
+  assert checkBackend "devenv" devenv;
+  assert lib.assertMsg (unknownDefaults == [])
+  "mkRuntime ${name}: defaults carries ${lib.concatStringsSep ", " unknownDefaults}; it takes only `package`.";
+    {
+      inherit name defaults options supportedPools hm devenv pkgs;
+    }
+    // lib.optionalAttrs (config != null) {inherit config;}
+    // lib.optionalAttrs (args ? installPackage) {inherit installPackage;}
+    // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
+    // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
+    // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
+    // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
+    // lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}

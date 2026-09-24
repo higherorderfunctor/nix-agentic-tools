@@ -19,7 +19,8 @@
 > hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
 > `trust.json.lock`; an ungated HM `kimchiConfigMode` writer narrows the
 > credential-bearing user `config.json` to owner-only; `mkPrep` builds only the
-> launcher. Full lineage:
+> launcher, and one record-level `config` and `installPackage` serve both
+> backends. Full lineage:
 > `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -27,11 +28,12 @@ closest in shape to `mkKiro` (dual config trees + activation-merge for the
 mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
 / `devenvTransform` to the record.
 
-Its shared local delivery function describes each file: its bytes, consumer
-facts, and writer if it is not a symlink. Both backend callbacks use that same
-function with the merged pools supplied by `mkBackendTransform.nix`, and
-`lib/ai/deliver.nix` decides how each entry lands. The other runtimes retain
-their existing callbacks during the staged migration.
+Its record-level `config`, `kimchiDelivery`, describes each file: its bytes,
+consumer facts, and writer if it is not a symlink. It serves both backends,
+reading `backend` for the paths only one of them has, with the merged pools
+supplied by `mkBackendTransform.nix`, and `lib/ai/deliver.nix` decides how each
+entry lands. One record-level `installPackage` likewise serves both, adding the
+exact-cwd guard on devenv only.
 
 The factory consumes Kimchi-shaped JSON from `ai.kimchi.native.settings` and
 `ai.kimchi.native.harnessSettings`. The closed `ai.kimchi.settings` submodule is
@@ -412,12 +414,10 @@ devenv stay at parity by construction. Locked by `module-kimchi-wrapper-builds`.
 
 ## Orientation-only steering
 
-`defaults.outputPath = null` and
-`transformers.markdown = lib.ai.transformers.agentsmd`: Kimchi takes a flat,
-always-injected user `harness/AGENTS.md` or project-root `AGENTS.md`
-(orientation tier, like Codex). It has **no** path-scoped steering (no Claude
-`rules/` or Kiro `steering/` equivalent), so the scoped-fragment transforms do
-not apply to it.
+Kimchi takes a flat, always-injected user `harness/AGENTS.md` or project-root
+`AGENTS.md` (orientation tier, like Codex). It has **no** path-scoped steering
+(no Claude `rules/` or Kiro `steering/` equivalent), so the scoped-fragment
+transforms do not apply to it.
 
 ## Shared prep
 

@@ -857,7 +857,6 @@ in
       "shell"
       "skills"
     ];
-    transformers.markdown = lib.ai.transformers.agentsmd;
     defaults.package = pkgs.ai.chatgpt-codex;
 
     options = {
@@ -950,14 +949,8 @@ in
       };
     };
 
-    devenv = {
-      installPackage = codexInstallPackage;
-      migrationConfig = codexExecpolicyWriterConfig;
-    };
-    hm = {
-      installPackage = codexInstallPackage;
-      migrationConfig = codexExecpolicyWriterConfig;
-    };
+    installPackage = codexInstallPackage;
+    migrationConfig = codexExecpolicyWriterConfig;
     config = {
       backend,
       cfg,

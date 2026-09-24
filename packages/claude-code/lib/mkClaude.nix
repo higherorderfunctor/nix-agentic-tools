@@ -272,7 +272,6 @@ in
       "shell"
       "skills"
     ];
-    transformers.markdown = lib.ai.transformers.claude;
     defaults = {
       package = pkgs.ai.claude-code;
     };

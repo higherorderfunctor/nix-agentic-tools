@@ -9,6 +9,28 @@
 in {
   checks = {
     # ── mkRuntime tests ───────────────────────────────────────────────
+    # The per-backend seam is retired: delivery is ONE record-level `config`,
+    # and a backend spec takes only installPackage, migrationConfig and
+    # options. A record still written against the seam must fail loudly
+    # rather than evaluate to a runtime that delivers nothing. The record-level
+    # `config` is the positive control.
+    factory-mkRuntime-rejects-backend-seam = mkTest "mkRuntime-rejects-backend-seam" (
+      let
+        base = {
+          name = "testapp";
+          defaults.package = pkgs.hello;
+        };
+        rejected = record: !(builtins.tryEval (ai.app.mkRuntime record)).success;
+      in
+        lib.all (backend:
+          rejected (base // {${backend}.config = _: {};})
+          && rejected (base // {${backend}.defaults.package = pkgs.hello;}))
+        ["devenv" "hm"]
+        && rejected (base // {defaults.outputPath = null;})
+        && (builtins.tryEval (ai.app.mkRuntime (base // {config = _: {};}))).success
+        && (builtins.tryEval (ai.app.mkRuntime (base // {hm.installPackage = null;}))).success
+    );
+
     factory-mkRuntime-hmTransform-exists = mkTest "mkRuntime-hmTransform-exists" (
       builtins.isFunction ai.app.hmTransform
     );
@@ -22,15 +44,10 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
-          defaults = {
-            package = pkgs.hello;
-            outputPath = ".config/test/CONFIG.md";
-          };
+          defaults.package = pkgs.hello;
         };
       in
         record ? name
-        && record ? transformers
         && record ? defaults
         && record.supportedPools == []
     );
@@ -40,11 +57,7 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = ["mcpServers"];
-          transformers.markdown = ai.transformers.claude;
-          defaults = {
-            package = pkgs.hello;
-            outputPath = ".config/test/CONFIG.md";
-          };
+          defaults.package = pkgs.hello;
         };
         module = ai.app.hmTransform record;
         evaluated = lib.evalModules {
@@ -65,7 +78,6 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
           defaults = {package = pkgs.hello;};
           options = {
             turboMode = lib.mkOption {
@@ -92,21 +104,18 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = ["mcpServers"];
-          transformers.markdown = ai.transformers.claude;
           defaults = {package = pkgs.hello;};
           options = {
             # Synthetic introspection option — NOT part of the real mkRuntime contract,
             # only used here to prove mergedServers is computed and accessible to
-            # the config callback.
+            # the delivery callback.
             _mergedServerCount = lib.mkOption {
               type = lib.types.int;
               default = 0;
             };
           };
-          hm = {
-            config = {mergedServers, ...}: {
-              ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
-            };
+          config = {mergedServers, ...}: {
+            ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
           };
         };
         module = ai.app.hmTransform record;
@@ -255,7 +264,6 @@ in {
           inherit pkgs;
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
           defaults.package = pkgs.hello;
           options.mcpServers = lib.mkOption {
             type = lib.types.listOf lib.types.str;
@@ -284,11 +292,7 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
-          defaults = {
-            package = pkgs.hello;
-            outputPath = ".config/test/CONFIG.md";
-          };
+          defaults.package = pkgs.hello;
         };
         module = ai.app.hmTransform record;
         evaluated = lib.evalModules {
@@ -308,11 +312,7 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
-          defaults = {
-            package = pkgs.hello;
-            outputPath = ".config/test/CONFIG.md";
-          };
+          defaults.package = pkgs.hello;
         };
         module = ai.app.devenvTransform record;
         evaluated = lib.evalModules {

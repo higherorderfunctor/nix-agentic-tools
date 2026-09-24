@@ -1,14 +1,15 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-24 — Claude, Codex, Copilot and Kiro describe
-> delivery once through `mkRuntime`'s record-level `config`; Kimchi reaches the
-> same delivery layer from its per-backend callbacks. Claude devenv delivers
-> `ai.agents` and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw
-> agent writer (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a
-> store-path string is a file, never a body naming its own path. File content at
-> `mkDefault` enables its entry; `content.enable = false` suppresses every
-> content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
-> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-24 — every runtime describes delivery once through
+> `mkRuntime`'s record-level `config`, and `mkRuntime` rejects a backend spec
+> carrying anything but `installPackage`, `migrationConfig` and `options`.
+> Claude devenv delivers `ai.agents` and `ai.claude.agentsDir` to
+> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
+> Kiro) tests `agent.isPathLike`, so a store-path string is a file, never a body
+> naming its own path. File content at `mkDefault` enables its entry;
+> `content.enable = false` suppresses every content form. The builder entry
+> point is `lib.ai.app.mkRuntime`. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
@@ -25,6 +26,12 @@
 > wrongly. Full lineage:
 > `git show d1c28a21:dev/fragments/ai-module/ai-module-fanout.md`.
 >
+> - **No per-backend delivery callback on the runtime record.** A backend spec's
+>   own `config` let a runtime lower each backend separately, and the untyped
+>   callbacks grew into near-duplicate per-backend delivery bodies that the
+>   delivery layer now replaces. One record-level `config` receives `backend`
+>   for a real scope difference; the record-level `transformers` and
+>   `defaults.outputPath` fields, which nothing read, are gone with it.
 > - **Don't hardcode Copilot's instructions/rules destination to
 >   `.github/instructions/`.** That resolves to `$HOME/.github/instructions/` on
 >   Home Manager, a directory copilot-cli never reads — every named instruction
@@ -99,8 +106,8 @@ runtime, lowering it to `home.packages` on Home Manager and `packages` on devenv
 — the two option names being the whole reason it cannot live in a factory
 without being written twice per runtime. A backend spec that says nothing
 installs the plain `cfg.package`; one that wraps its binary supplies an
-`installPackage` callback taking the same arguments as `config`;
-`installPackage = null` opts out.
+`installPackage` callback taking the same arguments as `config`, on the record
+or on one backend spec, which wins; `installPackage = null` opts out.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and
@@ -442,7 +449,7 @@ documented composition semantics.
 ### Per-pool capability gate
 
 Every app record carries one `supportedPools` list. The shared transformer uses
-it for the per-runtime option schema, keyed-pool merge, callback fanout, and
+it for the per-runtime option schema, keyed-pool merge, delivery callback, and
 shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
@@ -630,8 +637,8 @@ broken — fix the module, not the consumer.
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
 `ai.mcpServers`, `ai.lspServers`, `ai.environmentVariables`, `ai.agents`,
-`ai.hooks`, `ai.context`). It's imported by BOTH `hmTransform.nix` and
-`devenvTransform.nix`.
+`ai.hooks`, `ai.context`). Both backend module trees import it, and
+`lib/ai/app/default.nix` selects the one shared transform body per backend.
 
 **The option declarations are shared. The values are NOT.**
 
@@ -649,12 +656,11 @@ Contributing in one and expecting the other to pick it up will silently fail —
 the contribution just doesn't land in the other eval. A program option tree can
 make enablement structural without changing that per-evaluation ownership.
 
-AI CLI factories (`mkRuntime`) may instead share one record-level `config`
-callback, which receives `backend` for intentional scope differences. Claude,
-Codex, Copilot and Kiro do; Kimchi still keeps per-backend `hm.config` /
-`devenv.config` blocks. Backend specs retain package installation and migration
-callbacks. Each backend still evaluates that configuration independently;
-sharing code never shares option values.
+AI CLI factories (`mkRuntime`) instead share one record-level `config` callback,
+which receives `backend` for intentional scope differences. Package installation
+and migration callbacks sit on the record too, and a backend spec may override
+either; it cannot carry a delivery callback. Each backend still evaluates that
+configuration independently; sharing code never shares option values.
 
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
