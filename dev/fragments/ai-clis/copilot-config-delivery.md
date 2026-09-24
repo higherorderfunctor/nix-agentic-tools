@@ -1,8 +1,8 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-08-16 — the unscoped-frontmatter measurement (1.0.79)
-> is retained as the durable record after the normalized-interface plan was
-> retired; it was not re-measured at 1.0.80.
+> **Last verified:** 2026-09-23 — LSP config is delivered at repository scope
+> through `<projectDir>/lsp.json` (copilot-cli 1.0.88), so only `settings.json`
+> remains inert under `configDir`; server names Copilot rejects throw at eval.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -157,6 +157,17 @@ Inside the project it touches ONLY:
 never opened, and never even stat'd. From `$HOME` it opens
 `~/.copilot/{config,mcp-config,lsp-config}.json` plus session state.
 
+That trace predates repository-scope LSP. copilot-cli 1.0.88 also loads
+`.github/lsp.json` from the repository root: the npm package README documents it
+("Repository-level configuration"), `app.js` calls
+`lspConfigsLoadRawProjectConfig`, and the native `runtime.node` carries the path
+string. Both LSP files take the same `{"lspServers": {…}}` envelope; the
+validator rejects a bare per-server map (`lspServers must be an object`), marks
+`fileExtensions` Required, and rejects any server name that is empty or holds a
+character outside ASCII letters, digits, `_` and `-` ("LSP server name must only
+contain alphanumeric characters, underscores, and hyphens"; probed against
+`settingsParseLspServersConfig` in the 1.0.88 `runtime.node`).
+
 ### Why not `COPILOT_HOME`
 
 `COPILOT_HOME` **does** work — verified: setting it moves `mcp-config.json`
@@ -211,31 +222,40 @@ contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
 MCP-less devenv project no longer keeps the bare package. Home Manager still
 does, since it states that default in Git's own config instead.
 
-### Why `lsp-config.json` and `settings.json` are written but not delivered
+### Where LSP goes, and why `settings.json` is written but not delivered
 
-There is no `--additional-lsp-config` and no settings equivalent — the flag
-surface has exactly one config injector. So those two files cannot be delivered
-at project scope at all.
+LSP servers are delivered at repository scope: the devenv module writes
+`<projectDir>/lsp.json` (default `.github/lsp.json`), and Home Manager writes
+the user-scope `~/.copilot/lsp-config.json`. Nothing LSP-related lives under
+`configDir` any more.
 
-They are still written, and this is deliberate on three counts:
+There is no settings equivalent of `--additional-mcp-config` — the flag surface
+has exactly one config injector — so `settings.json` cannot be delivered at
+project scope at all. It is still written, and this is deliberate on three
+counts:
 
 1. Option-surface parity with the HM module, which the config-parity rule wants.
-2. Zero cost — gitignored, and they become live for free if upstream ever grows
+2. Zero cost — gitignored, and it becomes live for free if upstream ever grows
    project-scope discovery.
 3. Removing them buys nothing a user can observe.
 
-**They are NOT an assertion**, and that is the load-bearing part.
-`ai.lspServers` is a SHARED pool that fans out to Claude, Copilot and Kiro.
-Asserting on a non-empty pool would hard-fail a devenv project that legitimately
-configures LSP servers for Claude and merely happens to enable Copilot too. The
-exclusion is therefore documented (option description + this fragment), matching
-how Codex's missing LSP surface is handled — excluded and documented, not
-asserted.
+**They are NOT an assertion**, and that is the load-bearing part. Shared pools
+fan out to several runtimes, so asserting on one because a single runtime cannot
+deliver it would hard-fail a project that legitimately targets another runtime
+with it. The exclusion is therefore documented (option description + this
+fragment), matching how Codex's missing LSP surface is handled — excluded and
+documented, not asserted.
+
+The two LSP throws are different in kind: a server Copilot receives with empty
+`extensions`, or with a name its validator rejects (a quoted attribute such as
+`"nix.lsp"`), throws, because Copilot would otherwise reject the whole file.
+Each names a fixable entry (set `extensions` or rename the server, or
+`ai.copilot.lspServers.<name> = null`), not an undeliverable surface.
 
 ### What would change this decision
 
-- Upstream adds project-scope config discovery, or a second injection flag →
-  drop the inert-file caveat and deliver them properly.
+- Upstream adds project-scope settings discovery, or a second injection flag →
+  drop the inert-file caveat and deliver `settings.json` properly.
 - Upstream splits auth/session out of `COPILOT_HOME` → the env-var route becomes
   viable and would remove the wrapper.
 - Copilot stops accepting `@`-prefixed paths → the whole delivery mechanism

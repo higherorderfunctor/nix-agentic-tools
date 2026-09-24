@@ -373,10 +373,10 @@
       primitive = "ownPathDeclarative";
       pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
       surface = "lspServers";
-      target = "$DEVENV_ROOT/.config/github-copilot/lsp-config.json";
+      target = "$DEVENV_ROOT/.github/lsp.json";
       writerAttr = [
         "files"
-        ".config/github-copilot/lsp-config.json"
+        ".github/lsp.json"
       ];
     }
     {

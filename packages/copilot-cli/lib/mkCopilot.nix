@@ -132,17 +132,12 @@ in
         default = {};
         description = "Freeform settings for Copilot's `settings.json` under `configDir`. Home Manager reconciles the declared leaves into it on activation and leaves Copilot's own keys alone. devenv writes a static project copy for option parity; Copilot never reads a project-scope settings.json, and the module warns when this is set there.";
       };
-      # Typed LSP server definitions for lsp-config.json. Freeform
-      # attrs-of-anything (matching the legacy `attrsOf jsonFormat.type`)
-      # — consumers pass the JSON shape copilot expects. A richer typed
-      # schema shared with kiro lives in `lib/ai-common.nix`
-      # (`lspServerModule` + `mkCopilotLspConfig`) and is a pattern
-      # expansion deferred until the cross-ecosystem `ai.lspServers`
-      # surface lands; per-app options are fine for now.
+      # Typed LSP server definitions, merged with the shared
+      # `ai.lspServers` pool and rendered by `mkCopilotLspFile`.
       lspServers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule);
         default = {};
-        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspConfig` into lsp-config.json on emission (adds fileExtensions mapping).";
+        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspFile` into the `lspServers` envelope: `<configDir>/lsp-config.json` under Home Manager, `<projectDir>/lsp.json` under devenv. Every entry must set `extensions`, because Copilot requires `fileExtensions`, and its name must be non-empty ASCII letters, digits, `_` and `-`, because Copilot rejects the whole file otherwise.";
       };
       # Baked into the symlinkJoin wrapper on BOTH backends. devenv used to
       # populate its native `env` attrset instead, which exported them into the
@@ -234,18 +229,19 @@ in
           );
         })
 
-        # lsp-config.json — typed LSP server definitions.
-        #
-        # INERT at project scope: Copilot opens `$HOME/.copilot/lsp-config.json`
-        # and nothing project-local, and unlike MCP there is no
-        # `--additional-lsp-config` to point it here (verified against 1.0.78
-        # `--help`). Written anyway for option parity with Home Manager, and
-        # deliberately NOT an assertion: `ai.lspServers` is a shared pool, so
-        # failing here would break a project that legitimately targets Claude or
-        # Kiro with it. Non-empty requests receive the delivery policy's warning.
+        # LSP servers, in the same `lspServers` envelope at both scopes. The
+        # CLI reads its USER-level file, `~/.copilot/lsp-config.json`;
+        # copilot-cli 1.0.88 also loads the REPOSITORY-level `.github/lsp.json`
+        # from the repository root (upstream README "Repository-level
+        # configuration"), which is why devenv writes under `projectDir`
+        # rather than beside the wrapper-aimed `configDir`.
         (lib.mkIf (mergedLspServers != {}) {
-          ai.copilot.files."${cfg.configDir}/lsp-config.json" = {
-            content.value = lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers;
+          ai.copilot.files.${
+            if isHm
+            then "${cfg.configDir}/lsp-config.json"
+            else "${cfg.projectDir}/lsp.json"
+          } = {
+            content.value = aiCommon.mkCopilotLspFile mergedLspServers;
             format = "json";
           };
         })
@@ -266,8 +262,8 @@ in
         })
 
         # mcp-config.json — the wrapper points `--additional-mcp-config` at this
-        # exact path on both backends, which is what makes it LIVE where
-        # lsp-config.json and settings.json are not.
+        # exact path on both backends, which is what makes it LIVE where the
+        # project settings.json is not.
         (lib.mkIf (mergedServers != {}) {
           ai.copilot.files."${cfg.configDir}/mcp-config.json" = {
             content.value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
@@ -377,15 +373,15 @@ in
       options = {
         # Wrapper-aimed config dir. `mcp-config.json` here is LIVE — the
         # `packages` wrapper points `--additional-mcp-config` at it.
-        # `lsp-config.json` and `settings.json` are INERT: Copilot reads
-        # neither at project scope and offers no flag to inject them
-        # (measured, see dev/fragments/ai-clis/copilot-config-delivery.md).
-        # They remain declared for HM option parity; the shared delivery
-        # diagnostics now warn whenever a consumer supplies either surface.
-        # Project-scope files Copilot DOES read
-        # live under `projectDir` (default `.github`) instead — that is also
-        # the surface github.com's Copilot code review consumes, and it is a
-        # different consumer from this CLI.
+        # `settings.json` is INERT: Copilot does not read it at project scope
+        # and offers no flag to inject it (measured, see
+        # dev/fragments/ai-clis/copilot-config-delivery.md). It remains
+        # declared for HM option parity; the shared delivery diagnostics warn
+        # whenever a consumer supplies it. Project-scope files Copilot DOES
+        # read live under `projectDir` (default `.github`) instead, LSP config
+        # (`lsp.json`) included — that is also the surface github.com's
+        # Copilot code review consumes, and it is a different consumer from
+        # this CLI.
         configDir = lib.mkOption {
           type = lib.types.str;
           default = ".config/github-copilot";
@@ -394,11 +390,10 @@ in
             `mcp-config.json`, which the wrapped `copilot` is pointed at via
             `--additional-mcp-config`.
 
-            Also holds `lsp-config.json` and `settings.json`, which Copilot
-            does NOT read at project scope and provides no flag to inject;
-            those are written for option parity with Home Manager but are not
-            delivered. Configure LSP servers and settings through the Home
-            Manager module if they must take effect.
+            Also holds `settings.json`, which Copilot does NOT read at
+            project scope and provides no flag to inject; it is written for
+            option parity with Home Manager but is not delivered. LSP servers
+            are delivered through `<projectDir>/lsp.json` instead.
 
             This is NOT the directory github.com's Copilot code review reads —
             that consumes committed files under `projectDir` (`.github`), and

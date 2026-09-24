@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument;
+  inherit (harness) evalDevenv evalHm lspEntryOf mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument;
   settingsDocument = evaluated:
     ownedDocument "copilot" "${evaluated.config.ai.copilot.configDir}/settings.json" evaluated;
 in {
@@ -313,7 +313,8 @@ in {
     );
 
     # ── Task 4b: Copilot feature-gap closure ───────────────────────
-    # lspServers → lsp-config.json (HM and devenv).
+    # lspServers → the `lspServers` envelope: `~/.copilot/lsp-config.json`
+    # (HM, user scope) and `.github/lsp.json` (devenv, repository scope).
     module-copilot-hm-writes-lsp-config-json = mkTest "copilot-hm-writes-lsp-config-json" (
       let
         result = evalHm {
@@ -322,17 +323,20 @@ in {
             lspServers.typescript = {
               command = "typescript-language-server";
               args = ["--stdio"];
+              extensions = ["ts"];
             };
           };
         };
-        lspFile = result.config.home.file.".copilot/lsp-config.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "typescript-language-server" (lspFile.text or "")
+        lspEntryOf "lspServers" (result.config.home.file.".copilot/lsp-config.json" or null) "typescript"
+        == {
+          args = ["--stdio"];
+          command = "typescript-language-server";
+          fileExtensions.".ts" = "typescript";
+        }
     );
 
-    module-copilot-devenv-writes-lsp-config-json = mkTest "copilot-devenv-writes-lsp-config-json" (
+    module-copilot-devenv-writes-lsp-json = mkTest "copilot-devenv-writes-lsp-json" (
       let
         result = evalDevenv {
           ai.copilot = {
@@ -340,14 +344,19 @@ in {
             lspServers.typescript = {
               command = "typescript-language-server";
               args = ["--stdio"];
+              extensions = ["ts"];
             };
           };
         };
-        lspFile = result.config.files.".config/github-copilot/lsp-config.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "typescript-language-server" (lspFile.text or "")
+        lspEntryOf "lspServers" (result.config.files.".github/lsp.json" or null) "typescript"
+        == {
+          args = ["--stdio"];
+          command = "typescript-language-server";
+          fileExtensions.".ts" = "typescript";
+        }
+        # The old inert user-scope write must be gone, not merely joined.
+        && !(result.config.files ? ".config/github-copilot/lsp-config.json")
     );
 
     # environmentVariables → the launcher wrapper, on devenv exactly as on HM.
@@ -560,16 +569,15 @@ in {
           ai.lspServers.typescript = {
             command = "typescript-language-server";
             args = ["--stdio"];
+            extensions = ["ts"];
           };
         };
-        lspFile = result.config.home.file.".copilot/lsp-config.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "typescript-language-server" (lspFile.text or "")
+        (lspEntryOf "lspServers" (result.config.home.file.".copilot/lsp-config.json" or null) "typescript").command or null
+        == "typescript-language-server"
     );
 
-    # Devenv: top-level ai.lspServers fans out to Copilot's lsp-config.json.
+    # Devenv: top-level ai.lspServers fans out to Copilot's .github/lsp.json.
     module-copilot-devenv-top-level-lsp-fanout = mkTest "copilot-devenv-top-level-lsp-fanout" (
       let
         result = evalDevenv {
@@ -577,13 +585,12 @@ in {
           ai.lspServers.typescript = {
             command = "typescript-language-server";
             args = ["--stdio"];
+            extensions = ["ts"];
           };
         };
-        lspFile = result.config.files.".config/github-copilot/lsp-config.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "typescript-language-server" (lspFile.text or "")
+        (lspEntryOf "lspServers" (result.config.files.".github/lsp.json" or null) "typescript").command or null
+        == "typescript-language-server"
     );
 
     # HM: top-level ai.environmentVariables fans out to the Copilot wrapper.
@@ -616,8 +623,8 @@ in {
         needles = ["COPILOT_DEBUG" "copilot-devenv-fanout-sentinel"];
       };
 
-    # Copilot HM: typed LSP with `extensions` emits fileExtensions
-    # mapping. Per-ecosystem Copilot translator (mkCopilotLspConfig).
+    # Copilot HM: typed LSP with `extensions` emits the fileExtensions
+    # mapping, keyed by dotted extension.
     module-copilot-hm-lsp-file-extensions = mkTest "copilot-hm-lsp-file-extensions" (
       let
         result = evalHm {
@@ -630,13 +637,46 @@ in {
             };
           };
         };
-        lspFile = result.config.home.file.".copilot/lsp-config.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "fileExtensions" (lspFile.text or "")
-        && lib.hasInfix "\".ts\"" (lspFile.text or "")
-        && lib.hasInfix "\".tsx\"" (lspFile.text or "")
+        (lspEntryOf "lspServers" (result.config.home.file.".copilot/lsp-config.json" or null) "typescript").fileExtensions or null
+        == {
+          ".ts" = "typescript";
+          ".tsx" = "typescript";
+        }
+    );
+
+    # Copilot marks `fileExtensions` Required, so a server without
+    # `extensions` must fail evaluation instead of rendering a file Copilot
+    # rejects whole.
+    module-copilot-lsp-without-extensions-throws = mkTest "copilot-lsp-without-extensions-throws" (
+      let
+        result = evalHm {
+          ai.copilot.enable = true;
+          ai.lspServers.nixd.command = "nixd";
+        };
+      in
+        !(builtins.tryEval result.config.home.file.".copilot/lsp-config.json".text).success
+    );
+
+    # Copilot rejects the whole file when a server name holds anything but
+    # ASCII letters, digits, `_` and `-`, and the name is the attribute key,
+    # so a quoted "nix.lsp" must fail evaluation. The same config renamed to
+    # "nix_lsp-1" must render: that is the positive control, and it pins
+    # `_` and `-` as accepted.
+    module-copilot-lsp-invalid-name-throws = mkTest "copilot-lsp-invalid-name-throws" (
+      let
+        fileFor = name:
+          (evalHm {
+            ai.copilot.enable = true;
+            ai.lspServers.${name} = {
+              command = "nixd";
+              extensions = ["nix"];
+            };
+          }).config.home.file.".copilot/lsp-config.json";
+      in
+        (lspEntryOf "lspServers" (fileFor "nix_lsp-1") "nix_lsp-1").command or null
+        == "nixd"
+        && !(builtins.tryEval (fileFor "nix.lsp").text).success
     );
 
     # HM: top-level ai.agents fans out to Copilot's agents file write.

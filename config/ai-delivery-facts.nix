@@ -146,7 +146,7 @@
       evidence = evidence.${row.ecosystem};
       inputOptions = inputOptions row.surface row.ecosystem;
     }
-    // lib.optionalAttrs (row.ecosystem == "copilot" && row.mode == "devenv" && builtins.elem row.surface ["lspServers" "settings"]) {deliveryGap = copilotInert;}
+    // lib.optionalAttrs (row.ecosystem == "copilot" && row.mode == "devenv" && row.surface == "settings") {deliveryGap = copilotInert;}
     // lib.optionalAttrs (key row == "settings/kimchi/devenv") {
       deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys reconcile into the fixed project harness path.";
     }

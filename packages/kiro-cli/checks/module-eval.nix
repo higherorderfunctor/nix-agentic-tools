@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument;
+  inherit (harness) evalDevenv evalHm hasLiteral lspEntryOf mkTest mkWrapperGrepTest ownedDocument;
   cliDocument = evaluated:
     ownedDocument "kiro" "${evaluated.config.ai.kiro.configDir}/settings/cli.json" evaluated;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
@@ -1726,7 +1726,7 @@ in {
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
 
-    # HM: lsp.json — verify LSP server config write.
+    # HM: lsp.json — the `languages` envelope with snake_case fields.
     module-kiro-hm-writes-lsp-json = mkTest "kiro-hm-writes-lsp-json" (
       let
         result = evalHm {
@@ -1735,14 +1735,22 @@ in {
             lspServers.nix = {
               command = "nixd";
               args = [];
+              extensions = ["nix"];
             };
           };
         };
-        lspFile = result.config.home.file.".kiro/settings/lsp.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "nixd" (lspFile.text or "")
+        # The whole documented Kiro entry, inside the `languages` envelope.
+        lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "nix"
+        == {
+          args = [];
+          command = "nixd";
+          exclude_patterns = [];
+          file_extensions = ["nix"];
+          initialization_options = {};
+          name = "nix";
+          project_patterns = [];
+        }
     );
 
     # HM: explicit `permissions` rules render permissions.yaml (source is a
@@ -2811,7 +2819,7 @@ in {
         && !(result.config.files ? ".kiro/settings/mcp.json")
     );
 
-    # Devenv: lsp.json write.
+    # Devenv: lsp.json — the `languages` envelope with snake_case fields.
     module-kiro-devenv-writes-lsp-json = mkTest "kiro-devenv-writes-lsp-json" (
       let
         result = evalDevenv {
@@ -2820,14 +2828,35 @@ in {
             lspServers.nix = {
               command = "nixd";
               args = [];
+              extensions = ["nix"];
             };
           };
         };
-        lspFile = result.config.files.".kiro/settings/lsp.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "nixd" (lspFile.text or "")
+        # The whole documented Kiro entry, inside the `languages` envelope.
+        lspEntryOf "languages" (result.config.files.".kiro/settings/lsp.json" or null) "nix"
+        == {
+          args = [];
+          command = "nixd";
+          exclude_patterns = [];
+          file_extensions = ["nix"];
+          initialization_options = {};
+          name = "nix";
+          project_patterns = [];
+        }
+    );
+
+    # Kiro routes files to LSP servers by extension alone, so a server
+    # without `extensions` must fail evaluation, not render an entry that
+    # never starts.
+    module-kiro-lsp-without-extensions-throws = mkTest "kiro-lsp-without-extensions-throws" (
+      let
+        result = evalDevenv {
+          ai.kiro.enable = true;
+          ai.lspServers.nixd.command = "nixd";
+        };
+      in
+        !(builtins.tryEval result.config.files.".kiro/settings/lsp.json".text).success
     );
 
     # Devenv: environment variables are baked into the launcher, not exported
@@ -3284,13 +3313,12 @@ in {
           ai.lspServers.nixd = {
             command = "nixd";
             args = [];
+            extensions = ["nix"];
           };
         };
-        lspFile = result.config.home.file.".kiro/settings/lsp.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "nixd" (lspFile.text or "")
+        (lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "nixd").command or null
+        == "nixd"
     );
 
     # Devenv: top-level ai.lspServers fans out to Kiro's settings/lsp.json.
@@ -3301,13 +3329,12 @@ in {
           ai.lspServers.nixd = {
             command = "nixd";
             args = [];
+            extensions = ["nix"];
           };
         };
-        lspFile = result.config.files.".kiro/settings/lsp.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "nixd" (lspFile.text or "")
+        (lspEntryOf "languages" (result.config.files.".kiro/settings/lsp.json" or null) "nixd").command or null
+        == "nixd"
     );
 
     # HM: per-CLI ai.kiro.lspServers overrides top-level ai.lspServers on
@@ -3319,18 +3346,17 @@ in {
             kiro.enable = true;
             lspServers.nixd = {
               command = "nixd-top-level";
+              extensions = ["nix"];
             };
             kiro.lspServers.nixd = {
               command = "nixd-kiro-specific";
+              extensions = ["nix"];
             };
           };
         };
-        lspFile = result.config.home.file.".kiro/settings/lsp.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "nixd-kiro-specific" (lspFile.text or "")
-        && !(lib.hasInfix "nixd-top-level" (lspFile.text or ""))
+        (lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "nixd").command or null
+        == "nixd-kiro-specific"
     );
 
     # HM: top-level ai.environmentVariables fans out to the Kiro wrapper.
@@ -3402,14 +3428,13 @@ in {
               package = pkgs.hello;
               binary = "hello";
               args = [];
+              extensions = ["hello"];
             };
           };
         };
-        lspFile = result.config.home.file.".kiro/settings/lsp.json" or null;
       in
-        lspFile
-        != null
-        && lib.hasInfix "/bin/hello" (lspFile.text or "")
+        lib.hasSuffix "/bin/hello"
+        ((lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "hello-lsp").command or "")
     );
 
     # Kiro independence: the top-level `ai.agents` pool carries Claude/Copilot
