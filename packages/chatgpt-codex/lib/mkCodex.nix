@@ -569,14 +569,14 @@
     then applyWorkspaceWriteRoots settings integrationRoots
     else applyNamedPermissionRoots settings integrationRoots;
   hasPermissionProfiles = settings:
-    helpers.filterNulls (lib.filterAttrs
+    aiCommon.filterNulls (lib.filterAttrs
       (name: _: builtins.elem name ["default_permissions" "permissions"])
       settings)
     != {};
 
   renderCodexServer = name: server: let
     rendered = removeAttrs (lib.ai.renderServer pkgs name server) ["type"];
-    native = helpers.filterNulls (server.codex or {});
+    native = aiCommon.filterNulls (server.codex or {});
     translated =
       lib.optionalAttrs ((native.auth or null) != null) {inherit (native) auth;}
       // lib.optionalAttrs ((native.bearerTokenEnvVar or null) != null) {bearer_token_env_var = native.bearerTokenEnvVar;}
@@ -1012,7 +1012,7 @@ in
         if isHm
         then integrationSettings
         else applyNamedPermissionRoots integrationSettings (lib.optional (gitCommonDir != null) gitCommonDir);
-      settings = helpers.filterNulls (permissionSettings
+      settings = aiCommon.filterNulls (permissionSettings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });

@@ -1545,10 +1545,10 @@ in {
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
-    # It cannot see a bundle a helper returns: `helpers.mkOwnedDocument`
-    # writes `home.activation`, `tasks` and `enterTest` from inside
-    # `lib/ai/own.nix`, where no pattern over a factory's text matches. No
-    # factory calls it today; `ai.<runtime>._ownPlans` is where a check reads
+    # It cannot see a bundle a helper returns: `helpers.mkOwnBundle` writes
+    # `home.activation`, `tasks` and `enterTest` from inside `lib/ai/own.nix`,
+    # where no pattern over a factory's text matches. No factory calls it;
+    # the router does, and `ai.<runtime>._ownPlans` is where a check reads
     # what owned writers do.
     module-delivery-no-new-direct-sink-writes =
       pkgs.runCommandLocal "delivery-no-new-direct-sink-writes" {

@@ -3,16 +3,17 @@
 > **Last verified:** 2026-09-24 — native file settings live under
 > `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Shared documents, each declared by
-> `facts.harnessWrites` (no factory calls `helpers.mkOwnedDocument`), reconcile
-> owned leaves through `lib/ai/own.{nix,py}` on HM activation and devenv shell
-> entry where the CLI writes that copy (Copilot's user settings.json on HM, its
-> repository settings on devenv), a fully retracted empty document is deleted, a
-> document may name its native writer's lock, document targets may enforce
-> modes, a document is published by compare-and-swap against unlocked runtime
-> writers, credential documents get an ungated mode-narrowing command writer,
-> and the delivery-path parity example uses `ai.codex.execpolicyRules`. The
-> shared LSP producers are `mkKiroLspFile` / `mkCopilotLspFile` (whole files,
-> envelope included) and `mkClaudeLspConfig` (one entry).
+> `facts.harnessWrites` (the router, never a factory, calls
+> `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
+> on HM activation and devenv shell entry where the CLI writes that copy
+> (Copilot's user settings.json on HM, its repository settings on devenv), a
+> fully retracted empty document is deleted, a document may name its native
+> writer's lock, document targets may enforce modes, a document is published by
+> compare-and-swap against unlocked runtime writers, credential documents get an
+> ungated mode-narrowing command writer, and the delivery-path parity example
+> uses `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile`
+> / `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
+> (one entry).
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
