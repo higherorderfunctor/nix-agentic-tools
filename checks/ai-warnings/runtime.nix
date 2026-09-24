@@ -45,6 +45,16 @@
       enable = true;
     };
   };
+  # Codex, Kimchi and Kiro all write the project-root AGENTS.md by default, and
+  # Codex publishes its key even with no content. Codex sorts first, so a
+  # first-wins manifest named only ai.codex.* for Kimchi's text.
+  sharedAgentsMd = harness.evalDevenv {
+    ai.codex.enable = true;
+    ai.kimchi = {
+      context.text = "kimchi only";
+      enable = true;
+    };
+  };
   stubBin = pkgs.writeShellScript "kiro-warning-stub" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -82,7 +92,8 @@ in {
         ${wrappers} \
         ${../../packages/claude-code/lib/delegation-clamp.sh} \
         ${pkgs.writeText "warning-observer-shell" enabled.config.enterShell} \
-        ${pkgs.writeText "kimchi-warning-observer-shell" kimchi.config.enterShell}
+        ${pkgs.writeText "kimchi-warning-observer-shell" kimchi.config.enterShell} \
+        ${pkgs.writeText "shared-agents-md-observer-shell" sharedAgentsMd.config.enterShell}
       touch "$out"
     '';
   checks.ai-warnings-files-wired = harness.mkTest "ai-warnings-files-wired" (
