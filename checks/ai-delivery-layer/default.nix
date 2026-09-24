@@ -209,30 +209,6 @@
     ++ [(snapshotSection backend "<all>" harnessNames)])
   ["devenv" "hm"]);
 
-  # The factories that still write a native sink themselves, with the step of
-  # the migration that takes each one off the list. This is keyed by PATH and
-  # not by a count: anchored assignments and nested `home = {` blocks both
-  # count as direct writes, even when several sinks share one factory.
-  #
-  # An entry is removed when its factory stops writing sinks directly, and the
-  # check fails in BOTH directions — a new writer anywhere under
-  # `packages/*/lib/` fails it, and so does an entry the scan can no longer
-  # reproduce. The capstone replaces this transitional census before the list
-  # would become empty; an explicit guard below makes that handoff
-  # self-retiring.
-  #
-  # What the scan CANNOT see is a bundle a helper returns —
-  # `lib.mkMerge [(helpers.mkOwnedDocument …)]` writes `home.activation`,
-  # `tasks` and `enterTest` from inside `lib/ai/own.nix`, and no anchored
-  # pattern over the caller's text will ever match it. That is not a hole to
-  # regex around: every factory that does it is on the list below for its
-  # other writes, and the direct-`own` call is exactly what the router's
-  # `copy-ro`/`shared` bucket replaces, one factory at a time. When a factory
-  # leaves this list it has stopped calling `own` directly too, and
-  # `ai.<runtime>._ownPlans` is where a check reads what its writers do.
-  sinkWriters = {
-  };
-
   # One writer, both backends, every ordering feature: a backend-keyed entry
   # name, a token with no devenv node (`secrets`), the literal-node escape
   # hatch, and both ends of the position.
@@ -1541,10 +1517,15 @@ in {
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
+    # It cannot see a bundle a helper returns: `helpers.mkOwnedDocument`
+    # writes `home.activation`, `tasks` and `enterTest` from inside
+    # `lib/ai/own.nix`, where no pattern over a factory's text matches. No
+    # factory calls it today; `ai.<runtime>._ownPlans` is where a check reads
+    # what owned writers do.
     module-delivery-no-new-direct-sink-writes =
       pkgs.runCommandLocal "delivery-no-new-direct-sink-writes" {
         src = ../..;
-        nativeBuildInputs = [pkgs.coreutils pkgs.diffutils pkgs.findutils pkgs.gnugrep];
+        nativeBuildInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep];
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -1563,7 +1544,7 @@ in {
         anchored='^[[:space:]]*(home\.file|home\.activation|files|tasks|enterTest)([."[]|[[:space:]]*=)'
         # The nested form: a `home = {` block whose body writes `file` and
         # `activation` at a depth the anchored pattern cannot see. Flagging the
-        # block is enough, because this list is keyed by file.
+        # block itself is a forbidden direct sink owner.
         nested='^[[:space:]]*home[[:space:]]*=[[:space:]]*\{'
 
         find packages -mindepth 3 -path 'packages/*/lib/*' -type f -name '*.nix' -print0 \
@@ -1572,37 +1553,24 @@ in {
         test -s "$work/corpus"
         echo "scanned $(tr -d -c '\0' < "$work/corpus" | wc -c) factory library files"
 
+        # Zero direct writers, with no exemption mechanism. Distinguish grep's
+        # ordinary no-match status from an unreadable or malformed corpus.
         : > "$work/actual"
         while IFS= read -r -d $'\0' path; do
-          if grep -lE -e "$anchored" -e "$nested" "$path" >> "$work/actual"; then
+          if grep -nHE -e "$anchored" -e "$nested" "$path" >> "$work/actual"; then
             :
           else
             rc=$?
             test "$rc" -eq 1 || exit "$rc"
           fi
         done < "$work/corpus"
-        sort -o "$work/actual" "$work/actual"
-        {
-          # Bash requires a command even when the final factory leaves the list.
-          :
-          ${lib.concatMapStringsSep "\n          " (path: "echo ${lib.escapeShellArg path}") (lib.attrNames sinkWriters)}
-        } | sort > "$work/allowed"
-
-        if test ! -s "$work/allowed"; then
-          echo "delivery: the transitional direct-sink census is empty; land the capstone zero-writer contract instead of carrying this migration check." >&2
+        if test -s "$work/actual"; then
+          echo "delivery: expected ZERO direct native sink writes; route them through ai.<runtime>.files or ai.<runtime>.activation." >&2
+          cat "$work/actual" >&2
           exit 1
         fi
 
-        if ! diff -u "$work/allowed" "$work/actual" > "$work/sink-writers.diff"; then
-          echo "delivery: the set of files writing a native sink directly has changed." >&2
-          echo "A '+' line writes home.file/home.activation/files/tasks itself; route it" >&2
-          echo "through ai.<runtime>.files or ai.<runtime>.activation instead. A '-' line" >&2
-          echo "no longer does; drop it from sinkWriters in this check." >&2
-          cat "$work/sink-writers.diff" >&2
-          exit 1
-        fi
-
-        echo "PASS: ${toString (lib.length (lib.attrNames sinkWriters))} recorded factories write a native sink directly; no others do" > "$out"
+        echo "PASS: zero factory library files write a native sink directly" > "$out"
       '';
 
     # A single-file skill whose source is a package-interpolated STRING. Both
