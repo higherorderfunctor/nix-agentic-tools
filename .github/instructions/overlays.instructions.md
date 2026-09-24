@@ -348,8 +348,8 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-22 — the Go floor override follows the builder
-> supplied by each nixpkgs recipe and preserves that builder's own Go baseline.
+> **Last verified:** 2026-09-23 — Bruno 4.2.0 repairs stale workspace lock
+> entries in the builder input shared with its npm dependency fetcher.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -586,6 +586,14 @@ verification remains authoritative; the version is a retirement boundary, not
 proof that the base adaptation works. The threshold also keeps 4.0.0's builder
 inputs unchanged; the update script, not this compatibility shim, continues to
 derive both hashes.
+
+The same builder input also carries a 4.2.0-only lock repair. That release's
+three Bruno workspaces require `qs ^6.15.2`, but their nested lock entries still
+pin 6.14.1. Offline `npm ci` then asks for registry metadata despite the
+required 6.15.3 tarball being cached. `postPatch` checks the exact lock and
+manifest shape, then removes those stale nested entries so npm can use the root
+6.15.3 copy. `fetchNpmDeps` and the package build both consume this `postPatch`;
+changing the lock repair requires recalculating `npmDepsHash`.
 
 `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix` is a
 plain `overrideAttrs` and is CORRECT as one: it sets `cargoDeps` — an
