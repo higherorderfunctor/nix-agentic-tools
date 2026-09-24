@@ -9,14 +9,15 @@ applyTo: "packages/kimchi/**"
 
 > **Last verified:** 2026-09-23 — the package builds from the release source
 > that the extractor also reads, one pin for both, with pinned pnpm and Go
-> dependencies; `ai.kimchi.native.settings` and `native.harnessSettings` are
-> closed option trees generated from `extracted.json` by `lib/extracted.nix`;
-> devenv rejects user-scope `config.json` keys and both backends reject
-> environment variables Kimchi overwrites, both read from the sidecar, and the
-> overwrite and inert flags are derived from the sources, as is each harness
-> key's project scope, declarations resolve by reference or fail on ambiguity,
-> and the extractor's own hand-written parts are listed with their guards, and
-> pi's declaration packages follow Kimchi's lockfile; the builder entry point is
+> dependencies, and patches bundled-skill discovery to read store directories in
+> place; `ai.kimchi.native.settings` and `native.harnessSettings` are closed
+> option trees generated from `extracted.json` by `lib/extracted.nix`; devenv
+> rejects user-scope `config.json` keys and both backends reject environment
+> variables Kimchi overwrites, both read from the sidecar, and the overwrite and
+> inert flags are derived from the sources, as is each harness key's project
+> scope, declarations resolve by reference or fail on ambiguity, and the
+> extractor's own hand-written parts are listed with their guards, and pi's
+> declaration packages follow Kimchi's lockfile; the builder entry point is
 > `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and devenv its
 > project paths; the mutable JSON documents (`config.json`, harness
 > `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
@@ -439,5 +440,14 @@ compiling and staging the resources.
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.
 The install check requires the exact release version, a runnable helper, and the
-theme, export, and bundled-skill assets. Linux and Darwin builds run in CI. This
-packaging change does not alter discovery or configuration behavior.
+theme, export, and bundled-skill assets. Linux and Darwin builds run in CI. The
+source-build switch itself does not alter discovery or configuration behavior.
+
+## Immutable skill discovery
+
+The Nix patch returns individual bundled skill directories directly to Pi's
+resource inventory. Pi supports those paths and resolves supporting files
+relative to SKILL.md, so no temporary copy or exit cleanup is needed. Upstream's
+copy preserved the store's 0555 directory modes, causing EACCES during recursive
+cleanup. Filtering still omits bundled names supplied by stronger roots and now
+recognizes symlinked skill directories, including broken-link tolerance.
