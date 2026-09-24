@@ -336,9 +336,7 @@ in {
         }
     );
 
-    # The name predates the devenv move to `<projectDir>/lsp.json`; it is kept
-    # so the check set stays stable across the move.
-    module-copilot-devenv-writes-lsp-config-json = mkTest "copilot-devenv-writes-lsp-config-json" (
+    module-copilot-devenv-writes-lsp-json = mkTest "copilot-devenv-writes-lsp-json" (
       let
         result = evalDevenv {
           ai.copilot = {
