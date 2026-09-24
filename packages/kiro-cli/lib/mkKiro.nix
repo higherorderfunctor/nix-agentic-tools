@@ -1726,6 +1726,9 @@ in
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       isHm = backend == "hm";
+      # The shared repository AGENTS.md key devenv writes this runtime's
+      # context and always-on rules into.
+      projectContextKey = cfg.context.filename;
       settingsDir = "${cfg.configDir}/settings";
       configHash = builtins.hashString "sha256" cfg.configDir;
       settingsLedger = "json-settings/kiro-settings-${configHash}.json";
@@ -1757,8 +1760,11 @@ in
           {ai.kiro.hooks = workflowReminderHooks cfg;}
           (lib.mkIf isHm (workflowsSettingImplication cfg))
           {assertions = mkAssertions cfg ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);}
+          # Published for observers such as file-warnings.nix, whether or not
+          # the key has content this evaluation.
+          (lib.mkIf (!isHm) {ai.internal.agentsMdTargets.kiro = projectContextKey;})
           (lib.mkIf (!isHm && (hasMergedContext || sharedRules != {})) {
-            ai.internal.agentsMd.${cfg.context.filename} =
+            ai.internal.agentsMd.${projectContextKey} =
               {
                 hasContent = true;
                 rules = lib.mapAttrs (_name: aiCommon.readContent) sharedRules;

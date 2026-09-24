@@ -1171,14 +1171,15 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-23 — L5 is the delivery router plus one adapter per
+> **Last verified:** 2026-09-24 — L5 is the delivery router plus one adapter per
 > backend; Claude, Codex, Copilot and Kiro describe delivery once, Kimchi
 > reaches the layer from its callbacks, and the delivery matrix is generated
 > from the layer for every runtime's files. Normalized pools carry only a
 > text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
 > rules are read-only copies whose writers survive a disable. Copilot reconciles
 > settings.json on HM only. Native file settings live under
-> `ai.<runtime>.native`.
+> `ai.<runtime>.native`. Each devenv factory publishes its shared AGENTS.md key
+> in `ai.internal.agentsMdTargets`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1454,7 +1455,10 @@ copy the printed output to `config/ai-delivery-generated.nix`, then run
 `treefmt config/ai-delivery-generated.nix`. The `ai-delivery-generated` check
 regenerates and requires byte identity. `file-warnings.nix` continues rebasing
 the matrix's default directories onto consumer configuration; neither warning
-reader imports an evaluator.
+reader imports an evaluator. The matrix's project `AGENTS.md` writer is rebased
+onto the key the runtime's factory publishes in `ai.internal.agentsMdTargets`,
+never onto `context.filename`: Kimchi's names its Home Manager harness file,
+while its devenv factory always writes the project-root `AGENTS.md`.
 
 ### Layer location map
 

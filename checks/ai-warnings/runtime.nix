@@ -26,6 +26,18 @@
     # manifest must not claim it.
     files.".custom-kiro/consumer-owned.md".text = "consumer";
   };
+  # Kimchi's context.filename names the Home Manager harness file only; devenv
+  # always writes the project-root AGENTS.md. Evaluated alone so no other
+  # runtime's AGENTS.md writer can stand in for Kimchi's.
+  kimchi = harness.evalDevenv {
+    ai.kimchi = {
+      context = {
+        filename = "custom.md";
+        text = "kimchi probe";
+      };
+      enable = true;
+    };
+  };
   stubBin = pkgs.writeShellScript "kiro-warning-stub" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -62,7 +74,8 @@ in {
         ${lib.getExe reminder} \
         ${wrappers} \
         ${../../packages/claude-code/lib/delegation-clamp.sh} \
-        ${pkgs.writeText "warning-observer-shell" enabled.config.enterShell}
+        ${pkgs.writeText "warning-observer-shell" enabled.config.enterShell} \
+        ${pkgs.writeText "kimchi-warning-observer-shell" kimchi.config.enterShell}
       touch "$out"
     '';
   checks.ai-warnings-files-wired = harness.mkTest "ai-warnings-files-wired" (
