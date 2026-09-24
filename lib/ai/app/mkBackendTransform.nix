@@ -218,6 +218,17 @@
       type = lib.types.attrsOf lib.types.path;
     };
   };
+  # A per-runtime pool option the builder declares for a supported pool, with
+  # the record's `poolOptions.<pool>` merged over it, so a runtime states only
+  # what differs: its own description, or a native type (Codex's agents).
+  # `agentsDir` is opt-in by naming it there, because Codex consumes `agents`
+  # and deliberately has no directory form of it.
+  poolOptions = appRecord.poolOptions or {};
+  poolOption = pool: declaration:
+    lib.optionalAttrs (supportsPool pool) {
+      ${pool} = lib.mkOption ({default = {};} // declaration // poolOptions.${pool} or {});
+    };
+  hasAgentsDir = supportsPool "agents" && poolOptions ? agentsDir;
   normalizedPool = name: neutral:
     if supportsPool name
     then cfg.normalized.${name}
@@ -461,6 +472,26 @@ in {
         description = "${appRecord.name}-specific MCP servers. Entries replace top-level ai.mcpServers at the same key; null suppresses an inherited server.";
       };
     }
+    // poolOption "agents" {
+      type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
+      description = "${appRecord.name}-specific agents. Entries replace top-level ai.agents at the same key; null suppresses an inherited agent.";
+    }
+    // lib.optionalAttrs hasAgentsDir {
+      agentsDir = lib.mkOption ({
+          type = lib.types.nullOr aiCommon.dirOptionType;
+          default = null;
+          description = "Directory of `.md` agent files, expanded into `ai.${appRecord.name}.agents` keyed by basename minus `.md`.";
+        }
+        // poolOptions.agentsDir);
+    }
+    // poolOption "environmentVariables" {
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+      description = "Environment variables baked into the ${appRecord.name} launcher wrapper. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
+    }
+    // poolOption "lspServers" {
+      type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
+      description = "${appRecord.name}-specific LSP servers. Entries replace top-level ai.lspServers at the same key; null suppresses an inherited server.";
+    }
     // lib.optionalAttrs (supportsPool "settings") {
       settings = lib.mkOption {
         type = aiCommon.normalizedSettingsType;
@@ -569,6 +600,11 @@ in {
     (lib.optionalAttrs (supportsPool "rules") (lib.mkIf (cfg.rulesDir != null) {
       ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
         dirHelpers.rulesFromDir cfg.rulesDir
+      );
+    }))
+    (lib.optionalAttrs hasAgentsDir (lib.mkIf (cfg.agentsDir != null) {
+      ai.${appRecord.name}.agents = lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.agentsFromDir cfg.agentsDir
       );
     }))
     (lib.optionalAttrs (supportsPool "skills") (lib.mkIf (cfg.skillsDir != null) {

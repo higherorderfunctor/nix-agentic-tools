@@ -20,6 +20,10 @@
 #                                    # Same-named native options in `options` are independent.
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
+#     poolOptions ? {};              # {<pool> = mkOption attrs;} merged over the
+#                                    #   builder's declaration of `agents`,
+#                                    #   `environmentVariables` or `lspServers`;
+#                                    #   naming `agentsDir` opts into that option
 #     config ? _: {};                # ONE delivery callback for BOTH backends; it
 #                                    #   receives `backend` and describes delivery
 #                                    #   rather than lowering it.
@@ -59,6 +63,7 @@
   contextDescription ? null,
   ruleModule ? null,
   rulesDescription ? null,
+  poolOptions ? {},
   config ? null,
   # Presence matters: `null` is the documented opt-out, so an absent callback
   # is told apart from it through `args` below.
@@ -99,7 +104,7 @@ in
   assert lib.assertMsg (unknownDefaults == [])
   "mkRuntime ${name}: defaults carries ${lib.concatStringsSep ", " unknownDefaults}; it takes only `package`.";
     {
-      inherit name defaults options supportedPools hm devenv pkgs;
+      inherit name defaults options poolOptions supportedPools hm devenv pkgs;
     }
     // lib.optionalAttrs (config != null) {inherit config;}
     // lib.optionalAttrs (args ? installPackage) {inherit installPackage;}

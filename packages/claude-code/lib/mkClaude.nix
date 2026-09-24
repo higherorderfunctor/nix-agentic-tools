@@ -211,17 +211,6 @@
   # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
   # defaults UNDER the consumer's pool.
-  # L2b → L3: expand `ai.claude.agentsDir` into per-CLI `ai.claude.agents`,
-  # shared by both projections. mkDefault lets explicit
-  # `ai.claude.agents.<name>` entries win within this layer; the resulting
-  # per-runtime entry replaces a same-key root agent.
-  agentsDirEntries = cfg:
-    lib.mkIf (cfg.agentsDir != null) {
-      ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
-        lib.ai.agentsFromDir cfg.agentsDir
-      );
-    };
-
   shellSettings = {
     resolvedShell,
     moduleEnvironmentVariables,
@@ -274,6 +263,33 @@ in
     ];
     defaults = {
       package = pkgs.ai.claude-code;
+    };
+    # The builder declares these pool options; Claude states its delivery.
+    poolOptions = {
+      agents.description = ''
+        Claude-specific agent Markdown or portable semantic records. Entries
+        replace top-level `ai.agents` at the same key; null suppresses an
+        inherited agent. Home Manager routes them to
+        `programs.claude-code.agents`, which writes
+        `~/.claude/agents/<name>.md`; devenv writes project
+        `.claude/agents/<name>.md` itself.
+      '';
+      agentsDir.description = ''
+        Claude-specific directory of `.md` agent files. Each file
+        becomes one entry in `ai.claude.agents` keyed by basename
+        minus `.md`. Accepts a path literal or
+        `{ path, filter? }` (filter: name → bool, default keeps
+        `.md`).
+      '';
+      lspServers.description = ''
+        Typed Claude-specific LSP server declarations. Entries replace
+        top-level `ai.lspServers` at the same key; null suppresses an
+        inherited server. Translated via `mkClaudeLspConfig` to
+        `programs.claude-code.lspServers`, which upstream writes into
+        `~/.claude/settings.json`. Extensions list becomes
+        `extensionToLanguage` mapping. Upstream devenv `claude.code`
+        has no LSP surface — devenv warns when this option is non-empty.
+      '';
     };
     # Shared options (present in both backends)
     options = {
@@ -412,19 +428,6 @@ in
           change. The claude-code overlay's extraExtract guard asserts the key
           still parses on each bump so a silent drop fails the update pipeline
         loudly'';
-      lspServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
-        default = {};
-        description = ''
-          Typed Claude-specific LSP server declarations. Entries replace
-          top-level `ai.lspServers` at the same key; null suppresses an
-          inherited server. Translated via `mkClaudeLspConfig` to
-          `programs.claude-code.lspServers`, which upstream writes into
-          `~/.claude/settings.json`. Extensions list becomes
-          `extensionToLanguage` mapping. Upstream devenv `claude.code`
-          has no LSP surface — devenv warns when this option is non-empty.
-        '';
-      };
       marketplaces = lib.mkOption {
         type = with lib.types; attrsOf (either package path);
         default = {};
@@ -454,29 +457,6 @@ in
             concise = "Keep answers under 3 sentences.";
             tutorial = ./styles/tutorial.md;
           }
-        '';
-      };
-      agents = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
-        default = {};
-        description = ''
-          Claude-specific agent Markdown or portable semantic records. Entries
-          replace top-level `ai.agents` at the same key; null suppresses an
-          inherited agent. Home Manager routes them to
-          `programs.claude-code.agents`, which writes
-          `~/.claude/agents/<name>.md`; devenv writes project
-          `.claude/agents/<name>.md` itself.
-        '';
-      };
-      agentsDir = lib.mkOption {
-        type = lib.types.nullOr aiCommon.dirOptionType;
-        default = null;
-        description = ''
-          Claude-specific directory of `.md` agent files. Each file
-          becomes one entry in `ai.claude.agents` keyed by basename
-          minus `.md`. Accepts a path literal or
-          `{ path, filter? }` (filter: name → bool, default keeps
-          `.md`).
         '';
       };
       commands = lib.mkOption {
@@ -745,7 +725,6 @@ in
           ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
-        (agentsDirEntries cfg)
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
         # `ai.claude.hookScripts`. Content is `readFile`'d into
         # `lib.types.lines` via hooksFromDir.
