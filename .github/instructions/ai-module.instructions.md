@@ -1214,6 +1214,7 @@ path types".
 > mode-narrowing command writer beside its unpin ledger. The builder declares
 > the per-runtime `agents`, `environmentVariables` and `lspServers` options and
 > an opt-in `agentsDir`; a record's `poolOptions` carries only what differs.
+> Every reconciled document is one `helpers.mkReconciledDocument` call.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1335,7 +1336,11 @@ path types".
   of its settings copies (`/model`, `/settings` and their `--repo` forms), so
   one writer, `copilotSettingsMerge`, reconciles the user settings.json on HM
   and the repository `.github/copilot/settings.json` on devenv. Codex's project
-  config remains a static source because its native writer is user-scoped.
+  config remains a static source because its native writer is user-scoped. Each
+  such document is one `helpers.mkReconciledDocument` call
+  (`lib/ai/hm-helpers.nix`), which emits the writer with its ledger and the file
+  entry that names both, so the pair cannot drift. Its `entry` and `ledger` stay
+  literals at the call site: both are upgrade contracts.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON/TOML ledger, even without a

@@ -1130,56 +1130,48 @@ in
           );
         }
 
-        (lib.optionalAttrs isHm {
+        (lib.optionalAttrs isHm (lib.mkMerge [
           # The user config is not wholly declarative: Codex's trust prompt
           # persists project decisions here via config/batchWrite. Reconcile
           # only Nix-owned leaves, retaining native trust/MCP/feature siblings.
           # The TOML codec selects tomlkit to preserve comments and ordering.
           # New files are writable 0600; existing files retain their mode.
-          # Keep the writer AND the document when settings are empty so old
-          # leaves retract, while a first empty generation remains a no-op.
-          ai.codex.activation.codexSettingsReconcile.ledgers.${settingsLedger} = {
-            codec = "toml";
+          # A first empty generation remains a no-op.
+          (helpers.mkReconciledDocument {
+            # Ordinary leaves retain generated siblings when a consumer
+            # extends this document; a whole-content default discards them.
+            content.value = settings;
+            format = "toml";
+            ledger = settingsLedger;
             path = configFile;
-          };
-          ai.codex.files = lib.mkMerge [
-            {
-              ${configFile} = {
-                # Ordinary leaves retain generated siblings when a consumer
-                # extends this document; a whole-content default discards them.
-                content.value = settings;
-                entry = "codexSettingsReconcile";
-                facts.harnessWrites = true;
-                format = "toml";
-                ledger = settingsLedger;
-              };
-            }
-            (lib.mkIf hasAgentsMdContent {
-              # The ONE generated entry whose priority stays on the whole entry
-              # rather than moving onto `content`. Deciding between enabled and
-              # empty generated content reads the COMPOSED body, and the body may
-              # come from a store source a consumer has already replaced. The
-              # `mkDefault` wrapper lets priority filtering discard that source
-              # unread. A consumer defining only a sibling field therefore must
-              # also restate content; validation diagnoses an empty survivor.
-              ${agentsMdTarget} = lib.mkDefault (
-                if agentsMd == ""
-                then {
-                  content = {
-                    enable = false;
-                    text = agentsMd;
-                  };
-                }
-                else {
-                  content = {
-                    enable = true;
-                    text = agentsMd;
-                  };
-                }
-              );
-            })
-          ];
-        })
+            runtime = "codex";
+            writer = "codexSettingsReconcile";
+          })
+          (lib.mkIf hasAgentsMdContent {
+            # The ONE generated entry whose priority stays on the whole entry
+            # rather than moving onto `content`. Deciding between enabled and
+            # empty generated content reads the COMPOSED body, and the body may
+            # come from a store source a consumer has already replaced. The
+            # `mkDefault` wrapper lets priority filtering discard that source
+            # unread. A consumer defining only a sibling field therefore must
+            # also restate content; validation diagnoses an empty survivor.
+            ai.codex.files.${agentsMdTarget} = lib.mkDefault (
+              if agentsMd == ""
+              then {
+                content = {
+                  enable = false;
+                  text = agentsMd;
+                };
+              }
+              else {
+                content = {
+                  enable = true;
+                  text = agentsMd;
+                };
+              }
+            );
+          })
+        ]))
         (lib.optionalAttrs (!isHm) {
           ai = {
             codex.files.${configFile} = lib.mkIf (settings != {}) {
