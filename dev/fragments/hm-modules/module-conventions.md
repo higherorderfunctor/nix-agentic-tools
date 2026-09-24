@@ -1,13 +1,14 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-23 — native file settings live under
+> **Last verified:** 2026-09-24 — native file settings live under
 > `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Shared documents, each declared by
 > `facts.harnessWrites` (no factory calls `helpers.mkOwnedDocument`), reconcile
 > owned leaves through `lib/ai/own.{nix,py}` on HM activation and devenv shell
 > entry where the CLI writes that copy (Copilot's settings.json on HM only), a
 > fully retracted empty document is deleted, a document may name its native
-> writer's lock, document targets may enforce modes, and the delivery-path
+> writer's lock, document targets may enforce modes, a document is published by
+> compare-and-swap against unlocked runtime writers, and the delivery-path
 > parity example uses `ai.codex.execpolicyRules`.
 >
 > Full lineage:
@@ -250,6 +251,18 @@ preserves native siblings within the same table, and publishes the whole
 document with one atomic replacement. The manifest is necessary because
 `existing * desired` cannot tell a native key from a Nix key deleted in the next
 generation.
+
+A runtime that shares a document without a lock (Claude Code's `.claude.json`,
+Kimchi's `config.json`) can rename its own write over the path between
+`own.py`'s read and its rename, which the flock cannot see. So a document is
+published by compare-and-swap: `own.py` records the SHA-256 of the bytes it
+parsed, and immediately before the rename re-reads the path. If it moved, the
+run re-parses the runtime's bytes, replays its own sets and deletes onto them,
+and tries again, up to three attempts. Content rather than mtime, because a
+sibling rename can leave the same size and mtime behind. Exhaustion fails the
+run loudly with the runtime's write intact and the ledger unwritten; it never
+overwrites. This narrows the window to the check-to-rename gap and cannot close
+it. Locked by `ai-activation-settings-mode` (the race cases).
 
 Modes on a document are the reconciler's, not the caller's: a NEW file is
 created 0600, and an existing regular file keeps the mode it has — unless its
