@@ -240,6 +240,20 @@ in {
             files."AGENTS.md".content.text = "KIMCHI-CONSUMER-ONLY";
           };
         };
+        # Generated Kimchi context beside a custom (Home Manager) filename. The
+        # devenv factory still writes AGENTS.md, so a public override on that
+        # path must arbitrate with the shared owner rather than fail its
+        # aggregate assertion for a context.filename that names another file.
+        kimchiContextOverride = evalDevenv {
+          ai.kimchi = {
+            enable = true;
+            context = {
+              filename = "custom.md";
+              text = "KIMCHI-GENERATED";
+            };
+            files."AGENTS.md".content.text = "KIMCHI-CONTEXT-OVERRIDE";
+          };
+        };
         consumerOnlySuppressed = evalDevenv {
           ai.kimchi = {
             enable = true;
@@ -299,6 +313,8 @@ in {
         && consumerOnly.config.files."AGENTS.md".text or null == "CONSUMER-ONLY"
         && kimchiConsumerOnly.config.files."AGENTS.md".text or null == "KIMCHI-CONSUMER-ONLY"
         && !(kimchiConsumerOnly.config.files ? "custom.md")
+        && kimchiContextOverride.config.files."AGENTS.md".text or null == "KIMCHI-CONTEXT-OVERRIDE"
+        && lib.all (assertion: assertion.assertion) kimchiContextOverride.config.assertions
         && !(consumerOnlySuppressed.config.files ? "AGENTS.md")
         && !(consumerOnlySuppressed.config.files ? "custom.md")
         && !consumerOnlyDivergent.success

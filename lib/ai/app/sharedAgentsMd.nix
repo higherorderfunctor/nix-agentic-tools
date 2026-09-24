@@ -117,10 +117,12 @@
     if isDevenv
     then "devenv"
     else "hm";
+  # The key a runtime's devenv factory writes, as it declares it. Not
+  # `context.filename`: Kimchi's names its Home Manager harness file while its
+  # devenv factory always writes AGENTS.md.
   sharedTarget = runtime: path:
     isDevenv
-    && options.ai.${runtime} ? normalized.context
-    && config.ai.${runtime}.context.filename == path
+    && (config.ai.internal.agentsMdTargets.${runtime} or null) == path
     && builtins.hasAttr path config.ai.internal.agentsMd;
   projectEntry = entry:
     entry
