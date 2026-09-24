@@ -18,6 +18,11 @@
 # Manager harness file while its devenv factory always writes AGENTS.md.
 # Reading the whole owner per runtime attributed every runtime's key to the
 # first one listed, so Kiro's context file was reported as `ai.codex.files`.
+#
+# Several runtimes can still write one path: Codex, Kimchi and Kiro all default
+# to the project-root AGENTS.md, and Codex publishes its key even with no
+# content. Each path therefore names every writer's options, folded across
+# runtimes. A first-wins map named only `ai.codex.*` for Kimchi's text.
 {
   config,
   lib,
@@ -79,21 +84,19 @@
         || (templated entry
           && lib.hasPrefix (builtins.head (lib.splitString "<" entry.target)) name))
       targets;
-    option = name:
-      lib.concatStringsSep ", " (lib.unique (map lib.showOption (lib.concatMap (entry: entry.inputOptions) (matching name)))
-        ++ ["ai.${runtime}.files.${builtins.toJSON name}"]);
+    options = name:
+      map lib.showOption (lib.concatMap (entry: entry.inputOptions) (matching name))
+      ++ ["ai.${runtime}.files.${builtins.toJSON name}"];
     names =
       builtins.attrNames (cfg.files or {})
       ++ map (entry: entry.target) (lib.filter (entry: !(templated entry)) targets);
   in
-    lib.optionals (cfg.enable or false) (map (name: {
-        inherit name;
-        value = option name;
-      })
-      (lib.unique names));
+    lib.optionalAttrs (cfg.enable or false) (lib.genAttrs (lib.unique names) options);
   # Name -> the consumer options that write it. Shared with the snapshot task,
   # so the ledger bootstrap and the delivery report agree on what is managed.
-  owned = builtins.listToAttrs (lib.concatMap ownedFor runtimes);
+  owned =
+    lib.mapAttrs (_: lists: lib.concatStringsSep ", " (lib.unique (lib.concatLists lists)))
+    (lib.zipAttrs (map ownedFor runtimes));
   desired =
     lib.mapAttrs (name: file: {
       mode = file.copyMode or "symlink";

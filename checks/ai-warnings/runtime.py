@@ -211,6 +211,15 @@ def kimchi_wiring(script):
     assert "ai.kimchi." in desired.get("AGENTS.md", {}).get("option", ""), desired
 
 
+def shared_agents_md_wiring(script):
+    # Several runtimes write the one project-root AGENTS.md. The manifest names
+    # every writer's options, so the runtime that actually supplied the text is
+    # among them even when an empty one sorts first.
+    option = manifest(script).get("AGENTS.md", {}).get("option", "")
+    assert "ai.kimchi." in option, option
+    assert "ai.codex." in option, option
+
+
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     files(sys.argv[1], root)
@@ -221,4 +230,5 @@ with tempfile.TemporaryDirectory() as directory:
     clamp(sys.argv[5], root / "clamp")
     wiring(sys.argv[6])
     kimchi_wiring(sys.argv[7])
+    shared_agents_md_wiring(sys.argv[8])
 print("PASS: file observations and optional hook warnings have firing and silent controls")

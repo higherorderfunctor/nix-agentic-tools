@@ -287,7 +287,10 @@ the matrix's default directories onto consumer configuration; neither warning
 reader imports an evaluator. The matrix's project `AGENTS.md` writer is rebased
 onto the key the runtime's factory publishes in `ai.internal.agentsMdTargets`,
 never onto `context.filename`: Kimchi's names its Home Manager harness file,
-while its devenv factory always writes the project-root `AGENTS.md`.
+while its devenv factory always writes the project-root `AGENTS.md`. Codex,
+Kimchi and Kiro all default to that one path, so the manifest folds every
+writer's options per path; a first-wins map named only `ai.codex.*` for text
+Kimchi supplied.
 
 ### Layer location map
 
