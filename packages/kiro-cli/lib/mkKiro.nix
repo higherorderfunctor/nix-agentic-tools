@@ -1,19 +1,11 @@
 # Kiro-specific factory-of-factory.
 #
-# Returns a backend-agnostic app record describing the Kiro AI app.
-# Backend-specific module functions are produced by applying
-# `hmTransform` (HM) or `devenvTransform` (devenv) to this record.
-#
-# Fanout absorbed in Task 5 (A4): settings/cli.json activation merge,
-# settings/mcp.json static write, settings/lsp.json write,
-# per-instruction steering files under `.kiro/steering/`, skills
-# routing to `.kiro/skills/`, agents + agentsDir writing under
-# `.kiro/agents/`, hooks + hooksDir writing under `.kiro/hooks/`,
-# environmentVariables fed into the HM symlinkJoin wrapper (export)
-# and the devenv `env` blob.
-#
-# Source material: modules/kiro-cli/default.nix (291 lines, legacy
-# HM module) + modules/devenv/kiro.nix (153 lines, legacy devenv).
+# Returns a backend-agnostic runtime record describing the Kiro AI app;
+# `lib.ai.app.hmTransform` and `lib.ai.app.devenvTransform` project it into
+# the Home Manager and devenv modules. One delivery description serves both
+# backends: the settings/cli.json leaf reconciler, settings/mcp.json,
+# settings/lsp.json, steering, skills, agents and hooks under `<configDir>`,
+# with environment variables baked into the launcher on both backends.
 {
   lib,
   pkgs,
@@ -528,29 +520,23 @@
         lib.nameValuePair "${name}.json" {text = content;})
       (mkAllHookFiles cfg);
 
-  # The legacy steering copies an OLDER generation owned, as a target that
-  # declares nothing. Steering is delivered through the ordinary runtime-file
-  # symlink sink now (the pinned Kiro follows steering symlinks), so there is
-  # nothing left to write here and the only job is retracting what a manifest
-  # from before that change still records.
-  mkSteeringRetirementTarget = cfg: {
-    codec = "dir";
-    ledger = "materialize/kiro-steering.manifest";
-    path = "${cfg.configDir}/steering";
-    units = {};
-  };
-
   # Declared outside the product gate so upgrade+disable still drains the old
   # copy ledger before Home Manager checks the replacement steering symlinks.
-  kiroMigrationConfig = {cfg, ...}: let
-    target = mkSteeringRetirementTarget cfg;
-  in {
+  kiroMigrationConfig = {cfg, ...}: {
     ai.kiro.activation.retireSteering = {
       entry = {
         devenv = "ai:kiro:retire-steering-copies";
         hm = "retire-materialize-kiro-steering-ledger";
       };
-      ledgers.${target.ledger} = {inherit (target) codec path;};
+      # The legacy steering copies an OLDER generation owned. Steering is
+      # delivered through the ordinary runtime-file symlink sink now (the
+      # pinned Kiro follows steering symlinks), and no file claims this
+      # ledger, so the router emits an empty target that only retracts what a
+      # manifest from before that change still records.
+      ledgers."materialize/kiro-steering.manifest" = {
+        codec = "dir";
+        path = "${cfg.configDir}/steering";
+      };
       pruneEntry.hm = "retire-materialize-kiro-steering";
       runWhenDisabled = true;
     };
@@ -701,6 +687,12 @@
   # native files to `ai.kiro.files` at default priority. The current pinned
   # Kiro (2.18.1) follows steering symlinks in both project and Home
   # Manager-like layouts, so ordinary backend file delivery is sufficient.
+  # An unscoped always-on rule, which AGENTS.md carries when Kiro shares it.
+  isSharedRule = rule:
+    rule.matcher
+    == null
+    && ((rule.inclusion or null) == null || rule.inclusion == "always");
+
   mkSteeringEmitters = {
     cfg,
     mergedRules,
@@ -711,10 +703,6 @@
     fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
     inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
     hasContext = hasMergedContext;
-    isSharedRule = rule:
-      rule.matcher
-      == null
-      && ((rule.inclusion or null) == null || rule.inclusion == "always");
     steeringRules =
       if sharedAgentsMd
       then lib.filterAttrs (_name: rule: !(isSharedRule rule)) mergedRules
@@ -1330,9 +1318,8 @@ in
         description = "Config directory relative to HOME / devenv root.";
       };
       # Kiro-specific freeform settings with typed subkeys for known
-      # knobs. Consumed by the settings/cli.json leaf reconciler in
-      # `hm.config` (retire Nix leaves and preserve native siblings) and by
-      # the static write in `devenv.config`.
+      # knobs. The settings/cli.json delivery writer reconciles these leaves
+      # on both backends, retiring Nix leaves and preserving native siblings.
       native.settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
@@ -1480,8 +1467,7 @@ in
         default = {};
         description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
       };
-      # Env vars exported when launching kiro. In HM they're baked into
-      # Baked into the symlinkJoin launcher on BOTH backends. devenv used to
+      # Env vars baked into the symlinkJoin launcher on BOTH backends. devenv used to
       # populate its native `env` attrset instead, which exported them into
       # the project shell rather than into Kiro. `attrsOf str` — matching the
       # legacy surface.
@@ -1582,12 +1568,9 @@ in
         ];
       };
       # -- Agents & hooks --------------------------------------------------
-      # GREENFIELD (held -- see docs/plans/kiro-v3-permissions.md). These are
-      # UNTYPED PASSTHROUGH today: we write whatever JSON the consumer
-      # authors. There is no upstream format we wrap -- Kiro OWNS these
-      # schemas -- so a future session should MODEL them typed (like
-      # `permissions`), not passthrough. No v2 typed surface exists, so there
-      # is nothing to translate; this is net-new modeling.
+      # Typed as `kiroAgentRecord` and `kiroHookRecord`; agents still accept
+      # the legacy raw forms, and raw hook envelopes go in `hooksJson`. Kiro
+      # OWNS both schemas; there is no upstream format we wrap.
       #
       # v3 agent schema (`<configDir>/agents/<name>.{json,md}`; global
       # ~/.kiro or project .kiro): { name, description, model, prompt,
@@ -1653,9 +1636,8 @@ in
           }
         '';
       };
-      # External agents directory. Symlinked at `<configDir>/agents`
-      # when set; walked recursively in devenv because devenv's
-      # `files.*.source` can't recurse.
+      # External agents directory, delivered recursively at
+      # `<configDir>/agents` on both backends.
       agentsDir = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
@@ -1750,9 +1732,7 @@ in
       };
       flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.native.settings);
       permissionRules = mkPermissionRules cfg;
-      sharedRules = lib.filterAttrs (_name: rule:
-        rule.matcher == null && ((rule.inclusion or null) == null || rule.inclusion == "always"))
-      mergedRules;
+      sharedRules = lib.filterAttrs (_name: isSharedRule) mergedRules;
       steeringEmitters = mkSteeringEmitters {
         inherit cfg mergedContext hasMergedContext mergedRules;
         sharedAgentsMd = !isHm;
@@ -1931,11 +1911,9 @@ in
     devenv = {
       installPackage = kiroInstallPackage;
       migrationConfig = kiroMigrationConfig;
-      options = {};
     };
     hm = {
       installPackage = kiroInstallPackage;
       migrationConfig = kiroMigrationConfig;
-      options = {};
     };
   }
