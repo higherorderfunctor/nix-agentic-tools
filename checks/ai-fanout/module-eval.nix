@@ -8,6 +8,10 @@
 }: let
   inherit (harness) aiStubs evalDevenv evalHm harnessNames hmLib mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
+  # Runtimes whose app record supports the normalized settings pool. Kiro is
+  # excluded: it persists effort only per model, so it declares no
+  # `ai.kiro.settings` (packages/kiro-cli/checks: kiro-settings-pool-excluded).
+  settingsHarnessNames = lib.remove "kiro" harnessNames;
 in {
   checks = {
     # ── Structural gate: every enabled runtime installs SOMETHING ──
@@ -278,16 +282,16 @@ in {
         && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "high"
     );
 
-    module-runtime-settings-exist-for-every-harness = mkTest "runtime-settings-exist-for-every-harness" (
+    module-runtime-settings-exist-for-capable-harnesses = mkTest "runtime-settings-exist-for-capable-harnesses" (
       let
-        config.ai = lib.genAttrs harnessNames (_: {
+        config.ai = lib.genAttrs settingsHarnessNames (_: {
           settings.reasoningEffort = "low";
         });
         hm = evalHm config;
         devenv = evalDevenv config;
       in
-        lib.all (runtime: hm.config.ai.${runtime}.settings.reasoningEffort == "low") harnessNames
-        && lib.all (runtime: devenv.config.ai.${runtime}.settings.reasoningEffort == "low") harnessNames
+        lib.all (runtime: hm.config.ai.${runtime}.settings.reasoningEffort == "low") settingsHarnessNames
+        && lib.all (runtime: devenv.config.ai.${runtime}.settings.reasoningEffort == "low") settingsHarnessNames
     );
 
     module-runtime-settings-reject-native-keys = mkTest "runtime-settings-reject-native-keys" (

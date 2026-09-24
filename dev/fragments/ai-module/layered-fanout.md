@@ -7,9 +7,9 @@
 > text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
 > rules are read-only copies whose writers survive a disable. Copilot reconciles
 > settings.json on HM only; its devenv settings are a static write to
-> `.github/copilot/settings.json`. Native file settings live under
-> `ai.<runtime>.native`. Each devenv factory publishes its shared AGENTS.md key
-> in `ai.internal.agentsMdTargets`.
+> `.github/copilot/settings.json`. Kiro excludes the normalized `settings` pool.
+> Native file settings live under `ai.<runtime>.native`. Each devenv factory
+> publishes its shared AGENTS.md key in `ai.internal.agentsMdTargets`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -217,10 +217,11 @@
   them at one priority, which the record rejects, and computing that priority
   reads the source — a build during evaluation for a derivation.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
-  declares the same closed `settings` submodule. Each field resolves root versus
-  per-runtime with `resolveOverride`; native lowering remains per-runtime and
-  may support only a subset of fields. Runtime-shaped passthrough is separate
-  under `native.settings` and is not a normalized pool.
+  whose `supportedPools` lists `settings` declares the same closed `settings`
+  submodule; Kiro does not, because it persists effort only per model. Each
+  field resolves root versus per-runtime with `resolveOverride`; native lowering
+  remains per-runtime and may support only a subset of fields. Runtime-shaped
+  passthrough is separate under `native.settings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -323,8 +324,9 @@ Kimchi supplied.
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
 3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
-   The uniform normalized `settings` schema is the explicit exception: every
-   runtime declares it, while each field's native lowering may be narrower.
+   The normalized `settings` pool follows the same rule: a runtime with no
+   lossless target for any field (Kiro) leaves it out, and one that lowers only
+   some fields keeps it and warns for the rest.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's `config`. Declare owned outputs' ledgers under
    `ai.<runtime>.activation`; work that owns no files uses `command`.

@@ -374,7 +374,8 @@ in {
 
   # ── Settings utilities ──────────────────────────────────────────────
 
-  # Closed normalized settings shared by the root and every runtime scope.
+  # Closed normalized settings shared by the root and every runtime whose
+  # app record supports the `settings` pool (all but Kiro).
   # Native settings live in each factory's separate `native.settings` option.
   normalizedSettingsType = lib.types.submodule {
     options.reasoningEffort = lib.mkOption {

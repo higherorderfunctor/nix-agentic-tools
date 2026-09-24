@@ -247,15 +247,13 @@
         suffix = ".action.prompt";
       }
     ]
+    # Kiro persists effort only per model, so its normalized settings pool is
+    # excluded: the root value warns, and `ai.kiro.settings` does not exist to
+    # be a case (packages/kiro-cli/checks: kiro-settings-pool-excluded).
     ++ [
       {
         runtime = "kiro";
         path = ["ai" "settings" "reasoningEffort"];
-        value = "high";
-      }
-      {
-        runtime = "kiro";
-        path = ["ai" "kiro" "settings" "reasoningEffort"];
         value = "high";
       }
     ];
