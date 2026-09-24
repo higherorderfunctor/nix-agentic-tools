@@ -1,6 +1,6 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-23 — Bruno 4.2.0 repairs stale workspace lock
+> **Last verified:** 2026-09-24 — Bruno 4.2.0 repairs stale workspace lock
 > entries in the builder input shared with its npm dependency fetcher; Kimchi's
 > source-derived sidecar participates in the extraction loop, Kimchi joins the
 > release-derived Go-floor update chain and declares a pnpm dependency-hash
@@ -382,13 +382,14 @@ choice usually gets read as a question about the source shape. It mostly is not.
   does NOT self-heal a hash invalidated WITHOUT a version bump: it early-exits
   on version equality and never re-derives. An input update follows a separate
   repair path: failed verification discovers `fix_sidecar_hashes`, derives the
-  hashes through the package's passthru fixers, and retries once. An out-of-band
-  same-version change still needs the standalone fixer
-  (`passthru.fixNpmDepsHash`, `passthru.fixPnpmDepsHash`,
-  `passthru.fixVendorHash`) as an explicit escape hatch. Hashes are derived by
-  those fixers, never edited by hand. Inline re-derives every sweep and
-  therefore self-heals without that repair path. **Neither shape fails
-  silently**; do not write that one does.
+  hashes through the package's passthru fixers, and retries once. Those fixers
+  build against the recorded hash, so they re-derive it only when the old output
+  cannot be substituted; a cached path reports `ok`. An out-of-band same-version
+  change still needs the standalone fixer (`passthru.fixNpmDepsHash`,
+  `passthru.fixPnpmDepsHash`, `passthru.fixVendorHash`) as an explicit escape
+  hatch. Hashes are derived by those fixers, never edited by hand. Inline
+  re-derives every sweep and therefore self-heals without that repair path.
+  **Neither shape fails silently**; do not write that one does.
 - **Record the inversion.** It corrects a belief this repo held: the rows still
   on plain `nix-update` are paying that uncacheable per-sweep cost TODAY, so
   "sidecars are legacy overhead from an older design" is close to backwards.

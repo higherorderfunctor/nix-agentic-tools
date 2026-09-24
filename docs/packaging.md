@@ -78,9 +78,11 @@ composed registry and ninja DAG:
   `hashFixTargets.pnpmDeps` supplies the repair. Order matters within the chain:
   the pnpm fixer is passed as `extraAfter` to `mkGoUpdateExtract`, so it runs
   after the Go floor and vendor hash rather than racing them. It is also
-  `passthru.fixPnpmDepsHash`, which `fix_sidecar_hashes` discovers — a pnpm
-  package WITHOUT that attr still has no automatic repair, which is the
-  remaining half of the Mode D gap in
+  `passthru.fixPnpmDepsHash`, which `fix_sidecar_hashes` discovers. Like the
+  vendor-hash fixer, it is not validated by "it built": at an unchanged version
+  a cached pnpm-deps path satisfies it, so it repairs an input bump only when
+  that path cannot be substituted. A pnpm package WITHOUT that attr still has no
+  automatic repair, which is the remaining half of the Mode D gap in
   `docs/update-pipeline-transitive-hash-gap.md`. Its `pnpmDeps` and `src` FODs
   carry the version in their names, so a bump that forgets a hash fails the
   fetch instead of substituting the previous release's cached output.

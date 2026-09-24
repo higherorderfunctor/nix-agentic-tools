@@ -136,6 +136,22 @@ rec {
   # each its own `nix build`, is what lets the second read the sidecar the
   # first just wrote.
   #
+  # A successful build is read as "the recorded hash is right", and that
+  # only holds when the build actually FETCHED. A fixed-output path is a
+  # function of its name and its declared hash, so when nothing in either
+  # moved — a nixpkgs, toolchain or pnpm bump at an unchanged package
+  # version — the path is the one already in the local store or in cachix.
+  # Nix substitutes it, the build succeeds, and this reports `ok` without
+  # comparing anything. So a caller that has NOT first reset the key to
+  # `lib.fakeHash` repairs a stale hash only when the old output is not
+  # substitutable. The version-bump chain always resets it (`buildCandidate`
+  # rewrites the sidecar from scratch); `fix_sidecar_hashes` in
+  # dev/scripts/update-common.sh does not. A substituted stale output is
+  # also what the verification build consumed, so no hash mismatch was
+  # seen there either: the package builds, or it fails in its build phase
+  # and the input PR opens red. It is never committed as a silently wrong
+  # hash, but nothing here re-derives it.
+  #
   # Runs from the repo root, and the sidecar must be GIT-TRACKED: a flake
   # only sees tracked files, so an untracked sidecar is invisible to the
   # eval this drives.

@@ -534,6 +534,15 @@ verify_all_packages() {
 # fixer that has quietly stopped firing is worse than no fixer. The
 # fixers are idempotent — on a correct hash each one is a cache-hit
 # build that prints "<pname>: <key> ok" and writes nothing.
+#
+# That same cache hit is the limit of this repair. The fixers build
+# against the RECORDED hash, and an input bump at an unchanged version
+# moves neither the FOD's name nor its hash, so its path is unchanged
+# and substitutes from the store or cachix. The fixer then reports `ok`
+# on a stale hash. So this re-derives a hash only when the old output is
+# not substitutable — which is also the only case in which verification
+# saw a fixed-output mismatch. See the note on `fodHashFixFn` in
+# lib/packaging.nix.
 fix_sidecar_hashes() {
   local expr paths p rc=0
 
