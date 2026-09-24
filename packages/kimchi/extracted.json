@@ -104,6 +104,37 @@
         "inert": true,
         "project": true
       },
+      "memoryEmbedding": {
+        "typeExpression": "{ model?: string; dims?: number; }",
+        "type": "object",
+        "properties": {
+          "dims": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true
+          },
+          "model": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": true
+      },
+      "memoryExtraction": {
+        "typeExpression": "{ model?: string; }",
+        "type": "object",
+        "properties": {
+          "model": {
+            "typeExpression": "string",
+            "type": "string",
+            "optional": true
+          }
+        },
+        "optional": true,
+        "project": true
+      },
       "migrationState": {
         "typeExpression": "\"done\" | \"skip-forever\"",
         "type": "enum",
@@ -256,6 +287,8 @@
         "maxToolResultChars",
         "mcpSearch",
         "mcpSearchLimit",
+        "memoryEmbedding",
+        "memoryExtraction",
         "migrationState",
         "redaction",
         "skillPaths"
@@ -315,6 +348,11 @@
         "readBy": ["pi"],
         "controls": "pi session storage directory (pi's ENV_SESSION_DIR, named from Kimchi's piConfig.name)"
       },
+      "KIMCHI_CONTEXT_DATE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "prompt context date shown in place of the wall-clock date"
+      },
       "KIMCHI_DAP_BINARIES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -335,6 +373,11 @@
         "readBy": ["pi"],
         "controls": "suppression of pi built-in providers",
         "reason": "src/entry.ts assigns it on every launch before anything reads it"
+      },
+      "KIMCHI_ENABLE_RESOURCES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "transient comma-separated resource enablement"
       },
       "KIMCHI_FERMENT_DISABLE_PARALLEL": {
         "consumerOverridable": true,
@@ -375,6 +418,16 @@
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "controls": "MCP end-to-end test keyring directory"
+      },
+      "KIMCHI_MEMORY_CAPTURE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "memory capture kill-switch ('off' disables capture)"
+      },
+      "KIMCHI_MEMORY_DRAIN_CONCURRENCY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "memory capture drain concurrency"
       },
       "KIMCHI_NO_PROXY": {
         "consumerOverridable": true,
@@ -1396,7 +1449,7 @@
   },
   "provenance": {
     "extractorSchema": 3,
-    "kimchiVersion": "1.1.32",
+    "kimchiVersion": "1.1.33",
     "piVersion": "0.85.1"
   }
 }
