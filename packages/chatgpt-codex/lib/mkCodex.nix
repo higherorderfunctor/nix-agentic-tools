@@ -593,6 +593,10 @@
     "projects"
   ];
 
+  # Codex's own default for `project_doc_max_bytes`: it reads at most this
+  # many bytes of a project document and silently drops the rest.
+  codexProjectDocMaxBytes = 32768;
+
   renderScope = matcher:
     lib.optionalString (matcher != null) (
       "_Apply this guidance only when working with files matching: "
@@ -859,10 +863,13 @@ in
       # it landed and cannot restrict Codex skill or AGENTS.md discovery.
       projectDocMaxBytes = lib.mkOption {
         type = lib.types.ints.positive;
-        default = 32768;
+        default = codexProjectDocMaxBytes;
         description = ''
           Maximum byte size of the generated Codex AGENTS.md. Evaluation fails
-          before Codex can silently truncate content beyond this limit.
+          before Codex can silently truncate content beyond this limit. A value
+          other than Codex's own default (32768) is also written to Codex's
+          `project_doc_max_bytes` at default priority, so Codex reads as much
+          as this guard admits.
         '';
       };
       native.settings = lib.mkOption {
@@ -982,9 +989,20 @@ in
           ));
         }
         {
-          ai.codex.native.settings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
-            model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
-          };
+          ai.codex.native.settings = lib.mkMerge [
+            (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+              model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+            })
+            # The size guard alone would let a raised limit pass evaluation
+            # while Codex still truncated at its own default. Codex honors
+            # this key from a trusted project's `.codex/config.toml` as well
+            # as from user config (measured with `codex debug prompt-input`
+            # on an 88 KB AGENTS.md: 744 of 2000 lines by default, all 2000
+            # with the key raised).
+            (lib.mkIf (cfg.projectDocMaxBytes != codexProjectDocMaxBytes) {
+              project_doc_max_bytes = lib.mkDefault cfg.projectDocMaxBytes;
+            })
+          ];
           assertions =
             mkAgentAssertions mergedAgents
             ++ mkExecpolicyAssertions cfg.execpolicyRules

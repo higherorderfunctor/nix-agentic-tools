@@ -1794,6 +1794,32 @@ in {
         && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)
     );
 
+    # The guard and Codex's own limit are one number: a raised guard reaches
+    # config.toml on both backends, the default writes nothing, and an
+    # explicit native value still wins.
+    module-codex-project-doc-limit-reaches-native = mkTest "codex-project-doc-limit-reaches-native" (
+      let
+        settingsOf = eval: eval.config.ai.codex.native.settings;
+        raised = extra: {
+          ai.codex =
+            {
+              enable = true;
+              projectDocMaxBytes = 131072;
+            }
+            // extra;
+        };
+        hmRaised = evalHm (raised {});
+        devenvRaised = evalDevenv (raised {});
+        devenvDefault = evalDevenv {ai.codex.enable = true;};
+        explicit = evalDevenv (raised {native.settings.project_doc_max_bytes = 65536;});
+      in
+        (settingsOf hmRaised).project_doc_max_bytes
+        == 131072
+        && (settingsOf devenvRaised).project_doc_max_bytes == 131072
+        && !((settingsOf devenvDefault) ? project_doc_max_bytes)
+        && (settingsOf explicit).project_doc_max_bytes == 65536
+    );
+
     module-codex-size-guard-byte-boundaries = mkTest "codex-size-guard-byte-boundaries" (
       let
         evaluate = context: projectDocMaxBytes:
