@@ -83,7 +83,8 @@
 
   # A mapping may name any language Semble knows: a parsed one (bundled, an
   # alias, or a `grammars` language) or one it indexes with line chunking
-  # (every extension-map language). Only unknown names are rejected.
+  # (every extension-map language). null asks for line chunking outright.
+  # Only unknown names are rejected, which is what catches a typo.
   mappingErrors = spec: let
     known = bundledLanguages ++ extracted.languages ++ map (grammar: grammar.language or "") spec.grammars;
     patterns = lib.concatMap (mapping: mapping.patterns or []) spec.pathMappings;
@@ -93,11 +94,13 @@
       language = mapping.language or "";
     in
       (
-        if !(builtins.isString language) || language == ""
-        then ["Semble `${path}.language` must be a non-empty string."]
+        if language == null
+        then []
+        else if !(builtins.isString language) || language == ""
+        then ["Semble `${path}.language` must be null or a non-empty string."]
         else
           lib.optional (!(lib.elem language known))
-          "Semble `${path}.language`: \"${language}\" is not a language Semble knows. Use a bundled grammar or alias (semble-grammars ${extracted.provenance.sembleGrammarsVersion}), a language from Semble's extension map, or the language of a `grammars` package."
+          "Semble `${path}.language`: \"${language}\" is not a language Semble knows. Use a bundled grammar or alias (semble-grammars ${extracted.provenance.sembleGrammarsVersion}), a language from Semble's extension map, the language of a `grammars` package, or null for line chunking."
       )
       ++ lib.optional (!(lib.elem (mapping.content or null) categories))
       "Semble `${path}.content` must be one of code, config or docs."

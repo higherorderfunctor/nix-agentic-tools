@@ -16,11 +16,7 @@
 
   sembleScript = import ./semble-script.nix pkgs;
 
-  # A tiny model2vec model, built offline from Semble's own closure.
-  fixtureModel = seed:
-    pkgs.runCommand "semble-fixture-model-${toString seed}" {} ''
-      ${sembleScript "fixture-model" pkgs.ai.semble ./fixture-model.py} "$out" ${toString seed}
-    '';
+  fixtureModel = import ./fixture-model.nix pkgs;
   docsModel = fixtureModel 1;
   codeConfigModel = fixtureModel 2;
   fallbackModel = fixtureModel 3;

@@ -11,10 +11,11 @@ applyTo: "packages/semble/**"
 > content set, with `defaultContent` and `defaultModel`; the CLI and the MCP
 > server route alike through `patches/models.patch`, and there is no `--model`.
 > `pathMappings` is an ordered root list of `{ language; content; patterns; }`
-> where the first match wins, validated against `extracted.json`. `mcp.content`
-> and `mcp.rootExposure` are gone: `mcp.enable = false` with an MCP-backed
-> subagent is a Kiro agent-private server. Every installed package is a bin-only
-> launcher set that unsets PYTHONPATH. Model examples use the flake's
+> where the first match wins, validated against `extracted.json`, and
+> `language = null` means line chunking with no parser. `mcp.content` and
+> `mcp.rootExposure` are gone: `mcp.enable = false` with an MCP-backed subagent
+> is a Kiro agent-private server. Every installed package is a bin-only launcher
+> set that unsets PYTHONPATH. Model examples use the flake's
 > `lib.packaging.fetchHuggingFaceModel` and forward `files` as `passthru.files`,
 > which turns on the model2vec layout check.
 >
@@ -137,12 +138,17 @@ ordered list of `{ language; content; patterns; }` entries. Each `language` must
 be one Semble knows: a grammar it bundles, an alias of one (such as `zsh`, `py`
 or `terraform`), the language of a `grammars` package, or any other language in
 its extension map (such as `caddy` or `nginx`), which Semble indexes with line
-chunking. Anything else fails evaluation, checked against `extracted.json`. That
-file describes the pinned Semble; a consumer who overrides `package` with
-another version is validated against the pinned one. Extra grammars must not
-reuse a bundled name or alias, since Semble would never load them. The same
-language may appear in several entries, so one language can split across content
-categories by path.
+chunking. `language = null` indexes the matched files with line chunking and no
+language at all, even when their suffix names a parsed language: the patched
+`detect_language` returns the mapping's `None`, and upstream's `chunk_source`
+skips the parser lookup for `None` and goes straight to `chunk_lines` (about 750
+characters per chunk), so nothing is logged. Anything else fails evaluation,
+checked against `extracted.json`, which is what turns a misspelt language name
+into an error instead of a silent line-chunked mapping. That file describes the
+pinned Semble; a consumer who overrides `package` with another version is
+validated against the pinned one. Extra grammars must not reuse a bundled name
+or alias, since Semble would never load them. The same language may appear in
+several entries, so one language can split across content categories by path.
 
 A pattern without `/` matches a basename at any depth; a pattern containing `/`
 matches the path relative to the indexed repository root. Path matching uses
@@ -163,7 +169,10 @@ In Semble 0.6.0, index creation collects files before wrapping iteration in a
 progress bar. The customization patch passes content selection to that
 collection and the repository root to language detection inside the loop. The
 `module-semble-extra-grammars-load` check builds the customized package and
-exercises grammar loading, mapped discovery, and cache fingerprints.
+exercises grammar loading, mapped discovery, and cache fingerprints;
+`module-semble-null-language-runtime` indexes null-mapped files against a
+fixture model and searches them. The mapping table reaches Python through
+`json.loads`, not as a literal, because a `null` language is not Python.
 
 The customized package writes a fingerprint of its grammar and mapping set into
 index metadata and rejects caches created by a different customization. The HM

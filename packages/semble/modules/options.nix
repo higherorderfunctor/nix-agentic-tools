@@ -66,15 +66,19 @@
         description = "Semble content category containing the matched files.";
       };
       language = lib.mkOption {
-        type = lib.types.nonEmptyStr;
+        type = lib.types.nullOr lib.types.nonEmptyStr;
         example = "json";
         description = ''
           The language Semble assigns to the matched files: a language Semble
           bundles a grammar for (or an alias of one), the language of a
           `grammars` package, or any other language in Semble's extension
           map, which Semble indexes with line chunking instead of a parser.
-          The same language may appear in several entries, for example to
-          split one language across content categories.
+          null indexes the files with line chunking and no language, even
+          when their extension names a parsed one; use it for files no
+          language fits. Any other name is an evaluation error, so a typo
+          cannot silently fall back to line chunking. The same language may
+          appear in several entries, for example to split one language
+          across content categories.
         '';
       };
       patterns = lib.mkOption {
@@ -152,6 +156,11 @@ in {
             language = "json";
             content = "config";
             patterns = ["*.json" "flake.lock"];
+          }
+          {
+            language = null;
+            content = "docs";
+            patterns = ["LICENSE" "CODEOWNERS"];
           }
         ]
       '';

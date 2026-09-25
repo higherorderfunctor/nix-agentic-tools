@@ -84,16 +84,18 @@
   pathMappingLoader = pkgs.writeText "semble-path-mappings.py" ''
     from __future__ import annotations
 
+    import json
     from fnmatch import fnmatchcase
     from pathlib import Path
     from typing import Any
 
     CUSTOMIZATION_FINGERPRINT = "${customizationFingerprint}"
-    # In match order; the first matching pattern wins.
-    _MAPPINGS: list[dict[str, Any]] = ${builtins.toJSON mappings}
+    # In match order; the first matching pattern wins. A None language means
+    # line chunking, with no parser lookup.
+    _MAPPINGS: list[dict[str, Any]] = json.loads(${builtins.toJSON (builtins.toJSON mappings)})
 
 
-    def _find_mapping(file_path: Path, root: Path | None = None) -> dict[str, Any] | None:
+    def find_mapping(file_path: Path, root: Path | None = None) -> dict[str, Any] | None:
         try:
             relative = file_path.relative_to(root).as_posix() if root is not None else file_path.as_posix()
         except ValueError:
@@ -107,13 +109,8 @@
         return None
 
 
-    def get_mapped_language(file_path: Path, root: Path | None = None) -> str | None:
-        mapping = _find_mapping(file_path, root)
-        return None if mapping is None else mapping["language"]
-
-
     def get_mapped_content(file_path: Path, root: Path) -> str | None:
-        mapping = _find_mapping(file_path, root)
+        mapping = find_mapping(file_path, root)
         return None if mapping is None else mapping["content"]
   '';
 in

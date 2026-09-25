@@ -1,5 +1,5 @@
 # End-to-end module contracts; the shared harness discovers every backend.
-# cspell:ignore batchmode sembleignore
+# cspell:ignore batchmode markdwon sembleignore
 {
   lib,
   pkgs,
@@ -411,6 +411,10 @@ in {
         && allPass (withMappings [] [(mapping "awk" ["*.awk.in"]) (mapping "caddy" ["Caddyfile"]) (mapping "nginx" ["nginx.conf"])])
         && allPass (withMappings awk [(mapping "awk" ["*.awk.in"])])
         && failedWith ''`pathMappings.2.language`: "klingon" is not a language Semble knows'' (withMappings [] [(mapping "bash" [".envrc"]) (mapping "klingon" ["*.tlh"])])
+        # null asks for line chunking outright; a misspelt name is still an
+        # error rather than a silent line-chunked mapping.
+        && allPass (withMappings [] [(mapping null ["LICENSE" "*.vendored.py"])])
+        && failedWith ''`pathMappings.1.language`: "markdwon" is not a language Semble knows'' (withMappings [] [(mapping "markdwon" ["*.md.in"])])
         # One language may appear in several entries.
         && allPass (withMappings [] [
           ((mapping "json" ["docs/*.json"]) // {content = "docs";})
@@ -601,6 +605,78 @@ in {
           ./test-grammars.py
           ${pkgs.coreutils}/bin/touch "$out"
         '';
+
+    # A null-language mapping indexes its files with line chunks and no
+    # language, bypasses the parser its suffix would pick, and logs nothing.
+    module-semble-null-language-runtime = let
+      customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
+      semble = customizePackage pkgs.ai.semble {
+        pathMappings = [
+          {
+            language = null;
+            content = "code";
+            patterns = ["NOTES" "*.vendored.py"];
+          }
+        ];
+      };
+      model = import ./fixture-model.nix pkgs 5;
+      script = pkgs.writeText "semble-null-language.py" ''
+        import logging
+        import sys
+        from pathlib import Path
+
+        from semble.index.index import SembleIndex
+        from semble.types import ContentType
+
+        records: list[logging.LogRecord] = []
+
+
+        class Capture(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                records.append(record)
+
+
+        logging.getLogger().addHandler(Capture(level=logging.DEBUG))
+        logging.getLogger().setLevel(logging.DEBUG)
+
+        root = Path(sys.argv[1]).resolve()
+        index = SembleIndex.from_path(root, content=ContentType.CODE, model_path=sys.argv[2])
+        by_file: dict[str, list] = {}
+        for chunk in index.chunks:
+            by_file.setdefault(chunk.file_path, []).append(chunk)
+
+        # Extensionless and null-mapped: indexed, several line chunks, no language.
+        notes = by_file["NOTES"]
+        assert len(notes) > 1, len(notes)
+        assert all(chunk.language is None for chunk in notes), [chunk.language for chunk in notes]
+        assert notes[-1].end_line == 60, notes[-1].end_line
+        # A .py file mapped to null is not parsed as Python.
+        assert all(chunk.language is None for chunk in by_file["lib.vendored.py"])
+        # The unmapped control keeps its suffix language.
+        assert all(chunk.language == "python" for chunk in by_file["main.py"])
+
+        results = index.search("gamma", top_k=3)
+        assert results and results[0].chunk.file_path == "NOTES", [result.chunk.file_path for result in results]
+
+        noisy = [record.getMessage() for record in records if record.levelno >= logging.WARNING]
+        assert not noisy, noisy
+      '';
+    in
+      pkgs.runCommand "module-test-semble-null-language-runtime" {} ''
+        export HOME="$TMPDIR/home" HF_HUB_OFFLINE=1
+        ${pkgs.coreutils}/bin/mkdir -p "$HOME" repo
+        for line in $(${pkgs.coreutils}/bin/seq 1 60); do
+          if [ "$line" -eq 42 ]; then
+            printf 'gamma gamma gamma\n'
+          else
+            printf 'alpha beta line %s of plain notes\n' "$line"
+          fi
+        done > repo/NOTES
+        printf 'def alpha():\n    return beta\n' > repo/lib.vendored.py
+        printf 'def beta():\n    return alpha\n' > repo/main.py
+        ${import ./semble-script.nix pkgs "null-language" semble script} repo ${model}
+        ${pkgs.coreutils}/bin/touch "$out"
+      '';
 
     module-semble-cache-hooks-inert-when-disabled = mkTest "semble-cache-hooks-inert-when-disabled" (
       let

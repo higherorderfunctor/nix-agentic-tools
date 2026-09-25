@@ -24,14 +24,18 @@ diff --git a/src/semble/index/files.py b/src/semble/index/files.py
 --- a/src/semble/index/files.py
 +++ b/src/semble/index/files.py
 @@ -6 +6,2 @@
-+from semble.path_mappings import get_mapped_language
++from semble.path_mappings import find_mapping
  from semble.types import ContentType
-@@ -462,3 +463,3 @@
+@@ -462,3 +463,7 @@
 -def detect_language(file_name: Path) -> str | None:
 +def detect_language(file_name: Path, root: Path | None = None) -> str | None:
      """Detects the language of a file."""
 -    return _EXTENSION_TO_LANGUAGE.get(file_name.suffix.lower())
-+    return get_mapped_language(file_name, root) or _EXTENSION_TO_LANGUAGE.get(file_name.suffix.lower())
++    # A mapping's language wins even when it is None: that means line chunking.
++    mapping = find_mapping(file_name, root)
++    if mapping is not None:
++        return mapping["language"]
++    return _EXTENSION_TO_LANGUAGE.get(file_name.suffix.lower())
 diff --git a/src/semble/index/file_walker.py b/src/semble/index/file_walker.py
 --- a/src/semble/index/file_walker.py
 +++ b/src/semble/index/file_walker.py
