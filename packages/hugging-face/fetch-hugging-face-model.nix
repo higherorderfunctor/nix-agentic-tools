@@ -31,6 +31,13 @@
 # - `name` defaults to "<lowercased repo>-<short rev>" rather than "source",
 #   with a stable pname/version so lib.getName survives rev bumps and name
 #   overrides.
+# - meta.position points at the caller's `rev` when the caller gives no
+#   meta.description. nixpkgs takes it from meta.description, which the
+#   wrapper would otherwise always set, so it named this file.
+# - The result has no `override`. nixpkgs' makeOverridable version called
+#   fetchFromHuggingFace directly, skipping every default and check above, and
+#   kept the old name after a rev change. `overrideAttrs` stays, on both result
+#   shapes.
 {
   fetchFromHuggingFace,
   lib,
@@ -55,6 +62,11 @@
     if name == null
     then "${pname}-${version}"
     else name;
+  # Only when the description is ours: nixpkgs already points a caller's own
+  # meta.description at the caller.
+  position = lib.optionalAttrs (!(meta ? description)) {
+    pos = builtins.unsafeGetAttrPos "rev" args;
+  };
   api = "https://${args.domain or "huggingface.co"}/api/${args.repoType or "model"}s/${repoId}";
   validPath = file:
     lib.isString file
@@ -79,7 +91,7 @@
     // {
       inherit backend passthru;
       name = drvName;
-      derivationArgs = (args.derivationArgs or {}) // {inherit pname version;};
+      derivationArgs = (args.derivationArgs or {}) // position // {inherit pname version;};
       meta = {description = "${repoId} at ${version} (Hugging Face)";} // meta // {inherit license;};
     }
   );
@@ -106,13 +118,14 @@ in
   assert lib.assertMsg (files == null || lib.allUnique (map lib.toLower files)) "fetchHuggingFaceModel: files must be unique, ignoring case (a case-insensitive filesystem would merge them)";
   assert lib.assertMsg (files == null || builtins.all validPath files) "fetchHuggingFaceModel: files must be relative paths with no empty, '.' or '..' segment";
     if notices == []
-    then fetched
+    then removeAttrs fetched ["override" "overrideDerivation"]
     else
-      runCommand drvName {
-        inherit pname version;
-        inherit (fetched) meta;
-        passthru = passthru // {inherit fetched;};
-      } ''
+      runCommand drvName ({
+          inherit pname version;
+          inherit (fetched) meta;
+          passthru = passthru // {inherit fetched;};
+        }
+        // position) ''
         mkdir "$out"
         # One copy of the weights, not two: each symlink is a store reference
         # that also retains the fetched tree against GC.
