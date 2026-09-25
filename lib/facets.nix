@@ -83,23 +83,36 @@
   in
     compared.success && compared.value;
 
-  changedLeafPaths = prefix: beforePresent: before: after:
-    if beforePresent && ordinaryAttrs before && ordinaryAttrs after
+  # `opaque` holds the package leaf paths (as JSON). The diff never forces
+  # them: comparing a leaf evaluates its recipe, so one ordinary overlay would
+  # otherwise evaluate every package in its namespace on first access, and a
+  # recipe that fails on some pin would break unrelated leaves. A package leaf
+  # still present on both sides counts as unchanged.
+  changedLeafPaths = opaque: prefix: beforePresent: before: after: let
+    isOpaque = path: elem (builtins.toJSON path) opaque;
+  in
+    if beforePresent && isOpaque prefix
+    then []
+    else if beforePresent && ordinaryAttrs before && ordinaryAttrs after
     then
       concatMap (
-        name:
+        name: let
+          path = prefix ++ [name];
+        in
           if after ? ${name}
-          then changedLeafPaths (prefix ++ [name]) (before ? ${name}) before.${name} after.${name}
-          else pathsUnder (prefix ++ [name]) before.${name}
+          then changedLeafPaths opaque path (before ? ${name}) before.${name} after.${name}
+          else if isOpaque path
+          then [path]
+          else pathsUnder path before.${name}
       ) (unique (attrNames before ++ attrNames after))
     else if beforePresent && valuesEqual before after
     then []
     else pathsUnder prefix after;
 
-  overlayChanges = prev: contribution:
+  overlayChanges = opaque: prev: contribution:
     concatMap (
       name:
-        changedLeafPaths [name] (prev ? ${name}) prev.${name} contribution.${name}
+        changedLeafPaths opaque [name] (prev ? ${name}) prev.${name} contribution.${name}
     ) (attrNames contribution);
 
   contributionFor = owner: name: source: {
@@ -441,13 +454,14 @@ in rec {
       )
       loaded;
     exclusive = mergeExclusiveClaims "overlay" ownershipClaims;
+    packageLeafIds = map (claim: builtins.toJSON claim.keyPath) packageClaims;
     checkedOverlays =
       map (
         item: final: prev: let
           contribution = item.value.overlay final prev;
           changedPaths =
             if isAttrs contribution
-            then overlayChanges prev contribution
+            then overlayChanges packageLeafIds prev contribution
             else [];
           declaredIds = map builtins.toJSON item.value.claims;
           changedIds = map builtins.toJSON changedPaths;
