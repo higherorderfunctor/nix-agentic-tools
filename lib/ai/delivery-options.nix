@@ -247,29 +247,6 @@
           dropped on devenv, which has no such node.
         '';
       };
-      afterNodes = lib.mkOption {
-        type = lib.types.submodule {
-          options = {
-            devenv = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [];
-              description = "Literal devenv task names this writer also runs after.";
-            };
-            hm = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [];
-              description = "Literal Home Manager activation entries this writer also runs after.";
-            };
-          };
-        };
-        default = {};
-        description = ''
-          Escape hatch for an ordering node no `after` token names. It is
-          ADDITIVE to the token edges rather than a replacement for them, so a
-          writer that needs one extra node keeps the portable ordering it
-          already had.
-        '';
-      };
       before = lib.mkOption {
         type = lib.types.listOf (lib.types.enum ["linkCheck" "shell"]);
         default = ["shell"];

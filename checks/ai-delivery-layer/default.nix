@@ -229,14 +229,13 @@
   ["devenv" "hm"]);
 
   # One writer, both backends, every ordering feature: a backend-keyed entry
-  # name, a token with no devenv node (`secrets`), the literal-node escape
-  # hatch, and both ends of the position.
+  # name, a token with no devenv node (`secrets`), and both ends of the
+  # position.
   migrator = runtime: {
     ai.${runtime} = {
       enable = true;
       activation.probeMigrate = {
         after = ["secrets"];
-        afterNodes.hm = ["probeSecretProvider"];
         before = ["linkCheck" "shell"];
         command = "printf 'probe'";
         entry = {
@@ -663,6 +662,20 @@ in {
       ) [evalHm evalDevenv]
     );
 
+    # Ordering is expressed in `after` tokens only. The literal-node escape
+    # hatch `afterNodes` had no user outside this check and is gone, so a
+    # writer that still sets it fails evaluation instead of silently losing
+    # the edge; the same writer without it is the positive control.
+    module-delivery-writer-rejects-after-nodes = mkTest "delivery-writer-rejects-after-nodes" (
+      let
+        withAfterNodes = lib.recursiveUpdate (migrator "kiro") {
+          ai.kiro.activation.probeMigrate.afterNodes.hm = ["probeSecretProvider"];
+        };
+        evaluates = config: (builtins.tryEval (builtins.deepSeq (evalHm config).config.home.activation.probeMigrate.after true)).success;
+      in
+        !(evaluates withAfterNodes) && evaluates (migrator "kiro")
+    );
+
     module-delivery-command-writer-lowers-to-both-backends = mkTest "delivery-command-writer-lowers-to-both-backends" (
       let
         # Kiro declares no devenv files when bare-enabled, so the task's edge
@@ -672,11 +685,10 @@ in {
         entry = hm.home.activation.probeMigrate;
         task = devenv.tasks."ai:probe:migrate";
       in
-        # Home Manager gets both ends of the position, the abstract `secrets`
-        # token resolved to its node, and the literal escape hatch appended
-        # rather than substituted.
+        # Home Manager gets both ends of the position and the abstract
+        # `secrets` token resolved to its node.
         entry.after
-        == ["sops-nix" "probeSecretProvider"]
+        == ["sops-nix"]
         && entry.before == ["checkLinkTargets"]
         && strict entry.text
         && lib.hasInfix "printf 'probe'" entry.text
@@ -1545,10 +1557,10 @@ in {
 
     # A corpus scan, not a changed-files scan: a gate that only looks at the
     # diff cannot notice that the tree behind it grew a new direct write.
-    # It cannot see a bundle a helper returns: `helpers.mkOwnedDocument`
-    # writes `home.activation`, `tasks` and `enterTest` from inside
-    # `lib/ai/own.nix`, where no pattern over a factory's text matches. No
-    # factory calls it today; `ai.<runtime>._ownPlans` is where a check reads
+    # It cannot see a bundle a helper returns: `helpers.mkOwnBundle` writes
+    # `home.activation`, `tasks` and `enterTest` from inside `lib/ai/own.nix`,
+    # where no pattern over a factory's text matches. No factory calls it;
+    # the router does, and `ai.<runtime>._ownPlans` is where a check reads
     # what owned writers do.
     module-delivery-no-new-direct-sink-writes =
       pkgs.runCommandLocal "delivery-no-new-direct-sink-writes" {

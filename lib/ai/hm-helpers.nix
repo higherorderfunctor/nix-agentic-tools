@@ -1,16 +1,10 @@
 # Shared helpers for AI CLI modules (copilot-cli, kiro-cli, devenv).
 #
-# Provides content option builders, MCP server transformation, settings
-# utilities, and file generation helpers.
+# Provides skill delivery entries and the `own` bundle builder that records
+# reconciliation plans.
 {lib}: let
-  aiCommon = import ./ai-common.nix {inherit lib;};
   own = import ./own.nix {inherit lib;};
-in rec {
-  # ── Settings utilities ──────────────────────────────────────────────
-
-  # Delegated to lib/ai-common.nix (single source of truth).
-  inherit (aiCommon) filterNulls;
-
+in {
   # ── File entry builders ──────────────────────────────────────────────
 
   # One skill tree as DELIVERY entries, for every runtime and both backends.
@@ -62,14 +56,6 @@ in rec {
     )
     skills;
 
-  # ── MCP server transformation ───────────────────────────────────────
-
-  mkMcpServer = server:
-    (removeAttrs server ["disabled"])
-    // (lib.optionalAttrs (server ? url) {type = "http";})
-    // (lib.optionalAttrs (server ? command) {type = "stdio";})
-    // {enabled = !(server.disabled or false);};
-
   # ── Owned artifacts ──────────────────────────────────────────────────
 
   # Emit one `own` bundle AND the eval-visible record of its plan, from one
@@ -119,43 +105,6 @@ in rec {
     else
       record
       // {inherit (owned.config) enterTest tasks;};
-
-  # Reconcile the Nix-owned leaves of ONE runtime-writable document, keeping
-  # every unowned sibling. The prior generation's ledger retires leaves this
-  # one no longer declares; an empty declaration is therefore a retirement and
-  # NOT a reason to skip the writer.
-  #
-  # codec:   "json", or "toml" for a document with native comments to keep.
-  # entry:   home.activation attribute name — a consumer ordering contract.
-  # ledger:  "{json,toml}-settings/<name>.json" relative to the state root; a
-  #          LITERAL at the call site, because a derived one silently orphans
-  #          every ownership record the previous name wrote.
-  # path:    document path relative to $HOME.
-  # python:  pkgs.python3, or one carrying tomlkit for codec = "toml".
-  # runtime: ai.<runtime> namespace that records the declaration.
-  # value:   the leaves this generation owns (Kiro flattens dot-keys first).
-  mkOwnedDocument = {
-    codec ? "json",
-    entry,
-    ledger,
-    path,
-    pkgs,
-    python,
-    runtime,
-    value,
-  }:
-    mkOwnBundle {
-      backend = "hm";
-      declared.${path} = value;
-      entryNames.write = entry;
-      targets = [
-        {
-          inherit codec ledger path;
-          units.text = builtins.toJSON value;
-        }
-      ];
-      inherit pkgs python runtime;
-    };
 
   # Strip group and other access from a runtime credential document, UNGATED.
   #

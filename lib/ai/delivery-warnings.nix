@@ -90,13 +90,6 @@
     if (cfg.settings.reasoningEffort or null) != null
     then ["ai" runtime "settings" "reasoningEffort"]
     else ["ai" "settings" "reasoningEffort"];
-  # Effort follows the `present` doctrine above: a runtime without the
-  # normalized settings pool (Kiro) has no per-runtime remedy, so a bare root
-  # value stays silent and the exclusion lives in the pool's description.
-  effortWarnings =
-    lib.optional
-    (supports "settings" && !(builtins.elem runtime ["claude" "codex" "copilot" "kimchi"]) && get effortPath != null)
-    (message effortPath "No lossless native reasoning-effort translation exists for this runtime.");
   entries = pool:
     (lib.mapAttrsToList (name: value: {
       inherit name value;
@@ -203,4 +196,4 @@ in
   then []
   else
     lib.unique
-    (rowWarnings ++ effortWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings)
+    (rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings)

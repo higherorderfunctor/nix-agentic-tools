@@ -78,17 +78,13 @@
     ai.app.mkRuntime {
       inherit name pkgs;
       supportedPools = ["mcpServers"];
-      transformers.markdown = ai.transformers.claude;
       defaults.package = pkgs.hello;
       options._observedServers = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
         internal = true;
       };
-      hm.config = {mergedServers, ...}: {
-        ai.${name}._observedServers = mergedServers;
-      };
-      devenv.config = {mergedServers, ...}: {
+      config = {mergedServers, ...}: {
         ai.${name}._observedServers = mergedServers;
       };
     };
@@ -137,7 +133,6 @@
       ai.app.mkRuntime {
         inherit name;
         supportedPools = [poolName];
-        transformers.markdown = ai.transformers.claude;
         defaults.package = pkgs.hello;
         options =
           {
@@ -150,7 +145,7 @@
           // lib.optionalAttrs (builtins.hasAttr poolName customPoolOptions) {
             ${poolName} = customPoolOptions.${poolName};
           };
-        hm.config = args: {
+        config = args: {
           ai.${name}._observedPool = args.${mergedArg};
         };
       };

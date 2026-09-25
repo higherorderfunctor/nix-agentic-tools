@@ -3,7 +3,6 @@
 #
 # Consumed by:
 # - packages/*/lib/mk*.nix (factory-built HM + devenv modules)
-# - lib/hm-helpers.nix (filterNulls re-export)
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
   contentType = enableDefault:
@@ -166,7 +165,6 @@ in {
   # while `_sourceWins` lets file emission keep a source-only winner lazy.
   inherit flattenDotKeysUntil;
 
-  contentModule = mkContentModule {};
   optionalContentModule = mkContentModule {};
   runtimeContextModule = defaultFilename:
     mkContentModule {inherit defaultFilename;};
@@ -352,25 +350,6 @@ in {
   # modes are intentionally unavailable at the root and on other runtimes.
   ruleModule = mkRuleModule {};
   kiroRuleModule = mkRuleModule {kiroNative = true;};
-
-  # ── MCP server transform ───────────────────────────────────────────
-  # Transform a typed MCP server submodule value into the JSON structure
-  # expected by target ecosystems (VS Code mcp.json / Kiro mcp.json).
-  transformMcpServer = server:
-    if server.type == "stdio"
-    then
-      {
-        type = "stdio";
-        inherit (server) command;
-      }
-      // lib.optionalAttrs (server.args != []) {inherit (server) args;}
-      // lib.optionalAttrs (server.env != {}) {inherit (server) env;}
-    else if server.type == "http"
-    then {
-      type = "http";
-      inherit (server) url;
-    }
-    else throw "Invalid MCP server type: ${server.type}";
 
   # ── Settings utilities ──────────────────────────────────────────────
 

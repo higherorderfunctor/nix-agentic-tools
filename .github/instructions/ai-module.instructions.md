@@ -7,11 +7,14 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-24 — Claude, Codex, Copilot and Kiro describe
-> delivery once through `mkRuntime`'s record-level `config`; Kimchi reaches the
-> same delivery layer from its per-backend callbacks. Claude devenv delivers
-> `ai.agents` and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw
-> agent writer (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a
+> **Last verified:** 2026-09-24 — every runtime describes delivery once through
+> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
+> transforms reject a backend spec carrying anything but `installPackage`,
+> `migrationConfig` and `options`, since an overridden or hand-built record
+> reaches a transform without the constructor. Kiro hook commands resolve
+> packages through the shared `commandType`. Claude devenv delivers `ai.agents`
+> and `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent
+> writer (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, so a
 > store-path string is a file, never a body naming its own path. File content at
 > `mkDefault` enables its entry; `content.enable = false` suppresses every
 > content form. The builder entry point is `lib.ai.app.mkRuntime`. Native file
@@ -32,6 +35,12 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > wrongly. Full lineage:
 > `git show d1c28a21:dev/fragments/ai-module/ai-module-fanout.md`.
 >
+> - **No per-backend delivery callback on the runtime record.** A backend spec's
+>   own `config` let a runtime lower each backend separately, and the untyped
+>   callbacks grew into near-duplicate per-backend delivery bodies that the
+>   delivery layer now replaces. One record-level `config` receives `backend`
+>   for a real scope difference; the record-level `transformers` and
+>   `defaults.outputPath` fields, which nothing read, are gone with it.
 > - **Don't hardcode Copilot's instructions/rules destination to
 >   `.github/instructions/`.** That resolves to `$HOME/.github/instructions/` on
 >   Home Manager, a directory copilot-cli never reads — every named instruction
@@ -106,8 +115,8 @@ runtime, lowering it to `home.packages` on Home Manager and `packages` on devenv
 — the two option names being the whole reason it cannot live in a factory
 without being written twice per runtime. A backend spec that says nothing
 installs the plain `cfg.package`; one that wraps its binary supplies an
-`installPackage` callback taking the same arguments as `config`;
-`installPackage = null` opts out.
+`installPackage` callback taking the same arguments as `config`, on the record
+or on one backend spec, which wins; `installPackage = null` opts out.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and
@@ -351,7 +360,8 @@ enabled ecosystem whose native model preserves the option's semantics):
   Kimchi event and is left out silently. Kimchi has no user-scope lifecycle file
   Home Manager can own, so its Home Manager row is an explicit exclusion: silent
   for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
-  remain native-only.
+  remain native-only, but their `action.command` resolves a package through the
+  same shared `commandType`.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
   when both are present. The strictly higher-priority definition supplies the
@@ -449,7 +459,7 @@ documented composition semantics.
 ### Per-pool capability gate
 
 Every app record carries one `supportedPools` list. The shared transformer uses
-it for the per-runtime option schema, keyed-pool merge, callback fanout, and
+it for the per-runtime option schema, keyed-pool merge, delivery callback, and
 shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
@@ -637,8 +647,8 @@ broken — fix the module, not the consumer.
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
 `ai.mcpServers`, `ai.lspServers`, `ai.environmentVariables`, `ai.agents`,
-`ai.hooks`, `ai.context`). It's imported by BOTH `hmTransform.nix` and
-`devenvTransform.nix`.
+`ai.hooks`, `ai.context`). Both backend module trees import it, and
+`lib/ai/app/default.nix` selects the one shared transform body per backend.
 
 **The option declarations are shared. The values are NOT.**
 
@@ -656,12 +666,11 @@ Contributing in one and expecting the other to pick it up will silently fail —
 the contribution just doesn't land in the other eval. A program option tree can
 make enablement structural without changing that per-evaluation ownership.
 
-AI CLI factories (`mkRuntime`) may instead share one record-level `config`
-callback, which receives `backend` for intentional scope differences. Claude,
-Codex, Copilot and Kiro do; Kimchi still keeps per-backend `hm.config` /
-`devenv.config` blocks. Backend specs retain package installation and migration
-callbacks. Each backend still evaluates that configuration independently;
-sharing code never shares option values.
+AI CLI factories (`mkRuntime`) instead share one record-level `config` callback,
+which receives `backend` for intentional scope differences. Package installation
+and migration callbacks sit on the record too, and a backend spec may override
+either; it cannot carry a delivery callback. Each backend still evaluates that
+configuration independently; sharing code never shares option values.
 
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
@@ -1027,8 +1036,8 @@ because two-part composition reads source bytes and would force a default that
 B7 later replaces or disables. The composed value stays inside the lazy default
 until priority arbitration selects it.
 
-`hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
-duplicate pool logic into them.
+`lib/ai/app/default.nix` selects `mkBackendTransform.nix` once per backend; pool
+logic lives only in that shared body.
 
 B7's type lives in `lib/ai/delivery-options.nix`; `lib/ai/runtime-files.nix`
 owns path and content validation, enable filtering, and the shape one entry
@@ -1190,12 +1199,12 @@ path types".
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-09-24 — L5 is the delivery router plus one adapter per
-> backend; Claude, Codex, Copilot and Kiro describe delivery once, Kimchi
-> reaches the layer from its callbacks, and the delivery matrix is generated
-> from the layer for every runtime's files. Normalized pools carry only a
-> text-source record's winning arm. Claude's devenv rules and Codex's execpolicy
-> rules are read-only copies whose writers survive a disable. Copilot reconciles
-> its user settings.json on HM and the repository
+> backend; every runtime describes delivery once through the record-level
+> `config`, which `mkRuntime` makes the only delivery callback, and the delivery
+> matrix is generated from the layer for every runtime's files. Normalized pools
+> carry only a text-source record's winning arm. Claude's devenv rules and
+> Codex's execpolicy rules are read-only copies whose writers survive a disable.
+> Copilot reconciles its user settings.json on HM and the repository
 > `.github/copilot/settings.json` on devenv. Kiro excludes the normalized
 > `settings` pool. Native file settings live under `ai.<runtime>.native`. Each
 > devenv factory publishes its shared AGENTS.md key in
@@ -1359,7 +1368,7 @@ path types".
   records and so never touches. The writer is declared from `migrationConfig`
   with `runWhenDisabled = true`, so both N→0 and disabling Codex retract the
   copies; an `allow` policy must not outlive its declaration.
-- **Retirement can survive disable explicitly.** Kiro's migration callback
+- **Retirement can survive disable explicitly.** Kiro's `migrationConfig`
   declares its unclaimed steering ledger with `runWhenDisabled = true`, and the
   Claude rules and Codex execpolicy writers declare theirs the same way. The
   adapter strips every file claim and ordinary writer while disabled; the
@@ -1491,8 +1500,8 @@ Kimchi supplied.
 
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
-  `lib/ai/app/mkBackendTransform.nix` (the HM/devenv transform files are thin
-  selectors)
+  `lib/ai/app/mkBackendTransform.nix` (`lib/ai/app/default.nix` selects it once
+  per backend)
 - L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
@@ -1517,10 +1526,10 @@ Kimchi supplied.
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline (if every
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
-3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
-   The normalized `settings` pool follows the same rule: a runtime with no
-   lossless target for any field (Kiro) leaves it out, and one that lowers only
-   some fields keeps it and warns for the rest.
+3. Add `X` to `supportedPools` only on app records whose delivery `config`
+   consumes it. The normalized `settings` pool follows the same rule: a runtime
+   with no lossless target for any field (Kiro) leaves it out, and one that
+   lowers only some fields keeps it and warns for the rest.
 4. Add L4 routing/rendering into `ai.<runtime>.files` in each supporting per-CLI
    factory's `config`. Declare owned outputs' ledgers under
    `ai.<runtime>.activation`; work that owns no files uses `command`.
@@ -1562,13 +1571,14 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-23 — the builder entry point is
-> `lib.ai.app.mkRuntime`, renamed from its old app name. Native file settings
-> live under `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Resolves #877: Kiro's FHS root supplies bash but
-> hides a host zsh, and that does not justify a runtime-specific implicit shell
-> default. `ai.shell` stays null; see below for the standing decision and the
-> override rule it shares with normalized `settings`.
+> **Last verified:** 2026-09-24 — the builder entry point is
+> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
+> callback. Native file settings live under `ai.<runtime>.native`
+> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
+> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
+> a runtime-specific implicit shell default. `ai.shell` stays null; see below
+> for the standing decision and the override rule it shares with normalized
+> `settings`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1580,7 +1590,7 @@ places:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime merging;
-- only supported root pools reach the backend callback; and
+- only supported root pools reach the delivery callback; and
 - `shell` resolution runs only when `shell` is in the list.
 
 An unsupported per-runtime write is therefore an "option does not exist" eval

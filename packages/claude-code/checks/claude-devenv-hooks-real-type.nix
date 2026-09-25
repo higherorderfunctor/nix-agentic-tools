@@ -112,7 +112,7 @@
           emits git-hooks-run as a settings.json PostToolUse command hook (its
           shape or mechanism changed on a devenv bump). The approach-B coexistence
           assumption — that our typed ai.claude.hooks concatenate WITH git-hooks-run
-          in settings.json.hooks — may be stale. Re-verify the hooksToSettings
+          in settings.json.hooks — may be stale. Re-verify the sharedHooks.render
           lowering in packages/claude-code/lib/mkClaude.nix and re-derive this
           check's stubs against the new devenv claude.nix.
         ''

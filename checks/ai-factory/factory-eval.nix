@@ -9,6 +9,57 @@
 in {
   checks = {
     # ── mkRuntime tests ───────────────────────────────────────────────
+    # The per-backend seam is retired: delivery is ONE record-level `config`,
+    # and a backend spec takes only installPackage, migrationConfig and
+    # options. A record still written against the seam must fail loudly
+    # rather than evaluate to a runtime that delivers nothing, both where the
+    # record is built and where a transform reads it: the exported records are
+    # plain attrsets, so an override (`r // {hm = …;}`) or a hand-built record
+    # reaches `hmTransform` / `devenvTransform` without passing `mkRuntime`.
+    # The record-level `config` and the untouched record are the positive
+    # controls.
+    factory-mkRuntime-rejects-backend-seam = mkTest "mkRuntime-rejects-backend-seam" (
+      let
+        base = {
+          inherit pkgs;
+          name = "testapp";
+          defaults.package = pkgs.hello;
+        };
+        built = ai.app.mkRuntime base;
+        rejected = record: !(builtins.tryEval (ai.app.mkRuntime record)).success;
+        transformed = backend: record:
+          builtins.tryEval
+          (lib.evalModules {
+            modules = [
+              ai.sharedOptions
+              (
+                if backend == "hm"
+                then hmStubs
+                else devenvStubs
+              )
+              (ai.app.${backend + "Transform"} record)
+              {config.ai.testapp.enable = true;}
+            ];
+          })
+          .config
+          .ai
+          .testapp
+          .enable;
+        rejectedByTransform = backend: record: !(transformed backend record).success;
+      in
+        lib.all (backend:
+          rejected (base // {${backend}.config = _: {};})
+          && rejected (base // {${backend}.defaults.package = pkgs.hello;})
+          && rejectedByTransform backend (built // {${backend} = built.${backend} // {config = _: {};};})
+          && rejectedByTransform backend (built // {${backend} = built.${backend} // {defaults.package = pkgs.hello;};})
+          && rejectedByTransform backend (built // {defaults = built.defaults // {outputPath = null;};})
+          && (transformed backend built).success)
+        ["devenv" "hm"]
+        && rejected (base // {defaults.outputPath = null;})
+        && (builtins.tryEval (ai.app.mkRuntime (base // {config = _: {};}))).success
+        && (builtins.tryEval (ai.app.mkRuntime (base // {hm.installPackage = null;}))).success
+    );
+
     factory-mkRuntime-hmTransform-exists = mkTest "mkRuntime-hmTransform-exists" (
       builtins.isFunction ai.app.hmTransform
     );
@@ -22,17 +73,54 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
-          defaults = {
-            package = pkgs.hello;
-            outputPath = ".config/test/CONFIG.md";
-          };
+          defaults.package = pkgs.hello;
         };
       in
         record ? name
-        && record ? transformers
         && record ? defaults
         && record.supportedPools == []
+    );
+
+    # A runtime record outside this repository may support the normalized
+    # `settings` pool without lowering reasoning effort. No generic warning
+    # speaks for it any more: the old one fired for every such runtime whether
+    # or not it lowered effort. Disclosure belongs to the runtime's own
+    # delivery `config`, which is merged into module config and can emit
+    # `warnings` for the fields it drops. The repository's delivery rows cannot
+    # do it, because they cover only this repository's runtimes. The control
+    # is that the root value did reach the runtime's normalized settings, so
+    # the silence is not an unread value.
+    factory-mkRuntime-no-generic-effort-warning = mkTest "mkRuntime-no-generic-effort-warning" (
+      let
+        record = ai.app.mkRuntime {
+          inherit pkgs;
+          name = "testapp";
+          supportedPools = ["settings"];
+          defaults.package = pkgs.hello;
+        };
+        evaluated = lib.evalModules {
+          modules = [
+            ai.sharedOptions
+            hmStubs
+            {
+              options.warnings = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [];
+              };
+            }
+            (ai.app.hmTransform record)
+            {
+              config.ai = {
+                settings.reasoningEffort = "high";
+                testapp.enable = true;
+              };
+            }
+          ];
+        };
+      in
+        evaluated.config.ai.testapp.normalized.settings.reasoningEffort
+        == "high"
+        && !(lib.any (lib.hasInfix "reasoningEffort") evaluated.config.warnings)
     );
 
     factory-mkRuntime-builds-option-tree = mkTest "mkRuntime-builds-option-tree" (
@@ -40,11 +128,7 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = ["mcpServers"];
-          transformers.markdown = ai.transformers.claude;
-          defaults = {
-            package = pkgs.hello;
-            outputPath = ".config/test/CONFIG.md";
-          };
+          defaults.package = pkgs.hello;
         };
         module = ai.app.hmTransform record;
         evaluated = lib.evalModules {
@@ -65,7 +149,6 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
           defaults = {package = pkgs.hello;};
           options = {
             turboMode = lib.mkOption {
@@ -92,21 +175,18 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = ["mcpServers"];
-          transformers.markdown = ai.transformers.claude;
           defaults = {package = pkgs.hello;};
           options = {
             # Synthetic introspection option — NOT part of the real mkRuntime contract,
             # only used here to prove mergedServers is computed and accessible to
-            # the config callback.
+            # the delivery callback.
             _mergedServerCount = lib.mkOption {
               type = lib.types.int;
               default = 0;
             };
           };
-          hm = {
-            config = {mergedServers, ...}: {
-              ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
-            };
+          config = {mergedServers, ...}: {
+            ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
           };
         };
         module = ai.app.hmTransform record;
@@ -255,7 +335,6 @@ in {
           inherit pkgs;
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
           defaults.package = pkgs.hello;
           options.mcpServers = lib.mkOption {
             type = lib.types.listOf lib.types.str;
@@ -284,11 +363,7 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
-          defaults = {
-            package = pkgs.hello;
-            outputPath = ".config/test/CONFIG.md";
-          };
+          defaults.package = pkgs.hello;
         };
         module = ai.app.hmTransform record;
         evaluated = lib.evalModules {
@@ -308,11 +383,7 @@ in {
         record = ai.app.mkRuntime {
           name = "testapp";
           supportedPools = [];
-          transformers.markdown = ai.transformers.claude;
-          defaults = {
-            package = pkgs.hello;
-            outputPath = ".config/test/CONFIG.md";
-          };
+          defaults.package = pkgs.hello;
         };
         module = ai.app.devenvTransform record;
         evaluated = lib.evalModules {

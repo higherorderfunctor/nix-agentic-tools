@@ -241,8 +241,8 @@ because two-part composition reads source bytes and would force a default that
 B7 later replaces or disables. The composed value stays inside the lazy default
 until priority arbitration selects it.
 
-`hmTransform.nix` and `devenvTransform.nix` are thin backend selectors; do not
-duplicate pool logic into them.
+`lib/ai/app/default.nix` selects `mkBackendTransform.nix` once per backend; pool
+logic lives only in that shared body.
 
 B7's type lives in `lib/ai/delivery-options.nix`; `lib/ai/runtime-files.nix`
 owns path and content validation, enable filtering, and the shape one entry

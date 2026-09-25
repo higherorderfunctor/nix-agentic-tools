@@ -569,14 +569,14 @@
     then applyWorkspaceWriteRoots settings integrationRoots
     else applyNamedPermissionRoots settings integrationRoots;
   hasPermissionProfiles = settings:
-    helpers.filterNulls (lib.filterAttrs
+    aiCommon.filterNulls (lib.filterAttrs
       (name: _: builtins.elem name ["default_permissions" "permissions"])
       settings)
     != {};
 
   renderCodexServer = name: server: let
     rendered = removeAttrs (lib.ai.renderServer pkgs name server) ["type"];
-    native = helpers.filterNulls (server.codex or {});
+    native = aiCommon.filterNulls (server.codex or {});
     translated =
       lib.optionalAttrs ((native.auth or null) != null) {inherit (native) auth;}
       // lib.optionalAttrs ((native.bearerTokenEnvVar or null) != null) {bearer_token_env_var = native.bearerTokenEnvVar;}
@@ -786,35 +786,26 @@
       })
     (lib.filterAttrs (_: agent.isSemantic) agents);
 
+  # Lower Codex's typed statusMessage to its text, then render through the
+  # shared renderer, which drops a null field. Keep the presence guard for
+  # portable handlers that omit this Codex-only field. The shared type rejects
+  # enabled empty text, so this lowering only checks whether it is enabled.
   renderHooks = hooks:
-    lib.mapAttrs (_event: blocks:
+    sharedHooks.render (lib.mapAttrs (_event:
       map (block:
-        lib.optionalAttrs (block.matcher != null) {inherit (block) matcher;}
+        block
         // {
-          hooks =
-            map (
-              handler:
-                lib.filterAttrs (_: value: value != null) (
-                  handler
-                  // {
-                    # Keep the presence guard for portable handlers that omit
-                    # this Codex-only typed field. The shared type rejects
-                    # enabled empty text, so this lowering only checks whether
-                    # it is enabled.
-                    statusMessage =
-                      if
-                        handler
-                        ? statusMessage
-                        && handler.statusMessage.enable
-                      then handler.statusMessage.text
-                      else null;
-                  }
-                )
-            )
-            block.hooks;
-        })
-      blocks)
-    hooks;
+          hooks = map (handler:
+            handler
+            // {
+              statusMessage =
+                if handler ? statusMessage && handler.statusMessage.enable
+                then handler.statusMessage.text
+                else null;
+            })
+          block.hooks;
+        }))
+    hooks);
 
   mkAgentsMd = {
     mergedContext,
@@ -866,7 +857,6 @@ in
       "shell"
       "skills"
     ];
-    transformers.markdown = lib.ai.transformers.agentsmd;
     defaults.package = pkgs.ai.chatgpt-codex;
 
     options = {
@@ -959,14 +949,8 @@ in
       };
     };
 
-    devenv = {
-      installPackage = codexInstallPackage;
-      migrationConfig = codexExecpolicyWriterConfig;
-    };
-    hm = {
-      installPackage = codexInstallPackage;
-      migrationConfig = codexExecpolicyWriterConfig;
-    };
+    installPackage = codexInstallPackage;
+    migrationConfig = codexExecpolicyWriterConfig;
     config = {
       backend,
       cfg,
@@ -1012,7 +996,7 @@ in
         if isHm
         then integrationSettings
         else applyNamedPermissionRoots integrationSettings (lib.optional (gitCommonDir != null) gitCommonDir);
-      settings = helpers.filterNulls (permissionSettings
+      settings = aiCommon.filterNulls (permissionSettings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });

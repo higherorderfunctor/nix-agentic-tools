@@ -11,9 +11,9 @@
   pkgs,
   ...
 }: let
-  agent = import ../../../lib/ai/agent.nix {inherit lib;};
+  inherit (lib.ai) agent;
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
-  sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
+  sharedHooks = lib.ai.hooks;
   # Eval-pure reads of COMMITTED source JSON (no IFD). See overlays.md
   # § IFD Patterns and memory project_claude_effort_pin_state.
   extracted =
@@ -83,13 +83,6 @@
       };
     };
 
-  # Typed hook wiring (northbound). S1: a handler `command` accepts a package,
-  # coerced to its executable path so its supporting files ride the /nix/store
-  # closure at absolute paths (Claude runs hooks with cwd = project root, so
-  # relative companion paths are unsafe). A package with meta.mainProgram →
-  # getExe; a bare-file derivation (writeShellScript/writeText) → its outPath; a
-  # string passes through unchanged.
-  pkgToCommand = sharedHooks.packageToCommand;
   # A single handler. `command` is modelled fully; the exotic handler types
   # (http/prompt/agent/mcp_tool) round-trip via the freeform JSON tail (and, on
   # devenv, force the gap-write path — see plan §9b).
@@ -102,7 +95,10 @@
         description = "Handler type. Only `command` is modelled fully; other types round-trip via the freeform tail.";
       };
       command = lib.mkOption {
-        type = lib.types.nullOr (lib.types.coercedTo lib.types.package pkgToCommand lib.types.str);
+        # A package coerces to its executable store path, so its supporting
+        # files ride the closure at absolute paths: Claude runs hooks with
+        # cwd = project root, where relative companion paths are unsafe.
+        type = lib.types.nullOr sharedHooks.commandType;
         default = null;
         description = ''
           For `type = "command"`: the executable to run. A package (coerced to
@@ -135,13 +131,6 @@
       };
     };
   };
-  # Shared lowering (both backends): typed event map → settings.json `hooks`
-  # JSON, through the one renderer Kimchi's hooks.json also uses. Same-event
-  # lists concat across module writers (formats.json merge), so this composes
-  # with the legacy `settings.hooks` escape hatch and, on devenv, with the
-  # git-hooks-run entry — never clobbers.
-  hooksToSettings = sharedHooks.render;
-
   # heron_brook delegation clamp — the opt-in mitigation's hook pair.
   #
   # Two events, one script (./delegationClampMitigation.nix):
@@ -229,7 +218,7 @@
   agentsDirEntries = cfg:
     lib.mkIf (cfg.agentsDir != null) {
       ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
-        (import ../../../lib/ai/dir-helpers.nix {inherit lib;}).agentsFromDir cfg.agentsDir
+        lib.ai.agentsFromDir cfg.agentsDir
       );
     };
 
@@ -283,7 +272,6 @@ in
       "shell"
       "skills"
     ];
-    transformers.markdown = lib.ai.transformers.claude;
     defaults = {
       package = pkgs.ai.claude-code;
     };
@@ -425,7 +413,7 @@ in
           still parses on each bump so a silent drop fails the update pipeline
         loudly'';
       lspServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule);
+        type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
         default = {};
         description = ''
           Typed Claude-specific LSP server declarations. Entries replace
@@ -481,7 +469,7 @@ in
         '';
       };
       agentsDir = lib.mkOption {
-        type = lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).dirOptionType;
+        type = lib.types.nullOr aiCommon.dirOptionType;
         default = null;
         description = ''
           Claude-specific directory of `.md` agent files. Each file
@@ -614,7 +602,7 @@ in
         '';
       };
       hookScriptsDir = lib.mkOption {
-        type = lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).dirOptionType;
+        type = lib.types.nullOr aiCommon.dirOptionType;
         default = null;
         description = ''
           Claude-specific directory of inline hook scripts. Each regular file
@@ -724,7 +712,6 @@ in
       topHooks,
       ...
     }: let
-      dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       isHm = backend == "hm";
@@ -764,7 +751,7 @@ in
         # `lib.types.lines` via hooksFromDir.
         (lib.mkIf (cfg.hookScriptsDir != null) {
           ai.claude.hookScripts = lib.mapAttrs (_: lib.mkDefault) (
-            dirHelpers.hooksFromDir cfg.hookScriptsDir
+            lib.ai.hooksFromDir cfg.hookScriptsDir
           );
         })
         # heron_brook delegation-clamp mitigation (default off). Writes into
@@ -804,8 +791,12 @@ in
               else ["files" ".claude/settings.json" "json"];
           };
         })
+        # The one renderer Kimchi's hooks.json also uses. Same-event lists
+        # concat across module writers (formats.json merge), so this composes
+        # with the legacy `settings.hooks` escape hatch and, on devenv, with
+        # the git-hooks-run entry — never clobbers.
         (lib.mkIf (effectiveHooks != {}) (settings {
-          hooks = hooksToSettings effectiveHooks;
+          hooks = sharedHooks.render effectiveHooks;
         }))
         (lib.mkIf hasMergedContext {
           ai.claude.files.".claude/${cfg.context.filename}" =
@@ -827,7 +818,7 @@ in
         # and a disable retract the copies.
         (let
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-          inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
+          inherit (lib.ai.transformers.claude) claudeTransformer;
         in {
           ai.claude.files = lib.mapAttrs' (name: rule:
             lib.nameValuePair ".claude/rules/${name}.md" {
