@@ -108,6 +108,8 @@ _: {
         # so it is exactly where collision-semantics' "where a MODULE may
         # contribute" rule has to be read before editing. Previously unscoped.
         "lib/ai/mkSkillPackageModule.nix"
+        # The per-runtime module-env channel (`shell-option` describes it).
+        "lib/ai/module-environment.nix"
         # The reconciler behind the ledger-guarded, enable-independent
         # migration exception documented by the fanout fragments.
         "lib/ai/own.nix"
@@ -115,6 +117,8 @@ _: {
         # Portable program option-tree factory. Like `mkRuntime`, it declares
         # capability-gated runtime paths and resolves root/runtime values.
         "lib/ai/program.nix"
+        # The per-harness git/gh identity, described by the fanout fragment.
+        "lib/ai/programs/**"
         # Final B7 static-file registry and generic backend lowering.
         "lib/ai/runtime-files.nix"
         # The runtime registry that file and sharedOptions.nix share.

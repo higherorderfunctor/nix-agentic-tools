@@ -1,7 +1,8 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-25 — module-contributed env rides the per-runtime
-> internal channel `ai.<runtime>.internal._moduleEnvironmentVariables`
+> **Last verified:** 2026-09-25 — module-contributed env, including the
+> per-harness git identity, rides the per-runtime internal channel
+> `ai.<runtime>.internal._moduleEnvironmentVariables`
 > (`lib/ai/module-environment.nix`). The builder entry point is
 > `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
 > callback. Native file settings live under `ai.<runtime>.native`
@@ -205,8 +206,8 @@ three runtimes demonstrably do not perform.
 - **Always-on process defaults do not write hidden normalized-pool entries.**
   `ai.<cli>.environmentVariables` is the consumer's replacement/negation
   surface, and definition provenance treats package claims there as owned API.
-  Internal defaults such as the sandbox-safe SSH command therefore ride the
-  per-runtime internal channel
+  Internal defaults such as the sandbox-safe SSH command and the git identity
+  (`ai.programs.git`) therefore ride the per-runtime internal channel
   `ai.<runtime>.internal._moduleEnvironmentVariables` (published through
   `lib/ai/module-environment.nix`) or the `resolvedShell` callback argument, and
   merge under consumer values at the wrapper call site. The channel is per

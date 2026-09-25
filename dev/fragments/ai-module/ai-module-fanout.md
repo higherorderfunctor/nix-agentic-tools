@@ -1,8 +1,9 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-25 — module-contributed process env rides a
-> per-runtime internal channel, and the Git SSH default never touches the devenv
-> shell. Every runtime describes delivery once through `mkRuntime`'s
+> per-runtime internal channel, which carries `ai.programs.git`'s per-harness
+> `GIT_CONFIG_GLOBAL` and `GH_CONFIG_DIR`; the Git SSH default never touches the
+> devenv shell. Every runtime describes delivery once through `mkRuntime`'s
 > record-level `config`, and both `mkRuntime` and the backend transforms reject
 > a backend spec carrying anything but `installPackage`, `migrationConfig` and
 > `options`, since an overridden or hand-built record reaches a transform
@@ -194,6 +195,46 @@ set `ai.gitSshConfigWorkaround = false` or override either backend-native value.
 The wrapper forces `BatchMode=yes` on both paths: agent-backed authentication
 continues normally, while unavailable credentials fail instead of opening a
 password dialog in an unattended harness session.
+
+### Per-harness git and gh identity (`ai.programs.git` / `ai.programs.gh`)
+
+`lib/ai/programs/git.nix`, imported by `sharedOptions.nix`, so both backends
+share one module and one option tree (`git-options.nix`). The leaves are Home
+Manager's names (`settings`, `signing.key/format/signByDefault`) plus the repo's
+`credentials` type; it is not a mirror of HM's `programs.git`. `mkProgram` gives
+every leaf an `ai.<runtime>.programs.<name>` override that REPLACES the root,
+except `settings`, which the module deep-merges itself (root, then runtime), so
+a per-harness `user.name` keeps the shared `user.email`.
+
+Delivery: each enabled runtime gets its own store gitconfig, published as
+`GIT_CONFIG_GLOBAL` (plus `GH_CONFIG_DIR`) on its internal module-env channel,
+so it reaches launchers and Claude's `settings.env` like any module default and
+an explicit consumer entry wins. Invariants, each load-bearing:
+
+- **`[include]` is the first section.** `GIT_CONFIG_GLOBAL` replaces
+  `~/.gitconfig` and the XDG config, so the file includes both, then overrides
+  them. `lib.generators.toGitINI` sorts sections, which would put `[commit]`,
+  `[credential …]` and `[gpg]` before the include: the user's config would then
+  win over the agent's signing and re-append the user's credential helper after
+  the reset. So the include is rendered by its own `toGitINI` call and
+  prepended.
+- **The empty `credential."https://github.com".helper` is required.** It drops
+  the user's own helper; without it an agent push that the agent helper cannot
+  answer falls through to the user's token. The agent helper is a store script
+  that reads the `credentials` file on `get` only.
+- **Never write the user's `programs.git`** (unlike `gitSshConfigWorkaround`'s
+  HM branch), **never set `GH_TOKEN`** (Copilot CLI prefers it over its own
+  login), **nothing on PATH** (Claude's Bash tool re-runs shell init).
+- A signing key is a string refused under the store (a path literal would copy
+  the key there). `signByDefault` with a null key or format is an assertion
+  failure for an enabled runtime, never a silent unsigned commit.
+
+`module-ai-programs-git-rendered-gitconfig` reads the file with real git. When
+probing by hand, note that `git config --global` reads one file and SKIPS its
+includes; use `--includes`. Not covered by this mechanism: tools that ignore
+`GIT_CONFIG_GLOBAL` (git-mcp's GitPython commit; libgit2 callers are
+unmeasured). On devenv each launcher bakes the project's own env, so the
+identity must be configured in the project (`devenv.local.nix`) too.
 
 ### Fanout data flow
 

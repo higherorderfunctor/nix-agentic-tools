@@ -135,7 +135,7 @@
   };
   sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
 in {
-  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
+  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix ./programs/git.nix];
 
   options.ai = {
     context = lib.mkOption {
