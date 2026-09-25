@@ -300,6 +300,11 @@ different cache, by design.
 - The CLI prints a one-line stderr warning on every call that falls back to
   `defaultModel`, but only while `models` has entries. A setup without models
   stays silent.
+- An MCP call's `content` is one category or `all` (upstream's
+  `ContentSelection`), and a call without it searches `defaultContent`. So over
+  MCP a model is reachable only when its set is a single category, `all`, or
+  `defaultContent`. Evaluation warns for any other enabled entry while MCP or an
+  MCP-backed subagent is selected; only the CLI can select it.
 - A runtime override replaces the whole `models` list.
 - When a model package lists `passthru.files`, evaluation checks them against
   model2vec's three folder layouts. `lib.packaging.fetchHuggingFaceModel`
@@ -334,7 +339,10 @@ settings (`models = []`, `defaultModel = null`, `defaultContent = ["code"]`,
 `pathMappings = []`, `grammars = []`) keep the installed package upstream's
 derivation byte for byte, which is what keeps it substitutable. Disabled entries
 count as absent. Any other value changes the package, so the cache guard clears
-the indexes on the next activation or shell entry.
+the indexes on the next activation or shell entry. That includes changing only
+`defaultContent`: it costs a local, non-substitutable rebuild of Semble, where
+the removed `mcp.content` was a plain argument on upstream's cached package. The
+cost buys one default shared by the CLI and the MCP server.
 
 ### Routing guidance
 
@@ -344,8 +352,10 @@ one line per enabled entry with its `--content` and description, then the
 fallback rule and a reminder to pass `find-related` the same `--content`. A
 changed `defaultContent` without models renders only the first line. The
 subagent description lists what the configured models cover, so delegation can
-match prose questions too. A vanilla setup emits no block and keeps the packaged
-rule source.
+match prose questions too. The MCP subagent's description spells each entry as
+an MCP call would (`content: "docs"`, or "a call without `content`") and leaves
+out entries MCP cannot reach. A vanilla setup emits no block and keeps the
+packaged rule source.
 
 `ai.programs.semble.finalPackage` is the read-only package built from the
 portable config, with the module's cache location baked in. It is declared
