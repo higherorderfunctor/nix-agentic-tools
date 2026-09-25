@@ -137,6 +137,9 @@ in
   cli
   // {
     inherit cli mcp mcpTools;
+    # True when the routing block lists the `default` entry, the only place
+    # its description is shown.
+    listsDefault = models: routes models && builtins.elem "default" (enabledKeys models);
     forCommand = command: mkCliRecords command {};
     # `models` is a resolved `cli.models` set; see the routing notes above.
     forCli = {

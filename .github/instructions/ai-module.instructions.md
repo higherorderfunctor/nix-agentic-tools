@@ -8,7 +8,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-25 — `mkProgram` takes a `pools` list: a listed
-> `attrsOf` option resolves per key through `mergePool` at runtime level, and
+> `attrsOf` option resolves per key through `mergePool` at runtime level, its
+> runtime option drops the portable `apply`, an unknown pool path fails, and
 > every other leaf keeps the scalar B4 contract.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
@@ -668,7 +669,10 @@ behavior. The exception is an `attrsOf` option listed in the spec's `pools`
 (Semble's `cli.models`): its runtime option holds nullable entries, and
 `resolveTree` merges it with `mergePool`, so a runtime entry replaces one key
 and a runtime null drops it. Without `pools`, a runtime set would replace the
-whole portable set and silently drop keys the module defines in config.
+whole portable set and silently drop the portable keys. A pool's runtime option
+drops the portable `apply`, which has already shaped the pool it merges into,
+and a `pools` path that names no option fails evaluation instead of quietly
+falling back to the scalar contract.
 
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write

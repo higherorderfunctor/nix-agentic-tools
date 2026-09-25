@@ -955,6 +955,20 @@ in {
           lib = hmLib;
           pkgs = helperPkgs;
         } {content = "all";};
+        # An explicit `code` is passed, so it also replaces a `--model` entry's
+        # content.
+        explicitCode =
+          mkSemble {
+            lib = hmLib;
+            pkgs = helperPkgs;
+          } {
+            args = ["--model" "prose"];
+            content = "code";
+          };
+        modelOnly = mkSemble {
+          lib = hmLib;
+          pkgs = helperPkgs;
+        } {args = ["--model" "prose"];};
         codeAndDocs = mkSemble {
           lib = hmLib;
           pkgs = helperPkgs;
@@ -984,6 +998,8 @@ in {
         && code.args == []
         && lib.hasSuffix "/bin/semble-mcp" code.command
         && all.args == ["--content" "all"]
+        && explicitCode.args == ["--model" "prose" "--content" "code"]
+        && modelOnly.args == ["--model" "prose"]
         && codeAndDocs.args == ["--content" "code" "docs"]
         && !allMixed.success
         && !duplicate.success
