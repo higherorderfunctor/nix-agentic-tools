@@ -7,15 +7,16 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-24 — every runtime describes delivery once through
-> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
-> transforms reject a backend spec carrying anything but `installPackage`,
-> `migrationConfig` and `options`, since an overridden or hand-built record
-> reaches a transform without the constructor. Kiro hook commands resolve
-> packages through the shared `commandType`. Launchers bake the builder's one
-> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
-> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
-> `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
+> **Last verified:** 2026-09-25 — Semble derives a Kiro agent-private MCP server
+> from `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
+> delivery once through `mkRuntime`'s record-level `config`, and both
+> `mkRuntime` and the backend transforms reject a backend spec carrying anything
+> but `installPackage`, `migrationConfig` and `options`, since an overridden or
+> hand-built record reaches a transform without the constructor. Kiro hook
+> commands resolve packages through the shared `commandType`. Launchers bake the
+> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
+> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
+> through `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
 > `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
 > (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
 > `agent.fileContent` where it copies, so a store-path string is a file, never a
@@ -703,12 +704,13 @@ consumer choice.
 Semble was the first factory consumer. Its single spec supports Claude, Codex,
 and Kiro, and generates its named MCP, agent, and `semble` rule defaults in both
 backend evaluations. The MCP agent and CLI rule use separate committed prompts.
-Kiro alone can carry `mcpServers.semble` inside its named agent, so
-`mcp.rootExposure = false` is rejected for other runtimes and without a matching
-MCP-backed Kiro agent. The skill-package factory now consumes the same primitive
-for stacked-workflows, with an enable-only program spec that supports every
-registered runtime. The rule composes into Claude and Codex's single
-always-loaded files and lets Kiro's directory-native renderer write `semble.md`.
+Kiro alone can carry `mcpServers.semble` inside its named agent, so an
+MCP-backed subagent with `mcp.enable = false` gets a server private to that
+agent on Kiro and fails evaluation on Claude and Codex. The skill-package
+factory now consumes the same primitive for stacked-workflows, with an
+enable-only program spec that supports every registered runtime. The rule
+composes into Claude and Codex's single always-loaded files and lets Kiro's
+directory-native renderer write `semble.md`.
 
 Semble also treats Codex's selected permission model as an integration boundary.
 A selected Codex feature appends that runtime's effective Semble cache to the
@@ -804,13 +806,13 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-24 — merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
-> text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target, matched on the key
-> each record's `sharedAgentsMd` callback declares. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-25 — Semble's CLI rule gate is `cli.instructions`.
+> Merged pools are public `ai.<runtime>.normalized.<pool>` options fed per-key
+> defaults, and a text-source record crosses into them with only its winning
+> arm. Path claims fail across runtimes except the shared AGENTS.md target,
+> matched on the key each record's `sharedAgentsMd` callback declares. Rules and
+> context use entry-local `enable` suppression; delivery entries default
+> `content` alone, and `content.enable = false` suppresses every content form.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -972,7 +974,7 @@ same-priority definitions of both fields fail. Semble's generated CLI rule is
 the deliberate package pattern that relies on this contract: it defaults the
 rule fields so a consumer's inline text can override the packaged source while
 the source remains visible. Consumers can retract that generated rule with
-`ai.<runtime>.rules.semble.enable = false`; its runtime `instructions.cli`
+`ai.<runtime>.rules.semble.enable = false`; its runtime `cli.instructions`
 feature flag remains the package-level gate.
 
 **`ai.<runtime>.files` is another exception, and the reason is worth knowing

@@ -1,8 +1,16 @@
 # Semble integrations
 
-> **Last verified:** 2026-09-21 — CLI rule content uses leaf defaults so a
-> consumer's higher-priority inline text can override the packaged source, and
-> entry-local `enable` suppresses the generated rule.
+> **Last verified:** 2026-09-25 — `models` is a root list routed by exact
+> content set, with `defaultContent` and `defaultModel`; the CLI and the MCP
+> server route alike through `patches/models.patch`, and there is no `--model`.
+> `pathMappings` is an ordered root list of `{ language; content; patterns; }`
+> where the first match wins, validated against `extracted.json`, and
+> `language = null` means line chunking with no parser. `mcp.content` and
+> `mcp.rootExposure` are gone: `mcp.enable = false` with an MCP-backed subagent
+> is a Kiro agent-private server. Every installed package is a bin-only launcher
+> set that unsets PYTHONPATH. Model examples use the flake's
+> `lib.packaging.fetchHuggingFaceModel` and forward `files` as `passthru.files`,
+> which turns on the model2vec layout check.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -41,29 +49,32 @@ ai = {
       tree-sitter-jq
     ];
     package = pkgs.ai.semble;
+    # First match wins: list narrower patterns first.
+    pathMappings = [
+      {
+        language = "bash";
+        content = "code";
+        patterns = [".envrc" "checks/hooks/pre-edit"];
+      }
+      {
+        language = "json";
+        content = "docs";
+        patterns = ["docs/*.json"];
+      }
+      {
+        language = "json";
+        content = "config";
+        patterns = ["*.json" "flake.lock" "devenv.lock"];
+      }
+      {
+        language = "markdown";
+        content = "docs";
+        patterns = ["*.md.fixture"];
+      }
+    ];
 
-    instructions.cli.enable = true;
-    mcp = {
-      enable = true;
-      content = ["code" "docs"];
-      pathMappings = [
-        {
-          content = "code";
-          language = "bash";
-          patterns = [".envrc" "checks/hooks/pre-edit"];
-        }
-        {
-          content = "config";
-          language = "json";
-          patterns = ["flake.lock" "devenv.lock"];
-        }
-        {
-          content = "docs";
-          language = "markdown";
-          patterns = ["*.md.fixture"];
-        }
-      ];
-    };
+    cli.instructions.enable = true;
+    mcp.enable = true;
     subagent = {
       enable = true;
       interface = "mcp";
@@ -90,21 +101,21 @@ feature is explicitly enabled; an explicit runtime feature value can still make
 just that feature differ. There is no `runtimes` selector. Program options exist
 only for Semble's declared capability set: Claude, Codex, and Kiro.
 
-The MCP content values are `code`, `docs`, `config`, and `all`. A scalar is
-accepted as a one-element list; several categories may be combined and are
-sorted into canonical argv. Empty lists, duplicates, and `all` mixed with a
-specific category fail evaluation. `["code"]` uses Semble's default and emits no
-command-line argument. Semble 0.5.5's MCP tools also accept one scalar `content`
-value per call, replacing the server default for that call.
+The content values are `code`, `docs`, `config`, and `all`. A scalar is accepted
+as a one-element list and several categories may be combined. Empty lists,
+duplicates, and `all` mixed with a specific category fail evaluation. The
+module's MCP entry passes no arguments: the server takes its default content
+from the package (`defaultContent`, below), and each tool call may pass one
+scalar `content` that replaces it for that call.
 
-`ai.programs.semble.mcp.rootExposure = false` keeps the root MCP pool free of
-Semble while retaining the server inside a Kiro `semble-search` agent. It
-requires that runtime's subagent to be enabled with `interface = "mcp"`. Kiro's
-agent receives `tools = ["@semble"]`, `includeMcpJson = false`, and its own
-`mcpServers.semble` entry whether root exposure is on or off. Claude and Codex
-cannot isolate an agent-scoped server and therefore fail evaluation when root
-exposure is disabled; the integration does not emulate this by weakening the
-root boundary.
+There is no root-exposure option. It is derived: with `mcp.enable = false` and
+an MCP-backed subagent (`subagent.enable = true`, `interface = "mcp"`), the
+server exists only inside Kiro's `semble-search` agent and not in the root MCP
+pool. Kiro's agent receives `tools = ["@semble"]`, `includeMcpJson = false`, and
+its own `mcpServers.semble` entry whether the root server exists or not. Claude
+and Codex cannot scope a server to one agent, so that combination fails
+evaluation there; the integration does not emulate it by weakening the root
+boundary.
 
 `ai.programs.semble.grammars` extends Semble with nixpkgs Tree-sitter grammar
 packages. Each package must expose its canonical `language` attribute and the
@@ -114,22 +125,47 @@ compiled library at `${grammar}/parser`, which is the shape produced by
 package to try these store-backed parsers after its bundled grammar lookup. This
 keeps the upstream bundle intact and avoids its mutable extraction cache.
 
-`ai.programs.semble.mcp.pathMappings` assigns files with non-standard names to
-an existing or extra grammar and to one of Semble's `code`, `config`, or `docs`
-indexes. A pattern without `/` matches a basename at any depth; a pattern
-containing `/` matches the path relative to the indexed repository root. Entries
-are ordered and the first match wins. Path matching uses `fnmatch` semantics,
-where `*` can span `/`; use an exact relative path when directory depth matters.
-A match overrides both suffix-based language detection and content
-categorization. Mappings participate in file discovery, parser selection, and
-cache validation, so mapped files are indexed and changes to them invalidate the
-relevant index normally.
+`ai.programs.semble.pathMappings` assigns files with non-standard names to a
+language and to one of Semble's `code`, `config`, or `docs` indexes. It is an
+ordered list of `{ language; content; patterns; }` entries. Each `language` must
+be one Semble knows: a grammar it bundles, an alias of one (such as `zsh`, `py`
+or `terraform`), the language of a `grammars` package, or any other language in
+its extension map (such as `caddy` or `nginx`), which Semble indexes with line
+chunking. `language = null` indexes the matched files with line chunking and no
+language at all, even when their suffix names a parsed language: the patched
+`detect_language` returns the mapping's `None`, and upstream's `chunk_source`
+skips the parser lookup for `None` and goes straight to `chunk_lines` (about 750
+characters per chunk), so nothing is logged. Anything else fails evaluation,
+checked against `extracted.json`, which is what turns a misspelt language name
+into an error instead of a silent line-chunked mapping. That file describes the
+pinned Semble; a consumer who overrides `package` with another version is
+validated against the pinned one. Extra grammars must not reuse a bundled name
+or alias, since Semble would never load them. The same language may appear in
+several entries, so one language can split across content categories by path.
+
+A pattern without `/` matches a basename at any depth; a pattern containing `/`
+matches the path relative to the indexed repository root. Path matching uses
+`fnmatch` semantics, where `*` can span `/`; use an exact relative path when
+directory depth matters. Entries, and the patterns within an entry, are tried in
+list order and the first match wins, so the consumer controls precedence. A
+pattern may appear only once across the whole list. A runtime override replaces
+the whole list. A match overrides both suffix-based language detection and
+content categorization. Mappings participate in file discovery, parser
+selection, and cache validation, so mapped files are indexed and changes to them
+invalidate the relevant index normally.
+
+The extracted extension map is used for validation and documentation only. It is
+not merged in as default mappings: that would re-declare every built-in suffix
+and drift from upstream's own detection.
 
 In Semble 0.6.0, index creation collects files before wrapping iteration in a
 progress bar. The customization patch passes content selection to that
 collection and the repository root to language detection inside the loop. The
 `module-semble-extra-grammars-load` check builds the customized package and
-exercises grammar loading, mapped discovery, and cache fingerprints.
+exercises grammar loading, mapped discovery, and cache fingerprints;
+`module-semble-null-language-runtime` indexes null-mapped files against a
+fixture model and searches them. The mapping table reaches Python through
+`json.loads`, not as a literal, because a `null` language is not Python.
 
 The customized package writes a fingerprint of its grammar and mapping set into
 index metadata and rejects caches created by a different customization. The HM
@@ -153,7 +189,7 @@ record atomically and `null` suppresses it for that runtime. The CLI rule
 instead defaults each content field: a consumer's higher-priority `text`
 overrides the packaged `source`, which remains visible on the resolved rule. Set
 `ai.<runtime>.rules.semble.enable = false` to retract it at the normalized pool,
-or disable `ai.<runtime>.programs.semble.instructions.cli` at its package gate.
+or disable `ai.<runtime>.programs.semble.cli.instructions` at its package gate.
 Kiro's runtime-native subagent is not a normalized nullable pool: consumers can
 replace the generated entry atomically, but cannot suppress it with `null`.
 Claude and Codex compose the guidance into their single always-loaded
@@ -168,6 +204,26 @@ The devenv integration uses `${config.devenv.state}/semble-cache`. Both bake
 value never enters the surrounding user or project shell. Consumer override of
 the variable through `env` is deliberately gone: devenv/Nix is the only config
 path.
+
+Semble is a Python application, and the module never installs its derivation
+directly. Every installed package, vanilla included, is a launcher set: a `bin/`
+of `makeWrapper` launchers and nothing else, no `lib/` and no `nix-support/`.
+Two nixpkgs behaviors make that necessary. First, a Python application
+propagates its whole closure and the interpreter
+(`nix-support/propagated-build-inputs`), and Python's setup hook turns that into
+PYTHONPATH in any shell that contains Python. Installing the upstream derivation
+in a devenv shell put Semble's dependencies (numpy, tokenizers, huggingface-hub,
+...) on the project's PYTHONPATH, ahead of its own virtualenv, even in
+non-Python projects. Home Manager profiles run no setup hooks and never leaked.
+Second, the upstream entry point appends Semble's site-packages AFTER
+PYTHONPATH, so any `semble` or dependency the calling shell exports shadows
+Semble's own. Each launcher therefore unsets PYTHONPATH. Both are properties of
+every nixpkgs Python application, not of Semble; the module fixes them for the
+packages it installs without touching the upstream derivation.
+`module-semble-launcher-python-isolation` checks both backends, including a
+multi-variant install, and proves its fake module does shadow the unwrapped
+binary. `lib.ai.mcpServers.mkSemble` points at whatever package it is given and
+does not add these launchers.
 
 Both backends record each effective Semble package store path in its assigned
 cache directory. A single active package keeps the established cache root;
@@ -192,9 +248,131 @@ Codex with `sandbox_mode` set to `workspace-write`. That gate is about Codex's
 sandbox rather than about where Semble keeps its index. The module does not
 choose a sandbox mode.
 
+## Embedding models
+
+`models` routes searches across embedding models by content. Each entry names a
+model directory (a package, never a Hugging Face id) and the content set it
+serves, with an optional description shown to agents:
+
+```nix
+let
+  files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+  # passthru.files lets evaluation check the layout (see below).
+  hf = args:
+    inputs.nix-agentic-tools.lib.packaging.fetchHuggingFaceModel ({
+        inherit pkgs files;
+        passthru = {inherit files;};
+      }
+      // args);
+in {
+  ai.programs.semble = {
+    enable = true;
+    models = [
+      {
+        model = hf {
+          repoId = "minishlab/potion-code-16M-v2";
+          rev = "e9d2a44ca6a05ac6685f3b23709ea57eb7352d5b";
+          hash = "sha256-EPzwepPyhcrNmU6lrmx2F5iCSbeSoKg5qZbErEEYHvw=";
+          license = pkgs.lib.licenses.mit;
+        };
+        content = "code";
+      }
+      {
+        model = hf {
+          repoId = "minishlab/potion-base-32M";
+          rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
+          hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
+          license = pkgs.lib.licenses.mit;
+        };
+        content = "docs";
+        description = "Prose: READMEs, design notes, architecture docs.";
+      }
+    ];
+    # The defaults, shown for reference.
+    defaultContent = ["code"];
+    defaultModel = null;
+  };
+}
+```
+
+A search's content set is its `--content` (or an MCP call's `content`), which
+replaces `defaultContent` wholesale, or else `defaultContent`. It uses the
+enabled entry whose content set equals that set exactly, and otherwise
+`defaultModel` (null is Semble's built-in model). `all` counts as
+`code config docs`. Different content sets use different indexes, and so a
+different cache, by design.
+
+- Enabled entries must have distinct content sets, so `["all"]` and
+  `["code" "config" "docs"]` collide.
+- Evaluation warns when `models` has entries but none matches `defaultContent`:
+  a plain `semble search` then uses `defaultModel`.
+- The CLI prints a one-line stderr warning on every call that falls back to
+  `defaultModel`, but only while `models` has entries. A setup without models
+  stays silent.
+- An MCP call's `content` is one category or `all` (upstream's
+  `ContentSelection`), and a call without it searches `defaultContent`. So over
+  MCP a model is reachable only when its set is a single category, `all`, or
+  `defaultContent`. Evaluation warns for any other enabled entry while MCP or an
+  MCP-backed subagent is selected; only the CLI can select it.
+- A runtime override replaces the whole `models` list.
+- When a model package lists `passthru.files`, evaluation checks them against
+  model2vec's three folder layouts. `lib.packaging.fetchHuggingFaceModel`
+  forwards `passthru` unchanged, so pass `passthru = { inherit files; }` as the
+  example does; without it the check does not run.
+
+### Mechanism
+
+Routing is a patch to Semble (`patches/models.patch`), not a wrapper:
+
+- `customizePackage` writes the routing table to `src/semble/semble_models.py`
+  in `postPatch`, the way the grammar loader is written: `DEFAULT_CONTENT`,
+  `DEFAULT_MODEL`, and `MODELS` (enabled entries only, content expanded and
+  sorted). `utils.route_model(content)` looks up the exact set.
+- `cli.py`: `--content` defaults to None and resolves to `DEFAULT_CONTENT`.
+  `search` and `find-related` route the resolved set, print the fallback
+  warning, and set `SEMBLE_MODEL_NAME` in-process when the route names a model.
+  `semble-mcp` uses `DEFAULT_CONTENT` as its default content.
+- `mcp.py` routes per call. The index cache key is (repo, content set, model).
+  Models load lazily, once each, as shared tasks; `serve` preloads the model for
+  the default content as upstream preloads its one model.
+- `cache.py`'s `find_index_from_cache_folder` appends `@` and 16 hex characters
+  of `sha256(model name)` to the index directory when the index's own model is
+  not Semble's default: `<cache>/<repo-hash>/index-<scope>@<modelhash>`. It
+  takes the model from the index (or the lookup), never from the process
+  environment, because one MCP process serves several models. The default model
+  keeps upstream's exact path, and `semble clear index` still reaches every
+  model's index, so the cache guard needs no change.
+
+The models patch applies on its own or on top of the grammar patch. The vanilla
+settings (`models = []`, `defaultModel = null`, `defaultContent = ["code"]`,
+`pathMappings = []`, `grammars = []`) keep the installed package upstream's
+derivation byte for byte, which is what keeps it substitutable. Disabled entries
+count as absent. Any other value changes the package, so the cache guard clears
+the indexes on the next activation or shell entry. That includes changing only
+`defaultContent`: it costs a local, non-substitutable rebuild of Semble, where
+the removed `mcp.content` was a plain argument on upstream's cached package. The
+cost buys one default shared by the CLI and the MCP server.
+
+### Routing guidance
+
+While `models` has enabled entries, the CLI rule and both CLI subagent prompts
+open with one routing block: which content a plain `semble search` uses, then
+one line per enabled entry with its `--content` and description, then the
+fallback rule and a reminder to pass `find-related` the same `--content`. A
+changed `defaultContent` without models renders only the first line. The
+subagent description lists what the configured models cover, so delegation can
+match prose questions too. The MCP subagent's description spells each entry as
+an MCP call would (`content: "docs"`, or "a call without `content`") and leaves
+out entries MCP cannot reach. A vanilla setup emits no block and keeps the
+packaged rule source.
+
+`ai.programs.semble.finalPackage` is the read-only package built from the
+portable config, with the module's cache location baked in. It is declared
+outside the program factory, so it has no runtime override.
+
 ## CLI rule and subagent content
 
-`instructions.cli.enable` installs one named `semble` rule containing committed
+`cli.instructions.enable` installs one named `semble` rule containing committed
 CLI guidance, without the non-Nix `uvx` fallback. It defaults false even when
 the program is enabled. The named subagent also defaults false and selects one
 of two committed prompts: `interface = "cli"` uses shell/read tools and the CLI
@@ -228,6 +406,38 @@ exact MCP surface is reviewed separately, and every tool and argument named by
 the committed MCP prompt must remain present. Module evaluation reads only
 committed files and does not introduce IFD.
 
+## Language knowledge snapshot
+
+`packages/semble/extracted.json` records what the pinned Semble knows about
+languages, and `lib/extracted.nix` exposes it to evaluation without IFD. Two
+packages decide how a file is treated:
+
+- **semble** maps a file suffix to a language (`extensions`). A suffix outside
+  that map is not indexed. `contentTypes` holds the language sets behind
+  `--content code|docs|config`; `code` is upstream's remainder after docs,
+  config and `dataLanguages`.
+- **semble-grammars** decides which languages get tree-sitter parsing
+  (`grammars.bundled`, after its `grammars.aliases`, so `zsh` parses as `bash`).
+  Every other indexed language falls back to line chunking. `parsedLanguages`
+  joins the two.
+
+semble-grammars ships one wheel per platform, each with its own manifest, and
+`available_languages()` reads that manifest. The extractor
+(`checks/extract-languages.py`) imports the real modules under Semble's own
+interpreter and fails unless the platform manifest equals the
+platform-independent `sources.json`. So the committed file is the same on every
+system, and the drift check (`semble-languages-extracted`) catches a platform
+that drops a grammar. It runs on Linux inside `nix flake check`, which skips
+Darwin, so CI's aarch64-darwin package job builds it separately (shard 0, before
+the receipt upload, so it gates the required `build` context). The update
+pipeline extracts on x86_64-linux only. On 0.1.2 the linux-x86_64 and
+macos-arm64 manifests both list the same 77 grammars as `sources.json`.
+
+Semble has no update target of its own; it arrives with the `llm-agents` input.
+`dev/scripts/update-input.sh` therefore rebuilds both Semble snapshots
+(`extracted.json` and `upstream-templates.json`) from their checks'
+`passthru.extracted` on every `llm-agents` bump, so the bot PR carries them.
+
 ## Direct configuration
 
 The convenience module is optional. The exported helpers can be composed with
@@ -254,13 +464,16 @@ in {
 ```
 
 For package-only composition,
-`lib.ai.semble.customizePackage { inherit lib pkgs; } package grammars pathMappings`
-applies both customization lists. `lib.ai.semble.withGrammars` remains the
-grammar-only shorthand.
+`lib.ai.semble.customizePackage { inherit lib pkgs; } package { grammars; pathMappings; models; defaultContent; defaultModel; }`
+applies the customizations; every field is optional and takes the option's
+shape. `lib.ai.semble.withGrammars` remains the grammar-only shorthand.
+`lib.ai.semble.forCli { command; routing = { models; defaultContent; }; }`
+renders the CLI records with the routing block.
 
 The package roles are `pkgs.ai.semble` and `pkgs.ai.mcpServers.semble-mcp`. They
 share one derivation; the latter changes only the evaluation-time
 `meta.mainProgram` used by `lib.getExe`.
 
-Semble may download its embedding model into the user cache on first use. The
-Nix package does not vendor that runtime model.
+Unless every search routes to a configured model, Semble downloads its built-in
+embedding model into the user cache on first use; the Nix package does not
+vendor it.

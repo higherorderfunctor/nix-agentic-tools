@@ -21,6 +21,7 @@
     "packages/chatgpt-codex/extracted.json",
     "packages/claude-code/extracted.json",
     "packages/glab/extracted.json",
+    "packages/semble/extracted.json",
     "result"
   ],
   "language": "en",

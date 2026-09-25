@@ -1,14 +1,15 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-24 — every runtime describes delivery once through
-> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
-> transforms reject a backend spec carrying anything but `installPackage`,
-> `migrationConfig` and `options`, since an overridden or hand-built record
-> reaches a transform without the constructor. Kiro hook commands resolve
-> packages through the shared `commandType`. Launchers bake the builder's one
-> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
-> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
-> `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
+> **Last verified:** 2026-09-25 — Semble derives a Kiro agent-private MCP server
+> from `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
+> delivery once through `mkRuntime`'s record-level `config`, and both
+> `mkRuntime` and the backend transforms reject a backend spec carrying anything
+> but `installPackage`, `migrationConfig` and `options`, since an overridden or
+> hand-built record reaches a transform without the constructor. Kiro hook
+> commands resolve packages through the shared `commandType`. Launchers bake the
+> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
+> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
+> through `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
 > `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
 > (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
 > `agent.fileContent` where it copies, so a store-path string is a file, never a
@@ -696,12 +697,13 @@ consumer choice.
 Semble was the first factory consumer. Its single spec supports Claude, Codex,
 and Kiro, and generates its named MCP, agent, and `semble` rule defaults in both
 backend evaluations. The MCP agent and CLI rule use separate committed prompts.
-Kiro alone can carry `mcpServers.semble` inside its named agent, so
-`mcp.rootExposure = false` is rejected for other runtimes and without a matching
-MCP-backed Kiro agent. The skill-package factory now consumes the same primitive
-for stacked-workflows, with an enable-only program spec that supports every
-registered runtime. The rule composes into Claude and Codex's single
-always-loaded files and lets Kiro's directory-native renderer write `semble.md`.
+Kiro alone can carry `mcpServers.semble` inside its named agent, so an
+MCP-backed subagent with `mcp.enable = false` gets a server private to that
+agent on Kiro and fails evaluation on Claude and Codex. The skill-package
+factory now consumes the same primitive for stacked-workflows, with an
+enable-only program spec that supports every registered runtime. The rule
+composes into Claude and Codex's single always-loaded files and lets Kiro's
+directory-native renderer write `semble.md`.
 
 Semble also treats Codex's selected permission model as an integration boundary.
 A selected Codex feature appends that runtime's effective Semble cache to the

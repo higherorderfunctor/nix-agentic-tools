@@ -15,19 +15,20 @@
 }: {
   config,
   lib,
+  options,
   pkgs,
   ...
 }: let
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
   program = programFactory.mkProgram (import ./options.nix {inherit lib pkgs;});
-  contentScope = import ../lib/contentScope.nix {inherit lib;};
+  customization = import ../lib/customization.nix {inherit lib;};
   records = import ../lib/integrations.nix;
   runtimes = program.supportedRuntimes;
   cacheRoot = cacheLocation {inherit config lib;};
-  customizePackage = import ../lib/withGrammars.nix {inherit lib pkgs;};
+  customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
 
   featurePaths = {
-    instructions = ["instructions" "cli"];
+    instructions = ["cli" "instructions"];
     mcp = ["mcp"];
     subagent = ["subagent"];
   };
@@ -51,37 +52,39 @@
     then portableFeature
     else portable.enable;
 
+  # The customization checks, shared by every runtime state and by
+  # `finalPackage`, which is built from the portable config.
+  mkCustomization = cfg: let
+    spec = customization.normalize {inherit (cfg) defaultContent defaultModel grammars models pathMappings;};
+    packageCustomizable = customization.isVanilla spec || cfg.package ? overridePythonAttrs;
+    errors =
+      customization.errors spec
+      ++ lib.optional (!packageCustomizable)
+      "Semble grammar, path-mapping or model customization requires `package` to expose overridePythonAttrs.";
+  in {
+    inherit errors;
+    customizationWarnings = customization.warnings spec;
+    customizedPackage =
+      if errors == []
+      then customizePackage cfg.package spec
+      else cfg.package;
+  };
+
   mkState = runtime: let
     portable = config.ai.programs.semble;
     override = config.ai.${runtime}.programs.semble;
     cfg = program.resolve config runtime;
-    grammarLanguages = map (grammar: grammar.language or "") cfg.grammars;
-    mappingPatterns = lib.concatMap (mapping: mapping.patterns) cfg.mcp.pathMappings;
-    packageCustomizable = (cfg.grammars == [] && cfg.mcp.pathMappings == []) || cfg.package ? overridePythonAttrs;
-    grammarLanguagesValid = lib.all (language: language != "") grammarLanguages;
-    grammarLanguagesUnique = lib.length (lib.unique grammarLanguages) == lib.length grammarLanguages;
-    pathMappingsValid = lib.all (mapping: mapping.language != "" && mapping.patterns != [] && lib.all (pattern: pattern != "") mapping.patterns) cfg.mcp.pathMappings;
-    pathMappingPatternsUnique = lib.length (lib.unique mappingPatterns) == lib.length mappingPatterns;
-    customizationValid = packageCustomizable && grammarLanguagesValid && grammarLanguagesUnique && pathMappingsValid && pathMappingPatternsUnique;
-    customizedPackage =
-      if customizationValid
-      then customizePackage cfg.package cfg.grammars cfg.mcp.pathMappings
-      else cfg.package;
     selected = featureName: featureEnabled portable override featureName;
-  in {
-    inherit
-      cfg
-      customizedPackage
-      grammarLanguagesUnique
-      grammarLanguagesValid
-      packageCustomizable
-      pathMappingPatternsUnique
-      pathMappingsValid
-      runtime
-      selected
-      ;
-    integrationActive = lib.any selected ["instructions" "mcp" "subagent"];
-  };
+  in
+    mkCustomization cfg
+    // {
+      inherit
+        cfg
+        runtime
+        selected
+        ;
+      integrationActive = lib.any selected ["instructions" "mcp" "subagent"];
+    };
 
   states = lib.genAttrs runtimes mkState;
   stateList = lib.attrValues states;
@@ -91,37 +94,51 @@
   packageKey = package: builtins.hashString "sha256" (builtins.unsafeDiscardStringContext (toString package));
   variantKeys = lib.unique (map (state: packageKey state.customizedPackage) activeStates);
   variantCount = lib.length variantKeys;
+  # One installed variant per distinct customized package. A package that no
+  # active runtime uses (only `finalPackage` can ask for one) gets its own
+  # package-keyed cache directory, so it never shares an index with another.
+  mkVariant = package: let
+    key = packageKey package;
+    cacheDir =
+      if variantCount == 1 && lib.elem key variantKeys
+      then cacheRoot
+      else "${cacheRoot}/variants/${builtins.substring 0 16 key}";
+    launcherArgs =
+      ["--unset" "PYTHONPATH"]
+      ++ lib.optionals relocatesCache ["--set" "SEMBLE_CACHE_LOCATION" cacheDir];
+  in {
+    inherit cacheDir package;
+    # Every installed package, vanilla included, goes through this launcher
+    # set rather than being installed as-is, for two Python reasons:
+    #
+    # - It carries ONLY `bin/`. Semble is a Python application, and nixpkgs
+    #   propagates a Python application's whole closure plus the interpreter
+    #   (`nix-support/propagated-build-inputs`). In a devenv shell, Python's
+    #   setup hook turns that into PYTHONPATH entries for numpy, tokenizers,
+    #   huggingface-hub and the rest, ahead of the project's own virtualenv.
+    #   A launcher with no `lib/` and no `nix-support/` leaks nothing.
+    # - Each launcher unsets PYTHONPATH. nixpkgs' entry point appends the
+    #   app's own site-packages AFTER PYTHONPATH, so any `semble` (or numpy)
+    #   the calling shell exports would shadow Semble's own.
+    #
+    # The upstream derivation is untouched; only these launchers are new.
+    wrappedPackage =
+      pkgs.runCommand "${lib.getName package}-wrapped" {
+        nativeBuildInputs = [pkgs.makeWrapper];
+        passthru = (package.passthru or {}) // {unwrapped = package;};
+        meta = lib.optionalAttrs (package.meta ? mainProgram) {inherit (package.meta) mainProgram;};
+      } ''
+        mkdir -p "$out/bin"
+        for bin in ${package}/bin/*; do
+          makeWrapper "$bin" "$out/bin/$(basename "$bin")" ${lib.escapeShellArgs launcherArgs}
+        done
+      '';
+  };
   variants =
     builtins.listToAttrs
-    (map (state: let
-        key = packageKey state.customizedPackage;
-        variantCache =
-          if variantCount == 1
-          then cacheRoot
-          else "${cacheRoot}/variants/${builtins.substring 0 16 key}";
-        wrappedPackage =
-          if !relocatesCache
-          then state.customizedPackage
-          else
-            pkgs.symlinkJoin {
-              name = "${lib.getName state.customizedPackage}-wrapped";
-              paths = [state.customizedPackage];
-              nativeBuildInputs = [pkgs.makeWrapper];
-              passthru = state.customizedPackage.passthru or {};
-              postBuild = ''
-                for bin in "$out"/bin/*; do
-                  wrapProgram "$bin" \
-                    --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg variantCache}
-                done
-              '';
-            };
-      in {
-        name = key;
-        value = {
-          cacheDir = variantCache;
-          package = state.customizedPackage;
-          inherit wrappedPackage;
-        };
+    (map (state: {
+        name = packageKey state.customizedPackage;
+        value = mkVariant state.customizedPackage;
       })
       activeStates);
   variantFor = state: variants.${packageKey state.customizedPackage};
@@ -131,7 +148,17 @@
     if multiVariant
     then "semble-${state.runtime}"
     else "semble";
-  recordsFor = state: records.forCommand (commandFor state);
+  routingFor = state: {inherit (state.cfg) defaultContent models;};
+  recordsFor = state:
+    records.forCli {
+      command = commandFor state;
+      routing = routingFor state;
+    };
+
+  # The package `semble` resolves to for the portable config, with the same
+  # cache relocation as the installed launcher.
+  portablePackage = (mkCustomization config.ai.programs.semble).customizedPackage;
+  finalPackage = (variants.${packageKey portablePackage} or (mkVariant portablePackage)).wrappedPackage;
 
   installedPackage =
     if !multiVariant
@@ -178,7 +205,7 @@
         if [ "$previous" != "$expected" ]; then
           printf 'Semble package changed; clearing indexes in %s\n' "$cache_dir"
           SEMBLE_CACHE_LOCATION="$cache_dir" \
-            ${variant.package}/bin/semble clear index >/dev/null
+            ${variant.wrappedPackage}/bin/semble clear index >/dev/null
 
           temporary="$(${pkgs.coreutils}/bin/mktemp "$cache_dir/.nix-package.XXXXXX")"
           trap '${pkgs.coreutils}/bin/rm -f "$temporary"' EXIT
@@ -205,16 +232,20 @@
   # That gate is real: it is about Codex's sandbox, not about where semble
   # keeps its index.
 
+  # The MCP server routes each call by content from the package's own table,
+  # so it takes no arguments.
   mcpEntry = state: {
-    args = contentScope.toArgs state.cfg.mcp.content;
+    args = [];
     command = "${statePackage state}/bin/semble-mcp";
     type = "stdio";
   };
 
+  mcpSubagent = state: state.selected "subagent" && state.cfg.subagent.interface == "mcp";
+
   agentRecord = state: let
     interfaceRecords =
       if state.cfg.subagent.interface == "mcp"
-      then records.mcp
+      then records.forMcp (routingFor state)
       else recordsFor state;
     base =
       if state.runtime == "kiro"
@@ -234,7 +265,9 @@
       (lib.mkIf (state.selected "instructions") {
         ai.${runtime}.rules.semble = lib.mapAttrs (_: lib.mkDefault) (recordsFor state).rule;
       })
-      (lib.mkIf (state.selected "mcp" && state.cfg.mcp.rootExposure) {
+      # An MCP-backed subagent with `mcp` off keeps its server private to the
+      # agent: only Kiro can do that, and an assertion rejects the others.
+      (lib.mkIf (state.selected "mcp") {
         ai.${runtime}.mcpServers.semble = lib.mkDefault (mcpEntry state);
       })
       (lib.mkIf (state.selected "subagent") {
@@ -246,55 +279,63 @@
         ai.${runtime}.agents.semble-search = lib.mkDefault (agentRecord state);
       })
     ];
+
+  # An MCP caller passes `content` as one category or "all", or omits it for
+  # `defaultContent`; an enabled model for any other set is unreachable there.
+  mcpWarnings = state:
+    lib.optionals (state.selected "mcp" || mcpSubagent state)
+    (lib.concatLists (lib.imap1 (index: entry:
+      lib.optional (entry.enable && !(records.mcpReachable (routingFor state) entry.content))
+      "`models.${toString index}` (content ${lib.concatStringsSep " " (lib.toList entry.content)}) is unreachable through MCP: an MCP call's `content` is one category or \"all\", and this set is not `defaultContent` either. Only the CLI can select it.")
+    state.cfg.models));
+
+  # Warnings for active runtimes, one line per distinct message.
+  warningMessages = let
+    byMessage =
+      lib.foldl' (acc: state:
+        lib.foldl' (inner: message: inner // {${message} = (inner.${message} or []) ++ [state.runtime];}) acc (state.customizationWarnings ++ mcpWarnings state))
+      {}
+      activeStates;
+  in
+    lib.mapAttrsToList (message: runtimes: "ai.programs.semble (${lib.concatStringsSep ", " runtimes}): ${message}") byMessage;
 in {
   imports = [program.module];
 
+  # A second declaration of the portable program option, so the factory does
+  # not generate a per-runtime override for this read-only value.
+  options.ai.programs.semble = lib.mkOption {
+    type = lib.types.submodule {
+      options.finalPackage = lib.mkOption {
+        type = lib.types.package;
+        readOnly = true;
+        description = ''
+          The Semble package built from the portable `ai.programs.semble`
+          config: grammars, path mappings and model routing applied, with the
+          module's cache location baked in.
+        '';
+      };
+    };
+  };
+
   config = lib.mkMerge (
     [
-      {
-        assertions = lib.concatMap (state:
-          [
-            {
-              assertion = state.packageCustomizable;
-              message = "ai.${state.runtime}.programs.semble grammar or path customization requires package to expose overridePythonAttrs.";
-            }
-            {
-              assertion = state.grammarLanguagesValid;
-              message = "ai.${state.runtime}.programs.semble.grammars packages must expose a non-empty language attribute.";
-            }
-            {
-              assertion = state.grammarLanguagesUnique;
-              message = "ai.${state.runtime}.programs.semble.grammars language names must be unique.";
-            }
-            {
-              assertion = state.pathMappingsValid;
-              message = "ai.${state.runtime}.programs.semble.mcp.pathMappings entries require a non-empty language and at least one non-empty pattern.";
-            }
-            {
-              assertion = state.pathMappingPatternsUnique;
-              message = "ai.${state.runtime}.programs.semble.mcp.pathMappings patterns must be unique.";
-            }
-          ]
-          ++ map (message: {
-            assertion = false;
-            inherit message;
-          }) (contentScope.errors state.cfg.mcp.content)
-          ++ lib.optional (state.selected "subagent" && state.cfg.subagent.interface == "mcp") {
-            assertion = state.selected "mcp";
-            message = "ai.${state.runtime}.programs.semble.subagent.interface = \"mcp\" requires the Semble MCP integration for the same runtime.";
-          }
-          ++ lib.optionals (state.selected "mcp" && !state.cfg.mcp.rootExposure) [
-            {
+      ({
+          ai.programs.semble = {inherit finalPackage;};
+          assertions = lib.concatMap (state:
+            map (message: {
+              assertion = false;
+              message = "ai.${state.runtime}.programs.semble: ${message}";
+            })
+            state.errors
+            ++ lib.optional (mcpSubagent state && !(state.selected "mcp")) {
               assertion = state.runtime == "kiro";
-              message = "ai.${state.runtime}.programs.semble.mcp.rootExposure = false is unsupported: only Kiro can attach a Semble MCP server to a named agent without exposing it to the root session.";
-            }
-            {
-              assertion = state.selected "subagent" && state.cfg.subagent.interface == "mcp";
-              message = "ai.${state.runtime}.programs.semble.mcp.rootExposure = false requires an enabled MCP-backed Semble subagent for the same runtime.";
-            }
-          ])
-        stateList;
-      }
+              message = "ai.${state.runtime}.programs.semble: subagent.interface = \"mcp\" with mcp.enable = false needs an MCP server private to the agent, which only Kiro supports. ${state.runtime} cannot scope a server to one agent: enable mcp or use subagent.interface = \"cli\".";
+            })
+          stateList;
+        }
+        // lib.optionalAttrs (options ? warnings) {
+          warnings = warningMessages;
+        })
       (lib.mkIf integrationActive
         (lib.mkMerge [
           (installPackages [installedPackage])

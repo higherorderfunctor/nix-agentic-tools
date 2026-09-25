@@ -1,12 +1,12 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-24 — merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
-> text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target, matched on the key
-> each record's `sharedAgentsMd` callback declares. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-25 — Semble's CLI rule gate is `cli.instructions`.
+> Merged pools are public `ai.<runtime>.normalized.<pool>` options fed per-key
+> defaults, and a text-source record crosses into them with only its winning
+> arm. Path claims fail across runtimes except the shared AGENTS.md target,
+> matched on the key each record's `sharedAgentsMd` callback declares. Rules and
+> context use entry-local `enable` suppression; delivery entries default
+> `content` alone, and `content.enable = false` suppresses every content form.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -168,7 +168,7 @@ same-priority definitions of both fields fail. Semble's generated CLI rule is
 the deliberate package pattern that relies on this contract: it defaults the
 rule fields so a consumer's inline text can override the packaged source while
 the source remains visible. Consumers can retract that generated rule with
-`ai.<runtime>.rules.semble.enable = false`; its runtime `instructions.cli`
+`ai.<runtime>.rules.semble.enable = false`; its runtime `cli.instructions`
 feature flag remains the package-level gate.
 
 **`ai.<runtime>.files` is another exception, and the reason is worth knowing

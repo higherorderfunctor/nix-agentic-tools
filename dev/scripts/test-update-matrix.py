@@ -917,6 +917,7 @@ class PreparationTest(unittest.TestCase):
         (self.repo / "flake.lock").write_text("{}\n")
         (self.repo / "devenv.lock").write_text("{}\n")
         (self.repo / "devenv.yaml").write_text("inputs: {}\n")
+        (self.repo / "packages" / "semble" / "extracted.json").write_text("{}\n")
         (self.repo / "packages" / "semble" / "upstream-templates.json").write_text("{}\n")
         self.write_recipe(False)
         subprocess.run(["git", "init", "-b", "main"], cwd=self.repo, check=True, capture_output=True)

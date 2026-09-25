@@ -89,6 +89,7 @@ creds
 crystallise
 cuda
 customisation
+datamodels
 dataurl
 deadnix
 dedented
@@ -268,12 +269,14 @@ memsize
 Menlo
 mergetool
 metacharacter
+minishlab
 misattributes
 miscited
 misordered
 mkfifo
 mlen
 modelcontextprotocol
+modelhash
 moderations
 modfmt
 moff
@@ -502,6 +505,7 @@ unrepresentable
 unresumable
 unreviewed
 unscanned
+unsets
 unskipped
 unstages
 unstarted

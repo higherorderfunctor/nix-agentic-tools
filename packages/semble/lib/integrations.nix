@@ -13,48 +13,170 @@ let
     then {source = value;}
     else {text = value;};
 
-  mkCliRecords = command: let
-    renderedInstructions =
+  # ── Model routing ──────────────────────────────────────────────
+  # `routing` is `{ models; defaultContent; }` from the resolved program
+  # config. Routing guidance appears only when an enabled model exists or the
+  # default content is not upstream's `code`, so a vanilla setup keeps the
+  # packaged instructions byte for byte.
+  toList = value:
+    if builtins.isList value
+    then value
+    else [value];
+  sortStrings = builtins.sort builtins.lessThan;
+  inherit (import ./contentCategories.nix) categories expand;
+  shownContent = content: builtins.concatStringsSep " " (sortStrings (toList content));
+  enabledModels = routing: builtins.filter (entry: entry.enable or true) (routing.models or []);
+  defaultContentOf = routing: toList (routing.defaultContent or ["code"]);
+  routes = routing:
+    enabledModels routing
+    != []
+    || expand (defaultContentOf routing) != ["code"];
+  withoutPeriod = text: let
+    trimmed = builtins.match "(.*)\\.$" text;
+  in
+    if trimmed == null
+    then text
+    else builtins.head trimmed;
+
+  routingBlock = command: routing: let
+    models = enabledModels routing;
+    defaultContent = defaultContentOf routing;
+    modelLine = entry: let
+      plain =
+        if expand (toList entry.content) == expand defaultContent
+        then " (plain `${command} search`)"
+        else "";
+      description =
+        if (entry.description or null) == null
+        then ""
+        else ": ${entry.description}";
+    in "- `--content ${shownContent entry.content}`${plain}${description}";
+  in
+    builtins.concatStringsSep "\n" (
+      [
+        "Plain `${command} search` in this setup searches `${shownContent defaultContent}`. `--content` replaces that set for one call."
+      ]
+      ++ (
+        if models == []
+        then []
+        else
+          [
+            ""
+            "Each content set below has its own embedding model, used when the call's set matches exactly:"
+            ""
+          ]
+          ++ map modelLine models
+          ++ [
+            ""
+            "Any other set uses the default model, and the CLI prints a warning. Pass `${command} find-related` the same `--content` as the search that returned its location."
+          ]
+      )
+      ++ ["" ""]
+    );
+
+  # The MCP tools take `content` as ONE category or "all" (upstream's
+  # ContentSelection), and a call without it searches `defaultContent`. So an
+  # MCP caller reaches a model only for those sets; returns the argument to
+  # pass (null for none), or false when the set is unreachable.
+  mcpContentFor = routing: content: let
+    set = expand (toList content);
+  in
+    if set == expand (defaultContentOf routing)
+    then null
+    else if set == categories
+    then "all"
+    else if builtins.length set == 1
+    then builtins.head set
+    else false;
+  mcpReachable = routing: content: mcpContentFor routing content != false;
+
+  # Mentions the configured models so delegation can match questions about
+  # their content, prose included. `render` spells one entry's selection in
+  # the interface's own syntax; an entry it returns null for is omitted.
+  agentDescription = render: routing: let
+    models = builtins.filter (entry: render entry != null) (enabledModels routing);
+    item = entry:
+      render entry
+      + (
+        if (entry.description or null) == null
+        then ""
+        else " (${withoutPeriod entry.description})"
+      );
+  in
+    if models == []
+    then baseDescription
+    else "${baseDescription} This setup has dedicated embedding models for ${builtins.concatStringsSep "; " (map item models)}.";
+  cliSelection = entry: "--content ${shownContent entry.content}";
+  mcpSelection = routing: entry: let
+    content = mcpContentFor routing entry.content;
+  in
+    if content == false
+    then null
+    else if content == null
+    then "a call without `content`"
+    else "`content: \"${content}\"`";
+
+  mkCliRecords = command: routing: let
+    routed = routes routing;
+    packaged =
       if command == "semble"
-      then cliInstructions
+      then builtins.readFile cliInstructions
       else
         builtins.replaceStrings
         ["semble search" "semble find-related"]
         ["${command} search" "${command} find-related"]
         (builtins.readFile cliInstructions);
+    renderedInstructions =
+      if command == "semble" && !routed
+      then cliInstructions
+      else if routed
+      then routingBlock command routing + packaged
+      else packaged;
+    description = agentDescription cliSelection routing;
   in {
     rule =
-      if command == "semble"
+      if command == "semble" && !routed
       then {source = cliInstructions;}
       else {text = renderedInstructions;};
     kiroAgent = {
-      description = baseDescription;
+      inherit description;
       prompt = mkTextSource renderedInstructions;
       tools = ["shell" "read"];
     };
     semanticAgent = {
-      description = baseDescription;
+      inherit description;
       instructions = mkTextSource renderedInstructions;
       tools = ["Bash" "Read"];
     };
   };
 
-  cli = mkCliRecords "semble";
-  mcp = {
+  mkMcpRecords = routing: let
+    description = agentDescription (mcpSelection routing) routing;
+  in {
     kiroAgent = {
-      description = baseDescription;
+      inherit description;
       prompt = mkTextSource mcpInstructions;
       tools = ["@semble"];
     };
     semanticAgent = {
-      description = baseDescription;
+      inherit description;
       instructions = mkTextSource mcpInstructions;
       tools = claudeMcpTools;
     };
   };
+
+  cli = mkCliRecords "semble" {};
+  mcp = mkMcpRecords {};
 in
   cli
   // {
-    inherit cli mcp mcpTools;
-    forCommand = mkCliRecords;
+    inherit cli mcp mcpReachable mcpTools;
+    forCommand = command: mkCliRecords command {};
+    # `routing` is `{ models; defaultContent; }`; see the routing notes above.
+    forCli = {
+      command ? "semble",
+      routing ? {},
+    }:
+      mkCliRecords command routing;
+    forMcp = mkMcpRecords;
   }
