@@ -469,19 +469,24 @@ Claude and Codex compose the guidance into their single always-loaded
 entry whose content set equals its `--content` (or `defaultContent`) exactly,
 and `defaultModel` otherwise. The CLI and the MCP server route the same way, and
 the generated guidance tells agents which content has which model. Each model is
-a pinned package such as a `pkgs.ai.fetchHuggingFaceModel` output:
+a pinned package such as a `lib.packaging.fetchHuggingFaceModel` output:
 
 ```nix
 ai.programs.semble = {
   models = [
     {
-      model = pkgs.ai.fetchHuggingFaceModel {
-        repoId = "minishlab/potion-base-32M";
-        rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
+      model = let
         files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
-        hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
-        license = lib.licenses.mit;
-      };
+      in
+        inputs.nix-agentic-tools.lib.packaging.fetchHuggingFaceModel {
+          inherit pkgs files;
+          repoId = "minishlab/potion-base-32M";
+          rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
+          hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
+          license = lib.licenses.mit;
+          # Lets evaluation check the files against model2vec's layouts.
+          passthru = {inherit files;};
+        };
       content = "docs";
       description = "Prose: READMEs, design notes, architecture docs.";
     }

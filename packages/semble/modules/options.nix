@@ -4,16 +4,21 @@
 }: let
   contentScope = import ../lib/contentScope.nix {inherit lib;};
   modelExample = repo: rev: hash: ''
-    pkgs.ai.fetchHuggingFaceModel {
-      repoId = "minishlab/${repo}";
-      rev = "${rev}";
+    let
       files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
-      hash = "${hash}";
-      license = lib.licenses.mit;
-    }'';
+    in
+      inputs.nix-agentic-tools.lib.packaging.fetchHuggingFaceModel {
+        inherit pkgs files;
+        repoId = "minishlab/${repo}";
+        rev = "${rev}";
+        hash = "${hash}";
+        license = lib.licenses.mit;
+        # Lets evaluation check the files against model2vec's layouts.
+        passthru = {inherit files;};
+      }'';
   modelDescription = ''
     A package whose output is a model2vec model directory, such as a
-    `pkgs.ai.fetchHuggingFaceModel` result. Hugging Face ids are not
+    `lib.packaging.fetchHuggingFaceModel` result. Hugging Face ids are not
     accepted: they are unpinned, fail without network, and bypass the licence
     gate. Wrap local weights in a derivation. When the package lists its files
     in `passthru.files`, evaluation checks them against model2vec's accepted

@@ -6,8 +6,9 @@
 > `pathMappings` is an ordered root list of `{ language; content; patterns; }`
 > where the first match wins, validated against `extracted.json`. `mcp.content`
 > and `mcp.rootExposure` are gone: `mcp.enable = false` with an MCP-backed
-> subagent is a Kiro agent-private server. Model examples use
-> `pkgs.ai.fetchHuggingFaceModel`, which sets no `passthru.files`.
+> subagent is a Kiro agent-private server. Model examples use the flake's
+> `lib.packaging.fetchHuggingFaceModel` and forward `files` as `passthru.files`,
+> which turns on the model2vec layout check.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -222,8 +223,14 @@ serves, with an optional description shown to agents:
 
 ```nix
 let
-  hf = pkgs.ai.fetchHuggingFaceModel;
   files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+  # passthru.files lets evaluation check the layout (see below).
+  hf = args:
+    inputs.nix-agentic-tools.lib.packaging.fetchHuggingFaceModel ({
+        inherit pkgs files;
+        passthru = {inherit files;};
+      }
+      // args);
 in {
   ai.programs.semble = {
     enable = true;
@@ -232,7 +239,6 @@ in {
         model = hf {
           repoId = "minishlab/potion-code-16M-v2";
           rev = "e9d2a44ca6a05ac6685f3b23709ea57eb7352d5b";
-          inherit files;
           hash = "sha256-EPzwepPyhcrNmU6lrmx2F5iCSbeSoKg5qZbErEEYHvw=";
           license = pkgs.lib.licenses.mit;
         };
@@ -242,7 +248,6 @@ in {
         model = hf {
           repoId = "minishlab/potion-base-32M";
           rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
-          inherit files;
           hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
           license = pkgs.lib.licenses.mit;
         };
@@ -273,8 +278,9 @@ different cache, by design.
   stays silent.
 - A runtime override replaces the whole `models` list.
 - When a model package lists `passthru.files`, evaluation checks them against
-  model2vec's three folder layouts. `pkgs.ai.fetchHuggingFaceModel` outputs do
-  not set it, so the check does not run for them.
+  model2vec's three folder layouts. `lib.packaging.fetchHuggingFaceModel`
+  forwards `passthru` unchanged, so pass `passthru = { inherit files; }` as the
+  example does; without it the check does not run.
 
 ### Mechanism
 
