@@ -8,9 +8,10 @@ applyTo: "packages/semble/**"
 # Semble integrations
 
 > **Last verified:** 2026-09-25 — `cli.models` routes the CLI across per-key
-> embedding models through a Semble patch, resolved per key at runtime level;
-> `instructions.cli` became `cli.instructions` with no alias; `finalPackage`
-> exposes the portable package.
+> embedding models through a Semble patch, resolved per key at runtime level,
+> with `default` added by the option's `apply`; `instructions.cli` became
+> `cli.instructions` with no alias; `finalPackage` exposes the portable package;
+> `mkSemble` passes any set `content`.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -250,11 +251,15 @@ The CLI then behaves like this:
 - An unknown or disabled key is an argparse error that lists the valid keys.
   With `default.enable = false`, a call without `--model` fails the same way.
 
-`default` always exists: the module defines `cli.models.default = {}` in config,
-because an `attrsOf` option default is discarded as soon as a consumer defines
-any key. Disable it rather than removing it. `default.model = null` (the
-default) means Semble's built-in model, and its description then falls back to a
-built-in text; once `default.model` is set, `default.description` is required.
+`default` always exists: the option's `apply` adds Semble's built-in entry when
+no definition names it. It is not defined in config, because an `attrsOf` option
+keeps only its highest-priority definitions: a normal-priority entry would drop
+a consumer's `cli.models = lib.mkDefault {…}` wholesale, and a lower-priority
+one would be dropped by any consumer key. Disable it rather than removing it.
+`default.model = null` (the default) means Semble's built-in model, and its
+description then falls back to a built-in text. Once `default.model` is set,
+`default.description` is required whenever the routing block lists the default,
+that is, while another entry is enabled. At least one entry must stay enabled.
 Other keys have no description default, so an enabled entry without one fails
 with nixpkgs' own path-qualified error. Keys match `[a-z0-9][a-z0-9_-]*`. When a
 model package lists `passthru.files`, as `fetchFromHuggingFace` outputs do,
@@ -284,16 +289,16 @@ wrapper, which leaves room for per-call model selection over MCP later:
   of `sha256(model name)` to the index directory when the model is not Semble's
   default: `<cache>/<repo-hash>/index-<scope>@<modelhash>`. Upstream 0.6.0 keys
   the index by repo and content only, so two models on one repo would overwrite
-  each other. The default model keeps upstream's exact path, renaming a key
-  never reindexes, and `semble clear index` (which removes each repo folder)
+  each other. The default model keeps upstream's exact path, the path never
+  depends on the key, and `semble clear index` (which removes each repo folder)
   still reaches every model's index, so the cache guard needs no change.
 
 The models patch applies on its own or on top of the grammar patch, and only
 when `cli.models` differs from the built-in default. With the built-in default
 and no grammars or path mappings, the installed package stays upstream's
 derivation byte for byte, which is what keeps it substitutable. Any model edit
-changes the package, so the cache guard clears the indexes on the next
-activation or shell entry.
+changes the package, a key rename included, so the cache guard clears the
+indexes on the next activation or shell entry.
 
 A runtime override resolves `cli.models` per key (the program factory's `pools`
 field): `ai.kiro.programs.semble.cli.models.prose = null` drops one key for
@@ -327,6 +332,10 @@ ai.claude.mcpServers.semble-docs = inputs.nix-agentic-tools.lib.ai.mcpServers.mk
   args = ["--model" "prose"];
 };
 ```
+
+`mkSemble`'s `content` defaults to null, which passes no `--content`, so the
+server searches the `prose` entry's content. Any set `content`, `"code"`
+included, is passed and replaces it.
 
 ## CLI rule and subagent content
 

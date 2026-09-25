@@ -296,18 +296,12 @@ in {
   config = lib.mkMerge (
     [
       {
-        # The `default` entry always exists. Defining it here rather than as
-        # the option default matters: an attrsOf default is discarded as soon
-        # as a consumer defines any key.
-        ai.programs.semble = {
-          cli.models.default = {};
-          inherit finalPackage;
-        };
+        ai.programs.semble = {inherit finalPackage;};
         assertions = lib.concatMap (state:
           [
             {
               assertion = state.packageCustomizable;
-              message = "ai.${state.runtime}.programs.semble grammar or path customization requires package to expose overridePythonAttrs.";
+              message = "ai.${state.runtime}.programs.semble grammar, path-mapping or cli.models customization requires package to expose overridePythonAttrs.";
             }
             {
               assertion = state.grammarLanguagesValid;
@@ -330,9 +324,11 @@ in {
             assertion = false;
             message = "ai.${state.runtime}.programs.semble: ${message}";
           }) (contentScope.errors "mcp.content" state.cfg.mcp.content ++ state.modelErrors)
-          ++ lib.optional (state.cfg.cli.models ? default) {
+          # The description is read only where the routing block lists the
+          # default entry.
+          ++ lib.optional (records.listsDefault state.cfg.cli.models) {
             assertion = state.cfg.cli.models.default.model == null || state.cfg.cli.models.default.description != null;
-            message = "ai.${state.runtime}.programs.semble.cli.models.default.description must be set once cli.models.default.model is set: the built-in description describes Semble's own model.";
+            message = "ai.${state.runtime}.programs.semble.cli.models.default.description must be set once cli.models.default.model is set and another model is enabled: the routing guidance lists the default, and the built-in description describes Semble's own model.";
           }
           ++ lib.optional (state.selected "subagent" && state.cfg.subagent.interface == "mcp") {
             assertion = state.selected "mcp";

@@ -32,11 +32,21 @@
 in {
   inherit keyPattern layouts;
 
+  # Semble's own model, as the module's option evaluates an empty entry.
+  builtinEntry = {
+    content = contentScope.default;
+    description = null;
+    enable = true;
+    model = null;
+  };
+
   # `optionPath` prefixes each message, e.g. "cli.models". Reads only
   # `content`, `enable` and `model`, so an entry's description is never forced.
   errors = optionPath: models:
     lib.optional (!(models ? default))
     "Semble `${optionPath}` must keep its `default` entry; set `${optionPath}.default.enable = false` instead of removing it."
+    ++ lib.optional (!(lib.any (entry: (normalizeEntry entry).enable) (lib.attrValues models)))
+    "Semble `${optionPath}` must keep at least one entry enabled: with none, every CLI search fails."
     ++ lib.concatLists (lib.mapAttrsToList (key: entry: let
       normalized = normalizeEntry entry;
       entryPath = "${optionPath}.${key}";

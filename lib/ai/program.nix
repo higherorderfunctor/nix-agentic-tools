@@ -39,11 +39,13 @@
   # overridden per key rather than wholesale. Its runtime option holds
   # nullable entries: a runtime entry replaces the portable entry at the same
   # key, and a runtime null drops it. This is the keyed-pool rule, applied to
-  # a program option.
+  # a program option. The portable option's `apply` stays portable-only: it
+  # has already shaped the portable pool the runtime entries merge into, and
+  # it was written for non-null entries.
   mkPoolOverrideOption = path: option:
     assert lib.assertMsg ((option.type.name or null) == "attrsOf")
     "mkProgram: pool `${lib.concatStringsSep "." path}` must be an attrsOf option.";
-      (builtins.removeAttrs option ["default" "defaultText" "example"])
+      (builtins.removeAttrs option ["apply" "default" "defaultText" "example"])
       // {
         default = {};
         type = lib.types.attrsOf (lib.types.nullOr option.type.nestedTypes.elemType);
@@ -83,6 +85,9 @@ in {
     pools ? [],
     supportedRuntimes,
   }: let
+    # A pool path that names no option would silently keep the wholesale
+    # override the pool exists to prevent.
+    unknownPools = builtins.filter (path: !(lib.hasAttrByPath path options && lib.isOption (lib.getAttrFromPath path options))) pools;
     overrideOptions = mapOptionTree (path: option:
       if lib.elem path pools
       then mkPoolOverrideOption path option
@@ -94,27 +99,29 @@ in {
         default = {};
         inherit description;
       };
-  in {
-    inherit name options pools spec supportedRuntimes;
+  in
+    assert lib.assertMsg (unknownPools == [])
+    "mkProgram `${name}`: pools ${lib.concatMapStringsSep ", " (path: "`${lib.concatStringsSep "." path}`") unknownPools} name no option."; {
+      inherit name options pools spec supportedRuntimes;
 
-    module = {
-      options.ai =
-        {
-          programs.${name} = mkProgramOption options "Portable defaults for the ${name} program integration.";
-        }
-        // lib.genAttrs supportedRuntimes (runtime: {
-          programs.${name} = mkProgramOption overrideOptions "${runtime} overrides for the ${name} program integration.";
-        });
+      module = {
+        options.ai =
+          {
+            programs.${name} = mkProgramOption options "Portable defaults for the ${name} program integration.";
+          }
+          // lib.genAttrs supportedRuntimes (runtime: {
+            programs.${name} = mkProgramOption overrideOptions "${runtime} overrides for the ${name} program integration.";
+          });
+      };
+
+      resolve = config: runtime:
+        assert lib.assertMsg (builtins.elem runtime supportedRuntimes)
+        "Program `${name}` does not support runtime `${runtime}`.";
+          resolveTree
+          pools
+          []
+          options
+          config.ai.programs.${name}
+          config.ai.${runtime}.programs.${name};
     };
-
-    resolve = config: runtime:
-      assert lib.assertMsg (builtins.elem runtime supportedRuntimes)
-      "Program `${name}` does not support runtime `${runtime}`.";
-        resolveTree
-        pools
-        []
-        options
-        config.ai.programs.${name}
-        config.ai.${runtime}.programs.${name};
-  };
 }
