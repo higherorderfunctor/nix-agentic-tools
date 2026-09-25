@@ -65,34 +65,13 @@
   environmentVariables ? {},
 }: let
   mcpConfigPath = ''\''${${rootVar}}/${configDir}/mcp-config.json'';
-  addFlagsArg =
-    lib.optionalString mcp
-    ''--add-flags "--additional-mcp-config @${mcpConfigPath}"'';
-  setEnvArgs =
-    lib.concatStringsSep " "
-    (lib.mapAttrsToList
-      (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}")
-      environmentVariables);
-  # Filtered so an empty half never leaves a dangling continuation, and so the
-  # "nothing to wrap" case is decided by ONE condition rather than each backend
-  # re-deriving its own `needsWrapper`.
-  wrapArgs = lib.filter (a: a != "") [addFlagsArg setEnvArgs];
 in
-  if wrapArgs == []
-  then package
-  else
-    # `wrapProgram` (from `makeWrapper`) rather than a legacy inline bash
-    # heredoc. The legacy form wrote `$out` into the generated wrapper via a
-    # quoted `<< 'WRAPPER'` heredoc and relied on `$out` being set at RUNTIME,
-    # which it is not outside the nix build sandbox — a latent bug.
-    # `wrapProgram` resolves the target path at wrap time, substituting the
-    # real store path. Relocated here from mkCopilot.nix, which described this
-    # file's implementation from the caller's side.
-    pkgs.symlinkJoin {
-      name = "copilot-cli-wrapped";
-      paths = [package];
-      nativeBuildInputs = [pkgs.makeWrapper];
-      postBuild = ''
-        wrapProgram $out/bin/copilot ${lib.concatStringsSep " " wrapArgs}
-      '';
-    }
+  # The shared launcher returns the bare package when nothing needs wrapping.
+  # Imported by path: packages/copilot-cli/checks/copilot-wrapper-argv.nix
+  # calls this file with a `lib` that carries no `lib.ai`.
+  import ../../../lib/ai/launcher.nix pkgs {
+    inherit environmentVariables package;
+    exe = "copilot";
+    flags = lib.optional mcp ''--add-flags "--additional-mcp-config @${mcpConfigPath}"'';
+    name = "copilot-cli-wrapped";
+  }

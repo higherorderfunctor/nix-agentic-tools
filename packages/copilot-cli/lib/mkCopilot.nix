@@ -89,16 +89,15 @@
   # predicate to keep in sync across backends.
   copilotInstallPackageFor = rootVar: {
     cfg,
+    launcherEnvironment,
     mergedServers,
-    moduleEnvironmentVariables,
-    mergedEnvironmentVariables,
     ...
   }:
     wrapCopilotPackage {
       inherit (cfg) package configDir;
       inherit rootVar;
       mcp = mergedServers != {};
-      environmentVariables = moduleEnvironmentVariables // mergedEnvironmentVariables;
+      environmentVariables = launcherEnvironment;
     };
 in
   lib.ai.app.mkRuntime {
@@ -138,6 +137,14 @@ in
     defaults = {
       package = pkgs.ai.copilot-cli;
     };
+    # The builder declares these pool options, `environmentVariables` (baked
+    # into ./wrapPackage.nix on both backends) included, and expands
+    # `agentsDir` into `agents`; Copilot states where each one lands.
+    poolOptions = {
+      agents.description = "Agent Markdown or portable semantic records (HM: <configDir>/agents/<name>.md; devenv: <projectDir>/agents/<name>.agent.md). Null suppresses a root entry at the same key.";
+      agentsDir.description = "Directory of `.md` agent files (expanded into `ai.copilot.agents`).";
+      lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspFile` into the `lspServers` envelope: `<configDir>/lsp-config.json` under Home Manager, `<projectDir>/lsp.json` under devenv. Every entry must set `extensions`, because Copilot requires `fileExtensions`, and its name must be non-empty ASCII letters, digits, `_` and `-`, because Copilot rejects the whole file otherwise.";
+    };
     options = {
       # Keep the option visible in both backends even though only a project-local
       # devenv has a meaningful project root. Home Manager rejects non-default
@@ -169,43 +176,6 @@ in
         type = lib.types.attrsOf lib.types.anything;
         default = {};
         description = "Freeform Copilot settings; null leaves are dropped. Both backends reconcile the declared leaves on activation or shell entry and leave the keys Copilot writes itself alone. Home Manager owns them inside `settings.json` under `configDir`, which every Copilot mode reads. devenv owns them inside `.github/copilot/settings.json`, the fixed repository settings path (independent of `projectDir`). Copilot reads that file from the git root, only in a trusted folder, and reads its `effortLevel` only in interactive sessions. devenv rejects keys outside Copilot's repository schema, and values of the wrong kind, at evaluation. `ai.settings.reasoningEffort` lowers to `effortLevel` here at default priority.";
-      };
-      # Typed LSP server definitions, merged with the shared
-      # `ai.lspServers` pool and rendered by `mkCopilotLspFile`.
-      lspServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule);
-        default = {};
-        description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspFile` into the `lspServers` envelope: `<configDir>/lsp-config.json` under Home Manager, `<projectDir>/lsp.json` under devenv. Every entry must set `extensions`, because Copilot requires `fileExtensions`, and its name must be non-empty ASCII letters, digits, `_` and `-`, because Copilot rejects the whole file otherwise.";
-      };
-      # Baked into the symlinkJoin wrapper on BOTH backends. devenv used to
-      # populate its native `env` attrset instead, which exported them into the
-      # project shell rather than into Copilot. `attrsOf str` — matching the
-      # legacy surface exactly.
-      environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-        default = {};
-        description = "Environment variables baked into the copilot launcher wrapper. Scoped to the Copilot process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
-      };
-      # Inline agent markdown content. Written under
-      # `<configDir>/agents/<name>.md` in HM and
-      # `<projectDir>/agents/<name>.agent.md` in devenv. Per-runtime entries
-      # replace or suppress top-level `ai.agents`. Can also be populated
-      # from a directory via `agentsDir` below (same L2b→L3 pattern as
-      # `rulesDir` / `skillsDir`).
-      agents = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.ai.agent.agentType);
-        default = {};
-        description = "Agent Markdown or portable semantic records (HM: <configDir>/agents/<name>.md; devenv: <projectDir>/agents/<name>.agent.md). Null suppresses a root entry at the same key.";
-      };
-      # Directory of `.md` agent files. Each file becomes one entry
-      # in `ai.copilot.agents`, keyed by basename minus `.md`. Parity
-      # with `rulesDir` / `skillsDir`: expansion runs through the
-      # shared replacement semantics, and the on-disk emission dir is NOT taken
-      # over wholesale (other derivations may still contribute files alongside).
-      agentsDir = lib.mkOption {
-        type = lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).dirOptionType;
-        default = null;
-        description = "Directory of `.md` agent files (expanded into `ai.copilot.agents`).";
       };
     };
     # ONE delivery description for both backends.
@@ -271,16 +241,6 @@ in
           ];
         })
 
-        # L2b → L3: expand `ai.copilot.agentsDir` into `ai.copilot.agents`.
-        # mkDefault lets an explicit per-runtime value win, and the resulting
-        # entry replaces a same-key root agent — so `agents` and `agentsDir`
-        # are not mutually exclusive, they feed one pool.
-        (lib.mkIf (cfg.agentsDir != null) {
-          ai.copilot.agents = lib.mapAttrs (_: lib.mkDefault) (
-            lib.ai.agentsFromDir cfg.agentsDir
-          );
-        })
-
         # LSP servers, in the same `lspServers` envelope at both scopes. The
         # CLI reads its USER-level file, `~/.copilot/lsp-config.json`;
         # copilot-cli 1.0.88 also loads the REPOSITORY-level `.github/lsp.json`
@@ -337,18 +297,11 @@ in
         # rather than writing a HOME copy nothing reads.
         (lib.optionalAttrs (!isHm) (lib.mkMerge [
           {
-            ai.copilot.files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
-                content = lib.mkDefault {
-                  enable = true;
-                  text = lib.ai.transformers.copilot.render (rule
-                    // {
-                      paths = rule.matcher;
-                      text = aiCommon.readContent rule;
-                    });
-                };
-              })
-            mergedRules;
+            ai.copilot.files = aiCommon.mkRuleFiles {
+              path = name: "${cfg.projectDir}/instructions/${name}.instructions.md";
+              rules = mergedRules;
+              transformer = lib.ai.transformers.copilot.copilotTransformer;
+            };
           }
           (lib.mkIf hasMergedContext {
             ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" =
@@ -377,25 +330,18 @@ in
         # ownership it leaves an externally managed file untouched — which is
         # what a consumer enabling Copilot purely for MCP or skills fanout
         # needs, and what keeps a committed team file intact.
-        {
-          ai.copilot.activation.copilotSettingsMerge = {
-            entry = {
-              devenv = "ai:copilot:settings-merge";
-              hm = "copilotSettingsMerge";
-            };
-            ledgers.${settingsLedger} = {
-              codec = "json";
-              path = settingsPath;
-            };
+        (helpers.mkReconciledDocument {
+          content.value = settings;
+          entry = {
+            devenv = "ai:copilot:settings-merge";
+            hm = "copilotSettingsMerge";
           };
-          ai.copilot.files.${settingsPath} = {
-            content.value = settings;
-            entry = "copilotSettingsMerge";
-            facts.harnessWrites = true;
-            format = "json";
-            ledger = settingsLedger;
-          };
-        }
+          format = "json";
+          ledger = settingsLedger;
+          path = settingsPath;
+          runtime = "copilot";
+          writer = "copilotSettingsMerge";
+        })
 
         # The repository schema is narrower than the user one. A name outside
         # it has no effect and a mistyped value voids the whole file, so both

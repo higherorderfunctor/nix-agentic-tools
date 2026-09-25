@@ -6,8 +6,10 @@
 #
 # Input record shape: see mkRuntime.nix, which owns it. `checkRecord.nix`
 # rejects a backend spec carrying anything but `installPackage`,
-# `migrationConfig` and `options`, both there and here, because a record can
-# reach this transform without passing mkRuntime. This body reads `<backend>`
+# `migrationConfig` and `options`, and a `poolOptions` key no pool option here
+# reads, both there and here, because a record can reach this transform
+# without passing mkRuntime. It also rejects a stray field in what the
+# record's `sharedAgentsMd` callback returns. This body reads `<backend>`
 # for those three and ignores the other backend's spec: `installPackage` and
 # `migrationConfig` fall back to the record-level field, while `options` is
 # merged over the record's shared `options` rather than replacing them.
@@ -221,6 +223,18 @@
       type = lib.types.attrsOf lib.types.path;
     };
   };
+  checkRecord = import ./checkRecord.nix {inherit lib;};
+  # A per-runtime pool option the builder declares for a supported pool, with
+  # the record's `poolOptions.<pool>` merged over it, so a runtime states only
+  # what differs: its own description, or a native type (Codex's agents).
+  # `agentsDir` is opt-in by naming it there, because Codex consumes `agents`
+  # and deliberately has no directory form of it.
+  poolOptions = appRecord.poolOptions or {};
+  poolOption = pool: declaration:
+    lib.optionalAttrs (supportsPool pool) {
+      ${pool} = lib.mkOption ({default = {};} // declaration // poolOptions.${pool} or {});
+    };
+  hasAgentsDir = supportsPool "agents" && poolOptions ? agentsDir;
   normalizedPool = name: neutral:
     if supportsPool name
     then cfg.normalized.${name}
@@ -239,7 +253,7 @@
   # of an exported record, or a hand-built one), so its closed fields are
   # checked again here. Every backend-specific read goes through
   # `backendSpec`, and `backendOptions` is forced by every evaluation.
-  backendSpec = assert import ./checkRecord.nix {inherit lib;} appRecord;
+  backendSpec = assert checkRecord.record appRecord;
     appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
   # Delivery is described once, on the record. Installation and migration
@@ -258,9 +272,21 @@
   # never reads this, but a surface one backend genuinely does not have — a
   # document only Home Manager reconciles, a path only the project tree has —
   # has to be able to say so.
+  #
+  # `launcherEnvironment` is everything a launcher bakes into its runtime's
+  # own process, merged in ONE order for every runtime: module defaults, then
+  # `SHELL` from the resolved shell, then the consumer's pool LAST, so an
+  # explicit entry (`environmentVariables.SHELL` included) wins. Claude has
+  # no launcher and lowers the parts into `settings.env` instead.
   callbackArgs = {
     inherit backend cfg config moduleEnvironmentVariables;
     inherit (cfg) normalized;
+    launcherEnvironment =
+      moduleEnvironmentVariables
+      // lib.optionalAttrs (callbackArgs.resolvedShell != null) {
+        SHELL = lib.getExe callbackArgs.resolvedShell;
+      }
+      // callbackArgs.mergedEnvironmentVariables;
     hasMergedContext = normalizedHasContext;
     mergedAgents = normalizedPool "agents" {};
     mergedContext = normalizedPool "context" null;
@@ -274,6 +300,38 @@
     topHooks = normalizedPool "hooks" {};
   };
   customConfig = configFn callbackArgs;
+  # A runtime that reads the repository AGENTS.md contributes to its one
+  # owner (sharedAgentsMd.nix) on devenv: its merged context plus the rules
+  # and limit its record's `sharedAgentsMd` callback returns, each runtime
+  # keeping its own rule policy. The key is published whether or not it has
+  # content, for observers such as file-warnings.nix. A limit is published
+  # with it too, because the runtime reads the file whoever wrote it.
+  sharedAgentsMdConfig = lib.optionalAttrs (backend == "devenv" && appRecord ? sharedAgentsMd) (let
+    # Read by field, so a stray one is rejected rather than dropped.
+    shared = let
+      result = appRecord.sharedAgentsMd callbackArgs;
+    in
+      assert checkRecord.sharedAgentsMd appRecord.name result; result;
+    rules = shared.rules or {};
+    hasContent = normalizedHasContext || rules != {};
+  in {
+    ai.internal.agentsMdTargets.${appRecord.name} = shared.key;
+    ai.internal.agentsMd = lib.mkIf (hasContent || shared ? maxBytes) {
+      ${shared.key} =
+        {
+          # A limit alone must yield to content another runtime supplies.
+          hasContent =
+            if hasContent
+            then true
+            else lib.mkDefault false;
+          inherit rules;
+        }
+        // lib.optionalAttrs (shared ? maxBytes) {inherit (shared) maxBytes;}
+        // lib.optionalAttrs normalizedHasContext {
+          context = aiCommon.readContent callbackArgs.mergedContext;
+        };
+    };
+  });
   migrationConfig = migrationConfigFn callbackArgs;
   # Repository AGENTS.md targets have one cross-runtime owner. Public file
   # entries for those paths arbitrate inside sharedAgentsMd.nix;
@@ -469,6 +527,26 @@ in {
         description = "${appRecord.name}-specific MCP servers. Entries replace top-level ai.mcpServers at the same key; null suppresses an inherited server.";
       };
     }
+    // poolOption "agents" {
+      type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
+      description = "${appRecord.name}-specific agents. Entries replace top-level ai.agents at the same key; null suppresses an inherited agent.";
+    }
+    // lib.optionalAttrs hasAgentsDir {
+      agentsDir = lib.mkOption ({
+          type = lib.types.nullOr aiCommon.dirOptionType;
+          default = null;
+          description = "Directory of `.md` agent files, expanded into `ai.${appRecord.name}.agents` keyed by basename minus `.md`.";
+        }
+        // poolOptions.agentsDir);
+    }
+    // poolOption "environmentVariables" {
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+      description = "Environment variables baked into the ${appRecord.name} launcher wrapper. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
+    }
+    // poolOption "lspServers" {
+      type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
+      description = "${appRecord.name}-specific LSP servers. Entries replace top-level ai.lspServers at the same key; null suppresses an inherited server.";
+    }
     // lib.optionalAttrs (supportsPool "settings") {
       settings = lib.mkOption {
         type = aiCommon.normalizedSettingsType;
@@ -579,6 +657,11 @@ in {
         dirHelpers.rulesFromDir cfg.rulesDir
       );
     }))
+    (lib.optionalAttrs hasAgentsDir (lib.mkIf (cfg.agentsDir != null) {
+      ai.${appRecord.name}.agents = lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.agentsFromDir cfg.agentsDir
+      );
+    }))
     (lib.optionalAttrs (supportsPool "skills") (lib.mkIf (cfg.skillsDir != null) {
       ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
         dirHelpers.skillsFromDir cfg.skillsDir
@@ -587,6 +670,7 @@ in {
     (lib.mkIf cfg.enable (lib.mkMerge [
       packageInstallConfig
       customConfig
+      sharedAgentsMdConfig
     ]))
     # Lower once, including retirement writers declared by migrationConfig.
     # Disabling a runtime removes every file claim and every ordinary writer;

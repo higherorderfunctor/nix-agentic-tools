@@ -631,8 +631,8 @@ in {
     # It used to assert "is the unwrapped package", which was a proxy for the
     # same thing and stopped being true on 2026-08-10: Codex is now wrapped to
     # carry process ENVIRONMENT (`SHELL` from `ai.shell`, `GIT_SSH_COMMAND`
-    # from `gitSshConfigWorkaround`) — see packages/chatgpt-codex/lib/wrapPackage.nix,
-    # which only ever emits `--set`. An env-only wrapper cannot reintroduce the
+    # from `gitSshConfigWorkaround`) — see lib/ai/launcher.nix, which Codex's
+    # launcher calls with no flags and so only ever emits `--set`. An env-only wrapper cannot reintroduce the
     # profile, so the guard now tests the hazard directly instead of the proxy.
     nat_codex_bin="$(command -v codex)"
     test -n "$nat_codex_bin" || { echo "FAIL: Codex is not on PATH"; exit 1; }

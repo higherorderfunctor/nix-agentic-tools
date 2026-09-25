@@ -1,4 +1,5 @@
 # Factory contracts for this owner or shared primitive.
+# cspell:ignore agnets maxbytes
 {
   lib,
   pkgs,
@@ -58,6 +59,90 @@ in {
         && rejected (base // {defaults.outputPath = null;})
         && (builtins.tryEval (ai.app.mkRuntime (base // {config = _: {};}))).success
         && (builtins.tryEval (ai.app.mkRuntime (base // {hm.installPackage = null;}))).success
+    );
+
+    # The record's `poolOptions` and the value its `sharedAgentsMd` callback
+    # returns are read by name, so a key nothing reads would be dropped with
+    # no error: a misspelt pool, a pool the builder does not declare
+    # (`hooks`), one the record does not support, `agentsDir` without
+    # `agents`, or a stray callback field such as `context` or `maxbytes`.
+    # Each must fail, `poolOptions` both where the record is built and where a
+    # transform reads it. The well-formed record, every callback field, and a
+    # bare `key` are the positive controls.
+    factory-mkRuntime-rejects-unread-record-keys = mkTest "mkRuntime-rejects-unread-record-keys" (
+      let
+        base = {
+          inherit pkgs;
+          name = "testapp";
+          supportedPools = ["agents" "lspServers" "rules"];
+          defaults.package = pkgs.hello;
+          poolOptions = {
+            agents.description = "Test agents.";
+            agentsDir.description = "Test agents directory.";
+            lspServers.description = "Test LSP servers.";
+          };
+        };
+        built = ai.app.mkRuntime base;
+        rejected = record: !(builtins.tryEval (ai.app.mkRuntime record)).success;
+        evaluate = backend: record:
+          (lib.evalModules {
+            modules = [
+              ai.sharedOptions
+              (
+                if backend == "hm"
+                then hmStubs
+                else devenvStubs
+              )
+              (ai.app.${backend + "Transform"} record)
+              {config.ai.testapp.enable = true;}
+            ];
+          })
+          .config;
+        transformed = backend: record: builtins.tryEval (evaluate backend record).ai.testapp.enable;
+        withPoolOptions = poolOptions: base // {poolOptions = base.poolOptions // poolOptions;};
+        agentsMdTarget = sharedAgentsMd:
+          builtins.tryEval
+          (evaluate "devenv" (ai.app.mkRuntime (base // {inherit sharedAgentsMd;})))
+          .ai
+          .internal
+          .agentsMdTargets
+          .testapp;
+        rejectedResult = result: !(agentsMdTarget (_: result)).success;
+        publishes = result:
+          agentsMdTarget (_: result)
+          == {
+            success = true;
+            value = "AGENTS.md";
+          };
+      in
+        rejected (withPoolOptions {agnets.description = "misspelt";})
+        && rejected (withPoolOptions {environmentVariables.description = "unsupported";})
+        && rejected (withPoolOptions {hooks.description = "undeclared";} // {supportedPools = base.supportedPools ++ ["hooks"];})
+        && rejected (base
+          // {
+            supportedPools = ["lspServers"];
+            poolOptions.agentsDir.description = "no agents pool";
+          })
+        && lib.all (backend:
+          !(transformed backend (built // {poolOptions = built.poolOptions // {agnets = {};};})).success
+          && (transformed backend built).success)
+        ["devenv" "hm"]
+        && (evaluate "hm" built).ai.testapp.agentsDir == null
+        && rejectedResult {
+          key = "AGENTS.md";
+          maxbytes = 1;
+        }
+        && rejectedResult {
+          key = "AGENTS.md";
+          context = "stray";
+        }
+        && rejectedResult {rules = {};}
+        && publishes {key = "AGENTS.md";}
+        && publishes {
+          key = "AGENTS.md";
+          maxBytes = 1024;
+          rules = {};
+        }
     );
 
     factory-mkRuntime-hmTransform-exists = mkTest "mkRuntime-hmTransform-exists" (

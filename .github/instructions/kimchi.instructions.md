@@ -26,9 +26,10 @@ applyTo: "packages/kimchi/**"
 > hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
 > `trust.json.lock`; an ungated HM `kimchiConfigMode` writer narrows the
 > credential-bearing user `config.json` to owner-only; `mkPrep` builds only the
-> launcher, and one record-level `config` and `installPackage` serve both
-> backends. Full lineage:
-> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> launcher, from the builder's `launcherEnvironment`, and one record-level
+> `config` and `installPackage` serve both backends; the builder publishes
+> devenv context to the shared root `AGENTS.md` from `sharedAgentsMd`. Full
+> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -255,7 +256,8 @@ Everything else Kimchi delivers except agents (below) is immutable and
 symlink-readable, so it takes both defaults and states no fact at all.
 Normalized context renders into the `ai.kimchi.files` map on Home Manager.
 Devenv context joins the single root `AGENTS.md` owner shared with Codex and
-Kiro. In either backend, the generated body is a default on the entry's
+Kiro, through the record's `sharedAgentsMd`, which names that fixed key and no
+rules. In either backend, the generated body is a default on the entry's
 `content` option, so a consumer can replace or suppress it. When root and
 Kimchi-specific context are both configured, their bodies concatenate
 root-first. Home Manager honors `ai.kimchi.context.filename`; devenv always
@@ -337,9 +339,10 @@ would widen the agent and translating it would fail silently), and root Markdown
 model id). Markdown under `ai.kimchi.agents` or `ai.kimchi.agentsDir` is
 Kimchi's own and lands verbatim. A path-like entry, a store-path string such as
 a flake input's `"${src}/a.md"` included, is copied from that source by
-`lib.ai.agent.isPathLike`; `builtins.isPath` alone would write the path itself
-as the agent's text. Locked by `module-kimchi-agents-rejected` and, for the
-string form on both backends, `module-kimchi-agents`.
+`lib.ai.agent.fileContent`, which tests `isPathLike`; `builtins.isPath` alone
+would write the path itself as the agent's text. Locked by
+`module-kimchi-agents-rejected` and, for the string form on both backends,
+`module-kimchi-agents`.
 
 ## Hooks: project `hooks.json` only
 
@@ -428,10 +431,13 @@ transforms do not apply to it.
 
 ## Shared prep
 
-`mkPrep` (top-level `let`) builds the wrapped launcher from the effective env,
-the credential export and, on devenv, the exact-cwd guard. The one record-level
-`installPackage` calls it; the delivery function computes its own filtered
-settings and context entry, because it never installs the package.
+`mkPrep` (top-level `let`) builds the wrapped launcher from the builder's
+`launcherEnvironment` plus Kimchi's typed variables, the credential export and,
+on devenv, the exact-cwd guard. The one `installPackage` callback calls it; the
+delivery function computes its own filtered settings and context entry, because
+it never installs the package. The wrapper stays a local `symlinkJoin` rather
+than `lib.ai.mkLauncher`: its `postBuild` uses a continued line, and moving it
+would change the wrapper's store path.
 
 ## Source packaging
 

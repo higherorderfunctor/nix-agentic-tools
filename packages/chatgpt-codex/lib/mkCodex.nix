@@ -12,45 +12,25 @@
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-  # Launcher wrapper — see ./wrapPackage.nix for why Codex needs one at all.
-  wrapCodexPackage = import ./wrapPackage.nix {inherit lib pkgs;};
-
-  # Everything destined for Codex's own process environment: the merged
-  # `environmentVariables` pool plus `ai.shell`. Codex reads `SHELL` from its
-  # process environment and has no config key for it — `shell_environment_policy`
-  # governs what SPAWNED commands inherit, which is a different thing.
-  #
-  # Ordering is the contract, and it is the same one Claude and Kiro use:
-  # module-contributed defaults first, the consumer's own pool LAST, so an
-  # explicit `environmentVariables.SHELL` wins.
-  #
-  # This previously applied `resolvedShell` last, on the reasoning that the
-  # typed option is the more specific surface. That was defensible in
-  # isolation and wrong in aggregate: Claude (`settings.env`, mkDefault) and
-  # Kiro both let the explicit entry win, so the same two-key config resolved
-  # differently depending on which runtime the consumer happened to name.
-  # One rule everywhere beats a better rule in one place.
-  codexPackageFor = cfg: moduleEnvironmentVariables: mergedEnvironmentVariables: resolvedShell:
-    wrapCodexPackage {
-      inherit (cfg) package;
-      environmentVariables =
-        moduleEnvironmentVariables
-        // lib.optionalAttrs (resolvedShell != null) {
-          SHELL = lib.getExe resolvedShell;
-        }
-        // mergedEnvironmentVariables;
-    };
-  # Adapter onto the shared transform's `installPackage` hook, which hands
-  # every backend the same callback args as `config`. Both backends install
-  # the identical wrapper, so it is derived once here.
+  # Codex's launcher, installed identically by both backends. Codex takes its
+  # command shell from `SHELL` in its OWN process environment (via
+  # `portable_pty`) and has no config key for it: `shell_environment_policy`
+  # filters what SPAWNED commands inherit, which is a different thing. So the
+  # launcher is the only declarative place for it and for the rest of the
+  # environment pool. When `SHELL` is unset or not executable Codex falls back
+  # to the PASSWORD-DATABASE shell, so leaving it unset is not neutral. With
+  # nothing to bake in, the bare upstream package is installed.
   codexInstallPackage = {
     cfg,
-    moduleEnvironmentVariables,
-    mergedEnvironmentVariables,
-    resolvedShell,
+    launcherEnvironment,
     ...
   }:
-    codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;
+    lib.ai.mkLauncher pkgs {
+      environmentVariables = launcherEnvironment;
+      exe = "codex";
+      name = "chatgpt-codex-wrapped";
+      inherit (cfg) package;
+    };
   jsonFormat = pkgs.formats.json {};
   tomlFormat = pkgs.formats.toml {};
 
@@ -190,17 +170,15 @@
   approvalPolicyNames = rootFlagValues "--ask-for-approval";
   sandboxModeNames = rootFlagValues "--sandbox";
   codexAgentType = agent.mkSemanticAgentType tomlFormat.type;
-  codexHookHandlerType = lib.types.submodule {
+  # The portable command handler plus Codex's own fields; other JSON fields
+  # remain a native escape hatch through the freeform tail.
+  codexHookHandlerType = aiTypes.extendSubmodule sharedHooks.portableHandlerType {
     freeformType = jsonFormat.type;
     options = {
       additionalContextLimit = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.unsigned;
         default = null;
         description = "Approximate token threshold for large additionalContext output; zero disables truncation.";
-      };
-      command = lib.mkOption {
-        type = sharedHooks.commandType;
-        description = "Command executed for this hook; packages resolve to their executable store path.";
       };
       commandWindows = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -215,31 +193,12 @@
         default = {};
         description = "Optional status text displayed while the hook runs.";
       };
-      timeout = lib.mkOption {
-        type = lib.types.nullOr lib.types.ints.positive;
-        default = null;
-        description = "Per-handler timeout in seconds.";
-      };
-      type = lib.mkOption {
-        type = lib.types.enum ["command"];
-        default = "command";
-        description = "Codex currently executes command handlers only.";
-      };
     };
   };
-  codexHookMatcherBlockType = lib.types.submodule {
-    options = {
-      hooks = lib.mkOption {
-        type = lib.types.listOf codexHookHandlerType;
-        default = [];
-        description = "Command handlers Codex runs for this matcher group.";
-      };
-      matcher = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Optional regular-expression matcher restricting this hook group.";
-      };
-    };
+  codexHookMatcherBlockType = sharedHooks.mkMatcherBlockType {
+    handler = codexHookHandlerType;
+    hooks = "Command handlers Codex runs for this matcher group.";
+    matcher = "Optional regular-expression matcher restricting this hook group.";
   };
   approvalPolicyType =
     lib.types.either
@@ -787,9 +746,8 @@
     (lib.filterAttrs (_: agent.isSemantic) agents);
 
   # Lower Codex's typed statusMessage to its text, then render through the
-  # shared renderer, which drops a null field. Keep the presence guard for
-  # portable handlers that omit this Codex-only field. The shared type rejects
-  # enabled empty text, so this lowering only checks whether it is enabled.
+  # shared renderer, which drops a null field. A portable handler has no such
+  # field, so it lowers as a disabled one.
   renderHooks = hooks:
     sharedHooks.render (lib.mapAttrs (_event:
       map (block:
@@ -798,10 +756,7 @@
           hooks = map (handler:
             handler
             // {
-              statusMessage =
-                if handler ? statusMessage && handler.statusMessage.enable
-                then handler.statusMessage.text
-                else null;
+              statusMessage = aiTypes.enabledTextOrNull (handler.statusMessage or {enable = false;});
             })
           block.hooks;
         }))
@@ -815,31 +770,6 @@
       context = aiCommon.readContent mergedContext;
       rules = lib.mapAttrs mkRuleBody mergedRules;
     };
-
-  mkSizeAssertion = {
-    cfg,
-    finalEntry,
-  }: let
-    finalText =
-      if finalEntry == null
-      then null
-      else aiTypes.textSourceInlineText finalEntry.content;
-    renderedBytes =
-      if finalText == null
-      then 0
-      else builtins.stringLength finalText;
-  in {
-    # Store-backed sources stay lazy: reading a derivation output here would
-    # introduce IFD. Inline generated/replacement content is checked after B7
-    # arbitration; disabled and source entries do not force discarded text.
-    assertion = finalText == null || renderedBytes <= cfg.projectDocMaxBytes;
-    message = ''
-      Codex AGENTS.md renders to ${toString renderedBytes} bytes, exceeding
-      ai.codex.projectDocMaxBytes (${toString cfg.projectDocMaxBytes} bytes).
-      Trim or replace the final inline content, or raise
-      ai.codex.projectDocMaxBytes.
-    '';
-  };
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -858,18 +788,21 @@ in
       "skills"
     ];
     defaults.package = pkgs.ai.chatgpt-codex;
+    # The builder declares `environmentVariables` (baked into the launcher,
+    # never the project shell) and `agents`, typed here with the Codex extension.
+    poolOptions.agents = {
+      type = lib.types.attrsOf (lib.types.nullOr codexAgentType);
+      description = ''
+        Codex-specific semantic agents replace portable `ai.agents` entries
+        at the same key; null suppresses an inherited agent. Each record
+        becomes one standalone TOML layer under the active config directory's
+        `agents/` child. Put normal Codex config keys such as model,
+        model_reasoning_effort, sandbox_mode, mcp_servers, and skills.config
+        under the record's `codex` extension.
+      '';
+    };
 
     options = {
-      # Baked into the launcher wrapper (./wrapPackage.nix), so the value
-      # lands on Codex's own process and the commands it spawns — never in
-      # the project shell or the user's session. Codex has no config-file
-      # surface for its process environment; `shell_environment_policy`
-      # filters what SPAWNED commands inherit, which is a different thing.
-      environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-        default = {};
-        description = "Environment variables baked into the codex launcher wrapper. Scoped to the Codex process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
-      };
       configDir = lib.mkOption {
         type = lib.types.addCheck lib.types.str (value:
           value
@@ -880,18 +813,6 @@ in
         description = ''
           Codex configuration directory relative to HOME. Home Manager writes
           global AGENTS.md here; devenv uses project-root AGENTS.md instead.
-        '';
-      };
-      agents = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr codexAgentType);
-        default = {};
-        description = ''
-          Codex-specific semantic agents replace portable `ai.agents` entries
-          at the same key; null suppresses an inherited agent. Each record
-          becomes one standalone TOML layer under the active config directory's
-          `agents/` child. Put normal Codex config keys such as model,
-          model_reasoning_effort, sandbox_mode, mcp_servers, and skills.config
-          under the record's `codex` extension.
         '';
       };
       execpolicyRules = lib.mkOption {
@@ -951,6 +872,16 @@ in
 
     installPackage = codexInstallPackage;
     migrationConfig = codexExecpolicyWriterConfig;
+    # Every rule, scope-prefixed, under Codex's size limit.
+    sharedAgentsMd = {
+      cfg,
+      mergedRules,
+      ...
+    }: {
+      key = cfg.context.filename;
+      maxBytes = cfg.projectDocMaxBytes;
+      rules = lib.mapAttrs mkRuleBody mergedRules;
+    };
     config = {
       backend,
       cfg,
@@ -966,9 +897,6 @@ in
       ...
     }: let
       isHm = backend == "hm";
-      # The shared repository AGENTS.md key devenv writes this runtime's
-      # context and rules into.
-      projectContextKey = cfg.context.filename;
       nativeDir = nativeDirFor backend cfg;
       configFile = "${nativeDir}/config.toml";
       # The TOML ledger directory and name are a live migration contract: every
@@ -1062,9 +990,16 @@ in
               }
             ]
             ++ lib.optionals isHm [
-              (mkSizeAssertion {
-                inherit cfg;
-                finalEntry = finalAgentsMdEntry;
+              # Checked after B7 arbitration, on the final inline content.
+              (aiCommon.sizeAssertion {
+                entry = finalAgentsMdEntry;
+                maxBytes = cfg.projectDocMaxBytes;
+                message = size: ''
+                  Codex AGENTS.md renders to ${toString size} bytes, exceeding
+                  ai.codex.projectDocMaxBytes (${toString cfg.projectDocMaxBytes} bytes).
+                  Trim or replace the final inline content, or raise
+                  ai.codex.projectDocMaxBytes.
+                '';
               })
               {
                 assertion = !(cfg.execpolicyRules ? default);
@@ -1139,77 +1074,55 @@ in
           );
         }
 
-        (lib.optionalAttrs isHm {
+        (lib.optionalAttrs isHm (lib.mkMerge [
           # The user config is not wholly declarative: Codex's trust prompt
           # persists project decisions here via config/batchWrite. Reconcile
           # only Nix-owned leaves, retaining native trust/MCP/feature siblings.
           # The TOML codec selects tomlkit to preserve comments and ordering.
           # New files are writable 0600; existing files retain their mode.
-          # Keep the writer AND the document when settings are empty so old
-          # leaves retract, while a first empty generation remains a no-op.
-          ai.codex.activation.codexSettingsReconcile.ledgers.${settingsLedger} = {
-            codec = "toml";
+          # A first empty generation remains a no-op.
+          (helpers.mkReconciledDocument {
+            # Ordinary leaves retain generated siblings when a consumer
+            # extends this document; a whole-content default discards them.
+            content.value = settings;
+            format = "toml";
+            ledger = settingsLedger;
             path = configFile;
-          };
-          ai.codex.files = lib.mkMerge [
-            {
-              ${configFile} = {
-                # Ordinary leaves retain generated siblings when a consumer
-                # extends this document; a whole-content default discards them.
-                content.value = settings;
-                entry = "codexSettingsReconcile";
-                facts.harnessWrites = true;
-                format = "toml";
-                ledger = settingsLedger;
-              };
-            }
-            (lib.mkIf hasAgentsMdContent {
-              # The ONE generated entry whose priority stays on the whole entry
-              # rather than moving onto `content`. Deciding between enabled and
-              # empty generated content reads the COMPOSED body, and the body may
-              # come from a store source a consumer has already replaced. The
-              # `mkDefault` wrapper lets priority filtering discard that source
-              # unread. A consumer defining only a sibling field therefore must
-              # also restate content; validation diagnoses an empty survivor.
-              ${agentsMdTarget} = lib.mkDefault (
-                if agentsMd == ""
-                then {
-                  content = {
-                    enable = false;
-                    text = agentsMd;
-                  };
-                }
-                else {
-                  content = {
-                    enable = true;
-                    text = agentsMd;
-                  };
-                }
-              );
-            })
-          ];
-        })
-        (lib.optionalAttrs (!isHm) {
-          ai = {
-            codex.files.${configFile} = lib.mkIf (settings != {}) {
-              # Project config stays wholly Nix-owned: it is already trust-gated,
-              # and no project-local Codex writer has been observed. Preserve the
-              # generator name as well as the bytes so its store path stays fixed.
-              content = lib.mkDefault {source = tomlFormat.generate "codex-project-config.toml" settings;};
-              executable = null;
-            };
-            # The key this factory writes, published for observers such as
-            # file-warnings.nix, whether or not it has content this evaluation.
-            internal.agentsMdTargets.codex = projectContextKey;
-            internal.agentsMd.${projectContextKey} =
-              {
-                hasContent = lib.mkDefault hasAgentsMdContent;
-                maxBytes = cfg.projectDocMaxBytes;
-                rules = lib.mapAttrs mkRuleBody mergedRules;
+            runtime = "codex";
+            writer = "codexSettingsReconcile";
+          })
+          (lib.mkIf hasAgentsMdContent {
+            # The ONE generated entry whose priority stays on the whole entry
+            # rather than moving onto `content`. Deciding between enabled and
+            # empty generated content reads the COMPOSED body, and the body may
+            # come from a store source a consumer has already replaced. The
+            # `mkDefault` wrapper lets priority filtering discard that source
+            # unread. A consumer defining only a sibling field therefore must
+            # also restate content; validation diagnoses an empty survivor.
+            ai.codex.files.${agentsMdTarget} = lib.mkDefault (
+              if agentsMd == ""
+              then {
+                content = {
+                  enable = false;
+                  text = agentsMd;
+                };
               }
-              // lib.optionalAttrs hasMergedContext {
-                context = aiCommon.readContent mergedContext;
-              };
+              else {
+                content = {
+                  enable = true;
+                  text = agentsMd;
+                };
+              }
+            );
+          })
+        ]))
+        (lib.optionalAttrs (!isHm) {
+          ai.codex.files.${configFile} = lib.mkIf (settings != {}) {
+            # Project config stays wholly Nix-owned: it is already trust-gated,
+            # and no project-local Codex writer has been observed. Preserve the
+            # generator name as well as the bytes so its store path stays fixed.
+            content = lib.mkDefault {source = tomlFormat.generate "codex-project-config.toml" settings;};
+            executable = null;
           };
         })
       ];

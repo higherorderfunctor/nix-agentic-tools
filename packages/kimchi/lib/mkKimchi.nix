@@ -73,8 +73,7 @@
   # runtime secret export and, on devenv, the exact-cwd guard.
   mkPrep = {
     cfg,
-    mergedEnvironmentVariables,
-    moduleEnvironmentVariables ? {},
+    launcherEnvironment,
     requiredProjectRoot ? null,
   }: let
     # Non-secret env vars — baked into the wrapper via `--set`.
@@ -86,10 +85,11 @@
           then "1"
           else "0";
       };
-    # Module-contributed defaults (e.g. the sandbox-safe GIT_SSH_COMMAND) sit
-    # UNDER the consumer's pool, matching every other harness. `kimchiEnvVars`
-    # stays last: those are derived from typed options, not free-form entries.
-    effectiveEnvVars = moduleEnvironmentVariables // mergedEnvironmentVariables // kimchiEnvVars;
+    # The builder's `launcherEnvironment` keeps module defaults (e.g. the
+    # sandbox-safe GIT_SSH_COMMAND) under the consumer's pool, as for every
+    # harness. `kimchiEnvVars` stays last: those are derived from typed
+    # options, not free-form entries.
+    effectiveEnvVars = launcherEnvironment // kimchiEnvVars;
 
     # The Cast AI key is a secret: read it from its decrypted file (or
     # helper) at launch via the repo's shared credential snippet, so it is
@@ -119,6 +119,8 @@
       ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}"
       ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
 
+    # Not `lib.ai.mkLauncher`: that one writes `wrapProgram` on one line, and
+    # moving this continued form onto it would change the wrapper's store path.
     wrappedPackage = pkgs.symlinkJoin {
       name = "kimchi-wrapped";
       paths = [cfg.package];
@@ -143,10 +145,9 @@
     backend,
     cfg,
     config,
+    launcherEnvironment,
     mergedAgents,
-    mergedEnvironmentVariables,
     mergedServers,
-    moduleEnvironmentVariables,
     topHooks,
     ...
   }: let
@@ -160,7 +161,7 @@
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
-      inherit cfg mergedEnvironmentVariables moduleEnvironmentVariables;
+      inherit cfg launcherEnvironment;
       requiredProjectRoot =
         if backend == "devenv" && hasExactCwdProjectFiles
         then config.devenv.root
@@ -261,27 +262,12 @@
     # an empty declaration RETIRES whatever the previous generation owned,
     # which is the whole reason the writer is an identity rather than a
     # product of the files that happen to exist, on either backend.
-    document = {
-      entry,
-      ledger,
-      path,
-      value ? null,
-      run ? null,
-    }: {
-      ai.kimchi.files.${path} = {
-        inherit entry ledger;
-        # `value` or `run` IS the content form for this entry. The text/source
-        # form stays off because nothing defines it; `enable` is deliberately
-        # NOT stated, since a defined `content.enable = false` suppresses the
-        # whole entry, `run` and `value` included (runtime-files.nix isLive).
-        content =
-          if run != null
-          then {inherit run;}
-          else {inherit value;};
-        facts.harnessWrites = true;
-        format = "json";
-      };
-    };
+    document = args:
+      helpers.mkReconciledDocument ({
+          format = "json";
+          runtime = "kimchi";
+        }
+        // args);
   in
     lib.mkMerge [
       # Three writers, three entry names — deliberately NOT one bundle of
@@ -334,61 +320,18 @@
               Home Manager delivers these declaratively by reconciling config.json and harness/settings.json; a /nix/store symlink would break Kimchi's runtime writes. Configuring inside Kimchi persists the decision or setting in its user-global harness files.
             '';
           };
-        ai.kimchi.activation = {
-          kimchiConfigMerge = {
-            # Devenv requires a namespace; HM ordering names stay stable.
-            entry = {
-              devenv = "ai:kimchi:config-merge";
-              hm = "kimchiConfigMerge";
-            };
-            ledgers.${ledgerFor "config" configPath} = {
-              codec = "json";
-              path = configPath;
-            };
+        # A directory of whole files; Home Manager needs the second entry
+        # that deletes a retired real file before checkLinkTargets.
+        ai.kimchi.activation.kimchiAgents = {
+          entry = {
+            devenv = "ai:kimchi:agents";
+            hm = "kimchiAgents";
           };
-          kimchiHarnessSettingsMerge = {
-            entry = {
-              devenv = "ai:kimchi:harness-settings-merge";
-              hm = "kimchiHarnessSettingsMerge";
-            };
-            ledgers.${ledgerFor "harness-settings" harnessSettingsPath} = {
-              codec = "json";
-              path = harnessSettingsPath;
-            };
+          ledgers.${agentsLedger} = {
+            codec = "dir";
+            path = agentsDir;
           };
-          kimchiMcpMerge = {
-            entry = {
-              devenv = "ai:kimchi:mcp-merge";
-              hm = "kimchiMcpMerge";
-            };
-            ledgers.${ledgerFor "mcp" mcpPath} = {
-              codec = "json";
-              path = mcpPath;
-            };
-          };
-          kimchiPermissionsMerge = {
-            entry = {
-              devenv = "ai:kimchi:permissions-merge";
-              hm = "kimchiPermissionsMerge";
-            };
-            ledgers.${ledgerFor "permissions" permissionsPath} = {
-              codec = "json";
-              path = permissionsPath;
-            };
-          };
-          # A directory of whole files; Home Manager needs the second entry
-          # that deletes a retired real file before checkLinkTargets.
-          kimchiAgents = {
-            entry = {
-              devenv = "ai:kimchi:agents";
-              hm = "kimchiAgents";
-            };
-            ledgers.${agentsLedger} = {
-              codec = "dir";
-              path = agentsDir;
-            };
-            pruneEntry = "kimchiAgentsPrune";
-          };
+          pruneEntry = "kimchiAgentsPrune";
         };
       }
 
@@ -401,10 +344,15 @@
       })
 
       (document {
-        entry = "kimchiConfigMerge";
+        content.value = filteredSettings;
+        # Devenv requires a namespace; HM ordering names stay stable.
+        entry = {
+          devenv = "ai:kimchi:config-merge";
+          hm = "kimchiConfigMerge";
+        };
         ledger = ledgerFor "config" configPath;
         path = configPath;
-        value = filteredSettings;
+        writer = "kimchiConfigMerge";
       })
 
       # The user config.json holds `apiKey` and `gitTokens`. The merge writer
@@ -421,10 +369,14 @@
       })
 
       (document {
-        entry = "kimchiHarnessSettingsMerge";
+        content.value = filteredHarnessSettings;
+        entry = {
+          devenv = "ai:kimchi:harness-settings-merge";
+          hm = "kimchiHarnessSettingsMerge";
+        };
         ledger = ledgerFor "harness-settings" harnessSettingsPath;
         path = harnessSettingsPath;
-        value = filteredHarnessSettings;
+        writer = "kimchiHarnessSettingsMerge";
       })
 
       # mcp.json — Claude-compatible format, and harness-written. Kimchi
@@ -437,12 +389,16 @@
       # the declared servers are owned by leaf: a migrated server or a
       # `disabled` toggle is an unowned sibling the reconciler keeps.
       (document {
-        entry = "kimchiMcpMerge";
-        ledger = ledgerFor "mcp" mcpPath;
-        path = mcpPath;
-        value = lib.optionalAttrs (mergedServers != {}) {
+        content.value = lib.optionalAttrs (mergedServers != {}) {
           mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
         };
+        entry = {
+          devenv = "ai:kimchi:mcp-merge";
+          hm = "kimchiMcpMerge";
+        };
+        ledger = ledgerFor "mcp" mcpPath;
+        path = mcpPath;
+        writer = "kimchiMcpMerge";
       })
 
       # permissions.json — `/permissions … save user|project` rewrites the
@@ -450,10 +406,14 @@
       # commands.ts:234-237, config.ts:153), so the declared keys are owned by
       # leaf like the other three documents.
       (document {
-        entry = "kimchiPermissionsMerge";
+        content.value = aiCommon.filterNulls cfg.permissions;
+        entry = {
+          devenv = "ai:kimchi:permissions-merge";
+          hm = "kimchiPermissionsMerge";
+        };
         ledger = ledgerFor "permissions" permissionsPath;
         path = permissionsPath;
-        value = aiCommon.filterNulls cfg.permissions;
+        writer = "kimchiPermissionsMerge";
       })
 
       # trust.json — Kimchi's trust prompt rewrites it in place with
@@ -465,52 +425,29 @@
       # document declares `run` rather than `value`. Declared even when empty,
       # so removing the last entry retracts it. Home Manager only: devenv
       # rejects the option in the assertions above.
-      (lib.mkIf (!isDevenv) (lib.mkMerge [
-        {
-          ai.kimchi.activation.kimchiProjectTrustMerge = {
-            entry = "kimchiProjectTrustMerge";
-            ledgers.${ledgerFor "project-trust" projectTrustPath} = {
-              codec = "json";
-              # pi takes proper-lockfile's `<path>.lock` around every trust
-              # read and rewrite (acquireTrustLockSync, withTrustFileLock:
-              # dist/core/trust-manager.js:105-142, 187-200), so the reconciler
-              # takes the same lock rather than racing a prompt answered
-              # during a switch.
-              lock = "${projectTrustPath}.lock";
-              path = projectTrustPath;
-            };
-          };
-        }
-        (document {
-          entry = "kimchiProjectTrustMerge";
-          ledger = ledgerFor "project-trust" projectTrustPath;
-          path = projectTrustPath;
-          run = ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
-            exec ${pkgs.python3}/bin/python3 ${./project-trust.py} ${pkgs.writeText "kimchi-project-trust.json" (builtins.toJSON cfg.projectTrust)}
-          '';
-        })
-      ]))
+      (lib.mkIf (!isDevenv) (document {
+        content.run = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          exec ${pkgs.python3}/bin/python3 ${./project-trust.py} ${pkgs.writeText "kimchi-project-trust.json" (builtins.toJSON cfg.projectTrust)}
+        '';
+        entry = "kimchiProjectTrustMerge";
+        ledger = ledgerFor "project-trust" projectTrustPath;
+        # pi takes proper-lockfile's `<path>.lock` around every trust read and
+        # rewrite (acquireTrustLockSync, withTrustFileLock:
+        # dist/core/trust-manager.js:105-142, 187-200), so the reconciler
+        # takes the same lock rather than racing a prompt answered during a
+        # switch.
+        lock = "${projectTrustPath}.lock";
+        path = projectTrustPath;
+        writer = "kimchiProjectTrustMerge";
+      }))
 
-      # User harness context stays runtime-owned. Project context joins the one
-      # shared repository AGENTS.md owner used by Codex and Kiro, at a fixed
-      # key: context.filename names the Home Manager harness file only.
-      # Published for observers such as file-warnings.nix, whether or not the
-      # key has content this evaluation.
-      (lib.mkIf isDevenv {ai.internal.agentsMdTargets.kimchi = projectContextFilename;})
-      (lib.mkIf hasMergedContext (
-        if isDevenv
-        then {
-          ai.internal.agentsMd.${projectContextFilename} = {
-            context = aiCommon.readContent mergedContext;
-            hasContent = true;
-          };
-        }
-        else {
-          ai.kimchi.files."${harness}/${cfg.context.filename}" = contextEntry;
-        }
-      ))
+      # User harness context stays runtime-owned. Project context joins the
+      # shared repository AGENTS.md through the record's `sharedAgentsMd`.
+      (lib.mkIf (hasMergedContext && !isDevenv) {
+        ai.kimchi.files."${harness}/${cfg.context.filename}" = contextEntry;
+      })
 
       # agents/<name>.md — one real file per agent, in a real directory.
       # Kimchi's /agents Edit, Disable and Enable writeFileSync the file in
@@ -522,21 +459,12 @@
       # stated per file: an owned copy the user can write. The next activation
       # backs an edited file up and restores the declaration; a file Kimchi
       # created is an unowned sibling and is never touched.
-      (lib.mkIf (cfg.agentsDir != null) {
-        ai.kimchi.agents = lib.mapAttrs (_: lib.mkDefault) (lib.ai.agentsFromDir cfg.agentsDir);
-      })
       {
-        ai.kimchi.files = lib.mapAttrs' (name: value: let
-          rendered = lib.ai.agent.renderKimchi name value;
-        in
+        ai.kimchi.files = lib.mapAttrs' (name: value:
           lib.nameValuePair "${agentsDir}/${name}.md" {
             # A store-path string, as a flake input yields, is a source too;
             # `builtins.isPath` alone would write the path as the agent's text.
-            content = lib.mkDefault (
-              if lib.ai.agent.isPathLike rendered
-              then {source = rendered;}
-              else {text = rendered;}
-            );
+            content = lib.mkDefault (lib.ai.agent.fileContent (lib.ai.agent.renderKimchi name value));
             entry = "kimchiAgents";
             ledger = agentsLedger;
             method = lib.mkDefault "copy-ro";
@@ -592,30 +520,29 @@ in
       "skills"
     ];
     defaults.package = pkgs.ai.kimchi;
+    # The builder declares these pool options and expands `agentsDir`.
+    poolOptions = {
+      agents.description = ''
+        Kimchi agents, one `<name>.md` each: Home Manager writes
+        `<configDir>/harness/agents/`, devenv a trusted project's
+        `.kimchi/agents/`. A portable `{ description, instructions }` record
+        renders to Kimchi frontmatter plus body; Markdown here is Kimchi's
+        own and lands verbatim. Entries replace root `ai.agents` at the same
+        key and null suppresses one. Root Markdown and a record's
+        Claude/Copilot `tools` list have no Kimchi reading and fail
+        evaluation, naming this option as the remedy. Each file is a real,
+        writable copy so Kimchi's /agents commands can edit it; the next
+        activation backs such an edit up and restores the declaration.
+      '';
+      agentsDir.description = "Directory of Kimchi-native `.md` agent files, expanded into `ai.kimchi.agents` keyed by basename minus `.md`.";
+      environmentVariables.description = ''
+        Environment variables exported when launching kimchi. Null suppresses
+        a root entry at the same key. A variable Kimchi overwrites at launch
+        (listed with its reason in packages/kimchi/extracted.json) fails
+        evaluation, because a value set for it is never read.
+      '';
+    };
     options = {
-      agents = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.ai.agent.agentType);
-        default = {};
-        description = ''
-          Kimchi agents, one `<name>.md` each: Home Manager writes
-          `<configDir>/harness/agents/`, devenv a trusted project's
-          `.kimchi/agents/`. A portable `{ description, instructions }` record
-          renders to Kimchi frontmatter plus body; Markdown here is Kimchi's
-          own and lands verbatim. Entries replace root `ai.agents` at the same
-          key and null suppresses one. Root Markdown and a record's
-          Claude/Copilot `tools` list have no Kimchi reading and fail
-          evaluation, naming this option as the remedy. Each file is a real,
-          writable copy so Kimchi's /agents commands can edit it; the next
-          activation backs such an edit up and restores the declaration.
-        '';
-      };
-
-      agentsDir = lib.mkOption {
-        type = lib.types.nullOr aiCommon.dirOptionType;
-        default = null;
-        description = "Directory of Kimchi-native `.md` agent files, expanded into `ai.kimchi.agents` keyed by basename minus `.md`.";
-      };
-
       permissions = lib.mkOption {
         # No freeform keys: Kimchi validates the file with a `.strict()` zod
         # schema (src/extensions/permissions/config.ts:11-19), so one unknown
@@ -734,17 +661,6 @@ in
         '';
       };
 
-      environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-        default = {};
-        description = ''
-          Environment variables exported when launching kimchi. Null suppresses
-          a root entry at the same key. A variable Kimchi overwrites at launch
-          (listed with its reason in packages/kimchi/extracted.json) fails
-          evaluation, because a value set for it is never read.
-        '';
-      };
-
       hooks = lib.mkOption {
         type = sharedHooks.mkHooksType hookEvents;
         default = {};
@@ -784,4 +700,7 @@ in
 
     config = kimchiDelivery;
     installPackage = kimchiInstallPackage;
+    # Context only, at a fixed key: context.filename names the Home Manager
+    # harness file.
+    sharedAgentsMd = _: {key = projectContextFilename;};
   }

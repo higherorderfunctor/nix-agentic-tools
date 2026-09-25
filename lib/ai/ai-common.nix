@@ -5,6 +5,7 @@
 # - packages/*/lib/mk*.nix (factory-built HM + devenv modules)
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
+  fragments = import ../fragments.nix {inherit lib;};
   contentType = enableDefault:
     aiTypes.optionalTextSource {
       description = "Markdown content";
@@ -158,6 +159,10 @@
         value = name;
       })
       extensions);
+  readContent = value:
+    if value == null
+    then ""
+    else value.text;
 in {
   # ── Markdown content records ───────────────────────────────────────
   # Context and rules share one text-source record. The type resolves source
@@ -169,12 +174,7 @@ in {
   runtimeContextModule = defaultFilename:
     mkContentModule {inherit defaultFilename;};
 
-  inherit hasContent;
-
-  readContent = value:
-    if value == null
-    then ""
-    else value.text;
+  inherit hasContent readContent;
 
   composeContent = values: let
     present = builtins.filter hasContent values;
@@ -203,6 +203,46 @@ in {
   # unread. Generated content explicitly enables its shared text-source record.
   contentFileEntry = value: {
     content = lib.mkDefault (aiTypes.textSourceFile value // {enable = true;});
+  };
+
+  # One file entry per rule, rendered through a runtime's transformer with the
+  # rule's matcher as its `paths` and its resolved text; the generated text is
+  # a default on `content`. `context` is the transformer's render context for
+  # a rule name, and `fields` the runtime's own ones (writer, ledger, facts).
+  mkRuleFiles = {
+    context ? _: {},
+    fields ? {},
+    path,
+    rules,
+    transformer,
+  }:
+    lib.mapAttrs' (name: rule:
+      lib.nameValuePair (path name) ({
+          content = lib.mkDefault {
+            enable = true;
+            text = fragments.mkRenderer transformer (context name) (rule
+              // {
+                paths = rule.matcher;
+                text = readContent rule;
+              });
+          };
+        }
+        // fields))
+    rules;
+
+  # A final file entry's inline byte size against a limit. A source-backed
+  # or disabled entry is not measured: reading a derivation output here would
+  # build it during evaluation. `message` receives the measured size.
+  sizeAssertion = {
+    entry,
+    maxBytes,
+    message,
+  }: let
+    text = lib.mapNullable (final: aiTypes.textSourceInlineText final.content) entry;
+    size = lib.mapNullable builtins.stringLength text;
+  in {
+    assertion = maxBytes == null || size == null || size <= maxBytes;
+    message = message size;
   };
 
   # ── Activation flag scoping ────────────────────────────────────────

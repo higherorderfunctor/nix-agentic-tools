@@ -102,6 +102,8 @@ _: {
         "lib/ai/deliveryMethod.nix"
         "lib/ai/formats.nix"
         "lib/ai/hooks.nix"
+        # The shared launcher; `shell-option` documents the environment it bakes.
+        "lib/ai/launcher.nix"
         # The one factory that contributes to the pools from inside this repo,
         # so it is exactly where collision-semantics' "where a MODULE may
         # contribute" rule has to be read before editing. Previously unscoped.

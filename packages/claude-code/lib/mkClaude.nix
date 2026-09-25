@@ -117,19 +117,10 @@
     };
   };
   # One matcher block within an event: an optional matcher + its handlers.
-  hookMatcherBlock = lib.types.submodule {
-    options = {
-      matcher = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Tool-name matcher (exact name or JS regex). Null for events that take no matcher (Stop, UserPromptSubmit, …).";
-      };
-      hooks = lib.mkOption {
-        type = lib.types.listOf hookHandler;
-        default = [];
-        description = "Handlers that fire for this matcher block.";
-      };
-    };
+  hookMatcherBlock = sharedHooks.mkMatcherBlockType {
+    handler = hookHandler;
+    hooks = "Handlers that fire for this matcher block.";
+    matcher = "Tool-name matcher (exact name or JS regex). Null for events that take no matcher (Stop, UserPromptSubmit, …).";
   };
   # heron_brook delegation clamp — the opt-in mitigation's hook pair.
   #
@@ -211,17 +202,6 @@
   # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
   # defaults UNDER the consumer's pool.
-  # L2b → L3: expand `ai.claude.agentsDir` into per-CLI `ai.claude.agents`,
-  # shared by both projections. mkDefault lets explicit
-  # `ai.claude.agents.<name>` entries win within this layer; the resulting
-  # per-runtime entry replaces a same-key root agent.
-  agentsDirEntries = cfg:
-    lib.mkIf (cfg.agentsDir != null) {
-      ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
-        lib.ai.agentsFromDir cfg.agentsDir
-      );
-    };
-
   shellSettings = {
     resolvedShell,
     moduleEnvironmentVariables,
@@ -274,6 +254,33 @@ in
     ];
     defaults = {
       package = pkgs.ai.claude-code;
+    };
+    # The builder declares these pool options; Claude states its delivery.
+    poolOptions = {
+      agents.description = ''
+        Claude-specific agent Markdown or portable semantic records. Entries
+        replace top-level `ai.agents` at the same key; null suppresses an
+        inherited agent. Home Manager routes them to
+        `programs.claude-code.agents`, which writes
+        `~/.claude/agents/<name>.md`; devenv writes project
+        `.claude/agents/<name>.md` itself.
+      '';
+      agentsDir.description = ''
+        Claude-specific directory of `.md` agent files. Each file
+        becomes one entry in `ai.claude.agents` keyed by basename
+        minus `.md`. Accepts a path literal or
+        `{ path, filter? }` (filter: name → bool, default keeps
+        `.md`).
+      '';
+      lspServers.description = ''
+        Typed Claude-specific LSP server declarations. Entries replace
+        top-level `ai.lspServers` at the same key; null suppresses an
+        inherited server. Translated via `mkClaudeLspConfig` to
+        `programs.claude-code.lspServers`, which upstream writes into
+        `~/.claude/settings.json`. Extensions list becomes
+        `extensionToLanguage` mapping. Upstream devenv `claude.code`
+        has no LSP surface — devenv warns when this option is non-empty.
+      '';
     };
     # Shared options (present in both backends)
     options = {
@@ -412,19 +419,6 @@ in
           change. The claude-code overlay's extraExtract guard asserts the key
           still parses on each bump so a silent drop fails the update pipeline
         loudly'';
-      lspServers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
-        default = {};
-        description = ''
-          Typed Claude-specific LSP server declarations. Entries replace
-          top-level `ai.lspServers` at the same key; null suppresses an
-          inherited server. Translated via `mkClaudeLspConfig` to
-          `programs.claude-code.lspServers`, which upstream writes into
-          `~/.claude/settings.json`. Extensions list becomes
-          `extensionToLanguage` mapping. Upstream devenv `claude.code`
-          has no LSP surface — devenv warns when this option is non-empty.
-        '';
-      };
       marketplaces = lib.mkOption {
         type = with lib.types; attrsOf (either package path);
         default = {};
@@ -454,29 +448,6 @@ in
             concise = "Keep answers under 3 sentences.";
             tutorial = ./styles/tutorial.md;
           }
-        '';
-      };
-      agents = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
-        default = {};
-        description = ''
-          Claude-specific agent Markdown or portable semantic records. Entries
-          replace top-level `ai.agents` at the same key; null suppresses an
-          inherited agent. Home Manager routes them to
-          `programs.claude-code.agents`, which writes
-          `~/.claude/agents/<name>.md`; devenv writes project
-          `.claude/agents/<name>.md` itself.
-        '';
-      };
-      agentsDir = lib.mkOption {
-        type = lib.types.nullOr aiCommon.dirOptionType;
-        default = null;
-        description = ''
-          Claude-specific directory of `.md` agent files. Each file
-          becomes one entry in `ai.claude.agents` keyed by basename
-          minus `.md`. Accepts a path literal or
-          `{ path, filter? }` (filter: name → bool, default keeps
-          `.md`).
         '';
       };
       commands = lib.mkOption {
@@ -745,7 +716,6 @@ in
           ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
-        (agentsDirEntries cfg)
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
         # `ai.claude.hookScripts`. Content is `readFile`'d into
         # `lib.types.lines` via hooksFromDir.
@@ -816,29 +786,22 @@ in
         # survives. Its writer is `claudeRulesWriterConfig`, declared whether
         # or not a rule is and whether or not Claude is enabled, so both N→0
         # and a disable retract the copies.
-        (let
-          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-          inherit (lib.ai.transformers.claude) claudeTransformer;
-        in {
-          ai.claude.files = lib.mapAttrs' (name: rule:
-            lib.nameValuePair ".claude/rules/${name}.md" {
-              content = lib.mkDefault {
-                enable = true;
-                text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
-                  // {
-                    text = aiCommon.readContent rule;
-                    paths = rule.matcher;
-                  });
-              };
+        {
+          ai.claude.files = aiCommon.mkRuleFiles {
+            context = name: {package = name;};
+            fields = {
               entry = rulesWriter;
               facts.symlinkReadable = {
                 devenv = false;
                 hm = true;
               };
               ledger = rulesLedger;
-            })
-          mergedRules;
-        })
+            };
+            path = name: ".claude/rules/${name}.md";
+            rules = mergedRules;
+            transformer = lib.ai.transformers.claude.claudeTransformer;
+          };
+        }
 
         (lib.optionalAttrs isHm (lib.mkMerge [
           # The upstream Home Manager module owns these surfaces, including
@@ -866,28 +829,23 @@ in
             };
           }
           # Claude writes native state (including OAuth tokens) here. Own
-          # only the unpin leaves and retain the writer when they are empty.
-          # This user-global operation never runs from a project shell.
+          # only the unpin leaves. This user-global operation never runs from
+          # a project shell.
+          (helpers.mkReconciledDocument {
+            content.value = cfg.unpinLaunchEffort;
+            format = "json";
+            ledger = unpinLedger;
+            path = claudeJson;
+            runtime = "claude";
+            writer = "claudeUnpinLaunchEffort";
+          })
           {
-            ai.claude.activation.claudeUnpinLaunchEffort.ledgers.${unpinLedger} = {
-              codec = "json";
-              path = claudeJson;
-            };
             # The unpin writer keeps an existing file's mode whether or not it
             # rewrites it, so this is the only thing that narrows a file an
             # earlier generation widened to 0644, with or without flags.
             ai.claude.activation.claudeConfigMode = helpers.mkCredentialModeWriter {
               inherit (pkgs) coreutils;
               path = claudeJson;
-            };
-          }
-          {
-            ai.claude.files.${claudeJson} = {
-              content.value = cfg.unpinLaunchEffort;
-              entry = "claudeUnpinLaunchEffort";
-              facts.harnessWrites = true;
-              format = "json";
-              ledger = unpinLedger;
             };
           }
         ]))
@@ -923,18 +881,9 @@ in
           # option requires typed description/prompt fields, so it cannot
           # carry a raw Markdown or path entry without parsing it.
           {
-            ai.claude.files = lib.mapAttrs' (name: value: let
-              rendered = agent.renderClaude name value;
-            in
+            ai.claude.files = lib.mapAttrs' (name: value:
               lib.nameValuePair ".claude/agents/${name}.md" {
-                content = lib.mkDefault (
-                  {enable = true;}
-                  // (
-                    if agent.isPathLike rendered
-                    then {source = rendered;}
-                    else {text = rendered;}
-                  )
-                );
+                content = lib.mkDefault ({enable = true;} // agent.fileContent (agent.renderClaude name value));
               })
             mergedAgents;
           }

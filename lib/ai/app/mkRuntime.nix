@@ -20,6 +20,12 @@
 #                                    # Same-named native options in `options` are independent.
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
+#     poolOptions ? {};              # {<pool> = mkOption attrs;} merged over the
+#                                    #   builder's declaration of `agents`,
+#                                    #   `environmentVariables` or `lspServers`;
+#                                    #   naming `agentsDir` opts into that option.
+#                                    #   Any other key, or a pool not in
+#                                    #   `supportedPools`, is rejected.
 #     config ? _: {};                # ONE delivery callback for BOTH backends; it
 #                                    #   receives `backend` and describes delivery
 #                                    #   rather than lowering it.
@@ -30,6 +36,9 @@
 #                                    #   transform owns the `home.packages` / `packages`
 #                                    #   lowering, so a factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
+#     sharedAgentsMd ? <absent>;     # callback (same args) → {key; rules?; maxBytes?}:
+#                                    #   the devenv repository AGENTS.md contribution;
+#                                    #   the transform rejects any other field
 #     hm = {                         # Home Manager only; each field overrides the
 #       installPackage ? <record>;   #   record-level one of the same name
 #       migrationConfig ? <record>;
@@ -40,16 +49,17 @@
 #
 # A backend spec carries no delivery callback and no defaults: delivery is
 # described once, and a runtime states a per-backend difference by reading
-# `backend`. `checkRecord.nix` rejects any other backend key, here and again in
-# the transform, so a record written against the retired per-backend seam fails
+# `backend`. `checkRecord.nix` rejects any other backend key, and any
+# `poolOptions` key the builder would not read, here and again in the
+# transform, so a record written against the retired per-backend seam fails
 # instead of silently delivering nothing.
 #
 # The callbacks receive ONE attrset, assembled in exactly one place —
 # `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
 # trusting a list here. It carries `backend`, `cfg`, `config`, `normalized`,
 # every `merged*` pool, `resolvedSettings`, `resolvedShell`, `mergedContext`,
-# and `topHooks`; every callback takes `...`, so a stale list here would
-# mislead without ever breaking a build.
+# `launcherEnvironment` and `topHooks`; every callback takes `...`, so a
+# stale list here would mislead without ever breaking a build.
 {lib}: {
   name,
   defaults ? {},
@@ -59,11 +69,13 @@
   contextDescription ? null,
   ruleModule ? null,
   rulesDescription ? null,
+  poolOptions ? {},
   config ? null,
   # Presence matters: `null` is the documented opt-out, so an absent callback
   # is told apart from it through `args` below.
   installPackage ? null,
   migrationConfig ? null,
+  sharedAgentsMd ? null,
   hm ? {},
   devenv ? {},
   # The package set the factory was built with, carried on the record so
@@ -86,13 +98,14 @@
   # need it must degrade rather than throw.
   pkgs ? null,
 } @ args:
-assert import ./checkRecord.nix {inherit lib;} {inherit name defaults hm devenv;};
+assert (import ./checkRecord.nix {inherit lib;}).record {inherit name defaults hm devenv poolOptions supportedPools;};
   {
-    inherit name defaults options supportedPools hm devenv pkgs;
+    inherit name defaults options poolOptions supportedPools hm devenv pkgs;
   }
   // lib.optionalAttrs (config != null) {inherit config;}
   // lib.optionalAttrs (args ? installPackage) {inherit installPackage;}
   // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
+  // lib.optionalAttrs (sharedAgentsMd != null) {inherit sharedAgentsMd;}
   // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
   // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
   // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
