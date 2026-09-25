@@ -54,8 +54,10 @@
             default = null;
             description = ''
               What the default model is for, shown to agents in the routing
-              guidance. null uses a built-in description while `model` is null;
-              once `model` is set, a description is required.
+              guidance. null uses a built-in description while `model` is null.
+              Once `model` is set, a description is required whenever the
+              guidance lists the default, that is, while another entry is
+              enabled.
             '';
           }
         else
@@ -144,6 +146,11 @@ in {
       models = lib.mkOption {
         type = lib.types.attrsOf modelType;
         default = {};
+        # `default` always exists. It is added after merging, not defined in
+        # config: an attrsOf option keeps only its highest-priority
+        # definitions, so a config-defined entry would either be dropped by a
+        # consumer's normal-priority key or drop a consumer's `mkDefault` set.
+        apply = models: {default = sembleModels.builtinEntry;} // models;
         example = lib.literalExpression ''
           {
             default = {
@@ -159,8 +166,9 @@ in {
         '';
         description = ''
           Embedding models the Semble CLI routes between, by key. `default`
-          always exists: the module defines it, so set
-          `default.enable = false` rather than removing it. `semble search`
+          always exists: the option adds Semble's built-in entry when no
+          definition names it, so set `default.enable = false` rather than
+          removing it. `semble search`
           uses `default`, and `semble --model <key> search` (or
           `semble search ... --model <key>`) uses another entry. Keys must
           match `${sembleModels.keyPattern}`.

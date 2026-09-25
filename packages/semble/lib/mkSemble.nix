@@ -1,6 +1,7 @@
 # Direct typed MCP constructor for consumers that do not use the convenience
-# module. The command is absolute and content="code" is represented by the
-# server's native default (no redundant argument).
+# module. The command is absolute. An unset `content` emits no argument, so the
+# server decides: code, or with `--model K` in `args` (a `cli.models` package)
+# entry K's content. A set `content` is always passed, `code` included.
 {
   lib,
   pkgs,
@@ -15,7 +16,15 @@
         type = lib.mkDefault "stdio";
       };
       options.content = lib.mkOption {
-        inherit (contentScope) default description type;
+        type = lib.types.nullOr contentScope.type;
+        default = null;
+        description = ''
+          File-content categories the Semble MCP server searches by default. A
+          scalar is coerced to a one-element list, and `all` must appear alone.
+          null passes no `--content`: the server then searches code, or, when
+          `args` select a `cli.models` entry with `--model`, that entry's
+          content. Any other value is passed as `--content`, `code` included.
+        '';
       };
     }
     consumerArgs;
@@ -25,7 +34,7 @@
     else if evaluated.package != null
     then "${evaluated.package}/bin/semble-mcp"
     else throw "lib.ai.mcpServers.mkSemble requires either `package` or `command`";
-  contentErrors = contentScope.errors "content" evaluated.content;
+  contentErrors = lib.optionals (evaluated.content != null) (contentScope.errors "content" evaluated.content);
 in
   if contentErrors != []
   then throw "lib.ai.mcpServers.mkSemble: ${lib.concatStringsSep "\n" contentErrors}"
@@ -33,5 +42,7 @@ in
     removeAttrs evaluated ["content"]
     // {
       inherit command;
-      args = evaluated.args ++ contentScope.toArgs evaluated.content;
+      args =
+        evaluated.args
+        ++ lib.optionals (evaluated.content != null) (["--content"] ++ contentScope.normalize evaluated.content);
     }
