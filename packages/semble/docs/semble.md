@@ -127,12 +127,15 @@ keeps the upstream bundle intact and avoids its mutable extraction cache.
 `ai.programs.semble.pathMappings` assigns files with non-standard names to a
 language and to one of Semble's `code`, `config`, or `docs` indexes. It is an
 ordered list of `{ language; content; patterns; }` entries. Each `language` must
-be a grammar Semble bundles, an alias of one (such as `zsh`, `py` or
-`terraform`), or the language of a `grammars` package; anything else fails
-evaluation, checked against `extracted.json`. Extra grammars must not reuse a
-bundled name or alias, since Semble would never load them. The same language may
-appear in several entries, so one language can split across content categories
-by path.
+be one Semble knows: a grammar it bundles, an alias of one (such as `zsh`, `py`
+or `terraform`), the language of a `grammars` package, or any other language in
+its extension map (such as `caddy` or `nginx`), which Semble indexes with line
+chunking. Anything else fails evaluation, checked against `extracted.json`. That
+file describes the pinned Semble; a consumer who overrides `package` with
+another version is validated against the pinned one. Extra grammars must not
+reuse a bundled name or alias, since Semble would never load them. The same
+language may appear in several entries, so one language can split across content
+categories by path.
 
 A pattern without `/` matches a basename at any depth; a pattern containing `/`
 matches the path relative to the indexed repository root. Path matching uses

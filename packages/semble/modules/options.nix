@@ -70,10 +70,11 @@
         example = "json";
         description = ''
           The language Semble assigns to the matched files: a language Semble
-          bundles a grammar for (or an alias of one), or the language of a
-          `grammars` package. The same language may appear in several
-          entries, for example to split one language across content
-          categories.
+          bundles a grammar for (or an alias of one), the language of a
+          `grammars` package, or any other language in Semble's extension
+          map, which Semble indexes with line chunking instead of a parser.
+          The same language may appear in several entries, for example to
+          split one language across content categories.
         '';
       };
       patterns = lib.mkOption {

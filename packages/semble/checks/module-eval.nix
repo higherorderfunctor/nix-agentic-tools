@@ -382,8 +382,9 @@ in {
           ${pkgs.coreutils}/bin/touch "$out"
         '';
 
-    # Each pathMappings entry must name a language Semble can parse: a bundled
-    # grammar, an alias of one, or a `grammars` language.
+    # Each pathMappings entry must name a language Semble knows: a bundled
+    # grammar, an alias of one, a `grammars` language, or an extension-map
+    # language Semble line-chunks.
     module-semble-path-mapping-validation = mkTest "semble-path-mapping-validation" (
       let
         withMappings = grammars: pathMappings:
@@ -405,10 +406,11 @@ in {
         allPass (withMappings [] [(mapping "bash" [".envrc"])])
         # An alias resolves to a bundled grammar.
         && allPass (withMappings [] [(mapping "zsh" [".zshrc"])])
-        # awk is in Semble's extension map but has no bundled grammar.
-        && failedWith ''`pathMappings.1.language`: "awk" is not a language Semble can parse'' (withMappings [] [(mapping "awk" ["*.awk.in"])])
+        # Extension-map languages with no bundled grammar are line-chunked,
+        # with or without an extra grammar.
+        && allPass (withMappings [] [(mapping "awk" ["*.awk.in"]) (mapping "caddy" ["Caddyfile"]) (mapping "nginx" ["nginx.conf"])])
         && allPass (withMappings awk [(mapping "awk" ["*.awk.in"])])
-        && failedWith ''`pathMappings.2.language`: "klingon" is not a language'' (withMappings [] [(mapping "bash" [".envrc"]) (mapping "klingon" ["*.tlh"])])
+        && failedWith ''`pathMappings.2.language`: "klingon" is not a language Semble knows'' (withMappings [] [(mapping "bash" [".envrc"]) (mapping "klingon" ["*.tlh"])])
         # One language may appear in several entries.
         && allPass (withMappings [] [
           ((mapping "json" ["docs/*.json"]) // {content = "docs";})
