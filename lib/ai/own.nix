@@ -32,12 +32,19 @@
   codecs = ["dir" "json" "toml"];
   contentFields = ["run" "store" "text"];
 
+  # `launch` prefixes the one mutating command. Home-manager's `run` helper
+  # echoes instead of executing when DRY_RUN is set, which is the only thing
+  # that keeps `home-manager switch --dry-run` from writing runtime settings
+  # and ledgers: own.py itself never reads DRY_RUN. devenv has no dry-run
+  # mode and no `run` helper, so its command is launched bare.
   backends = {
     devenv = {
+      launch = "";
       root = "$DEVENV_ROOT";
       state = "$DEVENV_STATE/nix-agentic-tools";
     };
     hm = {
+      launch = "run ";
       root = "$HOME";
       state = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools";
     };
@@ -156,7 +163,7 @@
     shopt -s inherit_errexit 2>/dev/null || :
     export NAT_OWN_ROOT="${backends.${backend}.root}"
     export NAT_OWN_STATE="${backends.${backend}.state}"
-    ${python}/bin/python3 ${lib.escapeShellArg "${program}"} --plan ${lib.escapeShellArg "${plan}"} ${arguments}
+    ${backends.${backend}.launch}${python}/bin/python3 ${lib.escapeShellArg "${program}"} --plan ${lib.escapeShellArg "${plan}"} ${arguments}
   '';
 in
   {

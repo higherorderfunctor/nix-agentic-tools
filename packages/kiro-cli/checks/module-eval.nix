@@ -558,9 +558,12 @@ in {
         };
       };
       mkScript = backend: config: let
+        # The hm branch is HM activation entry text and needs home-manager's
+        # `run` helper in scope; the devenv task's `.exec` defines no such
+        # helper and must not get one.
         body =
           if backend == "hm"
-          then let ev = evalHm config; in hmMcpPruneScript ev + "\n" + hmMcpWriteScript ev
+          then let ev = evalHm config; in harness.hmRunShim + hmMcpPruneScript ev + "\n" + hmMcpWriteScript ev
           else dvMcpTaskExec (evalDevenv config);
       in
         pkgs.writeShellScript "kiro-mcp-${backend}" ''
@@ -2790,8 +2793,10 @@ in {
       hmGen = cfg: let
         ev = evalHm cfg;
       in
+        # HM activation entry text, which expects home-manager's `run` helper
+        # (activation-init.sh) already in scope.
         pkgs.writeShellScript "kiro-hooks-hm-gen"
-        (hmHookPruneScript ev + "\n" + hmHookWriteScript ev);
+        (harness.hmRunShim + hmHookPruneScript ev + "\n" + hmHookWriteScript ev);
       dvGen = cfg: pkgs.writeShellScript "kiro-hooks-dv-gen" (dvHookTaskExec (evalDevenv cfg));
     in
       pkgs.runCommand "module-test-kiro-hooks-materialize-runtime" {
@@ -3177,11 +3182,13 @@ in {
       # HM delivers as a PAIR: the prune phase deletes the recorded copies
       # before checkLinkTargets, the write phase unlinks the drained ledger.
       # Replay them in that order, exactly as activation would.
+      # HM activation entry text, which expects home-manager's `run` helper
+      # (activation-init.sh) already in scope.
       hmScript = pkgs.writeShellScript "kiro-steering-hm-retirement" (
         let
           ev = evalHm {ai.kiro.enable = false;};
         in
-          hmRetirementScript ev + "\n" + hmRetirementLedgerScript ev
+          harness.hmRunShim + hmRetirementScript ev + "\n" + hmRetirementLedgerScript ev
       );
       devenvScript = pkgs.writeShellScript "kiro-steering-devenv-retirement" (
         dvTaskExec (evalDevenv {ai.kiro.enable = false;})

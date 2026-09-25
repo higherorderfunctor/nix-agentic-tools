@@ -712,6 +712,10 @@ in {
       pkgs.runCommand "module-test-codex-settings-reconciliation" {} ''
         export HOME="$PWD/home"
         export XDG_STATE_HOME="$PWD/state"
+        # The activation* fragments below are HM activation entry text, which
+        # expects home-manager's `run` helper (activation-init.sh) already in
+        # scope.
+        ${harness.hmRunShim}
         ${pkgs.coreutils}/bin/mkdir -p "$HOME/.codex"
 
         # Model the old HM delivery exactly: config.toml is a read-only symlink

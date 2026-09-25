@@ -622,6 +622,9 @@ in {
         pkgs.writeShellScript "kimchi-project-trust" ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
+          # This is an HM activation entry, which expects home-manager's `run`
+          # helper (activation-init.sh) already in scope.
+          ${harness.hmRunShim}
           ${(evalHm {
             ai.kimchi = {
               enable = true;
@@ -829,8 +832,11 @@ in {
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           ${
+            # The hm branch is HM activation entry text and needs
+            # home-manager's `run` helper in scope; the devenv task's `.exec`
+            # defines no such helper and must not get one.
             if backend == "hm"
-            then evaluated.config.home.activation.kimchiAgentsPrune.text + "\n" + evaluated.config.home.activation.kimchiAgents.text
+            then harness.hmRunShim + evaluated.config.home.activation.kimchiAgentsPrune.text + "\n" + evaluated.config.home.activation.kimchiAgents.text
             else evaluated.config.tasks."ai:kimchi:agents".exec
           }
         '';
