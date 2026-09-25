@@ -221,6 +221,10 @@
         message = "${prefix}.gh.enable needs a config directory: set ai.programs.gh.configDir or ${prefix}.gh.configDir.";
       }
       {
+        assertion = state.ghCfg.configDir == null || lib.hasPrefix "/" state.ghCfg.configDir;
+        message = "${prefix}.gh.configDir is not an absolute path. It is published verbatim as GH_CONFIG_DIR: nothing expands `~`, and a relative path resolves against the harness's working directory. Pass an absolute path.";
+      }
+      {
         assertion = !underStore state.ghCfg.configDir;
         message = "${prefix}.gh.configDir points into ${builtins.storeDir}, where hosts.yml and its token are world-readable and gh cannot write. Pass a writable directory outside the store as a string.";
       }

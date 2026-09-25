@@ -209,7 +209,7 @@ in {
     # Signing with nothing to sign with is an eval error (assertion), judged
     # on the rendered body as git reads it, so `settings` in any key spelling
     # is held to the same rule; so is a token under the store, and gh with no
-    # directory or one under the store. Only enabled runtimes
+    # directory, a relative or `~` one, or one under the store. Only enabled runtimes
     # are held to it, and the full identity is the positive control.
     module-ai-programs-git-assertions = mkTest "ai-programs-git-assertions" (
       builtins.all (backend: let
@@ -265,6 +265,8 @@ in {
         storeToken = eval {ai.programs.git.credentials.file = "${builtins.storeDir}/00000000000000000000000000000000-token";};
         noGhDir = eval {ai.programs.gh.configDir = null;};
         storeGhDir = eval {ai.codex.programs.gh.configDir = "${builtins.storeDir}/00000000000000000000000000000000-gh";};
+        homeGhDir = eval {ai.codex.programs.gh.configDir = "~/.config/ai-gh";};
+        relativeGhDir = eval {ai.codex.programs.gh.configDir = "ai-gh";};
         disabledRuntime = eval {
           ai.kiro = {
             enable = false;
@@ -287,6 +289,8 @@ in {
         && builtins.any (lib.hasPrefix "ai.codex.programs.git.credentials.file points into") (ourFailures storeToken)
         && builtins.any (lib.hasPrefix "ai.codex.programs.gh.enable needs a config directory") (ourFailures noGhDir)
         && only "ai.codex.programs.gh.configDir points into" storeGhDir
+        && only "ai.codex.programs.gh.configDir is not an absolute path" homeGhDir
+        && only "ai.codex.programs.gh.configDir is not an absolute path" relativeGhDir
         && ourFailures disabledRuntime == []
         && ourFailures (backends.${backend} identity) == [])
       (builtins.attrNames backends)
@@ -372,6 +376,10 @@ in {
         ${lib.concatMapStringsSep "\n" (runtime: ''
             export GIT_CONFIG_GLOBAL=${file hm runtime}
             [ "$(head -n1 "$GIT_CONFIG_GLOBAL")" = '[include]' ] || fail "${runtime}: first section is not [include]"
+            # Home Manager includes its own XDG config home, where programs.git
+            # writes, ahead of `~/.gitconfig` — not the `~/.config` fallback.
+            cfg --get-all include.path > includes
+            [ "$(sed -n 1p includes)" = /home/test/.config/git/config ] || fail "${runtime}: HM include is not xdg.configHome"
             [ "$(cfg user.name)" = 'bot (${runtime})' ] || fail "${runtime}: user.name"
             [ "$(cfg user.email)" = 'bot@example.com' ] || fail "${runtime}: root user.email lost by the runtime override"
             [ "$(cfg user.signingKey)" = '${keyFor runtime}' ] || fail "${runtime}: user.signingKey"

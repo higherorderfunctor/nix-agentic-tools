@@ -165,7 +165,9 @@ in {
         launched from a shell exporting one acts as that token's account, not
         as this identity. On Copilot, `GH_CONFIG_DIR` also becomes the source
         of its last-resort `gh` login, so that fallback now uses this
-        directory's token
+        directory's token. Not covered: Copilot CLI's built-in GitHub MCP
+        server reportedly acts as the Copilot login whatever `GH_CONFIG_DIR`
+        says (unmeasured against the pinned build)
       '';
 
       configDir = lib.mkOption {
@@ -175,10 +177,13 @@ in {
         description = ''
           Directory holding the harness's `gh` `config.yml` and `hosts.yml`,
           published as `GH_CONFIG_DIR`. It is not created or written here:
-          render `hosts.yml` (it holds the token) with your secrets tool, or
-          run `gh auth login` against it once. Required when `enable` is set;
-          evaluation fails for a directory under the store, where the token
-          would be world-readable and gh cannot write.
+          render `hosts.yml` (with the token) with your secrets tool, or run
+          `GH_CONFIG_DIR=<dir> gh auth login --insecure-storage` once. Without
+          `--insecure-storage`, gh keeps the token in the system keyring,
+          which a sandboxed harness may not reach. Required when `enable` is
+          set; evaluation fails for a relative or `~` path, which nothing
+          expands, and for a directory under the store, where the token would
+          be world-readable and gh cannot write.
         '';
       };
     };
