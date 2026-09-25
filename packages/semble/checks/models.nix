@@ -164,6 +164,9 @@ in {
       let
         vanilla = evalHm {};
         extended = evalHm {ai.programs.semble.cli.models.prose = prose;};
+        # A lower-priority definition of the whole set, as a shared profile
+        # would write it, keeps its keys.
+        lowPriority = evalHm {ai.programs.semble.cli.models = lib.mkDefault {inherit prose;};};
         models = evaluated: evaluated.config.ai.programs.semble.cli.models;
       in
         builtins.attrNames (models vanilla)
@@ -174,6 +177,8 @@ in {
         # Adding a key does not discard the module-defined default.
         && builtins.attrNames (models extended) == ["default" "prose"]
         && (models extended).prose.content == ["docs"]
+        && builtins.attrNames (models lowPriority) == ["default" "prose"]
+        && (models lowPriority).default.model == null
     );
 
     module-semble-models-validation = mkTest "semble-models-validation" (
@@ -182,6 +187,23 @@ in {
           ai.programs.semble = {
             enable = true;
             cli.models.default.model = defaultModel;
+          };
+        };
+        # The routing block lists the default only while another key is
+        # enabled, so only then is its description read.
+        modelRouted = evalHm {
+          ai.programs.semble = {
+            enable = true;
+            cli.models = {
+              default.model = defaultModel;
+              inherit prose;
+            };
+          };
+        };
+        noneEnabled = evalHm {
+          ai.programs.semble = {
+            enable = true;
+            cli.models.default.enable = false;
           };
         };
         described = evalHm {
@@ -249,7 +271,9 @@ in {
             .text
             true);
       in
-        failedWith "cli.models.default.description must be set" modelOnly
+        allPass modelOnly
+        && failedWith "cli.models.default.description must be set" modelRouted
+        && failedWith "cli.models` must keep at least one entry enabled" noneEnabled
         && allPass described
         && failedWith ''key "Prose Docs" must match'' badKey
         && failedWith "Files given: config.json, model.safetensors, modules.json" missingTokenizer
@@ -283,6 +307,20 @@ in {
           };
         };
         packages = (builtins.head evaluated.config.home.packages).sembleRuntimePackages;
+        # A runtime entry for one key leaves the portable `default` alone.
+        customDefault = evalHm {
+          ai = {
+            programs.semble = {
+              enable = true;
+              cli.models.default = {
+                model = defaultModel;
+                description = "Fixture default model.";
+              };
+            };
+            codex.programs.semble.cli.models.prose = prose;
+          };
+        };
+        customPackages = (builtins.head customDefault.config.home.packages).sembleRuntimePackages;
         tombstoneDefault = evalHm {
           ai = {
             programs.semble.enable = true;
@@ -303,6 +341,10 @@ in {
         && lib.hasInfix "semble-kiro search" evaluated.config.ai.kiro.rules.semble.text
         && !(lib.hasInfix "--model" evaluated.config.ai.kiro.rules.semble.text)
         && failedWith "must keep its `default` entry; set" tombstoneDefault
+        && allPass customDefault
+        && builtins.attrNames customPackages.codex.sembleModels == ["default" "prose"]
+        && customPackages.codex.sembleModels.default.model == "${defaultModel}"
+        && customPackages.claude.sembleModels.default.model == "${defaultModel}"
     );
 
     # `pools` defaults to [], so a program without it keeps nullable scalar
@@ -343,6 +385,9 @@ in {
         explicit = evaluate (spec // {pools = [];}) config;
         pooled = evaluate (spec // {pools = [["entries"]];}) (lib.recursiveUpdate config {ai.claude.programs.fixture.entries.b = null;});
         resolve = programSpec: evaluated: (programFactory.mkProgram programSpec).resolve evaluated.config "claude";
+        # A pool path that names no option fails rather than falling back to a
+        # wholesale override.
+        unknownPool = path: !(builtins.tryEval (programFactory.mkProgram (spec // {pools = [path];})).module).success;
         delegateSizing = ((evalHm {}).options.ai.codex.programs.delegate-sizing.type.getSubOptions []).enable;
       in
         shape plain
@@ -368,6 +413,9 @@ in {
         }
         && (shape pooled).enable == (shape plain).enable
         && (shape pooled).entries.default == {}
+        && unknownPool ["entires"]
+        && unknownPool ["entries" "a"]
+        && !(unknownPool ["entries"])
         && delegateSizing.type.description == "null or boolean"
         && delegateSizing.default == null
     );
