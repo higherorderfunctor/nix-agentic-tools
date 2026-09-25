@@ -329,10 +329,12 @@ in {
             patterns = ["*.md.fixture"];
           }
         ];
-        # AGENTS.md already carries the repository's Semble search workflow from
-        # the generated stacked-workflows fragment. Avoid asking devenv `files.*`
-        # to replace that tracked real file with the redundant module projection.
-        cli.instructions.enable = false;
+        # CLI only: no Semble MCP server, and the Semble CLI rule is on. Codex
+        # reads rules through AGENTS.md, which the repository generator owns
+        # (`files."AGENTS.md".content.enable = false` above), so the rule
+        # lands in `ai.codex.rules` but no file here renders it.
+        cli.instructions.enable = true;
+        mcp.enable = false;
       };
       # Temporarily disable Codex's OS sandbox for project sessions. The Home
       # Manager layer has already migrated to named permissions, but this
