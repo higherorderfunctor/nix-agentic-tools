@@ -5711,8 +5711,8 @@
       "name": "cwd_relative_turn_diffs"
     },
     {
-      "default": false,
-      "maturity": "experimental",
+      "default": true,
+      "maturity": "stable",
       "name": "daemon_auto_start"
     },
     {
@@ -5821,8 +5821,8 @@
       "name": "guardianv2"
     },
     {
-      "default": false,
-      "maturity": "under development",
+      "default": true,
+      "maturity": "stable",
       "name": "guardianv2.thread_context"
     },
     {
@@ -5974,6 +5974,11 @@
       "default": false,
       "maturity": "under development",
       "name": "powershell_shell_version"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "prefer_mxc"
     },
     {
       "default": false,
@@ -6365,7 +6370,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.156.1",
+    "codexVersion": "0.157.0",
     "extractorSchema": 1
   }
 }
