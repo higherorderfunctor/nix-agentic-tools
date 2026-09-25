@@ -235,6 +235,28 @@ def write_arms(fixture):
     assert target.read_text() == "ours\n"
     print("PASS write_arms: unrecorded backed up then adopted")
 
+    # Identical bytes from another writer (a git checkout of a committed copy)
+    # are adopted in place, recorded or not: no backup, no warning, no
+    # republish, the mode imposed and the witness recorded.
+    for label, forget in (("mismatch", False), ("unrecorded", True)):
+        if forget:
+            ledger.unlink()
+        else:
+            ledger.write_text("unit.txt\t" + hashlib.sha256(b"older\n").hexdigest() + "\n")
+        target.chmod(0o644)
+        target.write_text("ours\n")
+        os.utime(target, ns=(10**9, 10**9))
+        before, inode = snapshot(target), identity(target)
+        result = fixture.own(plan)
+        assert "WARNING" not in result.stderr, result.stderr
+        assert len(fixture.backups()) == 2, "an identical file was backed up"
+        after = snapshot(target)
+        assert (after[0], after[2]) == (before[0], before[2]), "an identical file was republished"
+        assert identity(target) == inode, "an identical file was replaced"
+        assert stat.S_IMODE(target.stat().st_mode) == 0o444
+        assert ledger.read_text() == f"unit.txt\t{witness}\n", ledger.read_text()
+        print(f"PASS write_arms: {label} with identical bytes adopted silently")
+
     # symlink: replaced, never compared. The destination must survive.
     elsewhere = fixture.root / "elsewhere.txt"
     elsewhere.write_text("ours\n")
