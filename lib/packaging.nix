@@ -1169,7 +1169,7 @@ rec {
             passthru = passthru // {inherit fetched;};
           }
           // position) ''
-          mkdir "$out"
+          mkdir "$out" # bare-commands: ok (runCommand builder PATH)
           # One copy of the weights, not two: each symlink is a store reference
           # that also retains the fetched tree against GC.
           find ${fetched} -mindepth 1 -maxdepth 1 -exec ln -s -t "$out" {} +
@@ -1180,7 +1180,7 @@ rec {
               echo "fetchHuggingFaceModel: the fetched tree already has $1. If the repository ships it, fetch it and drop licenseFile / attribution." >&2
               return 1
             fi
-            cp "$2" "$out/$1"
+            cp "$2" "$out/$1" # bare-commands: ok (runCommand builder PATH)
           }
           ${lib.concatMapStrings (entry: ''
               notice ${lib.escapeShellArgs [entry.target entry.source]}
