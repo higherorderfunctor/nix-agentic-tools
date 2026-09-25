@@ -83,37 +83,23 @@
   in
     compared.success && compared.value;
 
-  # `opaque` holds the leaf paths (as JSON) the diff never compares: package
-  # leaves and other owners' ordinary leaves. Comparing a package leaf
-  # evaluates its recipe, so one ordinary overlay would otherwise evaluate
-  # every package in its namespace on first access, and a recipe that fails on
-  # some pin would break unrelated leaves. An opaque leaf still present on both
-  # sides counts as unchanged; one that disappears is still reported.
-  changedLeafPaths = opaque: prefix: beforePresent: before: after: let
-    isOpaque = path: elem (builtins.toJSON path) opaque;
-  in
-    if beforePresent && isOpaque prefix
-    then []
-    else if beforePresent && ordinaryAttrs before && ordinaryAttrs after
+  changedLeafPaths = prefix: beforePresent: before: after:
+    if beforePresent && ordinaryAttrs before && ordinaryAttrs after
     then
       concatMap (
-        name: let
-          path = prefix ++ [name];
-        in
+        name:
           if after ? ${name}
-          then changedLeafPaths opaque path (before ? ${name}) before.${name} after.${name}
-          else if isOpaque path
-          then [path]
-          else pathsUnder path before.${name}
+          then changedLeafPaths (prefix ++ [name]) (before ? ${name}) before.${name} after.${name}
+          else pathsUnder (prefix ++ [name]) before.${name}
       ) (unique (attrNames before ++ attrNames after))
     else if beforePresent && valuesEqual before after
     then []
     else pathsUnder prefix after;
 
-  overlayChanges = opaque: prev: contribution:
+  overlayChanges = prev: contribution:
     concatMap (
       name:
-        changedLeafPaths opaque [name] (prev ? ${name}) prev.${name} contribution.${name}
+        changedLeafPaths [name] (prev ? ${name}) prev.${name} contribution.${name}
     ) (attrNames contribution);
 
   contributionFor = owner: name: source: {
@@ -443,8 +429,9 @@ in rec {
       if packageWorld == null
       then []
       else packageWorld.eligibleClaims;
-    ordinaryClaims =
-      concatMap (
+    ownershipClaims =
+      packageClaims
+      ++ concatMap (
         loadedClaim:
           map (keyPath: {
             inherit keyPath;
@@ -453,23 +440,14 @@ in rec {
           loadedClaim.value.claims
       )
       loaded;
-    ownershipClaims = packageClaims ++ ordinaryClaims;
     exclusive = mergeExclusiveClaims "overlay" ownershipClaims;
-    leafIds = map (claim: builtins.toJSON claim.keyPath);
-    # Leaves another owner holds are never compared either. Claims are
-    # exclusive, so an owner has no business writing them, and `==` is false
-    # for every function: an earlier owner's function leaf would otherwise
-    # read as changed and be blamed on each later overlay in its namespace.
-    opaqueFor = owner:
-      leafIds packageClaims
-      ++ leafIds (filter (claim: claim.owner != owner) ordinaryClaims);
     checkedOverlays =
       map (
         item: final: prev: let
           contribution = item.value.overlay final prev;
           changedPaths =
             if isAttrs contribution
-            then overlayChanges (opaqueFor item.claim.owner) prev contribution
+            then overlayChanges prev contribution
             else [];
           declaredIds = map builtins.toJSON item.value.claims;
           changedIds = map builtins.toJSON changedPaths;

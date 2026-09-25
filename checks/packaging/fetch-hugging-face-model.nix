@@ -1,15 +1,15 @@
-# fetch-hugging-face-model — the WRAPPER, offline. nixpkgs owns and tests the
-# fetching itself.
+# fetch-hugging-face-model — lib.packaging.fetchHuggingFaceModel, offline.
+# nixpkgs owns and tests the fetching itself.
 #
-# Two pkgs sets, neither of which touches the network:
-# - `stubbed` swaps in a fetchFromHuggingFace that records the arguments the
-#   wrapper passed and writes one small file per sparseCheckout entry, so the
-#   LICENSE / ATTRIBUTION layer can actually be built.
-# - the real fetcher is only EVALUATED (name, meta, drvPath). That is enough
-#   for getName and the licence gate, and proves nixpkgs accepts what the
-#   wrapper passes.
-# Both reach the wrapper as pkgs.ai.fetchHuggingFaceModel, so the overlay
-# exposure and its binding to the consumer's own pkgs are tested too.
+# The wrapper takes the caller's `pkgs` as an argument, and this check passes
+# two, neither of which touches the network:
+# - `stubbed` is pkgs with a fetchFromHuggingFace that records the arguments
+#   the wrapper passed and writes one small file per sparseCheckout entry, so
+#   the LICENSE / ATTRIBUTION layer can actually be built.
+# - the real pkgs is only EVALUATED (name, meta, drvPath). That is enough for
+#   getName and the licence gate, and proves nixpkgs accepts what the wrapper
+#   passes.
+# Both go through the flake's public self.lib, so the exposure is tested too.
 {
   lib,
   pkgs,
@@ -17,6 +17,7 @@
   ...
 }: let
   inherit (pkgs.stdenv.hostPlatform) system;
+  inherit (self.lib.packaging) fetchHuggingFaceModel;
   rev = "0123456789abcdef0123456789abcdef01234567";
   files = ["1_Pooling/config.json" "config.json"];
   base = {
@@ -39,20 +40,19 @@
         printf '%s\n' "$path" > "$out/$path"
       done
     '';
-  stubbed = pkgs.extend (_: _: {fetchFromHuggingFace = stub;});
-  fake = overrides: stubbed.ai.fetchHuggingFaceModel (base // overrides);
+  stubbed = pkgs // {fetchFromHuggingFace = stub;};
+  fake = overrides: fetchHuggingFaceModel ({pkgs = stubbed;} // base // overrides);
   passed = overrides: (fake overrides).args;
 
-  real = overrides: pkgs.ai.fetchHuggingFaceModel (base // overrides);
+  real = overrides: fetchHuggingFaceModel ({inherit pkgs;} // base // overrides);
   rejects = overrides: !(builtins.tryEval (real overrides).drvPath).success;
   # The licence gate itself, not just the meta value: check-meta must refuse
-  # the unfree default on both layers once allowUnfree is off.
+  # the unfree default on both layers once the CALLER's allowUnfree is off.
   strict = import pkgs.path {
     inherit system;
     config.allowUnfree = false;
-    overlays = [self.overlays.default];
   };
-  evaluates = overrides: (builtins.tryEval (strict.ai.fetchHuggingFaceModel (base // overrides)).drvPath).success;
+  evaluates = overrides: (builtins.tryEval (fetchHuggingFaceModel ({pkgs = strict;} // base // overrides)).drvPath).success;
 
   plain = fake {};
   noticedTree = fake noticed;
@@ -62,9 +62,15 @@
     files = ["license"];
   });
 in {
-  # Exposure: a plain function on the consumer's pkgs, and not a flake package.
-  checks.fetch-hugging-face-model = assert builtins.isFunction pkgs.ai.fetchHuggingFaceModel;
+  # Exposure: a plain function on the public lib, the only packaging helper
+  # exported there, and neither an overlay leaf nor a flake package.
+  checks.fetch-hugging-face-model = assert builtins.isFunction self.lib.packaging.fetchHuggingFaceModel;
+  assert builtins.attrNames self.lib.packaging == ["fetchHuggingFaceModel"];
+  assert !(pkgs.ai or {} ? fetchHuggingFaceModel);
+  assert !(pkgs ? fetchHuggingFaceModel);
   assert !(self.packages.${system} ? fetchHuggingFaceModel);
+  # `pkgs` is consumed, never handed to nixpkgs.
+  assert !(passed {} ? pkgs);
   # What the wrapper hands nixpkgs.
   assert (passed {}).backend == "lfs";
   assert (passed {backend = "xet";}).backend == "xet";
@@ -113,8 +119,8 @@ in {
   assert (real {}).meta.homepage == "https://huggingface.co/fixture-owner/Fixture-Model";
   assert (real noticed).fetched.outPath == (real mit).outPath;
   # meta.position names the caller, not the wrapper.
-  assert lib.hasInfix "/packages/hugging-face/checks.nix:" (real {}).meta.position;
-  assert lib.hasInfix "/packages/hugging-face/checks.nix:" (real noticed).meta.position;
+  assert lib.hasInfix "/checks/packaging/fetch-hugging-face-model.nix:" (real {}).meta.position;
+  assert lib.hasInfix "/checks/packaging/fetch-hugging-face-model.nix:" (real noticed).meta.position;
   # No makeOverridable `override`: it would skip the wrapper.
   assert !((real {}) ? override || (real {}) ? overrideDerivation);
   assert (real {}) ? overrideAttrs && (real noticed) ? overrideAttrs;

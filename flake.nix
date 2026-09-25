@@ -175,6 +175,10 @@
             # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
             # packages/stacked-workflows/modules/homeManager/git-config*.nix).
           };
+        # Consumer-facing packaging helpers. Only this one is public; the rest
+        # of lib/packaging.nix is the repo's own update/build tooling. It takes
+        # the caller's `pkgs` as an argument, so it builds on their nixpkgs.
+        packaging = {inherit (import ./lib/packaging.nix) fetchHuggingFaceModel;};
       };
     in
       repository.libraryFor baseLib;
