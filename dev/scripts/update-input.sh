@@ -95,29 +95,43 @@ set +e
   fi
 
   # Semble comes from the llm-agents flake input rather than a package update
-  # target, so mkUpdateScript's extraExtract hook can never run for it. Refresh
-  # the generated upstream snapshot here instead. The separate human-reviewed
-  # hashes deliberately stay untouched: CI must fail until a reviewer accepts
-  # or adapts each local derivative after upstream content changes.
+  # target, so mkUpdateScript's extraExtract hook can never run for it.
+  # Refresh its generated snapshots here instead, each from the
+  # `passthru.extracted` of its drift check:
+  #
+  #   extracted.json           language knowledge (bundled grammars,
+  #                            extension map, content-type sets)
+  #   upstream-templates.json  agent templates, installer text, MCP surface
+  #
+  # The separate human-reviewed template hashes deliberately stay untouched:
+  # CI must fail until a reviewer accepts or adapts each local derivative
+  # after upstream content changes.
+  semble_snapshots=(
+    "semble-languages-extracted:packages/semble/extracted.json"
+    "semble-templates-extracted:packages/semble/upstream-templates.json"
+  )
   if [ "$name" = "llm-agents" ]; then
-    log_info "Regenerating pinned Semble agent templates..."
+    log_info "Regenerating pinned Semble snapshots..."
     # Each step produces content the PR carries, so each failure is a
-    # hold-back. Without the guards a failed `nix build` left
-    # `semble_templates_path` empty, `cp ""` failed, and the PR shipped
-    # with an unrefreshed snapshot — all silently, per the errexit note
-    # above.
+    # hold-back. Without the guards a failed `nix build` left the store
+    # path empty, `cp ""` failed, and the PR shipped with an unrefreshed
+    # snapshot — all silently, per the errexit note above.
     update_system=$(nix eval --raw --impure --expr builtins.currentSystem)
-    if ! semble_templates_path=$(nix build --no-link --print-out-paths \
-      ".#checks.$update_system.semble-templates-extracted.passthru.extracted"); then
-      log_failure "semble template extraction failed"
-      exit 1
-    fi
-    if ! cp "$semble_templates_path" packages/semble/upstream-templates.json ||
-      ! chmod 644 packages/semble/upstream-templates.json ||
-      ! nix fmt -- packages/semble/upstream-templates.json; then
-      log_failure "could not refresh packages/semble/upstream-templates.json"
-      exit 1
-    fi
+    for snapshot in "${semble_snapshots[@]}"; do
+      check="${snapshot%%:*}"
+      target="${snapshot#*:}"
+      if ! snapshot_path=$(nix build --no-link --print-out-paths \
+        ".#checks.$update_system.$check.passthru.extracted"); then
+        log_failure "$check extraction failed"
+        exit 1
+      fi
+      if ! cp "$snapshot_path" "$target" ||
+        ! chmod 644 "$target" ||
+        ! nix fmt -- "$target"; then
+        log_failure "could not refresh $target"
+        exit 1
+      fi
+    done
   fi
 
   # Check if anything changed. `git diff --staged --quiet` signals through its
@@ -133,7 +147,7 @@ set +e
   # exited the subshell 0 — so the sweep printed `NO UPDATES` and the real
   # lock change was discarded with the worktree. Neither hold back nor
   # ship; the update simply vanished.
-  if ! git add flake.lock devenv.yaml devenv.lock packages/semble/upstream-templates.json; then
+  if ! git add flake.lock devenv.yaml devenv.lock "${semble_snapshots[@]#*:}"; then
     log_failure "git add failed"
     exit 1
   fi
