@@ -13,7 +13,8 @@ applyTo: "packages/semble/**"
 > `pathMappings` is an ordered root list of `{ language; content; patterns; }`
 > where the first match wins, validated against `extracted.json`. `mcp.content`
 > and `mcp.rootExposure` are gone: `mcp.enable = false` with an MCP-backed
-> subagent is a Kiro agent-private server. Model examples use the flake's
+> subagent is a Kiro agent-private server. Every installed package is a bin-only
+> launcher set that unsets PYTHONPATH. Model examples use the flake's
 > `lib.packaging.fetchHuggingFaceModel` and forward `files` as `passthru.files`,
 > which turns on the model2vec layout check.
 >
@@ -133,12 +134,15 @@ keeps the upstream bundle intact and avoids its mutable extraction cache.
 `ai.programs.semble.pathMappings` assigns files with non-standard names to a
 language and to one of Semble's `code`, `config`, or `docs` indexes. It is an
 ordered list of `{ language; content; patterns; }` entries. Each `language` must
-be a grammar Semble bundles, an alias of one (such as `zsh`, `py` or
-`terraform`), or the language of a `grammars` package; anything else fails
-evaluation, checked against `extracted.json`. Extra grammars must not reuse a
-bundled name or alias, since Semble would never load them. The same language may
-appear in several entries, so one language can split across content categories
-by path.
+be one Semble knows: a grammar it bundles, an alias of one (such as `zsh`, `py`
+or `terraform`), the language of a `grammars` package, or any other language in
+its extension map (such as `caddy` or `nginx`), which Semble indexes with line
+chunking. Anything else fails evaluation, checked against `extracted.json`. That
+file describes the pinned Semble; a consumer who overrides `package` with
+another version is validated against the pinned one. Extra grammars must not
+reuse a bundled name or alias, since Semble would never load them. The same
+language may appear in several entries, so one language can split across content
+categories by path.
 
 A pattern without `/` matches a basename at any depth; a pattern containing `/`
 matches the path relative to the indexed repository root. Path matching uses
@@ -198,6 +202,26 @@ The devenv integration uses `${config.devenv.state}/semble-cache`. Both bake
 value never enters the surrounding user or project shell. Consumer override of
 the variable through `env` is deliberately gone: devenv/Nix is the only config
 path.
+
+Semble is a Python application, and the module never installs its derivation
+directly. Every installed package, vanilla included, is a launcher set: a `bin/`
+of `makeWrapper` launchers and nothing else, no `lib/` and no `nix-support/`.
+Two nixpkgs behaviors make that necessary. First, a Python application
+propagates its whole closure and the interpreter
+(`nix-support/propagated-build-inputs`), and Python's setup hook turns that into
+PYTHONPATH in any shell that contains Python. Installing the upstream derivation
+in a devenv shell put Semble's dependencies (numpy, tokenizers, huggingface-hub,
+...) on the project's PYTHONPATH, ahead of its own virtualenv, even in
+non-Python projects. Home Manager profiles run no setup hooks and never leaked.
+Second, the upstream entry point appends Semble's site-packages AFTER
+PYTHONPATH, so any `semble` or dependency the calling shell exports shadows
+Semble's own. Each launcher therefore unsets PYTHONPATH. Both are properties of
+every nixpkgs Python application, not of Semble; the module fixes them for the
+packages it installs without touching the upstream derivation.
+`module-semble-launcher-python-isolation` checks both backends, including a
+multi-variant install, and proves its fake module does shadow the unwrapped
+binary. `lib.ai.mcpServers.mkSemble` points at whatever package it is given and
+does not add these launchers.
 
 Both backends record each effective Semble package store path in its assigned
 cache directory. A single active package keeps the established cache root;
@@ -283,6 +307,11 @@ different cache, by design.
 - The CLI prints a one-line stderr warning on every call that falls back to
   `defaultModel`, but only while `models` has entries. A setup without models
   stays silent.
+- An MCP call's `content` is one category or `all` (upstream's
+  `ContentSelection`), and a call without it searches `defaultContent`. So over
+  MCP a model is reachable only when its set is a single category, `all`, or
+  `defaultContent`. Evaluation warns for any other enabled entry while MCP or an
+  MCP-backed subagent is selected; only the CLI can select it.
 - A runtime override replaces the whole `models` list.
 - When a model package lists `passthru.files`, evaluation checks them against
   model2vec's three folder layouts. `lib.packaging.fetchHuggingFaceModel`
@@ -317,7 +346,10 @@ settings (`models = []`, `defaultModel = null`, `defaultContent = ["code"]`,
 `pathMappings = []`, `grammars = []`) keep the installed package upstream's
 derivation byte for byte, which is what keeps it substitutable. Disabled entries
 count as absent. Any other value changes the package, so the cache guard clears
-the indexes on the next activation or shell entry.
+the indexes on the next activation or shell entry. That includes changing only
+`defaultContent`: it costs a local, non-substitutable rebuild of Semble, where
+the removed `mcp.content` was a plain argument on upstream's cached package. The
+cost buys one default shared by the CLI and the MCP server.
 
 ### Routing guidance
 
@@ -327,8 +359,10 @@ one line per enabled entry with its `--content` and description, then the
 fallback rule and a reminder to pass `find-related` the same `--content`. A
 changed `defaultContent` without models renders only the first line. The
 subagent description lists what the configured models cover, so delegation can
-match prose questions too. A vanilla setup emits no block and keeps the packaged
-rule source.
+match prose questions too. The MCP subagent's description spells each entry as
+an MCP call would (`content: "docs"`, or "a call without `content`") and leaves
+out entries MCP cannot reach. A vanilla setup emits no block and keeps the
+packaged rule source.
 
 `ai.programs.semble.finalPackage` is the read-only package built from the
 portable config, with the module's cache location baked in. It is declared
@@ -390,8 +424,11 @@ semble-grammars ships one wheel per platform, each with its own manifest, and
 (`checks/extract-languages.py`) imports the real modules under Semble's own
 interpreter and fails unless the platform manifest equals the
 platform-independent `sources.json`. So the committed file is the same on every
-system, and the drift check (`semble-languages-extracted`) running on each CI
-platform catches a platform that drops a grammar. On 0.1.2 the linux-x86_64 and
+system, and the drift check (`semble-languages-extracted`) catches a platform
+that drops a grammar. It runs on Linux inside `nix flake check`, which skips
+Darwin, so CI's aarch64-darwin package job builds it separately (shard 0, before
+the receipt upload, so it gates the required `build` context). The update
+pipeline extracts on x86_64-linux only. On 0.1.2 the linux-x86_64 and
 macos-arm64 manifests both list the same 77 grammars as `sources.json`.
 
 Semble has no update target of its own; it arrives with the `llm-agents` input.
