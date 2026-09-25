@@ -1,10 +1,10 @@
 # Semble integrations
 
-> **Last verified:** 2026-09-25 — `cli.models` routes the CLI across per-key
-> embedding models through a Semble patch, resolved per key at runtime level,
-> with `default` added by the option's `apply`; `instructions.cli` became
-> `cli.instructions` with no alias; `finalPackage` exposes the portable package;
-> `mkSemble` passes any set `content`.
+> **Last verified:** 2026-09-25 — model examples use
+> `pkgs.ai.fetchHuggingFaceModel`, which sets no `passthru.files`; `cli.models`
+> routes the CLI across per-key embedding models through a Semble patch;
+> `instructions.cli` became `cli.instructions` with no alias; `finalPackage`
+> exposes the portable package; `mkSemble` passes any set `content`.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -202,14 +202,12 @@ categories it searches by default, and a purpose shown to agents:
 
 ```nix
 let
-  hf = inputs.nix-agentic-tools.lib.packaging.fetchFromHuggingFace;
+  hf = pkgs.ai.fetchHuggingFaceModel;
 in {
   ai.programs.semble.cli.models = {
     default = {
       model = hf {
-        inherit pkgs;
-        owner = "minishlab";
-        repo = "potion-code-16M-v2";
+        repoId = "minishlab/potion-code-16M-v2";
         rev = "e9d2a44ca6a05ac6685f3b23709ea57eb7352d5b";
         files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
         hash = "sha256-EPzwepPyhcrNmU6lrmx2F5iCSbeSoKg5qZbErEEYHvw=";
@@ -219,9 +217,7 @@ in {
     };
     prose = {
       model = hf {
-        inherit pkgs;
-        owner = "minishlab";
-        repo = "potion-base-32M";
+        repoId = "minishlab/potion-base-32M";
         rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
         files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
         hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
@@ -255,8 +251,8 @@ description then falls back to a built-in text. Once `default.model` is set,
 that is, while another entry is enabled. At least one entry must stay enabled.
 Other keys have no description default, so an enabled entry without one fails
 with nixpkgs' own path-qualified error. Keys match `[a-z0-9][a-z0-9_-]*`. When a
-model package lists `passthru.files`, as `fetchFromHuggingFace` outputs do,
-evaluation checks them against model2vec's three folder layouts.
+model package lists `passthru.files`, evaluation checks them against model2vec's
+three folder layouts. `pkgs.ai.fetchHuggingFaceModel` outputs do not set it.
 
 The models live under `cli` because only the CLI routes between them today. If
 the MCP server gains per-call model selection, `models` should move to the
