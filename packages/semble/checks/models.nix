@@ -279,6 +279,46 @@ in {
         && !(builtins.tryEval (customizePackage pkgs.ai.semble {models = [docs docs];}).drvPath).success
     );
 
+    # An MCP call's `content` is one category or "all"; omitting it searches
+    # defaultContent. A model for any other set is unreachable over MCP, so
+    # evaluation warns, and the MCP subagent's description leaves it out.
+    module-semble-models-mcp-reachability = mkTest "semble-models-mcp-reachability" (
+      let
+        settings = {
+          enable = true;
+          models = [docs codeConfig];
+          defaultContent = "docs";
+        };
+        warningsFor = extra: (evalHm {ai.programs.semble = settings // extra;}).config.warnings;
+        unreachable = "ai.programs.semble (claude, codex, kiro): `models.2` (content config code) is unreachable through MCP: an MCP call's `content` is one category or \"all\", and this set is not `defaultContent` either. Only the CLI can select it.";
+        mcpDescription =
+          (evalHm {
+            ai.programs.semble =
+              settings
+              // {
+                models = [docs codeConfig (docs // {content = "all";})];
+                subagent = {
+                  enable = true;
+                  interface = "mcp";
+                };
+              };
+          }).config.ai.claude.agents.semble-search.description;
+      in
+        warningsFor {}
+        == [unreachable]
+        # CLI-only: every set is reachable through `--content`.
+        && warningsFor {
+          mcp.enable = false;
+          cli.instructions.enable = true;
+        }
+        == []
+        # The same set as defaultContent is reachable by omitting `content`.
+        && warningsFor {defaultContent = ["code" "config"];} == []
+        && lib.hasInfix "for a call without `content` (Prose: READMEs and guides); `content: \"all\"` (Prose: READMEs and guides)." mcpDescription
+        && !(lib.hasInfix "--content" mcpDescription)
+        && !(lib.hasInfix "code config" mcpDescription)
+    );
+
     module-semble-models-default-content-warning = mkTest "semble-models-default-content-warning" (
       let
         warningsFor = settings:
@@ -479,7 +519,7 @@ in {
         && lib.hasInfix "Any other set uses the default model, and the CLI prints a warning." rule
         && lib.hasInfix "This setup has dedicated embedding models for --content docs (Prose: READMEs and guides); --content code config." agent.description
         && agent.description == kiroAgent.description
-        && lib.hasInfix "--content docs (Prose: READMEs and guides)" mcpAgent.description
+        && lib.hasInfix "`content: \"docs\"` (Prose: READMEs and guides)" mcpAgent.description
         && mcpAgent.instructions.source == ../mcp-agent-instructions.md
         && lib.hasPrefix "${routingIntro} `docs`. `--content` replaces that set for one call.\n\nUse `semble search`" contentOnlyRule
         && !(lib.hasInfix "embedding model" contentOnlyRule)

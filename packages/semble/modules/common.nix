@@ -280,11 +280,20 @@
       })
     ];
 
+  # An MCP caller passes `content` as one category or "all", or omits it for
+  # `defaultContent`; an enabled model for any other set is unreachable there.
+  mcpWarnings = state:
+    lib.optionals (state.selected "mcp" || mcpSubagent state)
+    (lib.concatLists (lib.imap1 (index: entry:
+      lib.optional (entry.enable && !(records.mcpReachable (routingFor state) entry.content))
+      "`models.${toString index}` (content ${lib.concatStringsSep " " (lib.toList entry.content)}) is unreachable through MCP: an MCP call's `content` is one category or \"all\", and this set is not `defaultContent` either. Only the CLI can select it.")
+    state.cfg.models));
+
   # Warnings for active runtimes, one line per distinct message.
   warningMessages = let
     byMessage =
       lib.foldl' (acc: state:
-        lib.foldl' (inner: message: inner // {${message} = (inner.${message} or []) ++ [state.runtime];}) acc state.customizationWarnings)
+        lib.foldl' (inner: message: inner // {${message} = (inner.${message} or []) ++ [state.runtime];}) acc (state.customizationWarnings ++ mcpWarnings state))
       {}
       activeStates;
   in

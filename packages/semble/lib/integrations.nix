@@ -23,7 +23,7 @@ let
     then value
     else [value];
   sortStrings = builtins.sort builtins.lessThan;
-  inherit (import ./contentCategories.nix) expand;
+  inherit (import ./contentCategories.nix) categories expand;
   shownContent = content: builtins.concatStringsSep " " (sortStrings (toList content));
   enabledModels = routing: builtins.filter (entry: entry.enable or true) (routing.models or []);
   defaultContentOf = routing: toList (routing.defaultContent or ["code"]);
@@ -74,12 +74,29 @@ let
       ++ ["" ""]
     );
 
+  # The MCP tools take `content` as ONE category or "all" (upstream's
+  # ContentSelection), and a call without it searches `defaultContent`. So an
+  # MCP caller reaches a model only for those sets; returns the argument to
+  # pass (null for none), or false when the set is unreachable.
+  mcpContentFor = routing: content: let
+    set = expand (toList content);
+  in
+    if set == expand (defaultContentOf routing)
+    then null
+    else if set == categories
+    then "all"
+    else if builtins.length set == 1
+    then builtins.head set
+    else false;
+  mcpReachable = routing: content: mcpContentFor routing content != false;
+
   # Mentions the configured models so delegation can match questions about
-  # their content, prose included.
-  agentDescription = routing: let
-    models = enabledModels routing;
+  # their content, prose included. `render` spells one entry's selection in
+  # the interface's own syntax; an entry it returns null for is omitted.
+  agentDescription = render: routing: let
+    models = builtins.filter (entry: render entry != null) (enabledModels routing);
     item = entry:
-      "--content ${shownContent entry.content}"
+      render entry
       + (
         if (entry.description or null) == null
         then ""
@@ -89,6 +106,15 @@ let
     if models == []
     then baseDescription
     else "${baseDescription} This setup has dedicated embedding models for ${builtins.concatStringsSep "; " (map item models)}.";
+  cliSelection = entry: "--content ${shownContent entry.content}";
+  mcpSelection = routing: entry: let
+    content = mcpContentFor routing entry.content;
+  in
+    if content == false
+    then null
+    else if content == null
+    then "a call without `content`"
+    else "`content: \"${content}\"`";
 
   mkCliRecords = command: routing: let
     routed = routes routing;
@@ -106,7 +132,7 @@ let
       else if routed
       then routingBlock command routing + packaged
       else packaged;
-    description = agentDescription routing;
+    description = agentDescription cliSelection routing;
   in {
     rule =
       if command == "semble" && !routed
@@ -125,7 +151,7 @@ let
   };
 
   mkMcpRecords = routing: let
-    description = agentDescription routing;
+    description = agentDescription (mcpSelection routing) routing;
   in {
     kiroAgent = {
       inherit description;
@@ -144,7 +170,7 @@ let
 in
   cli
   // {
-    inherit cli mcp mcpTools;
+    inherit cli mcp mcpReachable mcpTools;
     forCommand = command: mkCliRecords command {};
     # `routing` is `{ models; defaultContent; }`; see the routing notes above.
     forCli = {
