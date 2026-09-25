@@ -11,7 +11,7 @@ import ../common.nix {
   }: {
     home.activation.sembleCacheGuard = lib.hm.dag.entryAfter ["linkGeneration"] ''
       (
-      ${lib.getExe cacheGuard}
+      run ${lib.getExe cacheGuard}
       )
     '';
   };

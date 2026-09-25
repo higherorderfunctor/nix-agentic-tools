@@ -357,6 +357,14 @@
     && lib.hasInfix "--phase prune" kiroMcp.config.home.activation.materialize-kiro-settings-prune.text
     && lib.hasInfix "--phase all" claudeUnpin.config.home.activation.claudeUnpinLaunchEffort.text
   ) "ai.own: an activation entry runs the wrong phase";
+  # Every HM entry mutates, so every one must go through home-manager's `run`
+  # helper or a dry run writes settings and ledgers for real. The devenv body
+  # must not: devenv defines no `run`, so the task would fail on a missing
+  # command.
+  assert lib.assertMsg (
+    lib.all (lib.hasInfix "\nrun /nix/store/") (bodies kiroMcp ++ bodies claudeUnpin ++ bodies steeringRetirement)
+    && !lib.hasInfix "run /nix/store/" (devenvHooks false).config.tasks."ai:kiro:materialize-hooks".exec
+  ) "ai.own: an HM activation entry bypasses `run`, so DRY_RUN would not stop it writing";
   assert lib.assertMsg (lib.all strict (
     bodies kiroMcp
     ++ bodies claudeUnpin

@@ -81,7 +81,9 @@
       .text;
   in {
     documents = lib.listToAttrs (map (document: lib.nameValuePair document.path (declared document)) documents);
-    script = "${pkgs.writeText "activation-gate-${name}.sh" (lib.concatMapStrings (entry: text entry + "\n") entries)}";
+    # Every entry here is an HM activation entry, so the assembled script needs
+    # home-manager's `run` helper in scope before any of their bodies run.
+    script = "${pkgs.writeText "activation-gate-${name}.sh" (harness.hmRunShim + lib.concatMapStrings (entry: text entry + "\n") entries)}";
   };
 
   tools = {

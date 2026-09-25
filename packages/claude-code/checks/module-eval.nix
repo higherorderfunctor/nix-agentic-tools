@@ -775,9 +775,13 @@ in {
     # `lib.hm.dag`, which only the harness stubs.
     module-json-settings-reconciliation = let
       helpers = import ../../../lib/ai/hm-helpers.nix {lib = harness.hmLib;};
+      # Every `render` here reads an HM activation entry's `.text`, which
+      # expects home-manager's `run` helper already in scope, unlike
+      # `mkDevenvCase` below, which reads a devenv task's `.exec` and defines
+      # no such helper.
       mkCase = name: configFile: first: second: native: render: {
         inherit configFile first name native second;
-        scripts = map render [first second {}];
+        scripts = map (settings: harness.hmRunShim + render settings) [first second {}];
       };
       mkDevenvCase = {
         configFile,

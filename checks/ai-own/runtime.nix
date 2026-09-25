@@ -1,6 +1,43 @@
-{pkgs, ...}: let
+{
+  lib,
+  pkgs,
+  harness,
+  ...
+}: let
+  # A stub `lib.hm.dag`, exactly like `checks/ai-own/eval.nix`'s, so `own` can
+  # be called here without pulling in real home-manager. This builds one real
+  # HM document entry so `dry_run` in runtime.py can execute the SAME text
+  # `home-manager switch` would, with home-manager's `run` helper (from
+  # `lib/testing/hm-run.sh`) prepended — the shim runtime checks need because
+  # they execute activation text under plain bash, which carries no such
+  # preamble.
+  ownLib =
+    lib
+    // {
+      hm.dag = {
+        entryAfter = _: text: {inherit text;};
+        entryBefore = _: text: {inherit text;};
+      };
+    };
+  own = import ../../lib/ai/own.nix {lib = ownLib;};
+  dryRunEntry =
+    (own {
+      inherit pkgs;
+      backend = "hm";
+      entryNames.write = "dryRunProbe";
+      python = pkgs.python3;
+      targets = [
+        {
+          codec = "json";
+          ledger = "json-settings/dry-run-probe.json";
+          path = "settings/probe.json";
+          units.text = builtins.toJSON {probe = true;};
+        }
+      ];
+    }).config.home.activation.dryRunProbe.text;
   tools = {
     bash = "${pkgs.bash}/bin/bash";
+    hmEntryScript = pkgs.writeText "ai-own-dry-run-entry.sh" (harness.hmRunShim + dryRunEntry);
     # The TSV manifest materialize.nix wrote, captured from that program before
     # it was deleted, exactly as the JSON one below. Both are frozen BYTES
     # because the rollback contract is a byte format and both writers are gone;

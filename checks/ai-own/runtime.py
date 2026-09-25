@@ -954,8 +954,50 @@ def rejections(fixture):
     print("PASS rejections: eleven malformed plans refused before any container opened")
 
 
+def dry_run(fixture):
+    """The real HM activation entry, not own.py in isolation: `own.nix` routes
+    it through home-manager's `run` helper so `DRY_RUN` echoes the mutating
+    command instead of executing it. Against a virgin HOME, a DRY_RUN run must
+    write nothing at all -- no target file, no state directory -- and the same
+    entry with DRY_RUN unset must actually write. The unset run is the
+    positive control: without it, a shim that always no-ops would pass too.
+    """
+    home = fixture.plans.parent / "dry-run-home"
+    home.mkdir()
+    target = home / "settings/probe.json"
+    state = home / ".local/state/nix-agentic-tools"
+    environment = dict(os.environ, HOME=str(home))
+    environment.pop("XDG_STATE_HOME", None)
+
+    def activate(dry):
+        env = dict(environment)
+        if dry:
+            env["DRY_RUN"] = "1"
+        else:
+            env.pop("DRY_RUN", None)
+        result = subprocess.run(
+            [TOOLS["bash"], TOOLS["hmEntryScript"]],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert result.returncode == 0, result.stderr
+
+    activate(dry=True)
+    assert not target.exists(), "DRY_RUN wrote the target file"
+    assert not state.exists(), "DRY_RUN created the state directory"
+
+    activate(dry=False)
+    assert target.exists(), "the positive control did not write the target file"
+    assert json.loads(target.read_text()) == {"probe": True}, target.read_text()
+    assert state.exists(), "the positive control left no state directory"
+    print("PASS dry_run: DRY_RUN wrote nothing; the same entry without it wrote for real")
+
+
 CASES = {
     "drain": drain,
+    "dry_run": dry_run,
     "lazy_toml": lazy_toml,
     "legacy": legacy,
     "lock": lock,

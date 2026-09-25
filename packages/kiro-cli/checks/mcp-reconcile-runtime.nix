@@ -30,8 +30,11 @@
     };
     hm = evalHm cfg;
   in
+    # The hm branch is HM activation entry text and needs home-manager's `run`
+    # helper in scope; the devenv task's `.exec` defines no such helper and
+    # must not get one.
     if backend == "hm"
-    then hmMcpPruneScript hm + hmMcpWriteScript hm
+    then harness.hmRunShim + hmMcpPruneScript hm + hmMcpWriteScript hm
     else dvMcpTaskExec (evalDevenv cfg);
   first = builtins.fromJSON (renderedMcpJson servers);
   second = builtins.fromJSON (renderedMcpJson reduced);

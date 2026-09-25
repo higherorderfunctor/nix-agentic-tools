@@ -1057,7 +1057,7 @@ in
                   for nat_codex_skill_name in ${lib.escapeShellArgs codexSkillNames}; do
                     nat_codex_skill_targets+=("$HOME/.agents/skills/$nat_codex_skill_name")
                   done
-                  ${lib.getExe skillLinkMigrator} "${skillBackupRoot}" "''${nat_codex_skill_targets[@]}"''
+                  run ${lib.getExe skillLinkMigrator} "${skillBackupRoot}" "''${nat_codex_skill_targets[@]}"''
                 else ''exec ${lib.getExe skillLinkMigrator} ${lib.escapeShellArg skillBackupRoot} ${lib.escapeShellArgs codexSkillTargets}'';
               entry = {
                 devenv = "ai:codex:migrate-skill-links";

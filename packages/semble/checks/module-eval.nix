@@ -556,6 +556,15 @@ in {
       pkgs.runCommand "module-test-semble-cache-guard-runtime" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
+        ${harness.hmRunShim}
+
+        # A dry run must not clear the index or write the stamp.
+        (
+        export DRY_RUN=1
+        ${activation}
+        )
+        test ! -e ${cacheHome}/semble/clear-calls
+        test ! -e ${cacheHome}/semble/.nix-package
 
         ${activation}
         test "$(${pkgs.coreutils}/bin/wc -l < ${cacheHome}/semble/clear-calls)" -eq 1

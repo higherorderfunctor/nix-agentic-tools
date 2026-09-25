@@ -180,6 +180,8 @@
     };
   };
   aiStubs = (pkgs.ai or {}) // testing.homeManagerAiPackages;
+  # Prepend to HM activation text a runtime check executes; hm-run.sh says why.
+  hmRunShim = builtins.readFile ./hm-run.sh;
 
   evalHmWithSpecialArgs = extraSpecialArgs: config:
     lib.evalModules {
@@ -345,6 +347,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   inherit testing;
 }
