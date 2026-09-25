@@ -25,7 +25,7 @@
     else if evaluated.package != null
     then "${evaluated.package}/bin/semble-mcp"
     else throw "lib.ai.mcpServers.mkSemble requires either `package` or `command`";
-  contentErrors = contentScope.errors evaluated.content;
+  contentErrors = contentScope.errors "content" evaluated.content;
 in
   if contentErrors != []
   then throw "lib.ai.mcpServers.mkSemble: ${lib.concatStringsSep "\n" contentErrors}"

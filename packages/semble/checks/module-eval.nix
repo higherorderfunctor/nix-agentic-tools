@@ -176,7 +176,7 @@ in {
           }).config;
         onlyInstructions =
           (evalDevenv {
-            ai.programs.semble.instructions.cli.enable = true;
+            ai.programs.semble.cli.instructions.enable = true;
           }).config;
         onlySubagent =
           (evalDevenv {
@@ -221,7 +221,7 @@ in {
           (evalDevenv {
             ai = {
               programs.semble.mcp.content = "docs";
-              claude.programs.semble.instructions.cli.enable = true;
+              claude.programs.semble.cli.instructions.enable = true;
               codex.programs.semble.subagent.enable = true;
               kiro.programs.semble.mcp = {
                 content = "config";
@@ -295,7 +295,7 @@ in {
           ai = {
             programs.semble = {
               enable = true;
-              instructions.cli.enable = true;
+              cli.instructions.enable = true;
             };
             codex.programs.semble.grammars = [pkgs.tree-sitter-grammars.tree-sitter-awk];
             kiro.programs.semble.grammars = [pkgs.tree-sitter-grammars.tree-sitter-jq];
@@ -370,7 +370,7 @@ in {
     );
 
     module-semble-extra-grammars-load = let
-      customizePackage = import ../lib/withGrammars.nix {inherit lib pkgs;};
+      customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
       pathMappings = [
         {
           content = "code";
@@ -398,7 +398,7 @@ in {
           tree-sitter-awk
           tree-sitter-jq
         ])
-        pathMappings;
+        pathMappings {};
     in
       assert sembleWithGrammars.passthru.updateFlakeInput == "llm-agents";
         pkgs.runCommand "module-test-semble-extra-grammars-load" {} ''
@@ -844,7 +844,7 @@ in {
       let
         evaluated = evalDevenv {
           ai.kiro.programs.semble = {
-            instructions.cli.enable = true;
+            cli.instructions.enable = true;
             package = pkgs.hello;
           };
         };
@@ -867,7 +867,7 @@ in {
       let
         evaluated = evalDevenv {
           ai.kiro.rules.semble.text = "Consumer rule.";
-          ai.kiro.programs.semble.instructions.cli.enable = true;
+          ai.kiro.programs.semble.cli.instructions.enable = true;
         };
         rule = evaluated.config.ai.kiro.rules.semble;
       in
@@ -880,7 +880,7 @@ in {
       let
         evaluated = evalDevenv {
           ai.kiro.rules.semble.matcher = ["src/**"];
-          ai.kiro.programs.semble.instructions.cli.enable = true;
+          ai.kiro.programs.semble.cli.instructions.enable = true;
         };
         rule = evaluated.config.ai.kiro.rules.semble;
       in
@@ -898,7 +898,7 @@ in {
             codex.enable = true;
             kiro.enable = true;
           };
-          ai.programs.semble.instructions.cli.enable = true;
+          ai.programs.semble.cli.instructions.enable = true;
         };
         hm = (evalHm nativeConfig).config;
         devenv = (evalDevenv nativeConfig).config;
@@ -935,11 +935,15 @@ in {
         && programShape hm ["ai" "codex" "programs" "semble"]
         == programShape devenv ["ai" "codex" "programs" "semble"]
         && builtins.attrNames (programShape hm ["ai" "programs" "semble"])
-        == ["enable" "grammars" "instructions" "mcp" "package" "subagent"]
+        == ["cli" "enable" "finalPackage" "grammars" "mcp" "package" "subagent"]
+        # finalPackage is portable-only: no runtime override exists for it.
+        && builtins.attrNames (programShape hm ["ai" "codex" "programs" "semble"])
+        == ["cli" "enable" "grammars" "mcp" "package" "subagent"]
         && builtins.attrNames (programShape hm ["ai" "programs" "semble"]).mcp
         == ["content" "enable" "pathMappings" "rootExposure"]
-        && builtins.attrNames (programShape hm ["ai" "programs" "semble"]).instructions
-        == ["cli"]
+        # `instructions.cli` was renamed to `cli.instructions` with no alias.
+        && builtins.attrNames (programShape hm ["ai" "programs" "semble"]).cli
+        == ["instructions" "models"]
         && lib.all
         (runtime: lib.hasAttrByPath ["ai" runtime "programs" "semble"] hm.options)
         ["claude" "codex" "kiro"]

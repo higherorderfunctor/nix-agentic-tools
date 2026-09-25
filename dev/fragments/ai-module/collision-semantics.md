@@ -1,12 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-24 — merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
-> text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target, matched on the key
-> each record's `sharedAgentsMd` callback declares. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-25 — B4 resolves a program's `pools` per key with
+> `mergePool`; Semble's CLI rule gate is `cli.instructions`.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -28,7 +23,7 @@ commit.
 | B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
 | B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
-| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
+| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins. A leaf in the spec's `pools` merges per key (B1, B10).      |
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
@@ -168,7 +163,7 @@ same-priority definitions of both fields fail. Semble's generated CLI rule is
 the deliberate package pattern that relies on this contract: it defaults the
 rule fields so a consumer's inline text can override the packaged source while
 the source remains visible. Consumers can retract that generated rule with
-`ai.<runtime>.rules.semble.enable = false`; its runtime `instructions.cli`
+`ai.<runtime>.rules.semble.enable = false`; its runtime `cli.instructions`
 feature flag remains the package-level gate.
 
 **`ai.<runtime>.files` is another exception, and the reason is worth knowing

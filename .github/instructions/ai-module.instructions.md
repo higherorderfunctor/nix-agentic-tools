@@ -7,32 +7,9 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-24 — every runtime describes delivery once through
-> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
-> transforms reject a backend spec carrying anything but `installPackage`,
-> `migrationConfig` and `options`, since an overridden or hand-built record
-> reaches a transform without the constructor. Kiro hook commands resolve
-> packages through the shared `commandType`. Launchers bake the builder's one
-> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
-> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
-> `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
-> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
-> `agent.fileContent` where it copies, so a store-path string is a file, never a
-> body naming its own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). A root request nothing per-runtime can withdraw
-> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
-> owned writable copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
-> declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Upstream
-> delegation aliases the content field's own definitions. Ledger-owned copies
-> whose files nothing else retracts opt into `runWhenDisabled`. `ai.lspServers`
-> renders whole files with each runtime's envelope, Copilot/Kiro require
-> `extensions`, and Copilot constrains server names.
+> **Last verified:** 2026-09-25 — `mkProgram` takes a `pools` list: a listed
+> `attrsOf` option resolves per key through `mergePool` at runtime level, and
+> every other leaf keeps the scalar B4 contract.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -687,7 +664,11 @@ tree. The factory projects that into `ai.programs.<name>` plus only the listed
 `ai.<runtime>.programs.<name>` paths. Runtime leaves are nullable and resolve
 independently through `resolveOverride`: null inherits the portable value and a
 non-null value wins. This is the scalar B4 contract, not keyed-pool tombstone
-behavior.
+behavior. The exception is an `attrsOf` option listed in the spec's `pools`
+(Semble's `cli.models`): its runtime option holds nullable entries, and
+`resolveTree` merges it with `mergePool`, so a runtime entry replaces one key
+and a runtime null drops it. Without `pools`, a runtime set would replace the
+whole portable set and silently drop keys the module defines in config.
 
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
@@ -804,13 +785,8 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-24 — merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
-> text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target, matched on the key
-> each record's `sharedAgentsMd` callback declares. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-25 — B4 resolves a program's `pools` per key with
+> `mergePool`; Semble's CLI rule gate is `cli.instructions`.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -832,7 +808,7 @@ commit.
 | B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
 | B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
-| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
+| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins. A leaf in the spec's `pools` merges per key (B1, B10).      |
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
@@ -972,7 +948,7 @@ same-priority definitions of both fields fail. Semble's generated CLI rule is
 the deliberate package pattern that relies on this contract: it defaults the
 rule fields so a consumer's inline text can override the packaged source while
 the source remains visible. Consumers can retract that generated rule with
-`ai.<runtime>.rules.semble.enable = false`; its runtime `instructions.cli`
+`ai.<runtime>.rules.semble.enable = false`; its runtime `cli.instructions`
 feature flag remains the package-level gate.
 
 **`ai.<runtime>.files` is another exception, and the reason is worth knowing
@@ -1607,15 +1583,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-24 — the builder entry point is
-> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
-> callback. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
-> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
-> a runtime-specific implicit shell default. `ai.shell` stays null; see below
-> for the standing decision and the override rule it shares with normalized
-> `settings`. The builder merges every launcher's process environment once, as
-> `launcherEnvironment`; Codex and Copilot wrap through `lib.ai.mkLauncher`.
+> **Last verified:** 2026-09-25 — `lib.ai.program.mkProgram` resolves a spec's
+> `pools` per key; every other program leaf stays a nullable override.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1671,10 +1640,12 @@ values have been resolved.
 
 `lib.ai.program.mkProgram` applies the same rule to every leaf of a program
 specification. Root declarations retain their ordinary types and defaults;
-runtime declarations are generated as nullable versions of those declarations.
-The program module receives one recursively resolved record per supported
-runtime. The specification's `supportedRuntimes` list is the single capability
-source: unsupported `ai.<runtime>.programs.<pkg>` paths do not exist.
+runtime declarations are generated as nullable versions of those declarations,
+except the `attrsOf` options listed in the spec's `pools`, whose runtime
+declarations hold nullable entries resolved per key with `mergePool`. The
+program module receives one recursively resolved record per supported runtime.
+The specification's `supportedRuntimes` list is the single capability source:
+unsupported `ai.<runtime>.programs.<pkg>` paths do not exist.
 
 Do not add a sibling runtime selector. Runtime program `enable = false` is the
 negation mechanism, and an individual runtime feature may override the portable

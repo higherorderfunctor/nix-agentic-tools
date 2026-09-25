@@ -1,8 +1,9 @@
 # Semble integrations
 
-> **Last verified:** 2026-09-21 — CLI rule content uses leaf defaults so a
-> consumer's higher-priority inline text can override the packaged source, and
-> entry-local `enable` suppresses the generated rule.
+> **Last verified:** 2026-09-25 — `cli.models` routes the CLI across per-key
+> embedding models through a Semble patch, resolved per key at runtime level;
+> `instructions.cli` became `cli.instructions` with no alias; `finalPackage`
+> exposes the portable package.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -42,7 +43,7 @@ ai = {
     ];
     package = pkgs.ai.semble;
 
-    instructions.cli.enable = true;
+    cli.instructions.enable = true;
     mcp = {
       enable = true;
       content = ["code" "docs"];
@@ -153,7 +154,7 @@ record atomically and `null` suppresses it for that runtime. The CLI rule
 instead defaults each content field: a consumer's higher-priority `text`
 overrides the packaged `source`, which remains visible on the resolved rule. Set
 `ai.<runtime>.rules.semble.enable = false` to retract it at the normalized pool,
-or disable `ai.<runtime>.programs.semble.instructions.cli` at its package gate.
+or disable `ai.<runtime>.programs.semble.cli.instructions` at its package gate.
 Kiro's runtime-native subagent is not a normalized nullable pool: consumers can
 replace the generated entry atomically, but cannot suppress it with `null`.
 Claude and Codex compose the guidance into their single always-loaded
@@ -192,9 +193,137 @@ Codex with `sandbox_mode` set to `workspace-write`. That gate is about Codex's
 sandbox rather than about where Semble keeps its index. The module does not
 choose a sandbox mode.
 
+## Embedding models
+
+`cli.models` lets the CLI route searches across several embedding models. Each
+key names a model directory (a package, never a Hugging Face id), the content
+categories it searches by default, and a purpose shown to agents:
+
+```nix
+let
+  hf = inputs.nix-agentic-tools.lib.packaging.fetchFromHuggingFace;
+in {
+  ai.programs.semble.cli.models = {
+    default = {
+      model = hf {
+        inherit pkgs;
+        owner = "minishlab";
+        repo = "potion-code-16M-v2";
+        rev = "e9d2a44ca6a05ac6685f3b23709ea57eb7352d5b";
+        files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+        hash = "sha256-EPzwepPyhcrNmU6lrmx2F5iCSbeSoKg5qZbErEEYHvw=";
+        license = pkgs.lib.licenses.mit;
+      };
+      description = "Source code: implementations, tests, build files.";
+    };
+    prose = {
+      model = hf {
+        inherit pkgs;
+        owner = "minishlab";
+        repo = "potion-base-32M";
+        rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
+        files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+        hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
+        license = pkgs.lib.licenses.mit;
+      };
+      content = "docs";
+      description = "Prose: READMEs, design notes, architecture docs.";
+    };
+  };
+}
+```
+
+The CLI then behaves like this:
+
+- `semble search …` uses the `default` entry's model and content.
+- `semble --model prose search …` and `semble search … --model prose` use the
+  `prose` entry. `--model` is accepted before the subcommand and on `search` and
+  `find-related`, not on `clear`, which removes every index anyway.
+- `--content` replaces the entry's content for that call, whole.
+- An unknown or disabled key is an argparse error that lists the valid keys.
+  With `default.enable = false`, a call without `--model` fails the same way.
+
+`default` always exists: the module defines `cli.models.default = {}` in config,
+because an `attrsOf` option default is discarded as soon as a consumer defines
+any key. Disable it rather than removing it. `default.model = null` (the
+default) means Semble's built-in model, and its description then falls back to a
+built-in text; once `default.model` is set, `default.description` is required.
+Other keys have no description default, so an enabled entry without one fails
+with nixpkgs' own path-qualified error. Keys match `[a-z0-9][a-z0-9_-]*`. When a
+model package lists `passthru.files`, as `fetchFromHuggingFace` outputs do,
+evaluation checks them against model2vec's three folder layouts.
+
+The models live under `cli` because only the CLI routes between them today. If
+the MCP server gains per-call model selection, `models` should move to the
+program root. `default.model` already drives the module's MCP server; the
+`default.enable` flag is CLI-only.
+
+### Mechanism
+
+Routing is a patch to Semble's entry points (`patches/models.patch`), not a bash
+wrapper, which leaves room for per-call model selection over MCP later:
+
+- `cli.py` reads a generated key table (`src/semble/semble_models.py`, written
+  in `postPatch` the way the grammar loader is). It resolves the entry, fills
+  `--content` from it when absent, and sets `SEMBLE_MODEL_NAME` in-process only
+  when the entry names a model. `main()` skips a leading `--model` before
+  choosing between the CLI and the MCP server.
+- `semble-mcp` (the same entry point) takes `--model KEY` too. Without it, the
+  server uses the default entry's model and upstream's content default, so the
+  module's `mcp.content` still decides. With it, the server uses that entry's
+  model and content unless `--content` is given. It never reads
+  `default.enable`.
+- `cache.py`'s `find_index_from_cache_folder` appends `@` and 16 hex characters
+  of `sha256(model name)` to the index directory when the model is not Semble's
+  default: `<cache>/<repo-hash>/index-<scope>@<modelhash>`. Upstream 0.6.0 keys
+  the index by repo and content only, so two models on one repo would overwrite
+  each other. The default model keeps upstream's exact path, renaming a key
+  never reindexes, and `semble clear index` (which removes each repo folder)
+  still reaches every model's index, so the cache guard needs no change.
+
+The models patch applies on its own or on top of the grammar patch, and only
+when `cli.models` differs from the built-in default. With the built-in default
+and no grammars or path mappings, the installed package stays upstream's
+derivation byte for byte, which is what keeps it substitutable. Any model edit
+changes the package, so the cache guard clears the indexes on the next
+activation or shell entry.
+
+A runtime override resolves `cli.models` per key (the program factory's `pools`
+field): `ai.kiro.programs.semble.cli.models.prose = null` drops one key for
+Kiro, and a runtime entry replaces only the entry with its key. The resolved set
+must still hold `default`; disable it with `default.enable = false` instead.
+
+### Routing guidance
+
+When a key other than `default` is enabled, or `default` is disabled, the CLI
+rule and both CLI subagent prompts open with a routing block: one line per
+enabled key (invocation, content, description), then precedence lines. Each
+enabled key whose content includes a category the default lacks gets "prefer
+`--model K` over `--content C`", because the kept upstream template tells agents
+to pass `--content` for non-code searches, which would reach the code model. A
+final line says to pass the same `--model` (and `--content`) to `find-related`,
+which otherwise queries the wrong index. The packaged template follows once. A
+vanilla setup emits no block and keeps the packaged rule source.
+
+### Extra MCP servers
+
+`ai.programs.semble.finalPackage` is the read-only package built from the
+portable config, with the module's cache location baked in. It is declared
+outside the program factory, so it has no runtime override. Point a
+hand-declared server at it to serve another model:
+
+```nix
+ai.claude.mcpServers.semble-docs = inputs.nix-agentic-tools.lib.ai.mcpServers.mkSemble {
+  inherit lib pkgs;
+} {
+  command = "${config.ai.programs.semble.finalPackage}/bin/semble-mcp";
+  args = ["--model" "prose"];
+};
+```
+
 ## CLI rule and subagent content
 
-`instructions.cli.enable` installs one named `semble` rule containing committed
+`cli.instructions.enable` installs one named `semble` rule containing committed
 CLI guidance, without the non-Nix `uvx` fallback. It defaults false even when
 the program is enabled. The named subagent also defaults false and selects one
 of two committed prompts: `interface = "cli"` uses shell/read tools and the CLI
@@ -254,13 +383,16 @@ in {
 ```
 
 For package-only composition,
-`lib.ai.semble.customizePackage { inherit lib pkgs; } package grammars pathMappings`
-applies both customization lists. `lib.ai.semble.withGrammars` remains the
-grammar-only shorthand.
+`lib.ai.semble.customizePackage { inherit lib pkgs; } package grammars pathMappings models`
+applies all three customizations; `models` takes the `cli.models` shape, and a
+missing `default` means the built-in one. `lib.ai.semble.withGrammars` remains
+the grammar-only shorthand. `lib.ai.semble.forCli { command; models; }` renders
+the CLI records with the routing block.
 
 The package roles are `pkgs.ai.semble` and `pkgs.ai.mcpServers.semble-mcp`. They
 share one derivation; the latter changes only the evaluation-time
 `meta.mainProgram` used by `lib.getExe`.
 
-Semble may download its embedding model into the user cache on first use. The
-Nix package does not vendor that runtime model.
+Unless `cli.models.default.model` is set, Semble downloads its built-in
+embedding model into the user cache on first use; the Nix package does not
+vendor it.

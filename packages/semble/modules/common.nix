@@ -21,13 +21,14 @@
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
   program = programFactory.mkProgram (import ./options.nix {inherit lib pkgs;});
   contentScope = import ../lib/contentScope.nix {inherit lib;};
+  sembleModels = import ../lib/models.nix {inherit lib;};
   records = import ../lib/integrations.nix;
   runtimes = program.supportedRuntimes;
   cacheRoot = cacheLocation {inherit config lib;};
-  customizePackage = import ../lib/withGrammars.nix {inherit lib pkgs;};
+  customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
 
   featurePaths = {
-    instructions = ["instructions" "cli"];
+    instructions = ["cli" "instructions"];
     mcp = ["mcp"];
     subagent = ["subagent"];
   };
@@ -51,37 +52,49 @@
     then portableFeature
     else portable.enable;
 
-  mkState = runtime: let
-    portable = config.ai.programs.semble;
-    override = config.ai.${runtime}.programs.semble;
-    cfg = program.resolve config runtime;
+  # The customization checks, shared by every runtime state and by
+  # `finalPackage`, which is built from the portable config.
+  mkCustomization = cfg: let
+    models = cfg.cli.models;
     grammarLanguages = map (grammar: grammar.language or "") cfg.grammars;
     mappingPatterns = lib.concatMap (mapping: mapping.patterns) cfg.mcp.pathMappings;
-    packageCustomizable = (cfg.grammars == [] && cfg.mcp.pathMappings == []) || cfg.package ? overridePythonAttrs;
+    packageCustomizable = (cfg.grammars == [] && cfg.mcp.pathMappings == [] && sembleModels.isVanilla models) || cfg.package ? overridePythonAttrs;
     grammarLanguagesValid = lib.all (language: language != "") grammarLanguages;
     grammarLanguagesUnique = lib.length (lib.unique grammarLanguages) == lib.length grammarLanguages;
     pathMappingsValid = lib.all (mapping: mapping.language != "" && mapping.patterns != [] && lib.all (pattern: pattern != "") mapping.patterns) cfg.mcp.pathMappings;
     pathMappingPatternsUnique = lib.length (lib.unique mappingPatterns) == lib.length mappingPatterns;
-    customizationValid = packageCustomizable && grammarLanguagesValid && grammarLanguagesUnique && pathMappingsValid && pathMappingPatternsUnique;
-    customizedPackage =
-      if customizationValid
-      then customizePackage cfg.package cfg.grammars cfg.mcp.pathMappings
-      else cfg.package;
-    selected = featureName: featureEnabled portable override featureName;
+    modelErrors = sembleModels.errors "cli.models" models;
+    customizationValid = packageCustomizable && grammarLanguagesValid && grammarLanguagesUnique && pathMappingsValid && pathMappingPatternsUnique && modelErrors == [];
   in {
     inherit
-      cfg
-      customizedPackage
       grammarLanguagesUnique
       grammarLanguagesValid
+      modelErrors
       packageCustomizable
       pathMappingPatternsUnique
       pathMappingsValid
-      runtime
-      selected
       ;
-    integrationActive = lib.any selected ["instructions" "mcp" "subagent"];
+    customizedPackage =
+      if customizationValid
+      then customizePackage cfg.package cfg.grammars cfg.mcp.pathMappings models
+      else cfg.package;
   };
+
+  mkState = runtime: let
+    portable = config.ai.programs.semble;
+    override = config.ai.${runtime}.programs.semble;
+    cfg = program.resolve config runtime;
+    selected = featureName: featureEnabled portable override featureName;
+  in
+    mkCustomization cfg
+    // {
+      inherit
+        cfg
+        runtime
+        selected
+        ;
+      integrationActive = lib.any selected ["instructions" "mcp" "subagent"];
+    };
 
   states = lib.genAttrs runtimes mkState;
   stateList = lib.attrValues states;
@@ -91,37 +104,39 @@
   packageKey = package: builtins.hashString "sha256" (builtins.unsafeDiscardStringContext (toString package));
   variantKeys = lib.unique (map (state: packageKey state.customizedPackage) activeStates);
   variantCount = lib.length variantKeys;
+  # One installed variant per distinct customized package. A package that no
+  # active runtime uses (only `finalPackage` can ask for one) gets its own
+  # package-keyed cache directory, so it never shares an index with another.
+  mkVariant = package: let
+    key = packageKey package;
+    cacheDir =
+      if variantCount == 1 && lib.elem key variantKeys
+      then cacheRoot
+      else "${cacheRoot}/variants/${builtins.substring 0 16 key}";
+  in {
+    inherit cacheDir package;
+    wrappedPackage =
+      if !relocatesCache
+      then package
+      else
+        pkgs.symlinkJoin {
+          name = "${lib.getName package}-wrapped";
+          paths = [package];
+          nativeBuildInputs = [pkgs.makeWrapper];
+          passthru = package.passthru or {};
+          postBuild = ''
+            for bin in "$out"/bin/*; do
+              wrapProgram "$bin" \
+                --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg cacheDir}
+            done
+          '';
+        };
+  };
   variants =
     builtins.listToAttrs
-    (map (state: let
-        key = packageKey state.customizedPackage;
-        variantCache =
-          if variantCount == 1
-          then cacheRoot
-          else "${cacheRoot}/variants/${builtins.substring 0 16 key}";
-        wrappedPackage =
-          if !relocatesCache
-          then state.customizedPackage
-          else
-            pkgs.symlinkJoin {
-              name = "${lib.getName state.customizedPackage}-wrapped";
-              paths = [state.customizedPackage];
-              nativeBuildInputs = [pkgs.makeWrapper];
-              passthru = state.customizedPackage.passthru or {};
-              postBuild = ''
-                for bin in "$out"/bin/*; do
-                  wrapProgram "$bin" \
-                    --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg variantCache}
-                done
-              '';
-            };
-      in {
-        name = key;
-        value = {
-          cacheDir = variantCache;
-          package = state.customizedPackage;
-          inherit wrappedPackage;
-        };
+    (map (state: {
+        name = packageKey state.customizedPackage;
+        value = mkVariant state.customizedPackage;
       })
       activeStates);
   variantFor = state: variants.${packageKey state.customizedPackage};
@@ -131,7 +146,17 @@
     if multiVariant
     then "semble-${state.runtime}"
     else "semble";
-  recordsFor = state: records.forCommand (commandFor state);
+  recordsFor = state:
+    records.forCli {
+      command = commandFor state;
+      models = state.cfg.cli.models;
+    };
+
+  # The package `semble` resolves to for the portable config, with the same
+  # cache relocation as the installed launcher. It is what a consumer points
+  # hand-declared MCP servers at (`semble-mcp --model <key>`).
+  portablePackage = (mkCustomization config.ai.programs.semble).customizedPackage;
+  finalPackage = (variants.${packageKey portablePackage} or (mkVariant portablePackage)).wrappedPackage;
 
   installedPackage =
     if !multiVariant
@@ -249,9 +274,35 @@
 in {
   imports = [program.module];
 
+  # A second declaration of the portable program option, so the factory does
+  # not generate a per-runtime override for this read-only value.
+  options.ai.programs.semble = lib.mkOption {
+    type = lib.types.submodule {
+      options.finalPackage = lib.mkOption {
+        type = lib.types.package;
+        readOnly = true;
+        description = ''
+          The Semble package built from the portable `ai.programs.semble`
+          config: grammars, path mappings and `cli.models` applied, with the
+          module's cache location baked in. Point hand-declared MCP servers at
+          it to serve a non-default model, e.g.
+          `command = "''${config.ai.programs.semble.finalPackage}/bin/semble-mcp";`
+          with `args = ["--model" "docs"];`.
+        '';
+      };
+    };
+  };
+
   config = lib.mkMerge (
     [
       {
+        # The `default` entry always exists. Defining it here rather than as
+        # the option default matters: an attrsOf default is discarded as soon
+        # as a consumer defines any key.
+        ai.programs.semble = {
+          cli.models.default = {};
+          inherit finalPackage;
+        };
         assertions = lib.concatMap (state:
           [
             {
@@ -277,8 +328,12 @@ in {
           ]
           ++ map (message: {
             assertion = false;
-            inherit message;
-          }) (contentScope.errors state.cfg.mcp.content)
+            message = "ai.${state.runtime}.programs.semble: ${message}";
+          }) (contentScope.errors "mcp.content" state.cfg.mcp.content ++ state.modelErrors)
+          ++ lib.optional (state.cfg.cli.models ? default) {
+            assertion = state.cfg.cli.models.default.model == null || state.cfg.cli.models.default.description != null;
+            message = "ai.${state.runtime}.programs.semble.cli.models.default.description must be set once cli.models.default.model is set: the built-in description describes Semble's own model.";
+          }
           ++ lib.optional (state.selected "subagent" && state.cfg.subagent.interface == "mcp") {
             assertion = state.selected "mcp";
             message = "ai.${state.runtime}.programs.semble.subagent.interface = \"mcp\" requires the Semble MCP integration for the same runtime.";
