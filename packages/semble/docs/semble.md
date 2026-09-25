@@ -1,6 +1,7 @@
 # Semble integrations
 
-> **Last verified:** 2026-09-25 — model examples use
+> **Last verified:** 2026-09-25 — `extracted.json` snapshots Semble's language
+> knowledge and regenerates on `llm-agents` bumps; model examples use
 > `pkgs.ai.fetchHuggingFaceModel`, which sets no `passthru.files`; `cli.models`
 > routes the CLI across per-key embedding models through a Semble patch;
 > `instructions.cli` became `cli.instructions` with no alias; `finalPackage`
@@ -361,6 +362,35 @@ embedded `semble[mcp]==<version>` fallback to match the packaged version. The
 exact MCP surface is reviewed separately, and every tool and argument named by
 the committed MCP prompt must remain present. Module evaluation reads only
 committed files and does not introduce IFD.
+
+## Language knowledge snapshot
+
+`packages/semble/extracted.json` records what the pinned Semble knows about
+languages, and `lib/extracted.nix` exposes it to evaluation without IFD. Two
+packages decide how a file is treated:
+
+- **semble** maps a file suffix to a language (`extensions`). A suffix outside
+  that map is not indexed. `contentTypes` holds the language sets behind
+  `--content code|docs|config`; `code` is upstream's remainder after docs,
+  config and `dataLanguages`.
+- **semble-grammars** decides which languages get tree-sitter parsing
+  (`grammars.bundled`, after its `grammars.aliases`, so `zsh` parses as `bash`).
+  Every other indexed language falls back to line chunking. `parsedLanguages`
+  joins the two.
+
+semble-grammars ships one wheel per platform, each with its own manifest, and
+`available_languages()` reads that manifest. The extractor
+(`checks/extract-languages.py`) imports the real modules under Semble's own
+interpreter and fails unless the platform manifest equals the
+platform-independent `sources.json`. So the committed file is the same on every
+system, and the drift check (`semble-languages-extracted`) running on each CI
+platform catches a platform that drops a grammar. On 0.1.2 the linux-x86_64 and
+macos-arm64 manifests both list the same 77 grammars as `sources.json`.
+
+Semble has no update target of its own; it arrives with the `llm-agents` input.
+`dev/scripts/update-input.sh` therefore rebuilds both Semble snapshots
+(`extracted.json` and `upstream-templates.json`) from their checks'
+`passthru.extracted` on every `llm-agents` bump, so the bot PR carries them.
 
 ## Direct configuration
 
