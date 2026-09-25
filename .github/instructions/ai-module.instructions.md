@@ -10,8 +10,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > **Last verified:** 2026-09-25 — module-contributed process env rides a
 > per-runtime internal channel, which carries `ai.programs.git`'s per-harness
 > identity; its gitconfig pins `tag.forceSignAnnotated`, its signing assertions
-> read the body case-insensitively as git does, and `mkProgram` takes
-> `overrideDescriptions` for a leaf it does not resolve.
+> read the body case-insensitively as git does, `gh.configDir` must be absolute,
+> and `mkProgram` takes `overrideDescriptions` for a leaf it does not resolve.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -232,17 +232,21 @@ an explicit consumer entry wins. Invariants, each load-bearing:
   stated in the `gh` option text.
 - A signing key is a string refused under the store (a path literal would copy
   the key there); so are `credentials.file` and `gh.configDir` (assertions).
-  `settings.user.signingKey` is NOT refused: git also takes a public key file or
-  a `key::` literal there for agent-backed ssh signing, and a public key in the
-  store is harmless. `signByDefault` with a null key or format is an assertion
-  failure for an enabled runtime, never a silent unsigned commit.
+  `gh.configDir` must also be absolute: it is published verbatim, so nothing
+  expands `~`. `settings.user.signingKey` is NOT refused: git also takes a
+  public key file or a `key::` literal there for agent-backed ssh signing, and a
+  public key in the store is harmless. `signByDefault` with a null key or format
+  is an assertion failure for an enabled runtime, never a silent unsigned
+  commit.
 
 `module-ai-programs-git-rendered-gitconfig` reads the file with real git. When
 probing by hand, note that `git config --global` reads one file and SKIPS its
 includes; use `--includes`. Not covered by this mechanism: SSH remotes
 (including one a user `pushInsteadOf` rewrites to SSH, measured: `insteadOf` is
 not re-applied to its result), and tools that ignore `GIT_CONFIG_GLOBAL`
-(git-mcp's GitPython commit; libgit2 callers are unmeasured). On devenv each
+(git-mcp's GitPython commit; libgit2 callers are unmeasured), and Copilot CLI's
+built-in GitHub MCP server, which reportedly acts as the Copilot login whatever
+`GH_CONFIG_DIR` says (unmeasured against the pinned build). On devenv each
 launcher bakes the project's own env, so the identity must be configured in the
 project (`devenv.local.nix`) too.
 
