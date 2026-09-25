@@ -1,5 +1,8 @@
 # lib/packaging.nix — DRY version extraction + smoke test helpers.
 #
+# One exception: `fetchHuggingFaceModel` is consumer-facing, exported
+# through the flake's `lib.packaging`. It lives here temporarily.
+#
 # Each helper reads a manifest from a Nix store path (src) at eval
 # time and returns the upstream version string. Callers combine it
 # with `builtins.substring 0 7 rev` to produce "x.y.z+abc1234".
