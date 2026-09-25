@@ -199,7 +199,11 @@
         && builtins.attrNames lazyWorld.packages.ai == ["available" "unavailable"]
         # Validating an ordinary overlay leaf must not force its package
         # neighbours: `unavailable` throws if evaluated.
-        && lazyOverlayResult.ai.ordinary == "ordinary";
+        && lazyOverlayResult.ai.ordinary == "ordinary"
+        # A later owner's claim check must not compare an earlier owner's
+        # function leaf: `==` is false for every function.
+        && lazyOverlayResult.ai.later == "later"
+        && lazyOverlayResult.ai.callable "value" == "value";
       overlay-order-and-namespace =
         overlayResult.ai.seed
         == inputs.fixture.sentinel
