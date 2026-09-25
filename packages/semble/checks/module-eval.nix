@@ -94,8 +94,8 @@ in {
     );
 
     # CONTENT coverage for semble's relocated cache. The parity test above can
-    # only assert the derivation NAME, which symlinkJoin emits whether or not
-    # the wrapper actually carries anything — so on its own it would pass a
+    # only assert the derivation NAME, which the launcher set carries whether
+    # or not its wrappers actually set anything — so on its own it would pass a
     # wrapper that sets nothing at all. This greps every entry point, because
     # `semble` and `semble-mcp` disagreeing about the cache location is the
     # specific failure the single-wrapper design exists to prevent.
@@ -122,6 +122,58 @@ in {
         done
         # An empty bin/ would pass the loop vacuously.
         [ "$found" -gt 0 ] || { echo "FAIL: wrapper exposes no entry points" >&2; exit 1; }
+        echo PASS > "$out"
+      '';
+
+    # Semble is a Python application, so two things can go wrong around it:
+    # its propagated closure leaks onto a devenv shell's PYTHONPATH (Python's
+    # setup hook reads `nix-support/propagated-build-inputs`), and a shell
+    # PYTHONPATH shadows Semble's own modules (nixpkgs appends the app's
+    # site-packages AFTER it). Every installed package, on both backends and
+    # for multi-variant installs, must expose bin/ only, and a fake `semble`
+    # on PYTHONPATH must not reach the real entry points. The positive control
+    # runs upstream's binary under the same PYTHONPATH and must be hijacked,
+    # so the fake is proven to shadow when nothing unsets it.
+    module-semble-launcher-python-isolation = let
+      installed = lib.concatLists [
+        (evalHm {ai.programs.semble.enable = true;}).config.home.packages
+        (evalDevenv {ai.programs.semble.enable = true;}).config.packages
+        (evalDevenv {
+          ai.programs.semble.enable = true;
+          ai.kiro.programs.semble.grammars = [pkgs.tree-sitter-grammars.tree-sitter-awk];
+        }).config.packages
+      ];
+    in
+      pkgs.runCommand "module-test-semble-launcher-python-isolation" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export HOME="$TMPDIR/home"
+        mkdir -p "$HOME" fake/semble
+        printf 'import sys\nprint("HIJACKED")\nsys.exit(97)\n' > fake/semble/__init__.py
+        fake="$PWD/fake"
+
+        status=0
+        PYTHONPATH="$fake" ${pkgs.ai.semble}/bin/semble --help > control.log 2>&1 || status=$?
+        [ "$status" -eq 97 ] && grep -q HIJACKED control.log \
+          || { echo "FAIL: control: upstream semble was not shadowed (exit $status)" >&2; cat control.log >&2; exit 1; }
+
+        checked=0
+        for pkg in ${lib.escapeShellArgs installed}; do
+          for entry in "$pkg"/*; do
+            [ "$(basename "$entry")" = bin ] \
+              || { echo "FAIL: $pkg exposes $(basename "$entry")/ beside bin/" >&2; exit 1; }
+          done
+          for bin in "$pkg"/bin/*; do
+            checked=$((checked + 1))
+            if ! PYTHONPATH="$fake" "$bin" --help > run.log 2>&1; then
+              echo "FAIL: $bin failed with a fake semble on PYTHONPATH" >&2; cat run.log >&2; exit 1
+            fi
+            if grep -q HIJACKED run.log; then
+              echo "FAIL: $bin loaded the fake semble from PYTHONPATH" >&2; exit 1
+            fi
+          done
+        done
+        [ "$checked" -gt 0 ] || { echo "FAIL: no entry points checked" >&2; exit 1; }
         echo PASS > "$out"
       '';
 
@@ -905,8 +957,8 @@ in {
         };
         rule = evaluated.config.ai.kiro.rules.semble;
       in
-        # devenv relocates the cache, so semble is installed WRAPPED. The
-        # wrapper is named after what it wraps, which is what keeps the
+        # semble is always installed behind its launcher set. The
+        # launchers are named after what they wrap, which is what keeps the
         # `package` override observable here rather than hidden behind a
         # fixed derivation name.
         builtins.length evaluated.config.packages

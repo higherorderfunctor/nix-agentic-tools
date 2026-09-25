@@ -3,10 +3,11 @@
 # interpreter shebang and the site setup that puts Semble's whole Python
 # closure on the path, so the script imports exactly the modules Semble does,
 # without rebuilding or wrapping anything. `package` is any Semble build
-# (patched or upstream).
+# (patched or upstream), or the module's launcher set, whose `unwrapped` is
+# that build.
 pkgs: name: package: script:
 pkgs.runCommand "semble-script-${name}" {} ''
-  ${pkgs.coreutils}/bin/head -n 3 ${package}/bin/.semble-wrapped > "$out"
+  ${pkgs.coreutils}/bin/head -n 3 ${package.unwrapped or package}/bin/.semble-wrapped > "$out"
   ${pkgs.coreutils}/bin/cat ${script} >> "$out"
   ${pkgs.coreutils}/bin/chmod +x "$out"
 ''

@@ -6,7 +6,8 @@
 > `pathMappings` is an ordered root list of `{ language; content; patterns; }`
 > where the first match wins, validated against `extracted.json`. `mcp.content`
 > and `mcp.rootExposure` are gone: `mcp.enable = false` with an MCP-backed
-> subagent is a Kiro agent-private server. Model examples use the flake's
+> subagent is a Kiro agent-private server. Every installed package is a bin-only
+> launcher set that unsets PYTHONPATH. Model examples use the flake's
 > `lib.packaging.fetchHuggingFaceModel` and forward `files` as `passthru.files`,
 > which turns on the model2vec layout check.
 >
@@ -191,6 +192,26 @@ The devenv integration uses `${config.devenv.state}/semble-cache`. Both bake
 value never enters the surrounding user or project shell. Consumer override of
 the variable through `env` is deliberately gone: devenv/Nix is the only config
 path.
+
+Semble is a Python application, and the module never installs its derivation
+directly. Every installed package, vanilla included, is a launcher set: a `bin/`
+of `makeWrapper` launchers and nothing else, no `lib/` and no `nix-support/`.
+Two nixpkgs behaviors make that necessary. First, a Python application
+propagates its whole closure and the interpreter
+(`nix-support/propagated-build-inputs`), and Python's setup hook turns that into
+PYTHONPATH in any shell that contains Python. Installing the upstream derivation
+in a devenv shell put Semble's dependencies (numpy, tokenizers, huggingface-hub,
+...) on the project's PYTHONPATH, ahead of its own virtualenv, even in
+non-Python projects. Home Manager profiles run no setup hooks and never leaked.
+Second, the upstream entry point appends Semble's site-packages AFTER
+PYTHONPATH, so any `semble` or dependency the calling shell exports shadows
+Semble's own. Each launcher therefore unsets PYTHONPATH. Both are properties of
+every nixpkgs Python application, not of Semble; the module fixes them for the
+packages it installs without touching the upstream derivation.
+`module-semble-launcher-python-isolation` checks both backends, including a
+multi-variant install, and proves its fake module does shadow the unwrapped
+binary. `lib.ai.mcpServers.mkSemble` points at whatever package it is given and
+does not add these launchers.
 
 Both backends record each effective Semble package store path in its assigned
 cache directory. A single active package keeps the established cache root;
