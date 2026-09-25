@@ -1,14 +1,9 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-24 — the builder entry point is
-> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
-> callback. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
-> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
-> a runtime-specific implicit shell default. `ai.shell` stays null; see below
-> for the standing decision and the override rule it shares with normalized
-> `settings`. The builder merges every launcher's process environment once, as
-> `launcherEnvironment`; Codex and Copilot wrap through `lib.ai.mkLauncher`.
+> **Last verified:** 2026-09-25 — module-contributed env rides the per-runtime
+> internal channel `ai.<runtime>.internal._moduleEnvironmentVariables`, found
+> through the option tree so downstream `mkRuntime` runtimes get it too; HM
+> ships Codex bare only while that channel is empty.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -183,11 +178,13 @@ three runtimes demonstrably do not perform.
   Codex with nothing to deliver still gets the bare upstream path.
 - **On devenv that empty case is unreachable in practice.** devenv has no
   `programs.git`, so the sandbox-safe Git SSH default (`gitSshConfigWorkaround`,
-  on by default) lands in Codex's `environmentVariables` — which means enabling
-  Codex on devenv ALWAYS builds a wrapper, while Home Manager ships it bare.
-  That divergence is asserted by `module-codex-enabled-installs-package`; if you
-  are wondering why the two backends install different store paths, this is why,
-  and it is intended.
+  on by default) lands on Codex's internal module-env channel — which means
+  enabling Codex on devenv ALWAYS builds a wrapper, while Home Manager ships it
+  bare when no module env is published (for example with `ai.programs.git` and
+  `ai.programs.gh` off; either one puts `GIT_CONFIG_GLOBAL` or `GH_CONFIG_DIR`
+  on the channel and HM wraps too). That divergence is asserted by
+  `module-codex-enabled-installs-package`; if you are wondering why the two
+  backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
@@ -203,11 +200,15 @@ three runtimes demonstrably do not perform.
 - **Always-on process defaults do not write hidden normalized-pool entries.**
   `ai.<cli>.environmentVariables` is the consumer's replacement/negation
   surface, and definition provenance treats package claims there as owned API.
-  Internal defaults such as the sandbox-safe SSH command therefore ride
-  `ai._sandboxSafeSshCommand` / the `resolvedShell` callback argument and merge
-  under consumer values at the wrapper call site. Opt-in packages may publish
-  documented per-runtime pool entries; two packages still cannot own the same
-  key and scope. See `collision-semantics.md`.
+  Internal defaults such as the sandbox-safe SSH command and the git identity
+  (`ai.programs.git`) therefore ride the per-runtime internal channel
+  `ai.<runtime>.internal._moduleEnvironmentVariables` (published through
+  `lib/ai/module-environment.nix`) or the `resolvedShell` callback argument, and
+  merge under consumer values at the wrapper call site. The channel is per
+  runtime so a module can give each harness its own value; a shared value is
+  published to each runtime. Opt-in packages may publish documented per-runtime
+  pool entries; two packages still cannot own the same key and scope. See
+  `collision-semantics.md`.
 
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.

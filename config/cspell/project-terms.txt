@@ -18,6 +18,7 @@ argstr
 aristocratos
 arkenfox
 arxanas
+askpass
 attrset
 attrsets
 aubut
@@ -149,6 +150,7 @@ fixpoint
 foldl
 foldr
 footgun
+forcesignannotated
 formedness
 frepo
 frontloaded
@@ -183,6 +185,7 @@ goproxy
 GOTOOLCHAIN
 GOWORK
 gpgsign
+gpgsm
 gradeability
 gradeable
 gsub
@@ -206,6 +209,7 @@ indexreferrer
 inferera
 inlines
 inspectable
+insteadof
 ints
 isaacphi
 isready
@@ -319,6 +323,7 @@ openclaw
 opencode
 openhands
 openmemory
+openpgp
 operationalizes
 optionset
 oraios
@@ -421,6 +426,7 @@ setext
 shellharden
 shortrev
 sigmask
+signingkey
 sigpipe
 sigtool
 sixel

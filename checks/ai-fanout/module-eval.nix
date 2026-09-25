@@ -163,18 +163,20 @@ in {
 
     module-ai-git-ssh-default-follows-harnesses = mkTest "ai-git-ssh-default-follows-harnesses" (
       let
-        # devenv has no `programs.git`, so the workaround travels the INTERNAL
-        # channel (`ai._sandboxSafeSshCommand`) and each factory merges it into
-        # its launcher wrapper. It is deliberately neither a project-shell write
-        # (which reached the developer's own git) nor a hidden contribution into
-        # the consumer-facing `ai.<cli>.environmentVariables` pool. Claude has no
+        # devenv has no `programs.git`, so the workaround travels each
+        # runtime's INTERNAL channel (`ai.<cli>.internal._moduleEnvironmentVariables`)
+        # and each factory merges it into its launcher wrapper. It is
+        # deliberately neither a project-shell write (which reached the
+        # developer's own git) nor a hidden contribution into the
+        # consumer-facing `ai.<cli>.environmentVariables` pool. Claude has no
         # wrapper and uses settings.env.
+        channel = cfg: name: cfg.ai.${name}.internal._moduleEnvironmentVariables.GIT_SSH_COMMAND or null;
         devenvChannel = name: let
           cfg = (evalDevenv (lib.setAttrByPath ["ai" name "enable"] true)).config;
         in
           if name == "claude"
           then cfg.ai.claude.native.settings.env.GIT_SSH_COMMAND
-          else cfg.ai._sandboxSafeSshCommand;
+          else channel cfg name;
         commands =
           lib.concatMap (name: [
               (evalHm (lib.setAttrByPath ["ai" name "enable"] true))
@@ -216,15 +218,58 @@ in {
       in
         builtins.all (lib.hasSuffix "/bin/ai-sandbox-safe-ssh") commands
         && !(disabledHm.programs.git.settings ? core)
-        && disabledDevenv.ai._sandboxSafeSshCommand == null
+        && builtins.all (name: channel disabledDevenv name == null) harnessNames
         && !(optedOutHm.programs.git.settings ? core)
-        && optedOutDevenv.ai._sandboxSafeSshCommand == null
+        && builtins.all (name: channel optedOutDevenv name == null) harnessNames
         && overriddenHm.programs.git.settings.core.sshCommand == "custom-ssh"
         && builtins.all (a: a.assertion) sharedPoolCollision.assertions
     );
 
+    # `mkRuntime` is public, so the module-env channel must reach a runtime
+    # outside the first-party registry too: it did when the SSH default was
+    # one root value every transform read, and the per-runtime channel finds
+    # runtimes in the option tree to keep it that way. Mutation-checked: a
+    # registry-only `publish` turns this red.
+    module-ai-module-env-reaches-downstream-runtime = mkTest "ai-module-env-reaches-downstream-runtime" (
+      let
+        factory = import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;};
+        record = factory.ai.app.mkRuntime {
+          inherit pkgs;
+          name = "downstream";
+          defaults.package = pkgs.hello;
+          options._observedEnv = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str;
+            default = {};
+            internal = true;
+          };
+          config = {moduleEnvironmentVariables, ...}: {
+            ai.downstream._observedEnv = moduleEnvironmentVariables;
+          };
+        };
+        evaluated = lib.evalModules {
+          specialArgs = {inherit pkgs;};
+          modules = [
+            factory.ai.sharedOptions
+            factory.devenvStubs
+            (factory.ai.app.devenvTransform record)
+            # The SSH default is gated on a REGISTRY harness being enabled
+            # (`anyHarnessEnabled`), unchanged here; this stands in for one
+            # without importing a whole runtime module.
+            {
+              options.ai.codex.enable = lib.mkEnableOption "registry harness stand-in";
+              config.ai = {
+                codex.enable = true;
+                downstream.enable = true;
+              };
+            }
+          ];
+        };
+      in
+        lib.hasSuffix "/bin/ai-sandbox-safe-ssh" (evaluated.config.ai.downstream._observedEnv.GIT_SSH_COMMAND or "")
+    );
+
     module-ai-git-ssh-wrapper-is-noninteractive = let
-      command = (evalDevenv {ai.codex.enable = true;}).config.ai._sandboxSafeSshCommand;
+      command = (evalDevenv {ai.codex.enable = true;}).config.ai.codex.internal._moduleEnvironmentVariables.GIT_SSH_COMMAND;
       sshConfig = pkgs.writeText "sandbox-ssh-config" ''
         Host *
           BatchMode no

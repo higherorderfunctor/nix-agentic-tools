@@ -1,31 +1,12 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-24 — every runtime describes delivery once through
-> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
-> transforms reject a backend spec carrying anything but `installPackage`,
-> `migrationConfig` and `options`, since an overridden or hand-built record
-> reaches a transform without the constructor. Kiro hook commands resolve
-> packages through the shared `commandType`. Launchers bake the builder's one
-> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
-> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
-> `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
-> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
-> `agent.fileContent` where it copies, so a store-path string is a file, never a
-> body naming its own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). A root request nothing per-runtime can withdraw
-> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
-> owned writable copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
-> declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Upstream
-> delegation aliases the content field's own definitions. Ledger-owned copies
-> whose files nothing else retracts opt into `runWhenDisabled`. `ai.lspServers`
-> renders whole files with each runtime's envelope, Copilot/Kiro require
-> `extensions`, and Copilot constrains server names.
+> **Last verified:** 2026-09-25 — module-contributed process env rides a
+> per-runtime internal channel, which carries `ai.programs.git`'s per-harness
+> identity; its gitconfig pins `tag.forceSignAnnotated`, its signing assertions
+> read the body case-insensitively as git does, `gh.configDir` and
+> `credentials.file` must be absolute, a repository's own config is named as
+> uncovered, and `mkProgram` takes `overrideDescriptions` for a leaf it does not
+> resolve.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -175,10 +156,12 @@ Fix landed in commit f2e911c.
 ### Harness activation also stabilizes Git SSH
 
 `ai.gitSshConfigWorkaround` defaults true. When any supported harness is
-enabled, Home Manager contributes `programs.git.settings.core.sshCommand` and
-devenv contributes `GIT_SSH_COMMAND`, both at `mkDefault` priority. The devenv
-environment setting intentionally covers ordinary Git launched from the dev
-shell as well as Git launched by a harness.
+enabled, Home Manager contributes `programs.git.settings.core.sshCommand` at
+`mkDefault` priority. Without Home Manager's `programs.git` (devenv included),
+each harness receives `GIT_SSH_COMMAND` on its internal module-env channel
+instead: baked into its launcher, or Claude's `settings.env`. It never reaches
+the project shell, so ordinary Git launched from the dev shell is untouched, and
+an explicit `environmentVariables.GIT_SSH_COMMAND` wins.
 
 The shared command is a narrow wrapper around the packaged OpenSSH. It resolves
 `~/.ssh/config`; when that symlink points into `/nix/store`, it passes the same
@@ -191,6 +174,81 @@ set `ai.gitSshConfigWorkaround = false` or override either backend-native value.
 The wrapper forces `BatchMode=yes` on both paths: agent-backed authentication
 continues normally, while unavailable credentials fail instead of opening a
 password dialog in an unattended harness session.
+
+### Per-harness git and gh identity (`ai.programs.git` / `ai.programs.gh`)
+
+`lib/ai/programs/git.nix`, imported by `sharedOptions.nix`, so both backends
+share one module and one option tree (`git-options.nix`). The leaves are Home
+Manager's names (`settings`, `signing.key/format/signByDefault`) plus the repo's
+`credentials` type; it is not a mirror of HM's `programs.git`. `mkProgram` gives
+every leaf an `ai.<runtime>.programs.<name>` override that REPLACES the root,
+except `settings`, which the module deep-merges itself (root, then runtime), so
+a per-harness `user.name` keeps the shared `user.email`.
+
+Delivery: each enabled runtime gets its own store gitconfig, published as
+`GIT_CONFIG_GLOBAL` (plus `GH_CONFIG_DIR`) on its internal module-env channel,
+so it reaches launchers and Claude's `settings.env` like any module default and
+an explicit consumer entry wins. Invariants, each load-bearing:
+
+- **`[include]` is the first section.** `GIT_CONFIG_GLOBAL` replaces
+  `~/.gitconfig` and the XDG config, so the file includes both, then overrides
+  them. `lib.generators.toGitINI` sorts sections, which would put `[commit]`,
+  `[credential …]` and `[gpg]` before the include: the user's config would then
+  win over the agent's signing and re-append the user's credential helper after
+  the reset. So the include is rendered by its own `toGitINI` call and
+  prepended.
+- **The empty `credential."https://github.com".helper` is required.** It drops
+  the user's own helper; without it an agent push that the agent helper cannot
+  answer falls through to the user's token. The agent helper is a store script
+  that reads the `credentials` file on `get` only, and on any failure prints
+  `quit=1`: git ignores a helper's exit status and would otherwise go on to
+  askpass (including a `core.askPass` from the included user config) and the
+  terminal. With `credentials` null nothing is reset, so the user's helper
+  answers.
+- **Signing is always written.** `commit.gpgSign`, `tag.gpgSign` and
+  `tag.forceSignAnnotated` render even when false, or a user global or XDG
+  config that signs by default signs the agent's commits, or its `git tag -m`
+  tags, with the user's key. A repo-local config still can (see "Not covered"
+  below). With no agent key the user's `user.signingKey` is still inherited, so
+  an explicit `-S`/`-s` signs as the user; the option text says so. The key and
+  format assertions judge the rendered body as git reads it: section and key
+  names case-insensitively, the last rendered spelling winning, and
+  `true`/`yes`/`on`/non-zero as true. `settings` deep-merges by exact name, so
+  `commit.gpgsign` renders BESIDE the derived `gpgSign` instead of replacing it;
+  a lookup by exact name let that switch signing on unchecked.
+- **Include order is git's own:** the XDG config, then `~/.gitconfig`. git
+  expands no env var in `include.path`, so the XDG root is fixed at eval
+  (`xdg.configHome` on HM, `~/.config` on devenv).
+- **Never write the user's `programs.git`** (unlike `gitSshConfigWorkaround`'s
+  HM branch), **never set `GH_TOKEN`** (Copilot CLI prefers it over its own
+  login), **nothing on PATH** (Claude's Bash tool re-runs shell init), and
+  **nothing unset**: the env channel only adds keys, so an inherited
+  `GH_TOKEN`/`GITHUB_TOKEN` still beats `hosts.yml` in `GH_CONFIG_DIR`. On
+  Copilot, `GH_CONFIG_DIR` also feeds its last-resort `gh` login. Both are
+  stated in the `gh` option text.
+- A signing key is a string refused under the store (a path literal would copy
+  the key there); so are `credentials.file` and `gh.configDir` (assertions).
+  Both must also be absolute: each is used verbatim, so nothing expands `~`.
+  `settings.user.signingKey` is NOT refused: git also takes a public key file or
+  a `key::` literal there for agent-backed ssh signing, and a public key in the
+  store is harmless. `signByDefault` with a null key or format is an assertion
+  failure for an enabled runtime, never a silent unsigned commit.
+
+`module-ai-programs-git-rendered-gitconfig` reads the file with real git. When
+probing by hand, note that `git config --global` reads one file and SKIPS its
+includes; use `--includes`. Not covered by this mechanism: a repository's own
+`.git/config` and `config.worktree`, which git reads after `GIT_CONFIG_GLOBAL`
+(measured: a repo-local `user.email` gives `bot <operator@…>`, a repo-local
+signing switch signs with the operator's key, and a repo-local credential helper
+is listed after the reset, so it survives and receives `store`/`erase` with the
+agent's token; `GIT_CONFIG_COUNT` entries have command-line precedence and could
+close this, not built); SSH remotes (including one a user `pushInsteadOf`
+rewrites to SSH, measured: `insteadOf` is not re-applied to its result), and
+tools that ignore `GIT_CONFIG_GLOBAL` (git-mcp's GitPython commit; libgit2
+callers are unmeasured), and Copilot CLI's built-in GitHub MCP server, which
+reportedly acts as the Copilot login whatever `GH_CONFIG_DIR` says (unmeasured
+against the pinned build). On devenv each launcher bakes the project's own env,
+so the identity must be configured in the project (`devenv.local.nix`) too.
 
 ### Fanout data flow
 
@@ -680,7 +738,9 @@ tree. The factory projects that into `ai.programs.<name>` plus only the listed
 `ai.<runtime>.programs.<name>` paths. Runtime leaves are nullable and resolve
 independently through `resolveOverride`: null inherits the portable value and a
 non-null value wins. This is the scalar B4 contract, not keyed-pool tombstone
-behavior.
+behavior. A spec whose module resolves a leaf differently (`ai.programs.git`'s
+deep-merged `settings`) names it in `overrideDescriptions`, which replaces that
+leaf's generated "non-null wins" sentence so the docs do not contradict it.
 
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
