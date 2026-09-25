@@ -13,14 +13,7 @@
   records = import ../lib/integrations.nix;
   cliInstructions = ../cli-instructions.md;
 
-  # Reuse a Semble entry point's interpreter and complete Python path, then
-  # append a script. `package` is any Semble build (patched or upstream).
-  sembleScript = name: package: script:
-    pkgs.runCommand "semble-script-${name}" {} ''
-      ${pkgs.coreutils}/bin/head -n 3 ${package}/bin/.semble-wrapped > "$out"
-      ${pkgs.coreutils}/bin/cat ${script} >> "$out"
-      ${pkgs.coreutils}/bin/chmod +x "$out"
-    '';
+  sembleScript = import ./semble-script.nix pkgs;
 
   # A tiny model2vec model, built offline from Semble's own closure.
   fixtureModel = seed:
@@ -29,7 +22,7 @@
     '';
   proseModel = fixtureModel 1;
   defaultModel = fixtureModel 2;
-  # The shape fetchFromHuggingFace returns, minus a real download.
+  # A model package that lists its files, minus a real download.
   withFiles = files: model: model // {passthru = (model.passthru or {}) // {inherit files;};};
 
   prose = {
