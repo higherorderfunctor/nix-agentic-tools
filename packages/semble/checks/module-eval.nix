@@ -208,10 +208,7 @@ in {
             ai = {
               programs.semble = {
                 enable = true;
-                mcp = {
-                  content = "docs";
-                  enable = true;
-                };
+                mcp.enable = true;
               };
               claude.programs.semble.enable = false;
               kiro.programs.semble.enable = false;
@@ -220,13 +217,9 @@ in {
         perFeature =
           (evalDevenv {
             ai = {
-              programs.semble.mcp.content = "docs";
               claude.programs.semble.cli.instructions.enable = true;
               codex.programs.semble.subagent.enable = true;
-              kiro.programs.semble.mcp = {
-                content = "config";
-                enable = true;
-              };
+              kiro.programs.semble.mcp.enable = true;
             };
           }).config;
         runtimeFeatureWins =
@@ -241,13 +234,12 @@ in {
           }).config;
       in
         top.ai.codex.mcpServers ? semble
-        && top.ai.codex.mcpServers.semble.args == ["--content" "docs"]
+        && top.ai.codex.mcpServers.semble.args == []
         && !(top.ai.codex.agents ? semble-search)
         && top.ai.codex.rules == {}
         && !(top.ai.claude.mcpServers ? semble)
         && !(top.ai.kiro.agents ? semble-search)
         && perFeature.ai.kiro.mcpServers ? semble
-        && perFeature.ai.kiro.mcpServers.semble.args == ["--content" "config"]
         && !(perFeature.ai.claude.mcpServers ? semble)
         && perFeature.ai.claude.rules ? semble
         && perFeature.ai.codex.rules == {}
@@ -266,13 +258,10 @@ in {
               tree-sitter-awk
               tree-sitter-jq
             ];
-            mcp.pathMappings = [
-              {
-                content = "config";
-                language = "json";
-                patterns = ["flake.lock"];
-              }
-            ];
+            pathMappings.json = {
+              content = "config";
+              patterns = ["flake.lock"];
+            };
           };
         };
         hm = (evalHm grammarConfig).config;
@@ -281,7 +270,14 @@ in {
       in
         hmPackage.sembleExtraGrammarLanguages
         == ["awk" "jq"]
-        && hmPackage.semblePathMappings == grammarConfig.ai.codex.programs.semble.mcp.pathMappings
+        && hmPackage.semblePathMappings
+        == [
+          {
+            content = "config";
+            language = "json";
+            pattern = "flake.lock";
+          }
+        ]
         && hmPackage.passthru.updateFlakeInput == "llm-agents"
         && hm.home.activation ? sembleCacheGuard
         && lib.hasInfix "semble-cache-guard" hm.home.activation.sembleCacheGuard.text
@@ -331,74 +327,88 @@ in {
           ${pkgs.coreutils}/bin/touch "$out"
         '';
 
+    # pathMappings keys must name a language Semble can parse: a bundled
+    # grammar, an alias of one, or a `grammars` language.
     module-semble-path-mapping-validation = mkTest "semble-path-mapping-validation" (
       let
-        empty =
-          (evalDevenv {
+        withMappings = grammars: pathMappings:
+          evalDevenv {
             ai.programs.semble = {
               enable = true;
-              mcp.pathMappings = [
-                {
-                  content = "code";
-                  language = "";
-                  patterns = [];
-                }
-              ];
+              inherit grammars pathMappings;
             };
-          }).config;
-        duplicate =
-          (evalHm {
-            ai.programs.semble = {
-              enable = true;
-              mcp.pathMappings = [
-                {
-                  content = "code";
-                  language = "bash";
-                  patterns = [".envrc"];
-                }
-                {
-                  content = "config";
-                  language = "json";
-                  patterns = [".envrc"];
-                }
-              ];
-            };
-          }).config;
+          };
+        failedWith = needle: evaluated:
+          builtins.any (assertion: !assertion.assertion && lib.hasInfix needle assertion.message) evaluated.config.assertions;
+        allPass = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
+        mapping = patterns: {
+          content = "code";
+          inherit patterns;
+        };
+        awk = [pkgs.tree-sitter-grammars.tree-sitter-awk];
       in
-        builtins.any (assertion: !assertion.assertion && lib.hasInfix "non-empty language" assertion.message) empty.assertions
-        && builtins.any (assertion: !assertion.assertion && lib.hasInfix "patterns must be unique" assertion.message) duplicate.assertions
+        allPass (withMappings [] {bash = mapping [".envrc"];})
+        # An alias resolves to a bundled grammar.
+        && allPass (withMappings [] {zsh = mapping [".zshrc"];})
+        # awk is in Semble's extension map but has no bundled grammar.
+        && failedWith ''`pathMappings.awk`: "awk" is not a language Semble can parse'' (withMappings [] {awk = mapping ["*.awk.in"];})
+        && allPass (withMappings awk {awk = mapping ["*.awk.in"];})
+        && failedWith ''"klingon" is not a language'' (withMappings [] {klingon = mapping ["*.tlh"];})
+        && failedWith ''pattern ".envrc" is listed more than once'' (withMappings [] {
+          bash = mapping [".envrc"];
+          json = mapping [".envrc"];
+        })
+        # The option type rejects an empty pattern list or pattern.
+        && !(builtins.tryEval (withMappings [] {bash = mapping [];}).config.assertions).success
+        && !(builtins.tryEval (withMappings [] {bash = mapping [""];}).config.assertions).success
     );
 
     module-semble-extra-grammars-load = let
       customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
-      pathMappings = [
-        {
+      pathMappings = {
+        bash = {
           content = "code";
-          language = "bash";
           patterns = [".envrc" "checks/hooks/pre-edit"];
-        }
-        {
+        };
+        gitignore = {
           content = "config";
-          language = "gitignore";
           patterns = [".gitignore" ".sembleignore"];
-        }
-        {
+        };
+        # Precedence: "pkg/*" (a path) beats the longer basename "*.lock",
+        # "special.lock" beats "*.lock" by length, and "?b.cfg" beats
+        # "a?.cfg" alphabetically.
+        ini = {
           content = "config";
-          language = "json";
-          patterns = ["flake.lock"];
-        }
-        {
+          patterns = ["?b.cfg"];
+        };
+        json = {
+          content = "config";
+          patterns = ["*.lock"];
+        };
+        markdown = {
           content = "docs";
-          language = "markdown";
           patterns = ["*.fixture.py" "*.md.fixture"];
-        }
-      ];
-      sembleWithGrammars =
-        customizePackage pkgs.ai.semble (with pkgs.tree-sitter-grammars; [
+        };
+        properties = {
+          content = "config";
+          patterns = ["a?.cfg"];
+        };
+        toml = {
+          content = "config";
+          patterns = ["pkg/*"];
+        };
+        yaml = {
+          content = "config";
+          patterns = ["special.lock"];
+        };
+      };
+      sembleWithGrammars = customizePackage pkgs.ai.semble {
+        grammars = with pkgs.tree-sitter-grammars; [
           tree-sitter-awk
           tree-sitter-jq
-        ])
-        pathMappings {};
+        ];
+        inherit pathMappings;
+      };
     in
       assert sembleWithGrammars.passthru.updateFlakeInput == "llm-agents";
         pkgs.runCommand "module-test-semble-extra-grammars-load" {} ''
@@ -407,15 +417,18 @@ in {
 
           # Reuse the wrapped entry point's interpreter and complete Python path,
           # replacing only its CLI dispatch tail with this parser smoke test.
-          ${pkgs.coreutils}/bin/mkdir -p repo/checks/hooks repo/docs
+          ${pkgs.coreutils}/bin/mkdir -p repo/checks/hooks repo/docs repo/pkg
           ${pkgs.coreutils}/bin/touch \
             repo/.envrc \
             repo/.gitignore \
             repo/.sembleignore \
+            repo/ab.cfg \
             repo/checks/hooks/pre-edit \
             repo/docs/example.fixture.py \
             repo/docs/example.md.fixture \
-            repo/flake.lock
+            repo/flake.lock \
+            repo/pkg/deps.lock \
+            repo/special.lock
           ${pkgs.coreutils}/bin/head -n 3 ${sembleWithGrammars}/bin/.semble-wrapped > test-grammars.py
           ${pkgs.coreutils}/bin/cat >> test-grammars.py <<'PY'
           import json
@@ -448,6 +461,9 @@ in {
               "docs/example.fixture.py": "markdown",
               "docs/example.md.fixture": "markdown",
               "flake.lock": "json",
+              "ab.cfg": "ini",
+              "pkg/deps.lock": "toml",
+              "special.lock": "yaml",
           }
           for relative, language in expected.items():
               assert detect_language(root / relative, root) == language, relative
@@ -466,7 +482,7 @@ in {
 
           assert walked("code") == {".envrc", "checks/hooks/pre-edit"}
           assert walked("docs") == {"docs/example.fixture.py", "docs/example.md.fixture"}
-          assert walked("config") == {".gitignore", ".sembleignore", "flake.lock"}
+          assert walked("config") == {".gitignore", ".sembleignore", "ab.cfg", "flake.lock", "pkg/deps.lock", "special.lock"}
           assert {
               path.relative_to(root).as_posix()
               for path in walk_files(root, [".py"])
@@ -583,30 +599,34 @@ in {
             ];
           };
         };
+        # A grammar named like a bundled one (or an alias of one) would never
+        # be loaded.
+        named = language:
+          evalHm {
+            ai.programs.semble = {
+              enable = true;
+              grammars = [(pkgs.tree-sitter-grammars.tree-sitter-awk // {inherit language;})];
+            };
+          };
         failed = evaluated: builtins.any (assertion: !assertion.assertion) evaluated.config.assertions;
+        failedWith = needle: evaluated:
+          builtins.any (assertion: !assertion.assertion && lib.hasInfix needle assertion.message) evaluated.config.assertions;
       in
-        failed missingLanguage && failed duplicateLanguage
+        failedWith "non-empty `language`" missingLanguage
+        && failedWith ''language "awk" appears more than once'' duplicateLanguage
+        && failedWith ''language "bash" is already bundled with Semble'' (named "bash")
+        && failedWith ''language "zsh" is already bundled with Semble'' (named "zsh")
+        && !(failed (named "awk"))
     );
 
-    module-semble-mcp-content-and-atomic-replacement = mkTest "semble-mcp-content-and-atomic-replacement" (
+    module-semble-mcp-entry-and-atomic-replacement = mkTest "semble-mcp-entry-and-atomic-replacement" (
       let
-        code = (evalHm {ai.programs.semble.mcp.enable = true;}).config.ai.claude.mcpServers.semble;
-        docs =
-          (evalHm {
-            ai.programs.semble = {
-              mcp = {
-                content = "docs";
-                enable = true;
-              };
-            };
-          }).config.ai.claude.mcpServers.semble;
-        codeAndDocs =
-          (evalHm {
-            ai.programs.semble.mcp = {
-              content = ["docs" "code"];
-              enable = true;
-            };
-          }).config.ai.claude.mcpServers.semble;
+        # The server routes by content from its package's own table, so the
+        # module passes it no arguments whatever the content settings.
+        entry = settings:
+          (evalHm {ai.programs.semble = {mcp.enable = true;} // settings;}).config.ai.claude.mcpServers.semble;
+        code = entry {};
+        docs = entry {defaultContent = ["docs" "code"];};
         replaced =
           (evalHm {
             ai.codex.mcpServers.semble = {
@@ -620,22 +640,22 @@ in {
         code.args
         == []
         && lib.hasSuffix "/bin/semble-mcp" code.command
-        && docs.args == ["--content" "docs"]
-        && codeAndDocs.args == ["--content" "code" "docs"]
+        && docs.args == []
+        && docs.command != code.command
         && replaced.args == ["--log-level" "debug"]
         && replaced.command == "custom-semble"
     );
 
-    module-semble-mcp-content-validation = mkTest "semble-mcp-content-validation" (
+    module-semble-default-content-validation = mkTest "semble-default-content-validation" (
       let
-        assertionsFor = content:
-          (evalHm {ai.programs.semble.mcp = {inherit content;};}).config.assertions;
+        assertionsFor = defaultContent:
+          (evalHm {ai.programs.semble = {inherit defaultContent;};}).config.assertions;
         hasFailure = needle: assertions:
           builtins.any
           (assertion: !assertion.assertion && lib.hasInfix needle assertion.message)
           assertions;
       in
-        hasFailure "at least one category" (assertionsFor [])
+        hasFailure "`defaultContent` must contain at least one category" (assertionsFor [])
         && hasFailure "duplicate categories" (assertionsFor ["docs" "docs"])
         && hasFailure ''combine "all"'' (assertionsFor ["all" "code"])
     );
@@ -653,15 +673,25 @@ in {
               subagent = mcpSubagent;
             };
           }).config;
+        # `mcp` off with an MCP-backed subagent: the server exists only inside
+        # the Kiro agent.
         isolated =
           (evalHm {
             ai.kiro = {
               enable = true;
               programs.semble = {
                 enable = true;
-                mcp.rootExposure = false;
+                mcp.enable = false;
                 subagent = mcpSubagent;
               };
+            };
+          }).config;
+        # The same with nothing enabled but the subagent.
+        subagentOnly =
+          (evalHm {
+            ai.kiro = {
+              enable = true;
+              programs.semble.subagent = mcpSubagent;
             };
           }).config;
         claude =
@@ -671,28 +701,15 @@ in {
               subagent = mcpSubagent;
             };
           }).config;
-        unsupported =
+        unsupported = runtime:
           (evalHm {
-            ai.claude.programs.semble = {
+            ai.${runtime}.programs.semble = {
               enable = true;
-              mcp.rootExposure = false;
-              subagent = mcpSubagent;
-            };
-          }).config;
-        missingMcp =
-          (evalHm {
-            ai.codex.programs.semble = {
               mcp.enable = false;
               subagent = mcpSubagent;
             };
           }).config;
-        orphaned =
-          (evalHm {
-            ai.kiro.programs.semble = {
-              enable = true;
-              mcp.rootExposure = false;
-            };
-          }).config;
+        passes = evaluated: builtins.all (assertion: assertion.assertion) evaluated.assertions;
         failedWith = needle: evaluated:
           builtins.any
           (assertion: !assertion.assertion && lib.hasInfix needle assertion.message)
@@ -710,6 +727,10 @@ in {
         && rootAgent.includeMcpJson == false
         && rootAgent.mcpServers ? semble
         && builtins.attrNames isolated.ai.kiro.mcpServers == []
+        && passes isolated
+        && builtins.attrNames subagentOnly.ai.kiro.mcpServers == []
+        && subagentOnly.ai.kiro.agents.semble-search.mcpServers ? semble
+        && passes subagentOnly
         && isolatedAgent.tools == ["@semble"]
         && isolatedAgent.includeMcpJson == false
         && isolatedAgent.mcpServers ? semble
@@ -719,9 +740,9 @@ in {
         && emitted.mcpServers ? semble
         && claude.ai.claude.agents.semble-search.tools
         == ["mcp__semble__find_related" "mcp__semble__search"]
-        && failedWith "only Kiro" unsupported
-        && failedWith "requires the Semble MCP integration" missingMcp
-        && failedWith "requires an enabled MCP-backed" orphaned
+        && failedWith "ai.claude.programs.semble: subagent.interface = \"mcp\" with mcp.enable = false needs an MCP server private to the agent, which only Kiro supports" (unsupported "claude")
+        && failedWith "which only Kiro supports" (unsupported "codex")
+        && !(unsupported "claude").ai.claude.mcpServers ? semble
     );
 
     module-semble-kiro-acp = let
@@ -730,7 +751,7 @@ in {
           enable = true;
           programs.semble = {
             enable = true;
-            mcp.rootExposure = false;
+            mcp.enable = false;
             subagent = {
               enable = true;
               interface = "mcp";
@@ -926,15 +947,16 @@ in {
         && programShape hm ["ai" "codex" "programs" "semble"]
         == programShape devenv ["ai" "codex" "programs" "semble"]
         && builtins.attrNames (programShape hm ["ai" "programs" "semble"])
-        == ["cli" "enable" "finalPackage" "grammars" "mcp" "package" "subagent"]
+        == ["cli" "defaultContent" "defaultModel" "enable" "finalPackage" "grammars" "mcp" "models" "package" "pathMappings" "subagent"]
         # finalPackage is portable-only: no runtime override exists for it.
         && builtins.attrNames (programShape hm ["ai" "codex" "programs" "semble"])
-        == ["cli" "enable" "grammars" "mcp" "package" "subagent"]
+        == ["cli" "defaultContent" "defaultModel" "enable" "grammars" "mcp" "models" "package" "pathMappings" "subagent"]
+        # mcp.content, mcp.pathMappings and mcp.rootExposure are gone, not aliased.
         && builtins.attrNames (programShape hm ["ai" "programs" "semble"]).mcp
-        == ["content" "enable" "pathMappings" "rootExposure"]
+        == ["enable"]
         # `instructions.cli` was renamed to `cli.instructions` with no alias.
         && builtins.attrNames (programShape hm ["ai" "programs" "semble"]).cli
-        == ["instructions" "models"]
+        == ["instructions"]
         && lib.all
         (runtime: lib.hasAttrByPath ["ai" runtime "programs" "semble"] hm.options)
         ["claude" "codex" "kiro"]
@@ -955,20 +977,12 @@ in {
           lib = hmLib;
           pkgs = helperPkgs;
         } {content = "all";};
-        # An explicit `code` is passed, so it also replaces a `--model` entry's
-        # content.
-        explicitCode =
-          mkSemble {
-            lib = hmLib;
-            pkgs = helperPkgs;
-          } {
-            args = ["--model" "prose"];
-            content = "code";
-          };
-        modelOnly = mkSemble {
+        # An explicit `code` is passed, so it also replaces a customized
+        # package's default content.
+        explicitCode = mkSemble {
           lib = hmLib;
           pkgs = helperPkgs;
-        } {args = ["--model" "prose"];};
+        } {content = "code";};
         codeAndDocs = mkSemble {
           lib = hmLib;
           pkgs = helperPkgs;
@@ -998,8 +1012,7 @@ in {
         && code.args == []
         && lib.hasSuffix "/bin/semble-mcp" code.command
         && all.args == ["--content" "all"]
-        && explicitCode.args == ["--model" "prose" "--content" "code"]
-        && modelOnly.args == ["--model" "prose"]
+        && explicitCode.args == ["--content" "code"]
         && codeAndDocs.args == ["--content" "code" "docs"]
         && !allMixed.success
         && !duplicate.success

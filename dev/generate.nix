@@ -795,7 +795,7 @@
       programs.semble = {
         enable = true;
         cli.instructions.enable = true;
-        mcp.content = ["code" "docs"];
+        defaultContent = ["code" "docs"];
         subagent = {
           enable = true;
           interface = "mcp";
@@ -812,31 +812,40 @@
     `CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
     `.kiro/steering/semble.md`.
 
-    `cli.models` adds per-key embedding models for the CLI, each a pinned
-    model package such as a `pkgs.ai.fetchHuggingFaceModel` output.
-    `semble --model prose search …` routes to one, and the generated guidance
-    tells agents which model fits which search. The read-only
-    `ai.programs.semble.finalPackage` is the resulting package, for
-    hand-declared `semble-mcp --model <key>` servers:
+    `models` routes searches across embedding models by content: a search uses
+    the entry whose content set equals its `--content` (or `defaultContent`)
+    exactly, and `defaultModel` otherwise. The CLI and the MCP server route the
+    same way, and the generated guidance tells agents which content has which
+    model. Each model is a pinned package such as a
+    `pkgs.ai.fetchHuggingFaceModel` output:
 
     ```nix
-    ai.programs.semble.cli.models.prose = {
-      model = pkgs.ai.fetchHuggingFaceModel {
-        repoId = "minishlab/potion-base-32M";
-        rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
-        files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
-        hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
-        license = lib.licenses.mit;
+    ai.programs.semble = {
+      models = [
+        {
+          model = pkgs.ai.fetchHuggingFaceModel {
+            repoId = "minishlab/potion-base-32M";
+            rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
+            files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+            hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
+            license = lib.licenses.mit;
+          };
+          content = "docs";
+          description = "Prose: READMEs, design notes, architecture docs.";
+        }
+      ];
+      # Files Semble cannot place by suffix, keyed by language.
+      pathMappings.json = {
+        content = "config";
+        patterns = ["flake.lock"];
       };
-      content = "docs";
-      description = "Prose: READMEs, design notes, architecture docs.";
     };
     ```
 
-    Set `mcp.rootExposure = false` only on Kiro, with an enabled MCP-backed
-    Semble subagent for that runtime. The server then remains in the agent file
-    while being omitted from the root MCP pool; unsupported runtimes fail
-    evaluation instead of silently exposing it.
+    With `mcp.enable = false` and an MCP-backed subagent, Kiro keeps the Semble
+    server inside the agent file and out of the root MCP pool. Claude and Codex
+    cannot scope a server to one agent, so they fail evaluation instead of
+    silently exposing it.
 
     Home Manager fixes the cache at its owned XDG location. A devenv integration
     relocates it to a project-local state directory and tells Semble where by
