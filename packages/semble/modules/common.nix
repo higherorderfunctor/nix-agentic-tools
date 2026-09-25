@@ -15,13 +15,13 @@
 }: {
   config,
   lib,
+  options,
   pkgs,
   ...
 }: let
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
   program = programFactory.mkProgram (import ./options.nix {inherit lib pkgs;});
-  contentScope = import ../lib/contentScope.nix {inherit lib;};
-  sembleModels = import ../lib/models.nix {inherit lib;};
+  customization = import ../lib/customization.nix {inherit lib;};
   records = import ../lib/integrations.nix;
   runtimes = program.supportedRuntimes;
   cacheRoot = cacheLocation {inherit config lib;};
@@ -55,28 +55,18 @@
   # The customization checks, shared by every runtime state and by
   # `finalPackage`, which is built from the portable config.
   mkCustomization = cfg: let
-    models = cfg.cli.models;
-    grammarLanguages = map (grammar: grammar.language or "") cfg.grammars;
-    mappingPatterns = lib.concatMap (mapping: mapping.patterns) cfg.mcp.pathMappings;
-    packageCustomizable = (cfg.grammars == [] && cfg.mcp.pathMappings == [] && sembleModels.isVanilla models) || cfg.package ? overridePythonAttrs;
-    grammarLanguagesValid = lib.all (language: language != "") grammarLanguages;
-    grammarLanguagesUnique = lib.length (lib.unique grammarLanguages) == lib.length grammarLanguages;
-    pathMappingsValid = lib.all (mapping: mapping.language != "" && mapping.patterns != [] && lib.all (pattern: pattern != "") mapping.patterns) cfg.mcp.pathMappings;
-    pathMappingPatternsUnique = lib.length (lib.unique mappingPatterns) == lib.length mappingPatterns;
-    modelErrors = sembleModels.errors "cli.models" models;
-    customizationValid = packageCustomizable && grammarLanguagesValid && grammarLanguagesUnique && pathMappingsValid && pathMappingPatternsUnique && modelErrors == [];
+    spec = customization.normalize {inherit (cfg) defaultContent defaultModel grammars models pathMappings;};
+    packageCustomizable = customization.isVanilla spec || cfg.package ? overridePythonAttrs;
+    errors =
+      customization.errors spec
+      ++ lib.optional (!packageCustomizable)
+      "Semble grammar, path-mapping or model customization requires `package` to expose overridePythonAttrs.";
   in {
-    inherit
-      grammarLanguagesUnique
-      grammarLanguagesValid
-      modelErrors
-      packageCustomizable
-      pathMappingPatternsUnique
-      pathMappingsValid
-      ;
+    inherit errors;
+    customizationWarnings = customization.warnings spec;
     customizedPackage =
-      if customizationValid
-      then customizePackage cfg.package cfg.grammars cfg.mcp.pathMappings models
+      if errors == []
+      then customizePackage cfg.package spec
       else cfg.package;
   };
 
@@ -146,15 +136,15 @@
     if multiVariant
     then "semble-${state.runtime}"
     else "semble";
+  routingFor = state: {inherit (state.cfg) defaultContent models;};
   recordsFor = state:
     records.forCli {
       command = commandFor state;
-      models = state.cfg.cli.models;
+      routing = routingFor state;
     };
 
   # The package `semble` resolves to for the portable config, with the same
-  # cache relocation as the installed launcher. It is what a consumer points
-  # hand-declared MCP servers at (`semble-mcp --model <key>`).
+  # cache relocation as the installed launcher.
   portablePackage = (mkCustomization config.ai.programs.semble).customizedPackage;
   finalPackage = (variants.${packageKey portablePackage} or (mkVariant portablePackage)).wrappedPackage;
 
@@ -230,16 +220,20 @@
   # That gate is real: it is about Codex's sandbox, not about where semble
   # keeps its index.
 
+  # The MCP server routes each call by content from the package's own table,
+  # so it takes no arguments.
   mcpEntry = state: {
-    args = contentScope.toArgs state.cfg.mcp.content;
+    args = [];
     command = "${statePackage state}/bin/semble-mcp";
     type = "stdio";
   };
 
+  mcpSubagent = state: state.selected "subagent" && state.cfg.subagent.interface == "mcp";
+
   agentRecord = state: let
     interfaceRecords =
       if state.cfg.subagent.interface == "mcp"
-      then records.mcp
+      then records.forMcp (routingFor state)
       else recordsFor state;
     base =
       if state.runtime == "kiro"
@@ -259,7 +253,9 @@
       (lib.mkIf (state.selected "instructions") {
         ai.${runtime}.rules.semble = lib.mapAttrs (_: lib.mkDefault) (recordsFor state).rule;
       })
-      (lib.mkIf (state.selected "mcp" && state.cfg.mcp.rootExposure) {
+      # An MCP-backed subagent with `mcp` off keeps its server private to the
+      # agent: only Kiro can do that, and an assertion rejects the others.
+      (lib.mkIf (state.selected "mcp") {
         ai.${runtime}.mcpServers.semble = lib.mkDefault (mcpEntry state);
       })
       (lib.mkIf (state.selected "subagent") {
@@ -271,6 +267,16 @@
         ai.${runtime}.agents.semble-search = lib.mkDefault (agentRecord state);
       })
     ];
+
+  # Warnings for active runtimes, one line per distinct message.
+  warningMessages = let
+    byMessage =
+      lib.foldl' (acc: state:
+        lib.foldl' (inner: message: inner // {${message} = (inner.${message} or []) ++ [state.runtime];}) acc state.customizationWarnings)
+      {}
+      activeStates;
+  in
+    lib.mapAttrsToList (message: runtimes: "ai.programs.semble (${lib.concatStringsSep ", " runtimes}): ${message}") byMessage;
 in {
   imports = [program.module];
 
@@ -283,11 +289,8 @@ in {
         readOnly = true;
         description = ''
           The Semble package built from the portable `ai.programs.semble`
-          config: grammars, path mappings and `cli.models` applied, with the
-          module's cache location baked in. Point hand-declared MCP servers at
-          it to serve a non-default model, e.g.
-          `command = "''${config.ai.programs.semble.finalPackage}/bin/semble-mcp";`
-          with `args = ["--model" "docs"];`.
+          config: grammars, path mappings and model routing applied, with the
+          module's cache location baked in.
         '';
       };
     };
@@ -295,57 +298,23 @@ in {
 
   config = lib.mkMerge (
     [
-      {
-        ai.programs.semble = {inherit finalPackage;};
-        assertions = lib.concatMap (state:
-          [
-            {
-              assertion = state.packageCustomizable;
-              message = "ai.${state.runtime}.programs.semble grammar, path-mapping or cli.models customization requires package to expose overridePythonAttrs.";
-            }
-            {
-              assertion = state.grammarLanguagesValid;
-              message = "ai.${state.runtime}.programs.semble.grammars packages must expose a non-empty language attribute.";
-            }
-            {
-              assertion = state.grammarLanguagesUnique;
-              message = "ai.${state.runtime}.programs.semble.grammars language names must be unique.";
-            }
-            {
-              assertion = state.pathMappingsValid;
-              message = "ai.${state.runtime}.programs.semble.mcp.pathMappings entries require a non-empty language and at least one non-empty pattern.";
-            }
-            {
-              assertion = state.pathMappingPatternsUnique;
-              message = "ai.${state.runtime}.programs.semble.mcp.pathMappings patterns must be unique.";
-            }
-          ]
-          ++ map (message: {
-            assertion = false;
-            message = "ai.${state.runtime}.programs.semble: ${message}";
-          }) (contentScope.errors "mcp.content" state.cfg.mcp.content ++ state.modelErrors)
-          # The description is read only where the routing block lists the
-          # default entry.
-          ++ lib.optional (records.listsDefault state.cfg.cli.models) {
-            assertion = state.cfg.cli.models.default.model == null || state.cfg.cli.models.default.description != null;
-            message = "ai.${state.runtime}.programs.semble.cli.models.default.description must be set once cli.models.default.model is set and another model is enabled: the routing guidance lists the default, and the built-in description describes Semble's own model.";
-          }
-          ++ lib.optional (state.selected "subagent" && state.cfg.subagent.interface == "mcp") {
-            assertion = state.selected "mcp";
-            message = "ai.${state.runtime}.programs.semble.subagent.interface = \"mcp\" requires the Semble MCP integration for the same runtime.";
-          }
-          ++ lib.optionals (state.selected "mcp" && !state.cfg.mcp.rootExposure) [
-            {
+      ({
+          ai.programs.semble = {inherit finalPackage;};
+          assertions = lib.concatMap (state:
+            map (message: {
+              assertion = false;
+              message = "ai.${state.runtime}.programs.semble: ${message}";
+            })
+            state.errors
+            ++ lib.optional (mcpSubagent state && !(state.selected "mcp")) {
               assertion = state.runtime == "kiro";
-              message = "ai.${state.runtime}.programs.semble.mcp.rootExposure = false is unsupported: only Kiro can attach a Semble MCP server to a named agent without exposing it to the root session.";
-            }
-            {
-              assertion = state.selected "subagent" && state.cfg.subagent.interface == "mcp";
-              message = "ai.${state.runtime}.programs.semble.mcp.rootExposure = false requires an enabled MCP-backed Semble subagent for the same runtime.";
-            }
-          ])
-        stateList;
-      }
+              message = "ai.${state.runtime}.programs.semble: subagent.interface = \"mcp\" with mcp.enable = false needs an MCP server private to the agent, which only Kiro supports. ${state.runtime} cannot scope a server to one agent: enable mcp or use subagent.interface = \"cli\".";
+            })
+          stateList;
+        }
+        // lib.optionalAttrs (options ? warnings) {
+          warnings = warningMessages;
+        })
       (lib.mkIf integrationActive
         (lib.mkMerge [
           (installPackages [installedPackage])

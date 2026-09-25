@@ -7,10 +7,10 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-24 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Shared documents, each declared by
-> `facts.harnessWrites` (the router, never a factory, calls
+> **Last verified:** 2026-09-25 — Semble's `pathMappings` and model routing live
+> at the program root. Native file settings live under `ai.<runtime>.native`
+> (`native.settings`; Kimchi also `native.harnessSettings`). Shared documents,
+> each declared by `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
 > on HM activation and devenv shell entry where the CLI writes that copy
 > (Copilot's user settings.json on HM, its repository settings on devenv), a
@@ -440,14 +440,14 @@ Manager deliberately fixes the user-global root at
 `${config.xdg.cacheHome}/semble`, including on Darwin where Semble's native
 platform default differs; devenv fixes the project root under its state
 directory. Runtime states that resolve to one customized derivation share its
-wrapper and the established cache root. Divergent `package`, `grammars`, or
-`mcp.pathMappings` values produce package-keyed cache directories and one
-collision-free installed aggregate: generated guidance uses runtime-specific CLI
-aliases, while MCP commands point at their exact wrappers. The activation guards
-therefore clear and stamp the same variant indexes the installed CLI and MCP
-servers use. Customized packages also stamp their grammar and mapping
-fingerprint into index metadata, protecting package-only consumers that do not
-use either module's activation guard.
+wrapper and the established cache root. Divergent `package`, `grammars`,
+`pathMappings` or model-routing values produce package-keyed cache directories
+and one collision-free installed aggregate: generated guidance uses
+runtime-specific CLI aliases, while MCP commands point at their exact wrappers.
+The activation guards therefore clear and stamp the same variant indexes the
+installed CLI and MCP servers use. Customized packages also stamp their grammar
+and mapping fingerprint into index metadata, protecting package-only consumers
+that do not use either module's activation guard.
 
 **Intentional differences** exist and are NOT parity gaps:
 

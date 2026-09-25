@@ -1,7 +1,8 @@
 # Direct typed MCP constructor for consumers that do not use the convenience
 # module. The command is absolute. An unset `content` emits no argument, so the
-# server decides: code, or with `--model K` in `args` (a `cli.models` package)
-# entry K's content. A set `content` is always passed, `code` included.
+# server uses its package's default content (`code`, unless the package was
+# customized with another `defaultContent`). A set `content` is always passed,
+# `code` included.
 {
   lib,
   pkgs,
@@ -19,11 +20,12 @@
         type = lib.types.nullOr contentScope.type;
         default = null;
         description = ''
-          File-content categories the Semble MCP server searches by default. A
-          scalar is coerced to a one-element list, and `all` must appear alone.
-          null passes no `--content`: the server then searches code, or, when
-          `args` select a `cli.models` entry with `--model`, that entry's
-          content. Any other value is passed as `--content`, `code` included.
+          File-content categories the Semble MCP server searches when a tool
+          call passes no `content`. A scalar is coerced to a one-element list,
+          and `all` must appear alone. null passes no `--content`: the server
+          then uses its package's default content. Any other value is passed
+          as `--content`, `code` included. A customized package routes each
+          content set to its configured model either way.
         '';
       };
     }

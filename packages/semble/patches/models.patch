@@ -10,27 +10,49 @@ diff --git a/src/semble/cache.py b/src/semble/cache.py
  
  logger = logging.getLogger(__name__)
  
-@@ -35,10 +35,18 @@
+@@ -34,11 +34,21 @@
+     return hashlib.new("sha256", data).hexdigest()
  
  
- def find_index_from_cache_folder(path: str, content: Sequence[ContentType] = (ContentType.CODE,)) -> Path:
+-def find_index_from_cache_folder(path: str, content: Sequence[ContentType] = (ContentType.CODE,)) -> Path:
 -    """Find an exact content index in the cache for a project path."""
++def find_index_from_cache_folder(
++    path: str, content: Sequence[ContentType] = (ContentType.CODE,), model_path: str | None = None
++) -> Path:
 +    """Find an exact content index in the cache for a project path.
 +
-+    An index built with a model other than the default is suffixed with a hash of the model name, so several
++    An index built with a model other than the default gets a hash of that model's name as a suffix, so several
 +    models can index one repo side by side while `clear` still finds every index under the repo's folder.
 +    """
      cache_dir = resolve_cache_folder() / cache_key(path)
      scope = "-".join(sorted({content_type.value for content_type in content}))
 -    return cache_dir / ("index" if scope == ContentType.CODE.value else f"index-{scope}")
 +    name = "index" if scope == ContentType.CODE.value else f"index-{scope}"
-+    model_name = resolve_model_name()
++    model_name = model_path or resolve_model_name()
 +    if model_name != DEFAULT_MODEL_NAME:
 +        name += "@" + hashlib.sha256(model_name.encode("utf-8")).hexdigest()[:16]
 +    return cache_dir / name
  
  
  def _windows_cache_dir(name: str) -> Path:
+@@ -92,7 +102,7 @@
+ def save_index_to_cache(index: "SembleIndex", path: str) -> None:
+     """Save an index to the cache folder if it was freshly built."""
+     if not index.loaded_from_disk:
+-        index.save(find_index_from_cache_folder(path, index.content))
++        index.save(find_index_from_cache_folder(path, index.content, index._model_path))
+ 
+ 
+ def _metadata_matches(metadata: dict, model_path: str, content: Sequence[ContentType]) -> bool:
+@@ -114,7 +124,7 @@
+     path: str, model_path: str | None, content: Sequence[ContentType]
+ ) -> tuple[PersistencePath, dict] | None:
+     """Return the cached index files and metadata for path, or None if absent or built with other settings."""
+-    persistence_path = PersistencePath.from_path(find_index_from_cache_folder(path, content))
++    persistence_path = PersistencePath.from_path(find_index_from_cache_folder(path, content, model_path))
+     if persistence_path.non_existing():
+         return None
+     metadata = json.loads(persistence_path.metadata.read_text(encoding="utf-8"))
 diff --git a/src/semble/cli.py b/src/semble/cli.py
 --- a/src/semble/cli.py
 +++ b/src/semble/cli.py
@@ -42,15 +64,20 @@ diff --git a/src/semble/cli.py b/src/semble/cli.py
  import re
  import sys
  import warnings
-@@ -17,6 +18,7 @@
+@@ -17,10 +18,11 @@
+ from semble.cache import cache_key, resolve_cache_folder, save_index_to_cache
  from semble.index import SembleIndex
  from semble.index.types import PersistencePath
++from semble.semble_models import DEFAULT_CONTENT
  from semble.installer.agents import AGENTS, IntegrationType
-+from semble.semble_models import MODELS
  from semble.stats import format_savings_report
  from semble.types import ContentType
- from semble.utils import format_results, is_git_url, resolve_chunk
-@@ -54,10 +56,10 @@
+-from semble.utils import format_results, is_git_url, resolve_chunk
++from semble.utils import format_results, is_git_url, resolve_chunk, route_model
+ from semble.version import __version__
+ 
+ _CLI_DISPATCH_ARGS = frozenset(
+@@ -75,10 +77,13 @@
      p.add_argument(
          "--content",
          nargs="+",
@@ -59,143 +86,216 @@ diff --git a/src/semble/cli.py b/src/semble/cli.py
          choices=[ct.value for ct in ContentType] + ["all"],
          metavar="TYPE",
 -        help="Content types to search (space-separated, e.g. --content code docs). Choices: code, docs, config, all. Default: code.",
-+        help="Content types to search (space-separated, e.g. --content code docs). Choices: code, docs, config, all. Default: the selected model's content.",
++        help=(
++            "Content types to search (space-separated, e.g. --content code docs). Choices: code, docs, config, all. "
++            f"Default: {' '.join(DEFAULT_CONTENT)}. The model is the one configured for exactly this set."
++        ),
      )
      p.add_argument(
          "--include-text-files",
-@@ -66,13 +68,56 @@
-     )
- 
- 
-+def _model_keys(*, cli: bool) -> list[str]:
-+    """Return the model keys --model accepts. MCP always accepts the default entry."""
-+    return [key for key, entry in MODELS.items() if entry["enabled"] or (not cli and key == "default")]
-+
-+
-+def _add_model_arg(p: argparse.ArgumentParser, keys: list[str], *, subcommand: bool = False) -> None:
-+    """Add --model. A subcommand copy uses SUPPRESS so it does not clobber a value given before the subcommand."""
-+    p.add_argument(
-+        "--model",
-+        choices=keys,
-+        default=argparse.SUPPRESS if subcommand else None,
-+        metavar="KEY",
-+        help=f"Configured embedding model to use. Choices: {', '.join(keys)}. Default: default.",
-+    )
-+
-+
-+def _select_model(parser: argparse.ArgumentParser, key: str | None, *, cli: bool) -> dict:
-+    """Return the configured model entry and point Semble at its model, if it names one."""
-+    if key is None:
-+        key = "default"
-+        if cli and not MODELS[key]["enabled"]:
-+            parser.error(
-+                f"the default model is disabled; pass --model (choose from {', '.join(map(repr, _model_keys(cli=True)))})"
-+            )
-+    entry = MODELS[key]
-+    if entry["model"] is not None:
-+        os.environ["SEMBLE_MODEL_NAME"] = entry["model"]
-+    return entry
-+
-+
-+def _dispatch_arg(argv: list[str]) -> str | None:
-+    """Return the first argument after any leading --model option."""
-+    index = 1
-+    while index < len(argv):
-+        if argv[index] == "--model":
-+            index += 2
-+        elif argv[index].startswith("--model="):
-+            index += 1
-+        else:
-+            return argv[index]
-+    return None
-+
-+
- def main() -> None:
-     """Entry point for the semble command-line tool."""
-     # Non-UTF-8 Windows consoles can't encode glyphs like "✓" and would otherwise crash.
-     for stream in (sys.stdout, sys.stderr):
-         if isinstance(stream, io.TextIOWrapper):
-             stream.reconfigure(errors="replace")
--    if len(sys.argv) > 1 and sys.argv[1] in _CLI_DISPATCH_ARGS:
-+    if _dispatch_arg(sys.argv) in _CLI_DISPATCH_ARGS:
-         _cli_main()
-     else:
-         _mcp_main()
-@@ -84,13 +129,19 @@
-         description="Instant local code search for agents.",
-     )
-     _add_content_args(parser)
-+    _add_model_arg(parser, _model_keys(cli=False))
-     args = parser.parse_args()
-     if any(find_spec(dep) is None for dep in get_package_extras("semble", "mcp")):
-         print("MCP dependencies are not installed. Run: pip install 'semble[mcp]'", file=sys.stderr)
+@@ -111,7 +116,7 @@
          raise SystemExit(1)
      from semble.mcp import serve
  
 -    content = _resolve_content(args.content, args.include_text_files)
-+    # Without --model the server keeps upstream's content default; the default entry supplies only its model.
-+    entry = _select_model(parser, args.model, cli=False)
-+    selected = args.content
-+    if selected is None:
-+        selected = ["code"] if args.model is None else entry["content"]
-+    content = _resolve_content(selected, args.include_text_files)
++    content = _resolve_content(DEFAULT_CONTENT if args.content is None else args.content, args.include_text_files)
      asyncio.run(serve(content))
  
  
-@@ -107,6 +158,13 @@
+@@ -128,6 +133,18 @@
      return [ContentType(c) for c in content]
  
  
-+def _command_content(parser: argparse.ArgumentParser, args: argparse.Namespace) -> list[ContentType]:
-+    """Resolve --model, then --content, which replaces the model's content when given."""
-+    entry = _select_model(parser, args.model, cli=True)
-+    content = entry["content"] if args.content is None else args.content
-+    return _resolve_content(content, args.include_text_files)
++def _command_content(content: list[str] | None, include_text_files: bool) -> list[ContentType]:
++    """Resolve a command's content, replacing the default wholesale, and select the model configured for it."""
++    resolved = _resolve_content(DEFAULT_CONTENT if content is None else content, include_text_files)
++    model, fell_back = route_model(resolved)
++    if fell_back:
++        scope = " ".join(sorted(content_type.value for content_type in resolved))
++        print(f"semble: no model is configured for content '{scope}'; using the default model", file=sys.stderr)
++    if model is not None:
++        os.environ["SEMBLE_MODEL_NAME"] = model
++    return resolved
 +
 +
  def _load_index(paths: list[str], content: list[ContentType]) -> tuple[SembleIndex, list[tuple[str, SembleIndex]]]:
      """Build an index per path or git URL, exiting on FileNotFoundError.
  
-@@ -263,6 +321,8 @@
-     _configure_cli_logging()
-     parser = argparse.ArgumentParser(prog="semble")
-     parser.add_argument("-V", "--version", action="version", version=__version__)
-+    model_keys = _model_keys(cli=True)
-+    _add_model_arg(parser, model_keys)
-     sub = parser.add_subparsers(dest="command")
- 
-     search_p = sub.add_parser("search", help="Search a codebase.")
-@@ -283,6 +343,7 @@
-     )
-     search_p.add_argument("--format", choices=["json", "text"], default="json", help="Output format (default: json).")
-     _add_content_args(search_p)
-+    _add_model_arg(search_p, model_keys, subcommand=True)
- 
-     clear_p = sub.add_parser("clear", help="Clear the index cache.")
-     clear_p.add_argument(
-@@ -310,6 +371,7 @@
-     )
-     related_p.add_argument("--format", choices=["json", "text"], default="json", help="Output format (default: json).")
-     _add_content_args(related_p)
-+    _add_model_arg(related_p, model_keys, subcommand=True)
- 
-     sub.add_parser("savings", help="Show token savings and usage stats.")
- 
-@@ -356,7 +418,7 @@
+@@ -330,7 +347,7 @@
              args.path,
              args.query,
              args.top_k,
 -            _resolve_content(args.content, args.include_text_files),
-+            _command_content(parser, args),
++            _command_content(args.content, args.include_text_files),
              args.max_snippet_lines,
              args.format,
          )
-@@ -366,7 +428,7 @@
+@@ -340,7 +357,7 @@
              args.file_path,
              args.line,
              args.top_k,
 -            _resolve_content(args.content, args.include_text_files),
-+            _command_content(parser, args),
++            _command_content(args.content, args.include_text_files),
              args.max_snippet_lines,
              args.format,
          )
+diff --git a/src/semble/mcp.py b/src/semble/mcp.py
+--- a/src/semble/mcp.py
++++ b/src/semble/mcp.py
+@@ -17,7 +17,7 @@
+ from semble.index import SembleIndex
+ from semble.index.dense import load_model
+ from semble.types import ContentType
+-from semble.utils import format_results, is_git_url, resolve_chunk
++from semble.utils import format_results, is_git_url, resolve_chunk, resolve_model_name, route_model
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -33,7 +33,7 @@
+ )  # Idle seconds before dropping an index (0 = never)
+ _MIN_REVALIDATE_FACTOR = 3  # Don't recheck staleness sooner than this many times the last build's duration
+ ContentSelection = Literal["code", "docs", "config", "all"]
+-_CacheKey = tuple[str, tuple[ContentType, ...]]
++_CacheKey = tuple[str, tuple[ContentType, ...], str]  # source, content, model
+ 
+ 
+ async def _get_one_index(repo: str, cache: _IndexCache, content: Sequence[ContentType]) -> SembleIndex:
+@@ -176,19 +176,8 @@
+ ) -> None:
+     """Start an MCP stdio server."""
+     cache = _IndexCache()
+-
+-    async def _load_and_prewarm() -> None:
+-        """Pre-load the embedding model in parallel with starting the server."""
+-        try:
+-            _, cache._model_path = await asyncio.to_thread(load_model)
+-        except Exception as exc:
+-            logger.exception("Failed to load embedding model")
+-            cache._model_error = exc
+-            return
+-        finally:
+-            cache._model_ready.set()
+-
+-    init_task = asyncio.create_task(_load_and_prewarm())
++    # Pre-load the default content's model in parallel with starting the server; other models load on first use.
++    init_task = cache._model_task(_model_for(content))
+     server = create_server(cache, default_content=content)
+     try:
+         await server.run_stdio_async()
+@@ -197,15 +186,28 @@
+             init_task.cancel()
+ 
+ 
++def _model_for(content: Sequence[ContentType]) -> str:
++    """Return the model configured for exactly this content set, resolved to a name."""
++    return route_model(content)[0] or resolve_model_name()
++
++
++async def _load_model(model_path: str) -> str:
++    """Load an embedding model off the event loop."""
++    try:
++        _, loaded = await asyncio.to_thread(load_model, model_path)
++    except Exception:
++        logger.exception("Failed to load embedding model %r", model_path)
++        raise
++    return loaded
++
++
+ class _IndexCache:
+     """Cache of indexed repos and local paths for the lifetime of the MCP server process."""
+ 
+     def __init__(self) -> None:
+         """Initialise an empty cache."""
+         self._idle_timers: dict[_CacheKey, asyncio.TimerHandle] = {}
+-        self._model_path: str | None = None
+-        self._model_error: BaseException | None = None
+-        self._model_ready = asyncio.Event()
++        self._models: dict[str, asyncio.Task[str]] = {}  # one load per model; a failed load stays failed
+         self._tasks: OrderedDict[_CacheKey, asyncio.Task[SembleIndex]] = OrderedDict()  # ordered for LRU eviction
+         self._revalidate_after: dict[_CacheKey, float] = {}
+         self._merged: tuple[list[SembleIndex], SembleIndex] | None = None  # last merge and its parts
+@@ -217,23 +219,25 @@
+             self._merged = (indexes, SembleIndex.merge(parts))
+         return self._merged[1]
+ 
+-    async def _await_model(self) -> str:
+-        """Block until the model is installed; re-raise the load error if it failed."""
+-        await self._model_ready.wait()
+-        if self._model_error is not None:
+-            raise self._model_error
+-        assert self._model_path is not None
+-        return self._model_path
++    def _model_task(self, model_path: str) -> asyncio.Task[str]:
++        """Return the task loading a model, starting it on first use."""
++        if model_path not in self._models:
++            self._models[model_path] = asyncio.create_task(_load_model(model_path))
++        return self._models[model_path]
++
++    async def _await_model(self, model_path: str) -> str:
++        """Block until the model is loaded; re-raise the load error if it failed."""
++        return await asyncio.shield(self._model_task(model_path))
+ 
+     def _compute_cache_key(self, source: str, content: Sequence[ContentType] = (ContentType.CODE,)) -> _CacheKey:
+         """Compute the canonical key for an exact index variant."""
+         source_key = source if is_git_url(source) else str(Path(source).resolve())
+         normalized = tuple(content_type for content_type in ContentType if content_type in content)
+-        return source_key, normalized
++        return source_key, normalized, _model_for(normalized)
+ 
+     def _build_index(self, source: str, model_path: str, cache_key: _CacheKey) -> SembleIndex:
+         """Build an index for the given source and cache it."""
+-        source_key, content = cache_key
++        source_key, content, _ = cache_key
+         index = (
+             SembleIndex.from_git(source, model_path=model_path, content=content)
+             if is_git_url(source)
+@@ -287,7 +291,7 @@
+             return
+         if time.monotonic() < self._revalidate_after.get(cache_key, 0.0):
+             return
+-        validated = await asyncio.to_thread(get_validated_cache, cache_key[0], self._model_path, cache_key[1])
++        validated = await asyncio.to_thread(get_validated_cache, cache_key[0], cache_key[2], cache_key[1])
+         # Only evict if this entry hasn't already been replaced by a concurrent caller.
+         if validated is None and self._tasks.get(cache_key) is cached:
+             self.evict(cache_key)
+@@ -302,7 +306,7 @@
+         await self._evict_if_stale(cache_key)
+ 
+         if cache_key not in self._tasks:
+-            model_path = await self._await_model()
++            model_path = await self._await_model(cache_key[2])
+             # Re-check after the await: another caller may have populated the entry.
+             if cache_key not in self._tasks:
+                 if len(self._tasks) >= _CACHE_MAX_SIZE:
+diff --git a/src/semble/utils.py b/src/semble/utils.py
+--- a/src/semble/utils.py
++++ b/src/semble/utils.py
+@@ -2,9 +2,11 @@
+ 
+ import os
+ import re
++from collections.abc import Iterable
+ from typing import Any
+ 
+-from semble.types import Chunk, SearchResult
++from semble.semble_models import DEFAULT_MODEL, MODELS
++from semble.types import Chunk, ContentType, SearchResult
+ 
+ _GIT_URL_SCHEMES = ("https://", "http://", "ssh://", "git://", "git+ssh://", "file://")
+ _SCP_GIT_URL_RE = re.compile(r"^[\w.-]+@[\w.-]+:(?!/)")
+@@ -67,3 +69,15 @@
+ def resolve_model_name() -> str:
+     """Resolve a model name to a configurable."""
+     return os.environ.get("SEMBLE_MODEL_NAME", DEFAULT_MODEL_NAME)
++
++
++def route_model(content: Iterable[ContentType]) -> tuple[str | None, bool]:
++    """Return the model configured for exactly this content set, or the default model.
++
++    :return: The model (None means Semble's own) and whether a configured table had no entry for this set.
++    """
++    selected = sorted({content_type.value for content_type in content})
++    for entry in MODELS:
++        if entry["content"] == selected:
++            return entry["model"], False
++    return DEFAULT_MODEL, bool(MODELS)
