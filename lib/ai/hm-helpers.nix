@@ -168,7 +168,7 @@ in {
     command = ''
       credential_file="$HOME"/${lib.escapeShellArg path}
       if [ -f "$credential_file" ] && [ ! -L "$credential_file" ]; then
-        ${coreutils}/bin/chmod go-rwx -- "$credential_file"
+        run ${coreutils}/bin/chmod go-rwx -- "$credential_file"
       fi'';
   };
 

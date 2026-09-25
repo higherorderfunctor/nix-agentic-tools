@@ -623,7 +623,7 @@ in {
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           # This is an HM activation entry, which expects home-manager's `run`
-          # helper (activation-init.sh) already in scope.
+          # helper (lib/bash/home-manager.sh) already in scope.
           ${harness.hmRunShim}
           ${(evalHm {
             ai.kimchi = {

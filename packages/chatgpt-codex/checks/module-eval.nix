@@ -332,6 +332,9 @@ in {
         && devenv.config.files.".agents/skills/shared".source
         == ../../claude-code/checks/fixtures/claude-skills/skill-a
         && hm.config.home.activation ? codexMigrateSkillLinks
+        # It moves user directories, so under DRY_RUN it must only echo.
+        && lib.hasInfix "run /nix/store/" hm.config.home.activation.codexMigrateSkillLinks.text
+        && !lib.hasInfix "run /nix/store/" devenv.config.tasks."ai:codex:migrate-skill-links".exec
         && devenv.config.tasks ? "ai:codex:migrate-skill-links"
         && devenv.config.tasks."ai:codex:migrate-skill-links".after
         == ["devenv:files:cleanup"]
@@ -713,7 +716,7 @@ in {
         export HOME="$PWD/home"
         export XDG_STATE_HOME="$PWD/state"
         # The activation* fragments below are HM activation entry text, which
-        # expects home-manager's `run` helper (activation-init.sh) already in
+        # expects home-manager's `run` helper (lib/bash/home-manager.sh) already in
         # scope.
         ${harness.hmRunShim}
         ${pkgs.coreutils}/bin/mkdir -p "$HOME/.codex"

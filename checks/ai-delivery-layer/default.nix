@@ -469,7 +469,7 @@ in {
       export HOME="$PWD/home"
       export XDG_STATE_HOME="$PWD/state"
       # This is HM activation entry text, which expects home-manager's `run`
-      # helper (activation-init.sh) to already be in scope.
+      # helper (lib/bash/home-manager.sh) to already be in scope.
       ${harness.hmRunShim}
       ${(codexExtension false).config.home.activation.codexSettingsReconcile.text}
       printf '\n[native]\nkeep = true\n' >> "$HOME/.codex/config.toml"

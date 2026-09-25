@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Transcription of home-manager's `run` helper (modules/lib-bash/activation-init.sh),
+# Transcription of home-manager's `run` helper (lib/bash/home-manager.sh),
 # which every activation script gets in its preamble. `lib/ai/own.nix` routes
 # each HM entry's one mutating command through `run` so DRY_RUN echoes it
 # instead of executing it — that is the only thing that keeps

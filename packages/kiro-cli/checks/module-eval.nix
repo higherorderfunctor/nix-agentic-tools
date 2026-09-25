@@ -2794,7 +2794,7 @@ in {
         ev = evalHm cfg;
       in
         # HM activation entry text, which expects home-manager's `run` helper
-        # (activation-init.sh) already in scope.
+        # (lib/bash/home-manager.sh) already in scope.
         pkgs.writeShellScript "kiro-hooks-hm-gen"
         (harness.hmRunShim + hmHookPruneScript ev + "\n" + hmHookWriteScript ev);
       dvGen = cfg: pkgs.writeShellScript "kiro-hooks-dv-gen" (dvHookTaskExec (evalDevenv cfg));
@@ -3183,7 +3183,7 @@ in {
       # before checkLinkTargets, the write phase unlinks the drained ledger.
       # Replay them in that order, exactly as activation would.
       # HM activation entry text, which expects home-manager's `run` helper
-      # (activation-init.sh) already in scope.
+      # (lib/bash/home-manager.sh) already in scope.
       hmScript = pkgs.writeShellScript "kiro-steering-hm-retirement" (
         let
           ev = evalHm {ai.kiro.enable = false;};
