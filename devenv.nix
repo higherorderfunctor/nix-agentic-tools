@@ -331,7 +331,7 @@ in {
         # AGENTS.md already carries the repository's Semble search workflow from
         # the generated stacked-workflows fragment. Avoid asking devenv `files.*`
         # to replace that tracked real file with the redundant module projection.
-        instructions.cli.enable = false;
+        cli.instructions.enable = false;
       };
       # Temporarily disable Codex's OS sandbox for project sessions. The Home
       # Manager layer has already migrated to named permissions, but this

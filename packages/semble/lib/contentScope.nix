@@ -16,13 +16,14 @@ in rec {
     that per-call value replaces this server default for the call.
   '';
 
-  errors = content:
+  # `optionPath` names the option in the message, e.g. "mcp.content".
+  errors = optionPath: content:
     lib.optional (content == [])
-    "Semble `mcp.content` must contain at least one category."
+    "Semble `${optionPath}` must contain at least one category."
     ++ lib.optional (lib.length content != lib.length (lib.unique content))
-    "Semble `mcp.content` must not contain duplicate categories."
+    "Semble `${optionPath}` must not contain duplicate categories."
     ++ lib.optional (lib.elem "all" content && lib.length content > 1)
-    ''Semble `mcp.content` must not combine "all" with another category.'';
+    ''Semble `${optionPath}` must not combine "all" with another category.'';
 
   toArgs = content: let
     normalized = normalize content;
