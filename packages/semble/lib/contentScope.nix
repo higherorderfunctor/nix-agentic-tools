@@ -1,7 +1,7 @@
 # Semble content categories: the option type, validation, and ordering shared
 # by `defaultContent`, each `models` entry and `mkSemble`'s `content`.
 {lib}: let
-  categories = ["all" "code" "config" "docs"];
+  categories = ["all"] ++ (import ./contentCategories.nix).categories;
   normalize = lib.sort (a: b: a < b);
 in {
   inherit categories normalize;

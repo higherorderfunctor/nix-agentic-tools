@@ -23,11 +23,7 @@ let
     then value
     else [value];
   sortStrings = builtins.sort builtins.lessThan;
-  # Matches customization.nix: "all" routes like the three categories.
-  expand = content:
-    if builtins.elem "all" content
-    then ["code" "config" "docs"]
-    else sortStrings content;
+  inherit (import ./contentCategories.nix) expand;
   shownContent = content: builtins.concatStringsSep " " (sortStrings (toList content));
   enabledModels = routing: builtins.filter (entry: entry.enable or true) (routing.models or []);
   defaultContentOf = routing: toList (routing.defaultContent or ["code"]);

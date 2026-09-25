@@ -10,7 +10,7 @@
 {lib}: let
   contentScope = import ./contentScope.nix {inherit lib;};
   extracted = import ./extracted.nix;
-  categories = ["code" "config" "docs"];
+  inherit (import ./contentCategories.nix) categories expand;
 
   # model2vec's accepted folder layouts (persistence/datamodels.py
   # FOLDER_LAYOUTS in model2vec 0.8.1). A model directory must hold every file
@@ -25,13 +25,6 @@
   # aliases it resolves to them. An extra grammar under one of these names
   # would never be asked for.
   bundledLanguages = extracted.bundledGrammars ++ builtins.attrNames extracted.grammarAliases;
-
-  # The exact content set a selection searches. "all" is every category, so
-  # it routes like the three listed.
-  expand = content:
-    if lib.elem "all" content
-    then categories
-    else contentScope.normalize (lib.unique content);
 
   normalize = spec: {
     defaultContent = lib.toList (spec.defaultContent or contentScope.default);
