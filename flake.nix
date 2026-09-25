@@ -175,10 +175,6 @@
             # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
             # packages/stacked-workflows/modules/homeManager/git-config*.nix).
           };
-        # Consumer-callable packaging helpers. Most of lib/packaging.nix serves
-        # this repo's own recipes and update pipeline; only helpers meant for
-        # a consumer's own config are exported here.
-        packaging = {inherit (import ./lib/packaging.nix) fetchFromHuggingFace;};
       };
     in
       repository.libraryFor baseLib;
