@@ -794,7 +794,7 @@
     ai = {
       programs.semble = {
         enable = true;
-        instructions.cli.enable = true;
+        cli.instructions.enable = true;
         mcp.content = ["code" "docs"];
         subagent = {
           enable = true;
@@ -811,6 +811,29 @@
     Claude and Codex compose the guidance into their single always-loaded
     `CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
     `.kiro/steering/semble.md`.
+
+    `cli.models` adds per-key embedding models for the CLI, each a pinned
+    model package such as a `lib.packaging.fetchFromHuggingFace` output.
+    `semble --model prose search …` routes to one, and the generated guidance
+    tells agents which model fits which search. The read-only
+    `ai.programs.semble.finalPackage` is the resulting package, for
+    hand-declared `semble-mcp --model <key>` servers:
+
+    ```nix
+    ai.programs.semble.cli.models.prose = {
+      model = inputs.nix-agentic-tools.lib.packaging.fetchFromHuggingFace {
+        inherit pkgs;
+        owner = "minishlab";
+        repo = "potion-base-32M";
+        rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
+        files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+        hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
+        license = lib.licenses.mit;
+      };
+      content = "docs";
+      description = "Prose: READMEs, design notes, architecture docs.";
+    };
+    ```
 
     Set `mcp.rootExposure = false` only on Kiro, with an enabled MCP-backed
     Semble subagent for that runtime. The server then remains in the agent file

@@ -45,9 +45,9 @@
     # CLI+MCP case) -> CLI directions only.
     cli = claudeSkill {
       enable = true;
-      instructions.cli.enable = true;
+      cli.instructions.enable = true;
     };
-    # MCP only: `enable` selects MCP, `instructions.cli` is an explicit opt-in
+    # MCP only: `enable` selects MCP, `cli.instructions` is an explicit opt-in
     # that stays off -> MCP directions.
     mcp = claudeSkill {enable = true;};
   };
