@@ -404,7 +404,8 @@ GitHub credential helper; it is published as `GIT_CONFIG_GLOBAL`, and
 per-harness ones under `ai.<cli>.programs.git`; `settings` deep-merges the two.
 The token and the signing key stay files read at run time, so only their paths
 reach the store, and no `GH_TOKEN` is set, because Copilot CLI would prefer it
-over its own login.
+over its own login. It covers HTTPS to github.com: a remote that stays SSH still
+authenticates with your SSH identity.
 
 ```nix
 ai = {

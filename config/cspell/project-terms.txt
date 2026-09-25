@@ -18,6 +18,7 @@ argstr
 aristocratos
 arkenfox
 arxanas
+askpass
 attrset
 attrsets
 aubut
@@ -183,6 +184,7 @@ goproxy
 GOTOOLCHAIN
 GOWORK
 gpgsign
+gpgsm
 gradeability
 gradeable
 gsub
@@ -206,6 +208,7 @@ indexreferrer
 inferera
 inlines
 inspectable
+insteadof
 ints
 isaacphi
 isready
@@ -319,6 +322,7 @@ openclaw
 opencode
 openhands
 openmemory
+openpgp
 operationalizes
 optionset
 oraios

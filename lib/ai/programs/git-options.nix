@@ -11,7 +11,6 @@
 #
 # One file, imported by `git.nix`, which `sharedOptions.nix` imports on both
 # backends — so the two option trees cannot drift.
-# cspell:ignore gpgsm openpgp
 {
   lib,
   mkCredentialsOption,
@@ -42,11 +41,36 @@ in {
       enable = lib.mkEnableOption ''
         a per-harness git identity. Each enabled harness gets its own gitconfig
         in the store, published as `GIT_CONFIG_GLOBAL` on the harness's
-        process environment (Claude: `settings.env`). That file includes
-        `~/.gitconfig` and the XDG `git/config` FIRST, so your own aliases and
-        tooling still apply and everything set here overrides them. The
-        project shell and your own `programs.git` are never touched
+        process environment (Claude: `settings.env`). That file includes the
+        XDG `git/config` and `~/.gitconfig` FIRST, in git's own order, so your
+        aliases and tooling still apply and everything set here overrides
+        them. git expands no environment variable in an include path, so the
+        XDG file is Home Manager's `xdg.configHome`, and `~/.config` on devenv
+        whatever `$XDG_CONFIG_HOME` says. The project shell and your own
+        `programs.git` are never touched. The identity covers HTTPS to
+        github.com: a remote that stays SSH (including one a `pushInsteadOf`
+        in your own config rewrites to SSH) still authenticates as whoever
+        your SSH config says
       '';
+
+      credentials =
+        mkCredentialsOption "the password git's credential helper returns for https://github.com"
+        // {
+          description = ''
+            The GitHub token git pushes and fetches with. Renders an empty
+            `credential."https://github.com".helper` (dropping every helper
+            your own config set, so a push never falls back to your token)
+            and then a store helper that reads this secret on every
+            credential request and answers `username=x-access-token`; if the
+            secret is missing or empty it tells git to stop rather than
+            prompt. Only the path reaches the store, and the token is never
+            put in the environment. A `helper` executable runs on every
+            request, not once at start. Set exactly one of `file` or `helper`.
+
+            Left null, nothing is reset: git uses whatever helper your own
+            config sets for github.com, which may be your token.
+          '';
+        };
 
       settings = lib.mkOption {
         type = gitIniType;
@@ -69,6 +93,17 @@ in {
       };
 
       signing = {
+        format = lib.mkOption {
+          type = lib.types.nullOr (lib.types.enum ["openpgp" "ssh" "x509"]);
+          default = null;
+          description = ''
+            Signature format, rendered as `gpg.format`, with
+            `gpg.<format>.program` pinned to the store signer (`gpg`,
+            `ssh-keygen`, `gpgsm`) as Home Manager does, so signing does not
+            depend on PATH. No legacy default: set it explicitly.
+          '';
+        };
+
         key = lib.mkOption {
           type = lib.types.nullOr signingKeyType;
           default = null;
@@ -81,41 +116,18 @@ in {
           '';
         };
 
-        format = lib.mkOption {
-          type = lib.types.nullOr (lib.types.enum ["openpgp" "ssh" "x509"]);
-          default = null;
-          description = ''
-            Signature format, rendered as `gpg.format`, with
-            `gpg.<format>.program` pinned to the store signer (`gpg`,
-            `ssh-keygen`, `gpgsm`) as Home Manager does, so signing does not
-            depend on PATH. No legacy default: set it explicitly.
-          '';
-        };
-
         signByDefault = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = ''
-            Sign every commit and tag (`commit.gpgSign`, `tag.gpgSign`).
-            Evaluation fails for an enabled harness whose resolved `key` or
-            `format` is null, so there is no silent unsigned fallback.
+            Sign every commit and tag. Rendered as `commit.gpgSign` and
+            `tag.gpgSign` whether true or false, so a signing default in your
+            own config never signs the agent's commits with your key.
+            Evaluation fails for an enabled harness that signs (through this
+            or `settings`) while no key or format resolves.
           '';
         };
       };
-
-      credentials =
-        mkCredentialsOption "the password git's credential helper returns for https://github.com"
-        // {
-          description = ''
-            The GitHub token git pushes and fetches with. Renders an empty
-            `credential."https://github.com".helper` (dropping every helper
-            your own config set, so a push never falls back to your token)
-            and then a store helper that reads this secret when git asks and
-            answers `username=x-access-token`. Only the path reaches the
-            store, and the token is never put in the environment. Set exactly
-            one of `file` or `helper`.
-          '';
-        };
     };
   };
 

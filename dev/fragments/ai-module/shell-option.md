@@ -1,17 +1,8 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-25 — module-contributed env, including the
-> per-harness git identity, rides the per-runtime internal channel
-> `ai.<runtime>.internal._moduleEnvironmentVariables`
-> (`lib/ai/module-environment.nix`). The builder entry point is
-> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
-> callback. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
-> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
-> a runtime-specific implicit shell default. `ai.shell` stays null; see below
-> for the standing decision and the override rule it shares with normalized
-> `settings`. The builder merges every launcher's process environment once, as
-> `launcherEnvironment`; Codex and Copilot wrap through `lib.ai.mkLauncher`.
+> **Last verified:** 2026-09-25 — module-contributed env rides the per-runtime
+> internal channel `ai.<runtime>.internal._moduleEnvironmentVariables`, found
+> through the option tree so downstream `mkRuntime` runtimes get it too.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 

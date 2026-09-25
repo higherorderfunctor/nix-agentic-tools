@@ -9,32 +9,7 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 > **Last verified:** 2026-09-25 — module-contributed process env rides a
 > per-runtime internal channel, which carries `ai.programs.git`'s per-harness
-> `GIT_CONFIG_GLOBAL` and `GH_CONFIG_DIR`; the Git SSH default never touches the
-> devenv shell. Every runtime describes delivery once through `mkRuntime`'s
-> record-level `config`, and both `mkRuntime` and the backend transforms reject
-> a backend spec carrying anything but `installPackage`, `migrationConfig` and
-> `options`, since an overridden or hand-built record reaches a transform
-> without the constructor. Kiro hook commands resolve packages through the
-> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
-> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
-> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
-> Claude devenv delivers `ai.agents` and `ai.claude.agentsDir` to
-> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
-> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
-> so a store-path string is a file, never a body naming its own path. File
-> content at `mkDefault` enables its entry; `content.enable = false` suppresses
-> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). A root request nothing per-runtime can withdraw
-> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
-> owned writable copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
-> declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Upstream
-> delegation aliases the content field's own definitions. Ledger-owned copies
-> whose files nothing else retracts opt into `runWhenDisabled`. `ai.lspServers`
-> renders whole files with each runtime's envelope, Copilot/Kiro require
-> `extensions`, and Copilot constrains server names.
+> identity.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -228,7 +203,18 @@ an explicit consumer entry wins. Invariants, each load-bearing:
 - **The empty `credential."https://github.com".helper` is required.** It drops
   the user's own helper; without it an agent push that the agent helper cannot
   answer falls through to the user's token. The agent helper is a store script
-  that reads the `credentials` file on `get` only.
+  that reads the `credentials` file on `get` only, and on any failure prints
+  `quit=1`: git ignores a helper's exit status and would otherwise go on to
+  askpass (including a `core.askPass` from the included user config) and the
+  terminal. With `credentials` null nothing is reset, so the user's helper
+  answers.
+- **Signing is always written.** `commit.gpgSign` / `tag.gpgSign` render even
+  when false, or a user config that signs by default signs the agent's commits
+  with the user's key. The key and format assertions judge the rendered body, so
+  signing switched on through `settings` is held to them.
+- **Include order is git's own:** the XDG config, then `~/.gitconfig`. git
+  expands no env var in `include.path`, so the XDG root is fixed at eval
+  (`xdg.configHome` on HM, `~/.config` on devenv).
 - **Never write the user's `programs.git`** (unlike `gitSshConfigWorkaround`'s
   HM branch), **never set `GH_TOKEN`** (Copilot CLI prefers it over its own
   login), **nothing on PATH** (Claude's Bash tool re-runs shell init).
@@ -238,10 +224,12 @@ an explicit consumer entry wins. Invariants, each load-bearing:
 
 `module-ai-programs-git-rendered-gitconfig` reads the file with real git. When
 probing by hand, note that `git config --global` reads one file and SKIPS its
-includes; use `--includes`. Not covered by this mechanism: tools that ignore
-`GIT_CONFIG_GLOBAL` (git-mcp's GitPython commit; libgit2 callers are
-unmeasured). On devenv each launcher bakes the project's own env, so the
-identity must be configured in the project (`devenv.local.nix`) too.
+includes; use `--includes`. Not covered by this mechanism: SSH remotes
+(including one a user `pushInsteadOf` rewrites to SSH, measured: `insteadOf` is
+not re-applied to its result), and tools that ignore `GIT_CONFIG_GLOBAL`
+(git-mcp's GitPython commit; libgit2 callers are unmeasured). On devenv each
+launcher bakes the project's own env, so the identity must be configured in the
+project (`devenv.local.nix`) too.
 
 ### Fanout data flow
 
@@ -1651,18 +1639,9 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-25 — module-contributed env, including the
-> per-harness git identity, rides the per-runtime internal channel
-> `ai.<runtime>.internal._moduleEnvironmentVariables`
-> (`lib/ai/module-environment.nix`). The builder entry point is
-> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
-> callback. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
-> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
-> a runtime-specific implicit shell default. `ai.shell` stays null; see below
-> for the standing decision and the override rule it shares with normalized
-> `settings`. The builder merges every launcher's process environment once, as
-> `launcherEnvironment`; Codex and Copilot wrap through `lib.ai.mkLauncher`.
+> **Last verified:** 2026-09-25 — module-contributed env rides the per-runtime
+> internal channel `ai.<runtime>.internal._moduleEnvironmentVariables`, found
+> through the option tree so downstream `mkRuntime` runtimes get it too.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 

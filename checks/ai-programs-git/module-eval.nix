@@ -1,6 +1,5 @@
 # `ai.programs.git` / `ai.programs.gh` — the per-harness git and gh identity
 # (lib/ai/programs/git.nix). Both backends, every runtime from the registry.
-# cspell:ignore insteadof
 {
   lib,
   pkgs,
@@ -190,48 +189,108 @@ in {
         && probe {ai.claude.programs.git.signing.key = "/run/secrets/key";}
     );
 
-    # signByDefault with nothing to sign with is an eval error (assertion), not
-    # a silent unsigned commit. Only enabled runtimes are held to it, and the
-    # full identity is the positive control.
-    module-ai-programs-git-sign-by-default-needs-key-and-format = mkTest "ai-programs-git-sign-by-default-needs-key-and-format" (
+    # Signing with nothing to sign with is an eval error (assertion), judged
+    # on the rendered body so `settings` is held to the same rule; so is a
+    # token under the store and gh without a directory. Only enabled runtimes
+    # are held to it, and the full identity is the positive control.
+    module-ai-programs-git-assertions = mkTest "ai-programs-git-assertions" (
       builtins.all (backend: let
-        eval = backends.${backend};
-        noKey = eval (lib.recursiveUpdate identity {ai.kiro.programs.git.signing.key = null;});
-        noFormat = eval (lib.recursiveUpdate identity {ai.programs.git.signing.format = null;});
-        noGhDir = eval (lib.recursiveUpdate identity {ai.programs.gh.configDir = null;});
-        disabledRuntime = eval (lib.recursiveUpdate identity {
+        eval = config: backends.${backend} (lib.recursiveUpdate identity config);
+        noKey = eval {ai.kiro.programs.git.signing.key = null;};
+        noFormat = eval {ai.programs.git.signing.format = null;};
+        settingsSigns = eval {
+          ai = {
+            programs.git = {
+              signing.signByDefault = false;
+              settings.commit.gpgSign = true;
+            };
+            kiro.programs.git.signing.key = null;
+          };
+        };
+        keyViaSettings = eval {
+          ai.kiro.programs.git = {
+            signing.key = null;
+            settings.user.signingKey = "/run/secrets/kiro-key";
+          };
+        };
+        storeToken = eval {ai.programs.git.credentials.file = "${builtins.storeDir}/00000000000000000000000000000000-token";};
+        noGhDir = eval {ai.programs.gh.configDir = null;};
+        disabledRuntime = eval {
           ai.kiro = {
             enable = false;
             programs.git.signing.key = null;
           };
-        });
+        };
+        only = prefix: ev: let
+          failures = ourFailures ev;
+        in
+          failures != [] && builtins.all (lib.hasPrefix prefix) failures;
       in
-        builtins.any (lib.hasPrefix "ai.kiro.programs.git.signing.signByDefault is on but no signing key") (ourFailures noKey)
-        && lib.length (ourFailures noKey) == 1
-        && builtins.any (lib.hasPrefix "ai.claude.programs.git.signing.signByDefault is on but no signing format") (ourFailures noFormat)
+        only "ai.kiro.programs.git signs commits or tags but no signing key" noKey
         && lib.length (ourFailures noFormat) == lib.length harnessNames
+        && builtins.any (lib.hasPrefix "ai.claude.programs.git signs commits or tags but no signing format") (ourFailures noFormat)
+        && only "ai.kiro.programs.git signs commits or tags but no signing key" settingsSigns
+        && ourFailures keyViaSettings == []
+        && lib.length (ourFailures storeToken) == lib.length harnessNames
+        && builtins.any (lib.hasPrefix "ai.codex.programs.git.credentials.file points into") (ourFailures storeToken)
         && builtins.any (lib.hasPrefix "ai.codex.programs.gh.enable needs a config directory") (ourFailures noGhDir)
         && ourFailures disabledRuntime == []
-        && ourFailures (eval identity) == [])
+        && ourFailures (backends.${backend} identity) == [])
       (builtins.attrNames backends)
     );
 
-    # The rendered file, read by real git. Checks the four things the design
-    # rests on: `[include]` is the FIRST section; the per-runtime `user.name`
-    # deep-merges with the root `user.email`; the credential reset comes AFTER
-    # the user's included helper, so git keeps only the agent's; signing pins
-    # the store ssh-keygen. The fake HOME's gitconfig stands in for the user's.
+    # The rendered file, read by real git against a fake HOME whose configs
+    # stand in for the user's: an XDG config and a `~/.gitconfig` that signs
+    # by default with the user's key, sets a github.com helper and an askpass
+    # that would answer with the user's secret. Covers: `[include]` is the
+    # FIRST section and keeps git's own XDG-then-home order; the per-runtime
+    # `user.name` deep-merges with the root `user.email`; the credential reset
+    # comes AFTER the user's helper; signing pins the store ssh-keygen and,
+    # when off, is written off rather than inherited; the helper answers `get`
+    # with the token, and on a missing token tells git to quit instead of
+    # falling through to askpass.
     module-ai-programs-git-rendered-gitconfig = let
-      ev = evalHm identity;
-      file = runtime: (channel ev runtime).GIT_CONFIG_GLOBAL;
+      hm = evalHm identity;
+      devenv = evalDevenv identity;
+      file = ev: runtime: (channel ev runtime).GIT_CONFIG_GLOBAL;
+      tokenHelper = pkgs.writeShellScript "fake-token-helper" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf '%s\n' fake-token
+      '';
+      # Replace the credential outright: a recursive merge would set both arms.
+      withHelper = evalHm (lib.updateManyAttrsByPath [
+          {
+            path = ["ai" "programs" "git" "credentials"];
+            update = _: {helper = "${tokenHelper}";};
+          }
+        ]
+        identity);
+      unsigned = evalHm (lib.recursiveUpdate identity {ai.programs.git.signing.signByDefault = false;});
+      askpass = pkgs.writeShellScript "operator-askpass" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf '%s\n' OPERATOR_SECRET
+      '';
       userGitconfig = pkgs.writeText "user-gitconfig" ''
         [user]
           name = the-operator
           email = operator@example.com
+          signingKey = /home/operator/.ssh/signing_key
+        [alias]
+          who = home
+        [core]
+          askPass = ${askpass}
         [credential "https://github.com"]
           helper = operator-helper
         [commit]
-          gpgSign = false
+          gpgSign = true
+        [tag]
+          gpgSign = true
+      '';
+      xdgGitconfig = pkgs.writeText "xdg-gitconfig" ''
+        [alias]
+          who = xdg
       '';
     in
       pkgs.runCommand "module-test-ai-programs-git-rendered-gitconfig" {nativeBuildInputs = [pkgs.git];} ''
@@ -246,12 +305,16 @@ in {
         cfg() {
           git config --includes --global "$@"
         }
+        fill() {
+          printf 'protocol=https\nhost=github.com\n\n' | GIT_TERMINAL_PROMPT=0 git credential fill
+        }
         export HOME="$PWD/home"
-        mkdir -p "$HOME"
+        mkdir -p "$HOME/.config/git"
         cp ${userGitconfig} "$HOME/.gitconfig"
+        cp ${xdgGitconfig} "$HOME/.config/git/config"
 
         ${lib.concatMapStringsSep "\n" (runtime: ''
-            export GIT_CONFIG_GLOBAL=${file runtime}
+            export GIT_CONFIG_GLOBAL=${file hm runtime}
             [ "$(head -n1 "$GIT_CONFIG_GLOBAL")" = '[include]' ] || fail "${runtime}: first section is not [include]"
             [ "$(cfg user.name)" = 'bot (${runtime})' ] || fail "${runtime}: user.name"
             [ "$(cfg user.email)" = 'bot@example.com' ] || fail "${runtime}: root user.email lost by the runtime override"
@@ -280,6 +343,39 @@ in {
             [ -z "$("$helper" store </dev/null)" ] || fail "${runtime}: helper answered a store request"
           '')
           harnessNames}
+
+        # The token file does not exist in the sandbox: the helper must say
+        # quit, and git must stop there rather than ask the user's askpass.
+        export GIT_CONFIG_GLOBAL=${file hm "claude"}
+        if "$helper" get </dev/null > answer 2>/dev/null; then
+          fail "helper succeeded without a token file"
+        fi
+        grep -Fxq quit=1 answer || fail "helper did not answer quit=1 on a missing token"
+        if fill > filled 2>/dev/null; then
+          fail "credential fill succeeded without a token file"
+        fi
+        if grep -Fq OPERATOR_SECRET filled; then
+          fail "missing token fell through to the user's askpass"
+        fi
+
+        # A readable token is answered as x-access-token.
+        export GIT_CONFIG_GLOBAL=${file withHelper "claude"}
+        fill > filled || fail "credential fill failed with a token helper"
+        grep -Fxq username=x-access-token filled || fail "username is not x-access-token"
+        grep -Fxq password=fake-token filled || fail "password is not the helper's token"
+
+        # Signing off is written off: the user's gpgSign = true stays out.
+        export GIT_CONFIG_GLOBAL=${file unsigned "claude"}
+        [ "$(cfg commit.gpgSign)" = false ] || fail "unsigned: user's commit.gpgSign leaked through"
+        [ "$(cfg tag.gpgSign)" = false ] || fail "unsigned: user's tag.gpgSign leaked through"
+
+        # devenv includes git's default XDG path; `~/.gitconfig` still wins a
+        # key both user files set, as it does natively.
+        export GIT_CONFIG_GLOBAL=${file devenv "claude"}
+        cfg --get-all include.path > includes
+        printf '%s\n' '~/.config/git/config' '~/.gitconfig' | cmp -s - includes || fail "devenv include paths or order"
+        [ "$(cfg alias.who)" = home ] || fail "XDG config overrides ~/.gitconfig"
+
         echo "PASS: ai-programs-git-rendered-gitconfig" > "$out"
       '';
 

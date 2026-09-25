@@ -13,15 +13,23 @@
 # harness (name, signing key). A value every harness shares — the sandbox-safe
 # `GIT_SSH_COMMAND` — is published to each one.
 #
-# Only runtimes whose module is imported have the channel. The probe reads the
-# OPTION tree, which is build-time structure and forces no config, so it cannot
-# recurse into the value being defined.
+# Only runtimes whose module is imported have the channel. They are found in
+# the evaluated OPTION tree, not the first-party registry, because `mkRuntime`
+# is public: a downstream runtime gets the shared defaults too. The probe reads
+# build-time structure and forces no config, so it cannot recurse into the
+# value being defined.
 {lib}: let
-  harnessNames = import ./runtimes.nix;
+  runtimeNames = options:
+    builtins.filter
+    (name: let
+      group = options.ai.${name};
+    in
+      builtins.isAttrs group && !lib.isOption group && group ? internal && lib.isOption group.internal)
+    (builtins.attrNames options.ai);
 in {
   # `envFor runtime` → attrset of strings. Returns a config fragment.
   publish = options: envFor: {
-    ai = lib.genAttrs (builtins.filter (name: lib.hasAttrByPath ["ai" name "internal"] options) harnessNames) (runtime: {
+    ai = lib.genAttrs (runtimeNames options) (runtime: {
       internal._moduleEnvironmentVariables = envFor runtime;
     });
   };

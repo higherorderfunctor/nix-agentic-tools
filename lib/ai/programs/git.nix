@@ -13,7 +13,6 @@
 #   through its credential helper; gh reads `hosts.yml` in `GH_CONFIG_DIR`.
 # - Nothing on PATH. Claude's Bash tool re-runs shell init, which can put
 #   the real binaries back in front; env vars survive it.
-# cspell:ignore gpgsm openpgp
 {
   config,
   lib,
@@ -62,8 +61,10 @@
 
   # git runs an absolute helper path as `<helper> get|store|erase`. Only `get`
   # answers. The secret is read when git asks, so only its PATH is in the
-  # store, and the shared reader fails loudly on a missing or empty secret
-  # rather than handing git an empty password.
+  # store. A missing or empty secret must STOP git, not merely fail: git
+  # ignores a helper's exit status and moves on to askpass (`SSH_ASKPASS`, or a
+  # `core.askPass` from the included user config) and then the terminal. Only
+  # a `quit=1` answer ends the lookup, so any failure path prints it.
   credentialHelper = secret:
     pkgs.writeShellApplication {
       name = "ai-git-credential-github";
@@ -72,20 +73,26 @@
         shopt -s inherit_errexit 2>/dev/null || :
 
         [ "''${1:-}" = get ] || exit 0
+        trap '[ "$?" -eq 0 ] || printf "quit=1\n"' EXIT
         ${credentials.mkSecretAssignment pkgs "ai_git_token" secret}
         printf 'username=x-access-token\npassword=%s\n' "$ai_git_token"
       '';
     };
 
-  # `GIT_CONFIG_GLOBAL` REPLACES both `~/.gitconfig` and the XDG config, so
-  # the file includes them. Home Manager knows the XDG root; elsewhere git's
-  # own default stands in.
+  # `GIT_CONFIG_GLOBAL` REPLACES both the XDG config and `~/.gitconfig`, so
+  # the file includes them, in git's own order: XDG first, so `~/.gitconfig`
+  # wins a key both set, as it does natively. git expands `~` in an include
+  # path but no environment variable, so the XDG root is fixed at evaluation:
+  # Home Manager's `xdg.configHome`, elsewhere git's default `~/.config`.
   userConfigs = [
-    "~/.gitconfig"
     "${lib.attrByPath ["xdg" "configHome"] "~/.config" config}/git/config"
+    "~/.gitconfig"
   ];
 
-  renderGitconfig = runtime: cfg: let
+  # Everything after the include. `commit.gpgSign` and `tag.gpgSign` are
+  # ALWAYS written: left unset, a user config that signs by default would
+  # sign the agent's commits with the user's key.
+  gitconfigBody = cfg: let
     inherit (cfg) signing;
     derived = lib.foldl' lib.recursiveUpdate {} [
       (lib.optionalAttrs (signing.key != null) {user.signingKey = signing.key;})
@@ -95,10 +102,10 @@
           ${signing.format}.program = signers.${signing.format};
         };
       })
-      (lib.optionalAttrs signing.signByDefault {
-        commit.gpgSign = true;
-        tag.gpgSign = true;
-      })
+      {
+        commit.gpgSign = signing.signByDefault;
+        tag.gpgSign = signing.signByDefault;
+      }
       # The empty value resets the helper list, dropping every helper the
       # included user config set. Without it an agent push that this helper
       # cannot answer falls through to the user's own token.
@@ -106,13 +113,15 @@
         credential."https://github.com".helper = ["" (lib.getExe (credentialHelper cfg.credentials))];
       })
     ];
-    body = lib.recursiveUpdate derived cfg.settings;
   in
-    # Two renders, concatenated. `toGitINI` sorts sections, which would put
-    # `[commit]`, `[credential …]` and `[gpg]` BEFORE `[include]` — and since
-    # the last value wins, the user's included config would then override the
-    # agent's signing and re-append the user's credential helper after the
-    # reset. The include must be the first section.
+    lib.recursiveUpdate derived cfg.settings;
+
+  # Two renders, concatenated. `toGitINI` sorts sections, which would put
+  # `[commit]`, `[credential …]` and `[gpg]` BEFORE `[include]` — and since
+  # the last value wins, the user's included config would then override the
+  # agent's signing and re-append the user's credential helper after the
+  # reset. The include must be the first section.
+  renderGitconfig = runtime: body:
     pkgs.writeText "ai-gitconfig-${runtime}" (
       lib.generators.toGitINI {
         include.path = userConfigs ++ lib.toList (body.include.path or []);
@@ -124,32 +133,45 @@
     gitCfg = resolveGit runtime;
     ghCfg = gh.resolve config runtime;
     enabled = runtimeEnabled runtime;
+    body = gitconfigBody gitCfg;
   in {
-    inherit ghCfg gitCfg runtime;
+    inherit body ghCfg gitCfg runtime;
     gitActive = enabled && gitCfg.enable;
     ghActive = enabled && ghCfg.enable;
-    gitconfig = renderGitconfig runtime gitCfg;
+    gitconfig = renderGitconfig runtime body;
   });
 
-  envFor = runtime: let
-    state = states.${runtime};
-  in
-    lib.optionalAttrs state.gitActive {GIT_CONFIG_GLOBAL = "${state.gitconfig}";}
-    // lib.optionalAttrs (state.ghActive && state.ghCfg.configDir != null) {
-      GH_CONFIG_DIR = state.ghCfg.configDir;
-    };
+  # `publish` also reaches runtimes built with the public `mkRuntime`, which
+  # this module has no identity for.
+  envFor = runtime:
+    lib.optionalAttrs (states ? ${runtime}) (let
+      state = states.${runtime};
+    in
+      lib.optionalAttrs state.gitActive {GIT_CONFIG_GLOBAL = "${state.gitconfig}";}
+      // lib.optionalAttrs (state.ghActive && state.ghCfg.configDir != null) {
+        GH_CONFIG_DIR = state.ghCfg.configDir;
+      });
 
+  # Judged on the rendered body, so signing switched on through `settings`
+  # is held to the same rule and a key supplied there counts.
   assertionsFor = state: let
     prefix = "ai.${state.runtime}.programs";
+    inherit (state) body;
+    signs = (body.commit.gpgSign or false) == true || (body.tag.gpgSign or false) == true;
+    tokenFile = (state.gitCfg.credentials or {}).file or null;
   in
     lib.optionals state.gitActive [
       {
-        assertion = !state.gitCfg.signing.signByDefault || state.gitCfg.signing.key != null;
-        message = "${prefix}.git.signing.signByDefault is on but no signing key resolves for ${state.runtime}. Set ai.programs.git.signing.key or ${prefix}.git.signing.key; commits would otherwise go out unsigned.";
+        assertion = !signs || (body.user.signingKey or null) != null;
+        message = "${prefix}.git signs commits or tags but no signing key resolves for ${state.runtime}. Set ai.programs.git.signing.key or ${prefix}.git.signing.key; git would otherwise sign with whatever key your own config names, or fail.";
       }
       {
-        assertion = !state.gitCfg.signing.signByDefault || state.gitCfg.signing.format != null;
-        message = "${prefix}.git.signing.signByDefault is on but no signing format resolves for ${state.runtime}. Set ai.programs.git.signing.format (\"ssh\", \"openpgp\" or \"x509\").";
+        assertion = !signs || (body.gpg.format or null) != null;
+        message = "${prefix}.git signs commits or tags but no signing format resolves for ${state.runtime}. Set ai.programs.git.signing.format (\"ssh\", \"openpgp\" or \"x509\").";
+      }
+      {
+        assertion = tokenFile == null || !lib.hasPrefix "${builtins.storeDir}/" tokenFile;
+        message = "${prefix}.git.credentials.file points into ${builtins.storeDir}, where the token is world-readable. Pass the path of a decrypted secret as a string.";
       }
     ]
     ++ lib.optional state.ghActive {

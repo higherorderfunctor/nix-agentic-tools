@@ -225,6 +225,49 @@ in {
         && builtins.all (a: a.assertion) sharedPoolCollision.assertions
     );
 
+    # `mkRuntime` is public, so the module-env channel must reach a runtime
+    # outside the first-party registry too: it did when the SSH default was
+    # one root value every transform read, and the per-runtime channel finds
+    # runtimes in the option tree to keep it that way. Mutation-checked: a
+    # registry-only `publish` turns this red.
+    module-ai-module-env-reaches-downstream-runtime = mkTest "ai-module-env-reaches-downstream-runtime" (
+      let
+        factory = import ../../lib/testing/factory-harness.nix {inherit lib pkgs harness;};
+        record = factory.ai.app.mkRuntime {
+          inherit pkgs;
+          name = "downstream";
+          defaults.package = pkgs.hello;
+          options._observedEnv = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str;
+            default = {};
+            internal = true;
+          };
+          config = {moduleEnvironmentVariables, ...}: {
+            ai.downstream._observedEnv = moduleEnvironmentVariables;
+          };
+        };
+        evaluated = lib.evalModules {
+          specialArgs = {inherit pkgs;};
+          modules = [
+            factory.ai.sharedOptions
+            factory.devenvStubs
+            (factory.ai.app.devenvTransform record)
+            # The SSH default is gated on a REGISTRY harness being enabled
+            # (`anyHarnessEnabled`), unchanged here; this stands in for one
+            # without importing a whole runtime module.
+            {
+              options.ai.codex.enable = lib.mkEnableOption "registry harness stand-in";
+              config.ai = {
+                codex.enable = true;
+                downstream.enable = true;
+              };
+            }
+          ];
+        };
+      in
+        lib.hasSuffix "/bin/ai-sandbox-safe-ssh" (evaluated.config.ai.downstream._observedEnv.GIT_SSH_COMMAND or "")
+    );
+
     module-ai-git-ssh-wrapper-is-noninteractive = let
       command = (evalDevenv {ai.codex.enable = true;}).config.ai.codex.internal._moduleEnvironmentVariables.GIT_SSH_COMMAND;
       sshConfig = pkgs.writeText "sandbox-ssh-config" ''
