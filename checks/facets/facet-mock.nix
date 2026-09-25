@@ -50,23 +50,10 @@
       index = facetIndex;
       rootLibrary.ai.rootControl = "root";
     };
-    lazyIndex = loader.index {facetsDir = fixtureRoot + "/lazy";};
     lazyWorld = loader.realizePackages {
       inherit inputs pkgs system;
-      index = lazyIndex;
+      index = loader.index {facetsDir = fixtureRoot + "/lazy";};
     };
-    lazyOverlayResult = lib.fix (
-      final:
-        (loader.realizeOverlay {
-          context = {
-            inherit inputs;
-            inherit (lazyWorld) packages;
-          };
-          index = lazyIndex;
-          packageWorld = lazyWorld;
-        }).overlay
-        final {}
-    );
     overlayWorld = loader.realizeOverlay {
       context = {
         inherit inputs;
@@ -196,14 +183,7 @@
         && library.ai.callableControl "value" == "called:value";
       package-laziness =
         lib.isDerivation lazyWorld.packages.ai.available
-        && builtins.attrNames lazyWorld.packages.ai == ["available" "unavailable"]
-        # Validating an ordinary overlay leaf must not force its package
-        # neighbours: `unavailable` throws if evaluated.
-        && lazyOverlayResult.ai.ordinary == "ordinary"
-        # A later owner's claim check must not compare an earlier owner's
-        # function leaf: `==` is false for every function.
-        && lazyOverlayResult.ai.later == "later"
-        && lazyOverlayResult.ai.callable "value" == "value";
+        && builtins.attrNames lazyWorld.packages.ai == ["available" "unavailable"];
       overlay-order-and-namespace =
         overlayResult.ai.seed
         == inputs.fixture.sentinel

@@ -144,17 +144,19 @@ composed registry and ninja DAG:
   along with the openmemory-mcp backend it fed. The shape is kept in this
   taxonomy because nothing about it was wrong; it simply has no consumer.
 
-## Model weights: `pkgs.ai.fetchHuggingFaceModel`
+## Model weights: `lib.packaging.fetchHuggingFaceModel`
 
 nixpkgs already ships `pkgs.fetchFromHuggingFace`: `fetchgit` with Git LFS, a
 `repoId`, a `rev` or `tag`, `repoType`, `domain`, `sparseCheckout` (with
 `nonConeMode` for exact paths or gitignore-style globs), every other `fetchgit`
-option, `hash`, `meta` and `passthru`. `pkgs.ai.fetchHuggingFaceModel` is a thin
-wrapper over it. It comes from this repo's overlay and is built on your own
-`pkgs`, so your `allowUnfree` settings apply:
+option, `hash`, `meta` and `passthru`. `lib.packaging.fetchHuggingFaceModel` on
+this flake's outputs is a thin wrapper over it. You pass your own `pkgs` in the
+same attribute set, so the fetch is built on your nixpkgs and your `allowUnfree`
+settings apply:
 
 ```nix
-pkgs.ai.fetchHuggingFaceModel {
+inputs.nix-agentic-tools.lib.packaging.fetchHuggingFaceModel {
+  inherit pkgs;
   repoId = "minishlab/potion-base-32M";
   rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
   files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
@@ -167,6 +169,9 @@ The result is a directory holding the selected files, with subdirectories kept.
 A tool that loads a model from a local directory can be pointed straight at it.
 Git LFS downloads only the selected files, so a repository's other weight
 formats are never fetched.
+
+It lives in the flake's `lib` for now. Where it ends up is open until the
+module-system rework settles; expect it to move then.
 
 Every nixpkgs argument passes through, except as listed below:
 
@@ -220,7 +225,8 @@ So set `hash = lib.fakeHash` again after every change to `files` or
 `sparseCheckout`, or Nix finds the old path already valid and silently returns
 the old tree.
 
-`packages/hugging-face/checks.nix` tests the wrapper offline: a stub fetcher
+The wrapper is defined in `lib/packaging.nix`.
+`checks/packaging/fetch-hugging-face-model.nix` tests it offline: a stub fetcher
 records what it passes to nixpkgs, and the real fetcher is only evaluated.
 Fetching itself is nixpkgs' to test.
 
