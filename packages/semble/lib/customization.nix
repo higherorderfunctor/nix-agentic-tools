@@ -4,7 +4,7 @@
 # callers, which throw) and the convenience module (which reports the same
 # messages as assertions and warnings).
 #
-# A spec is `{ grammars ? []; pathMappings ? {}; models ? []; defaultContent ?
+# A spec is `{ grammars ? []; pathMappings ? []; models ? []; defaultContent ?
 # ["code"]; defaultModel ? null; }`, shaped like the module's options. Model
 # entries may omit `enable` and `description`, and content may be a scalar.
 {lib}: let
@@ -45,7 +45,7 @@
         model = entry.model or null;
       })
       (spec.models or []);
-    pathMappings = spec.pathMappings or {};
+    pathMappings = spec.pathMappings or [];
   };
 
   enabledModels = spec: builtins.filter (entry: entry.enable) spec.models;
@@ -90,23 +90,29 @@
 
   mappingErrors = spec: let
     known = bundledLanguages ++ map (grammar: grammar.language or "") spec.grammars;
-    patterns = lib.concatMap (mapping: mapping.patterns or []) (builtins.attrValues spec.pathMappings);
+    patterns = lib.concatMap (mapping: mapping.patterns or []) spec.pathMappings;
   in
-    lib.concatLists (lib.mapAttrsToList (language: mapping: let
-      path = "pathMappings.${language}";
+    lib.concatLists (lib.imap1 (index: mapping: let
+      path = "pathMappings.${toString index}";
+      language = mapping.language or "";
     in
-      lib.optional (!(lib.elem language known))
-      "Semble `${path}`: \"${language}\" is not a language Semble can parse. Use a bundled grammar or alias (semble-grammars ${extracted.provenance.sembleGrammarsVersion}) or the language of a `grammars` package."
+      (
+        if !(builtins.isString language) || language == ""
+        then ["Semble `${path}.language` must be a non-empty string."]
+        else
+          lib.optional (!(lib.elem language known))
+          "Semble `${path}.language`: \"${language}\" is not a language Semble can parse. Use a bundled grammar or alias (semble-grammars ${extracted.provenance.sembleGrammarsVersion}) or the language of a `grammars` package."
+      )
       ++ lib.optional (!(lib.elem (mapping.content or null) categories))
       "Semble `${path}.content` must be one of code, config or docs."
       ++ lib.optional (!(builtins.isList (mapping.patterns or null) && mapping.patterns != [] && lib.all (pattern: builtins.isString pattern && pattern != "") mapping.patterns))
       "Semble `${path}.patterns` must be a non-empty list of non-empty globs.")
     spec.pathMappings)
-    ++ map (pattern: "Semble `pathMappings` pattern \"${pattern}\" is listed more than once; each pattern maps to one language.")
+    ++ map (pattern: "Semble `pathMappings` pattern \"${pattern}\" is listed more than once; only its first entry could ever match.")
     (duplicates (builtins.filter builtins.isString patterns));
 
   modelsVanilla = spec: enabledModels spec == [] && spec.defaultModel == null && expand spec.defaultContent == contentScope.default;
-  grammarsVanilla = spec: spec.grammars == [] && spec.pathMappings == {};
+  grammarsVanilla = spec: spec.grammars == [] && spec.pathMappings == [];
 in {
   inherit bundledLanguages expand layouts normalize;
 
@@ -136,28 +142,12 @@ in {
       (enabledModels spec);
   };
 
-  # The path mappings as one flat list in match order: patterns with a "/"
-  # (matched against the repository-relative path) first, then longer
-  # patterns, then alphabetical. The first match wins.
-  mappingList = pathMappings: let
-    flat = lib.concatLists (lib.mapAttrsToList (language: mapping:
-      map (pattern: {
-        inherit (mapping) content;
-        inherit language pattern;
-      })
-      mapping.patterns)
-    pathMappings);
-    before = a: b: let
-      aPath = lib.hasInfix "/" a.pattern;
-      bPath = lib.hasInfix "/" b.pattern;
-      aLength = builtins.stringLength a.pattern;
-      bLength = builtins.stringLength b.pattern;
-    in
-      if aPath != bPath
-      then aPath
-      else if aLength != bLength
-      then aLength > bLength
-      else a.pattern < b.pattern;
-  in
-    lib.sort before flat;
+  # The path mappings flattened to one entry per pattern, in list order: the
+  # first match wins, so the consumer's order is the precedence.
+  mappingList = lib.concatMap (mapping:
+    map (pattern: {
+      inherit (mapping) content language;
+      inherit pattern;
+    })
+    mapping.patterns);
 }

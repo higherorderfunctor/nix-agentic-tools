@@ -167,8 +167,9 @@ in {
         modelsDefault = root.models.default == [];
         defaultContent = root.defaultContent.default == ["code"];
         defaultModel = root.defaultModel.default == null && root.defaultModel.type.description == "null or package";
-        pathMappingsKeyed = lib.hasPrefix "attribute set of" root.pathMappings.type.description && root.pathMappings.default == {};
-        mappingFields = builtins.attrNames mappingOptions == ["content" "patterns"];
+        pathMappingsIsList = root.pathMappings.type.description == "list of (submodule)" && root.pathMappings.default == [];
+        mappingFields = builtins.attrNames mappingOptions == ["content" "language" "patterns"];
+        runtimeMappingsReplace = runtimeOptions.pathMappings.type.description == "null or (list of (submodule))";
         devenvParity = builtins.attrNames (entryOptions devenv) == builtins.attrNames options;
         # A runtime override replaces the whole list.
         runtimeListType = runtimeOptions.models.type.description == "null or (list of (submodule))";
@@ -331,7 +332,7 @@ in {
           models = [];
           defaultContent = ["code"];
           defaultModel = null;
-          pathMappings = {};
+          pathMappings = [];
           grammars = [];
         }).drvPath
         == pkgs.ai.semble.drvPath
@@ -388,27 +389,48 @@ in {
         && final.drvAttrs.paths == ["${customizePackage pkgs.ai.semble routedSettings}"]
     );
 
-    # Patterns with a "/" first, then longer, then alphabetical.
+    # Mappings keep the consumer's list order, one entry per pattern: the
+    # first match wins, and one language can map to several categories.
     module-semble-models-mapping-order = mkTest "semble-models-mapping-order" (
-      map (mapping: mapping.pattern) (customization.mappingList {
-        ini = {
+      customization.mappingList [
+        {
+          language = "json";
+          content = "docs";
+          patterns = ["docs/*.json"];
+        }
+        {
+          language = "yaml";
           content = "config";
-          patterns = ["?b.cfg"];
-        };
-        json = {
+          patterns = ["special.lock"];
+        }
+        {
+          language = "json";
           content = "config";
-          patterns = ["*.lock" "flake.lock"];
-        };
-        properties = {
+          patterns = ["*.json" "*.lock"];
+        }
+      ]
+      == [
+        {
+          content = "docs";
+          language = "json";
+          pattern = "docs/*.json";
+        }
+        {
           content = "config";
-          patterns = ["a?.cfg"];
-        };
-        toml = {
+          language = "yaml";
+          pattern = "special.lock";
+        }
+        {
           content = "config";
-          patterns = ["pkg/*" "pkg/deep/*"];
-        };
-      })
-      == ["pkg/deep/*" "pkg/*" "flake.lock" "*.lock" "?b.cfg" "a?.cfg"]
+          language = "json";
+          pattern = "*.json";
+        }
+        {
+          content = "config";
+          language = "json";
+          pattern = "*.lock";
+        }
+      ]
     );
 
     module-semble-models-routing-text = mkTest "semble-models-routing-text" (

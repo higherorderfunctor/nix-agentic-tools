@@ -258,10 +258,13 @@ in {
               tree-sitter-awk
               tree-sitter-jq
             ];
-            pathMappings.json = {
-              content = "config";
-              patterns = ["flake.lock"];
-            };
+            pathMappings = [
+              {
+                language = "json";
+                content = "config";
+                patterns = ["flake.lock"];
+              }
+            ];
           };
         };
         hm = (evalHm grammarConfig).config;
@@ -327,7 +330,7 @@ in {
           ${pkgs.coreutils}/bin/touch "$out"
         '';
 
-    # pathMappings keys must name a language Semble can parse: a bundled
+    # Each pathMappings entry must name a language Semble can parse: a bundled
     # grammar, an alias of one, or a `grammars` language.
     module-semble-path-mapping-validation = mkTest "semble-path-mapping-validation" (
       let
@@ -341,67 +344,86 @@ in {
         failedWith = needle: evaluated:
           builtins.any (assertion: !assertion.assertion && lib.hasInfix needle assertion.message) evaluated.config.assertions;
         allPass = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
-        mapping = patterns: {
+        mapping = language: patterns: {
+          inherit language patterns;
           content = "code";
-          inherit patterns;
         };
         awk = [pkgs.tree-sitter-grammars.tree-sitter-awk];
       in
-        allPass (withMappings [] {bash = mapping [".envrc"];})
+        allPass (withMappings [] [(mapping "bash" [".envrc"])])
         # An alias resolves to a bundled grammar.
-        && allPass (withMappings [] {zsh = mapping [".zshrc"];})
+        && allPass (withMappings [] [(mapping "zsh" [".zshrc"])])
         # awk is in Semble's extension map but has no bundled grammar.
-        && failedWith ''`pathMappings.awk`: "awk" is not a language Semble can parse'' (withMappings [] {awk = mapping ["*.awk.in"];})
-        && allPass (withMappings awk {awk = mapping ["*.awk.in"];})
-        && failedWith ''"klingon" is not a language'' (withMappings [] {klingon = mapping ["*.tlh"];})
-        && failedWith ''pattern ".envrc" is listed more than once'' (withMappings [] {
-          bash = mapping [".envrc"];
-          json = mapping [".envrc"];
-        })
-        # The option type rejects an empty pattern list or pattern.
-        && !(builtins.tryEval (withMappings [] {bash = mapping [];}).config.assertions).success
-        && !(builtins.tryEval (withMappings [] {bash = mapping [""];}).config.assertions).success
+        && failedWith ''`pathMappings.1.language`: "awk" is not a language Semble can parse'' (withMappings [] [(mapping "awk" ["*.awk.in"])])
+        && allPass (withMappings awk [(mapping "awk" ["*.awk.in"])])
+        && failedWith ''`pathMappings.2.language`: "klingon" is not a language'' (withMappings [] [(mapping "bash" [".envrc"]) (mapping "klingon" ["*.tlh"])])
+        # One language may appear in several entries.
+        && allPass (withMappings [] [
+          ((mapping "json" ["docs/*.json"]) // {content = "docs";})
+          ((mapping "json" ["*.json"]) // {content = "config";})
+        ])
+        && failedWith ''pattern ".envrc" is listed more than once'' (withMappings [] [
+          (mapping "bash" [".envrc"])
+          (mapping "json" [".envrc"])
+        ])
+        # The option type rejects an empty language, pattern list or pattern.
+        && !(builtins.tryEval (withMappings [] [(mapping "" [".envrc"])]).config.assertions).success
+        && !(builtins.tryEval (withMappings [] [(mapping "bash" [])]).config.assertions).success
+        && !(builtins.tryEval (withMappings [] [(mapping "bash" [""])]).config.assertions).success
     );
 
     module-semble-extra-grammars-load = let
       customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
-      pathMappings = {
-        bash = {
+      # First match wins in list order: "pkg/*" and "special.lock" come before
+      # "*.lock", "a?.cfg" (properties) before "?b.cfg" (ini), and json splits
+      # into docs and config by path.
+      pathMappings = [
+        {
+          language = "bash";
           content = "code";
           patterns = [".envrc" "checks/hooks/pre-edit"];
-        };
-        gitignore = {
+        }
+        {
+          language = "gitignore";
           content = "config";
           patterns = [".gitignore" ".sembleignore"];
-        };
-        # Precedence: "pkg/*" (a path) beats the longer basename "*.lock",
-        # "special.lock" beats "*.lock" by length, and "?b.cfg" beats
-        # "a?.cfg" alphabetically.
-        ini = {
-          content = "config";
-          patterns = ["?b.cfg"];
-        };
-        json = {
-          content = "config";
-          patterns = ["*.lock"];
-        };
-        markdown = {
-          content = "docs";
-          patterns = ["*.fixture.py" "*.md.fixture"];
-        };
-        properties = {
-          content = "config";
-          patterns = ["a?.cfg"];
-        };
-        toml = {
+        }
+        {
+          language = "toml";
           content = "config";
           patterns = ["pkg/*"];
-        };
-        yaml = {
+        }
+        {
+          language = "yaml";
           content = "config";
           patterns = ["special.lock"];
-        };
-      };
+        }
+        {
+          language = "properties";
+          content = "config";
+          patterns = ["a?.cfg"];
+        }
+        {
+          language = "ini";
+          content = "config";
+          patterns = ["?b.cfg"];
+        }
+        {
+          language = "json";
+          content = "docs";
+          patterns = ["docs/*.json"];
+        }
+        {
+          language = "json";
+          content = "config";
+          patterns = ["*.json" "*.lock"];
+        }
+        {
+          language = "markdown";
+          content = "docs";
+          patterns = ["*.fixture.py" "*.md.fixture"];
+        }
+      ];
       sembleWithGrammars = customizePackage pkgs.ai.semble {
         grammars = with pkgs.tree-sitter-grammars; [
           tree-sitter-awk
@@ -426,8 +448,10 @@ in {
             repo/checks/hooks/pre-edit \
             repo/docs/example.fixture.py \
             repo/docs/example.md.fixture \
+            repo/docs/schema.json \
             repo/flake.lock \
             repo/pkg/deps.lock \
+            repo/settings.json \
             repo/special.lock
           ${pkgs.coreutils}/bin/head -n 3 ${sembleWithGrammars}/bin/.semble-wrapped > test-grammars.py
           ${pkgs.coreutils}/bin/cat >> test-grammars.py <<'PY'
@@ -460,8 +484,10 @@ in {
               "checks/hooks/pre-edit": "bash",
               "docs/example.fixture.py": "markdown",
               "docs/example.md.fixture": "markdown",
+              "docs/schema.json": "json",
               "flake.lock": "json",
-              "ab.cfg": "ini",
+              "ab.cfg": "properties",
+              "settings.json": "json",
               "pkg/deps.lock": "toml",
               "special.lock": "yaml",
           }
@@ -481,8 +507,16 @@ in {
               }
 
           assert walked("code") == {".envrc", "checks/hooks/pre-edit"}
-          assert walked("docs") == {"docs/example.fixture.py", "docs/example.md.fixture"}
-          assert walked("config") == {".gitignore", ".sembleignore", "ab.cfg", "flake.lock", "pkg/deps.lock", "special.lock"}
+          assert walked("docs") == {"docs/example.fixture.py", "docs/example.md.fixture", "docs/schema.json"}
+          assert walked("config") == {
+              ".gitignore",
+              ".sembleignore",
+              "ab.cfg",
+              "flake.lock",
+              "pkg/deps.lock",
+              "settings.json",
+              "special.lock",
+          }
           assert {
               path.relative_to(root).as_posix()
               for path in walk_files(root, [".py"])
