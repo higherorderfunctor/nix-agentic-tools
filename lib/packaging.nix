@@ -1,8 +1,12 @@
-# lib/packaging.nix — DRY version extraction + smoke test helpers.
+# lib/packaging.nix — shared fetch, build, version, and update helpers.
 #
-# Each helper reads a manifest from a Nix store path (src) at eval
-# time and returns the upstream version string. Callers combine it
-# with `builtins.substring 0 7 rev` to produce "x.y.z+abc1234".
+# NOT one shape. The VERSION helpers (mkVersion and friends) read a manifest
+# from a Nix store path (src) at eval time and return the upstream version
+# string; callers combine that with `builtins.substring 0 7 rev` to produce
+# "x.y.z+abc1234". Other helpers here do different things —
+# `fetchFromHuggingFace` produces a fixed-output derivation and returns no
+# version at all, and the update helpers emit scripts. Read the helper you are
+# calling rather than assuming this header describes it.
 #
 # `rec` so a composed helper can call a sibling —
 # `ghArchiveUpdateScript` is `mkUpdateScript` + `ghLatestVersionCmd`
@@ -10,6 +14,115 @@
 # body to avoid the self-reference would be the DRY loss this file
 # exists to prevent. Same shape as lib/ai/transformers/*.nix.
 rec {
+  # Fetch selected files of one Hugging Face repository at a pinned commit, as
+  # ONE fixed-output derivation — one `hash` for the whole tree, the way
+  # fetchFromGitHub works. Get it from tooling: pass `lib.fakeHash`, build, and
+  # copy the `got:` line.
+  #
+  # `license` defaults to unfree ON PURPOSE. nixpkgs has no `licenses.unknown`,
+  # and check-meta treats a derivation with NO meta.license as free
+  # (hasUnfreeLicense requires meta.license to be set). Weights with no stated
+  # licence therefore have to be marked unfree explicitly, so they need
+  # allowUnfree and stay out of binary-cache pushes until a caller states the
+  # real licence.
+  #
+  # `licenseFile` / `attribution` are for licences that require the notice to
+  # travel with the work (Apache-2.0 section 4(a), for one) when the repository
+  # does not ship it. Either one wraps the fetched tree in a derivation that
+  # symlinks every file and adds LICENSE / ATTRIBUTION at the root; with
+  # neither, the fetched tree IS the result.
+  fetchFromHuggingFace = {
+    # Required. `files` are repo-relative; subdirectories are kept.
+    files,
+    hash,
+    owner,
+    pkgs,
+    repo,
+    rev,
+    # Optional.
+    attribution ? null,
+    description ? "${owner}/${repo}",
+    # Tried in order for each file. Each must serve
+    # <endpoint>/<owner>/<repo>/resolve/<rev>/<path>, as huggingface.co and
+    # its mirrors do.
+    endpoints ? ["https://huggingface.co"],
+    homepage ? "https://huggingface.co/${owner}/${repo}",
+    license ? pkgs.lib.licenses.unfree,
+    licenseFile ? null,
+  }: let
+    inherit (pkgs) lib;
+    name = "${lib.toLower repo}-${builtins.substring 0 7 rev}";
+    wrapped = licenseFile != null || attribution != null;
+    segments = file: lib.splitString "/" file;
+    validPath = file:
+      !(lib.hasPrefix "/" file)
+      && builtins.all (s: !(builtins.elem s ["" "." ".."])) (segments file);
+    meta = {
+      inherit description homepage license;
+      # Trained weights are neither source nor native code.
+      sourceProvenance = [lib.sourceTypes.binaryBytecode];
+    };
+    passthru = {inherit endpoints files owner repo rev;};
+    fetched = pkgs.stdenvNoCC.mkDerivation {
+      inherit meta name passthru;
+      # $1 is the output path, $2 the same path percent-encoded per segment
+      # for the URL.
+      buildCommand = ''
+        fetch() {
+          for endpoint in ${lib.escapeShellArgs (map (lib.removeSuffix "/") endpoints)}; do
+            if curl --fail --location --retry 3 --retry-delay 2 --silent --show-error \
+              --create-dirs --remove-on-error --output "$out/$1" \
+              "$endpoint/$resolvePath/$2"; then
+              return 0
+            fi
+            echo "fetchFromHuggingFace: $endpoint did not serve $1" >&2
+          done
+          echo "fetchFromHuggingFace: no endpoint served $1" >&2
+          return 1
+        }
+        ${lib.concatMapStrings (file: ''
+            fetch ${lib.escapeShellArgs [file (lib.concatMapStringsSep "/" lib.escapeURL (segments file))]}
+          '')
+          files}
+      '';
+      impureEnvVars = lib.fetchers.proxyImpureEnvVars;
+      nativeBuildInputs = [pkgs.curl];
+      outputHash = hash;
+      outputHashMode = "recursive";
+      preferLocalBuild = true;
+      # Pinned to a commit because resolve/main/ moves: a branch name would
+      # break the hash the moment upstream pushes.
+      resolvePath = "${owner}/${repo}/resolve/${rev}";
+      SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    };
+    attributionFile = pkgs.writeText "${name}-attribution" attribution;
+  in
+    assert lib.assertMsg (builtins.match "[0-9a-f]{40}" rev != null) "fetchFromHuggingFace: rev must be a full 40-hex commit hash";
+    assert lib.assertMsg (files != []) "fetchFromHuggingFace: files must not be empty";
+    assert lib.assertMsg (lib.allUnique files) "fetchFromHuggingFace: files must be unique";
+    assert lib.assertMsg (builtins.all validPath files) "fetchFromHuggingFace: files must be relative paths with no empty, '.' or '..' segment";
+    assert lib.assertMsg (!wrapped || !(builtins.any (f: builtins.elem f ["ATTRIBUTION" "LICENSE"]) files)) "fetchFromHuggingFace: LICENSE and ATTRIBUTION are reserved at the root when licenseFile or attribution is set";
+      if !wrapped
+      then fetched
+      else
+        pkgs.runCommand name {
+          inherit meta;
+          passthru = passthru // {inherit fetched;};
+        } ''
+          # One copy of the weights, not two: each symlink is a store
+          # reference that also retains the fetched tree against GC.
+          for file in ${lib.escapeShellArgs files}; do
+            mkdir -p "$out/$(dirname "$file")" # bare-commands: ok
+            ln -s "${fetched}/$file" "$out/$file"
+          done
+          ${lib.optionalString (licenseFile != null) ''
+            cp ${lib.escapeShellArg "${licenseFile}"} "$out/LICENSE" # bare-commands: ok
+          ''}
+          ${lib.optionalString (attribution != null) ''
+            cp ${attributionFile} "$out/ATTRIBUTION" # bare-commands: ok
+          ''}
+        '';
+
   # Format: "{upstream}+{shortrev}"
   mkVersion = {
     upstream,
