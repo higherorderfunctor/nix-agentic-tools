@@ -3,84 +3,65 @@
   pkgs,
 }: let
   contentScope = import ../lib/contentScope.nix {inherit lib;};
-  sembleModels = import ../lib/models.nix {inherit lib;};
-  modelType = lib.types.submodule ({name, ...}: {
+  modelExample = repo: rev: hash: ''
+    pkgs.ai.fetchHuggingFaceModel {
+      repoId = "minishlab/${repo}";
+      rev = "${rev}";
+      files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+      hash = "${hash}";
+      license = lib.licenses.mit;
+    }'';
+  modelDescription = ''
+    A package whose output is a model2vec model directory, such as a
+    `pkgs.ai.fetchHuggingFaceModel` result. Hugging Face ids are not
+    accepted: they are unpinned, fail without network, and bypass the licence
+    gate. Wrap local weights in a derivation. When the package lists its files
+    in `passthru.files`, evaluation checks them against model2vec's accepted
+    layouts.
+  '';
+  modelType = lib.types.submodule {
     options = {
+      content = lib.mkOption {
+        inherit (contentScope) type;
+        example = ["code" "docs"];
+        description = ''
+          The content set this model serves. A search whose content set (its
+          `--content`, or `defaultContent`) equals this set exactly uses this
+          model. A scalar is coerced to a one-element list; `all` must appear
+          alone and counts as `code config docs`. Enabled entries must have
+          distinct sets.
+        '';
+      };
+      description = lib.mkOption {
+        type = lib.types.nullOr lib.types.nonEmptyStr;
+        default = null;
+        example = "Prose: READMEs, design notes, architecture docs.";
+        description = ''
+          What this model is for, shown to agents in the routing guidance and
+          the subagent description. State the purpose only; the guidance
+          already names the content.
+        '';
+      };
       enable = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = ''
-          Whether the CLI offers this model. Disabling `default` makes
-          `--model` required for `semble search` and `semble find-related`.
-          The MCP server ignores this flag for `default`.
-        '';
+        description = "Whether this entry routes searches. A disabled entry is left out of the package.";
       };
       model = lib.mkOption {
-        type = lib.types.nullOr lib.types.package;
-        default = null;
-        example = lib.literalExpression ''
-          pkgs.ai.fetchHuggingFaceModel {
-            repoId = "minishlab/potion-base-32M";
-            rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
-            files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
-            hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
-            license = lib.licenses.mit;
-          }
-        '';
-        description = ''
-          A package whose output is a model2vec model directory, such as a
-          `pkgs.ai.fetchHuggingFaceModel` result. null uses Semble's
-          built-in default model. Hugging Face ids are not accepted: they are
-          unpinned, fail without network, and bypass the licence gate. Wrap
-          local weights in a derivation. When the package lists its files in
-          `passthru.files`, evaluation checks them against model2vec's
-          accepted layouts.
-        '';
+        type = lib.types.package;
+        example = lib.literalExpression (modelExample "potion-base-32M" "1e5a03f8eeb2c98b928fbbd846f22f816360919f" "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=");
+        description = modelDescription;
       };
-      content = lib.mkOption {
-        inherit (contentScope) default type;
-        description = ''
-          Content categories this model searches when the call passes no
-          `--content`. A `--content` argument replaces this list for that call.
-        '';
-      };
-      description =
-        if name == "default"
-        then
-          lib.mkOption {
-            type = lib.types.nullOr lib.types.nonEmptyStr;
-            default = null;
-            description = ''
-              What the default model is for, shown to agents in the routing
-              guidance. null uses a built-in description while `model` is null.
-              Once `model` is set, a description is required whenever the
-              guidance lists the default, that is, while another entry is
-              enabled.
-            '';
-          }
-        else
-          lib.mkOption {
-            type = lib.types.nonEmptyStr;
-            description = ''
-              What this model is for, shown to agents in the routing guidance.
-              State the purpose only; the guidance already adds the invocation
-              and the content categories.
-            '';
-          };
     };
-  });
+  };
   pathMappingType = lib.types.submodule {
     options = {
       content = lib.mkOption {
         type = lib.types.enum ["code" "config" "docs"];
         description = "Semble content category containing the matched files.";
       };
-      language = lib.mkOption {
-        type = lib.types.str;
-        description = "Tree-sitter language name used to parse matched files.";
-      };
       patterns = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
+        type = lib.types.nonEmptyListOf lib.types.nonEmptyStr;
         description = ''
           Filename globs or repository-relative path globs. Patterns without a
           slash match basenames at any depth; patterns with a slash match from
@@ -106,7 +87,6 @@
   };
 in {
   name = "semble";
-  pools = [["cli" "models"]];
   supportedRuntimes = ["claude" "codex" "kiro"];
   options = {
     enable = lib.mkOption {
@@ -132,95 +112,102 @@ in {
       description = ''
         Additional Tree-sitter grammar packages used by Semble. Each package
         must expose a `language` attribute and a compiled `parser` output.
+        Languages must be unique and must not name a grammar Semble already
+        bundles (or an alias of one): Semble would never load it.
       '';
     };
-    cli = {
-      instructions = optInFeatureOptions "CLI instructions";
+    pathMappings = lib.mkOption {
+      type = lib.types.attrsOf pathMappingType;
+      default = {};
+      example = lib.literalExpression ''
+        {
+          bash = {
+            content = "code";
+            patterns = [".envrc"];
+          };
+          json = {
+            content = "config";
+            patterns = ["flake.lock" "devenv.lock"];
+          };
+        }
+      '';
+      description = ''
+        Path-to-language overrides for extensionless files, compound
+        extensions, or repository-specific naming, keyed by the Tree-sitter
+        language that parses the matched files. Each key must be a language
+        Semble bundles (or an alias of one) or the language of a `grammars`
+        package. A language maps to one content category.
 
-      # Models live under `cli` because only the CLI routes between them
-      # today. If the MCP server gains per-call model selection, move `models`
-      # to the program root. `models.default.model` ALSO selects the model of
-      # this module's MCP server; `models.default.enable` is CLI-only.
-      models = lib.mkOption {
-        type = lib.types.attrsOf modelType;
-        default = {};
-        # `default` always exists. It is added after merging, not defined in
-        # config: an attrsOf option keeps only its highest-priority
-        # definitions, so a config-defined entry would either be dropped by a
-        # consumer's normal-priority key or drop a consumer's `mkDefault` set.
-        apply = models: {default = sembleModels.builtinEntry;} // models;
-        example = lib.literalExpression ''
-          {
-            default = {
-              model = potion-code-16M-v2;
-              description = "Source code: implementations, tests, build files.";
-            };
-            prose = {
-              model = potion-base-32M;
-              content = "docs";
-              description = "Prose: READMEs, design notes, architecture docs.";
-            };
-          }
-        '';
-        description = ''
-          Embedding models the Semble CLI routes between, by key. `default`
-          always exists: the option adds Semble's built-in entry when no
-          definition names it, so set `default.enable = false` rather than
-          removing it. `semble search`
-          uses `default`, and `semble --model <key> search` (or
-          `semble search ... --model <key>`) uses another entry. Keys must
-          match `${sembleModels.keyPattern}`.
-
-          Anything other than the built-in default patches Semble, so any
-          model edit changes the package and the cache guard clears the
-          indexes on the next activation or shell entry. Indexes built with a
-          non-default model live beside the default one, suffixed with a hash
-          of the model path.
-
-          A runtime override resolves per key: an entry replaces the portable
-          entry with that key, and null removes it.
-        '';
-      };
+        A pattern may appear under one language only. When patterns of
+        different languages both match a file, patterns containing `/` win
+        over basename patterns, then longer patterns over shorter ones, then
+        the alphabetically first.
+      '';
     };
+    models = lib.mkOption {
+      type = lib.types.listOf modelType;
+      default = [];
+      example = lib.literalExpression ''
+        [
+          {
+            model = potion-base-32M;
+            content = "docs";
+            description = "Prose: READMEs, design notes, architecture docs.";
+          }
+        ]
+      '';
+      description = ''
+        Embedding models routed by content. A search uses the enabled entry
+        whose content set equals the search's content set exactly (its
+        `--content`, or `defaultContent`); any other set uses `defaultModel`.
+        The CLI and the MCP server route the same way, the MCP server per
+        tool call from its `content` argument.
 
-    mcp =
-      inheritedFeatureOptions "MCP server"
-      // {
-        content = lib.mkOption {
-          inherit (contentScope) default description type;
-        };
-        rootExposure = lib.mkOption {
-          type = lib.types.bool;
-          default = true;
-          description = "Whether the Semble MCP server is exposed to the root session. False is supported only for a Kiro MCP-backed named agent.";
-        };
-        pathMappings = lib.mkOption {
-          type = lib.types.listOf pathMappingType;
-          default = [];
-          example = lib.literalExpression ''
-            [
-              {
-                content = "config";
-                language = "json";
-                patterns = ["flake.lock" "devenv.lock"];
-              }
-            ]
-          '';
-          description = ''
-            Ordered path-to-language overrides for extensionless files, compound
-            extensions, or repository-specific naming. The first matching entry
-            wins and its content category controls which Semble indexes include it.
-          '';
-        };
-      };
+        Anything other than the vanilla settings patches Semble, so any model
+        edit changes the package and the cache guard clears the indexes on
+        the next activation or shell entry. Indexes built with a model other
+        than Semble's own live beside the default ones, suffixed with a hash
+        of the model path. A runtime override replaces the whole list.
+      '';
+    };
+    defaultContent = lib.mkOption {
+      inherit (contentScope) default type;
+      example = ["code" "docs"];
+      description = ''
+        The content a search uses when the call passes none: a plain
+        `semble search`, and an MCP tool call without `content`. A call's
+        `--content` replaces it wholesale. A scalar is coerced to a
+        one-element list; `all` must appear alone.
+      '';
+    };
+    defaultModel = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = null;
+      example = lib.literalExpression (modelExample "potion-code-16M-v2" "e9d2a44ca6a05ac6685f3b23709ea57eb7352d5b" "sha256-EPzwepPyhcrNmU6lrmx2F5iCSbeSoKg5qZbErEEYHvw=");
+      description = ''
+        The model for a content set no `models` entry matches. null is
+        Semble's built-in model, downloaded from Hugging Face on first use.
+        While `models` has entries, the CLI prints a one-line warning each
+        time it falls back to this model.
 
+        ${modelDescription}
+      '';
+    };
+    cli.instructions = optInFeatureOptions "CLI instructions";
+    mcp = inheritedFeatureOptions "MCP server";
     subagent =
       optInFeatureOptions "semantic search subagent"
       // {
         interface = lib.mkOption {
           type = lib.types.enum ["cli" "mcp"];
           default = "cli";
-          description = "Whether the named agent reaches Semble through its CLI or MCP tools.";
+          description = ''
+            Whether the named agent reaches Semble through its CLI or MCP
+            tools. On Kiro, `"mcp"` with `mcp.enable = false` gives the agent a
+            private MCP server that the root session does not see. Claude and
+            Codex cannot scope a server to one agent, so there that combination
+            fails evaluation.
+          '';
         };
       };
   };

@@ -1,22 +1,15 @@
+# Semble content categories: the option type, validation, and ordering shared
+# by `defaultContent`, each `models` entry and `mkSemble`'s `content`.
 {lib}: let
   categories = ["all" "code" "config" "docs"];
   normalize = lib.sort (a: b: a < b);
-in rec {
+in {
   inherit categories normalize;
 
   type = lib.types.coercedTo (lib.types.enum categories) lib.singleton (lib.types.listOf (lib.types.enum categories));
   default = ["code"];
 
-  description = ''
-    Default file-content categories for the Semble MCP server. A scalar is
-    coerced to a one-element list, and several categories may be combined.
-    `all` must appear alone. The native default, `["code"]`, emits no argv.
-
-    Semble 0.5.5 also accepts a scalar `content` value on each MCP tool call;
-    that per-call value replaces this server default for the call.
-  '';
-
-  # `optionPath` names the option in the message, e.g. "mcp.content".
+  # `optionPath` names the option in the message, e.g. "defaultContent".
   errors = optionPath: content:
     lib.optional (content == [])
     "Semble `${optionPath}` must contain at least one category."
@@ -24,9 +17,4 @@ in rec {
     "Semble `${optionPath}` must not contain duplicate categories."
     ++ lib.optional (lib.elem "all" content && lib.length content > 1)
     ''Semble `${optionPath}` must not combine "all" with another category.'';
-
-  toArgs = content: let
-    normalized = normalize content;
-  in
-    lib.optionals (normalized != default) (["--content"] ++ normalized);
 }
