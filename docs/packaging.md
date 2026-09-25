@@ -144,6 +144,52 @@ composed registry and ninja DAG:
   along with the openmemory-mcp backend it fed. The shape is kept in this
   taxonomy because nothing about it was wrong; it simply has no consumer.
 
+## Model weights: `fetchFromHuggingFace`
+
+`lib/packaging.nix:fetchFromHuggingFace` fetches chosen files of one Hugging
+Face repository at a pinned commit. It is exported on the flake's public `lib`,
+so a consumer's home-manager or devenv config can call it directly:
+
+```nix
+inputs.nix-agentic-tools.lib.packaging.fetchFromHuggingFace {
+  inherit pkgs;
+  owner = "minishlab";
+  repo = "potion-base-32M";
+  rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
+  files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+  hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
+  license = pkgs.lib.licenses.mit;
+}
+```
+
+The result is a directory holding the requested files, with subdirectories kept
+(`1_Pooling/config.json` lands at that path). A tool that loads a model from a
+local directory can be pointed straight at it.
+
+- **One hash.** Every file comes from one fixed-output derivation with
+  `outputHashMode = "recursive"`, so `hash` covers the whole tree, as with
+  `fetchFromGitHub`. Get it from tooling: pass `hash = lib.fakeHash`, build, and
+  copy the `got:` value. Changing `files`, `rev` or any file's bytes changes it.
+- **`rev` must be a full 40-hex commit.** `resolve/main/` is mutable.
+- **`endpoints`** (default `["https://huggingface.co"]`) are tried in order for
+  each file, and each must serve
+  `<endpoint>/<owner>/<repo>/resolve/<rev>/<path>`. A mirror therefore needs no
+  extra hash.
+- **`license` defaults to `lib.licenses.unfree`, on purpose.** nixpkgs has no
+  `licenses.unknown`, and check-meta counts a derivation with no `meta.license`
+  as free (`hasUnfreeLicense` requires `meta.license` to be set). So weights
+  whose licence nobody stated need `allowUnfree` and stay out of binary-cache
+  pushes. Read the `license:` field of the repository's `README.md` front matter
+  at the pinned `rev` and pass the matching `lib.licenses.*` value.
+- **`licenseFile` / `attribution`** are optional, for licences that require the
+  notice to travel with the work when the repository does not ship it. Setting
+  either wraps the fetched tree in a derivation that symlinks each file and adds
+  `LICENSE` / `ATTRIBUTION` at its root. The wrapper links the same fetched
+  tree, exposed as `passthru.fetched`, so the weights are stored once.
+
+`checks/packaging/fetch-from-hugging-face.nix` exercises it offline against a
+fixture tree served over `file://`.
+
 ## Package table
 
 | Package              | Group      | Source                  | Build                     | nixpkgs               | Tests         | Smoke               |
