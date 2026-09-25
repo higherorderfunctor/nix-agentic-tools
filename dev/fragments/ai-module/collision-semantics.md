@@ -1,7 +1,8 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-24 — merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
+> **Last verified:** 2026-09-25 — `ai.<runtime>.programs.git.settings` is the
+> one program leaf that deep-merges instead of replacing. Merged pools are
+> public `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
 > text-source record crosses into them with only its winning arm. Path claims
 > fail across runtimes except the shared AGENTS.md target, matched on the key
 > each record's `sharedAgentsMd` callback declares. Rules and context use
@@ -28,7 +29,7 @@ commit.
 | B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
 | B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
-| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
+| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins. Exception: `ai.programs.git.settings` deep-merges.          |
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
@@ -209,6 +210,11 @@ and out of the package provenance guard.
   `ai.<runtime>.programs.<pkg>` leaves are nullable scalars. `resolveOverride`
   interprets runtime null as **inherit**, not delete; a non-null runtime scalar
   wins.
+- `ai.<runtime>.programs.git.settings` is the one program leaf that does not
+  replace. `lib/ai/programs/git.nix` deep-merges it over the root with
+  `recursiveUpdate` (root first), so a per-harness `user.name` keeps the shared
+  `user.email`; a runtime null adds nothing. The spec's `overrideDescriptions`
+  keeps the generated option text from claiming "non-null wins".
 - `ai.<runtime>.files` is a final per-runtime output registry, not a portable
   root pool. Priority chooses one atomic nullable entry per backend-relative
   path; repeated text never concatenates. There is no root `ai.files` fanout.

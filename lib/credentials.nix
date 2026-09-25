@@ -23,27 +23,41 @@
   # Exactly one of `file` or `helper` may be set; the type system enforces
   # mutual exclusion (no runtime assertion needed). Wrapped in nullOr so
   # optional credentials default to null.
-  mkCredentialsOption = envVar:
+  #
+  # `mkCredentialsOptionWith` takes all three descriptions, for a consumer
+  # that does not read the secret once at service start into an env var.
+  mkCredentialsOptionWith = {
+    description,
+    file,
+    helper,
+  }:
     mkOption {
       type = types.nullOr (types.attrTag {
         file = mkOption {
           type = types.str;
-          description = ''
-            Path to a file containing the raw secret value, read at runtime.
-            Not stored in the Nix store. Works with sops-nix, agenix, or any
-            tool that decrypts secrets to files. Mapped to ${envVar}.
-          '';
+          description = file;
         };
         helper = mkOption {
           type = types.str;
-          description = ''
-            Path to an executable that outputs the raw secret value on stdout.
-            Executed at service start. Mapped to ${envVar}.
-          '';
+          description = helper;
         };
       });
       default = null;
+      inherit description;
+    };
+
+  mkCredentialsOption = envVar:
+    mkCredentialsOptionWith {
       description = "Credential mapped to ${envVar}. Set exactly one of file or helper.";
+      file = ''
+        Path to a file containing the raw secret value, read at runtime.
+        Not stored in the Nix store. Works with sops-nix, agenix, or any
+        tool that decrypts secrets to files. Mapped to ${envVar}.
+      '';
+      helper = ''
+        Path to an executable that outputs the raw secret value on stdout.
+        Executed at service start. Mapped to ${envVar}.
+      '';
     };
 
   # ── Secret option: credential PLUS an in-store literal ────────────
@@ -223,6 +237,7 @@
 in {
   inherit
     mkCredentialsOption
+    mkCredentialsOptionWith
     mkCredentialsSnippet
     mkSecretAssignment
     mkSecretExport

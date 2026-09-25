@@ -115,6 +115,23 @@ in {
         ]
     );
 
+    # The rendered docs say how each leaf really resolves and runs: the
+    # runtime `settings` is deep-merged, not replaced, and the token helper
+    # runs per request. The generic sentence stays on an ordinary leaf.
+    module-ai-programs-git-option-docs = mkTest "ai-programs-git-option-docs" (
+      let
+        ev = evalHm {};
+        sub = option: option.type.getSubOptions option.loc;
+        runtimeGit = sub ev.options.ai.claude.programs.git;
+        credentialLeaves = lib.attrValues (sub (sub ev.options.ai.programs.git).credentials);
+      in
+        lib.hasInfix "Deep-merged over" runtimeGit.settings.description
+        && !(lib.hasInfix "non-null value wins" runtimeGit.settings.description)
+        && lib.hasInfix "non-null value wins" runtimeGit.signing.key.description
+        && lib.length credentialLeaves == 2
+        && builtins.all (leaf: lib.hasInfix "every request" leaf.description && !(lib.hasInfix "service start" leaf.description)) credentialLeaves
+    );
+
     # Off by default, and never a write into the user's own git config: the
     # Home Manager `programs.git.settings` carries only the SSH workaround.
     module-ai-programs-git-inert-and-hands-off = mkTest "ai-programs-git-inert-and-hands-off" (
@@ -207,6 +224,15 @@ in {
             kiro.programs.git.signing.key = null;
           };
         };
+        forceSignSigns = eval {
+          ai = {
+            programs.git = {
+              signing.signByDefault = false;
+              settings.tag.forceSignAnnotated = true;
+            };
+            kiro.programs.git.signing.key = null;
+          };
+        };
         keyViaSettings = eval {
           ai.kiro.programs.git = {
             signing.key = null;
@@ -230,6 +256,7 @@ in {
         && lib.length (ourFailures noFormat) == lib.length harnessNames
         && builtins.any (lib.hasPrefix "ai.claude.programs.git signs commits or tags but no signing format") (ourFailures noFormat)
         && only "ai.kiro.programs.git signs commits or tags but no signing key" settingsSigns
+        && only "ai.kiro.programs.git signs commits or tags but no signing key" forceSignSigns
         && ourFailures keyViaSettings == []
         && lib.length (ourFailures storeToken) == lib.length harnessNames
         && builtins.any (lib.hasPrefix "ai.codex.programs.git.credentials.file points into") (ourFailures storeToken)
@@ -246,7 +273,9 @@ in {
     # FIRST section and keeps git's own XDG-then-home order; the per-runtime
     # `user.name` deep-merges with the root `user.email`; the credential reset
     # comes AFTER the user's helper; signing pins the store ssh-keygen and,
-    # when off, is written off rather than inherited; the helper answers `get`
+    # when off, is written off rather than inherited (an annotated tag is
+    # really created unsigned despite the user's `tag.forceSignAnnotated`);
+    # the helper answers `get`
     # with the token, and on a missing token tells git to quit instead of
     # falling through to askpass.
     module-ai-programs-git-rendered-gitconfig = let
@@ -286,6 +315,7 @@ in {
         [commit]
           gpgSign = true
         [tag]
+          forceSignAnnotated = true
           gpgSign = true
       '';
       xdgGitconfig = pkgs.writeText "xdg-gitconfig" ''
@@ -321,6 +351,7 @@ in {
             [ "$(cfg user.signingKey)" = '${keyFor runtime}' ] || fail "${runtime}: user.signingKey"
             [ "$(cfg commit.gpgSign)" = true ] || fail "${runtime}: commit.gpgSign"
             [ "$(cfg tag.gpgSign)" = true ] || fail "${runtime}: tag.gpgSign"
+            [ "$(cfg tag.forceSignAnnotated)" = true ] || fail "${runtime}: tag.forceSignAnnotated"
             [ "$(cfg gpg.format)" = ssh ] || fail "${runtime}: gpg.format"
             [ "$(cfg gpg.ssh.program)" = '${lib.getExe' pkgs.openssh "ssh-keygen"}' ] || fail "${runtime}: gpg.ssh.program"
             cfg --get-all url.https://github.com/.insteadOf > insteadof
@@ -368,6 +399,15 @@ in {
         export GIT_CONFIG_GLOBAL=${file unsigned "claude"}
         [ "$(cfg commit.gpgSign)" = false ] || fail "unsigned: user's commit.gpgSign leaked through"
         [ "$(cfg tag.gpgSign)" = false ] || fail "unsigned: user's tag.gpgSign leaked through"
+        [ "$(cfg tag.forceSignAnnotated)" = false ] || fail "unsigned: user's tag.forceSignAnnotated leaked through"
+        # And git acts on it: an annotated tag is created unsigned. The user's
+        # signing key does not exist here, so a signing attempt would fail.
+        git init -q repo
+        git -C repo commit -q --allow-empty -m init || fail "unsigned: commit failed"
+        git -C repo tag -m v1 v1 || fail "unsigned: annotated tag failed (tried to sign?)"
+        if git -C repo cat-file tag v1 | grep -Fq 'BEGIN SSH SIGNATURE'; then
+          fail "unsigned: annotated tag was signed"
+        fi
 
         # devenv includes git's default XDG path; `~/.gitconfig` still wins a
         # key both user files set, as it does natively.

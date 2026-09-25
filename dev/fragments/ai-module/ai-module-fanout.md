@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-09-25 — module-contributed process env rides a
 > per-runtime internal channel, which carries `ai.programs.git`'s per-harness
-> identity.
+> identity; its gitconfig pins `tag.forceSignAnnotated`, and `mkProgram` takes
+> `overrideDescriptions` for a leaf it does not resolve.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -201,16 +202,23 @@ an explicit consumer entry wins. Invariants, each load-bearing:
   askpass (including a `core.askPass` from the included user config) and the
   terminal. With `credentials` null nothing is reset, so the user's helper
   answers.
-- **Signing is always written.** `commit.gpgSign` / `tag.gpgSign` render even
-  when false, or a user config that signs by default signs the agent's commits
-  with the user's key. The key and format assertions judge the rendered body, so
-  signing switched on through `settings` is held to them.
+- **Signing is always written.** `commit.gpgSign`, `tag.gpgSign` and
+  `tag.forceSignAnnotated` render even when false, or a user config that signs
+  by default signs the agent's commits, or its `git tag -m` tags, with the
+  user's key. With no agent key the user's `user.signingKey` is still inherited,
+  so an explicit `-S`/`-s` signs as the user; the option text says so. The key
+  and format assertions judge the rendered body, so signing switched on through
+  `settings` is held to them.
 - **Include order is git's own:** the XDG config, then `~/.gitconfig`. git
   expands no env var in `include.path`, so the XDG root is fixed at eval
   (`xdg.configHome` on HM, `~/.config` on devenv).
 - **Never write the user's `programs.git`** (unlike `gitSshConfigWorkaround`'s
   HM branch), **never set `GH_TOKEN`** (Copilot CLI prefers it over its own
-  login), **nothing on PATH** (Claude's Bash tool re-runs shell init).
+  login), **nothing on PATH** (Claude's Bash tool re-runs shell init), and
+  **nothing unset**: the env channel only adds keys, so an inherited
+  `GH_TOKEN`/`GITHUB_TOKEN` still beats `hosts.yml` in `GH_CONFIG_DIR`. On
+  Copilot, `GH_CONFIG_DIR` also feeds its last-resort `gh` login. Both are
+  stated in the `gh` option text.
 - A signing key is a string refused under the store (a path literal would copy
   the key there). `signByDefault` with a null key or format is an assertion
   failure for an enabled runtime, never a silent unsigned commit.
@@ -712,7 +720,9 @@ tree. The factory projects that into `ai.programs.<name>` plus only the listed
 `ai.<runtime>.programs.<name>` paths. Runtime leaves are nullable and resolve
 independently through `resolveOverride`: null inherits the portable value and a
 non-null value wins. This is the scalar B4 contract, not keyed-pool tombstone
-behavior.
+behavior. A spec whose module resolves a leaf differently (`ai.programs.git`'s
+deep-merged `settings`) names it in `overrideDescriptions`, which replaces that
+leaf's generated "non-null wins" sentence so the docs do not contradict it.
 
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write

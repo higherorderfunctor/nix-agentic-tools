@@ -13,7 +13,7 @@
 # backends — so the two option trees cannot drift.
 {
   lib,
-  mkCredentialsOption,
+  mkCredentialsOptionWith,
   supportedRuntimes,
 }: let
   # Home Manager's `programs.git.settings` type, restated: devenv has no
@@ -37,6 +37,13 @@ in {
   git = {
     name = "git";
     inherit supportedRuntimes;
+    # `git.nix` deep-merges `settings` itself; the generated "non-null wins"
+    # sentence would contradict that.
+    overrideDescriptions.settings = ''
+      Runtime override for the portable program option. Deep-merged over
+      `ai.programs.git.settings`, root first and this value on top; null adds
+      nothing.
+    '';
     options = {
       enable = lib.mkEnableOption ''
         a per-harness git identity. Each enabled harness gets its own gitconfig
@@ -53,24 +60,33 @@ in {
         your SSH config says
       '';
 
-      credentials =
-        mkCredentialsOption "the password git's credential helper returns for https://github.com"
-        // {
-          description = ''
-            The GitHub token git pushes and fetches with. Renders an empty
-            `credential."https://github.com".helper` (dropping every helper
-            your own config set, so a push never falls back to your token)
-            and then a store helper that reads this secret on every
-            credential request and answers `username=x-access-token`; if the
-            secret is missing or empty it tells git to stop rather than
-            prompt. Only the path reaches the store, and the token is never
-            put in the environment. A `helper` executable runs on every
-            request, not once at start. Set exactly one of `file` or `helper`.
+      credentials = mkCredentialsOptionWith {
+        description = ''
+          The GitHub token git pushes and fetches with. Renders an empty
+          `credential."https://github.com".helper` (dropping every helper
+          your own config set, so a push never falls back to your token)
+          and then a store helper that reads this secret on every
+          credential request and answers `username=x-access-token`; if the
+          secret is missing or empty it tells git to stop rather than
+          prompt. Only the path reaches the store, and the token is never
+          put in the environment. A `helper` executable runs on every
+          request, not once at start. Set exactly one of `file` or `helper`.
 
-            Left null, nothing is reset: git uses whatever helper your own
-            config sets for github.com, which may be your token.
-          '';
-        };
+          Left null, nothing is reset: git uses whatever helper your own
+          config sets for github.com, which may be your token.
+        '';
+        file = ''
+          Path to a file holding the raw GitHub token, read by the credential
+          helper on every request git makes for https://github.com. Only the
+          path reaches the store. Works with sops-nix, agenix, or any tool
+          that decrypts secrets to files.
+        '';
+        helper = ''
+          Path to an executable that prints the raw GitHub token on stdout.
+          The credential helper runs it on every request git makes for
+          https://github.com, not once at start.
+        '';
+      };
 
       settings = lib.mkOption {
         type = gitIniType;
@@ -88,7 +104,9 @@ in {
           keeps the root `user.email`. Keys derived from `signing` and
           `credentials` are defaults; an explicit entry here at the same key
           wins. `include.path` entries are appended after the user configs
-          the file always includes first.
+          the file always includes first. A key left unset here, such as
+          `user.name` or `user.email`, is inherited from your own included
+          config.
         '';
       };
 
@@ -113,6 +131,9 @@ in {
             `format = "ssh"` this is the private key file, read by `ssh-keygen`
             at signing time, so no agent is involved. A string, never a Nix
             path, and never under the store: either would publish the key.
+            Left null, the `user.signingKey` from your own included config
+            stays in effect, so an explicit `git commit -S` or `git tag -s`
+            by the agent signs with the key your own config names.
           '';
         };
 
@@ -120,9 +141,10 @@ in {
           type = lib.types.bool;
           default = false;
           description = ''
-            Sign every commit and tag. Rendered as `commit.gpgSign` and
-            `tag.gpgSign` whether true or false, so a signing default in your
-            own config never signs the agent's commits with your key.
+            Sign every commit and tag. Rendered as `commit.gpgSign`,
+            `tag.gpgSign` and `tag.forceSignAnnotated` whether true or false,
+            so a signing default in your own config never signs the agent's
+            commits or annotated tags with your key.
             Evaluation fails for an enabled harness that signs (through this
             or `settings`) while no key or format resolves.
           '';
@@ -138,7 +160,12 @@ in {
       enable = lib.mkEnableOption ''
         the GitHub CLI config directory below for each enabled harness,
         published as `GH_CONFIG_DIR`. No `GH_TOKEN` is set: Copilot CLI would
-        prefer it over its own login
+        prefer it over its own login. Nothing is unset either: gh prefers an
+        inherited `GH_TOKEN` or `GITHUB_TOKEN` over `hosts.yml`, so a harness
+        launched from a shell exporting one acts as that token's account, not
+        as this identity. On Copilot, `GH_CONFIG_DIR` also becomes the source
+        of its last-resort `gh` login, so that fallback now uses this
+        directory's token
       '';
 
       configDir = lib.mkOption {

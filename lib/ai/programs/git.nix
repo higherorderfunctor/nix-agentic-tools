@@ -26,7 +26,7 @@
   harnessNames = import ../runtimes.nix;
   specs = import ./git-options.nix {
     inherit lib;
-    inherit (credentials) mkCredentialsOption;
+    inherit (credentials) mkCredentialsOptionWith;
     supportedRuntimes = harnessNames;
   };
   git = programFactory.mkProgram specs.git;
@@ -89,9 +89,10 @@
     "~/.gitconfig"
   ];
 
-  # Everything after the include. `commit.gpgSign` and `tag.gpgSign` are
-  # ALWAYS written: left unset, a user config that signs by default would
-  # sign the agent's commits with the user's key.
+  # Everything after the include. `commit.gpgSign`, `tag.gpgSign` and
+  # `tag.forceSignAnnotated` are ALWAYS written: left unset, a user config
+  # that signs by default would sign the agent's commits, or its `git tag -m`
+  # tags, with the user's key.
   gitconfigBody = cfg: let
     inherit (cfg) signing;
     derived = lib.foldl' lib.recursiveUpdate {} [
@@ -104,7 +105,10 @@
       })
       {
         commit.gpgSign = signing.signByDefault;
-        tag.gpgSign = signing.signByDefault;
+        tag = {
+          forceSignAnnotated = signing.signByDefault;
+          gpgSign = signing.signByDefault;
+        };
       }
       # The empty value resets the helper list, dropping every helper the
       # included user config set. Without it an agent push that this helper
@@ -157,7 +161,11 @@
   assertionsFor = state: let
     prefix = "ai.${state.runtime}.programs";
     inherit (state) body;
-    signs = (body.commit.gpgSign or false) == true || (body.tag.gpgSign or false) == true;
+    signs = lib.any (value: value == true) [
+      (body.commit.gpgSign or false)
+      (body.tag.forceSignAnnotated or false)
+      (body.tag.gpgSign or false)
+    ];
     tokenFile = (state.gitCfg.credentials or {}).file or null;
   in
     lib.optionals state.gitActive [
