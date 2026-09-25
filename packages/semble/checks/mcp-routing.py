@@ -39,10 +39,52 @@ def text_of(result) -> str:
     return blocks[0].text
 
 
+class StubServer:
+    """Stands in for the stdio server: waits for the loads serve() started."""
+
+    def __init__(self, cache) -> None:
+        self.cache = cache
+
+    async def run_stdio_async(self) -> None:
+        await asyncio.wait(list(self.cache._models.values()))
+
+
+async def drive_serve(default) -> None:
+    """Run the real serve() with the stdio server stubbed; check what it preloads."""
+    created = []
+    real_create_server = semble.mcp.create_server
+
+    def fake_create_server(cache, default_content):
+        created.append(cache)
+        return StubServer(cache)
+
+    semble.mcp.create_server = fake_create_server
+    try:
+        await semble.mcp.serve(default)
+    finally:
+        semble.mcp.create_server = real_create_server
+    (cache,) = created
+    assert list(cache._models) == [expected["preload"]], list(cache._models)
+    assert cache._models[expected["preload"]].result() == expected["preload"]
+    print("ok serve preload", expected["preload"])
+
+
+async def failed_load_is_retrieved() -> None:
+    """A load nobody awaits must not end as 'Task exception was never retrieved'."""
+    cache = semble.mcp._IndexCache()
+    task = cache._model_task(str(Path(sys.argv[2]) / "no-such-model"))
+    await asyncio.wait([task])
+    # asyncio clears this flag once the exception is retrieved; only the done
+    # callback can have done that yet, so check it before calling exception().
+    assert task._log_traceback is False
+    assert task.exception() is not None
+    print("ok failed load retrieved")
+
+
 async def main() -> None:
     default = [ContentType(value) for value in expected["defaultContent"]]
-    # serve() preloads this model before the first call.
-    assert semble.mcp._model_for(default) == expected["preload"], semble.mcp._model_for(default)
+    await drive_serve(default)
+    await failed_load_is_retrieved()
     cache = semble.mcp._IndexCache()
     server = semble.mcp.create_server(cache, default_content=default)
     for call in expected["calls"]:

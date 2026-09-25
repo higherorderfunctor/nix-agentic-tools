@@ -214,7 +214,7 @@ diff --git a/src/semble/mcp.py b/src/semble/mcp.py
          self._tasks: OrderedDict[_CacheKey, asyncio.Task[SembleIndex]] = OrderedDict()  # ordered for LRU eviction
          self._revalidate_after: dict[_CacheKey, float] = {}
          self._merged: tuple[list[SembleIndex], SembleIndex] | None = None  # last merge and its parts
-@@ -217,23 +219,25 @@
+@@ -217,23 +219,28 @@
              self._merged = (indexes, SembleIndex.merge(parts))
          return self._merged[1]
  
@@ -228,7 +228,10 @@ diff --git a/src/semble/mcp.py b/src/semble/mcp.py
 +    def _model_task(self, model_path: str) -> asyncio.Task[str]:
 +        """Return the task loading a model, starting it on first use."""
 +        if model_path not in self._models:
-+            self._models[model_path] = asyncio.create_task(_load_model(model_path))
++            task = asyncio.create_task(_load_model(model_path))
++            # _load_model logs a failure; retrieving it here keeps a load nobody awaits (the preload) quiet at exit.
++            task.add_done_callback(lambda done: done.cancelled() or done.exception())
++            self._models[model_path] = task
 +        return self._models[model_path]
 +
 +    async def _await_model(self, model_path: str) -> str:
@@ -249,7 +252,7 @@ diff --git a/src/semble/mcp.py b/src/semble/mcp.py
          index = (
              SembleIndex.from_git(source, model_path=model_path, content=content)
              if is_git_url(source)
-@@ -287,7 +291,7 @@
+@@ -287,7 +294,7 @@
              return
          if time.monotonic() < self._revalidate_after.get(cache_key, 0.0):
              return
@@ -258,7 +261,7 @@ diff --git a/src/semble/mcp.py b/src/semble/mcp.py
          # Only evict if this entry hasn't already been replaced by a concurrent caller.
          if validated is None and self._tasks.get(cache_key) is cached:
              self.evict(cache_key)
-@@ -302,7 +306,7 @@
+@@ -302,7 +309,7 @@
          await self._evict_if_stale(cache_key)
  
          if cache_key not in self._tasks:
