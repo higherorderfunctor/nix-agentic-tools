@@ -164,28 +164,52 @@ inputs.nix-agentic-tools.lib.packaging.fetchFromHuggingFace {
 
 The result is a directory holding the requested files, with subdirectories kept
 (`1_Pooling/config.json` lands at that path). A tool that loads a model from a
-local directory can be pointed straight at it.
+local directory can be pointed straight at it. Only public repositories work: no
+token or netrc reaches the fetch.
 
 - **One hash.** Every file comes from one fixed-output derivation with
   `outputHashMode = "recursive"`, so `hash` covers the whole tree, as with
   `fetchFromGitHub`. Get it from tooling: pass `hash = lib.fakeHash`, build, and
-  copy the `got:` value. Changing `files`, `rev` or any file's bytes changes it.
-- **`rev` must be a full 40-hex commit.** `resolve/main/` is mutable.
+  copy the `got:` value.
+- **Reset the hash whenever `files` changes.** A fixed-output derivation's store
+  path depends only on its name and hash, and the default name encodes repo and
+  rev, not `files`. Keep the old hash after adding a file and Nix finds the old
+  path already valid, so it silently returns the old tree without the new file.
+  Set `hash = lib.fakeHash` again after every edit to `files`.
+- **An updater has to prefetch.** Hugging Face publishes a per-file LFS oid, but
+  there is no way to derive the single tree hash from those, so an update script
+  cannot cross-check them against `hash`. It has to fetch the tree and read the
+  hash back.
+- **`rev` must be a full 40-hex commit.** Branches and tags are mutable. The
+  commit is the `sha` field of
+  `https://huggingface.co/api/models/<owner>/<repo>`, or an entry in the
+  repository's commit history.
 - **`endpoints`** (default `["https://huggingface.co"]`) are tried in order for
   each file, and each must serve
   `<endpoint>/<owner>/<repo>/resolve/<rev>/<path>`. A mirror therefore needs no
-  extra hash.
+  extra hash. As with `fetchurl`, TLS is verified only while `hash` is a
+  placeholder; with a real hash the hash guarantees integrity, which also lets
+  the fetch run behind a TLS-intercepting proxy.
+- **`name`** defaults to the lowercased repo plus the short rev, and
+  **`description`** to `<owner>/<repo> at <short rev> (Hugging Face)`. Both can
+  be overridden. `pname` is always the lowercased repo, so an
+  `allowUnfreePredicate` on `lib.getName` survives rev bumps.
 - **`license` defaults to `lib.licenses.unfree`, on purpose.** nixpkgs has no
   `licenses.unknown`, and check-meta counts a derivation with no `meta.license`
   as free (`hasUnfreeLicense` requires `meta.license` to be set). So weights
-  whose licence nobody stated need `allowUnfree` and stay out of binary-cache
-  pushes. Read the `license:` field of the repository's `README.md` front matter
-  at the pinned `rev` and pass the matching `lib.licenses.*` value.
+  whose licence nobody stated need `allowUnfree` (or an `allowUnfreePredicate`)
+  to evaluate, and Hydra-style public caches will not build them. That does not
+  stop you pushing them to a cache of your own. Read the `license:` field of the
+  repository's `README.md` front matter at the pinned `rev` and pass the
+  matching `lib.licenses.*` value.
 - **`licenseFile` / `attribution`** are optional, for licences that require the
-  notice to travel with the work when the repository does not ship it. Setting
-  either wraps the fetched tree in a derivation that symlinks each file and adds
-  `LICENSE` / `ATTRIBUTION` at its root. The wrapper links the same fetched
-  tree, exposed as `passthru.fetched`, so the weights are stored once.
+  notice to travel with the work when the repository does not ship it. If the
+  repository ships its own `LICENSE`, list it in `files` instead. Setting either
+  wraps the fetched tree in a derivation that symlinks each file and adds
+  `LICENSE` / `ATTRIBUTION` at its root; a `files` entry under a name the
+  wrapper writes is rejected. The wrapper links the same fetched tree, exposed
+  as `passthru.fetched`, so the weights are stored once. Both layers carry the
+  same `meta`, licence included.
 
 `checks/packaging/fetch-from-hugging-face.nix` exercises it offline against a
 fixture tree served over `file://`.

@@ -19,18 +19,28 @@ rec {
   # fetchFromGitHub works. Get it from tooling: pass `lib.fakeHash`, build, and
   # copy the `got:` line.
   #
+  # A FOD's store path depends on its name and hash only. The default name
+  # encodes repo and rev but not `files`, so after editing `files` replace the
+  # hash with `lib.fakeHash` again: a stale hash that is already in the store
+  # silently returns the OLD tree.
+  #
+  # Public repositories only: no token or netrc reaches curl.
+  #
   # `license` defaults to unfree ON PURPOSE. nixpkgs has no `licenses.unknown`,
   # and check-meta treats a derivation with NO meta.license as free
   # (hasUnfreeLicense requires meta.license to be set). Weights with no stated
-  # licence therefore have to be marked unfree explicitly, so they need
-  # allowUnfree and stay out of binary-cache pushes until a caller states the
-  # real licence.
+  # licence therefore have to be marked unfree explicitly: evaluating them then
+  # needs allowUnfree (or an allowUnfreePredicate on `pname`, which is the
+  # lowercased repo), and Hydra-style public caches will not build them. That
+  # does NOT keep them out of a cache you push to yourself.
   #
   # `licenseFile` / `attribution` are for licences that require the notice to
   # travel with the work (Apache-2.0 section 4(a), for one) when the repository
-  # does not ship it. Either one wraps the fetched tree in a derivation that
-  # symlinks every file and adds LICENSE / ATTRIBUTION at the root; with
-  # neither, the fetched tree IS the result.
+  # does not ship it. If it does, list its LICENSE in `files` instead. Either
+  # one wraps the fetched tree in a derivation that symlinks every file and
+  # adds LICENSE / ATTRIBUTION at the root; with neither, the fetched tree IS
+  # the result. meta (licence included) is on BOTH layers, so the inner FOD,
+  # reachable through passthru.fetched, carries the same licence gate.
   fetchFromHuggingFace = {
     # Required. `files` are repo-relative; subdirectories are kept.
     files,
@@ -41,7 +51,7 @@ rec {
     rev,
     # Optional.
     attribution ? null,
-    description ? "${owner}/${repo}",
+    description ? "${owner}/${repo} at ${builtins.substring 0 7 rev} (Hugging Face)",
     # Tried in order for each file. Each must serve
     # <endpoint>/<owner>/<repo>/resolve/<rev>/<path>, as huggingface.co and
     # its mirrors do.
@@ -49,30 +59,39 @@ rec {
     homepage ? "https://huggingface.co/${owner}/${repo}",
     license ? pkgs.lib.licenses.unfree,
     licenseFile ? null,
+    name ? "${pkgs.lib.toLower repo}-${builtins.substring 0 7 rev}",
   }: let
     inherit (pkgs) lib;
-    name = "${lib.toLower repo}-${builtins.substring 0 7 rev}";
-    wrapped = licenseFile != null || attribution != null;
+    # Stable across rev bumps and name overrides, so an allowUnfreePredicate
+    # keyed on lib.getName keeps matching.
+    pname = lib.toLower repo;
+    version = builtins.substring 0 7 rev;
     segments = file: lib.splitString "/" file;
     validPath = file:
       !(lib.hasPrefix "/" file)
       && builtins.all (s: !(builtins.elem s ["" "." ".."])) (segments file);
-    meta = {
-      inherit description homepage license;
-      # Trained weights are neither source nor native code.
-      sourceProvenance = [lib.sourceTypes.binaryBytecode];
-    };
+    # Root names the wrapper writes. Compared by first segment and case-folded,
+    # so neither LICENSE/x nor a case-insensitive filesystem slips past.
+    reserved =
+      lib.optional (licenseFile != null) "license"
+      ++ lib.optional (attribution != null) "attribution";
+    collides = file: builtins.elem (lib.toLower (builtins.head (segments file))) reserved;
+    meta = {inherit description homepage license;};
     passthru = {inherit endpoints files owner repo rev;};
     fetched = pkgs.stdenvNoCC.mkDerivation {
-      inherit meta name passthru;
+      inherit meta name passthru pname version;
       # $1 is the output path, $2 the same path percent-encoded per segment
       # for the URL.
       buildCommand = ''
+        curlArgs=(--fail --location --retry 3 --retry-delay 2 --silent --show-error
+          --create-dirs --remove-on-error)
+        # See SSL_CERT_FILE below.
+        if [ ! -f "$SSL_CERT_FILE" ]; then
+          curlArgs+=(--insecure)
+        fi
         fetch() {
           for endpoint in ${lib.escapeShellArgs (map (lib.removeSuffix "/") endpoints)}; do
-            if curl --fail --location --retry 3 --retry-delay 2 --silent --show-error \
-              --create-dirs --remove-on-error --output "$out/$1" \
-              "$endpoint/$resolvePath/$2"; then
+            if curl "''${curlArgs[@]}" --output "$out/$1" "$endpoint/$resolvePath/$2"; then
               return 0
             fi
             echo "fetchFromHuggingFace: $endpoint did not serve $1" >&2
@@ -87,26 +106,40 @@ rec {
       '';
       impureEnvVars = lib.fetchers.proxyImpureEnvVars;
       nativeBuildInputs = [pkgs.curl];
-      outputHash = hash;
+      outputHash =
+        if hash == ""
+        then lib.fakeHash
+        else hash;
       outputHashMode = "recursive";
       preferLocalBuild = true;
       # Pinned to a commit because resolve/main/ moves: a branch name would
       # break the hash the moment upstream pushes.
       resolvePath = "${owner}/${repo}/resolve/${rev}";
-      SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+      # Verify TLS only while the hash is a placeholder, as fetchurl does. With
+      # a real hash the FOD hash already guarantees integrity, and skipping
+      # verification is what lets a TLS-intercepting proxy work: curl trusts
+      # SSL_CERT_FILE only and never reads the proxy CA in NIX_SSL_CERT_FILE.
+      SSL_CERT_FILE =
+        if builtins.elem hash ["" lib.fakeHash lib.fakeSha256 lib.fakeSha512]
+        then "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+        else "/no-cert-file.crt";
     };
     attributionFile = pkgs.writeText "${name}-attribution" attribution;
   in
-    assert lib.assertMsg (builtins.match "[0-9a-f]{40}" rev != null) "fetchFromHuggingFace: rev must be a full 40-hex commit hash";
+    assert lib.assertMsg (builtins.match "[0-9a-f]{40}" rev != null) ''
+      fetchFromHuggingFace: rev must be a full 40-hex commit hash, got "${rev}".
+      Branches and tags are mutable, so they would break the hash. Take the
+      commit from the "sha" field of https://huggingface.co/api/models/${owner}/${repo},
+      or from the repository's commit history.'';
     assert lib.assertMsg (files != []) "fetchFromHuggingFace: files must not be empty";
-    assert lib.assertMsg (lib.allUnique files) "fetchFromHuggingFace: files must be unique";
+    assert lib.assertMsg (lib.allUnique (map lib.toLower files)) "fetchFromHuggingFace: files must be unique, ignoring case (a case-insensitive filesystem would merge them)";
     assert lib.assertMsg (builtins.all validPath files) "fetchFromHuggingFace: files must be relative paths with no empty, '.' or '..' segment";
-    assert lib.assertMsg (!wrapped || !(builtins.any (f: builtins.elem f ["ATTRIBUTION" "LICENSE"]) files)) "fetchFromHuggingFace: LICENSE and ATTRIBUTION are reserved at the root when licenseFile or attribution is set";
-      if !wrapped
+    assert lib.assertMsg (!(builtins.any collides files)) "fetchFromHuggingFace: a file under LICENSE (with licenseFile) or ATTRIBUTION (with attribution) collides with the one the wrapper writes. If the repository ships its own LICENSE, list it in files and drop licenseFile.";
+      if reserved == []
       then fetched
       else
         pkgs.runCommand name {
-          inherit meta;
+          inherit meta pname version;
           passthru = passthru // {inherit fetched;};
         } ''
           # One copy of the weights, not two: each symlink is a store
