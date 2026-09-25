@@ -88,8 +88,11 @@
     ++ map (language: "Semble `grammars` language \"${language}\" is already bundled with Semble (semble-grammars ${extracted.provenance.sembleGrammarsVersion}); Semble would never load the extra grammar.")
     (builtins.filter (language: lib.elem language bundledLanguages) languages);
 
+  # A mapping may name any language Semble knows: a parsed one (bundled, an
+  # alias, or a `grammars` language) or one it indexes with line chunking
+  # (every extension-map language). Only unknown names are rejected.
   mappingErrors = spec: let
-    known = bundledLanguages ++ map (grammar: grammar.language or "") spec.grammars;
+    known = bundledLanguages ++ extracted.languages ++ map (grammar: grammar.language or "") spec.grammars;
     patterns = lib.concatMap (mapping: mapping.patterns or []) spec.pathMappings;
   in
     lib.concatLists (lib.imap1 (index: mapping: let
@@ -101,7 +104,7 @@
         then ["Semble `${path}.language` must be a non-empty string."]
         else
           lib.optional (!(lib.elem language known))
-          "Semble `${path}.language`: \"${language}\" is not a language Semble can parse. Use a bundled grammar or alias (semble-grammars ${extracted.provenance.sembleGrammarsVersion}) or the language of a `grammars` package."
+          "Semble `${path}.language`: \"${language}\" is not a language Semble knows. Use a bundled grammar or alias (semble-grammars ${extracted.provenance.sembleGrammarsVersion}), a language from Semble's extension map, or the language of a `grammars` package."
       )
       ++ lib.optional (!(lib.elem (mapping.content or null) categories))
       "Semble `${path}.content` must be one of code, config or docs."
