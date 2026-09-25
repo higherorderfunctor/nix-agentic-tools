@@ -103,24 +103,36 @@
       if variantCount == 1 && lib.elem key variantKeys
       then cacheRoot
       else "${cacheRoot}/variants/${builtins.substring 0 16 key}";
+    launcherArgs =
+      ["--unset" "PYTHONPATH"]
+      ++ lib.optionals relocatesCache ["--set" "SEMBLE_CACHE_LOCATION" cacheDir];
   in {
     inherit cacheDir package;
+    # Every installed package, vanilla included, goes through this launcher
+    # set rather than being installed as-is, for two Python reasons:
+    #
+    # - It carries ONLY `bin/`. Semble is a Python application, and nixpkgs
+    #   propagates a Python application's whole closure plus the interpreter
+    #   (`nix-support/propagated-build-inputs`). In a devenv shell, Python's
+    #   setup hook turns that into PYTHONPATH entries for numpy, tokenizers,
+    #   huggingface-hub and the rest, ahead of the project's own virtualenv.
+    #   A launcher with no `lib/` and no `nix-support/` leaks nothing.
+    # - Each launcher unsets PYTHONPATH. nixpkgs' entry point appends the
+    #   app's own site-packages AFTER PYTHONPATH, so any `semble` (or numpy)
+    #   the calling shell exports would shadow Semble's own.
+    #
+    # The upstream derivation is untouched; only these launchers are new.
     wrappedPackage =
-      if !relocatesCache
-      then package
-      else
-        pkgs.symlinkJoin {
-          name = "${lib.getName package}-wrapped";
-          paths = [package];
-          nativeBuildInputs = [pkgs.makeWrapper];
-          passthru = package.passthru or {};
-          postBuild = ''
-            for bin in "$out"/bin/*; do
-              wrapProgram "$bin" \
-                --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg cacheDir}
-            done
-          '';
-        };
+      pkgs.runCommand "${lib.getName package}-wrapped" {
+        nativeBuildInputs = [pkgs.makeWrapper];
+        passthru = (package.passthru or {}) // {unwrapped = package;};
+        meta = lib.optionalAttrs (package.meta ? mainProgram) {inherit (package.meta) mainProgram;};
+      } ''
+        mkdir -p "$out/bin"
+        for bin in ${package}/bin/*; do
+          makeWrapper "$bin" "$out/bin/$(basename "$bin")" ${lib.escapeShellArgs launcherArgs}
+        done
+      '';
   };
   variants =
     builtins.listToAttrs
@@ -193,7 +205,7 @@
         if [ "$previous" != "$expected" ]; then
           printf 'Semble package changed; clearing indexes in %s\n' "$cache_dir"
           SEMBLE_CACHE_LOCATION="$cache_dir" \
-            ${variant.package}/bin/semble clear index >/dev/null
+            ${variant.wrappedPackage}/bin/semble clear index >/dev/null
 
           temporary="$(${pkgs.coreutils}/bin/mktemp "$cache_dir/.nix-package.XXXXXX")"
           trap '${pkgs.coreutils}/bin/rm -f "$temporary"' EXIT

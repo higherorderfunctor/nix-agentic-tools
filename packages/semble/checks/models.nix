@@ -337,8 +337,8 @@ in {
         }).drvPath
         == pkgs.ai.semble.drvPath
         && disabledOnly.drvPath == pkgs.ai.semble.drvPath
-        # The module installs upstream's derivation, only wrapped for its cache.
-        && finalPackage.drvAttrs.paths == ["${pkgs.ai.semble}"]
+        # The module installs upstream's derivation, only behind its launchers.
+        && finalPackage.unwrapped.drvPath == pkgs.ai.semble.drvPath
         && finalPackage == builtins.head evaluated.config.home.packages
         # A grammar-only customization gets no models patch.
         && !(lib.elem ../patches/models.patch grammarsOnly.drvAttrs.patches)
@@ -386,7 +386,7 @@ in {
         }
         && (customizePackage pkgs.ai.semble {defaultContent = "all";}).passthru.sembleModels.DEFAULT_CONTENT == ["code" "config" "docs"]
         # finalPackage wraps exactly the customized package.
-        && final.drvAttrs.paths == ["${customizePackage pkgs.ai.semble routedSettings}"]
+        && final.unwrapped.drvPath == (customizePackage pkgs.ai.semble routedSettings).drvPath
     );
 
     # Mappings keep the consumer's list order, one entry per pattern: the
