@@ -90,6 +90,17 @@ jobs:
             --result-file "$RUNNER_TEMP/results.json" --result-format json
           python3 dev/scripts/ci-packages.py verify "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/results.json"
           cp "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/receipt.json"
+      # flake check runs on ubuntu only, so Darwin needs its own run of the
+      # Semble drift check: semble-grammars ships a manifest per platform, and
+      # this is what catches a Darwin wheel that drops a grammar. One shard is
+      # enough. It runs before the receipt upload, so a failure fails the
+      # required build context.
+      - name: Check extracted Semble metadata
+        if: matrix.system == 'aarch64-darwin' && matrix.shard == 0
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          nix build ".#checks.$SYSTEM.semble-languages-extracted" --no-link
       - name: Upload successful shard receipt
         uses: actions/upload-artifact@v4
         with:
