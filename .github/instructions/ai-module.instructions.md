@@ -1212,7 +1212,7 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-24 — L5 is the delivery router plus one adapter per
+> **Last verified:** 2026-09-25 — L5 is the delivery router plus one adapter per
 > backend; every runtime describes delivery once through the record-level
 > `config`, which `mkRuntime` makes the only delivery callback, and the delivery
 > matrix is generated from the layer for every runtime's files. Normalized pools
@@ -1229,7 +1229,9 @@ path types".
 > record's `poolOptions` carries only what differs. `checkRecord.nix` rejects a
 > `poolOptions` key the builder would not read and a stray field in the
 > `sharedAgentsMd` result. Every reconciled document is one
-> `helpers.mkReconciledDocument` call.
+> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
+> `index` entries: Codex renders a scoped rule that names `references` as a
+> path-scoped index entry instead of inlining its body.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1544,11 +1546,16 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex every
-  rule, scope-prefixed; Kiro only unscoped always-on rules; Kimchi none) and an
-  optional `maxBytes`, and nothing else: the builder reads those by name, so
-  `checkRecord.nix` rejects a missing `key` or any other field. The builder adds
-  the merged context and publishes it on devenv. A limit is published even
-  without content, because the runtime reads the file whoever wrote it.
+  rule; Kiro only unscoped always-on rules; Kimchi none), optional `index`
+  entries and an optional `maxBytes`, and nothing else: the builder reads those
+  by name, so `checkRecord.nix` rejects a missing `key` or any other field.
+  Codex lists a scoped rule that names `references` as an index entry (its globs
+  plus links to those documents) and inlines every other rule, a scoped one
+  behind a prose scope note. `agentsmd.renderKeyed` writes the context, then the
+  `## Path-scoped rules` index, then the inlined rules, so a file with many
+  scoped rules stays under Codex's document limit. The builder adds the merged
+  context and publishes it on devenv. A limit is published even without content,
+  because the runtime reads the file whoever wrote it.
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
   single-owner map → `lib/ai/app/sharedAgentsMd.nix`
 - B7 public file-option declaration and runtime enable gate →

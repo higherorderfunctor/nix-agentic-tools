@@ -301,8 +301,8 @@
   };
   customConfig = configFn callbackArgs;
   # A runtime that reads the repository AGENTS.md contributes to its one
-  # owner (sharedAgentsMd.nix) on devenv: its merged context plus the rules
-  # and limit its record's `sharedAgentsMd` callback returns, each runtime
+  # owner (sharedAgentsMd.nix) on devenv: its merged context plus the rules,
+  # index entries and limit its record's `sharedAgentsMd` callback returns, each runtime
   # keeping its own rule policy. The key is published whether or not it has
   # content, for observers such as file-warnings.nix. A limit is published
   # with it too, because the runtime reads the file whoever wrote it.
@@ -312,8 +312,9 @@
       result = appRecord.sharedAgentsMd callbackArgs;
     in
       assert checkRecord.sharedAgentsMd appRecord.name result; result;
+    index = shared.index or {};
     rules = shared.rules or {};
-    hasContent = normalizedHasContext || rules != {};
+    hasContent = normalizedHasContext || index != {} || rules != {};
   in {
     ai.internal.agentsMdTargets.${appRecord.name} = shared.key;
     ai.internal.agentsMd = lib.mkIf (hasContent || shared ? maxBytes) {
@@ -324,7 +325,7 @@
             if hasContent
             then true
             else lib.mkDefault false;
-          inherit rules;
+          inherit index rules;
         }
         // lib.optionalAttrs (shared ? maxBytes) {inherit (shared) maxBytes;}
         // lib.optionalAttrs normalizedHasContext {

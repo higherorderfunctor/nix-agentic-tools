@@ -1746,6 +1746,54 @@ in {
         && devenv.config.files."AGENTS.md".text == expected
     );
 
+    # A scoped rule that names the documents holding its text is listed, not
+    # inlined: the flat file carries its globs and links, never its body. An
+    # unscoped rule with references stays inline, because an index entry with
+    # no globs could never tell the reader when to follow it.
+    module-codex-scoped-references-render-index = mkTest "codex-scoped-references-render-index" (
+      let
+        config = {
+          ai = {
+            codex.enable = true;
+            context.text = "Shared context";
+            rules = {
+              always = {
+                references = ["docs/always.md"];
+                text = "Always body";
+              };
+              beta = {
+                matcher = ["b/**"];
+                references = ["docs/b.md"];
+                text = "Beta body";
+              };
+              alpha = {
+                matcher = ["a/**" "lib/a.nix"];
+                references = ["docs/a.md" "docs/a-more.md"];
+                text = "Alpha body";
+              };
+            };
+          };
+        };
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        expected = builtins.concatStringsSep "\n\n" [
+          "Shared context"
+          (
+            "## Path-scoped rules\n\n"
+            + "Before editing a path that matches an entry below, read every document listed for it. When several entries match, their guidance composes.\n\n"
+            + "- **`alpha`**\n  - Match: `a/**`, `lib/a.nix`\n  - Read: [`docs/a.md`](docs/a.md), [`docs/a-more.md`](docs/a-more.md)\n"
+            + "- **`beta`**\n  - Match: `b/**`\n  - Read: [`docs/b.md`](docs/b.md)\n"
+          )
+          "<!-- rule: always -->\nAlways body"
+        ];
+      in
+        hm.config.home.file.".codex/AGENTS.md".text
+        == expected
+        && devenv.config.files."AGENTS.md".text == expected
+        && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? alpha
+        && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)
+    );
+
     module-codex-size-guard-byte-boundaries = mkTest "codex-size-guard-byte-boundaries" (
       let
         evaluate = context: projectDocMaxBytes:

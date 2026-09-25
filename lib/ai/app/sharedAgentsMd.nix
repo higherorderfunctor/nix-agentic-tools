@@ -60,6 +60,13 @@
         visible = false;
         description = "Whether normalized content should generate this AGENTS.md target.";
       };
+      index = lib.mkOption {
+        type = lib.types.attrsOf deduplicatedLines;
+        default = {};
+        internal = true;
+        visible = false;
+        description = "Rendered path-scoped index entries keyed by stable rule identity.";
+      };
       maxBytes = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.positive;
         default = null;
@@ -78,7 +85,7 @@
   };
   allRendered = lib.mapAttrs (_filename: value:
     agentsmd.renderKeyed {
-      inherit (value) context rules;
+      inherit (value) context index rules;
     })
   config.ai.internal.agentsMd;
   generatedRendered =

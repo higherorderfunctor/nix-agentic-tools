@@ -387,6 +387,11 @@ ai = {
 };
 ```
 
+A scoped rule can also name the documents that hold its text in `references`.
+Runtimes with path scoping ignore them; Codex, which reads one flat `AGENTS.md`,
+lists such a rule in a compact path-scoped index (globs plus links) instead of
+inlining its body into every turn.
+
 Enabling any harness also installs a sandbox-safe Git SSH default. It preserves
 Home Manager's `~/.ssh/config` host/key routing when a Linux user-namespace
 sandbox remaps the Nix-store target's owner; devenv exports the same wrapper as

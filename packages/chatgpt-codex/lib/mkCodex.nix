@@ -606,6 +606,18 @@
       text = aiCommon.readContent rule;
     };
 
+  # AGENTS.md has no path scoping, so a scoped rule costs its whole body on
+  # every turn. One that names the documents holding its text becomes an
+  # index entry instead, and the agent reads the documents only when it edits
+  # a matching path. Every other rule is inlined as before.
+  isIndexedRule = rule: rule.matcher != null && rule.references != [];
+  agentsMdUnits = mergedRules: {
+    index =
+      lib.mapAttrs lib.ai.transformers.agentsmd.renderIndexEntry
+      (lib.filterAttrs (_name: isIndexedRule) mergedRules);
+    rules = lib.mapAttrs mkRuleBody (lib.filterAttrs (_name: rule: !(isIndexedRule rule)) mergedRules);
+  };
+
   isExecpolicyPathLike = content:
     builtins.isPath content
     || (
@@ -766,10 +778,10 @@
     mergedContext,
     mergedRules,
   }:
-    lib.ai.transformers.agentsmd.renderKeyed {
-      context = aiCommon.readContent mergedContext;
-      rules = lib.mapAttrs mkRuleBody mergedRules;
-    };
+    lib.ai.transformers.agentsmd.renderKeyed ({
+        context = aiCommon.readContent mergedContext;
+      }
+      // agentsMdUnits mergedRules);
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -872,16 +884,17 @@ in
 
     installPackage = codexInstallPackage;
     migrationConfig = codexExecpolicyWriterConfig;
-    # Every rule, scope-prefixed, under Codex's size limit.
+    # Every rule, scope-prefixed or indexed, under Codex's size limit.
     sharedAgentsMd = {
       cfg,
       mergedRules,
       ...
-    }: {
-      key = cfg.context.filename;
-      maxBytes = cfg.projectDocMaxBytes;
-      rules = lib.mapAttrs mkRuleBody mergedRules;
-    };
+    }:
+      {
+        key = cfg.context.filename;
+        maxBytes = cfg.projectDocMaxBytes;
+      }
+      // agentsMdUnits mergedRules;
     config = {
       backend,
       cfg,

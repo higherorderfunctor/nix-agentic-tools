@@ -36,7 +36,7 @@
 #                                    #   transform owns the `home.packages` / `packages`
 #                                    #   lowering, so a factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
-#     sharedAgentsMd ? <absent>;     # callback (same args) → {key; rules?; maxBytes?}:
+#     sharedAgentsMd ? <absent>;     # callback (same args) → {key; index?; rules?; maxBytes?}:
 #                                    #   the devenv repository AGENTS.md contribution;
 #                                    #   the transform rejects any other field
 #     hm = {                         # Home Manager only; each field overrides the
