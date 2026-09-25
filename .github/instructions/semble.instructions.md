@@ -10,11 +10,11 @@ applyTo: "packages/semble/**"
 > **Last verified:** 2026-09-25 — `models` is a root list routed by exact
 > content set, with `defaultContent` and `defaultModel`; the CLI and the MCP
 > server route alike through `patches/models.patch`, and there is no `--model`.
-> `pathMappings` is a root attrset keyed by language, validated against
-> `extracted.json`. `mcp.content` and `mcp.rootExposure` are gone:
-> `mcp.enable = false` with an MCP-backed subagent is a Kiro agent-private
-> server. Model examples use `pkgs.ai.fetchHuggingFaceModel`, which sets no
-> `passthru.files`.
+> `pathMappings` is an ordered root list of `{ language; content; patterns; }`
+> where the first match wins, validated against `extracted.json`. `mcp.content`
+> and `mcp.rootExposure` are gone: `mcp.enable = false` with an MCP-backed
+> subagent is a Kiro agent-private server. Model examples use
+> `pkgs.ai.fetchHuggingFaceModel`, which sets no `passthru.files`.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -53,20 +53,29 @@ ai = {
       tree-sitter-jq
     ];
     package = pkgs.ai.semble;
-    pathMappings = {
-      bash = {
+    # First match wins: list narrower patterns first.
+    pathMappings = [
+      {
+        language = "bash";
         content = "code";
         patterns = [".envrc" "checks/hooks/pre-edit"];
-      };
-      json = {
+      }
+      {
+        language = "json";
+        content = "docs";
+        patterns = ["docs/*.json"];
+      }
+      {
+        language = "json";
         content = "config";
-        patterns = ["flake.lock" "devenv.lock"];
-      };
-      markdown = {
+        patterns = ["*.json" "flake.lock" "devenv.lock"];
+      }
+      {
+        language = "markdown";
         content = "docs";
         patterns = ["*.md.fixture"];
-      };
-    };
+      }
+    ];
 
     cli.instructions.enable = true;
     mcp.enable = true;
@@ -121,23 +130,25 @@ package to try these store-backed parsers after its bundled grammar lookup. This
 keeps the upstream bundle intact and avoids its mutable extraction cache.
 
 `ai.programs.semble.pathMappings` assigns files with non-standard names to a
-language and to one of Semble's `code`, `config`, or `docs` indexes. It is keyed
-by language, and each key must be a grammar Semble bundles, an alias of one
-(such as `zsh`, `py` or `terraform`), or the language of a `grammars` package;
-anything else fails evaluation, checked against `extracted.json`. Extra grammars
-must not reuse a bundled name or alias, since Semble would never load them. One
-language maps to one content category.
+language and to one of Semble's `code`, `config`, or `docs` indexes. It is an
+ordered list of `{ language; content; patterns; }` entries. Each `language` must
+be a grammar Semble bundles, an alias of one (such as `zsh`, `py` or
+`terraform`), or the language of a `grammars` package; anything else fails
+evaluation, checked against `extracted.json`. Extra grammars must not reuse a
+bundled name or alias, since Semble would never load them. The same language may
+appear in several entries, so one language can split across content categories
+by path.
 
 A pattern without `/` matches a basename at any depth; a pattern containing `/`
 matches the path relative to the indexed repository root. Path matching uses
 `fnmatch` semantics, where `*` can span `/`; use an exact relative path when
-directory depth matters. A pattern may appear under one language only. When
-patterns of several languages match one file, the order is deterministic:
-patterns containing `/` first, then longer patterns, then the alphabetically
-first. A match overrides both suffix-based language detection and content
-categorization. Mappings participate in file discovery, parser selection, and
-cache validation, so mapped files are indexed and changes to them invalidate the
-relevant index normally.
+directory depth matters. Entries, and the patterns within an entry, are tried in
+list order and the first match wins, so the consumer controls precedence. A
+pattern may appear only once across the whole list. A runtime override replaces
+the whole list. A match overrides both suffix-based language detection and
+content categorization. Mappings participate in file discovery, parser
+selection, and cache validation, so mapped files are indexed and changes to them
+invalidate the relevant index normally.
 
 The extracted extension map is used for validation and documentation only. It is
 not merged in as default mappings: that would re-declare every built-in suffix
@@ -297,7 +308,7 @@ Routing is a patch to Semble (`patches/models.patch`), not a wrapper:
 
 The models patch applies on its own or on top of the grammar patch. The vanilla
 settings (`models = []`, `defaultModel = null`, `defaultContent = ["code"]`,
-`pathMappings = {}`, `grammars = []`) keep the installed package upstream's
+`pathMappings = []`, `grammars = []`) keep the installed package upstream's
 derivation byte for byte, which is what keeps it substitutable. Disabled entries
 count as absent. Any other value changes the package, so the cache guard clears
 the indexes on the next activation or shell entry.

@@ -60,6 +60,17 @@
         type = lib.types.enum ["code" "config" "docs"];
         description = "Semble content category containing the matched files.";
       };
+      language = lib.mkOption {
+        type = lib.types.nonEmptyStr;
+        example = "json";
+        description = ''
+          The language Semble assigns to the matched files: a language Semble
+          bundles a grammar for (or an alias of one), or the language of a
+          `grammars` package. The same language may appear in several
+          entries, for example to split one language across content
+          categories.
+        '';
+      };
       patterns = lib.mkOption {
         type = lib.types.nonEmptyListOf lib.types.nonEmptyStr;
         description = ''
@@ -117,31 +128,33 @@ in {
       '';
     };
     pathMappings = lib.mkOption {
-      type = lib.types.attrsOf pathMappingType;
-      default = {};
+      type = lib.types.listOf pathMappingType;
+      default = [];
       example = lib.literalExpression ''
-        {
-          bash = {
+        [
+          {
+            language = "bash";
             content = "code";
             patterns = [".envrc"];
-          };
-          json = {
+          }
+          {
+            language = "json";
+            content = "docs";
+            patterns = ["docs/*.json"];
+          }
+          {
+            language = "json";
             content = "config";
-            patterns = ["flake.lock" "devenv.lock"];
-          };
-        }
+            patterns = ["*.json" "flake.lock"];
+          }
+        ]
       '';
       description = ''
         Path-to-language overrides for extensionless files, compound
-        extensions, or repository-specific naming, keyed by the Tree-sitter
-        language that parses the matched files. Each key must be a language
-        Semble bundles (or an alias of one) or the language of a `grammars`
-        package. A language maps to one content category.
-
-        A pattern may appear under one language only. When patterns of
-        different languages both match a file, patterns containing `/` win
-        over basename patterns, then longer patterns over shorter ones, then
-        the alphabetically first.
+        extensions, or repository-specific naming. Entries are tried in list
+        order and the first matching pattern wins, so put narrower patterns
+        first. A pattern may appear only once across all entries. A runtime
+        override replaces the whole list.
       '';
     };
     models = lib.mkOption {

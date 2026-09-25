@@ -834,11 +834,19 @@
           description = "Prose: READMEs, design notes, architecture docs.";
         }
       ];
-      # Files Semble cannot place by suffix, keyed by language.
-      pathMappings.json = {
-        content = "config";
-        patterns = ["flake.lock"];
-      };
+      # Files Semble cannot place by suffix. The first matching entry wins.
+      pathMappings = [
+        {
+          language = "json";
+          content = "docs";
+          patterns = ["docs/*.json"];
+        }
+        {
+          language = "json";
+          content = "config";
+          patterns = ["*.json" "flake.lock"];
+        }
+      ];
     };
     ```
 

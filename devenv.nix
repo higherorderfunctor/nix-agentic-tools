@@ -295,35 +295,40 @@ in {
           tree-sitter-awk
           tree-sitter-jq
         ];
-        pathMappings = {
-          bash = {
+        # First match wins; list narrower patterns first.
+        pathMappings = [
+          {
+            language = "bash";
             content = "code";
             patterns = [
               ".envrc"
               "packages/claude-code/checks/fixtures/claude-hooks/post-edit"
               "packages/claude-code/checks/fixtures/claude-hooks/pre-edit"
             ];
-          };
-          gitignore = {
+          }
+          {
+            language = "gitignore";
             content = "config";
             patterns = [
               ".gitignore"
               ".sembleignore"
               "docs/.gitignore"
             ];
-          };
-          json = {
+          }
+          {
+            language = "json";
             content = "config";
             patterns = [
               "devenv.lock"
               "flake.lock"
             ];
-          };
-          markdown = {
+          }
+          {
+            language = "markdown";
             content = "docs";
             patterns = ["*.md.fixture"];
-          };
-        };
+          }
+        ];
         # AGENTS.md already carries the repository's Semble search workflow from
         # the generated stacked-workflows fragment. Avoid asking devenv `files.*`
         # to replace that tracked real file with the redundant module projection.
