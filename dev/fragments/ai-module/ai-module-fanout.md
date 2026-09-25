@@ -1,21 +1,22 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-24 — every runtime describes delivery once through
-> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
-> transforms reject a backend spec carrying anything but `installPackage`,
-> `migrationConfig` and `options`, since an overridden or hand-built record
-> reaches a transform without the constructor. Kiro hook commands resolve
-> packages through the shared `commandType`. Launchers bake the builder's one
-> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
-> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
-> `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
-> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
-> `agent.fileContent` where it copies, so a store-path string is a file, never a
-> body naming its own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-25 — module-contributed process env rides a
+> per-runtime internal channel, and the Git SSH default never touches the devenv
+> shell. Every runtime describes delivery once through `mkRuntime`'s
+> record-level `config`, and both `mkRuntime` and the backend transforms reject
+> a backend spec carrying anything but `installPackage`, `migrationConfig` and
+> `options`, since an overridden or hand-built record reaches a transform
+> without the constructor. Kiro hook commands resolve packages through the
+> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
+> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
+> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
+> Claude devenv delivers `ai.agents` and `ai.claude.agentsDir` to
+> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
+> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
+> so a store-path string is a file, never a body naming its own path. File
+> content at `mkDefault` enables its entry; `content.enable = false` suppresses
+> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
+> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
@@ -175,10 +176,12 @@ Fix landed in commit f2e911c.
 ### Harness activation also stabilizes Git SSH
 
 `ai.gitSshConfigWorkaround` defaults true. When any supported harness is
-enabled, Home Manager contributes `programs.git.settings.core.sshCommand` and
-devenv contributes `GIT_SSH_COMMAND`, both at `mkDefault` priority. The devenv
-environment setting intentionally covers ordinary Git launched from the dev
-shell as well as Git launched by a harness.
+enabled, Home Manager contributes `programs.git.settings.core.sshCommand` at
+`mkDefault` priority. Without Home Manager's `programs.git` (devenv included),
+each harness receives `GIT_SSH_COMMAND` on its internal module-env channel
+instead: baked into its launcher, or Claude's `settings.env`. It never reaches
+the project shell, so ordinary Git launched from the dev shell is untouched, and
+an explicit `environmentVariables.GIT_SSH_COMMAND` wins.
 
 The shared command is a narrow wrapper around the packaged OpenSSH. It resolves
 `~/.ssh/config`; when that symlink points into `/nix/store`, it passes the same

@@ -112,18 +112,17 @@
     }
     else {};
 
-  # Module-contributed process env, delivered on the internal channel rather
-  # than through `ai.<cli>.environmentVariables` — see the note on
-  # `_sandboxSafeSshCommand` in sharedOptions.nix for why internal contributions
-  # do not belong in the consumer-facing override pool.
+  # Module-contributed process env, delivered on this runtime's internal
+  # channel rather than through `ai.<cli>.environmentVariables` — see
+  # `lib/ai/module-environment.nix` for why internal contributions do not
+  # belong in the consumer-facing override pool. The channel is per runtime,
+  # so a module can hand each harness a different value (the git identity
+  # does); a value every harness shares is simply published to each one.
   #
   # Callers merge this UNDER `mergedEnvironmentVariables`, so an explicit
   # consumer entry for the same key wins. That ordering is the contract; do
   # not flip it at a call site.
-  sandboxSshCommand = config.ai._sandboxSafeSshCommand or null;
-  moduleEnvironmentVariables = lib.optionalAttrs (sandboxSshCommand != null) {
-    GIT_SSH_COMMAND = sandboxSshCommand;
-  };
+  moduleEnvironmentVariables = cfg.internal._moduleEnvironmentVariables;
 
   # A text-source record becomes the DEFAULT of a public normalized option,
   # so every field it carries becomes a definition at one priority. Two
@@ -496,12 +495,26 @@ in {
       };
       internal = lib.mkOption {
         type = lib.types.submodule {
-          options._integration_writable_roots = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
-            default = [];
-            internal = true;
-            visible = false;
-            description = "Writable roots contributed by integrations for runtimes that support them.";
+          options = {
+            _integration_writable_roots = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+              internal = true;
+              visible = false;
+              description = "Writable roots contributed by integrations for runtimes that support them.";
+            };
+            _moduleEnvironmentVariables = lib.mkOption {
+              type = lib.types.attrsOf lib.types.str;
+              default = {};
+              internal = true;
+              visible = false;
+              description = ''
+                Process environment contributed by modules, merged UNDER the
+                consumer's `environmentVariables` into the launcher (Claude:
+                `native.settings.env` at `mkDefault`). Written through
+                `lib/ai/module-environment.nix`; not a consumer surface.
+              '';
+            };
           };
         };
         default = {};

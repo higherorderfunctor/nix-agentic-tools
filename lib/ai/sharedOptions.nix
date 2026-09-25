@@ -19,6 +19,7 @@
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
+  moduleEnvironment = import ./module-environment.nix {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
@@ -370,10 +371,12 @@ in {
         makes missing credentials fail instead of opening a password dialog.
 
         Home Manager contributes `programs.git.settings.core.sshCommand` at
-        `mkDefault` priority. Devenv contributes `GIT_SSH_COMMAND` to the shell
-        environment at `mkDefault` priority so its Git and every harness it
-        launches receive the same behavior. Set this false to manage Git SSH
-        delivery independently.
+        `mkDefault` priority. Elsewhere (devenv, or Home Manager without
+        `programs.git`) each harness's launcher receives `GIT_SSH_COMMAND`
+        (Claude: `settings.env`), so Git a harness spawns gets it while the
+        project shell and the developer's own Git do not. An explicit
+        `environmentVariables.GIT_SSH_COMMAND` wins. Set this false to manage
+        Git SSH delivery independently.
       '';
     };
 
@@ -399,20 +402,6 @@ in {
         `ai.claude.native.settings.env` is its native equivalent (upstream writes
         it into `~/.claude/settings.json`).
       '';
-    };
-
-    # Internal module-to-module channel. NOT a consumer surface: it exists so
-    # `gitSshConfigWorkaround` can reach each harness's launcher wrapper
-    # without writing into the consumer-facing
-    # `ai.<cli>.environmentVariables` override pool. Read by the per-package
-    # factories; `internal` keeps it out of the
-    # generated options documentation.
-    _sandboxSafeSshCommand = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      internal = true;
-      visible = false;
-      description = "Resolved sandbox-safe Git SSH command, delivered to harness wrappers. Set by `gitSshConfigWorkaround`; not for direct use.";
     };
 
     shell = lib.mkOption {
@@ -531,16 +520,12 @@ in {
       then {
         programs.git.settings.core.sshCommand = lib.mkDefault sandboxSafeSshCommand;
       }
-      else {
-        # Published on the INTERNAL channel, never into
-        # `ai.<cli>.environmentVariables`.
-        #
-        # The pool belongs to the consumer. Module contributions ride this
-        # channel and are merged UNDER the pool at each wrapper call site, so
-        # an explicit entry simply wins without a hidden module definition
-        # participating in the normalized pool's provenance guard.
-        ai._sandboxSafeSshCommand = sandboxSafeSshCommand;
-      }
+      else
+        # Published on each runtime's INTERNAL channel, never into
+        # `ai.<cli>.environmentVariables`; see module-environment.nix.
+        moduleEnvironment.publish options (_: {
+          GIT_SSH_COMMAND = sandboxSafeSshCommand;
+        })
     ))
   ];
 }
