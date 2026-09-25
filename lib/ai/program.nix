@@ -2,11 +2,12 @@
 {lib}: let
   aiCommon = import ./ai-common.nix {inherit lib;};
 
-  mapOptionTree = transform:
-    lib.mapAttrs (_: value:
+  # `transform` receives each option's path below the program root.
+  mapOptionTree = transform: path:
+    lib.mapAttrs (name: value:
       if lib.isOption value
-      then transform value
-      else mapOptionTree transform value);
+      then transform (path ++ [name]) value
+      else mapOptionTree transform (path ++ [name]) value);
 
   mkOverrideOption = option: let
     nullableType =
@@ -34,23 +35,59 @@
         else option.apply value;
     };
 
-  resolveTree = declarations: portable: override:
-    lib.mapAttrs (name: declaration:
+  # A keyed pool (an `attrsOf` option listed in the spec's `pools`) is
+  # overridden per key rather than wholesale. Its runtime option holds
+  # nullable entries: a runtime entry replaces the portable entry at the same
+  # key, and a runtime null drops it. This is the keyed-pool rule, applied to
+  # a program option.
+  mkPoolOverrideOption = path: option:
+    assert lib.assertMsg ((option.type.name or null) == "attrsOf")
+    "mkProgram: pool `${lib.concatStringsSep "." path}` must be an attrsOf option.";
+      (builtins.removeAttrs option ["default" "defaultText" "example"])
+      // {
+        default = {};
+        type = lib.types.attrsOf (lib.types.nullOr option.type.nestedTypes.elemType);
+        description = ''
+          ${option.description or ""}
+
+          Runtime override for the portable pool, resolved per key: an entry
+          replaces the portable entry with the same name, and null removes it.
+        '';
+      };
+
+  resolveTree = pools: path: declarations: portable: override:
+    lib.mapAttrs (name: declaration: let
+      optionPath = path ++ [name];
+    in
       if lib.isOption declaration
       then
-        aiCommon.resolveOverride {
-          topValue = portable.${name};
-          cliValue = override.${name};
-        }
-      else resolveTree declaration portable.${name} override.${name})
+        if lib.elem optionPath pools
+        then
+          aiCommon.mergePool {
+            topPool = portable.${name};
+            cliPool = override.${name};
+          }
+        else
+          aiCommon.resolveOverride {
+            topValue = portable.${name};
+            cliValue = override.${name};
+          }
+      else resolveTree pools optionPath declaration portable.${name} override.${name})
     declarations;
 in {
   mkProgram = spec @ {
     name,
     options,
+    # Option paths, relative to the program root, of `attrsOf` options whose
+    # runtime overrides resolve per key (see `mkPoolOverrideOption`).
+    pools ? [],
     supportedRuntimes,
   }: let
-    overrideOptions = mapOptionTree mkOverrideOption options;
+    overrideOptions = mapOptionTree (path: option:
+      if lib.elem path pools
+      then mkPoolOverrideOption path option
+      else mkOverrideOption option) []
+    options;
     mkProgramOption = optionDeclarations: description:
       lib.mkOption {
         type = lib.types.submodule {options = optionDeclarations;};
@@ -58,7 +95,7 @@ in {
         inherit description;
       };
   in {
-    inherit name options spec supportedRuntimes;
+    inherit name options pools spec supportedRuntimes;
 
     module = {
       options.ai =
@@ -74,6 +111,8 @@ in {
       assert lib.assertMsg (builtins.elem runtime supportedRuntimes)
       "Program `${name}` does not support runtime `${runtime}`.";
         resolveTree
+        pools
+        []
         options
         config.ai.programs.${name}
         config.ai.${runtime}.programs.${name};

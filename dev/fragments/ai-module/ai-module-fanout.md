@@ -1,31 +1,8 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-24 — every runtime describes delivery once through
-> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
-> transforms reject a backend spec carrying anything but `installPackage`,
-> `migrationConfig` and `options`, since an overridden or hand-built record
-> reaches a transform without the constructor. Kiro hook commands resolve
-> packages through the shared `commandType`. Launchers bake the builder's one
-> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
-> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
-> `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
-> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
-> `agent.fileContent` where it copies, so a store-path string is a file, never a
-> body naming its own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). A root request nothing per-runtime can withdraw
-> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
-> owned writable copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
-> declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Upstream
-> delegation aliases the content field's own definitions. Ledger-owned copies
-> whose files nothing else retracts opt into `runWhenDisabled`. `ai.lspServers`
-> renders whole files with each runtime's envelope, Copilot/Kiro require
-> `extensions`, and Copilot constrains server names.
+> **Last verified:** 2026-09-25 — `mkProgram` takes a `pools` list: a listed
+> `attrsOf` option resolves per key through `mergePool` at runtime level, and
+> every other leaf keeps the scalar B4 contract.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -680,7 +657,11 @@ tree. The factory projects that into `ai.programs.<name>` plus only the listed
 `ai.<runtime>.programs.<name>` paths. Runtime leaves are nullable and resolve
 independently through `resolveOverride`: null inherits the portable value and a
 non-null value wins. This is the scalar B4 contract, not keyed-pool tombstone
-behavior.
+behavior. The exception is an `attrsOf` option listed in the spec's `pools`
+(Semble's `cli.models`): its runtime option holds nullable entries, and
+`resolveTree` merges it with `mergePool`, so a runtime entry replaces one key
+and a runtime null drops it. Without `pools`, a runtime set would replace the
+whole portable set and silently drop keys the module defines in config.
 
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
