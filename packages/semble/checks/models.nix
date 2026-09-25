@@ -538,6 +538,7 @@ in {
       printf '# Setup\n\ninstall guide beta\n' > repo/GUIDE.md
       printf '{"alpha": "config"}\n' > repo/settings.json
 
+      ${harness.hmRunShim}
       jq=${pkgs.jq}/bin/jq
       warning="semble: no model is configured for content"
       indexes() {
@@ -558,9 +559,10 @@ in {
           exit 1
         fi
       }
-      # run yes|no COMMAND...: whether the command must print the fallback
-      # warning (exactly once) on stderr.
-      run() {
+      # check yes|no COMMAND...: whether the command must print the fallback
+      # warning (exactly once) on stderr. Not named `run`: that is
+      # home-manager's dry-run helper, which the cache guard entry calls.
+      check() {
         expect_warning="$1"
         shift
         "$@" > run.out 2> run.err || { status=$?; cat run.err >&2; echo "FAIL: '$*' exited $status" >&2; exit 1; }
@@ -583,34 +585,41 @@ in {
       # Record the package so the later guard run sees a change.
       ${routed.config.home.activation.sembleCacheGuard.text}
 
-      run no "$semble" search alpha repo
+      check no "$semble" search alpha repo
       expect_indexes "$cache" "index-code-config@${hash codeConfigModel} " "a plain search (defaultContent)"
       expect_model "$cache" "index-code-config@${hash codeConfigModel}" ${codeConfigModel}
 
-      run no "$semble" search "install guide" repo --content docs
-      run no "$semble" find-related README.md 1 repo --content docs
+      check no "$semble" search "install guide" repo --content docs
+      check no "$semble" find-related README.md 1 repo --content docs
       expect_model "$cache" "index-docs@${hash docsModel}" ${docsModel}
 
       # --content replaces defaultContent wholesale: `code` alone has no entry.
-      run yes "$semble" search alpha repo --content code
+      check yes "$semble" search alpha repo --content code
       ${pkgs.gnugrep}/bin/grep -Fx "$warning 'code'; using the default model" run.err
       expect_model "$cache" "index@${hash fallbackModel}" ${fallbackModel}
 
       # The disabled "all" entry routes nothing.
-      run yes "$semble" search alpha repo --content all
+      check yes "$semble" search alpha repo --content all
       expect_indexes "$cache" "index-code-config-docs@${hash fallbackModel} index-code-config@${hash codeConfigModel} index-docs@${hash docsModel} index@${hash fallbackModel} " "every routed search"
 
-      # The cache guard's `semble clear index` reaches every model's index.
+      # The cache guard's `semble clear index` reaches every model's index,
+      # and a home-manager dry run clears none of them.
       printf 'stale\n' > "$cache/.nix-package"
+      (
+      export DRY_RUN=1
+      ${routed.config.home.activation.sembleCacheGuard.text}
+      )
+      expect_indexes "$cache" "index-code-config-docs@${hash fallbackModel} index-code-config@${hash codeConfigModel} index-docs@${hash docsModel} index@${hash fallbackModel} " "a dry-run cache guard"
+      ${pkgs.gnugrep}/bin/grep -Fx stale "$cache/.nix-package"
       ${routed.config.home.activation.sembleCacheGuard.text}
       expect_indexes "$cache" "" "the cache guard"
 
       # ── No models: a default model alone never warns ──
-      run no ${silentPackage}/bin/semble search alpha repo
+      check no ${silentPackage}/bin/semble search alpha repo
       expect_indexes ${silentCacheHome}/semble "index@${hash fallbackModel} " "a default model alone"
 
       # ── Vanilla: upstream's package and its built-in model ──
-      run no ${vanillaPackage}/bin/semble search alpha repo
+      check no ${vanillaPackage}/bin/semble search alpha repo
       expect_indexes ${vanillaCacheHome}/semble "index " "a vanilla search"
       expect_model ${vanillaCacheHome}/semble index minishlab/potion-code-16M-v2
 
