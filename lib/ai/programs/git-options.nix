@@ -57,7 +57,10 @@ in {
         `programs.git` are never touched. The identity covers HTTPS to
         github.com: a remote that stays SSH (including one a `pushInsteadOf`
         in your own config rewrites to SSH) still authenticates as whoever
-        your SSH config says
+        your SSH config says. A repository's own config (`.git/config`, and
+        `config.worktree`) is read AFTER this file and wins over it: a
+        repo-local `user.email`, signing key or switch, or credential helper
+        applies to the agent's commits and pushes in that repository
       '';
 
       credentials = mkCredentialsOptionWith {
@@ -74,6 +77,11 @@ in {
 
           Left null, nothing is reset: git uses whatever helper your own
           config sets for github.com, which may be your token.
+
+          Not covered either way: a helper set in a repository's own
+          `.git/config` or `config.worktree` is read after the reset, so it
+          is not dropped. git sends `store` and `erase` to every helper, so
+          it receives the agent's token and can save it.
         '';
         file = ''
           Path to a file holding the raw GitHub token, read by the credential
@@ -143,8 +151,10 @@ in {
           description = ''
             Sign every commit and tag. Rendered as `commit.gpgSign`,
             `tag.gpgSign` and `tag.forceSignAnnotated` whether true or false,
-            so a signing default in your own config never signs the agent's
-            commits or annotated tags with your key.
+            so a signing default in your own global or XDG config never signs
+            the agent's commits or annotated tags with your key. A
+            repository's own `.git/config` or `config.worktree` is read after
+            this and still can.
             Evaluation fails for an enabled harness that signs (through this
             or `settings`) while no key or format resolves.
           '';

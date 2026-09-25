@@ -211,6 +211,10 @@
         message = "${prefix}.git signs commits or tags but no signing format resolves for ${state.runtime}. Set ai.programs.git.signing.format (\"ssh\", \"openpgp\" or \"x509\").";
       }
       {
+        assertion = tokenFile == null || lib.hasPrefix "/" tokenFile;
+        message = "${prefix}.git.credentials.file is not an absolute path. The credential helper reads it verbatim: nothing expands `~`, and a relative path resolves against the repository git is working in. Pass an absolute path.";
+      }
+      {
         assertion = !underStore tokenFile;
         message = "${prefix}.git.credentials.file points into ${builtins.storeDir}, where the token is world-readable. Pass the path of a decrypted secret as a string.";
       }

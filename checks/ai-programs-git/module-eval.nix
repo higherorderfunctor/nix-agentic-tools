@@ -263,6 +263,8 @@ in {
             };
           };
         storeToken = eval {ai.programs.git.credentials.file = "${builtins.storeDir}/00000000000000000000000000000000-token";};
+        homeToken = eval {ai.codex.programs.git.credentials.file = "~/.secrets/ai-github-token";};
+        relativeToken = eval {ai.codex.programs.git.credentials.file = "ai-github-token";};
         noGhDir = eval {ai.programs.gh.configDir = null;};
         storeGhDir = eval {ai.codex.programs.gh.configDir = "${builtins.storeDir}/00000000000000000000000000000000-gh";};
         homeGhDir = eval {ai.codex.programs.gh.configDir = "~/.config/ai-gh";};
@@ -287,6 +289,8 @@ in {
         && ourFailures (keyViaSettings {signingkey = "/run/secrets/kiro-key";}) == []
         && lib.length (ourFailures storeToken) == lib.length harnessNames
         && builtins.any (lib.hasPrefix "ai.codex.programs.git.credentials.file points into") (ourFailures storeToken)
+        && only "ai.codex.programs.git.credentials.file is not an absolute path" homeToken
+        && only "ai.codex.programs.git.credentials.file is not an absolute path" relativeToken
         && builtins.any (lib.hasPrefix "ai.codex.programs.gh.enable needs a config directory") (ourFailures noGhDir)
         && only "ai.codex.programs.gh.configDir points into" storeGhDir
         && only "ai.codex.programs.gh.configDir is not an absolute path" homeGhDir
