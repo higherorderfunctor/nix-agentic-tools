@@ -144,6 +144,92 @@ composed registry and ninja DAG:
   along with the openmemory-mcp backend it fed. The shape is kept in this
   taxonomy because nothing about it was wrong; it simply has no consumer.
 
+## Model weights: `lib.packaging.fetchHuggingFaceModel`
+
+nixpkgs already ships `pkgs.fetchFromHuggingFace`: `fetchgit` with Git LFS, a
+`repoId`, a `rev` or `tag`, `repoType`, `domain`, `sparseCheckout` (with
+`nonConeMode` for exact paths or gitignore-style globs), every other `fetchgit`
+option, `hash`, `meta` and `passthru`. `lib.packaging.fetchHuggingFaceModel` on
+this flake's outputs is a thin wrapper over it. You pass your own `pkgs` in the
+same attribute set, so the fetch is built on your nixpkgs and your `allowUnfree`
+settings apply:
+
+```nix
+inputs.nix-agentic-tools.lib.packaging.fetchHuggingFaceModel {
+  inherit pkgs;
+  repoId = "minishlab/potion-base-32M";
+  rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
+  files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
+  hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
+  license = pkgs.lib.licenses.mit;
+}
+```
+
+The result is a directory holding the selected files, with subdirectories kept.
+A tool that loads a model from a local directory can be pointed straight at it.
+Git LFS downloads only the selected files, so a repository's other weight
+formats are never fetched.
+
+It lives in the flake's `lib` for now. Where it ends up is open until the
+module-system rework settles; expect it to move then.
+
+Every nixpkgs argument passes through, except as listed below:
+
+- **`backend` defaults to `"lfs"`.** nixpkgs defaults to `"xet"`, which throws
+  "not implemented yet".
+- **`files`: exact repo paths.** They become `nonConeMode = true` plus anchored
+  `sparseCheckout` patterns (`"config.json"` becomes `"/config.json"`), with
+  `*`, `?` and `[` escaped so they match literally. Paths must be relative,
+  unique ignoring case, and free of empty, `.` and `..` segments.
+- **`sparseCheckout` for globs.** Pass it instead of `files` to pick file types,
+  for example `["/*.json" "/*.safetensors"]`. The wrapper defaults `nonConeMode`
+  to true here too. In cone mode every entry is a directory and every file at
+  the repository root is always checked out, so `"/*.json"` would also fetch
+  `README.md`, `.gitattributes` and the rest of the root. Passing both `files`
+  and `sparseCheckout` is an error.
+- **`rev` must be a full 40-hex commit, and `tag` is refused.** Branches and
+  tags can move, and the default name and version come from the commit. The
+  commit is the `sha` field of
+  `https://huggingface.co/api/models/<owner>/<repo>`, or an entry in the
+  repository's commit history.
+- **`license` defaults to `lib.licenses.unfree`, on purpose.** nixpkgs has no
+  `licenses.unknown`, and check-meta counts a derivation with no `meta.license`
+  as free (`hasUnfreeLicense` requires `meta.license` to be set). So weights
+  whose licence nobody stated need `allowUnfree` (or an `allowUnfreePredicate`)
+  to evaluate, and Hydra-style public caches will not build them. That does not
+  stop you pushing them to a cache of your own. Read the `license:` field of the
+  repository's `README.md` front matter at the pinned `rev` and pass the
+  matching `lib.licenses.*` value. Pass it as `license`, not `meta.license`.
+- **`licenseFile` / `attribution`** are optional, for licences that require the
+  notice to travel with the work when the repository does not ship it. If the
+  repository ships its own `LICENSE`, select it instead. Setting either wraps
+  the fetched tree in a derivation that symlinks its top-level entries and adds
+  `LICENSE` / `ATTRIBUTION` at the root. The build fails if the fetched tree
+  already has that name, in any case. The wrapper links the same fetched tree,
+  exposed as `passthru.fetched`, so the weights are stored once. Both layers
+  carry the same `meta`, licence included.
+- **`name`** defaults to the lowercased repo plus the short rev (nixpkgs uses
+  `"source"`), and `meta.description` to
+  `<repoId> at <short rev> (Hugging Face)`. `pname` is always the lowercased
+  repo and `version` the short rev, so an `allowUnfreePredicate` on
+  `lib.getName` survives rev bumps and `name` overrides. `meta.position` points
+  at your `rev`, not at the wrapper.
+- **No `.override`.** The one nixpkgs attaches would call `fetchFromHuggingFace`
+  directly, skipping the defaults and checks above, and keep the old name after
+  a rev change. Call the wrapper again instead. `.overrideAttrs` is kept.
+
+Getting the hash works as for any fixed-output fetcher. Pass
+`hash = lib.fakeHash`, build, and copy the `got:` value. The store path depends
+only on the name and hash, and the default name does not encode the selection.
+So set `hash = lib.fakeHash` again after every change to `files` or
+`sparseCheckout`, or Nix finds the old path already valid and silently returns
+the old tree.
+
+The wrapper is defined in `lib/packaging.nix`.
+`checks/packaging/fetch-hugging-face-model.nix` tests it offline: a stub fetcher
+records what it passes to nixpkgs, and the real fetcher is only evaluated.
+Fetching itself is nixpkgs' to test.
+
 ## Package table
 
 | Package              | Group      | Source                  | Build                     | nixpkgs               | Tests         | Smoke               |

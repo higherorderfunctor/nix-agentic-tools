@@ -199,6 +199,7 @@ hooksdir
 hostable
 hotspots
 hsjobeki
+huggingface
 idempotently
 idents
 indexedlog
@@ -241,6 +242,7 @@ libsets
 libstdc
 libx
 licence
+licences
 lifecycles
 lintable
 linuxbrew

@@ -1,0 +1,167 @@
+# fetch-hugging-face-model — lib.packaging.fetchHuggingFaceModel, offline.
+# nixpkgs owns and tests the fetching itself.
+#
+# The wrapper takes the caller's `pkgs` as an argument, and this check passes
+# two, neither of which touches the network:
+# - `stubbed` is pkgs with a fetchFromHuggingFace that records the arguments
+#   the wrapper passed and writes one small file per sparseCheckout entry, so
+#   the LICENSE / ATTRIBUTION layer can actually be built.
+# - the real pkgs is only EVALUATED (name, meta, drvPath). That is enough for
+#   getName and the licence gate, and proves nixpkgs accepts what the wrapper
+#   passes.
+# Both go through the flake's public self.lib, so the exposure is tested too.
+{
+  lib,
+  pkgs,
+  self,
+  ...
+}: let
+  inherit (pkgs.stdenv.hostPlatform) system;
+  inherit (self.lib.packaging) fetchHuggingFaceModel;
+  rev = "0123456789abcdef0123456789abcdef01234567";
+  files = ["1_Pooling/config.json" "config.json"];
+  base = {
+    inherit files rev;
+    hash = lib.fakeHash;
+    repoId = "fixture-owner/Fixture-Model";
+  };
+  attribution = "Literal shell text: $(false) `false` $out";
+  licenseFile = pkgs.writeText "fixture-license" "Fixture licence text.";
+  mit = {license = lib.licenses.mit;};
+  noticed = mit // {inherit attribution licenseFile;};
+
+  stub = args:
+    pkgs.runCommand args.name {
+      inherit (args) meta;
+      passthru = args.passthru // {inherit args;};
+    } ''
+      for path in ${lib.escapeShellArgs (map (lib.removePrefix "/") args.sparseCheckout)}; do
+        mkdir -p "$out/$(dirname "$path")"
+        printf '%s\n' "$path" > "$out/$path"
+      done
+    '';
+  stubbed = pkgs // {fetchFromHuggingFace = stub;};
+  fake = overrides: fetchHuggingFaceModel ({pkgs = stubbed;} // base // overrides);
+  passed = overrides: (fake overrides).args;
+
+  real = overrides: fetchHuggingFaceModel ({inherit pkgs;} // base // overrides);
+  rejects = overrides: !(builtins.tryEval (real overrides).drvPath).success;
+  # The licence gate itself, not just the meta value: check-meta must refuse
+  # the unfree default on both layers once the CALLER's allowUnfree is off.
+  strict = import pkgs.path {
+    inherit system;
+    config.allowUnfree = false;
+  };
+  evaluates = overrides: (builtins.tryEval (fetchHuggingFaceModel ({pkgs = strict;} // base // overrides)).drvPath).success;
+
+  plain = fake {};
+  noticedTree = fake noticed;
+  attributedTree = fake {inherit attribution;};
+  collision = pkgs.testers.testBuildFailure (fake {
+    inherit licenseFile;
+    files = ["license"];
+  });
+in {
+  # Exposure: a plain function on the public lib, the only packaging helper
+  # exported there, and neither an overlay leaf nor a flake package.
+  checks.fetch-hugging-face-model = assert builtins.isFunction self.lib.packaging.fetchHuggingFaceModel;
+  assert builtins.attrNames self.lib.packaging == ["fetchHuggingFaceModel"];
+  assert !(pkgs.ai or {} ? fetchHuggingFaceModel);
+  assert !(pkgs ? fetchHuggingFaceModel);
+  assert !(self.packages.${system} ? fetchHuggingFaceModel);
+  # `pkgs` is consumed, never handed to nixpkgs.
+  assert !(passed {} ? pkgs);
+  # What the wrapper hands nixpkgs.
+  assert (passed {}).backend == "lfs";
+  assert (passed {backend = "xet";}).backend == "xet";
+  assert (passed {}).nonConeMode;
+  assert (passed {}).sparseCheckout == ["/1_Pooling/config.json" "/config.json"];
+  assert (passed {files = ["a*b?[c]\\d"];}).sparseCheckout == ["/a\\*b\\?\\[c]\\\\d"];
+  assert (passed {
+    files = null;
+    sparseCheckout = ["/*.json"];
+  }).sparseCheckout
+  == ["/*.json"];
+  assert (passed {
+    files = null;
+    sparseCheckout = ["/*.json"];
+  }).nonConeMode;
+  assert !(passed {
+    files = null;
+    nonConeMode = false;
+    sparseCheckout = ["onnx"];
+  }).nonConeMode;
+  assert !(passed {files = null;} ? sparseCheckout);
+  assert (passed {fetchSubmodules = true;}).fetchSubmodules;
+  assert (passed {}).name == "fixture-model-0123456";
+  assert (passed {name = "custom";}).name == "custom";
+  assert removeAttrs (passed {}).derivationArgs ["pos"]
+  == {
+    pname = "fixture-model";
+    version = "0123456";
+  };
+  assert (passed {derivationArgs.extra = 1;}).derivationArgs.extra == 1;
+  assert (fake {passthru.extra = 1;}).extra == 1;
+  assert (fake (noticed // {passthru.extra = 1;})).extra == 1;
+  assert (passed {}).meta.description == "fixture-owner/Fixture-Model at 0123456 (Hugging Face)";
+  assert (passed {}).meta.license == lib.licenses.unfree;
+  assert (passed {meta.description = "custom";}).meta.description == "custom";
+  assert (passed mit).meta.license == lib.licenses.mit;
+  assert noticedTree.fetched.args.meta.license == lib.licenses.mit;
+  assert noticedTree.meta.license == lib.licenses.mit;
+  # Accepted by the real fetcher, with a stable getName.
+  assert (real {}).name == "fixture-model-0123456";
+  assert lib.getName (real {}) == "fixture-model";
+  assert lib.getName (real {name = "custom";}) == "fixture-model";
+  assert lib.getName (real noticed) == "fixture-model";
+  assert lib.getName (real (noticed // {name = "custom";})) == "fixture-model";
+  assert lib.getName (real {rev = "abcdef0123456789abcdef0123456789abcdef01";}) == "fixture-model";
+  assert (real {}).meta.homepage == "https://huggingface.co/fixture-owner/Fixture-Model";
+  assert (real noticed).fetched.outPath == (real mit).outPath;
+  # meta.position names the caller, not the wrapper.
+  assert lib.hasInfix "/checks/packaging/fetch-hugging-face-model.nix:" (real {}).meta.position;
+  assert lib.hasInfix "/checks/packaging/fetch-hugging-face-model.nix:" (real noticed).meta.position;
+  # No makeOverridable `override`: it would skip the wrapper.
+  assert !((real {}) ? override || (real {}) ? overrideDerivation);
+  assert (real {}) ? overrideAttrs && (real noticed) ? overrideAttrs;
+  # The licence gate on both layers.
+  assert !(evaluates {});
+  assert !(evaluates {inherit attribution;});
+  assert evaluates mit;
+  assert evaluates noticed;
+  # Rejects.
+  assert !(rejects {});
+  assert rejects {rev = "main";};
+  assert rejects {rev = builtins.substring 0 7 rev;};
+  assert rejects {
+    rev = null;
+    tag = "v1";
+  };
+  assert rejects {tag = "v1";};
+  # The wrapper's own refusal: the stub has no rev/tag xor of its own.
+  assert !(builtins.tryEval (fake {tag = "v1";}).drvPath).success;
+  assert rejects {meta.license = lib.licenses.mit;};
+  assert rejects {sparseCheckout = ["/*.json"];};
+  assert rejects {files = [];};
+  assert rejects {files = ["../x"];};
+  assert rejects {files = ["a/../x"];};
+  assert rejects {files = ["./x"];};
+  assert rejects {files = ["/abs"];};
+  assert rejects {files = [""];};
+  assert rejects {files = ["a//b"];};
+  assert rejects {files = ["config.json" "Config.json"];};
+    pkgs.runCommand "fetch-hugging-face-model" {} ''
+      for file in ${lib.escapeShellArgs files}; do
+        cmp "${plain}/$file" "${noticedTree}/$file"
+      done
+      test -L ${noticedTree}/1_Pooling
+      test ! -e ${plain}/LICENSE
+      test ! -e ${plain}/ATTRIBUTION
+      test ! -e ${attributedTree}/LICENSE
+      cmp ${noticedTree}/LICENSE ${licenseFile}
+      printf '%s' ${lib.escapeShellArg attribution} | cmp - ${attributedTree}/ATTRIBUTION
+      printf '%s' ${lib.escapeShellArg attribution} | cmp - ${noticedTree}/ATTRIBUTION
+      grep -q 'already has LICENSE' ${collision}/testBuildFailure.log
+      touch "$out"
+    '';
+}
