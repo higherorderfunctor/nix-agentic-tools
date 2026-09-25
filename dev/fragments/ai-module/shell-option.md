@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-09-25 — module-contributed env rides the per-runtime
 > internal channel `ai.<runtime>.internal._moduleEnvironmentVariables`, found
-> through the option tree so downstream `mkRuntime` runtimes get it too.
+> through the option tree so downstream `mkRuntime` runtimes get it too; HM
+> ships Codex bare only while that channel is empty.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -179,9 +180,11 @@ three runtimes demonstrably do not perform.
   `programs.git`, so the sandbox-safe Git SSH default (`gitSshConfigWorkaround`,
   on by default) lands on Codex's internal module-env channel — which means
   enabling Codex on devenv ALWAYS builds a wrapper, while Home Manager ships it
-  bare. That divergence is asserted by `module-codex-enabled-installs-package`;
-  if you are wondering why the two backends install different store paths, this
-  is why, and it is intended.
+  bare when no module env is published (for example with `ai.programs.git` and
+  `ai.programs.gh` off; either one puts `GIT_CONFIG_GLOBAL` or `GH_CONFIG_DIR`
+  on the channel and HM wraps too). That divergence is asserted by
+  `module-codex-enabled-installs-package`; if you are wondering why the two
+  backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it

@@ -9,7 +9,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 > **Last verified:** 2026-09-25 — module-contributed process env rides a
 > per-runtime internal channel, which carries `ai.programs.git`'s per-harness
-> identity; its gitconfig pins `tag.forceSignAnnotated`, and `mkProgram` takes
+> identity; its gitconfig pins `tag.forceSignAnnotated`, its signing assertions
+> read the body case-insensitively as git does, and `mkProgram` takes
 > `overrideDescriptions` for a leaf it does not resolve.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
@@ -214,8 +215,11 @@ an explicit consumer entry wins. Invariants, each load-bearing:
   by default signs the agent's commits, or its `git tag -m` tags, with the
   user's key. With no agent key the user's `user.signingKey` is still inherited,
   so an explicit `-S`/`-s` signs as the user; the option text says so. The key
-  and format assertions judge the rendered body, so signing switched on through
-  `settings` is held to them.
+  and format assertions judge the rendered body as git reads it: section and key
+  names case-insensitively, the last rendered spelling winning, and
+  `true`/`yes`/`on`/non-zero as true. `settings` deep-merges by exact name, so
+  `commit.gpgsign` renders BESIDE the derived `gpgSign` instead of replacing it;
+  a lookup by exact name let that switch signing on unchecked.
 - **Include order is git's own:** the XDG config, then `~/.gitconfig`. git
   expands no env var in `include.path`, so the XDG root is fixed at eval
   (`xdg.configHome` on HM, `~/.config` on devenv).
@@ -227,7 +231,10 @@ an explicit consumer entry wins. Invariants, each load-bearing:
   Copilot, `GH_CONFIG_DIR` also feeds its last-resort `gh` login. Both are
   stated in the `gh` option text.
 - A signing key is a string refused under the store (a path literal would copy
-  the key there). `signByDefault` with a null key or format is an assertion
+  the key there); so are `credentials.file` and `gh.configDir` (assertions).
+  `settings.user.signingKey` is NOT refused: git also takes a public key file or
+  a `key::` literal there for agent-backed ssh signing, and a public key in the
+  store is harmless. `signByDefault` with a null key or format is an assertion
   failure for an enabled runtime, never a silent unsigned commit.
 
 `module-ai-programs-git-rendered-gitconfig` reads the file with real git. When
@@ -1657,7 +1664,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 > **Last verified:** 2026-09-25 — module-contributed env rides the per-runtime
 > internal channel `ai.<runtime>.internal._moduleEnvironmentVariables`, found
-> through the option tree so downstream `mkRuntime` runtimes get it too.
+> through the option tree so downstream `mkRuntime` runtimes get it too; HM
+> ships Codex bare only while that channel is empty.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1834,9 +1842,11 @@ three runtimes demonstrably do not perform.
   `programs.git`, so the sandbox-safe Git SSH default (`gitSshConfigWorkaround`,
   on by default) lands on Codex's internal module-env channel — which means
   enabling Codex on devenv ALWAYS builds a wrapper, while Home Manager ships it
-  bare. That divergence is asserted by `module-codex-enabled-installs-package`;
-  if you are wondering why the two backends install different store paths, this
-  is why, and it is intended.
+  bare when no module env is published (for example with `ai.programs.git` and
+  `ai.programs.gh` off; either one puts `GIT_CONFIG_GLOBAL` or `GH_CONFIG_DIR`
+  on the channel and HM wraps too). That divergence is asserted by
+  `module-codex-enabled-installs-package`; if you are wondering why the two
+  backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it

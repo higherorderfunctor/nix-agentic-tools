@@ -7,7 +7,8 @@ applyTo: "packages/copilot-cli/checks/copilot-wrapper-argv.nix,packages/chatgpt-
 
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-09-24 — devenv reconciles settings into the fixed
+> **Last verified:** 2026-09-25 — Home Manager keeps the bare package only while
+> no module env is published. devenv reconciles settings into the fixed
 > repository file `.github/copilot/settings.json` and writes LSP config to
 > `<projectDir>/lsp.json` (both measured at copilot-cli 1.0.88), so `configDir`
 > holds only the wrapper-aimed `mcp-config.json`. The repository file is read
@@ -293,7 +294,9 @@ attrset and onto the wrapper on both backends. On devenv the env arm is
 effectively always live, because the default-on `gitSshConfigWorkaround`
 contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
 MCP-less devenv project no longer keeps the bare package. Home Manager still
-does, since it states that default in Git's own config instead.
+does when no module env is published (for example with `ai.programs.git` and
+`ai.programs.gh` off), since it states that SSH default in Git's own config
+instead; either identity puts its variables on the channel and HM wraps too.
 
 ### Where LSP and settings go
 

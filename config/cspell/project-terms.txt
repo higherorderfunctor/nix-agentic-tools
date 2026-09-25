@@ -150,6 +150,7 @@ fixpoint
 foldl
 foldr
 footgun
+forcesignannotated
 formedness
 frepo
 frontloaded
@@ -425,6 +426,7 @@ setext
 shellharden
 shortrev
 sigmask
+signingkey
 sigpipe
 sigtool
 sixel

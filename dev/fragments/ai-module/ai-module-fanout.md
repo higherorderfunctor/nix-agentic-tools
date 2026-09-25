@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-09-25 — module-contributed process env rides a
 > per-runtime internal channel, which carries `ai.programs.git`'s per-harness
-> identity; its gitconfig pins `tag.forceSignAnnotated`, and `mkProgram` takes
+> identity; its gitconfig pins `tag.forceSignAnnotated`, its signing assertions
+> read the body case-insensitively as git does, and `mkProgram` takes
 > `overrideDescriptions` for a leaf it does not resolve.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
@@ -207,8 +208,11 @@ an explicit consumer entry wins. Invariants, each load-bearing:
   by default signs the agent's commits, or its `git tag -m` tags, with the
   user's key. With no agent key the user's `user.signingKey` is still inherited,
   so an explicit `-S`/`-s` signs as the user; the option text says so. The key
-  and format assertions judge the rendered body, so signing switched on through
-  `settings` is held to them.
+  and format assertions judge the rendered body as git reads it: section and key
+  names case-insensitively, the last rendered spelling winning, and
+  `true`/`yes`/`on`/non-zero as true. `settings` deep-merges by exact name, so
+  `commit.gpgsign` renders BESIDE the derived `gpgSign` instead of replacing it;
+  a lookup by exact name let that switch signing on unchecked.
 - **Include order is git's own:** the XDG config, then `~/.gitconfig`. git
   expands no env var in `include.path`, so the XDG root is fixed at eval
   (`xdg.configHome` on HM, `~/.config` on devenv).
@@ -220,7 +224,10 @@ an explicit consumer entry wins. Invariants, each load-bearing:
   Copilot, `GH_CONFIG_DIR` also feeds its last-resort `gh` login. Both are
   stated in the `gh` option text.
 - A signing key is a string refused under the store (a path literal would copy
-  the key there). `signByDefault` with a null key or format is an assertion
+  the key there); so are `credentials.file` and `gh.configDir` (assertions).
+  `settings.user.signingKey` is NOT refused: git also takes a public key file or
+  a `key::` literal there for agent-backed ssh signing, and a public key in the
+  store is harmless. `signByDefault` with a null key or format is an assertion
   failure for an enabled runtime, never a silent unsigned commit.
 
 `module-ai-programs-git-rendered-gitconfig` reads the file with real git. When

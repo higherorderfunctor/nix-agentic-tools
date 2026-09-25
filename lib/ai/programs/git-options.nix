@@ -176,7 +176,9 @@ in {
           Directory holding the harness's `gh` `config.yml` and `hosts.yml`,
           published as `GH_CONFIG_DIR`. It is not created or written here:
           render `hosts.yml` (it holds the token) with your secrets tool, or
-          run `gh auth login` against it once. Required when `enable` is set.
+          run `gh auth login` against it once. Required when `enable` is set;
+          evaluation fails for a directory under the store, where the token
+          would be world-readable and gh cannot write.
         '';
       };
     };

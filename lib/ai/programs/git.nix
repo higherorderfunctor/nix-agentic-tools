@@ -156,36 +156,75 @@
         GH_CONFIG_DIR = state.ghCfg.configDir;
       });
 
-  # Judged on the rendered body, so signing switched on through `settings`
-  # is held to the same rule and a key supplied there counts.
+  # The value git would read for `section.key` in the rendered body. git
+  # matches section and key names case-insensitively and the last value
+  # wins; `toGitINI` renders names in sorted order, so every spelling is
+  # collected in that order and the last one taken. `settings` deep-merges
+  # by exact name, so `commit.gpgsign` sits BESIDE the derived `gpgSign`
+  # rather than replacing it.
+  gitValue = body: section: key: let
+    matching = name: attrs:
+      lib.filter (candidate: lib.toLower candidate == lib.toLower name) (lib.attrNames attrs);
+    values = lib.concatMap (sectionName: let
+      sectionBody = body.${sectionName};
+    in
+      lib.optionals (lib.isAttrs sectionBody)
+      (lib.concatMap (keyName: lib.toList sectionBody.${keyName}) (matching key sectionBody)))
+    (matching section body);
+  in
+    if values == []
+    then null
+    else lib.last values;
+
+  # git's boolean spellings: `true`/`yes`/`on` in any case, or a non-zero
+  # integer.
+  gitTrue = value:
+    value
+    == true
+    || (lib.isInt value && value != 0)
+    || (lib.isString value
+      && (lib.elem (lib.toLower value) ["true" "yes" "on"]
+        || (builtins.match "-?[0-9]+" value != null && builtins.match "-?0+" value == null)));
+
+  underStore = path: path != null && lib.hasPrefix "${builtins.storeDir}/" path;
+
+  # Judged on the rendered body, as git reads it, so signing switched on
+  # through `settings` — in any key spelling — is held to the same rule and a
+  # key supplied there counts.
   assertionsFor = state: let
     prefix = "ai.${state.runtime}.programs";
-    inherit (state) body;
-    signs = lib.any (value: value == true) [
-      (body.commit.gpgSign or false)
-      (body.tag.forceSignAnnotated or false)
-      (body.tag.gpgSign or false)
+    read = gitValue state.body;
+    signs = lib.any gitTrue [
+      (read "commit" "gpgSign")
+      (read "tag" "forceSignAnnotated")
+      (read "tag" "gpgSign")
     ];
     tokenFile = (state.gitCfg.credentials or {}).file or null;
   in
     lib.optionals state.gitActive [
       {
-        assertion = !signs || (body.user.signingKey or null) != null;
+        assertion = !signs || read "user" "signingKey" != null;
         message = "${prefix}.git signs commits or tags but no signing key resolves for ${state.runtime}. Set ai.programs.git.signing.key or ${prefix}.git.signing.key; git would otherwise sign with whatever key your own config names, or fail.";
       }
       {
-        assertion = !signs || (body.gpg.format or null) != null;
+        assertion = !signs || read "gpg" "format" != null;
         message = "${prefix}.git signs commits or tags but no signing format resolves for ${state.runtime}. Set ai.programs.git.signing.format (\"ssh\", \"openpgp\" or \"x509\").";
       }
       {
-        assertion = tokenFile == null || !lib.hasPrefix "${builtins.storeDir}/" tokenFile;
+        assertion = !underStore tokenFile;
         message = "${prefix}.git.credentials.file points into ${builtins.storeDir}, where the token is world-readable. Pass the path of a decrypted secret as a string.";
       }
     ]
-    ++ lib.optional state.ghActive {
-      assertion = state.ghCfg.configDir != null;
-      message = "${prefix}.gh.enable needs a config directory: set ai.programs.gh.configDir or ${prefix}.gh.configDir.";
-    };
+    ++ lib.optionals state.ghActive [
+      {
+        assertion = state.ghCfg.configDir != null;
+        message = "${prefix}.gh.enable needs a config directory: set ai.programs.gh.configDir or ${prefix}.gh.configDir.";
+      }
+      {
+        assertion = !underStore state.ghCfg.configDir;
+        message = "${prefix}.gh.configDir points into ${builtins.storeDir}, where hosts.yml and its token are world-readable and gh cannot write. Pass a writable directory outside the store as a string.";
+      }
+    ];
 in {
   imports = [git.module gh.module];
 

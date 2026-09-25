@@ -207,40 +207,64 @@ in {
     );
 
     # Signing with nothing to sign with is an eval error (assertion), judged
-    # on the rendered body so `settings` is held to the same rule; so is a
-    # token under the store and gh without a directory. Only enabled runtimes
+    # on the rendered body as git reads it, so `settings` in any key spelling
+    # is held to the same rule; so is a token under the store, and gh with no
+    # directory or one under the store. Only enabled runtimes
     # are held to it, and the full identity is the positive control.
     module-ai-programs-git-assertions = mkTest "ai-programs-git-assertions" (
       builtins.all (backend: let
         eval = config: backends.${backend} (lib.recursiveUpdate identity config);
         noKey = eval {ai.kiro.programs.git.signing.key = null;};
         noFormat = eval {ai.programs.git.signing.format = null;};
-        settingsSigns = eval {
+        # Signing switched on through `settings`, unsigned by `signing`. git
+        # reads keys case-insensitively and "true"/"yes"/"on"/1 as true, so
+        # every spelling must trip the key assertion.
+        signsVia = settings:
+          eval {
+            ai = {
+              programs.git = {
+                signing.signByDefault = false;
+                inherit settings;
+              };
+              kiro.programs.git.signing.key = null;
+            };
+          };
+        signingSpellings = map signsVia [
+          {commit.gpgSign = true;}
+          {commit.gpgsign = true;}
+          {commit.gpgSign = "true";}
+          {commit.gpgsign = "ON";}
+          {tag.forceSignAnnotated = true;}
+          {tag.gpgsign = 1;}
+        ];
+        # The reverse: the last spelling git reads wins, and each lowercase
+        # key renders after its derived camelCase twin, so these switch
+        # signing OFF and no key is needed.
+        signsOffLowercase = eval {
           ai = {
             programs.git = {
-              signing.signByDefault = false;
-              settings.commit.gpgSign = true;
+              signing.signByDefault = true;
+              settings = {
+                commit.gpgsign = false;
+                tag = {
+                  forcesignannotated = "no";
+                  gpgsign = 0;
+                };
+              };
             };
             kiro.programs.git.signing.key = null;
           };
         };
-        forceSignSigns = eval {
-          ai = {
-            programs.git = {
-              signing.signByDefault = false;
-              settings.tag.forceSignAnnotated = true;
+        keyViaSettings = key:
+          eval {
+            ai.kiro.programs.git = {
+              signing.key = null;
+              settings.user = key;
             };
-            kiro.programs.git.signing.key = null;
           };
-        };
-        keyViaSettings = eval {
-          ai.kiro.programs.git = {
-            signing.key = null;
-            settings.user.signingKey = "/run/secrets/kiro-key";
-          };
-        };
         storeToken = eval {ai.programs.git.credentials.file = "${builtins.storeDir}/00000000000000000000000000000000-token";};
         noGhDir = eval {ai.programs.gh.configDir = null;};
+        storeGhDir = eval {ai.codex.programs.gh.configDir = "${builtins.storeDir}/00000000000000000000000000000000-gh";};
         disabledRuntime = eval {
           ai.kiro = {
             enable = false;
@@ -255,12 +279,14 @@ in {
         only "ai.kiro.programs.git signs commits or tags but no signing key" noKey
         && lib.length (ourFailures noFormat) == lib.length harnessNames
         && builtins.any (lib.hasPrefix "ai.claude.programs.git signs commits or tags but no signing format") (ourFailures noFormat)
-        && only "ai.kiro.programs.git signs commits or tags but no signing key" settingsSigns
-        && only "ai.kiro.programs.git signs commits or tags but no signing key" forceSignSigns
-        && ourFailures keyViaSettings == []
+        && builtins.all (only "ai.kiro.programs.git signs commits or tags but no signing key") signingSpellings
+        && ourFailures signsOffLowercase == []
+        && ourFailures (keyViaSettings {signingKey = "/run/secrets/kiro-key";}) == []
+        && ourFailures (keyViaSettings {signingkey = "/run/secrets/kiro-key";}) == []
         && lib.length (ourFailures storeToken) == lib.length harnessNames
         && builtins.any (lib.hasPrefix "ai.codex.programs.git.credentials.file points into") (ourFailures storeToken)
         && builtins.any (lib.hasPrefix "ai.codex.programs.gh.enable needs a config directory") (ourFailures noGhDir)
+        && only "ai.codex.programs.gh.configDir points into" storeGhDir
         && ourFailures disabledRuntime == []
         && ourFailures (backends.${backend} identity) == [])
       (builtins.attrNames backends)
