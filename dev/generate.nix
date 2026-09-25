@@ -813,7 +813,7 @@
     `.kiro/steering/semble.md`.
 
     `cli.models` adds per-key embedding models for the CLI, each a pinned
-    model package such as a `lib.packaging.fetchFromHuggingFace` output.
+    model package such as a `pkgs.ai.fetchHuggingFaceModel` output.
     `semble --model prose search …` routes to one, and the generated guidance
     tells agents which model fits which search. The read-only
     `ai.programs.semble.finalPackage` is the resulting package, for
@@ -821,10 +821,8 @@
 
     ```nix
     ai.programs.semble.cli.models.prose = {
-      model = inputs.nix-agentic-tools.lib.packaging.fetchFromHuggingFace {
-        inherit pkgs;
-        owner = "minishlab";
-        repo = "potion-base-32M";
+      model = pkgs.ai.fetchHuggingFaceModel {
+        repoId = "minishlab/potion-base-32M";
         rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
         files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
         hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
