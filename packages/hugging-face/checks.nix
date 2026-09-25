@@ -89,11 +89,14 @@ in {
   assert (passed {fetchSubmodules = true;}).fetchSubmodules;
   assert (passed {}).name == "fixture-model-0123456";
   assert (passed {name = "custom";}).name == "custom";
-  assert (passed {}).derivationArgs
+  assert removeAttrs (passed {}).derivationArgs ["pos"]
   == {
     pname = "fixture-model";
     version = "0123456";
   };
+  assert (passed {derivationArgs.extra = 1;}).derivationArgs.extra == 1;
+  assert (fake {passthru.extra = 1;}).extra == 1;
+  assert (fake (noticed // {passthru.extra = 1;})).extra == 1;
   assert (passed {}).meta.description == "fixture-owner/Fixture-Model at 0123456 (Hugging Face)";
   assert (passed {}).meta.license == lib.licenses.unfree;
   assert (passed {meta.description = "custom";}).meta.description == "custom";
@@ -105,9 +108,16 @@ in {
   assert lib.getName (real {}) == "fixture-model";
   assert lib.getName (real {name = "custom";}) == "fixture-model";
   assert lib.getName (real noticed) == "fixture-model";
+  assert lib.getName (real (noticed // {name = "custom";})) == "fixture-model";
   assert lib.getName (real {rev = "abcdef0123456789abcdef0123456789abcdef01";}) == "fixture-model";
   assert (real {}).meta.homepage == "https://huggingface.co/fixture-owner/Fixture-Model";
   assert (real noticed).fetched.outPath == (real mit).outPath;
+  # meta.position names the caller, not the wrapper.
+  assert lib.hasInfix "/packages/hugging-face/checks.nix:" (real {}).meta.position;
+  assert lib.hasInfix "/packages/hugging-face/checks.nix:" (real noticed).meta.position;
+  # No makeOverridable `override`: it would skip the wrapper.
+  assert !((real {}) ? override || (real {}) ? overrideDerivation);
+  assert (real {}) ? overrideAttrs && (real noticed) ? overrideAttrs;
   # The licence gate on both layers.
   assert !(evaluates {});
   assert !(evaluates {inherit attribution;});
@@ -122,6 +132,8 @@ in {
     tag = "v1";
   };
   assert rejects {tag = "v1";};
+  # The wrapper's own refusal: the stub has no rev/tag xor of its own.
+  assert !(builtins.tryEval (fake {tag = "v1";}).drvPath).success;
   assert rejects {meta.license = lib.licenses.mit;};
   assert rejects {sparseCheckout = ["/*.json"];};
   assert rejects {files = [];};

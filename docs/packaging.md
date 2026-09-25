@@ -168,7 +168,7 @@ A tool that loads a model from a local directory can be pointed straight at it.
 Git LFS downloads only the selected files, so a repository's other weight
 formats are never fetched.
 
-Every nixpkgs argument passes through unchanged. The wrapper adds:
+Every nixpkgs argument passes through, except as listed below:
 
 - **`backend` defaults to `"lfs"`.** nixpkgs defaults to `"xet"`, which throws
   "not implemented yet".
@@ -207,7 +207,11 @@ Every nixpkgs argument passes through unchanged. The wrapper adds:
   `"source"`), and `meta.description` to
   `<repoId> at <short rev> (Hugging Face)`. `pname` is always the lowercased
   repo and `version` the short rev, so an `allowUnfreePredicate` on
-  `lib.getName` survives rev bumps and `name` overrides.
+  `lib.getName` survives rev bumps and `name` overrides. `meta.position` points
+  at your `rev`, not at the wrapper.
+- **No `.override`.** The one nixpkgs attaches would call `fetchFromHuggingFace`
+  directly, skipping the defaults and checks above, and keep the old name after
+  a rev change. Call the wrapper again instead. `.overrideAttrs` is kept.
 
 Getting the hash works as for any fixed-output fetcher. Pass
 `hash = lib.fakeHash`, build, and copy the `got:` value. The store path depends
