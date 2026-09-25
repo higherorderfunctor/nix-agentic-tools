@@ -19,10 +19,8 @@
         type = lib.types.nullOr lib.types.package;
         default = null;
         example = lib.literalExpression ''
-          inputs.nix-agentic-tools.lib.packaging.fetchFromHuggingFace {
-            inherit pkgs;
-            owner = "minishlab";
-            repo = "potion-base-32M";
+          pkgs.ai.fetchHuggingFaceModel {
+            repoId = "minishlab/potion-base-32M";
             rev = "1e5a03f8eeb2c98b928fbbd846f22f816360919f";
             files = ["config.json" "model.safetensors" "modules.json" "tokenizer.json"];
             hash = "sha256-d9bGAm1XdYCwF63uODq5eD5Ow7utLaoxaxCYtVrqMTU=";
@@ -31,7 +29,7 @@
         '';
         description = ''
           A package whose output is a model2vec model directory, such as a
-          `lib.packaging.fetchFromHuggingFace` result. null uses Semble's
+          `pkgs.ai.fetchHuggingFaceModel` result. null uses Semble's
           built-in default model. Hugging Face ids are not accepted: they are
           unpinned, fail without network, and bypass the licence gate. Wrap
           local weights in a derivation. When the package lists its files in
