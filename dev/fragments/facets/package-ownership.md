@@ -1,8 +1,8 @@
 ## Package ownership and native composition
 
 > **Last verified:** 2026-09-25 — the ordinary-overlay claim check treats
-> package leaves as opaque; `hugging-face` is the first production
-> `overlay.nix`.
+> package leaves and other owners' leaves as opaque; `hugging-face` is the first
+> production `overlay.nix`.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -72,8 +72,11 @@ Three evaluation boundaries are easy to break:
   Full flake validation still forces every exported derivation. The
   ordinary-overlay claim check follows the same rule: it never compares a
   package leaf, because that evaluates the recipe on first access to the
-  namespace. The cost is that an `overlay.nix` which silently replaces a package
-  leaf goes unreported.
+  namespace. It never compares a leaf another owner claims either: `==` is false
+  for every function, so an earlier owner's function leaf would read as changed
+  and be blamed on each later overlay in the namespace. The cost is that an
+  `overlay.nix` which silently replaces a package leaf, or another owner's leaf,
+  goes unreported. Removing one is still reported.
 - **Platform filtering changes the discovery path type.** `builtins.path`
   returns a context-bearing string. Native discovery therefore passes string
   recipe paths for filtered trees. Remap both path and string recipes to the
