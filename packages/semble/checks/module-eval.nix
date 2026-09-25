@@ -650,7 +650,9 @@ in {
         assert len(notes) > 1, len(notes)
         assert all(chunk.language is None for chunk in notes), [chunk.language for chunk in notes]
         assert notes[-1].end_line == 60, notes[-1].end_line
-        # A .py file mapped to null is not parsed as Python.
+        # A .py file mapped to null is not parsed as Python. This is the
+        # assertion that catches a regression to the suffix fallback: NOTES
+        # has no suffix, so it gets no language either way. Do not drop it.
         assert all(chunk.language is None for chunk in by_file["lib.vendored.py"])
         # The unmapped control keeps its suffix language.
         assert all(chunk.language == "python" for chunk in by_file["main.py"])
