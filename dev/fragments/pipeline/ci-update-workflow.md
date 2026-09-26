@@ -1,7 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-09-22 — Kiro's scoped native CI jobs also validate
-> extracted metadata on Linux and Darwin.
+> **Last verified:** 2026-09-26 — an unreadable predecessor receipt fails the
+> hold-back escalation instead of counting as a first offense.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -225,6 +225,18 @@ branch CI has nothing to judge for it and the condition cannot clear itself. Any
 update PR still open on a held-back target is an EARLIER proposal that
 publication preserved, not the blocked one. Read receipt statuses before
 claiming every update was prepared successfully.
+
+Only the immediate predecessor's receipt is consulted, and only its ABSENCE
+makes a first offense. The step asks whether the receipt artifact exists before
+downloading it, because a failed download alone cannot tell "no receipt" from
+"receipt we failed to read". When that listing, the download or the parse still
+fails after `gh` retries, the target also fails `cleanup`, titled
+`Update hold-back count unknown`: counting it as a first offense would silently
+reset the counter and turn a repeat green. Every annotation states which
+predecessor it compared against and why. Every failing one quotes a preparation
+excerpt, or says why none could be read. The excerpt is the newest nix builder
+block, or, when nothing was built, the log tail with traceback frames and the
+pipeline's own trailer lines removed.
 
 The Python fixture suites exercise package coverage, completion reports, cleanup
 receipts, and PR publication against disposable local Git repositories. They run
