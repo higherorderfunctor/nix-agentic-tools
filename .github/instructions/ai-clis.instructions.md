@@ -334,16 +334,15 @@ Each names a fixable entry (set `extensions` or rename the server, or
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-09-23 — Kimchi builds its CLI and proxy helper from
-> the release source that its version bumps pin alongside the declaration inputs
-> and the compiler-extracted sidecar.
+> **Last verified:** 2026-09-26 — chatgpt-codex installs upstream's complete
+> `codex-package-<target>` layout so its 0.157+ background daemon can start.
 
 ### Overview
 
 AI coding CLI recipes live at `packages/<owner>/packages/ai/<name>/package.nix`:
 
-- **chatgpt-codex** — OpenAI Codex CLI, pre-built static-musl binary fetched
-  from GitHub releases
+- **chatgpt-codex** — OpenAI Codex CLI, upstream's pre-built complete package
+  (static-musl on Linux) fetched from GitHub releases
 - **claude-code** — Claude Code CLI, pre-built binary
 - **copilot-cli** — GitHub Copilot CLI, pre-built SEA binary fetched from GitHub
   releases
@@ -368,11 +367,19 @@ inherit, so these are fresh `stdenv.mkDerivation`s over a per-platform release
 tarball selected from `sources.json`. On Linux the dynamically-linked ones run
 `autoPatchelfHook` to repoint the interpreter/rpath at the nix glibc.
 
-- chatgpt-codex unpacks to ONE flat `codex-<target-triple>` file (no wrapper
-  directory, hence `sourceRoot = "."`) installed as `$out/bin/codex`. Its Linux
-  build is `static-pie` musl, so it is the one standalone binary here that needs
-  neither autoPatchelfHook nor an interpreter patch. Apache-2.0 (free), so the
-  unfree guard passes it through unwrapped.
+- chatgpt-codex installs upstream's `codex-package-<target>.tar.gz` VERBATIM as
+  `$out/libexec/codex` (`codex-package.json`, `bin/codex`,
+  `bin/codex-code-mode-host`, `codex-path/rg`, `codex-resources/`), with
+  `$out/bin/*` as relative symlinks into it. Do not go back to the loose
+  `codex-<target>` binaries: since 0.157.0 a launch auto-starts the app-server
+  daemon, which only starts when the canonical executable sits at
+  `<root>/bin/codex` beside `<root>/codex-package.json`, and which copies
+  `<root>` into `CODEX_HOME` rejecting any symlink that leaves it. The static
+  binaries and bwrap stay byte-identical (codex digest-checks its bundled
+  bwrap); only the glibc-linked `codex-resources/{voice,zsh}` get a scoped
+  `autoPatchelf`. `checks/chatgpt-codex-package-layout.nix` starts and stops the
+  real daemon to hold this. Apache-2.0 (free), so the unfree guard passes it
+  through unwrapped.
 - copilot-cli installs a single SEA binary (`copilot`).
 
 **Bun source build** (kimchi): `fetchPnpmDeps` supplies the locked dependencies
