@@ -48,14 +48,19 @@
 //     behavior … it is bundler runtime". That is wrong, and the correction
 //     matters more than the wording: TWO mechanisms exist — bun's `__esm`
 //     lowering `(a,b)=>()=>(a&&(b=a(a=0)),b)`, and an Anthropic-authored
-//     ~800-byte module exporting a resettable lazy registry — and BOTH are
-//     present in every version measured, 2.1.245 and 2.1.250 alike. Neither
-//     replaced the other. What moved is only which one the SETTINGS chunk
-//     imports. So this anchor can track application code, and it can move for
-//     product reasons rather than only on a Bun upgrade.
+//     ~800-byte module exporting a resettable lazy registry — and at 2.1.245
+//     and 2.1.250 BOTH were present. Neither replaced the other then; what
+//     moved was only which one the SETTINGS chunk imports. So this anchor can
+//     track application code, and it can move for product reasons rather than
+//     only on a Bun upgrade — which it did again at 2.1.283, when the registry
+//     helper's METHOD BODY was rewritten (see locateLazyRegistryMethod).
 //
 //     Do NOT delete either branch on the theory that a version threshold has
-//     passed. Both are live; see MEMO_LAZY_METHOD_RE and MEMO_DECL_RE.
+//     passed. Counted at 2.1.281 and 2.1.283 (both Bun 1.4.3): bun's `__esm`
+//     lowering matches 0 chunks and the registry 1 chunk in each. The bun
+//     branch stays anyway: it costs nothing, and a Bun that lowers ESM that
+//     way again is a bundler change, not a product one, so nothing upstream
+//     would announce it. See locateLazyRegistryMethod and MEMO_DECL_RE.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -81,6 +86,10 @@ export const ANCHORS = {
 
 const BUNFS_PREFIX = "/$bunfs/root/";
 
+// Minified identifiers may carry `$`, which is a metacharacter when an
+// identifier is interpolated into a RegExp source.
+const escId = (s) => s.replace(/\$/g, "\\$");
+
 export function isBunfs(spec) {
   return spec.startsWith(BUNFS_PREFIX);
 }
@@ -105,8 +114,9 @@ export function bunfsToPath(root, spec) {
 // (1375/1375), as does every chunk in 2.1.250 (1768/1768). Reading the marker
 // in the version in front of you proves nothing; count it in BOTH.
 //
-// That is a BUNDLER change, not a behavior change, so it must not be fatal.
-// What still has to hold is that each side is unambiguous: exactly one module
+// That is a BUNDLER change, not a behavior change, so it must not be fatal —
+// and it is not one-way either: by 2.1.281 all three anchors sit in ONE chunk
+// again. What still has to hold is that each side is unambiguous: exactly one module
 // carries the schema anchor and exactly one carries BOTH emitter anchors. The
 // two may be the same file (monolith) or different files (split); anything
 // else still fails closed, because an ambiguous match is the case where a
@@ -347,7 +357,7 @@ export function locateFilterByMarker(src) {
   const markerVar = mv[1];
   const mp = new RegExp(
     'function\\s+([A-Za-z0-9_$]+)\\(([A-Za-z0-9_$]+)\\)\\{return typeof \\2==="string"&&' +
-      markerVar.replace(/\$/g, "\\$") +
+      escId(markerVar) +
       "\\.test\\(\\2\\)\\}",
   ).exec(src);
   if (!mp) return null;
@@ -387,9 +397,7 @@ export function locateFeatureList(src) {
   const listVar = m ? m[1] : null;
   if (listVar) {
     const lit = new RegExp(
-      "(?:^|[^A-Za-z0-9_$.])" +
-        listVar.replace(/\$/g, "\\$") +
-        "=(\\[[^\\]]*\\])",
+      "(?:^|[^A-Za-z0-9_$.])" + escId(listVar) + "=(\\[[^\\]]*\\])",
     ).exec(src);
     if (lit) {
       try {
@@ -439,25 +447,68 @@ export function locateFeatureList(src) {
 //
 // An earlier revision labelled these "BUN (<= 2.1.245)" and "LAZY REGISTRY
 // (>= 2.1.248)", which is wrong and actively dangerous: it invites a future
-// reader to delete the bun branch once versions advance. BOTH mechanisms are
-// present in BOTH versions measured — bun's `__esm` in 2 modules of each, the
-// lazy registry in 1 module of each. Upstream replaced nothing; what changed
-// is only which one the SETTINGS chunk happens to import (2.1.245: 35 thunk
-// sites through the bun helper, 2.1.250: 1 through the registry).
+// reader to delete the bun branch once versions advance. At 2.1.245 and
+// 2.1.250 BOTH mechanisms were present — bun's `__esm` in 2 modules of each,
+// the lazy registry in 1 module of each — and what changed was only which one
+// the SETTINGS chunk happens to import (2.1.245: 35 thunk sites through the
+// bun helper, 2.1.250: 1 through the registry). At 2.1.281 and 2.1.283 the
+// bun lowering matches 0 modules and the registry 1; the settings chunk wraps
+// 26 and 28 thunks with it respectively. The bun branch stays regardless.
 //
 // Both are confirmed structurally (backreferences only, no identifier is
 // written down) against the DEFINING module, so a match is never taken on the
-// strength of the call site alone. And because both are live, a module could
-// legitimately use BOTH at once — see locateMemoizerLocal, which unions every
-// confirming family rather than returning the first.
+// strength of the call site alone. And because both have been live, a module
+// could legitimately use BOTH at once — see locateMemoizerLocal, which unions
+// every confirming family rather than returning the first.
 // ---------------------------------------------------------------------------
 const MEMO_DECL_RE =
   /(?:var|let|const)\s+([A-Za-z0-9_$]+)=\(([A-Za-z0-9_$]+),([A-Za-z0-9_$]+)\)=>\(\)=>\(\2&&\(\3=\2\(\2=0\)\),\3\)/;
 
 // The registry METHOD — proves the module really is a memoizer and not merely
 // something that happens to export a one-argument function.
-const MEMO_LAZY_METHOD_RE =
-  /lazy\(([A-Za-z0-9_$]+)\)\{let ([A-Za-z0-9_$]+);return this\.resetters\.push\(\(\)=>\{\2=void 0\}\),\(\)=>\2\?\?=\1\(\)\}/;
+//
+// Recognised by CONTRACT, not by body text. Two lexical forms have shipped,
+// and the second held the update sweep back because the first was pinned as
+// a literal:
+//
+//   <= 2.1.281  lazy(e){let t;return this.resetters.push(()=>{t=void 0}),
+//                 ()=>t??=e()}
+//   >= 2.1.283  lazy(e){let t,r=()=>{t=void 0};return this.resetters.push(r),
+//                 ()=>{if(t===void 0)t=e(),this.built.push(r);return t}}
+//
+// What both share, and all the census relies on, is: a method `lazy(E)` that
+// (a) owns a cell `let T`, (b) registers a resetter clearing it —
+// `this.resetters.push(` together with `T=void 0` — and (c) returns an arrow
+// that fills the cell from its argument, `T??=E()` or `T=E()`. The `built`
+// bookkeeping 2.1.283 added around that is exactly the drift a body literal
+// cannot survive and a contract check does not care about. The method must
+// be UNIQUE in the defining module; two candidates is ambiguous and fails
+// closed, like every other anchor here.
+const LAZY_METHOD_HEAD_RE = /lazy\(([A-Za-z0-9_$]+)\)\{/g;
+
+export function locateLazyRegistryMethod(src) {
+  const hits = [];
+  for (const m of src.matchAll(LAZY_METHOD_HEAD_RE)) {
+    const open = m.index + m[0].length - 1;
+    const end = matchBraces(src, open);
+    if (end < 0) continue;
+    const body = src.slice(open + 1, end);
+    const param = m[1];
+    const cell = /^let\s+([A-Za-z0-9_$]+)/.exec(body);
+    if (!cell) continue;
+    const t = cell[1];
+    const registers = body.includes("this.resetters.push(");
+    const clears = new RegExp(`(?:^|[^A-Za-z0-9_$.])${escId(t)}=void 0`).test(
+      body,
+    );
+    const fills = new RegExp(
+      `(?:^|[^A-Za-z0-9_$.])${escId(t)}\\?{0,2}=${escId(param)}\\(\\)`,
+    ).test(body);
+    const thunk = body.includes("()=>");
+    if (registers && clears && fills && thunk) hits.push({ param, cell: t });
+  }
+  return hits.length === 1 ? hits[0] : null;
+}
 
 // The exported wrapper that call sites actually use: `function h(e){return
 // S.lazy(e)}`. Its NAME is what the importing module refers to.
@@ -465,10 +516,10 @@ const MEMO_LAZY_EXPORT_RE =
   /function\s+([A-Za-z0-9_$]+)\(([A-Za-z0-9_$]+)\)\{return\s+[A-Za-z0-9_$]+\.lazy\(\2\)\}/;
 
 // Return the LOCAL name a defining module gives its memoizer, or null.
-function memoDeclName(src) {
+export function memoDeclName(src) {
   const bun = MEMO_DECL_RE.exec(src);
   if (bun) return bun[1];
-  if (!MEMO_LAZY_METHOD_RE.test(src)) return null;
+  if (!locateLazyRegistryMethod(src)) return null;
   const wrapper = MEMO_LAZY_EXPORT_RE.exec(src);
   return wrapper ? wrapper[1] : null;
 }
@@ -480,16 +531,7 @@ export function locateMemoizerLocal(settingsSrc, readSpec) {
   // usage, then CONFIRM each against the defining module's source.
   const candidates = [];
   for (const [local, info] of imports) {
-    const n = (
-      settingsSrc.match(
-        new RegExp(
-          "(?:var|let|const)\\s+[A-Za-z0-9_$]+=" +
-            local.replace(/\$/g, "\\$") +
-            "\\(\\(\\)=>",
-          "g",
-        ),
-      ) || []
-    ).length;
+    const n = locateInitThunks(settingsSrc, local).length;
     // Ranked by call count, but a SINGLE site is enough to be a candidate:
     // the two-module layout leaves only one thunk in the emitter chunk, and a
     // `>= 3` floor silently rejected it. What actually rules out a false
@@ -537,9 +579,7 @@ export function locateMemoizerLocal(settingsSrc, readSpec) {
 
 export function locateInitThunks(src, memoLocal) {
   const re = new RegExp(
-    "(?:var|let|const)\\s+([A-Za-z0-9_$]+)=" +
-      memoLocal.replace(/\$/g, "\\$") +
-      "\\(\\(\\)=>",
+    "(?:var|let|const)\\s+([A-Za-z0-9_$]+)=" + escId(memoLocal) + "\\(\\(\\)=>",
     "g",
   );
   const out = [];

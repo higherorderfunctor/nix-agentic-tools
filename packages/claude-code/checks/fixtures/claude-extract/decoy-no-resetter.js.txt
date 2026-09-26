@@ -1,0 +1,3 @@
+// synthetic (.txt: verbatim minifier output — a formatter would rewrite the shape under test) decoy: a `lazy` method with a cell but no resetter registration
+class r{lazy(e){let t;return ()=>t??=e()}}var s=new r;function f(e){return s.lazy(e)}
+export{f};

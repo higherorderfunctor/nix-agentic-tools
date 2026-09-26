@@ -468,10 +468,10 @@ export async function census(
         info.alternates.convert === info.symbols.convert &&
         info.alternates.filter === info.symbols.filter,
       features: info.features,
-      // Both memoizer mechanisms are live upstream, so a module could use
-      // more than one. locateMemoizerLocal unions them; surface the count so a
-      // second family shows up here rather than only as a thunk total that
-      // silently shrank.
+      // Both memoizer mechanisms have been live upstream at once, so a module
+      // could use more than one. locateMemoizerLocal unions them; surface the
+      // count so a second family shows up here rather than only as a thunk
+      // total that silently shrank.
       memoizerFamilies: (info.memo.all ?? [info.memo]).length,
       initThunksRun: `${loaded.ran}/${loaded.total}`,
       distinctInitErrors: [...new Set(loaded.initErrors)],
