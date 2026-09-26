@@ -435,7 +435,9 @@ in {
       nat_agents_last="$(${pkgs.gnused}/bin/sed -n '/./h; ''${x;p}' AGENTS.md)"
       nat_agents_last_json="$(${pkgs.jq}/bin/jq -rn --arg line "$nat_agents_last" '$line | tojson | .[1:-1]')"
       ${pkgs.gnugrep}/bin/grep -Fq -- "$nat_agents_last_json" "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex truncated AGENTS.md (its last line is missing from the prompt)"; exit 1; }
-      ${pkgs.gnugrep}/bin/grep -Fq -- '## Path-scoped rules' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not receive the path-scoped rule index"; exit 1; }
+      # The index preamble, not its heading: the orientation mentions the
+      # heading by name, so the heading alone would pass a truncated file.
+      ${pkgs.gnugrep}/bin/grep -Fq -- 'Before editing a path that matches an entry below, read every document listed' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not receive the path-scoped rule index"; exit 1; }
       ${lib.optionalString (!isCI) ''
       ${pkgs.gnugrep}/bin/grep -Fq -- '<!-- rule: semble -->' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not receive the Semble CLI rule"; exit 1; }
     ''}
