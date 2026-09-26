@@ -1157,8 +1157,8 @@ in {
         && programShape hm ["ai" "codex" "programs" "semble"]
         == programShape devenv ["ai" "codex" "programs" "semble"]
         && builtins.attrNames (programShape hm ["ai" "programs" "semble"])
-        == ["cli" "defaultContent" "defaultModel" "enable" "finalPackage" "grammars" "mcp" "models" "package" "pathMappings" "subagent"]
-        # finalPackage is portable-only: no runtime override exists for it.
+        == ["cli" "defaultContent" "defaultModel" "enable" "finalPackage" "grammars" "install" "mcp" "models" "package" "pathMappings" "subagent"]
+        # finalPackage and install are portable-only: no runtime override exists for them.
         && builtins.attrNames (programShape hm ["ai" "codex" "programs" "semble"])
         == ["cli" "defaultContent" "defaultModel" "enable" "grammars" "mcp" "models" "package" "pathMappings" "subagent"]
         # mcp.content, mcp.pathMappings and mcp.rootExposure are gone, not aliased.
