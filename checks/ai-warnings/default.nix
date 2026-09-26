@@ -455,6 +455,105 @@ in {
       in
         valid.instanceUrl == null && !(valid ? assertions) && !invalid.success
     );
+    # A context or rule unit whose file is switched off (`content.enable =
+    # false`) warns, naming the unit, the file option that switched it off and
+    # a per-runtime way to withhold it; the warning is what makes the drop
+    # visible. Withholding the unit, replacing the file with other bytes, or
+    # having nothing to carry are all quiet.
+    ai-warnings-switched-off-files = harness.mkTest "ai-warnings-switched-off-files" (
+      let
+        offMessage = messages: unit: file: remedy:
+          lib.any (message:
+            lib.hasInfix "${unit} is set but" message
+            && lib.hasInfix "${file}.content.enable = false switches off" message
+            && lib.hasInfix remedy message)
+          messages;
+        # Codex's shared AGENTS.md on devenv, switched off by ANOTHER
+        # runtime's public entry: the message names Kiro's option.
+        sharedOff = evaluate "devenv" {
+          ai = {
+            codex.enable = true;
+            context.text = "CTX";
+            kiro = {
+              enable = true;
+              files."AGENTS.md".content.enable = false;
+            };
+            rules.probe.text = "RULE";
+          };
+        };
+        # Codex's user AGENTS.md on Home Manager.
+        hmCodexOff = evaluate "hm" {
+          ai = {
+            codex = {
+              enable = true;
+              files.".codex/AGENTS.md".content.enable = false;
+              rules.local.text = "LOCAL";
+            };
+            rules.probe.text = "RULE";
+          };
+        };
+        # One scoped Kiro steering file on devenv; Claude rule file on HM.
+        steeringOff = evaluate "devenv" {
+          ai.kiro = {
+            enable = true;
+            files.".kiro/steering/scoped.md".content.enable = false;
+            rules.scoped = {
+              matcher = ["src/**"];
+              text = "SCOPED";
+            };
+          };
+        };
+        claudeOff = evaluate "hm" {
+          ai = {
+            claude = {
+              enable = true;
+              files.".claude/rules/probe.md".content.enable = false;
+            };
+            rules.probe.text = "RULE";
+          };
+        };
+        # Quiet controls.
+        withheld = evaluate "devenv" {
+          ai = {
+            codex = {
+              enable = true;
+              files."AGENTS.md".content.enable = false;
+              normalized.context = lib.mkForce null;
+              rules.probe.enable = false;
+            };
+            context.text = "CTX";
+            rules.probe.text = "RULE";
+          };
+        };
+        replaced = evaluate "devenv" {
+          ai = {
+            codex = {
+              enable = true;
+              files."AGENTS.md".content.text = "MINE";
+            };
+            context.text = "CTX";
+            rules.probe.text = "RULE";
+          };
+        };
+        nothing = evaluate "devenv" {
+          ai.codex = {
+            enable = true;
+            files."AGENTS.md".content.enable = false;
+          };
+        };
+      in
+        offMessage sharedOff "ai.rules.probe" ''ai.kiro.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
+        && offMessage sharedOff "ai.context" ''ai.kiro.files."AGENTS.md"'' "withhold it from kiro"
+        && offMessage hmCodexOff "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
+        && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
+        && offMessage claudeOff "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
+        && !(contains "switches off" withheld)
+        && !(contains "switches off" replaced)
+        && !(contains "switches off" nothing)
+    );
+
     ai-warnings-tombstones = harness.mkTest "ai-warnings-tombstones" (
       evaluate "hm" {
         ai.copilot = {

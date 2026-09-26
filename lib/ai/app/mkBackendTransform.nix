@@ -50,6 +50,14 @@
   cfg = config.ai.${appRecord.name};
   deliveryWarnings = import ../delivery-warnings.nix {inherit lib;} {
     inherit appRecord backend config options;
+    # Where this runtime's context and rules land, from its own path
+    # bindings, and which of those paths the shared AGENTS.md owner holds.
+    contentTargets = lib.optionalAttrs (appRecord ? contentTargets) (let
+      result = appRecord.contentTargets callbackArgs;
+    in
+      assert checkRecord.contentTargets appRecord.name result; result);
+    sharedTargets = sharedAgentsMdTargets;
+    hasContext = normalizedHasContext;
   };
   supportedPools = appRecord.supportedPools or [];
   supportsPool = poolName: builtins.elem poolName supportedPools;
@@ -301,8 +309,8 @@
   };
   customConfig = configFn callbackArgs;
   # A runtime that reads the repository AGENTS.md contributes to its one
-  # owner (sharedAgentsMd.nix) on devenv: its merged context plus the rules
-  # and limit its record's `sharedAgentsMd` callback returns, each runtime
+  # owner (sharedAgentsMd.nix) on devenv: its merged context plus the rules,
+  # index entries and limit its record's `sharedAgentsMd` callback returns, each runtime
   # keeping its own rule policy. The key is published whether or not it has
   # content, for observers such as file-warnings.nix. A limit is published
   # with it too, because the runtime reads the file whoever wrote it.
@@ -312,8 +320,9 @@
       result = appRecord.sharedAgentsMd callbackArgs;
     in
       assert checkRecord.sharedAgentsMd appRecord.name result; result;
+    index = shared.index or {};
     rules = shared.rules or {};
-    hasContent = normalizedHasContext || rules != {};
+    hasContent = normalizedHasContext || index != {} || rules != {};
   in {
     ai.internal.agentsMdTargets.${appRecord.name} = shared.key;
     ai.internal.agentsMd = lib.mkIf (hasContent || shared ? maxBytes) {
@@ -324,7 +333,7 @@
             if hasContent
             then true
             else lib.mkDefault false;
-          inherit rules;
+          inherit index rules;
         }
         // lib.optionalAttrs (shared ? maxBytes) {inherit (shared) maxBytes;}
         // lib.optionalAttrs normalizedHasContext {
@@ -381,37 +390,7 @@
 in {
   options.ai.${appRecord.name} =
     {
-      _ownPlans = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.submodule {
-          options = {
-            declared = lib.mkOption {
-              type = lib.types.attrsOf lib.types.anything;
-              default = {};
-              description = "Per document path, the leaves this generation declares ownership of.";
-            };
-            plan = lib.mkOption {
-              type = lib.types.anything;
-              description = "The `own` plan this writer applies: `bash` plus the ordered targets.";
-            };
-          };
-        });
-        default = {};
-        internal = true;
-        visible = false;
-        # `own` carries every target, unit, mode, ledger name and byte of
-        # content as DATA in a store-resident plan, so an activation body names
-        # none of them, and the plan FILE cannot be read back at eval —
-        # importing a derivation is forbidden here, and discarding the plan's
-        # string context to make it readable would drop the store references
-        # that keep a rendered command alive in the generation's closure. This
-        # is the only eval-visible record, and the module-eval checks read it
-        # instead of splitting a heredoc out of generated shell.
-        # `helpers.mkOwnBundle` emits this record AND the writer from one set of
-        # arguments, so the two cannot drift; `declared` carries the one thing
-        # the plan cannot, because `builtins.fromJSON` refuses a string that
-        # refers to a store path.
-        description = "Reconciliation plans this generation owns, keyed by the writer's entry name.";
-      };
+      _ownPlans = deliveryOptions.ownPlansOption;
       activation = lib.mkOption {
         type = deliveryOptions.writerMapType;
         default = {};
@@ -438,7 +417,9 @@ in {
           bytes it carries, the consumer facts that decide how it lands, and
           which writer owns it if it is not a symlink. Setting
           `content.enable = false` omits the file whatever supplies its bytes,
-          while retaining the record for inspection and later overrides.
+          while retaining the record for inspection and later overrides. A
+          context or rule that would land in a file switched off this way is
+          reported as a warning naming a per-runtime way to withhold it.
 
           Generated `content.text` and `content.source` are contributed at
           `mkDefault` priority with every sibling field at ordinary priority,

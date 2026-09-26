@@ -7,8 +7,9 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-09-17 — Kimchi source builds require fresh closure
-> measurements; old binary-release figures are not current estimates.
+> **Last verified:** 2026-09-25 — Kimchi source builds require fresh closure
+> measurements; old binary-release figures are not current estimates. The
+> instruction copier check is gone with the generator's materializer.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -18,9 +19,9 @@ operator-chosen diagnostic cost, not an automatic merge-path cost. The required
 `test` context runs `nix flake check` and owns the deterministic invariants that
 previously justified the runtime workflow:
 
-- `instruction-materialization` executes the exact shell-entry copier against a
-  temporary repository and proves byte equality, real-file type, mode,
-  idempotence, repair, and stale-file pruning;
+- `instructions-drift` compares the committed instruction files with what the
+  repository's `ai.*` writers deliver, and `ai-own-runtime` proves the copy
+  writer's real-file type, mode, idempotence, adoption and pruning;
 - `isolate-prek-hooks` executes the exact shared-hook rewriter in primary and
   linked worktrees;
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
@@ -123,12 +124,14 @@ The unrestricted override needs no writable-root declarations. The repository
 enables Semble only outside diagnostic mode, pins it to this flake, adds AWK and
 jq Tree-sitter grammars, and maps its non-standard Bash, Gitignore, JSON, and
 Markdown paths. Its devenv facet still owns and invalidates
-`${config.devenv.state}/semble-cache`; its instruction facet stays off because
-the tracked, fragment-generated `AGENTS.md` already carries the same search
-workflow and devenv cannot replace that real file with a `files.*` symlink. The
-user-global cache is no longer in play for this shell. Keeping
-`ai.codex.programs.semble.enable = !isCI` is load-bearing: the manual diagnostic
-does not invoke Semble and must not realize its model, MCP, or grammar closure.
+`${config.devenv.state}/semble-cache`. It is the root `ai.programs.semble` in
+`dev/ai.nix`, so every runtime it supports gets its CLI rule (Claude as a rule
+file, Codex and Kiro inline in AGENTS.md) and none gets its MCP server. The
+user-global cache is no longer in play for this shell. Keeping `enable = !isCI`
+is load-bearing: the manual diagnostic does not invoke Semble and must not
+realize its model, MCP, or grammar closure. The diagnostic therefore rewrites
+its throwaway AGENTS.md without the Semble rule; the drift check pins
+`isCI = false`, so the committed bytes never depend on it.
 
 Integration roots remain available to normal workspace-write and named-profile
 consumers, but this project override intentionally does not use them. enterTest
@@ -167,9 +170,9 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-23 — repository AGENTS.md uses native seed
-> ownership alongside the atomic instruction materializer; redundant module
-> projections are suppressed.
+> **Last verified:** 2026-09-25 — the repository's instruction files are
+> `ai.*`'s own read-only copies (`own`), never `files.*` symlinks; the
+> generator's materializer and the AGENTS.md seed are gone.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -363,78 +366,33 @@ the user-space walker is a viable fix while waiting for upstream.
 
 ### Instruction files are copies, not `files.*` symlinks
 
-`devenv.nix` imports `dev/instructions.nix` as `instr` — the same import
-`flake.nix` uses, so both render identical bytes. It exposes the four
-`instructions-*` derivations; the working tree is materialized from them by a
-shell-entry task. `AGENTS.md` additionally has a native `files.*` seed
-declaration pointing at the exact same derivation source:
+This repository's instruction files are written by `ai.*` (configured in
+`dev/ai.nix`) like any consumer's. On devenv the committed ones (AGENTS.md,
+`.github/copilot-instructions.md`, `.github/instructions/*`) and Claude's and
+Kiro's project rule files are read-only COPIES written by `lib/ai/own.py`
+through a directory ledger each, on every `devenv shell`, `direnv reload`,
+`devenv up`, `devenv reload` and manual `devenv test`, after
+`devenv:files:cleanup` and before `devenv:enterShell`. Claude's
+`.claude/CLAUDE.md` stays a store link (its project context loader follows one;
+its scoped-rule loader does not).
 
-```nix
-instr = import ./dev/instructions.nix {
-  inherit lib pkgs;
-  inherit (inputs) treefmt-nix;
-};
-```
+Why copies rather than `files.*` symlinks:
 
-`lib/materialize-repo-instructions.nix` packages the copier.
-`dev/tasks/generate.nix` invokes that helper from
-`generate:instructions:materialize` after `devenv:files` and before
-`devenv:enterShell`, so every `devenv shell`, `direnv reload`, `devenv up`,
-`devenv reload`, and manual `devenv test` copies `CLAUDE.md`,
-`.claude/rules/*.md`, `AGENTS.md`, `.github/copilot-instructions.md`,
-`.github/instructions/*.md` and `.kiro/steering/*.md` into place as **real
-files**.
-
-The repository sets `content.enable = false` on `ai.codex.files."AGENTS.md"` and
-`ai.claude.files.".claude/rules/delegate-sizing-router.md"`: the delegate-sizing
-rule is already composed into AGENTS.md and CLAUDE.md. Without those disables,
-the module writer requests a short AGENTS.md symlink while the generator
-replaces it with the full real file, and the directory mirror prunes the
-standalone router. Ordering cannot reconcile incompatible owners.
-
-Native `files."AGENTS.md".copyMode = "seed"` records the deliberate real-file
-handoff using existing devenv semantics. It preserves existing regular files and
-mtime, seeds missing files from the same generated source, and migrates old
-store symlinks. The subsequent atomic materializer owns updates. Delivery
-inspection records seed ownership instead of retaining the old symlink
-expectation; unrelated conflict and retention warnings remain active. No manual
-file or ledger cleanup is needed. `instruction-ownership` exercises this
-migration and repeated activation with the pinned upstream file tasks and the
-actual warning observer.
-
-Why portable copies rather than `files.*` symlinks:
-
-- **The tracked outputs cannot be symlinks at all.** A store symlink commits as
-  mode `120000` holding an absolute `/nix/store` path — meaningless in any other
-  clone.
-
-The earlier Kiro-loader rationale is stale. Bounded live-TUI spikes against the
-pinned 2.18.1 release used `/context show` to prove both startup discovery and
-same-session symlink replacement reload in project-local and isolated global
-layouts. Factory-generated steering therefore traverses `ai.kiro.files` and the
-ordinary backend symlink sink. Kiro hooks retain real-file materialization
-because the steering probes did not revalidate hook loading or its ownership
-lifecycle.
-
-The materializer is idempotent (same bytes, real-file type, and mode leave the
-mtime alone), atomic (`mktemp` + `mv`, so a concurrent agent session never reads
-a partial file), and prunes generated files whose fragment was renamed or
-removed — including dangling symlinks. It refuses to prune when a generated
-source directory is unexpectedly empty.
-`checks/instructions/instruction-materialization.nix` runs this exact executable
-against a temporary repository and gates all of those properties under
-`nix flake check`; CI does not need a full devenv shell to test them.
+- **A tracked file cannot be a symlink.** A store symlink commits as mode
+  `120000` holding an absolute `/nix/store` path, meaningless in any other clone
+  and on github.com.
+- **A ledger claims only what it wrote.** A developer's own steering or
+  instruction file beside the generated ones survives every reload; a retired
+  rule's copy is removed.
+- **`own` is idempotent and quiet.** Unchanged bytes keep the mtime, and a file
+  whose bytes already match (a `git pull` of the committed copy) is adopted
+  without a backup; different bytes are backed up once before replacement.
 
 `devenv`'s own `files.<name>.copyMode = "copy"` was considered and rejected: it
 `rm -rf`s and re-`cp`s unconditionally on every entry (a read race plus mtime
-churn), it cannot prune, and feeding it _formatted_ content would require
-`builtins.readFile` on the built derivation — IFD on every eval.
-(`files.<name>.source` does exist in the pinned version — mkKiro uses it — but
-it only takes a path, not formatted content.)
-
-**Prerequisite:** the `coding-standards` overlay must be applied to devenv's
-pkgs, because the fragment composition reads
-`pkgs.coding-standards.passthru.fragments`.
+churn), it cannot prune, and it has no ownership record, so it cannot retract a
+file whose rule is removed. The `seed` mode the generator's AGENTS.md used is
+gone with the generator's materializer.
 
 Skills, `settings.json` and MCP JSON still use `files.*` symlinks — they are not
 tracked. Most skill backends enumerate leaves; Codex intentionally contributes

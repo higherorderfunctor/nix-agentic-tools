@@ -24,17 +24,18 @@ devenv.local.nix
 # devenv nix store symlinks inside skill source directories
 packages/stacked-workflows/skills/*/[0-9a-z]*-*
 
-# Generated on shell entry by generate:instructions:materialize.
-# Instruction files are real file COPIES, not files.* symlinks: Kiro
-# cannot read symlinked steering (it scans the dir and the scan skips
-# symlinks). Skills / settings.json / MCP JSON below are still symlinks.
+# Written on shell entry by `ai.*` (dev/ai.nix configures it). Claude's
+# context and Kiro's steering are local to a checkout; skills, settings.json
+# and MCP JSON below are store symlinks.
 #
-# NOT listed here, deliberately: AGENTS.md and .github/instructions/ are
-# generated but COMMITTED, because Copilot reads them from the repo.
+# NOT listed here, deliberately: AGENTS.md, .github/copilot-instructions.md
+# and .github/instructions/ are written by `ai.*` too but COMMITTED, because
+# Codex and github.com's Copilot read them from the repository.
 # `.agents/` is shared project-local agent space: devenv materializes Codex
 # skills there, while Kiro workflows write worker tasks there. Neither is
 # source-of-truth content in this repository.
 .agents/
+.claude/CLAUDE.md
 .claude/rules/
 .claude/settings.json
 .claude/settings.local.json
@@ -53,7 +54,6 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 .kiro/steering/
 .mcp.json
 .pre-commit-config.yaml
-CLAUDE.md
 
 # Generated doc site (mdbook source, built from dev/docs/ + nix eval)
 docs/src/

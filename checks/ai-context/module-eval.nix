@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest ownPlan;
+  inherit (harness) deliveredFiles evalDevenv evalHm mkTest;
   inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 
   # `aiCommon.contentFileEntry` returns the delivery record wrapped in
@@ -126,12 +126,10 @@ in {
         };
         hmFiles = (evalHm config).config.home.file;
         devenv = evalDevenv config;
-        # Claude's project rules are read-only copies; lay the copy writer's
-        # units over the linked files so one predicate reads both backends.
-        devenvFiles =
-          devenv.config.files
-          // lib.mapAttrs' (name: unit: lib.nameValuePair ".claude/rules/${name}" unit)
-          (lib.head (ownPlan "claude" "ai:claude:materialize-rules" devenv).targets).units;
+        # Several devenv outputs are read-only copies (Claude rules, Copilot
+        # instructions, Kiro steering, AGENTS.md); read what reaches the tree
+        # so one predicate covers both backends.
+        devenvFiles = deliveredFiles devenv.config;
         outputsAreCorrect = agentsPath: files:
           files ? ".claude/rules/active.md"
           && files ? ".kiro/steering/active.md"
@@ -166,9 +164,9 @@ in {
       in
         empty.config.ai.copilot.context.text
         == ""
-        && !(empty.config.files ? ".github/copilot-instructions.md")
+        && !((deliveredFiles empty.config) ? ".github/copilot-instructions.md")
         && withContent.config.ai.copilot.context.text == "Disabled content remains inspectable."
-        && !(withContent.config.files ? ".github/copilot-instructions.md")
+        && !((deliveredFiles withContent.config) ? ".github/copilot-instructions.md")
     );
 
     module-text-source-force-empty-disables = mkTest "text-source-force-empty-disables" (
@@ -262,9 +260,9 @@ in {
             enable = true;
           };
         };
-        entry = result.config.files.".github/copilot-instructions.md";
+        entry = (deliveredFiles result.config).".github/copilot-instructions.md";
       in
-        entry.source == source && !(entry ? text)
+        toString entry.source == toString source && !(entry ? text)
     );
 
     module-rule-rejects-empty-matcher = mkTest "rule-rejects-empty-matcher" (!(builtins.tryEval (let
@@ -287,10 +285,10 @@ in {
             rules.shared.text = "Shared rule.";
           };
         };
-        agents = result.config.files."AGENTS.md".text;
+        agents = (deliveredFiles result.config)."AGENTS.md".text;
       in
         agents
-        == "Shared context.\n\n<!-- rule: shared -->\nShared rule."
+        == "<!-- rule: shared -->\n\nShared rule.\n\nShared context.\n"
         && !(lib.hasInfix "---" agents)
     );
 
@@ -310,7 +308,7 @@ in {
             };
           };
         in
-          builtins.deepSeq result.config.files."AGENTS.md" true);
+          builtins.deepSeq (deliveredFiles result.config)."AGENTS.md" true);
       in
         !attempt.success
     );
@@ -329,7 +327,7 @@ in {
             };
           };
         };
-        agents = result.config.files."AGENTS.md".text;
+        agents = (deliveredFiles result.config)."AGENTS.md".text;
       in
         lib.hasInfix "Codex-only context." agents
         && lib.hasInfix "Kiro rule." agents

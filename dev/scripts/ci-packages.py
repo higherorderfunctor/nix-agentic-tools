@@ -10,10 +10,6 @@ from pathlib import Path
 # Generated documents are checked by `test`. Patched Kiro has dedicated native
 # jobs without cache uploads; it must never enter the public build cache.
 EXCLUDED = {
-    "instructions-agents",
-    "instructions-claude",
-    "instructions-copilot",
-    "instructions-kiro",
     "kiro-cli-workflows",
     "repo-contributing",
     "repo-readme",

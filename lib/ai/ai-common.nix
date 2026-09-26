@@ -67,7 +67,25 @@
     description = ''
       File globs selecting where this rule applies. null means always-on.
       Runtimes translate the normalized matcher into their native scoping
-      mechanism; flat AGENTS.md consumers preserve it as a prose scope note.
+      mechanism. Flat AGENTS.md consumers have none: they preserve it as a
+      prose scope note above the inlined body, or, when the rule names
+      `references`, as a path-scoped index entry that replaces the body.
+    '';
+  };
+  referencesOption = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = [];
+    example = ["docs/architecture/storage.md"];
+    description = ''
+      Project-relative paths of the documents that hold this rule's
+      authoritative text. Runtimes with native path scoping (Claude, Copilot,
+      Kiro) ignore it and deliver the body. A flat AGENTS.md renderer (Codex)
+      lists a scoped rule that names references in a compact "Path-scoped
+      rules" index — its globs and links to these documents — instead of
+      inlining its body into the always-loaded file. An unscoped rule is always
+      inlined. Paths resolve against the directory the runtime runs in, so on
+      Home Manager, where AGENTS.md is user-global, they name files of whatever
+      project is open.
     '';
   };
   mkRuleModule = {kiroNative ? false}:
@@ -80,6 +98,7 @@
             description = "Short description forwarded to runtime renderers.";
           };
           matcher = matcherOption;
+          references = referencesOption;
         }
         // lib.optionalAttrs kiroNative {
           inclusion = kiroInclusionOption;

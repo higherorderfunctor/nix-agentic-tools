@@ -1272,15 +1272,15 @@ start. Suggested sequence when the time comes:
      devenv generate tasks, not a custom snapshot-and-hash dance.
 
      ```bash
-     devenv tasks run generate:repo
-     devenv tasks run generate:instructions
-     git diff --exit-code -- README.md CONTRIBUTING.md AGENTS.md CLAUDE.md
+     devenv tasks run --mode before generate:all
+     git diff --exit-code -- README.md CONTRIBUTING.md AGENTS.md .github/
      ```
 
      If exit 0, the tracked generated files are byte-identical to what's
-     committed. The gitignored files (`.claude/rules/*`, `.kiro/steering/*`,
-     `.github/instructions/*`) share the same generation pipeline so any drift
-     would also surface in the tracked files.
+     committed (`nix flake check`'s `instructions-drift` asserts the same
+     without a shell). The gitignored files (`.claude/rules/*`,
+     `.kiro/steering/*`, `.github/instructions/*`) share the same generation
+     pipeline so any drift would also surface in the tracked files.
 
      **Anti-pattern (do NOT do this):** copying nix store outputs to a temp dir
      via `cp -r`, hashing them, and diffing against a snapshot. The Phase 2a

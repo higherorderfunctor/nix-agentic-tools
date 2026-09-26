@@ -47,6 +47,45 @@
   # `projectDir` says: copilot-cli 1.0.88 opens it (and
   # `settings.local.json` beside it) from the git root of a trusted folder.
   repositorySettingsPath = ".github/copilot/settings.json";
+  # github.com's reviewer and cloud agents read the COMMITTED tree, where a
+  # store symlink dangles, so on devenv the instruction files and the
+  # repository context are read-only copies. Each has a directory ledger that
+  # claims only the files it wrote, so a hand-written sibling survives. The
+  # writer is declared whether or not there are files and whether or not
+  # Copilot is enabled, so both N→0 and a disable retract the copies. Home
+  # Manager writes neither surface.
+  instructionsWriter = "materialize-copilot-instructions";
+  # Where each unit lands, shared by the emitters and `contentTargets`.
+  instructionPath = cfg: name: "${cfg.projectDir}/instructions/${name}.instructions.md";
+  contextPath = cfg: "${cfg.projectDir}/${cfg.context.filename}";
+  instructionsLedger = "materialize/copilot-instructions.manifest";
+  contextLedger = "materialize/copilot-context.manifest";
+  # The fact is a default, so a consumer can still state its own on one
+  # file (to keep a link, say) without a conflicting definition.
+  instructionFields = ledger: {
+    entry = instructionsWriter;
+    facts.symlinkReadable = lib.mkDefault {
+      devenv = false;
+      hm = true;
+    };
+    inherit ledger;
+  };
+  instructionsWriterConfig = {cfg, ...}: {
+    ai.copilot.activation.${instructionsWriter} = {
+      entry = "ai:copilot:materialize-instructions";
+      ledgers = {
+        ${contextLedger} = {
+          codec = "dir";
+          path = cfg.projectDir;
+        };
+        ${instructionsLedger} = {
+          codec = "dir";
+          path = "${cfg.projectDir}/instructions";
+        };
+      };
+      runWhenDisabled = true;
+    };
+  };
   # Copilot's repository settings schema: each key it accepts there, with the
   # kind of value it accepts. Read from copilot-cli 1.0.88's native
   # `runtime.node`: `userSettingsGovernanceKeys().repo` gives the fifteen
@@ -298,14 +337,16 @@ in
         (lib.optionalAttrs (!isHm) (lib.mkMerge [
           {
             ai.copilot.files = aiCommon.mkRuleFiles {
-              path = name: "${cfg.projectDir}/instructions/${name}.instructions.md";
+              fields = instructionFields instructionsLedger;
+              path = instructionPath cfg;
               rules = mergedRules;
               transformer = lib.ai.transformers.copilot.copilotTransformer;
             };
           }
           (lib.mkIf hasMergedContext {
-            ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" =
-              aiCommon.contentFileEntry mergedContext;
+            ai.copilot.files.${contextPath cfg} =
+              aiCommon.contentFileEntry mergedContext
+              // instructionFields contextLedger;
           })
         ]))
 
@@ -370,7 +411,19 @@ in
         })
       ];
 
+    # Home Manager writes neither surface, so nothing there can be switched off.
+    contentTargets = {
+      backend,
+      cfg,
+      mergedRules,
+      ...
+    }:
+      lib.optionalAttrs (backend == "devenv") {
+        context = contextPath cfg;
+        rules = lib.mapAttrs (name: _rule: instructionPath cfg name) mergedRules;
+      };
     devenv = {
+      migrationConfig = instructionsWriterConfig;
       # Package installation. ENV wiring needs no wrapper — devenv has a
       # native `env` attrset. MCP config DOES, and that is why `cfg.package`
       # alone was NOT enough here.

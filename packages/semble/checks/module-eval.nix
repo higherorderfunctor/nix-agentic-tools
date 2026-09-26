@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs evalDevenv evalHm hmLib mkTest mkWrapperGrepTest;
+  inherit (harness) aiStubs deliveredFiles evalDevenv evalHm hmLib mkTest mkWrapperGrepTest;
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
   inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 in {
@@ -689,6 +689,41 @@ in {
         && devenv.enterShell == ""
     );
 
+    # `install = false` drops the launchers and cache guard on both backends
+    # and nothing else: the rule every runtime receives is unchanged.
+    module-semble-install-off-keeps-rules = mkTest "semble-install-off-keeps-rules" (
+      let
+        config = install: {
+          ai = {
+            codex.enable = true;
+            programs.semble = {
+              cli.instructions.enable = true;
+              enable = true;
+              inherit install;
+            };
+          };
+        };
+        hmOn = (evalHm (config true)).config;
+        hmOff = (evalHm (config false)).config;
+        devenvOn = (evalDevenv (config true)).config;
+        devenvOff = (evalDevenv (config false)).config;
+        # Codex installs its own CLI, so Semble's package is the difference.
+        sembleOnly = on: off: lib.subtractLists off on;
+        isSemble = packages: builtins.length packages == 1 && lib.hasInfix "semble" (builtins.baseNameOf (builtins.head packages));
+      in
+        isSemble (sembleOnly hmOn.home.packages hmOff.home.packages)
+        && isSemble (sembleOnly devenvOn.packages devenvOff.packages)
+        && sembleOnly hmOff.home.packages hmOn.home.packages == []
+        && sembleOnly devenvOff.packages devenvOn.packages == []
+        && hmOn.home.activation ? sembleCacheGuard
+        && !(hmOff.home.activation ? sembleCacheGuard)
+        && !(lib.hasInfix "semble-cache-guard" devenvOff.enterShell)
+        && lib.hasInfix "semble-cache-guard" devenvOn.enterShell
+        && hmOff.home.file.".codex/AGENTS.md".text == hmOn.home.file.".codex/AGENTS.md".text
+        && (deliveredFiles devenvOff)."AGENTS.md".text == (deliveredFiles devenvOn)."AGENTS.md".text
+        && lib.hasInfix "Use `semble search`" (deliveredFiles devenvOff)."AGENTS.md".text
+    );
+
     module-semble-hm-cache-wrapper = let
       package =
         builtins.head
@@ -1101,7 +1136,7 @@ in {
         && lib.hasInfix "name: semble" hmKiroInstruction
         && lib.hasInfix "inclusion: always" hmKiroInstruction
         && !(devenvKiroSteering ? "semble.md")
-        && lib.hasInfix "Use `semble search`" devenv.files."AGENTS.md".text
+        && lib.hasInfix "Use `semble search`" (deliveredFiles devenv)."AGENTS.md".text
     );
 
     module-semble-hm-devenv-option-parity = mkTest "semble-hm-devenv-option-parity" (
@@ -1122,8 +1157,8 @@ in {
         && programShape hm ["ai" "codex" "programs" "semble"]
         == programShape devenv ["ai" "codex" "programs" "semble"]
         && builtins.attrNames (programShape hm ["ai" "programs" "semble"])
-        == ["cli" "defaultContent" "defaultModel" "enable" "finalPackage" "grammars" "mcp" "models" "package" "pathMappings" "subagent"]
-        # finalPackage is portable-only: no runtime override exists for it.
+        == ["cli" "defaultContent" "defaultModel" "enable" "finalPackage" "grammars" "install" "mcp" "models" "package" "pathMappings" "subagent"]
+        # finalPackage and install are portable-only: no runtime override exists for them.
         && builtins.attrNames (programShape hm ["ai" "codex" "programs" "semble"])
         == ["cli" "defaultContent" "defaultModel" "enable" "grammars" "mcp" "models" "package" "pathMappings" "subagent"]
         # mcp.content, mcp.pathMappings and mcp.rootExposure are gone, not aliased.

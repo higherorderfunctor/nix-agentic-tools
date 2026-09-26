@@ -105,7 +105,7 @@
     then throw "Kiro check requires exactly one --plan argument in an own body"
     else unquote (builtins.head (lib.splitString " " (builtins.elemAt parts 1)));
   dvMcpTaskExec = requireBody ["tasks" "ai:kiro:materialize-mcp" "exec"];
-  dvTaskExec = requireBody ["tasks" "ai:kiro:retire-steering-copies" "exec"];
+  dvTaskExec = requireBody ["tasks" "ai:kiro:materialize-steering" "exec"];
   hmHookPruneScript = requireBody ["home" "activation" "materialize-kiro-hooks-prune" "text"];
   hmHookWriteScript = requireBody ["home" "activation" "materialize-kiro-hooks-write" "text"];
   hmMcpPruneScript = requireBody ["home" "activation" "materialize-kiro-settings-prune" "text"];

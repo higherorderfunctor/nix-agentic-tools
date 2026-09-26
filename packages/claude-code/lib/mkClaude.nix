@@ -224,6 +224,10 @@
   # so it only removes what the ledger recorded. Home Manager links its rules,
   # and its generation diff retracts them.
   rulesLedger = "materialize/claude-rules.manifest";
+  # Where each unit lands, shared by the emitters below and `contentTargets`,
+  # so the disabled-file warning names the path the emitter really wrote.
+  contextPath = cfg: ".claude/${cfg.context.filename}";
+  rulePath = name: ".claude/rules/${name}.md";
   rulesWriter = "materialize-claude-rules";
   claudeRulesWriterConfig = _: {
     ai.claude.activation.${rulesWriter} = {
@@ -769,7 +773,7 @@ in
           hooks = sharedHooks.render effectiveHooks;
         }))
         (lib.mkIf hasMergedContext {
-          ai.claude.files.".claude/${cfg.context.filename}" =
+          ai.claude.files.${contextPath cfg} =
             aiCommon.contentFileEntry mergedContext;
         })
         # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
@@ -797,7 +801,7 @@ in
               };
               ledger = rulesLedger;
             };
-            path = name: ".claude/rules/${name}.md";
+            path = rulePath;
             rules = mergedRules;
             transformer = lib.ai.transformers.claude.claudeTransformer;
           };
@@ -899,5 +903,13 @@ in
     # second profile entry would collide at bin/claude. Devenv's integration
     # has no package option, so it keeps the shared transform's installation.
     devenv.migrationConfig = claudeRulesWriterConfig;
+    contentTargets = {
+      cfg,
+      mergedRules,
+      ...
+    }: {
+      context = contextPath cfg;
+      rules = lib.mapAttrs (name: _: rulePath name) mergedRules;
+    };
     hm.installPackage = null;
   }

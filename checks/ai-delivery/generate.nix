@@ -40,6 +40,11 @@
       then config.ai.internal.files
       else {};
     files = lib.filterAttrs (_: entry: entry != null) (cfg.files // shared);
+    # A shared target is written by the owner's writer, not the runtime's.
+    activationFor = path:
+      if shared ? ${path}
+      then config.ai.internal.activation
+      else cfg.activation;
     router = deliver {
       inherit cfg config options runtime;
       backend = mode;
@@ -82,7 +87,7 @@
         else path;
       destinations =
         if builtins.elem primitive schema.imperativePrimitives
-        then map (named: named // {writerAttr = writerPath mode named.name;}) (names entry.entry cfg.activation.${entry.entry})
+        then map (named: named // {writerAttr = writerPath mode named.name;}) (names entry.entry (activationFor path).${entry.entry})
         else [
           {
             phase = "write";
@@ -161,7 +166,16 @@
   retirementsFor = mode: runtime: let
     runtimeViews = builtins.attrValues views.${mode}.${runtime};
     view = views.${mode}.${runtime}.overwrite;
-    claimed = lib.concatMap (v: map (entry: entry.ledger) (builtins.attrValues v.files)) runtimeViews;
+    # A ledger is claimed only by an entry it actually OWNS on this backend. A
+    # linked entry may still name the ledger (Kiro steering links on Home
+    # Manager, copies on devenv), and there the writer only retires.
+    owns = v: path: entry:
+      builtins.elem (deliveryMethod.resolve {
+        inherit entry path;
+        inherit (v.cfg) methodFor;
+        backend = mode;
+      }) ["copy-ro" "shared"];
+    claimed = lib.concatMap (v: lib.mapAttrsToList (_path: entry: entry.ledger) (lib.filterAttrs (owns v) v.files)) runtimeViews;
     ledgerRows = writerName: writer: ledger: declaration: let
       primitive =
         if declaration.codec == "dir"

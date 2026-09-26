@@ -306,7 +306,7 @@ instruction building.
 | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
-| Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths |
+| Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
 | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
 | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi) | Same; project-native paths |
@@ -387,6 +387,11 @@ ai = {
 };
 ```
 
+A scoped rule can also name the documents that hold its text in `references`.
+Runtimes with path scoping ignore them; Codex, which reads one flat `AGENTS.md`,
+lists such a rule in a compact path-scoped index (globs plus links) instead of
+inlining its body into every turn.
+
 Enabling any harness also installs a sandbox-safe Git SSH default. It preserves
 Home Manager's `~/.ssh/config` host/key routing when a Linux user-namespace
 sandbox remaps the Nix-store target's owner; devenv exports the same wrapper as
@@ -461,9 +466,12 @@ ai = {
 };
 ```
 
-Claude and Codex compose the guidance into their single always-loaded
-`CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
-`.kiro/steering/semble.md`.
+Claude writes the guidance as the always-on rule file `.claude/rules/semble.md`,
+and Codex inlines it in `AGENTS.md`. Kiro writes it to
+`.kiro/steering/semble.md` under Home Manager and, under devenv, where it shares
+the repository `AGENTS.md`, inlines it there.
+`ai.programs.semble.install = false` keeps every rule but skips installing the
+package, for a shell that must not carry it.
 
 `models` routes searches across embedding models by content: a search uses the
 entry whose content set equals its `--content` (or `defaultContent`) exactly,

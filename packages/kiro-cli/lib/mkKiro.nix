@@ -507,20 +507,23 @@
         lib.nameValuePair "${name}.json" {text = content;})
       (mkAllHookFiles cfg);
 
-  # Declared outside the product gate so upgrade+disable still drains the old
-  # copy ledger before Home Manager checks the replacement steering symlinks.
+  # Project steering is a read-only COPY on devenv and a link on Home
+  # Manager. A committed or hand-kept `.kiro/steering/` then never holds a
+  # store symlink that dangles elsewhere, and the directory ledger claims
+  # only the files it wrote, so a developer's own steering files beside them
+  # survive every reload. On Home Manager the same ledger only retires the
+  # copies an older generation owned. Declared outside the product gate so
+  # both N→0 and upgrade+disable drain what the ledger records before Home
+  # Manager checks the replacement steering symlinks.
+  steeringWriter = "steering";
+  steeringLedger = "materialize/kiro-steering.manifest";
   kiroMigrationConfig = {cfg, ...}: {
-    ai.kiro.activation.retireSteering = {
+    ai.kiro.activation.${steeringWriter} = {
       entry = {
-        devenv = "ai:kiro:retire-steering-copies";
+        devenv = "ai:kiro:materialize-steering";
         hm = "retire-materialize-kiro-steering-ledger";
       };
-      # The legacy steering copies an OLDER generation owned. Steering is
-      # delivered through the ordinary runtime-file symlink sink now (the
-      # pinned Kiro follows steering symlinks), and no file claims this
-      # ledger, so the router emits an empty target that only retracts what a
-      # manifest from before that change still records.
-      ledgers."materialize/kiro-steering.manifest" = {
+      ledgers.${steeringLedger} = {
         codec = "dir";
         path = "${cfg.configDir}/steering";
       };
@@ -663,6 +666,11 @@
       )
     ];
 
+  # Where each steering unit lands, shared by the emitters below and
+  # `contentTargets`.
+  steeringPath = cfg: name: "${cfg.configDir}/steering/${name}.md";
+  contextSteeringPath = cfg: "${cfg.configDir}/steering/${cfg.context.filename}";
+
   # An unscoped always-on rule, which AGENTS.md carries when Kiro shares it.
   isSharedRule = rule:
     rule.matcher
@@ -670,9 +678,9 @@
     && ((rule.inclusion or null) == null || rule.inclusion == "always");
 
   # Steering emitters route first, render second, and contribute the final
-  # native files to `ai.kiro.files` at default priority. The current pinned
-  # Kiro (2.18.1) follows steering symlinks in both project and Home
-  # Manager-like layouts, so ordinary backend file delivery is sufficient.
+  # native files to `ai.kiro.files` at default priority. Rule steering is a
+  # read-only copy on devenv and a link on Home Manager (see
+  # `kiroMigrationConfig`); the Home Manager context file stays a link.
   mkSteeringEmitters = {
     cfg,
     mergedRules,
@@ -694,7 +702,16 @@
     {
       ai.kiro.files = aiCommon.mkRuleFiles {
         context = name: {inherit name;};
-        path = name: "${cfg.configDir}/steering/${name}.md";
+        # A default fact, so a consumer's own fact on one file still wins.
+        fields = {
+          entry = steeringWriter;
+          facts.symlinkReadable = lib.mkDefault {
+            devenv = false;
+            hm = true;
+          };
+          ledger = steeringLedger;
+        };
+        path = steeringPath cfg;
         rules = steeringRules;
         transformer = lib.ai.transformers.kiro.kiroTransformer;
       };
@@ -703,7 +720,7 @@
     # reads it natively as always-included content). Written without
     # frontmatter; root context precedes per-CLI context.
     (lib.mkIf (hasContext && !sharedAgentsMd) {
-      ai.kiro.files."${cfg.configDir}/steering/${cfg.context.filename}" =
+      ai.kiro.files.${contextSteeringPath cfg} =
         aiCommon.contentFileEntry mergedContext;
     })
   ];
@@ -1818,6 +1835,27 @@ in
         ]
         ++ steeringEmitters);
     installPackage = kiroInstallPackage;
+    # Home Manager: steering for every unit. devenv: the shared AGENTS.md for
+    # the context and the unscoped always-on rules, steering for the rest.
+    contentTargets = {
+      backend,
+      cfg,
+      mergedRules,
+      ...
+    }:
+      if backend == "hm"
+      then {
+        context = contextSteeringPath cfg;
+        rules = lib.mapAttrs (name: _rule: steeringPath cfg name) mergedRules;
+      }
+      else {
+        context = cfg.context.filename;
+        rules = lib.mapAttrs (name: rule:
+          if isSharedRule rule
+          then cfg.context.filename
+          else steeringPath cfg name)
+        mergedRules;
+      };
     migrationConfig = kiroMigrationConfig;
     # Only unscoped always-on rules; steering carries the rest.
     sharedAgentsMd = {
