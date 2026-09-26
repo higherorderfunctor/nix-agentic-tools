@@ -486,6 +486,23 @@ const MEMO_DECL_RE =
 // closed, like every other anchor here.
 const LAZY_METHOD_HEAD_RE = /lazy\(([A-Za-z0-9_$]+)\)\{/g;
 
+// Clause (c): some zero-argument arrow in the method's `return` expression
+// fills the cell INSIDE its own body. Finding the fill anywhere in the method
+// is not enough — `t=e(),()=>t` evaluates eagerly and caches nothing lazily,
+// and the resetter arrow alone would satisfy a bare "has an arrow" test. A
+// braced arrow body is bounded by its braces; a concise one is the method's
+// trailing expression, so it runs to the end of the body.
+function returnsFillingArrow(body, fill) {
+  const ret = /(?:^|[^A-Za-z0-9_$.])return(?![A-Za-z0-9_$])/.exec(body);
+  if (!ret) return false;
+  for (const a of body.slice(ret.index).matchAll(/\(\)=>/g)) {
+    const start = ret.index + a.index + a[0].length;
+    const end = body[start] === "{" ? matchBraces(body, start) : body.length;
+    if (end >= 0 && fill.test(body.slice(start, end))) return true;
+  }
+  return false;
+}
+
 export function locateLazyRegistryMethod(src) {
   const hits = [];
   for (const m of src.matchAll(LAZY_METHOD_HEAD_RE)) {
@@ -501,11 +518,11 @@ export function locateLazyRegistryMethod(src) {
     const clears = new RegExp(`(?:^|[^A-Za-z0-9_$.])${escId(t)}=void 0`).test(
       body,
     );
-    const fills = new RegExp(
+    const fill = new RegExp(
       `(?:^|[^A-Za-z0-9_$.])${escId(t)}\\?{0,2}=${escId(param)}\\(\\)`,
-    ).test(body);
-    const thunk = body.includes("()=>");
-    if (registers && clears && fills && thunk) hits.push({ param, cell: t });
+    );
+    if (registers && clears && returnsFillingArrow(body, fill))
+      hits.push({ param, cell: t });
   }
   return hits.length === 1 ? hits[0] : null;
 }

@@ -110,9 +110,14 @@ check(
   "memo-bun.js: bun lowering is NOT mistaken for the registry",
   L.locateLazyRegistryMethod(fixture("memo-bun.js.txt")) === null,
 );
+check(
+  "decoy-eager-fill.js: a returned arrow that only READS the cell is not lazy",
+  L.locateLazyRegistryMethod(fixture("decoy-eager-fill.js.txt")) === null,
+);
 
 // ── Decoys must not confirm, however the importing module uses them ──
 for (const file of [
+  "decoy-eager-fill.js.txt",
   "decoy-no-resetter.js.txt",
   "decoy-plain-call.js.txt",
   "decoy-two-registries.js.txt",
