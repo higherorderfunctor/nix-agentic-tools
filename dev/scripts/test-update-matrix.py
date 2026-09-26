@@ -1295,7 +1295,7 @@ class HoldBackEscalationTest(unittest.TestCase):
     @staticmethod
     def fake_predecessor_gh(artifacts=None, payload=None, listing_fails=False, download_fails=False):
         """A `gh` double for previous_status: the artifact listing, then the download."""
-        def fake_gh(*args):
+        def fake_gh(*args, **_):
             if args[0] == "api":
                 if listing_fails:
                     raise matrix.GhError("gh api failed after 3 attempts: HTTP 502")
@@ -1339,6 +1339,31 @@ class HoldBackEscalationTest(unittest.TestCase):
             for payload in ("{not json", "[]", "null", json.dumps({"name": "oxlint"}), json.dumps(self.receipt("beads", "HELD BACK"))):
                 self.assertEqual(status(payload=payload)[:2], (matrix.UNREADABLE, "u4"), payload)
             self.assertEqual(matrix.previous_status("o/r", None, "oxlint", Path(workspace))[:2], (None, None))
+
+    def test_download_retry_starts_from_a_clean_directory(self):
+        # `gh run download` refuses to overwrite a file an earlier failed
+        # attempt already extracted, so a retry into the same --dir would fail
+        # on "file exists" forever instead of recovering.
+        run = {"id": 4, "html_url": "u4"}
+        held = json.dumps(self.receipt("oxlint", "HELD BACK"))
+        listing = json.dumps({"artifacts": [{"name": "update-receipt-oxlint", "expired": False}]})
+        attempts = []
+
+        def fake_run(argv, **_):
+            if argv[1] == "api":
+                return subprocess.CompletedProcess(argv, 0, listing, "")
+            destination = Path(argv[argv.index("--dir") + 1])
+            target = destination / "update-receipt.json"
+            attempts.append(target.exists())
+            if target.exists():
+                return subprocess.CompletedProcess(argv, 1, "", f"error extracting: {target}: file exists")
+            destination.mkdir(parents=True, exist_ok=True)
+            target.write_text(held if len(attempts) > 1 else held[:5])
+            return subprocess.CompletedProcess(argv, 0 if len(attempts) > 1 else 1, "", "" if len(attempts) > 1 else "HTTP 502")
+
+        with tempfile.TemporaryDirectory() as workspace, mock.patch.object(matrix.time, "sleep"), mock.patch.object(matrix.subprocess, "run", side_effect=fake_run):
+            self.assertEqual(matrix.previous_status("o/r", run, "oxlint", Path(workspace)), ("HELD BACK", "u4", None))
+        self.assertEqual(attempts, [False, False])
 
     def escalate(self, receipts, overrides):
         """Run the escalate command against fixture receipts; return (rc, stdout).
@@ -1402,7 +1427,7 @@ class HoldBackEscalationTest(unittest.TestCase):
         # runs here; only `gh` is faked.
         held = self.receipt("kimchi-docs", "HELD BACK", "HELD BACK: kimchi-docs (nix-update, formatter or commit failed)")
         overrides = "\n".join([
-            "def fake_gh(*args):",
+            "def fake_gh(*args, **_):",
             "    if args[0] == 'api':",
             "        return json.dumps({'artifacts': [{'name': 'update-receipt-kimchi-docs', 'expired': False}]})",
             "    raise m.GhError('gh run download failed after 3 attempts: HTTP 502\\n(stderr line 2)')",

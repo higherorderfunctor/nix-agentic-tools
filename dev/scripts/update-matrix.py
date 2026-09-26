@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -172,8 +173,12 @@ class GhError(RuntimeError):
     """`gh` still failed after GH_ATTEMPTS tries; the message carries its stderr."""
 
 
-def gh(*args):
+def gh(*args, fresh_dir=None):
     """Run `gh` and return stdout, retrying; raise GhError if every attempt fails.
+
+    fresh_dir, when given, is deleted before every attempt. `gh run download`
+    refuses to overwrite a file an earlier failed attempt already extracted, so
+    without it every retry would fail on "file exists" and hide the real cause.
 
     There is no tolerated-failure mode. A caller that can proceed without the
     answer catches GhError and must say what it lost: silently reading an API
@@ -181,12 +186,19 @@ def gh(*args):
     when it is hardest to notice.
     """
     for attempt in range(1, GH_ATTEMPTS + 1):
+        if fresh_dir is not None:
+            shutil.rmtree(fresh_dir, ignore_errors=True)
         result = subprocess.run(["gh", *args], capture_output=True, text=True)
         if result.returncode == 0:
             return result.stdout
         if attempt < GH_ATTEMPTS:
             time.sleep(GH_RETRY_DELAY_SECONDS * attempt)
     raise GhError(f"gh {' '.join(args)} failed after {GH_ATTEMPTS} attempts: {result.stderr.strip()}")
+
+
+def download(repo, run_id, artifact, destination):
+    """Download one run artifact into `destination`, starting clean on every attempt."""
+    gh("run", "download", str(run_id), "--repo", repo, "--name", artifact, "--dir", str(destination), fresh_dir=destination)
 
 
 def previous_sweep(repo, current_run_id):
@@ -235,7 +247,7 @@ def previous_status(repo, run, name, workspace):
         return None, url, f"that sweep has no unexpired {artifact} artifact"
     destination = workspace / f"previous-{run['id']}-{name}"
     try:
-        gh("run", "download", str(run["id"]), "--repo", repo, "--name", artifact, "--dir", str(destination))
+        download(repo, run["id"], artifact, destination)
         receipt = json.loads((destination / "update-receipt.json").read_text())
     except (GhError, OSError, ValueError) as error:
         return UNREADABLE, url, f"its {artifact} artifact exists but could not be read: {error}"
@@ -251,7 +263,7 @@ def preparation_reason(repo, run_id, name, workspace):
     """(excerpt, None) from this sweep's own preparation log, or (None, why not)."""
     destination = workspace / f"report-{name}"
     try:
-        gh("run", "download", str(run_id), "--repo", repo, "--name", f"update-report-{name}", "--dir", str(destination))
+        download(repo, run_id, f"update-report-{name}", destination)
         logs = sorted(destination.rglob("prepare.log"))
         excerpt = held_back_reason(logs[0].read_text(errors="replace")) if logs else None
     except (GhError, OSError) as error:
