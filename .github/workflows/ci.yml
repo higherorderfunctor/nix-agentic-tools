@@ -13,10 +13,6 @@ concurrency:
 permissions:
   contents: read
 
-# TODO: remove once DeterminateSystems/nix-installer-action ships node24
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build-packages:
     name: packages (${{ matrix.system }}, shard ${{ matrix.shard }})
@@ -102,14 +98,14 @@ jobs:
           shopt -s inherit_errexit 2>/dev/null || :
           nix build ".#checks.$SYSTEM.semble-languages-extracted" --no-link
       - name: Upload successful shard receipt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.system }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/receipt.json
           if-no-files-found: error
       - name: Upload build diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-results-${{ matrix.system }}-${{ matrix.shard }}
           path: |
@@ -177,7 +173,7 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           test "$RESULT" = success
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: packages-${{ matrix.system }}-*
           path: receipts
