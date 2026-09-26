@@ -163,13 +163,12 @@ registry every package contributes a row to. It replaced the flat, top-level
   rows use `--use-update-script`, with `--override-filename` when needed.
   nix-update runs the first element of `updateScript` as argv[0], so it must be
   an executable FILE: a `writeShellApplication` output is a directory and needs
-  `lib.getExe`. kimchi-docs shipped the bare derivation and was held back with
-  exit 126 from its first sweep; `checks.update-script-executable` now realizes
-  every row's argv[0] and fails on a non-executable one. Multiple roles sharing
-  a source have one update target; Python source slices can declare
-  `passthru.updateSource` so completeness follows their common pin. Derive
-  counts from `nix eval --json .#updateTargets`; the sweep also includes root
-  input targets, so that count is not the sweep's PR ceiling.
+  `lib.getExe`. `checks.update-script-executable` realizes every row's argv[0]
+  and fails on a non-executable one. Multiple roles sharing a source have one
+  update target; Python source slices can declare `passthru.updateSource` so
+  completeness follows their common pin. Derive counts from
+  `nix eval --json .#updateTargets`; the sweep also includes root input targets,
+  so that count is not the sweep's PR ceiling.
 - **`.#updateTargets`** — selected from `lib/facets/repository.nix`'s native
   module evaluation. It merges discovered owner registries with workspace policy
   ; ownership validation rejects competing package keys before priorities can
