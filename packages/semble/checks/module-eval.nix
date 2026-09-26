@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs evalDevenv evalHm hmLib mkTest mkWrapperGrepTest;
+  inherit (harness) aiStubs deliveredFiles evalDevenv evalHm hmLib mkTest mkWrapperGrepTest;
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
   inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 in {
@@ -1101,7 +1101,7 @@ in {
         && lib.hasInfix "name: semble" hmKiroInstruction
         && lib.hasInfix "inclusion: always" hmKiroInstruction
         && !(devenvKiroSteering ? "semble.md")
-        && lib.hasInfix "Use `semble search`" devenv.files."AGENTS.md".text
+        && lib.hasInfix "Use `semble search`" (deliveredFiles devenv)."AGENTS.md".text
     );
 
     module-semble-hm-devenv-option-parity = mkTest "semble-hm-devenv-option-parity" (

@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm mkTest ownPlan tomlFormat;
+  inherit (harness) aiStubs deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm mkTest ownPlan tomlFormat;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
   # in the copy writer's plan, keyed by file name, not in home.file / files.
   execpolicyTarget = evaluated:
@@ -1686,7 +1686,7 @@ in {
       in
         hm.config.home.file.".codex/AGENTS.md".text
         == expected
-        && devenv.config.files."AGENTS.md".text == expected
+        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
         && !(lib.hasInfix "---" expected)
     );
 
@@ -1743,7 +1743,7 @@ in {
       in
         hm.config.home.file.".codex/AGENTS.md".text
         == expected
-        && devenv.config.files."AGENTS.md".text == expected
+        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
     );
 
     # A scoped rule that names the documents holding its text is listed, not
@@ -1789,7 +1789,7 @@ in {
       in
         hm.config.home.file.".codex/AGENTS.md".text
         == expected
-        && devenv.config.files."AGENTS.md".text == expected
+        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
         && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? alpha
         && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)
     );
@@ -1886,7 +1886,7 @@ in {
       in
         failed
         != null
-        && !(empty.config.files ? "AGENTS.md")
+        && !((deliveredFiles empty.config) ? "AGENTS.md")
     );
 
     module-codex-rule-runtime-replaces-root = mkTest "codex-rule-runtime-replaces-root" (

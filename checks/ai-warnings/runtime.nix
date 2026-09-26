@@ -58,6 +58,10 @@
       enable = true;
     };
   };
+  # The shell-entry report and the retired-path snapshot, in one file, so a
+  # check can read both manifests they are handed.
+  observer = name: evaluated:
+    pkgs.writeText name (evaluated.config.enterShell + "\n" + evaluated.config.tasks."ai:delivery:observe-retired".exec);
   stubBin = pkgs.writeShellScript "kiro-warning-stub" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -94,9 +98,9 @@ in {
         ${lib.getExe reminder} \
         ${wrappers} \
         ${../../packages/claude-code/lib/delegation-clamp.sh} \
-        ${pkgs.writeText "warning-observer-shell" enabled.config.enterShell} \
-        ${pkgs.writeText "kimchi-warning-observer-shell" kimchi.config.enterShell} \
-        ${pkgs.writeText "shared-agents-md-observer-shell" sharedAgentsMd.config.enterShell}
+        ${observer "warning-observer-shell" enabled} \
+        ${observer "kimchi-warning-observer-shell" kimchi} \
+        ${observer "shared-agents-md-observer-shell" sharedAgentsMd}
       touch "$out"
     '';
   checks.ai-warnings-files-wired = harness.mkTest "ai-warnings-files-wired" (

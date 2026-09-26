@@ -19,7 +19,8 @@
 > `sharedAgentsMd` result. Every reconciled document is one
 > `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
 > `index` entries: Codex renders a scoped rule that names `references` as a
-> path-scoped index entry instead of inlining its body.
+> path-scoped index entry instead of inlining its body. The shared AGENTS.md map
+> lowers through the router as `internal`, as a read-only copy.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -345,7 +346,9 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   context and publishes it on devenv. A limit is published even without content,
   because the runtime reads the file whoever wrote it.
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
-  single-owner map → `lib/ai/app/sharedAgentsMd.nix`
+  single-owner map → `lib/ai/app/sharedAgentsMd.nix`, which lowers that map
+  through the devenv adapter as the pseudo-runtime `internal` (a read-only copy
+  by default, written by `ai:agents-md:materialize`)
 - B7 public file-option declaration and runtime enable gate →
   `lib/ai/app/mkBackendTransform.nix`
 - L5 generic backend lowering → `lib/ai/deliver.nix` (the router) and

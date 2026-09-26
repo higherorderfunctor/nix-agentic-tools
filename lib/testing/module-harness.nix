@@ -335,6 +335,32 @@
     if lib.length hits == 1
     then lib.head hits
     else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
+  # Every file devenv delivers, whichever writer lands it: the native `files`
+  # sink entries for symlinks, plus each unit of an owned writer's directory
+  # plan for a read-only copy, as `{text}` or `{source}` plus its `mode`. The
+  # shared AGENTS.md owner (`ai.internal`) is a writer like any runtime. Read
+  # it where a check asks what reaches the project tree rather than how: a
+  # file that moves from a symlink to a copy stays where the check looks.
+  # Takes the evaluated `config`.
+  deliveredFiles = config: let
+    copiesOf = target:
+      lib.optionals (target.codec == "dir") (lib.mapAttrsToList (address: unit: {
+          name =
+            if target.path == "."
+            then address
+            else "${target.path}/${address}";
+          value =
+            lib.optionalAttrs (unit ? text) {inherit (unit) text;}
+            // lib.optionalAttrs (unit ? store) {source = unit.store;}
+            // lib.optionalAttrs (unit ? mode) {inherit (unit) mode;};
+        })
+        target.units);
+    copies = lib.concatMap (plans:
+      lib.concatMap (record: lib.concatMap copiesOf record.plan.targets)
+      (builtins.attrValues plans))
+    (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) (harnessNames ++ ["internal"]));
+  in
+    builtins.listToAttrs copies // config.files;
   # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
   # Null unless `envelope` is the file's ONLY top-level key, so a bare
   # per-server map (which Copilot and Kiro both reject) never matches.
@@ -347,6 +373,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs deliveredFiles devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   inherit testing;
 }

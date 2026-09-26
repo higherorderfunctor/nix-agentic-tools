@@ -3,12 +3,21 @@
 # units; this module renders each filename once after the module system has
 # deduplicated equal definitions and rejected divergent definitions for a key.
 # Applicable public final-file entries from enabled runtimes
-# arbitrate here too, before the single native sink, so replacement and
+# arbitrate here too, before the single writer, so replacement and
 # tombstones cannot bypass ownership or their runtime's sole enable gate.
+#
+# The result lands as a read-only COPY, not a store symlink. A repository
+# AGENTS.md is normally committed, and a committed symlink into /nix/store
+# dangles on every other machine and on github.com. It goes through the same
+# router as a runtime's files, as the pseudo-runtime `internal`, with one
+# writer whose directory ledger at the project root claims each key it wrote
+# and nothing else, so it also retracts a key that loses its last
+# contributor. An entry that states its own `method` keeps it.
 {
   config,
   lib,
   options,
+  pkgs,
   ...
 }: let
   isDevenv =
@@ -20,6 +29,9 @@
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
+  adapters = import ../adapters {inherit lib pkgs;};
+  writer = "materialize-agents-md";
+  ledger = "materialize/agents-md.manifest";
   deduplicatingType = {
     name,
     check,
@@ -121,8 +133,27 @@
     isDevenv
     && (config.ai.internal.agentsMdTargets.${runtime} or null) == path
     && builtins.hasAttr path config.ai.internal.agentsMd;
+  isAggregate = path: isDevenv && builtins.hasAttr path config.ai.internal.agentsMd;
+  # The aggregate's method, and what a public claim on it resolves to: the
+  # read-only copy unless the entry names another.
+  aggregateMethod = _: "copy-ro";
+  # Carried by EVERY definition of a shared target, generated or projected
+  # from a runtime's public entry, so whichever one wins still names the
+  # writer, its ledger and the consumer fact that makes it a copy. A sibling
+  # definition cannot add them: the generated body is a whole-entry default
+  # that any ordinary definition discards.
+  ownership = {
+    entry = writer;
+    facts.symlinkReadable = false;
+    inherit ledger;
+  };
+  # Only what can differ for a whole shared file crosses: its bytes and how it
+  # lands. The runtime entry's other fields (its own writer, facts, sink) name
+  # that runtime's delivery, not the aggregate's.
   projectEntry = entry:
-    entry
+    ownership
+    // lib.optionalAttrs (entry.method != null) {inherit (entry) method;}
+    // lib.optionalAttrs (entry.mode != null) {inherit (entry) mode;}
     // {
       # `enable` is forwarded only where the runtime entry defines it: a
       # restated default `false` would read as a deliberate disable here and
@@ -140,7 +171,10 @@
       inherit entry path runtime;
       method = deliveryMethod.resolve {
         inherit backend entry path;
-        inherit (cfg) methodFor;
+        methodFor =
+          if isAggregate path
+          then aggregateMethod
+          else cfg.methodFor;
       };
     }) (lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files)))
   runtimeNames;
@@ -159,12 +193,13 @@
     })
     contested;
   # A public claim on an aggregate also competes with its generated owner even
-  # when no second runtime supplies a public override. That owner is a native
-  # symlink; silently ignoring a claimant's method would lie about delivery.
+  # when no second runtime supplies a public override. The owner writes a
+  # whole file, as a copy or a link; a method it cannot honor would lie about
+  # delivery.
   aggregateAssertions = map (claim: {
-    assertion = sharedTarget claim.runtime claim.path && claim.method == "symlink";
-    message = "ai.${claim.runtime}.files.\"${claim.path}\": the shared AGENTS.md aggregate requires a matching context target and one method (symlink).";
-  }) (lib.filter (claim: isDevenv && builtins.hasAttr claim.path config.ai.internal.agentsMd) claims);
+    assertion = sharedTarget claim.runtime claim.path && builtins.elem claim.method ["copy-ro" "symlink"];
+    message = "ai.${claim.runtime}.files.\"${claim.path}\": the shared AGENTS.md aggregate requires a matching context target and a whole-file method (copy-ro or symlink).";
+  }) (lib.filter (claim: isAggregate claim.path) claims);
   sharedOverrideDefinitions = map (runtime: let
     inherit (config.ai.${runtime}) enable files;
   in
@@ -196,6 +231,14 @@ in {
         instead of inferring the key from a runtime option.
       '';
     };
+    _ownPlans = deliveryOptions.ownPlansOption;
+    activation = lib.mkOption {
+      type = deliveryOptions.writerMapType;
+      default = {};
+      internal = true;
+      visible = false;
+      description = "The writer that materializes the shared AGENTS.md targets on devenv.";
+    };
     files = lib.mkOption {
       type = deliveryOptions.fileMapType;
       default = {};
@@ -222,25 +265,33 @@ in {
           # store-backed body is read; a sibling-only override is diagnosed as an
           # empty entry and must restate content.
           ai.internal.files = lib.mapAttrs (_filename: text:
-            lib.mkDefault (
-              if text == ""
-              then {
+            lib.mkDefault (ownership
+              // {
                 content = {
-                  enable = false;
+                  enable = text != "";
                   inherit text;
                 };
-              }
-              else {
-                content = {
-                  enable = true;
-                  inherit text;
-                };
-              }
-            ))
+              }))
           generatedRendered;
         })
-        (lib.mkIf (config.ai.internal.files != {}) {
-          files = runtimeFiles.liveFiles config.ai.internal.files;
+        # Declared whether or not any key has content, so the writer that
+        # wrote AGENTS.md is still there to retract it when nothing does.
+        {
+          ai.internal.activation.${writer} = {
+            entry = "ai:agents-md:materialize";
+            ledgers.${ledger} = {
+              codec = "dir";
+              path = ".";
+            };
+          };
+        }
+        (adapters.devenv {
+          cfg = {
+            inherit (config.ai.internal) activation files;
+            methodFor = deliveryMethod.byRule;
+          };
+          inherit config options;
+          runtime = "internal";
         })
       ]
       ++ sharedOverrideDefinitions

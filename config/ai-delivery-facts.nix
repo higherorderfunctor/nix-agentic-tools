@@ -170,8 +170,11 @@
           instructions.text = "probe";
         };
       } {}
+    # The row's OWN runtime's context: the shared AGENTS.md and Copilot's
+    # repository context are copies whose writer must see it change. For the
+    # Kiro retirement row this is the probe it always had.
     else if row.surface == "context"
-    then probe ["ai" "kiro" "context"] {text = "probe";} {}
+    then probe ["ai" row.ecosystem "context"] {text = "probe";} {}
     else if row.surface == "hooks"
     then hookProbe
     else if row.surface == "mcpServers"
@@ -191,6 +194,16 @@
     then probe ["ai" "rules"] {probe.text = "probe";} {}
     else if row.ecosystem == "codex" && row.surface == "rules" && lib.hasInfix "/rules/" row.target
     then probe ["ai" "codex" "execpolicyRules"] {probe = "prefix_rule(pattern = [\"probe\"], decision = \"allow\")";} {}
+    # A rule copy's writer must see a rule of the kind it carries: the shared
+    # AGENTS.md takes an unscoped one, Kiro steering and Copilot instruction
+    # files a scoped one.
+    else if row.surface == "rules"
+    then
+      probe ["ai" "rules"] {
+        probe =
+          {text = "probe";}
+          // lib.optionalAttrs (!lib.hasSuffix "AGENTS.md" row.target) {matcher = ["probe/**"];};
+      } {}
     else if row.ecosystem == "claude"
     then probe ["ai" "claude" "unpinLaunchEffort"] {probe = true;} {}
     else if row.ecosystem == "kimchi"
@@ -225,7 +238,10 @@
     row
     // lib.optionalAttrs imperative {probe = declaration;}
     // lib.optionalAttrs (imperative && row.surface == "settings") {inputOptions = [declaration.option];}
-    // lib.optionalAttrs (imperative && row.surface == "context") {
+    # Only a retirement row is declaration-independent. An owned COPY of a
+    # context file (the shared AGENTS.md, Copilot's repository context) is an
+    # ordinary writer whose body follows the declaration.
+    // lib.optionalAttrs (imperative && row.surface == "context" && lib.hasSuffix "/<legacy-owned-file>" row.target) {
       declarationIndependent = "This writer removes what a PRIOR generation's ledger recorded. Its `own` target declares NO units, so its plan — and therefore the whole body, which is one command over two store paths — is the same under every declaration by construction.";
     }
     // lib.optionalAttrs (row.ecosystem == "codex" && row.surface == "rules" && lib.hasInfix "/rules/" row.target) {

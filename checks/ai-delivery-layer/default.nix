@@ -13,7 +13,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm harnessNames hasLiteral mkTest ownPlan;
+  inherit (harness) deliveredFiles evalDevenv evalHm harnessNames hasLiteral mkTest ownPlan;
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
   ownedControls = import ../ai-delivery/owned-fixtures.nix {inherit harness lib;};
 
@@ -385,7 +385,7 @@ in {
           files =
             if cfg ? home
             then cfg.home.file
-            else cfg.files;
+            else deliveredFiles cfg;
           inheritedPath =
             if cfg ? home
             then ".kiro/steering/inherited.md"
@@ -557,10 +557,10 @@ in {
       in
         replaced.ai.internal.files."AGENTS.md".content.text
         == "THIRD-CLAIMANT"
-        && replaced.files."AGENTS.md".text == "THIRD-CLAIMANT"
+        && (deliveredFiles replaced)."AGENTS.md".text == "THIRD-CLAIMANT"
         && lib.all (assertion: assertion.assertion) replaced.assertions
         && !suppressed.ai.internal.files."AGENTS.md".content.enable
-        && !(suppressed.files ? "AGENTS.md")
+        && !((deliveredFiles suppressed) ? "AGENTS.md")
         && lib.all (assertion: assertion.assertion) suppressed.assertions
     );
 
@@ -596,40 +596,64 @@ in {
       ) [evalHm evalDevenv]
     );
 
+    # The shared aggregate has ONE method. A runtime's `methodFor` does not
+    # reach it (the aggregate is not that runtime's file), so only an explicit
+    # `method` on a claimant can diverge, and a divergence is rejected. With
+    # none stated, it lands as the read-only copy; a claimant's explicit
+    # `symlink` keeps the store link.
     module-delivery-shared-agentsmd-needs-one-method = mkTest "delivery-shared-agentsmd-needs-one-method" (
       let
-        inherit
+        evaluate = kimchiMethod:
           (evalDevenv {
             ai = {
               codex = {
                 enable = true;
-                files."AGENTS.md".content.text = "SAME";
+                files."AGENTS.md" = {
+                  content.text = "SAME";
+                  method = "symlink";
+                };
               };
               kimchi = {
                 enable = true;
-                files."AGENTS.md".content.text = "SAME";
-                methodFor = lib.mkForce ({
-                    path,
-                    default,
-                    ...
-                  } @ args:
-                    if path == "AGENTS.md"
-                    then "copy-ro"
-                    else default args);
+                files."AGENTS.md" =
+                  {content.text = "SAME";}
+                  // lib.optionalAttrs (kimchiMethod != null) {method = kimchiMethod;};
+                methodFor = lib.mkForce (_: "shared");
               };
               kiro = {
                 enable = true;
-                files."AGENTS.md".content.text = "SAME";
+                files."AGENTS.md" = {
+                  content.text = "SAME";
+                  method = "symlink";
+                };
               };
             };
-          })
-          config
-          ;
+          }).config;
+        divergent = evaluate "copy-ro";
+        linked = evaluate "symlink";
+        copied =
+          (evalDevenv {
+            ai = {
+              codex.enable = true;
+              context.text = "GENERATED";
+            };
+          }).config;
+        # Two explicit methods on one aggregate cannot both be honored. The
+        # projected claims already conflict as option definitions, so the
+        # evaluation fails before the method assertion is ever read.
+        divergentFails =
+          !(builtins.tryEval (builtins.deepSeq divergent.ai.internal.files."AGENTS.md".method true)).success
+          || lib.any (assertion:
+            !assertion.assertion
+            && lib.hasInfix "one path has one owner and one method" assertion.message)
+          divergent.assertions;
       in
-        lib.any (assertion:
-          !assertion.assertion
-          && lib.hasInfix "one path has one owner and one method" assertion.message)
-        config.assertions
+        divergentFails
+        && lib.all (assertion: assertion.assertion) linked.assertions
+        && linked.files."AGENTS.md".text == "SAME"
+        && !(copied.files ? "AGENTS.md")
+        && (deliveredFiles copied)."AGENTS.md".text == "GENERATED"
+        && (lib.head (ownPlan "internal" "ai:agents-md:materialize" {config = copied;}).targets).path == "."
     );
 
     module-delivery-normalized-rules-reach-files = mkTest "delivery-normalized-rules-reach-files" (
@@ -652,7 +676,7 @@ in {
           files =
             if cfg ? home
             then cfg.home.file
-            else cfg.files;
+            else deliveredFiles cfg;
           option = evaluated.options.ai.kiro.normalized.rules;
         in
           builtins.attrNames cfg.ai.kiro.normalized.rules
@@ -986,7 +1010,7 @@ in {
           evaluate = evalDevenv;
           path = ".github/instructions/probe.instructions.md";
           runtime = "copilot";
-          sibling = fact;
+          sibling.facts.symlinkReadable = true;
         };
         kimchiContext = withSibling {
           evaluate = evalHm;
@@ -1007,7 +1031,7 @@ in {
         && lib.hasInfix "GENERATED-RULE" claudeRule.content.text
         && claudeRule.method == "copy-ro"
         && lib.hasInfix "GENERATED-RULE" copilotRule.content.text
-        && copilotRule.facts.symlinkReadable == false
+        && copilotRule.facts.symlinkReadable == true
         && kimchiContext.content.text == "GENERATED-CONTEXT"
         && kimchiContext.facts.symlinkReadable == false
         && lib.hasInfix "GENERATED-RULE" kiroRule.content.text

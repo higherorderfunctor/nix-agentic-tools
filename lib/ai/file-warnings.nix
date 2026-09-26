@@ -97,6 +97,24 @@
   owned =
     lib.mapAttrs (_: lists: lib.concatStringsSep ", " (lib.unique (lib.concatLists lists)))
     (lib.zipAttrs (map ownedFor runtimes));
+  # Paths an owned writer delivers this generation. A copy or a reconciled
+  # document never appears in `config.files`, so without these a path that
+  # moved from a store symlink to an owned copy (the shared AGENTS.md, say)
+  # would read as removed-but-retained on every shell entry.
+  ownedPaths = lib.concatMap (plans:
+    lib.concatMap (record:
+      lib.concatMap (target:
+        if target.codec == "dir"
+        then
+          map (address:
+            if target.path == "."
+            then address
+            else "${target.path}/${address}")
+          (builtins.attrNames target.units)
+        else lib.optional (target.units != {}) target.path)
+      record.plan.targets)
+    (builtins.attrValues plans))
+  (map (runtime: ai.${runtime}._ownPlans or {}) (runtimes ++ ["internal"]));
   desired =
     lib.mapAttrs (name: file: {
       mode = file.copyMode or "symlink";
@@ -132,7 +150,7 @@ in {
         ${lib.escapeShellArg config.devenv.root} \
         ${lib.escapeShellArg config.devenv.state} \
         ${pkgs.writeText "ai-delivery-files.json" (builtins.toJSON desired)} \
-        ${pkgs.writeText "ai-delivery-current-files.json" (builtins.toJSON (builtins.attrNames config.files))}
+        ${pkgs.writeText "ai-delivery-current-files.json" (builtins.toJSON (builtins.attrNames config.files ++ ownedPaths))}
       ${lib.optionalString ((ai.kiro.enable or false) && builtins.elem "workflows" (ai.kiro.unlockedRolloutFeatures or [])) ''
         ${pkgs.python3}/bin/python ${./file-warnings.py} workflows "''${KIRO_HOME:-$HOME/.kiro}"
       ''}
