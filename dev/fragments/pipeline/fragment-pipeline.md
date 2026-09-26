@@ -1,8 +1,9 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-09-13 — category declaration is SPLIT: shared
+> **Last verified:** 2026-09-25 — category declaration is SPLIT: shared
 > categories in `config/fragment-categories.nix`, owner-specific ones in the
-> owning package's `registry.nix`, merged by `lib/facets/registry.nix`.
+> owning package's `registry.nix`, merged by `lib/facets/registry.nix`. The
+> orchestration layer produces content; `ai.*` renders and writes it.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -38,13 +39,14 @@ fan out to many different consumers without duplication:
    both read from the same passthru surface.
 
 4. **Orchestration (`dev/generate.nix`)** — composes dev-only fragments with
-   published fragments, applies transforms, and produces the final output
-   strings for each ecosystem + AGENTS.md + README + CONTRIBUTING.
+   published fragments into CONTENT: the orientation (`context`), one rule per
+   scoped category (`rules`), README and CONTRIBUTING. It renders no instruction
+   file. `dev/ai.nix` hands `context` and `rules` to `ai.*`, whose runtimes
+   apply the transforms and write the files.
 
-### Data flow for a scoped rule file
+### Data flow for a scoped rule
 
-Concrete example: generating `.claude/rules/claude-code.md` from the
-`claude-code` category:
+Concrete example: the `claude-code` category reaching every runtime:
 
 1. `mkDevComposed "claude-code"` in `dev/generate.nix` reads the fragment
    sources from `config.fragments.categories.claude-code.sources` and calls
@@ -53,35 +55,29 @@ Concrete example: generating `.claude/rules/claude-code.md` from the
    read from.
 2. `compose { fragments = devFrags; }` sorts by priority, dedupes by SHA256, and
    concatenates. Scoped categories do NOT include commonFragments — only the
-   root `monorepo` profile does, to avoid duplicating shared content across
-   always-loaded common.md and every scoped rule file.
-3. `mkEcosystemFile "claude-code"` looks up the path scope in
-   `config.fragments.categories.claude-code.scopes` and returns a set of
-   per-ecosystem renderers. The claude renderer wraps
-   `aiTransforms.claude { package = "claude-code"; }` which emits `paths:`
-   frontmatter as a YAML list.
-4. The flake derivation `packages.<system>.instructions-claude` stores the
-   result at a nix store path.
-5. The devenv task `generate:instructions:claude` runs
-   `nix build .#instructions-claude`, then copies `$out/rules/claude-code.md` to
-   the working tree.
+   root `monorepo` profile does, to avoid duplicating shared content across the
+   always-loaded context and every scoped rule.
+3. `rules.claude-code` becomes
+   `{ text; matcher = <the category's scopes>; references = <its source documents>; }`,
+   and `dev/ai.nix` sets it as `ai.rules.claude-code`.
+4. `ai.*` renders it per runtime: `.claude/rules/claude-code.md` with `paths:`,
+   `.github/instructions/claude-code.instructions.md` with `applyTo:`,
+   `.kiro/steering/claude-code.md` with `inclusion: fileMatch`, and, for Codex,
+   an entry in AGENTS.md's path-scoped index linking the source documents.
 
-The same scoped composition runs through the Copilot and Kiro renderers as well.
-The root composition supplies AGENTS.md's always-loaded body, while a separate
-registry-derived index routes flat consumers to scoped source documents. Single
-source and registry, four ecosystem shapes.
+Single source and registry, four runtime shapes, one writer per file.
 
 ### Generated outputs are not binary-cache artifacts
 
-The four `instructions-*` derivations and the `repo-contributing` /
-`repo-readme` derivations are buildable flake packages because generation tasks
-copy their formatted output into the working tree. They are repository-local
-render products, not consumer packages. The authenticated all-packages CI job
-therefore filters them out before invoking `nix-fast-build`; otherwise every
-source revision and platform uploads another nearly identical output to Cachix.
-`nix flake check` still builds the instruction drift check in a read-only-cache
-job, so excluding these outputs from the publishing job does not remove
-validation.
+The `repo-contributing` / `repo-readme` derivations are buildable flake packages
+because generation tasks copy their formatted output into the working tree. They
+are repository-local render products, not consumer packages. The authenticated
+all-packages CI job therefore filters them out before invoking `nix-fast-build`;
+otherwise every source revision and platform uploads another nearly identical
+output to Cachix. `nix flake check` still builds the drift check in a
+read-only-cache job, so excluding these outputs from the publishing job does not
+remove validation. The instruction files have no package at all: `ai.*` writes
+them.
 
 ### The transforms in detail
 
@@ -107,16 +103,17 @@ validation.
   silently interpreted as one literal pattern and matched nothing. Fix landed in
   commit 5a97f09.
 - `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
-  AGENTS.md is a flat, always-loaded file, so it cannot enforce glob scopes.
-  Repo generation keeps scoped bodies out of that file and emits a compact
-  source-routing index instead; Codex applies that index manually.
+  AGENTS.md is a flat, always-loaded file, so it cannot enforce glob scopes. Its
+  `renderKeyed` writes the context, then a compact `## Path-scoped rules` index
+  of every scoped rule that names `references`, then the inlined rules; Codex
+  applies that index manually.
 
 ### Orchestration details worth knowing
 
 - **Scoped files skip commonFragments.** Before commit 1075bc4, every scoped
   rule file prepended the full coding-standards header on top of its
-  scope-specific content, duplicating ~80 lines against always-loaded common.md.
-  Fixed in `mkDevComposed` by gating `commonFragments` on
+  scope-specific content, duplicating ~80 lines against the always-loaded
+  orientation. Fixed in `mkDevComposed` by gating `commonFragments` on
   `package == "monorepo"`.
 - **Dev fragment location discriminator.** Since commit de3dd12, each entry in
   `config.fragments.categories.<category>.sources` may be either a bare string
@@ -154,17 +151,15 @@ validation.
   `fragmentsLib.mkFragment { text = builtins.readFile ...; }`. If dev
   instruction files should include it, add to
   `extraPublishedFragments.<category>` in `dev/generate.nix`.
-- **New ecosystem transform**: add a function to
-  `lib/ai/transformers/<name>.nix` and its `default.nix` barrel, wire it into
-  `mkEcosystemFile` in `dev/generate.nix`, add its formatted derivation to
-  `dev/instructions.nix` and flake export, then add the corresponding generation
-  task in `dev/tasks/generate.nix`.
+- **New runtime or transform**: it belongs to `ai.*` (a runtime factory and its
+  transformer), not to the generator. This repository picks it up by enabling
+  the runtime in `dev/ai.nix`.
 
 - **Flat-consumer routing is derived, not curated.** `dev/generate.nix` resolves
-  each source entry once for both fragment composition and AGENTS.md links, then
-  derives the routing index from `config.fragments.categories`. Do not add a
-  parallel Codex-only path/source table: it would be a fifth registry and could
-  silently diverge from the scoped runtime projections.
+  each source entry once for both fragment composition and a rule's
+  `references`, and `ai.*` derives AGENTS.md's index from `matcher` and
+  `references`. Do not add a parallel Codex-only path/source table: it would be
+  a fifth registry and could silently diverge from the scoped runtime files.
 
 ### Gotchas
 
@@ -179,6 +174,7 @@ validation.
 - **devenv caches nix eval** in `.devenv/nix-eval-cache.db`. If task definitions
   change and the tasks look stale, delete that file.
 - **Monorepo profile vs scoped profile differs semantically**. Only `monorepo`
-  gets commonFragments + swsFragments. Scoped categories are intentionally lean.
-  Don't "fix" this by re-adding commonFragments — that's the context-rot bug
-  that was removed.
+  gets commonFragments. Scoped categories are intentionally lean. The
+  delegate-sizing and stacked-workflow routing rules are separate `ai.*` rules,
+  never orientation text. Don't "fix" this by re-adding commonFragments — that's
+  the context-rot bug that was removed.

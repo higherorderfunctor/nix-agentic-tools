@@ -1,7 +1,8 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-09-17 — Kimchi source builds require fresh closure
-> measurements; old binary-release figures are not current estimates.
+> **Last verified:** 2026-09-25 — Kimchi source builds require fresh closure
+> measurements; old binary-release figures are not current estimates. The
+> instruction copier check is gone with the generator's materializer.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -11,9 +12,9 @@ operator-chosen diagnostic cost, not an automatic merge-path cost. The required
 `test` context runs `nix flake check` and owns the deterministic invariants that
 previously justified the runtime workflow:
 
-- `instruction-materialization` executes the exact shell-entry copier against a
-  temporary repository and proves byte equality, real-file type, mode,
-  idempotence, repair, and stale-file pruning;
+- `instructions-drift` compares the committed instruction files with what the
+  repository's `ai.*` writers deliver, and `ai-own-runtime` proves the copy
+  writer's real-file type, mode, idempotence, adoption and pruning;
 - `isolate-prek-hooks` executes the exact shared-hook rewriter in primary and
   linked worktrees;
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
@@ -116,12 +117,14 @@ The unrestricted override needs no writable-root declarations. The repository
 enables Semble only outside diagnostic mode, pins it to this flake, adds AWK and
 jq Tree-sitter grammars, and maps its non-standard Bash, Gitignore, JSON, and
 Markdown paths. Its devenv facet still owns and invalidates
-`${config.devenv.state}/semble-cache`; its instruction facet stays off because
-the tracked, fragment-generated `AGENTS.md` already carries the same search
-workflow and devenv cannot replace that real file with a `files.*` symlink. The
-user-global cache is no longer in play for this shell. Keeping
-`ai.codex.programs.semble.enable = !isCI` is load-bearing: the manual diagnostic
-does not invoke Semble and must not realize its model, MCP, or grammar closure.
+`${config.devenv.state}/semble-cache`. It is the root `ai.programs.semble` in
+`dev/ai.nix`, so every runtime it supports gets its CLI rule (Claude as a rule
+file, Codex and Kiro inline in AGENTS.md) and none gets its MCP server. The
+user-global cache is no longer in play for this shell. Keeping `enable = !isCI`
+is load-bearing: the manual diagnostic does not invoke Semble and must not
+realize its model, MCP, or grammar closure. The diagnostic therefore rewrites
+its throwaway AGENTS.md without the Semble rule; the drift check pins
+`isCI = false`, so the committed bytes never depend on it.
 
 Integration roots remain available to normal workspace-write and named-profile
 consumers, but this project override intentionally does not use them. enterTest

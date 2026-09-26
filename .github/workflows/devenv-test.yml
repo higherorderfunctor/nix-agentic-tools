@@ -1,8 +1,8 @@
 # On-demand full devenv diagnostic. This is deliberately NOT an automatic CI
 # gate: the cold shell closure routinely takes tens of minutes. Merge-blocking
-# invariants live under `nix flake check`, including the extracted instruction
-# materializer, shared-hook isolation, validation-policy projection, and corpus
-# linters. Run this workflow manually when changing the broader interactive
+# invariants live under `nix flake check`, including the instruction drift
+# check, the `ai.*` copy writer, shared-hook isolation, validation-policy
+# projection, and corpus linters. Run this workflow manually when changing the broader interactive
 # shell or investigating issue #821; it retains the full enterTest smoke suite
 # and forensic telemetry.
 

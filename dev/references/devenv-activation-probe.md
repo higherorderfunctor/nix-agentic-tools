@@ -274,8 +274,9 @@ no-change cache-hit control after the `devenv.nix` edit.
   established first.
 - **Log lines are useless here.** `devenv shell true` prints the same task list
   on a cache hit as on a re-evaluation — the 0.9 s run still ran `devenv:files`,
-  `generate:instructions:materialize` and the rest. Only the Nix evaluation is
-  skipped. Wall time and `input_hash` are the signals; the log is not.
+  the other shell-entry tasks (the instruction materializer of the time among
+  them). Only the Nix evaluation is skipped. Wall time and `input_hash` are the
+  signals; the log is not.
 
 ## What this does NOT settle
 

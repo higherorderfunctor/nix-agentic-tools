@@ -10,9 +10,12 @@
       credentials = "None";
     };
   };
-  # semble: program-factory integration, customization, cache ownership, and
-  # the shared HM/devenv backend contract.
-  fragments.categories.semble = {
+  # Program-factory integration, customization, cache ownership, and the
+  # shared HM/devenv backend contract. Not keyed `semble`: the category is a
+  # root `ai.rules` entry in this repository, and the Semble program's own
+  # per-runtime `rules.semble` (its CLI rule, public API) would replace it at
+  # the same key.
+  fragments.categories.semble-integration = {
     scopes = ["packages/${facetOwner}/**"];
     sources = [
       {

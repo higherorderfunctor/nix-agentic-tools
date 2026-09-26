@@ -199,7 +199,7 @@
     };
   evalHm = evalHmWithSpecialArgs {};
 
-  evalDevenvWithSpecialArgs = extraSpecialArgs: config:
+  evalDevenvModulesWithSpecialArgs = extraSpecialArgs: modules:
     lib.evalModules {
       specialArgs =
         {
@@ -211,9 +211,14 @@
       modules =
         [../ai/sharedOptions.nix]
         ++ moduleImports "devenv"
-        ++ [devenvStubs {inherit config;}];
+        ++ [devenvStubs]
+        ++ modules;
     };
+  evalDevenvWithSpecialArgs = extraSpecialArgs: config: evalDevenvModulesWithSpecialArgs extraSpecialArgs [{inherit config;}];
   evalDevenv = evalDevenvWithSpecialArgs {};
+  # A whole module rather than a config attrset, for a configuration that reads
+  # `config` or declares assertions of its own (this repository's dev/ai.nix).
+  evalDevenvModules = evalDevenvModulesWithSpecialArgs {};
   # The deterministic root tests assert paths only their injected resolver can
   # produce, so losing this specialArgs-only seam fails loudly instead of
   # silently measuring production builtins.getEnv behavior.
@@ -373,6 +378,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs deliveredFiles devenvStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs deliveredFiles devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   inherit testing;
 }

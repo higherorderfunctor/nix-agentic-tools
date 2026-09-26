@@ -31,20 +31,25 @@ report() {
 echo "=== Always-loaded steering budget ==="
 printf '\n'
 
+# Always-on rules (no `paths:` key) load with the context, so they count.
+claude_always=()
+for f in .claude/rules/*.md; do
+  [ -f "$f" ] || continue
+  grep -q '^paths:' "$f" || claude_always+=("$f")
+done
+
 report "Claude" \
-  CLAUDE.md \
-  .claude/rules/common.md
+  .claude/CLAUDE.md \
+  "${claude_always[@]}"
 
 report "Copilot" \
-  .github/copilot-instructions.md
+  .github/copilot-instructions.md \
+  .github/instructions/stacked-workflows-router.instructions.md
 
-report "Kiro" \
-  .kiro/steering/common.md
-
-report "AGENTS.md (Codex + flat consumers)" \
+report "AGENTS.md (Codex, Kiro, Kimchi)" \
   AGENTS.md
 
-echo "=== Source monorepo fragments (composed into common.md) ==="
+echo "=== Source monorepo fragments (composed into the orientation) ==="
 printf '\n'
 for f in dev/fragments/monorepo/*.md; do
   lines=$(wc -l <"$f")

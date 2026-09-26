@@ -1,22 +1,23 @@
-# Fragment composition for instruction file generation.
+# Content for this repository's agent instructions and front-door documents.
 #
-# Single source of truth for composing fragments into ecosystem-specific
-# instruction files. Consumed by both devenv tasks and flake derivations.
+# This file PRODUCES CONTENT. It writes no instruction file: `dev/ai.nix` hands
+# `context` and `rules` to the `ai.*` module, which owns and writes every
+# runtime's files exactly as it would for any consumer. Only the two human
+# documents, which are not agent steering, are rendered here.
 #
 # Takes { lib, pkgs } where pkgs has all content overlays applied
-# (coding-standards, delegate-sizing, stacked-workflows).
+# (coding-standards, stacked-workflows).
 #
 # Returns:
-#   agentsMd    — full AGENTS.md content string
-#   claudeFiles — { "filename.md" = content; } for Claude rule files
-#   claudeMd    — full CLAUDE.md content string
-#   copilotFiles — { "filename.md" = content; } for Copilot instruction files
-#   kiroFiles   — { "filename.md" = content; } for Kiro steering files
+#   context        — the always-loaded orientation (`ai.context.text`)
+#   rules          — one path-scoped rule per registry category:
+#                    { text; matcher; references; } (`ai.rules`)
+#   readmeMd       — README.md content string
+#   contributingMd — CONTRIBUTING.md content string
 {
   lib,
   pkgs,
 }: let
-  aiCommon = import ../lib/ai/ai-common.nix {inherit lib;};
   fragments = import ../lib/fragments.nix {inherit lib;};
 
   # Owner metadata uses the same registry as the public flake assembly.
@@ -26,69 +27,8 @@
   };
   fragmentCategories = registry.config.fragments.categories;
 
-  # Evaluate this repository's delegate-sizing config so generated instructions
-  # consume the same rendered rule as the runtime modules. Importing devenv.nix
-  # here reads the preset selection instead of restating it.
-  configuredAi =
-    (import ../devenv.nix {
-      config = {};
-      inputs = {};
-      inherit lib pkgs;
-    }).ai;
-  delegateSizingModule = lib.evalModules {
-    modules = [
-      ../lib/ai/sharedOptions.nix
-      ../packages/delegate-sizing/modules/devenv
-      {
-        options = {
-          ai = lib.genAttrs ["claude" "codex" "kiro"] (_: {
-            enable = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-            };
-            rules = lib.mkOption {
-              type = lib.types.attrsOf aiCommon.ruleModule;
-              default = {};
-            };
-            skills = lib.mkOption {
-              type = lib.types.attrsOf (lib.types.nullOr lib.types.path);
-              default = {};
-            };
-          });
-          assertions = lib.mkOption {
-            type = lib.types.listOf (lib.types.submodule {
-              options = {
-                assertion = lib.mkOption {type = lib.types.bool;};
-                message = lib.mkOption {type = lib.types.str;};
-              };
-            });
-            default = [];
-          };
-        };
-        config.ai = {
-          inherit (configuredAi) programs;
-          claude = {
-            inherit (configuredAi.claude) enable programs;
-          };
-          codex.enable = configuredAi.codex.enable;
-          kiro.enable = configuredAi.kiro.enable;
-        };
-      }
-    ];
-    specialArgs = {
-      inherit pkgs;
-      inputs = {};
-    };
-  };
-  delegateSizingRule = delegateSizingModule.config.ai.claude.rules.delegate-sizing-router;
-
   # ── Fragments from content packages (via overlay) ────────────────────
   commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
-  delegateSizingFragment = fragments.mkFragment {
-    inherit (delegateSizingRule) description text;
-    priority = 5;
-    source = "devenv.nix";
-  };
   swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
 
   # ── Dev-only fragment reader ─────────────────────────────────────────
@@ -163,18 +103,20 @@
     };
 
   # ── Extra published fragments per package (beyond commonFragments) ───
+  # The always-loaded routing rules (delegate sizing, stacked-workflow skill
+  # routing) are not orientation text: `ai.*` delivers each as a rule of its
+  # own, from the same source the programs use.
   extraPublishedFragments = {
-    monorepo = [delegateSizingFragment] ++ swsFragments;
     stacked-workflows = swsFragments;
   };
 
   # ── Compose fragments for a dev package profile ──────────────────────
   # The monorepo (root) profile includes shared content (coding standards,
   # commit conventions, etc. from commonFragments) because its output is
-  # the always-loaded CLAUDE.md / common.md. Scoped profiles include ONLY
-  # their scope-specific content — repeating the shared content in every
-  # scoped rule file amplifies context rot (duplicate tokens loaded when
-  # a scoped rule triggers alongside the always-loaded common.md).
+  # the always-loaded context. Scoped profiles include ONLY their
+  # scope-specific content — repeating the shared content in every scoped
+  # rule amplifies context rot (duplicate tokens loaded when a scoped rule
+  # triggers alongside the always-loaded context).
   # Per Checkpoint 2 research on context dilution.
   mkDevComposed = package: let
     devFrags = map (mkDevFragment package) (fragmentCategories.${package}.sources or []);
@@ -189,47 +131,34 @@
       generator = "dev/generate.nix";
     };
 
-  # ── Ecosystem file transforms ────────────────────────────────────────
-  # Transformer functions live in lib/ai/transformers/ (moved from
-  # packages/fragments-ai/default.nix passthru.transforms during the
-  # factory rollout — Milestone 9). Each exposes a `render` function
-  # that takes a composed fragment (optionally merged with
-  # ecosystem-specific extras like `package` for claude or `name`
-  # for kiro) and returns a rendered byte string.
-  aiTransforms = (import ../lib/ai {inherit lib;}).transformers;
-  mkEcosystemFile = package: let
-    paths = fragmentCategories.${package}.scopes or null;
-    withPaths = composed:
-      if paths != null
-      then composed // {inherit paths;}
-      else composed;
-  in {
-    agentsmd = composed: aiTransforms.agentsmd.render (withPaths composed);
-    claude = composed: aiTransforms.claude.render (withPaths composed // {inherit package;});
-    copilot = composed: aiTransforms.copilot.render (withPaths composed);
-    kiro = composed: aiTransforms.kiro.render (withPaths composed // {name = package;});
-  };
-
-  # ── Derived values ───────────────────────────────────────────────────
+  # ── Instruction content ──────────────────────────────────────────────
   nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") fragmentCategories;
-  rootComposed = mkDevComposed "monorepo";
-  monorepoEco = mkEcosystemFile "monorepo";
 
-  # ── AGENTS.md content ────────────────────────────────────────────────
-  # AGENTS.md keeps scoped fragment BODIES out of its always-loaded context.
-  # It previously concatenated every body because the agents.md standard has
-  # no glob-scoping primitive, bloating the file to ~19k mostly irrelevant
-  # tokens. Dropping them entirely created the opposite failure for Codex:
-  # unlike Claude/Copilot/Kiro, it does not load the generated scoped files and
-  # had no way to discover which authoritative source fragment applied.
-  #
-  # The compact index below is the progressive-disclosure bridge. Deriving its
-  # match globs and source links from the SAME registry prevents a fifth,
-  # hand-maintained routing surface from drifting. Link the source fragments,
-  # not runtime projections: source paths exist in every checkout, while the
-  # Claude/Kiro projections are gitignored shell-entry artifacts and editing
-  # any generated projection would be overwritten on the next reload.
-  agentsContent = rootComposed.text;
+  # The always-loaded orientation. Every runtime receives it through
+  # `ai.context`; Codex, Kiro and Kimchi share it in AGENTS.md.
+  context =
+    ''
+      # nix-agentic-tools
+
+      Project instructions for AI coding assistants working in this repository.
+
+    ''
+    + (mkDevComposed "monorepo").text;
+
+  # One rule per scoped category. `matcher` is the registry's scope globs,
+  # which each runtime lowers to its own scoping (Claude `paths:`, Copilot
+  # `applyTo:`, Kiro `fileMatchPattern`). `references` names the source
+  # documents: Codex, which has no path scoping, lists the rule in AGENTS.md's
+  # path-scoped index with links to them instead of inlining every body. Link
+  # the SOURCES, not runtime projections: they exist in every checkout, and a
+  # projection is regenerated over any edit.
+  rules =
+    lib.mapAttrs (category: record: {
+      inherit (mkDevComposed category) text;
+      matcher = record.scopes;
+      references = map (entry: (normalizeDevFragmentSource category entry).repoRelative) (record.sources or []);
+    })
+    nonRootPackages;
 
   mkInlineCodeList = values:
     lib.concatMapStringsSep ", " (value: "`${value}`") values;
@@ -239,117 +168,7 @@
       inherit lib pkgs;
       extracted = builtins.fromJSON (builtins.readFile ../packages/kimchi/extracted.json);
     }).userScopeHarnessKeys;
-  mkSourceLinks = package:
-    lib.concatMapStringsSep ", " (entry: let
-      path = (normalizeDevFragmentSource package entry).repoRelative;
-    in "[`${path}`](${path})")
-    (fragmentCategories.${package}.sources or []);
-  scopedArchitectureRouting = lib.concatMapStringsSep "\n" (package: ''
-    - **`${package}`**
-      - Match: ${mkInlineCodeList fragmentCategories.${package}.scopes}
-      - Read: ${mkSourceLinks package}
-  '') (lib.sort lib.lessThan (builtins.attrNames nonRootPackages));
 
-  # ── Claude rule files ────────────────────────────────────────────────
-  # Scoped rule files only. No common.md — the body content is
-  # already loaded via CLAUDE.md (which @-imports AGENTS.md), so
-  # a separate .claude/rules/common.md byte-identical to the body
-  # was pure waste and triple-loaded orientation content at every
-  # Claude session start.
-  claudeFiles =
-    lib.concatMapAttrs (pkg: _: let
-      composed = mkDevComposed pkg;
-      pkgEco = mkEcosystemFile pkg;
-    in {
-      "${pkg}.md" = pkgEco.claude composed;
-    })
-    nonRootPackages;
-
-  # ── Copilot instruction files ────────────────────────────────────────
-  copilotFiles =
-    {
-      "copilot-instructions.md" = monorepoEco.copilot rootComposed;
-    }
-    // (lib.concatMapAttrs (pkg: _: let
-        composed = mkDevComposed pkg;
-        pkgEco = mkEcosystemFile pkg;
-      in {
-        "${pkg}.instructions.md" = pkgEco.copilot composed;
-      })
-      nonRootPackages);
-
-  # ── Kiro steering files ─────────────────────────────────────────────
-  kiroFiles =
-    {
-      "common.md" = aiTransforms.kiro.render (rootComposed // {name = "common";});
-    }
-    // (lib.concatMapAttrs (pkg: _: let
-        composed = mkDevComposed pkg;
-        pkgEco = mkEcosystemFile pkg;
-      in {
-        "${pkg}.md" = pkgEco.kiro composed;
-      })
-      nonRootPackages);
-
-  # ── Top-level markdown files ─────────────────────────────────────────
-  agentsMd = ''
-    # AGENTS.md
-
-    Project instructions for AI coding assistants working in this repository.
-    Read by Claude Code, Kiro, GitHub Copilot, Codex, and other tools that
-    support the [AGENTS.md standard](https://agents.md).
-
-    Deep-dive architecture documentation (fanout semantics, wrapper chains,
-    fragment pipeline, overlay cache-hit parity, HM module conventions, etc.)
-    comes from the source fragments routed below. Claude, Copilot, and Kiro
-    receive generated path-scoped projections of those sources. Codex and other
-    AGENTS-only consumers do not load those projections, so they must use the
-    routing index before editing a matching path. Fragment bodies are not
-    duplicated here, keeping always-loaded context focused.
-
-    ## Scoped architecture routing
-
-    Before editing a path that matches one or more entries, read every listed
-    source document for those entries. When multiple entries match, their
-    guidance composes. The registry-generated index is authoritative for
-    routing; source documents are authoritative for content. Do not edit
-    generated `.claude/rules/`, `.github/instructions/`, or `.kiro/steering/`
-    projections directly.
-
-    ${scopedArchitectureRouting}
-
-    ${agentsContent}
-  '';
-
-  # CLAUDE.md carries the orientation directly rather than
-  # @-importing AGENTS.md, and the difference is the ROUTING
-  # INDEX. That index exists because Codex has no glob-scoped
-  # instruction primitive: it is Codex's only route from a path
-  # to the fragments governing it. Claude has real scoping in
-  # `.claude/rules/*.md` (`paths:` frontmatter), so under the
-  # import Claude paid for an index it can never act on —
-  # measured at 9,875 bytes on every session.
-  #
-  # Emitting the body ONCE here is what keeps this from being
-  # the double-load the import was designed to avoid: CLAUDE.md
-  # no longer imports AGENTS.md, so only one copy is ever read.
-  # Do not "simplify" this back to `@AGENTS.md`; that silently
-  # restores the index to Claude's payload.
-  claudeMd = ''
-    # CLAUDE.md
-
-    Project instructions for AI coding assistants working in this repository.
-
-    Deep-dive architecture documentation (fanout semantics, wrapper chains,
-    fragment pipeline, overlay cache-hit parity, HM module conventions, etc.)
-    comes from source fragments under `dev/fragments/`, `packages/*/docs/` and
-    `devshell/*/docs/`. They reach you as path-scoped rules in
-    `.claude/rules/*.md`, loaded automatically when you edit a matching path —
-    you do not look them up. Do not edit those projections, or the
-    `.github/instructions/` and `.kiro/steering/` ones; they are generated.
-
-    ${agentsContent}
-  '';
   # ── README.md generation ─────────────────────────────────────────────
 
   # Descriptions are authored alongside their packages.
@@ -653,7 +472,7 @@
     | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
-    | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths |
+    | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
     | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi) | Same; project-native paths |
@@ -1104,8 +923,8 @@
     ## Code Standards
 
     Coding standards, ordering rules, DRY principle, and Bash strict mode
-    are documented in [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md).
-    Do not duplicate — read those files first.
+    are documented in [AGENTS.md](AGENTS.md), the always-loaded instructions
+    every agent runtime shares. Do not duplicate — read that file first.
 
     ## Linting
 
@@ -1152,8 +971,9 @@
 
     ## Adding a Fragment
 
-    Fragments are composable instruction blocks used to build AI instruction
-    files (CLAUDE.md, AGENTS.md, Copilot, Kiro) and CONTRIBUTING.md.
+    Fragments are composable instruction blocks. `dev/generate.nix` composes
+    them into the context and rules that `ai.*` writes for every runtime
+    (AGENTS.md, Claude, Copilot, Kiro), and into CONTRIBUTING.md.
 
     <!-- TODO: refine with maintainer input -->
 
@@ -1189,13 +1009,14 @@
 
     - One logical change per PR
     - CI must pass (formatting, linting, spelling, module evaluation)
-    - Generated files (CLAUDE.md, AGENTS.md, README.md, CONTRIBUTING.md,
-      Copilot and Kiro instruction files) must be regenerated if their
-      source fragments changed: run
-      `devenv tasks run --mode before generate:all`
+    - Committed generated files (AGENTS.md, README.md, CONTRIBUTING.md,
+      `.github/copilot-instructions.md`, `.github/instructions/`) must be
+      regenerated if their source fragments changed: run
+      `devenv tasks run --mode before generate:all`. `nix flake check`
+      fails on drift.
     - Keep commits atomic using the stacked workflow skills
       (`/stack-plan`, `/stack-fix`, `/stack-submit`)
   '';
 in {
-  inherit agentsMd claudeFiles claudeMd contributingMd copilotFiles kiroFiles readmeMd;
+  inherit context contributingMd readmeMd rules;
 }

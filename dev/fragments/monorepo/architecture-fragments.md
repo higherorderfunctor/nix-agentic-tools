@@ -1,7 +1,8 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-09-12 — package categories live in owner registries
-> and generation shares native metadata assembly.
+> **Last verified:** 2026-09-25 — package categories live in owner registries;
+> `dev/generate.nix` turns them into `ai.rules` and `ai.*` writes every
+> runtime's files.
 
 This repo ships path-scoped architecture fragments as dev-only context for
 agents working on it. They are SEPARATE from the published consumer-facing
@@ -10,7 +11,7 @@ content. Three location flavors are supported by `dev/generate.nix`:
 - `dev/fragments/<category>/<name>.md` (default `location = "dev"`) —
   orientation and topic-scoped categories not tied to a single package.
   `dev/fragments/monorepo/` specifically holds the always-loaded orientation,
-  composed into `common.md` and the equivalent for each ecosystem.
+  delivered to every runtime as `ai.context`.
 - `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
   package whose abstractions it documents.
 - `devshell/<group>/docs/<name>.md` (`location = "devshell"`) — co-located with
@@ -21,26 +22,29 @@ Scope globs (which files the fragment loads for) live separately in
 `registry.nix` files and `config/fragment-categories.nix`) and are independent
 of where the markdown source lives on disk.
 
-Each scoped fragment emits per-ecosystem frontmatter via the
-`lib/ai/transformers/` pipeline:
+Each scoped category becomes one `ai.rules` entry (`dev/ai.nix`) whose `matcher`
+is its scopes and whose `references` are its source documents, and `ai.*` writes
+it per runtime through the `lib/ai/transformers/` pipeline:
 
 - Claude: `.claude/rules/<name>.md` with `paths:` YAML list
 - Copilot: `.github/instructions/<name>.instructions.md` with `applyTo:`
   comma-joined globs
 - Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an array
   `fileMatchPattern:`
-- Codex / AGENTS.md: always-loaded orientation plus a compact routing index.
-  Codex has no glob-scoped instruction primitive, so matching remains a manual
-  progressive-disclosure step: the index maps the same registry scopes to the
-  authoritative source documents. AGENTS.md used to concatenate every scoped
-  fragment body, but that bloated it to ~2k lines; Phase 2.4 removed the bodies
-  (commit c4f4aff), and the generated index restores discoverability without
-  restoring that context cost.
+- Codex / AGENTS.md: always-loaded orientation plus a compact
+  `## Path-scoped rules` index. Codex has no glob-scoped instruction primitive,
+  so matching remains a manual progressive-disclosure step: the index maps the
+  same registry scopes to the authoritative source documents. AGENTS.md used to
+  concatenate every scoped fragment body, but that bloated it to ~2k lines;
+  Phase 2.4 removed the bodies (commit c4f4aff), and `ai.*` renders a scoped
+  rule that names `references` as an index entry for the same reason.
 
-The source fragments are authoritative. The Claude, Copilot, and Kiro files are
-generated projections; some are gitignored and only materialized by devenv shell
-entry. Never edit a runtime projection directly. A `devenv shell` or direnv
-reload regenerates the analysis files after source or registry changes.
+The source fragments are authoritative. Every runtime file above is a generated
+projection that `ai.*` writes: AGENTS.md and `.github/` are committed, the
+Claude and Kiro ones are gitignored and written on devenv shell entry. Never
+edit a projection directly; the next shell entry, or the drift check, undoes it.
+A `devenv shell` or direnv reload regenerates the local files after source or
+registry changes.
 
 ### Maintenance is mandatory
 
@@ -162,8 +166,9 @@ let `config/fragment-categories.nix` be the source of real rows.
 `scopes` is a Nix list of globs, and `null` means always-loaded (what the
 `monorepo` orientation category uses). The option itself is declared in
 `lib/fragments-registry.nix`; `lib/facets/registry.nix` composes the
-contributions with `lib.evalModules`, and `dev/generate.nix` reads its result.
-The transforms handle per-ecosystem emission — do not hand-format frontmatter.
+contributions with `lib.evalModules`, and `dev/generate.nix` reads its result
+into the `context` and `rules` that `dev/ai.nix` hands to `ai.*`. The transforms
+handle per-ecosystem emission — do not hand-format frontmatter.
 
 After adding or editing fragments, run
 `devenv tasks run --mode before generate:all` to regenerate instruction and

@@ -199,9 +199,12 @@ overrides the packaged `source`, which remains visible on the resolved rule. Set
 or disable `ai.<runtime>.programs.semble.cli.instructions` at its package gate.
 Kiro's runtime-native subagent is not a normalized nullable pool: consumers can
 replace the generated entry atomically, but cannot suppress it with `null`.
-Claude and Codex compose the guidance into their single always-loaded
-`CLAUDE.md` and `AGENTS.md` files. Kiro receives the same named rule and writes
-it to `.kiro/steering/semble.md`.
+Claude writes the guidance as the always-on rule file `.claude/rules/semble.md`,
+and Codex inlines it in AGENTS.md. Kiro receives the same named rule: Home
+Manager writes it to `.kiro/steering/semble.md`, while devenv, where Kiro shares
+the repository AGENTS.md, inlines it there beside Codex's identical copy. The
+rule key `semble` is public API, so a repository that also keys an architecture
+rule by it should rename its own (this repository's is `semble-integration`).
 
 Home Manager fixes the global cache at `${config.xdg.cacheHome}/semble`, even on
 Darwin where Semble's platform default would otherwise be `~/Library/Caches`.

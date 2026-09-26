@@ -22,7 +22,6 @@
         # Feature modules
         ../devshell/mcp-servers/default.nix
         ../devshell/skills/stacked-workflows.nix
-        ../devshell/instructions/default.nix
       ]
       ++ (
         if builtins.isAttrs userConfig

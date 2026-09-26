@@ -37,24 +37,35 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-23 — repository AGENTS.md registers native seed
-> ownership before atomic materialization, and redundant module projections are
-> suppressed.
+> **Last verified:** 2026-09-25 — the generator produces content only;
+> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file.
+>
+> **Settled — do not relitigate.** Rendering and writing the instruction files
+> in the generator, beside `ai.*`, is what this replaced. The generator owned
+> AGENTS.md, so `ai.codex.files."AGENTS.md".content.enable = false` switched
+> `ai.*` off for it, and every `ai.*` rule for Codex (Semble's CLI rule among
+> them) was dropped with no diagnostic. One writer per file, and that writer is
+> `ai.*`. Full lineage:
+> `git show f77d34ac:dev/fragments/pipeline/generation-architecture.md`.
 
-Content is generated via Nix derivations wrapped in devenv tasks, organized by
-scope:
+Two kinds of generated content, two owners:
 
-- `generate:instructions:*` — AI instruction files (CLAUDE.md, AGENTS.md,
-  Copilot, Kiro) from fragments + ecosystem transforms
-- `generate:repo:*` — repo front-door files (README.md, CONTRIBUTING.md) from
-  fragments + nix-evaluated data
-- `generate:all` — runs all scopes
+- **Agent instructions** — `dev/generate.nix` returns `context` (the
+  always-loaded orientation) and `rules` (one path-scoped rule per registry
+  category: its composed text, its scope globs as `matcher`, its source
+  documents as `references`). `dev/ai.nix` sets them as `ai.context` and
+  `ai.rules` in this repository's own devenv, and `ai.*` renders and writes each
+  runtime's files exactly as it would for any consumer: AGENTS.md (Codex, Kiro,
+  Kimchi, with a path-scoped index of the rules), `.claude/CLAUDE.md` and
+  `.claude/rules/`, `.github/copilot-instructions.md` and
+  `.github/instructions/`, and `.kiro/steering/`. The committed ones (AGENTS.md
+  and `.github/`) are read-only copies.
+- **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
+  `dev/repo-docs.nix` renders them from `dev/generate.nix` and formats them in
+  the sandbox; `generate:repo:*` copies them out.
 
-The Nix derivations own the rendered bytes. Repository-document tasks build a
-named flake package and copy its output. Instruction tasks receive their
-already-realized derivation paths from devenv evaluation and invoke
-`lib/materialize-repo-instructions.nix`; unchanged bytes, file type, and mode
-are a no-op.
+`ai.*` genuinely cannot express the human documents: they are not context or
+rules of any runtime. Everything instruction-shaped goes through `ai.*`.
 
 ### Source Layout
 
@@ -63,57 +74,40 @@ are a no-op.
   `config/fragment-categories.nix`; package categories and descriptions come
   from owner `registry.nix` files. Options live in `lib/fragments-registry.nix`
   and `lib/documentation.nix`.
-- `dev/fragments/` — dev-only instruction fragments. Composed into instruction
-  files and CLAUDE.md.
-- `dev/generate.nix` — shared fragment composition logic consumed by both devenv
-  tasks and flake derivations.
-- `packages/coding-standards/fragments/` — published coding standards.
-- `packages/delegate-sizing/fragments/` — published delegate-sizing rule.
-- `packages/stacked-workflows/fragments/` — published skill-routing rule.
-- `lib/ai/transformers/` — AI ecosystem renderers, exported through the `lib/ai`
-  barrel.
+- `dev/fragments/` — dev-only instruction fragments.
+- `dev/generate.nix` — fragment composition into content, plus the two human
+  documents.
+- `dev/ai.nix` — this repository's `ai.*` configuration, imported by
+  `devenv.nix` and evaluated by the drift check.
+- `packages/coding-standards/fragments/` — published coding standards, part of
+  the orientation.
+- `packages/delegate-sizing/` and `packages/stacked-workflows/router.nix` — the
+  always-on routing rules, delivered as `ai.*` rules of their own (the
+  delegate-sizing program and a root rule) rather than inlined into the
+  orientation.
+- `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 
-### What Stays in Module System
+### Committed files and the drift check
 
-Skills and immutable CLI configuration generally use `files.*` (devenv) or
-`home.file` (HM), producing symlinks to store paths with no repository
-generation step. Runtime-writable files are an intentional exception: for
-example, Codex's user `config.toml` is reconciled by Home Manager activation,
-while project config remains statically owned by devenv. (Codex's separate
-whole-file `--profile` layer and its devenv `CODEX_HOME` materializer were
-removed 2026-09-19 as unreachable dead code; see the Settled bullet in
-`dev/fragments/ai-module/ai-module-fanout.md`.) These app-level materialization
-tasks are separate from the repository instruction generator described here.
-
-Repository-generated instruction projections are the exception: they are
-**copies**, not symlinks, materialized on every shell entry by
-`generate:instructions:materialize` after `devenv:files` and before shell entry.
-AGENTS.md also registers `copyMode = "seed"` from the same generated source,
-preserving existing regular files while handing off the old symlink delivery
-ledger. The materializer still owns updates and directory pruning;
-project-specific final-file content disables suppress redundant module output.
-Git-tracked outputs cannot be symlinks, since a store symlink commits as an
-absolute `/nix/store` path. This is separate from consumer module delivery:
-normalized runtime context/rules enter `ai.<runtime>.files` and lower to
-ordinary backend symlinks. A 2.18.1 live spike confirmed Kiro steering now loads
-through that path. See the devenv files-internals fragment.
-
-`checks/instructions/instruction-materialization.nix` runs the exact packaged
-copier in a temporary repository. It covers portability and lifecycle behavior
-without building the full interactive devenv shell, so the on-demand Devenv
-Diagnostic is no longer an automatic CI dependency.
+`checks/instructions/instructions-drift.nix` evaluates `dev/ai.nix` through the
+module harness with `isCI = false` (Semble, and so its AGENTS.md rule, is gated
+on it, and committed bytes must not depend on who evaluates them) and compares
+the tracked AGENTS.md, `.github/copilot-instructions.md` and
+`.github/instructions/` tree with the units the `ai.*` writers' plans carry.
+README.md and CONTRIBUTING.md compare against the `repo-*` packages. The
+committed instruction files are excluded from treefmt: they have one writer, and
+the drift check is their byte gate.
 
 ### Running Generation
 
 ```bash
 devenv tasks run --mode before generate:all  # instructions + repo documents
-
-# A leaf can be run directly when only one projection is intentionally wanted:
-devenv tasks run generate:instructions:claude # just CLAUDE.md + rules
 ```
 
-The aggregate form requires `--mode before`; without it devenv runs the named
-aggregate but skips its dependency leaves.
+`generate:instructions` orders the two `ai.*` writers whose files are committed
+(`ai:agents-md:materialize`, `ai:copilot:materialize-instructions`); it is not a
+second writer. The aggregate form requires `--mode before`; without it devenv
+runs the named aggregate but skips its dependency leaves.
 
 ## Updating Dependencies
 
@@ -133,8 +127,8 @@ If a hash mismatch occurs, copy the expected hash from the error and update
 ## Code Standards
 
 Coding standards, ordering rules, DRY principle, and Bash strict mode are
-documented in [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md). Do not
-duplicate — read those files first.
+documented in [AGENTS.md](AGENTS.md), the always-loaded instructions every agent
+runtime shares. Do not duplicate — read that file first.
 
 ## Linting
 
@@ -201,8 +195,9 @@ renaming a concept, all surfaces must be updated in the same commit.
 
 ## Adding a Fragment
 
-Fragments are composable instruction blocks used to build AI instruction files
-(CLAUDE.md, AGENTS.md, Copilot, Kiro) and CONTRIBUTING.md.
+Fragments are composable instruction blocks. `dev/generate.nix` composes them
+into the context and rules that `ai.*` writes for every runtime (AGENTS.md,
+Claude, Copilot, Kiro), and into CONTRIBUTING.md.
 
 <!-- TODO: refine with maintainer input -->
 
@@ -238,8 +233,10 @@ To add a published fragment (consumed by external users):
 
 - One logical change per PR
 - CI must pass (formatting, linting, spelling, module evaluation)
-- Generated files (CLAUDE.md, AGENTS.md, README.md, CONTRIBUTING.md, Copilot and
-  Kiro instruction files) must be regenerated if their source fragments changed:
-  run `devenv tasks run --mode before generate:all`
+- Committed generated files (AGENTS.md, README.md, CONTRIBUTING.md,
+  `.github/copilot-instructions.md`, `.github/instructions/`) must be
+  regenerated if their source fragments changed: run
+  `devenv tasks run --mode before generate:all`. `nix flake check` fails on
+  drift.
 - Keep commits atomic using the stacked workflow skills (`/stack-plan`,
   `/stack-fix`, `/stack-submit`)
