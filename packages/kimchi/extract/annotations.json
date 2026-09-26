@@ -19,6 +19,7 @@
     "onboarding": {},
     "preferences": {},
     "redaction": {},
+    "region": {},
     "skillPaths": {},
     "surveys": {},
     "telemetry": {},
@@ -132,6 +133,9 @@
     },
     "KIMCHI_REDACTION_ENABLED": {
       "controls": "PII redaction override"
+    },
+    "KIMCHI_REGION": {
+      "controls": "account region whose endpoints Kimchi uses (us or eu); overrides config.json region, and an unknown value counts as unset"
     },
     "KIMCHI_REMOTE_ENDPOINT": {
       "controls": "remote execution endpoint"
