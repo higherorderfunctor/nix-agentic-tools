@@ -1200,18 +1200,20 @@ class HoldBackEscalationTest(unittest.TestCase):
 
     def test_repeat_escalates_while_a_first_offense_only_warns(self):
         held = {"oxlint": "HELD BACK: oxlint (nix-update...)", "beads": "HELD BACK: beads"}
-        repeated, fresh = matrix.escalation(held, {"beads": "UPDATED", "oxlint": "HELD BACK"})
-        self.assertEqual(repeated, ["oxlint"])
-        self.assertEqual(fresh, ["beads"])
+        repeated, unreadable, fresh = matrix.escalation(held, {"beads": "UPDATED", "oxlint": "HELD BACK"})
+        self.assertEqual((repeated, unreadable, fresh), (["oxlint"], [], ["beads"]))
 
-    def test_unreadable_previous_sweep_never_escalates(self):
-        # A first-ever hold-back and one whose predecessor aged out must not be
-        # indistinguishable from a repeat. Erring toward silence here only
-        # restores today's behavior; erring the other way pages someone for a
-        # transient upstream blip.
+    def test_absent_predecessor_receipt_is_a_first_offense(self):
+        # A first-ever hold-back, or a target new to the registry, has no
+        # receipt to compare against. Erring toward a page there costs a person
+        # for a routinely transient blip.
         for previous in ({}, {"oxlint": None}, {"oxlint": "NO UPDATES"}):
-            repeated, fresh = matrix.escalation({"oxlint": "HELD BACK: oxlint"}, previous)
-            self.assertEqual((repeated, fresh), ([], ["oxlint"]), previous)
+            self.assertEqual(matrix.escalation({"oxlint": "HELD BACK: oxlint"}, previous), ([], [], ["oxlint"]), previous)
+
+    def test_unreadable_predecessor_receipt_is_never_a_first_offense(self):
+        # Counting a receipt that exists but could not be read as "not held
+        # back" reset the counter and turned a repeat into a green sweep.
+        self.assertEqual(matrix.escalation({"oxlint": "HELD BACK: oxlint"}, {"oxlint": matrix.UNREADABLE}), ([], ["oxlint"], []))
 
     def test_reason_takes_the_newest_builder_block_and_stays_bounded(self):
         # The plain tail of a preparation log is useless: it ends on the generic
@@ -1230,8 +1232,44 @@ class HoldBackEscalationTest(unittest.TestCase):
         self.assertNotIn("HELD BACK", reason)
         self.assertEqual(len(reason.splitlines()), matrix.REASON_MAX_LINES)
 
-    def test_reason_is_absent_rather_than_wrong_without_builder_output(self):
-        self.assertIsNone(matrix.held_back_reason("HELD BACK: oxlint\nnothing quoted here\n"))
+    def test_reason_without_builder_output_falls_back_to_the_failure_tail(self):
+        # kimchi-docs' updateScript could not execute. Nothing was built, so
+        # there is no builder block, and the cause sits above nix-update's
+        # traceback and the pipeline's own trailer lines.
+        long_command = "Command '['nix', 'develop', " + "x" * 2000 + "]' returned non-zero exit status 126."
+        log = "\n".join([
+            *[f"copying path '/nix/store/{index}-dep' from 'https://cache.nixos.org'..." for index in range(20)],
+            "/nix/store/a-updateScript: 1: /nix/store/b-update-kimchi-docs: Permission denied",
+            "$ nix develop --impure --expr 'with import <nixpkgs> {}; ...'",
+            "Traceback (most recent call last):",
+            *[f'  File "/nix/store/c-nix-update/update.py", line {index}, in run' for index in range(30)],
+            "    ^^^^^^^^^^",
+            f"subprocess.CalledProcessError: {long_command}",
+            "\x1b[0;31m  ✗ nix-update failed (nix-update=1 tee=0)\x1b[0m",
+            "HEAD is now at d5073ef2 chore(packages): update oxlint (#1986)",
+            "\x1b[0;31m  ✗ HELD BACK: kimchi-docs (nix-update, formatter or commit failed)\x1b[0m",
+        ])
+        reason = matrix.held_back_reason(log)
+        self.assertIn("Permission denied", reason)
+        self.assertIn("returned non-zero exit status 126.", reason)
+        self.assertIn("nix-update failed", reason)
+        for absent in ('File "/nix/store', "Traceback", "HEAD is now at", "HELD BACK", "\x1b["):
+            self.assertNotIn(absent, reason)
+        self.assertLessEqual(len(reason.splitlines()), matrix.REASON_MAX_LINES)
+        self.assertTrue(all(len(line) <= matrix.REASON_MAX_LINE_CHARS for line in reason.splitlines()))
+        self.assertIsNone(matrix.held_back_reason("\n  \n"))
+
+    def test_gh_retries_a_transient_failure_before_giving_up(self):
+        def completed(code, stdout="", stderr=""):
+            return subprocess.CompletedProcess([], code, stdout, stderr)
+
+        with mock.patch.object(matrix.time, "sleep") as sleep, mock.patch.object(matrix.subprocess, "run", side_effect=[completed(1, stderr="502"), completed(0, "ok")]) as run:
+            self.assertEqual(matrix.gh("api", "x"), "ok")
+        self.assertEqual((run.call_count, sleep.call_count), (2, 1))
+        with mock.patch.object(matrix.time, "sleep") as sleep, mock.patch.object(matrix.subprocess, "run", return_value=completed(1, stderr="HTTP 502")) as run:
+            with self.assertRaisesRegex(matrix.GhError, "HTTP 502"):
+                matrix.gh("api", "x")
+        self.assertEqual((run.call_count, sleep.call_count), (matrix.GH_ATTEMPTS, matrix.GH_ATTEMPTS - 1))
 
     def test_predecessor_is_the_immediate_scheduled_sweep_whatever_its_conclusion(self):
         # Once this gate fires the failing sweep IS the predecessor the next one
@@ -1245,7 +1283,7 @@ class HoldBackEscalationTest(unittest.TestCase):
         ]}
         captured = []
 
-        def fake_gh(*args, required=True):
+        def fake_gh(*args):
             captured.append(args)
             return json.dumps(runs)
 
@@ -1254,36 +1292,60 @@ class HoldBackEscalationTest(unittest.TestCase):
             self.assertEqual(matrix.previous_sweep("o/r", "3")["id"], 2)
         self.assertIn("event=schedule", captured[0][1])
 
-    def test_an_unreadable_immediate_predecessor_yields_no_status(self):
+    @staticmethod
+    def fake_predecessor_gh(artifacts=None, payload=None, listing_fails=False, download_fails=False):
+        """A `gh` double for previous_status: the artifact listing, then the download."""
+        def fake_gh(*args):
+            if args[0] == "api":
+                if listing_fails:
+                    raise matrix.GhError("gh api failed after 3 attempts: HTTP 502")
+                return json.dumps({"artifacts": artifacts if artifacts is not None else [{"name": "update-receipt-oxlint", "expired": False}]})
+            if download_fails:
+                raise matrix.GhError("gh run download failed after 3 attempts: HTTP 502")
+            arguments = list(args)
+            destination = Path(arguments[arguments.index("--dir") + 1])
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / "update-receipt.json").write_text(payload)
+            return ""
+        return fake_gh
+
+    def test_predecessor_status_distinguishes_absent_from_unreadable(self):
         # Walking back to an older sweep that happens to carry a receipt would
-        # let a gap turn two NON-consecutive hold-backs into an escalation,
-        # which is what the two-sweep threshold exists to prevent.
+        # let a gap turn two NON-consecutive hold-backs into an escalation, so
+        # only the immediate predecessor is read. Within it, "no receipt" is a
+        # first offense and "a receipt we could not read" is not.
         run = {"id": 4, "html_url": "u4"}
+        held = json.dumps(self.receipt("oxlint", "HELD BACK"))
         with tempfile.TemporaryDirectory() as workspace:
-            def serve(payload):
-                def fake_gh(*args, required=True):
-                    arguments = list(args)
-                    destination = Path(arguments[arguments.index("--dir") + 1])
-                    destination.mkdir(parents=True, exist_ok=True)
-                    (destination / "update-receipt.json").write_text(payload)
-                    return ""
-                return fake_gh
+            def status(**behavior):
+                with mock.patch.object(matrix, "gh", side_effect=self.fake_predecessor_gh(**behavior)):
+                    return matrix.previous_status("o/r", run, "oxlint", Path(workspace))
 
-            with mock.patch.object(matrix, "gh", side_effect=serve(json.dumps(self.receipt("oxlint", "HELD BACK")))):
-                self.assertEqual(matrix.previous_status("o/r", run, "oxlint", Path(workspace)), ("HELD BACK", "u4"))
-            # Download failed, malformed JSON, valid JSON of the wrong shape, and
-            # a receipt belonging to a DIFFERENT target are all "unreadable" --
-            # never "not held back", and never an AttributeError that would
-            # abort the cleanup job.
-            with mock.patch.object(matrix, "gh", return_value=None):
-                self.assertEqual(matrix.previous_status("o/r", run, "oxlint", Path(workspace)), (None, "u4"))
-            for payload in ("{not json", "[]", "null", json.dumps(self.receipt("beads", "HELD BACK"))):
-                with mock.patch.object(matrix, "gh", side_effect=serve(payload)):
-                    self.assertEqual(matrix.previous_status("o/r", run, "oxlint", Path(workspace)), (None, "u4"), payload)
-            self.assertEqual(matrix.previous_status("o/r", None, "oxlint", Path(workspace)), (None, None))
+            self.assertEqual(status(payload=held), ("HELD BACK", "u4", None))
+            for artifacts in ([], [{"name": "update-receipt-oxlint", "expired": True}], [{"name": "update-receipt-oxlint-extra", "expired": False}]):
+                result = status(artifacts=artifacts)
+                self.assertEqual(result[:2], (None, "u4"), artifacts)
+                self.assertIn("no unexpired update-receipt-oxlint", result[2])
+            # The incident: the receipt exists, but reading it failed. That is
+            # never "not held back", and never silent.
+            for behavior in ({"listing_fails": True}, {"download_fails": True}, {"artifacts": [{"name": "update-receipt-oxlint"}]}):
+                result = status(**behavior)
+                self.assertEqual(result[:2], (matrix.UNREADABLE, "u4"), behavior)
+                self.assertTrue(result[2], behavior)
+            self.assertIn("HTTP 502", status(download_fails=True)[2])
+            # Malformed JSON, valid JSON of the wrong shape, a receipt with no
+            # status, and one belonging to a DIFFERENT target are unreadable
+            # too -- never an AttributeError that would abort the cleanup job.
+            for payload in ("{not json", "[]", "null", json.dumps({"name": "oxlint"}), json.dumps(self.receipt("beads", "HELD BACK"))):
+                self.assertEqual(status(payload=payload)[:2], (matrix.UNREADABLE, "u4"), payload)
+            self.assertEqual(matrix.previous_status("o/r", None, "oxlint", Path(workspace))[:2], (None, None))
 
-    def escalate(self, receipts, previous_status_value):
-        """Run the escalate command against fixture receipts; return (rc, stdout)."""
+    def escalate(self, receipts, overrides):
+        """Run the escalate command against fixture receipts; return (rc, stdout).
+
+        `overrides` is Python source run against the loaded module `m` before
+        main(), replacing whatever would otherwise reach the GitHub API.
+        """
         with tempfile.TemporaryDirectory() as root:
             source, temp = Path(root) / "source", Path(root) / "temp"
             (source / "receipts").mkdir(parents=True)
@@ -1297,18 +1359,21 @@ class HoldBackEscalationTest(unittest.TestCase):
                 "import importlib.util, json, sys\n"
                 f"spec = importlib.util.spec_from_file_location('m', {str(SCRIPTS / 'update-matrix.py')!r})\n"
                 "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
-                f"m.previous_sweep = lambda *a, **k: {{'id': 8, 'html_url': 'prev-url'}}\n"
-                f"m.previous_status = lambda *a, **k: ({previous_status_value!r}, 'prev-url')\n"
-                "m.preparation_reason = lambda *a, **k: 'the guard said bump napi.version'\n"
+                "m.previous_sweep = lambda *a, **k: {'id': 8, 'html_url': 'prev-url'}\n"
+                "m.preparation_reason = lambda *a, **k: ('the guard said bump napi.version', None)\n"
+                f"{overrides}\n"
                 "sys.argv = ['update-matrix.py', 'escalate']\n"
                 "m.main()\n"
             )
             result = subprocess.run([os.sys.executable, "-c", script], cwd=source, env=environment, capture_output=True, text=True)
             return result.returncode, result.stdout + result.stderr
 
+    def predecessor(self, status, note=None):
+        return f"m.previous_status = lambda *a, **k: ({status!r}, 'prev-url', {note!r})"
+
     def test_escalate_fails_the_sweep_only_on_a_repeat(self):
         held = self.receipt("oxlint", "HELD BACK", "HELD BACK: oxlint (nix-update, formatter or commit failed)")
-        code, output = self.escalate([held], "HELD BACK")
+        code, output = self.escalate([held], self.predecessor("HELD BACK"))
         self.assertEqual(code, 1, output)
         self.assertIn("::error title=Update target held back twice::", output)
         self.assertIn("prev-url", output)
@@ -1319,13 +1384,51 @@ class HoldBackEscalationTest(unittest.TestCase):
         # The operator judges; the annotation carries what they need to judge on.
         self.assertIn("bump napi.version", output)
 
-        code, output = self.escalate([held], "UPDATED")
+        code, output = self.escalate([held], self.predecessor("UPDATED"))
         self.assertEqual(code, 0, output)
         self.assertIn("::warning title=Update target held back::", output)
         self.assertNotIn("::error", output)
 
+    def test_escalate_says_why_a_hold_back_counts_as_first(self):
+        held = self.receipt("oxlint", "HELD BACK")
+        code, output = self.escalate([held], self.predecessor(None, "that sweep has no unexpired update-receipt-oxlint artifact"))
+        self.assertEqual(code, 0, output)
+        self.assertIn("::warning title=Update target held back::", output)
+        self.assertIn("no unexpired update-receipt-oxlint artifact", output)
+
+    def test_escalate_fails_loud_when_the_predecessor_receipt_is_unreadable(self):
+        # Replays sweep 36103378626: the predecessor held the target and its
+        # receipt was valid, but the download failed. The real previous_status
+        # runs here; only `gh` is faked.
+        held = self.receipt("kimchi-docs", "HELD BACK", "HELD BACK: kimchi-docs (nix-update, formatter or commit failed)")
+        overrides = "\n".join([
+            "def fake_gh(*args):",
+            "    if args[0] == 'api':",
+            "        return json.dumps({'artifacts': [{'name': 'update-receipt-kimchi-docs', 'expired': False}]})",
+            "    raise m.GhError('gh run download failed after 3 attempts: HTTP 502\\n(stderr line 2)')",
+            "m.gh = fake_gh",
+        ])
+        code, output = self.escalate([held], overrides)
+        self.assertEqual(code, 1, output)
+        self.assertIn("::error title=Update hold-back count unknown::", output)
+        self.assertNotIn("::warning", output)
+        self.assertIn("could not be read", output)
+        self.assertIn("HTTP 502", output)
+        self.assertIn("unreadable predecessor receipt: kimchi-docs", output)
+        # gh's multi-line stderr stays inside the one annotation.
+        self.assertIn("HTTP 502%0A(stderr line 2)", output)
+        self.assertIn("bump napi.version", output)
+
+    def test_every_escalation_names_a_reason(self):
+        held = self.receipt("oxlint", "HELD BACK")
+        missing = "m.preparation_reason = lambda *a, **k: (None, 'could not read update-report-oxlint: HTTP 404')"
+        code, output = self.escalate([held], self.predecessor("HELD BACK") + "\n" + missing)
+        self.assertEqual(code, 1, output)
+        self.assertIn("Preparation log excerpt unavailable: could not read update-report-oxlint: HTTP 404.", output)
+        self.assertIn("Full log: gh run download 9 --repo o/r --name update-report-oxlint", output)
+
     def test_escalate_is_silent_and_cheap_when_nothing_is_held_back(self):
-        code, output = self.escalate([self.receipt("beads", "UPDATED")], "HELD BACK")
+        code, output = self.escalate([self.receipt("beads", "UPDATED")], self.predecessor("HELD BACK"))
         self.assertEqual(code, 0, output)
         self.assertNotIn("::error", output)
         self.assertNotIn("::warning", output)
