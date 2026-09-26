@@ -39,6 +39,7 @@
     "qwen3-coder-next"
   ],
   "rolloutFeatures": [
+    "background_execution",
     "c2s",
     "cloud_config",
     "infra_safety",
@@ -86,6 +87,7 @@
     "chat.preserveScrollback",
     "chat.sessionDashboard.groupBy",
     "chat.sessionDashboard.indexResponses",
+    "chat.sessionDashboard.scope",
     "chat.sessionDashboard.sortBy",
     "chat.showTasks",
     "chat.showThinking",
