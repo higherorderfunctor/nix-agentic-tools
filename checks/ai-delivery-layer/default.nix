@@ -652,7 +652,7 @@ in {
         && lib.all (assertion: assertion.assertion) linked.assertions
         && linked.files."AGENTS.md".text == "SAME"
         && !(copied.files ? "AGENTS.md")
-        && (deliveredFiles copied)."AGENTS.md".text == "GENERATED"
+        && (deliveredFiles copied)."AGENTS.md".text == "GENERATED\n"
         && (lib.head (ownPlan "internal" "ai:agents-md:materialize" {config = copied;}).targets).path == "."
     );
 

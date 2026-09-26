@@ -161,7 +161,8 @@ in {
       in
         hm.config.home.file.".config/kimchi/harness/AGENTS.md".text
         == expected
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+        # The shared repository AGENTS.md ends in one newline.
+        && (deliveredFiles devenv.config)."AGENTS.md".text == expected + "\n"
     );
     # ── Kimchi (mkRuntime factory participant) ──────────────────────────
     module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);

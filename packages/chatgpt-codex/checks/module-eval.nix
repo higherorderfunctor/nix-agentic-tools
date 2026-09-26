@@ -1677,12 +1677,14 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected = builtins.concatStringsSep "\n\n" [
-          "Shared context"
-          "Codex context"
-          "<!-- rule: alpha -->\nAlpha rule"
-          "<!-- rule: zeta -->\nZeta rule"
-        ];
+        expected =
+          builtins.concatStringsSep "\n\n" [
+            "Shared context"
+            "Codex context"
+            "<!-- rule: alpha -->\n\nAlpha rule"
+            "<!-- rule: zeta -->\n\nZeta rule"
+          ]
+          + "\n";
       in
         hm.config.home.file.".codex/AGENTS.md".text
         == expected
@@ -1701,7 +1703,7 @@ in {
         empty = evalHm {ai.codex.enable = true;};
       in
         hm.config.home.file.".codex/AGENTS.md".text
-        == "Shared context"
+        == "Shared context\n"
         && !(empty.config.home.file ? ".codex/AGENTS.md")
     );
 
@@ -1739,7 +1741,7 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected = "<!-- rule: scoped -->\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule";
+        expected = "<!-- rule: scoped -->\n\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule\n";
       in
         hm.config.home.file.".codex/AGENTS.md".text
         == expected
@@ -1776,16 +1778,20 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected = builtins.concatStringsSep "\n\n" [
-          "Shared context"
-          (
-            "## Path-scoped rules\n\n"
-            + "Before editing a path that matches an entry below, read every document listed for it. When several entries match, their guidance composes.\n\n"
-            + "- **`alpha`**\n  - Match: `a/**`, `lib/a.nix`\n  - Read: [`docs/a.md`](docs/a.md), [`docs/a-more.md`](docs/a-more.md)\n"
-            + "- **`beta`**\n  - Match: `b/**`\n  - Read: [`docs/b.md`](docs/b.md)\n"
-          )
-          "<!-- rule: always -->\nAlways body"
-        ];
+        expected =
+          builtins.concatStringsSep "\n\n" [
+            "Shared context"
+            (
+              "## Path-scoped rules\n\n"
+              + "Before editing a path that matches an entry below, read every document listed\n"
+              + "for it. When several entries match, their guidance composes.\n\n"
+              + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
+              + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
+              + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)"
+            )
+            "<!-- rule: always -->\n\nAlways body"
+          ]
+          + "\n";
       in
         hm.config.home.file.".codex/AGENTS.md".text
         == expected
@@ -1830,7 +1836,9 @@ in {
               inherit projectDocMaxBytes;
             };
           };
-        sized = size: lib.concatStrings (lib.replicate size "x");
+        # The rendered file ends in one newline, so N bytes of context render
+        # to N + 1.
+        sized = size: lib.concatStrings (lib.replicate (size - 1) "x");
         below = evaluate (sized 32767) 32768;
         exact = evaluate (sized 32768) 32768;
         above = evaluate (sized 32769) 32768;
@@ -1857,7 +1865,7 @@ in {
         && diagnosticAssertion != null
         && lib.hasInfix "replace the final inline content" diagnosticAssertion.message
         && unicodeAssertion != null
-        && lib.hasInfix "renders to 2 bytes" unicodeAssertion.message
+        && lib.hasInfix "renders to 3 bytes" unicodeAssertion.message
         && lib.hasInfix "projectDocMaxBytes (1 bytes)" unicodeAssertion.message
         && lib.hasInfix "Trim or replace" unicodeAssertion.message
     );

@@ -3310,7 +3310,7 @@ in {
         != null
         && hmEntry.text == "CONSUMER-CONTEXT."
         && !(hm.config.home.file ? ".kiro/steering/symlinked.md")
-        && dvContext.text == "SYMLINK-CTX-TOKEN."
+        && dvContext.text == "SYMLINK-CTX-TOKEN.\n"
         && dvRule == null
     );
 
