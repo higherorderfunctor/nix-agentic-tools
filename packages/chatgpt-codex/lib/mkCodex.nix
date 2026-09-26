@@ -659,6 +659,13 @@
     if backend == "hm"
     then cfg.configDir
     else ".codex";
+  # The one AGENTS.md every context and rule unit lands in: the user file on
+  # Home Manager, the shared repository key on devenv. The emitters and
+  # `contentTargets` both read it.
+  agentsMdPath = backend: cfg:
+    if backend == "hm"
+    then "${cfg.configDir}/${cfg.context.filename}"
+    else cfg.context.filename;
   # The copies are ledger-owned, and nothing but this writer retracts them.
   # Declared outside the enable gate, and whether or not any rule is, so both
   # N→0 and the generation that DISABLES Codex drain what the previous one
@@ -890,6 +897,15 @@ in
     };
 
     installPackage = codexInstallPackage;
+    contentTargets = {
+      backend,
+      cfg,
+      mergedRules,
+      ...
+    }: {
+      context = agentsMdPath backend cfg;
+      rules = lib.mapAttrs (_name: _rule: agentsMdPath backend cfg) mergedRules;
+    };
     migrationConfig = codexExecpolicyWriterConfig;
     # Every rule, scope-prefixed or indexed, under Codex's size limit.
     sharedAgentsMd = {
@@ -898,7 +914,7 @@ in
       ...
     }:
       {
-        key = cfg.context.filename;
+        key = agentsMdPath "devenv" cfg;
         maxBytes = cfg.projectDocMaxBytes;
       }
       // agentsMdUnits mergedRules;
@@ -925,7 +941,7 @@ in
       settingsLedger = "toml-settings/codex-config-${builtins.hashString "sha256" configFile}.json";
       agentsMd = mkAgentsMd {inherit mergedContext mergedRules;};
       hasAgentsMdContent = hasMergedContext || mergedRules != {};
-      agentsMdTarget = "${cfg.configDir}/${cfg.context.filename}";
+      agentsMdTarget = agentsMdPath "hm" cfg;
       finalAgentsMdEntry = cfg.files.${agentsMdTarget} or null;
       hasNativeMcpServers = cfg.native.settings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;

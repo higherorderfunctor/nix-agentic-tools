@@ -38,6 +38,10 @@
     # the committed bytes must not depend on who evaluates them.
     repo = harness.evalDevenvModules [(import ../../dev/ai.nix {isCI = false;})];
     failedAssertions = map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) repo.config.assertions);
+    # The repository's own configuration drops nothing: no context or rule it
+    # asks for lands in a file it has switched off, or anywhere `ai.*` cannot
+    # deliver it.
+    deliveryWarnings = lib.filter (lib.hasInfix "does not deliver it to") repo.config.warnings;
 
     # The units one writer's directory target will write, as files.
     unitsAt = runtime: writer: path: let
@@ -100,6 +104,8 @@
   in {
     instructions-drift = assert lib.assertMsg (failedAssertions == [])
     "instructions-drift: dev/ai.nix fails its own module assertions:\n${lib.concatStringsSep "\n" failedAssertions}";
+    assert lib.assertMsg (deliveryWarnings == [])
+    "instructions-drift: dev/ai.nix asks for content ai.* does not deliver:\n${lib.concatStringsSep "\n" deliveryWarnings}";
       pkgs.runCommand "instructions-drift" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :

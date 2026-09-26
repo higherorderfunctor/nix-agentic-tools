@@ -2,23 +2,24 @@
 
 > **Last verified:** 2026-09-25 — The repository AGENTS.md, Copilot's devenv
 > context and instruction files, and Kiro's devenv steering land as read-only
-> copies; Codex indexes scoped rules that name `references`. Semble derives a
-> Kiro agent-private MCP server from `mcp.enable = false` plus an MCP-backed
-> subagent. Every runtime describes delivery once through `mkRuntime`'s
-> record-level `config`, and both `mkRuntime` and the backend transforms reject
-> a backend spec carrying anything but `installPackage`, `migrationConfig` and
-> `options`, since an overridden or hand-built record reaches a transform
-> without the constructor. Kiro hook commands resolve packages through the
-> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
-> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
-> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
-> Claude devenv delivers `ai.agents` and `ai.claude.agentsDir` to
-> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
-> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
-> so a store-path string is a file, never a body naming its own path. File
-> content at `mkDefault` enables its entry; `content.enable = false` suppresses
-> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> copies; Codex indexes scoped rules that name `references`; a unit whose file
+> is switched off warns. Semble derives a Kiro agent-private MCP server from
+> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
+> delivery once through `mkRuntime`'s record-level `config`, and both
+> `mkRuntime` and the backend transforms reject a backend spec carrying anything
+> but `installPackage`, `migrationConfig` and `options`, since an overridden or
+> hand-built record reaches a transform without the constructor. Kiro hook
+> commands resolve packages through the shared `commandType`. Launchers bake the
+> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
+> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
+> through `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
+> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
+> `agent.fileContent` where it copies, so a store-path string is a file, never a
+> body naming its own path. File content at `mkDefault` enables its entry;
+> `content.enable = false` suppresses every content form. The builder entry
+> point is `lib.ai.app.mkRuntime`. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
@@ -494,6 +495,20 @@ has not withdrawn with `ai.<runtime>.<pool>.<name> = null`
 (`config/ai-delivery.nix` `keyedSurfaces`). A PER-RUNTIME request a backend
 cannot deliver does warn (`lib/ai/delivery-warnings.nix`), because that one the
 consumer wrote directly and can delete.
+
+A context or rule unit that resolves for a runtime but lands in a file whose
+final entry has `content.enable = false` warns too, root or per-runtime: the
+file option that switched it off is the consumer's own, and the drop used to be
+silent (this repository's Codex rules vanished behind
+`files."AGENTS.md".content.enable = false`). The record's `contentTargets`
+callback names each unit's path from the same bindings its delivery uses; for a
+shared AGENTS.md key the final entry is the owner's and the message names the
+runtime whose public entry disabled it. Every such warning has a per-runtime
+remedy, so it never repeats forever: `ai.<runtime>.rules.<name>.enable = false`
+for a rule, `ai.<runtime>.normalized.context = lib.mkForce null` for context
+(root and runtime context compose, so `ai.<runtime>.context.enable = false`
+would not withhold the root part). A file REPLACED with other bytes stays quiet:
+those are the consumer's bytes, not a switch-off.
 
 ### Assertion semantics
 

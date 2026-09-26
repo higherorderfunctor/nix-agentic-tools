@@ -55,6 +55,9 @@
   # Copilot is enabled, so both N→0 and a disable retract the copies. Home
   # Manager writes neither surface.
   instructionsWriter = "materialize-copilot-instructions";
+  # Where each unit lands, shared by the emitters and `contentTargets`.
+  instructionPath = cfg: name: "${cfg.projectDir}/instructions/${name}.instructions.md";
+  contextPath = cfg: "${cfg.projectDir}/${cfg.context.filename}";
   instructionsLedger = "materialize/copilot-instructions.manifest";
   contextLedger = "materialize/copilot-context.manifest";
   # The fact is a default, so a consumer can still state its own on one
@@ -335,13 +338,13 @@ in
           {
             ai.copilot.files = aiCommon.mkRuleFiles {
               fields = instructionFields instructionsLedger;
-              path = name: "${cfg.projectDir}/instructions/${name}.instructions.md";
+              path = instructionPath cfg;
               rules = mergedRules;
               transformer = lib.ai.transformers.copilot.copilotTransformer;
             };
           }
           (lib.mkIf hasMergedContext {
-            ai.copilot.files."${cfg.projectDir}/${cfg.context.filename}" =
+            ai.copilot.files.${contextPath cfg} =
               aiCommon.contentFileEntry mergedContext
               // instructionFields contextLedger;
           })
@@ -408,6 +411,17 @@ in
         })
       ];
 
+    # Home Manager writes neither surface, so nothing there can be switched off.
+    contentTargets = {
+      backend,
+      cfg,
+      mergedRules,
+      ...
+    }:
+      lib.optionalAttrs (backend == "devenv") {
+        context = contextPath cfg;
+        rules = lib.mapAttrs (name: _rule: instructionPath cfg name) mergedRules;
+      };
     devenv = {
       migrationConfig = instructionsWriterConfig;
       # Package installation. ENV wiring needs no wrapper — devenv has a

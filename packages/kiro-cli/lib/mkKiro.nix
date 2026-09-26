@@ -666,6 +666,11 @@
       )
     ];
 
+  # Where each steering unit lands, shared by the emitters below and
+  # `contentTargets`.
+  steeringPath = cfg: name: "${cfg.configDir}/steering/${name}.md";
+  contextSteeringPath = cfg: "${cfg.configDir}/steering/${cfg.context.filename}";
+
   # An unscoped always-on rule, which AGENTS.md carries when Kiro shares it.
   isSharedRule = rule:
     rule.matcher
@@ -706,7 +711,7 @@
           };
           ledger = steeringLedger;
         };
-        path = name: "${cfg.configDir}/steering/${name}.md";
+        path = steeringPath cfg;
         rules = steeringRules;
         transformer = lib.ai.transformers.kiro.kiroTransformer;
       };
@@ -715,7 +720,7 @@
     # reads it natively as always-included content). Written without
     # frontmatter; root context precedes per-CLI context.
     (lib.mkIf (hasContext && !sharedAgentsMd) {
-      ai.kiro.files."${cfg.configDir}/steering/${cfg.context.filename}" =
+      ai.kiro.files.${contextSteeringPath cfg} =
         aiCommon.contentFileEntry mergedContext;
     })
   ];
@@ -1830,6 +1835,27 @@ in
         ]
         ++ steeringEmitters);
     installPackage = kiroInstallPackage;
+    # Home Manager: steering for every unit. devenv: the shared AGENTS.md for
+    # the context and the unscoped always-on rules, steering for the rest.
+    contentTargets = {
+      backend,
+      cfg,
+      mergedRules,
+      ...
+    }:
+      if backend == "hm"
+      then {
+        context = contextSteeringPath cfg;
+        rules = lib.mapAttrs (name: _rule: steeringPath cfg name) mergedRules;
+      }
+      else {
+        context = cfg.context.filename;
+        rules = lib.mapAttrs (name: rule:
+          if isSharedRule rule
+          then cfg.context.filename
+          else steeringPath cfg name)
+        mergedRules;
+      };
     migrationConfig = kiroMigrationConfig;
     # Only unscoped always-on rules; steering carries the rest.
     sharedAgentsMd = {

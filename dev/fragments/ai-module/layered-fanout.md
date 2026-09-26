@@ -344,7 +344,14 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   `## Path-scoped rules` index, then the inlined rules, so a file with many
   scoped rules stays under Codex's document limit. The builder adds the merged
   context and publishes it on devenv. A limit is published even without content,
-  because the runtime reads the file whoever wrote it.
+  because the runtime reads the file whoever wrote it. The layout is the
+  Markdown formatter's fixed point (one blank line between units and after each
+  rule comment, one glob or link per index line), so a committed copy survives a
+  formatter pass.
+- L4 unit paths → the record's optional `contentTargets` callback,
+  `{context?; rules?}`: the path each context and rule unit lands in, built from
+  the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit
+  whose final file is switched off; `checkRecord.nix` rejects a stray field.
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
   single-owner map → `lib/ai/app/sharedAgentsMd.nix`, which lowers that map
   through the devenv adapter as the pseudo-runtime `internal` (a read-only copy

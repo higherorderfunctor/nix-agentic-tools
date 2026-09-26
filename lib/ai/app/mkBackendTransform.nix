@@ -50,6 +50,14 @@
   cfg = config.ai.${appRecord.name};
   deliveryWarnings = import ../delivery-warnings.nix {inherit lib;} {
     inherit appRecord backend config options;
+    # Where this runtime's context and rules land, from its own path
+    # bindings, and which of those paths the shared AGENTS.md owner holds.
+    contentTargets = lib.optionalAttrs (appRecord ? contentTargets) (let
+      result = appRecord.contentTargets callbackArgs;
+    in
+      assert checkRecord.contentTargets appRecord.name result; result);
+    sharedTargets = sharedAgentsMdTargets;
+    hasContext = normalizedHasContext;
   };
   supportedPools = appRecord.supportedPools or [];
   supportsPool = poolName: builtins.elem poolName supportedPools;
@@ -409,7 +417,9 @@ in {
           bytes it carries, the consumer facts that decide how it lands, and
           which writer owns it if it is not a symlink. Setting
           `content.enable = false` omits the file whatever supplies its bytes,
-          while retaining the record for inspection and later overrides.
+          while retaining the record for inspection and later overrides. A
+          context or rule that would land in a file switched off this way is
+          reported as a warning naming a per-runtime way to withhold it.
 
           Generated `content.text` and `content.source` are contributed at
           `mkDefault` priority with every sibling field at ordinary priority,

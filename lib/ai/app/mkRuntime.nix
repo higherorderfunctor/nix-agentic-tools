@@ -39,6 +39,10 @@
 #     sharedAgentsMd ? <absent>;     # callback (same args) → {key; index?; rules?; maxBytes?}:
 #                                    #   the devenv repository AGENTS.md contribution;
 #                                    #   the transform rejects any other field
+#     contentTargets ? <absent>;     # callback (same args) → {context?; rules?}: the
+#                                    #   path each context/rule unit lands in, from the
+#                                    #   SAME bindings the delivery uses. A unit whose
+#                                    #   final file is switched off warns.
 #     hm = {                         # Home Manager only; each field overrides the
 #       installPackage ? <record>;   #   record-level one of the same name
 #       migrationConfig ? <record>;
@@ -76,6 +80,7 @@
   installPackage ? null,
   migrationConfig ? null,
   sharedAgentsMd ? null,
+  contentTargets ? null,
   hm ? {},
   devenv ? {},
   # The package set the factory was built with, carried on the record so
@@ -106,6 +111,7 @@ assert (import ./checkRecord.nix {inherit lib;}).record {inherit name defaults h
   // lib.optionalAttrs (args ? installPackage) {inherit installPackage;}
   // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
   // lib.optionalAttrs (sharedAgentsMd != null) {inherit sharedAgentsMd;}
+  // lib.optionalAttrs (contentTargets != null) {inherit contentTargets;}
   // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
   // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
   // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
