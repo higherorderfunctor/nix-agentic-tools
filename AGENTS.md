@@ -1,3 +1,441 @@
+## Path-scoped rules
+
+Before editing a path that matches an entry below, read every document listed
+for it. When several entries match, their guidance composes.
+
+- **`ai-clis`**
+  - Match:
+    - `packages/copilot-cli/checks/copilot-wrapper-argv.nix`
+    - `packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`
+    - `packages/claude-code/packages/ai/claude-code/package.nix`
+    - `packages/copilot-cli/packages/ai/copilot-cli/package.nix`
+    - `packages/kimchi/packages/ai/kimchi/package.nix`
+    - `packages/kiro-cli/packages/ai/kiro-cli/package.nix`
+    - `packages/kiro-gateway/packages/ai/kiro-gateway/package.nix`
+    - `packages/chatgpt-codex/**`
+    - `packages/copilot-cli/**`
+    - `packages/kiro-cli/**`
+  - Read:
+    - [`dev/fragments/ai-clis/copilot-config-delivery.md`](dev/fragments/ai-clis/copilot-config-delivery.md)
+    - [`dev/fragments/ai-clis/packaging-guide.md`](dev/fragments/ai-clis/packaging-guide.md)
+- **`ai-config-scope`**
+  - Match:
+    - `dev/ai.nix`
+    - `devenv.nix`
+    - `packages/chatgpt-codex/lib/mkCodex.nix`
+    - `packages/claude-code/lib/mkClaude.nix`
+    - `packages/copilot-cli/lib/mkCopilot.nix`
+    - `packages/kimchi/lib/mkKimchi.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+    - `packages/*/lib/wrapPackage.nix`
+    - `packages/*/modules/devenv/**`
+  - Read:
+    - [`dev/fragments/ai-config-scope/host-config-merge.md`](dev/fragments/ai-config-scope/host-config-merge.md)
+- **`ai-module`**
+  - Match:
+    - `checks/*/module-eval.nix`
+    - `checks/ai-delivery/**`
+    - `checks/module-provenance/**`
+    - `config/ai-delivery*.nix`
+    - `lib/ai/adapters/**`
+    - `lib/ai/agent.nix`
+    - `lib/ai/ai-common.nix`
+    - `lib/ai/app/**`
+    - `lib/ai/default.nix`
+    - `lib/ai/deliver.nix`
+    - `lib/ai/delivery-options.nix`
+    - `lib/ai/deliveryMethod.nix`
+    - `lib/ai/formats.nix`
+    - `lib/ai/hooks.nix`
+    - `lib/ai/launcher.nix`
+    - `lib/ai/mkSkillPackageModule.nix`
+    - `lib/ai/own.nix`
+    - `lib/ai/own.py`
+    - `lib/ai/program.nix`
+    - `lib/ai/runtime-files.nix`
+    - `lib/ai/runtimes.nix`
+    - `lib/ai/sharedOptions.nix`
+    - `lib/testing/module-harness.nix`
+    - `packages/*/checks/module-eval.nix`
+    - `packages/chatgpt-codex/lib/mkCodex.nix`
+    - `packages/chatgpt-codex/modules/**`
+    - `packages/claude-code/lib/mkClaude.nix`
+    - `packages/claude-code/modules/**`
+    - `packages/copilot-cli/lib/mkCopilot.nix`
+    - `packages/copilot-cli/modules/**`
+    - `packages/delegate-sizing/modules/**`
+    - `packages/kimchi/lib/mkKimchi.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+    - `packages/kiro-cli/modules/**`
+    - `packages/semble/modules/common.nix`
+  - Read:
+    - [`dev/fragments/ai-module/ai-module-fanout.md`](dev/fragments/ai-module/ai-module-fanout.md)
+    - [`dev/fragments/ai-module/collision-semantics.md`](dev/fragments/ai-module/collision-semantics.md)
+    - [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md)
+    - [`dev/fragments/ai-module/layered-fanout.md`](dev/fragments/ai-module/layered-fanout.md)
+    - [`dev/fragments/ai-module/shell-option.md`](dev/fragments/ai-module/shell-option.md)
+- **`ai-skills`**
+  - Match:
+    - `lib/ai/hm-helpers.nix`
+    - `lib/ai/mkSkillPackageModule.nix`
+    - `packages/chatgpt-codex/lib/mkCodex.nix`
+    - `packages/chatgpt-codex/modules/**`
+    - `packages/claude-code/lib/mkClaude.nix`
+    - `packages/claude-code/modules/**`
+    - `packages/copilot-cli/lib/mkCopilot.nix`
+    - `packages/copilot-cli/modules/**`
+    - `packages/delegate-sizing/modules/**`
+    - `packages/kimchi/lib/mkKimchi.nix`
+    - `packages/kimchi/modules/**`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+    - `packages/kiro-cli/modules/**`
+    - `packages/stacked-workflows/modules/**`
+  - Read:
+    - [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
+- **`beads`**
+  - Match:
+    - `packages/beads/**`
+  - Read:
+    - [`packages/beads/docs/beads-lifecycle.md`](packages/beads/docs/beads-lifecycle.md)
+- **`claude-code`**
+  - Match:
+    - `packages/claude-code/packages/ai/claude-code/package.nix`
+    - `packages/claude-code/**`
+  - Read:
+    - [`packages/claude-code/docs/claude-code-wrapper.md`](packages/claude-code/docs/claude-code-wrapper.md)
+    - [`packages/claude-code/docs/heron-brook-clamp.md`](packages/claude-code/docs/heron-brook-clamp.md)
+- **`delegate-sizing`**
+  - Match:
+    - `packages/delegate-sizing/**`
+  - Read:
+    - [`packages/delegate-sizing/docs/development.md`](packages/delegate-sizing/docs/development.md)
+- **`devenv`**
+  - Match:
+    - `.github/workflows/devenv-test.yml`
+    - `devenv.nix`
+    - `lib/ai/hm-helpers.nix`
+    - `packages/*/modules/devenv/**`
+  - Read:
+    - [`dev/fragments/devenv/ci-lean-closure.md`](dev/fragments/devenv/ci-lean-closure.md)
+    - [`dev/fragments/devenv/files-internals.md`](dev/fragments/devenv/files-internals.md)
+- **`facets`**
+  - Match:
+    - `checks/*/default.nix`
+    - `checks/facets/**`
+    - `flake.nix`
+    - `lib/facets.nix`
+    - `lib/facets/**`
+    - `lib/testing/**`
+    - `packages/*/checks.nix`
+    - `packages/*/packages/**`
+    - `packages/*/registry.nix`
+  - Read:
+    - [`dev/fragments/facets/package-ownership.md`](dev/fragments/facets/package-ownership.md)
+- **`flake`**
+  - Match:
+    - `flake.nix`
+    - `devenv.nix`
+  - Read:
+    - [`dev/fragments/flake/binary-cache.md`](dev/fragments/flake/binary-cache.md)
+- **`hm-modules`**
+  - Match:
+    - `packages/*/modules/homeManager/**`
+  - Read:
+    - [`dev/fragments/hm-modules/module-conventions.md`](dev/fragments/hm-modules/module-conventions.md)
+- **`ifd`**
+  - Match:
+    - `.github/actions/warm-ifd/**`
+    - `.github/workflows/ci.yml`
+    - `.github/workflows/devenv-test.yml`
+    - `.github/workflows/update.yml`
+    - `lib/facets/**`
+    - `lib/testing/**`
+    - `lib/packaging.nix`
+    - `packages/*/lib/packaging.nix`
+    - `packages/*/packages/**/*.nix`
+    - `packages/*/packages/**`
+  - Read:
+    - [`dev/fragments/overlays/ifd-patterns.md`](dev/fragments/overlays/ifd-patterns.md)
+- **`kimchi`**
+  - Match:
+    - `packages/kimchi/**`
+  - Read:
+    - [`packages/kimchi/docs/kimchi-factory.md`](packages/kimchi/docs/kimchi-factory.md)
+- **`kiro-settings`**
+  - Match:
+    - `lib/ai/ai-common.nix`
+    - `packages/kiro-cli/lib/packaging.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+  - Read:
+    - [`packages/kiro-cli/docs/settings-shape.md`](packages/kiro-cli/docs/settings-shape.md)
+- **`kiro-steering`**
+  - Match:
+    - `lib/ai/ai-common.nix`
+    - `lib/ai/transformers/kiro.nix`
+    - `packages/kiro-cli/**`
+  - Read:
+    - [`packages/kiro-cli/docs/steering-inclusion.md`](packages/kiro-cli/docs/steering-inclusion.md)
+- **`kiro-workflows`**
+  - Match:
+    - `packages/kiro-cli/packages/ai/kiro-cli/package.nix`
+    - `packages/kiro-cli/lib/packaging.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+  - Read:
+    - [`packages/kiro-cli/docs/workflow-gating.md`](packages/kiro-cli/docs/workflow-gating.md)
+- **`kiro-wrapper`**
+  - Match:
+    - `packages/kiro-cli/checks/kiro-fhs-contract.nix`
+    - `packages/kiro-cli/checks/kiro-wrapper-argv.nix`
+    - `lib/idempotentFlags.nix`
+    - `packages/kiro-cli/packages/ai/kiro-cli/package.nix`
+    - `packages/kiro-cli/lib/**`
+  - Read:
+    - [`packages/kiro-cli/docs/fhs-sandbox.md`](packages/kiro-cli/docs/fhs-sandbox.md)
+    - [`packages/kiro-cli/docs/launcher-argv.md`](packages/kiro-cli/docs/launcher-argv.md)
+- **`markdown-formatting`**
+  - Match:
+    - `**/*.md`
+    - `checks/markdown/doubled-words-fixtures.nix`
+    - `checks/markdown/doubled-words-fixtures.py`
+    - `checks/markdown/doubled-words.nix`
+    - `checks/markdown/doubled-words.py`
+    - `checks/markdown/fixtures/doubled-words/**`
+    - `checks/markdown/markdown-scan.nix`
+    - `checks/markdown/markdown-scanners.nix`
+    - `checks/markdown/split-code-spans.nix`
+    - `checks/markdown/split-code-spans.py`
+    - `treefmt.nix`
+  - Read:
+    - [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)
+- **`mcp-secrets`**
+  - Match:
+    - `checks/*/factory-eval.nix`
+    - `checks/*/module-eval.nix`
+    - `lib/ai/app/mkBackendTransform.nix`
+    - `lib/ai/mcpProxy.nix`
+    - `lib/ai/mcpServer/**`
+    - `lib/ai/sharedOptions.nix`
+    - `lib/mcp.nix`
+    - `lib/testing/factory-harness.nix`
+    - `lib/testing/module-harness.nix`
+    - `packages/*/checks/factory-eval.nix`
+    - `packages/*/checks/module-eval.nix`
+    - `packages/kiro-cli/lib/mcpSecrets.nix`
+    - `packages/kiro-cli/lib/mkKiro.nix`
+    - `packages/kiro-cli/lib/wrapPackage.nix`
+  - Read:
+    - [`dev/fragments/mcp-secrets/mcp-secrets.md`](dev/fragments/mcp-secrets/mcp-secrets.md)
+- **`mcp-servers`**
+  - Match:
+    - `packages/*/packages/ai/mcpServers/**`
+  - Read:
+    - [`dev/fragments/mcp-servers/js-server-packaging.md`](dev/fragments/mcp-servers/js-server-packaging.md)
+    - [`dev/fragments/mcp-servers/overlay-guide.md`](dev/fragments/mcp-servers/overlay-guide.md)
+- **`mcp-services`**
+  - Match:
+    - `checks/*/factory-eval.nix`
+    - `checks/*/module-eval.nix`
+    - `lib/ai/mcpServer/mkServiceModule.nix`
+    - `lib/ai/mcpServer/serviceSchema.nix`
+    - `lib/testing/factory-harness.nix`
+    - `lib/testing/module-harness.nix`
+    - `packages/*/checks/factory-eval.nix`
+    - `packages/*/checks/module-eval.nix`
+    - `packages/*/modules/mcp-server.nix`
+    - `packages/mcp-services/modules/homeManager/default.nix`
+  - Read:
+    - [`dev/fragments/mcp-services/service-host-contract.md`](dev/fragments/mcp-services/service-host-contract.md)
+- **`nix-standards`**
+  - Match:
+    - `**/*.nix`
+  - Read:
+    - [`dev/fragments/nix-standards/nix-standards.md`](dev/fragments/nix-standards/nix-standards.md)
+- **`overlays`**
+  - Match:
+    - `lib/facets/**`
+    - `lib/testing/**`
+    - `lib/packaging.nix`
+    - `packages/*/lib/packaging.nix`
+    - `packages/*/packages/**/*.nix`
+    - `packages/*/packages/**`
+  - Read:
+    - [`dev/fragments/overlays/cache-hit-parity.md`](dev/fragments/overlays/cache-hit-parity.md)
+    - [`dev/fragments/overlays/overlay-pattern.md`](dev/fragments/overlays/overlay-pattern.md)
+    - [`dev/fragments/overlays/unfree-guard.md`](dev/fragments/overlays/unfree-guard.md)
+- **`packaging`**
+  - Match:
+    - `config/update-targets.nix`
+    - `packages/**/*.nix`
+  - Read:
+    - [`dev/fragments/packaging/naming-conventions.md`](dev/fragments/packaging/naming-conventions.md)
+    - [`dev/fragments/packaging/platforms.md`](dev/fragments/packaging/platforms.md)
+- **`pipeline`**
+  - Match:
+    - `.github/actions/warm-ifd/**`
+    - `.github/workflows/ci.yml`
+    - `.github/workflows/update.yml`
+    - `config/fragment-categories.nix`
+    - `config/generate-update-ninja.nix`
+    - `config/update-targets.nix`
+    - `dev/ai.nix`
+    - `dev/generate.nix`
+    - `dev/scripts/ci-*.py`
+    - `dev/scripts/test-ci-*.py`
+    - `dev/scripts/test-update-*.py`
+    - `dev/scripts/update-*.py`
+    - `dev/scripts/update-*.sh`
+    - `dev/tasks/generate.nix`
+    - `lib/ai/transformers/**`
+    - `lib/fragments-registry.nix`
+    - `lib/fragments.nix`
+    - `lib/update.nix`
+    - `packages/*/registry.nix`
+  - Read:
+    - [`dev/fragments/pipeline/ci-update-workflow.md`](dev/fragments/pipeline/ci-update-workflow.md)
+    - [`dev/fragments/pipeline/fragment-pipeline.md`](dev/fragments/pipeline/fragment-pipeline.md)
+    - [`dev/fragments/pipeline/generation-architecture.md`](dev/fragments/pipeline/generation-architecture.md)
+    - [`dev/fragments/pipeline/update-pipeline.md`](dev/fragments/pipeline/update-pipeline.md)
+- **`semble-integration`**
+  - Match:
+    - `packages/semble/**`
+  - Read:
+    - [`packages/semble/docs/semble.md`](packages/semble/docs/semble.md)
+- **`shell-activation`**
+  - Match:
+    - `.envrc`
+    - `devenv.yaml`
+    - `lib/traceSource.nix`
+  - Read:
+    - [`dev/fragments/shell-activation/activation-mechanism.md`](dev/fragments/shell-activation/activation-mechanism.md)
+- **`stacked-workflows`**
+  - Match:
+    - `packages/stacked-workflows/**`
+  - Read:
+    - [`packages/stacked-workflows/docs/development.md`](packages/stacked-workflows/docs/development.md)
+
+<!-- rule: delegate-sizing-router -->
+
+## Delegate Sizing
+
+Before calling a subagent, spawning a delegate, or building a workflow, load the
+`delegate-sizing` skill when your harness provides it and size the model and
+effort explicitly; a delegate never inherits the session's model and effort.
+
+### Launch independent work together
+
+Before launching a delegate, ask what else is ready to run now. Briefs that
+share no state go out in one message, not in consecutive turns.
+
+A dependency graph deeper than two steps belongs in a workflow script, so stages
+overlap instead of queueing.
+
+Concurrency is still bounded: at most two external CLI delegates on one machine,
+and never two against the same working tree before the first has committed.
+
+### Orchestrator session
+
+Keep the main session conversational. It reasons with the operator, decides, and
+delegates the doing.
+
+Delegate bulk reading, searching and measurement, every edit-verify loop, and
+any run longer than a few minutes. Keep the decision, the brief, and the
+verification of what came back.
+
+Read a file into the session only to reason about it with the operator. Bulk
+output goes to disk and the delegate reports the conclusion.
+
+### Prefer the flat-rate pool
+
+When one pool bills per token and another is flat-rate, send long, iterative or
+context-heavy work to the flat-rate pool. Offloading there is not a budget
+trade-off.
+
+An unused allowance does not carry over. Spending it is free; hoarding it is a
+loss.
+
+### Verify by the artifact
+
+A delegate's exit code reports whether its process ended, not whether it did the
+work. Verify by the tree, the diff or the artifact it was asked to produce.
+
+Ask what else in the repository is derived from or gated on the files it
+touched, and check those too. Reviewing the diff proves the diff is good; it
+does not prove the tree is consistent.
+
+<!-- rule: semble -->
+
+Use `semble search` to discover code by behavior or meaning. Use exact text
+searches, filename searches, and direct reads when you know the identifier or
+path or need to verify a result.
+
+```bash
+semble search "authentication flow" ./my-project --max-snippet-lines 10
+semble search "save_pretrained" ./my-project
+semble search "save model to disk" ./my-project --top-k 10
+```
+
+Results are cached automatically on first run and invalidated when files change.
+
+`--content` selects one or more categories to search:
+
+```bash
+semble search "deployment guide" ./my-project --content docs
+semble search "database host port" ./my-project --content config
+semble search "authentication" ./my-project --content code docs
+semble search "authentication" ./my-project --content all
+```
+
+Use `semble find-related` to discover code similar to a known location. Pass the
+`file_path` and `line` from a prior search result:
+
+```bash
+semble find-related src/auth.py 42 ./my-project
+```
+
+The path defaults to the current directory when omitted; Git URLs are accepted.
+
+Pass several known paths or URLs when the question spans related repositories:
+
+```bash
+semble search "invoice endpoint" ./service-a ../service-b
+```
+
+Results from several repositories prefix `file_path` with a repository label.
+The `repos` map identifies each label's source. For a local source, replace the
+label with that source path before reading the file. For a URL, use a known
+checkout or repository read tool. When calling `semble find-related`, retain the
+returned `file_path` including its label and pass the same repository paths and
+content selection.
+
+### Workflow
+
+1. Search with a focused description of the behavior. Pass `--content` when
+   searching beyond code: `docs`, `config`, several categories such as
+   `code docs`, or `all`.
+2. Treat ranked results as candidates. Read enough surrounding source, callers,
+   and tests to verify their relevance before proposing an edit.
+3. Refine the query, expand the snippets or result count, or use exact text and
+   filename searches when results are incomplete or ambiguous. Search known
+   dependent or sibling repositories together when relevant.
+4. Optionally use `semble find-related` with a promising result's `file_path`
+   and a `line` within its returned range, such as `start_line`, to discover
+   similar implementations. Similarity results do not enumerate every caller or
+   reference; use exact searches or language-aware reference tools when
+   completeness matters.
+
+<!-- rule: stacked-workflows-router -->
+
+<!-- Fragment: packages/stacked-workflows/fragments/skill-routing.md -->
+
+## Skill Routing — MANDATORY
+
+**RULE: Before running any git-branchless, git-absorb, or git-revise command via
+Bash, check whether a `stack-*` skill covers the operation.** Skills carry
+pre-flight checks, dry-run previews, conflict guidance, and post-operation
+verification that the equivalent hand-run commands miss.
+
+Each skill's own description states which operations it covers.
+
 # nix-agentic-tools
 
 Project instructions for AI coding assistants working in this repository.
@@ -172,7 +610,7 @@ alejandra) and markdown (via prettier).
 
 > **Last verified:** 2026-09-25 — package categories live in owner registries;
 > `dev/generate.nix` turns them into `ai.rules` and `ai.*` writes every
-> runtime's files.
+> runtime's files, AGENTS.md index first.
 
 This repo ships path-scoped architecture fragments as dev-only context for
 agents working on it. They are SEPARATE from the published consumer-facing
@@ -207,7 +645,10 @@ it per runtime through the `lib/ai/transformers/` pipeline:
   same registry scopes to the authoritative source documents. AGENTS.md used to
   concatenate every scoped fragment body, but that bloated it to ~2k lines;
   Phase 2.4 removed the bodies (commit c4f4aff), and `ai.*` renders a scoped
-  rule that names `references` as an index entry for the same reason.
+  rule that names `references` as an index entry for the same reason. The index
+  and the always-on rules come before the orientation, so Codex's default 32 KiB
+  read keeps them in a fresh clone or a linked worktree, where the raised
+  `project_doc_max_bytes` in the gitignored `.codex/` does not apply.
 
 The source fragments are authoritative. Every runtime file above is a generated
 projection that `ai.*` writes: AGENTS.md and `.github/` are committed, the
@@ -1404,441 +1845,3 @@ are historical evidence, not instructions to resume.
 
 See `docs/repository-layout.md` for the settled owner tree and the distinction
 between package and workspace responsibilities.
-
-## Path-scoped rules
-
-Before editing a path that matches an entry below, read every document listed
-for it. When several entries match, their guidance composes.
-
-- **`ai-clis`**
-  - Match:
-    - `packages/copilot-cli/checks/copilot-wrapper-argv.nix`
-    - `packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`
-    - `packages/claude-code/packages/ai/claude-code/package.nix`
-    - `packages/copilot-cli/packages/ai/copilot-cli/package.nix`
-    - `packages/kimchi/packages/ai/kimchi/package.nix`
-    - `packages/kiro-cli/packages/ai/kiro-cli/package.nix`
-    - `packages/kiro-gateway/packages/ai/kiro-gateway/package.nix`
-    - `packages/chatgpt-codex/**`
-    - `packages/copilot-cli/**`
-    - `packages/kiro-cli/**`
-  - Read:
-    - [`dev/fragments/ai-clis/copilot-config-delivery.md`](dev/fragments/ai-clis/copilot-config-delivery.md)
-    - [`dev/fragments/ai-clis/packaging-guide.md`](dev/fragments/ai-clis/packaging-guide.md)
-- **`ai-config-scope`**
-  - Match:
-    - `dev/ai.nix`
-    - `devenv.nix`
-    - `packages/chatgpt-codex/lib/mkCodex.nix`
-    - `packages/claude-code/lib/mkClaude.nix`
-    - `packages/copilot-cli/lib/mkCopilot.nix`
-    - `packages/kimchi/lib/mkKimchi.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-    - `packages/*/lib/wrapPackage.nix`
-    - `packages/*/modules/devenv/**`
-  - Read:
-    - [`dev/fragments/ai-config-scope/host-config-merge.md`](dev/fragments/ai-config-scope/host-config-merge.md)
-- **`ai-module`**
-  - Match:
-    - `checks/*/module-eval.nix`
-    - `checks/ai-delivery/**`
-    - `checks/module-provenance/**`
-    - `config/ai-delivery*.nix`
-    - `lib/ai/adapters/**`
-    - `lib/ai/agent.nix`
-    - `lib/ai/ai-common.nix`
-    - `lib/ai/app/**`
-    - `lib/ai/default.nix`
-    - `lib/ai/deliver.nix`
-    - `lib/ai/delivery-options.nix`
-    - `lib/ai/deliveryMethod.nix`
-    - `lib/ai/formats.nix`
-    - `lib/ai/hooks.nix`
-    - `lib/ai/launcher.nix`
-    - `lib/ai/mkSkillPackageModule.nix`
-    - `lib/ai/own.nix`
-    - `lib/ai/own.py`
-    - `lib/ai/program.nix`
-    - `lib/ai/runtime-files.nix`
-    - `lib/ai/runtimes.nix`
-    - `lib/ai/sharedOptions.nix`
-    - `lib/testing/module-harness.nix`
-    - `packages/*/checks/module-eval.nix`
-    - `packages/chatgpt-codex/lib/mkCodex.nix`
-    - `packages/chatgpt-codex/modules/**`
-    - `packages/claude-code/lib/mkClaude.nix`
-    - `packages/claude-code/modules/**`
-    - `packages/copilot-cli/lib/mkCopilot.nix`
-    - `packages/copilot-cli/modules/**`
-    - `packages/delegate-sizing/modules/**`
-    - `packages/kimchi/lib/mkKimchi.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-    - `packages/kiro-cli/modules/**`
-    - `packages/semble/modules/common.nix`
-  - Read:
-    - [`dev/fragments/ai-module/ai-module-fanout.md`](dev/fragments/ai-module/ai-module-fanout.md)
-    - [`dev/fragments/ai-module/collision-semantics.md`](dev/fragments/ai-module/collision-semantics.md)
-    - [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md)
-    - [`dev/fragments/ai-module/layered-fanout.md`](dev/fragments/ai-module/layered-fanout.md)
-    - [`dev/fragments/ai-module/shell-option.md`](dev/fragments/ai-module/shell-option.md)
-- **`ai-skills`**
-  - Match:
-    - `lib/ai/hm-helpers.nix`
-    - `lib/ai/mkSkillPackageModule.nix`
-    - `packages/chatgpt-codex/lib/mkCodex.nix`
-    - `packages/chatgpt-codex/modules/**`
-    - `packages/claude-code/lib/mkClaude.nix`
-    - `packages/claude-code/modules/**`
-    - `packages/copilot-cli/lib/mkCopilot.nix`
-    - `packages/copilot-cli/modules/**`
-    - `packages/delegate-sizing/modules/**`
-    - `packages/kimchi/lib/mkKimchi.nix`
-    - `packages/kimchi/modules/**`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-    - `packages/kiro-cli/modules/**`
-    - `packages/stacked-workflows/modules/**`
-  - Read:
-    - [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
-- **`beads`**
-  - Match:
-    - `packages/beads/**`
-  - Read:
-    - [`packages/beads/docs/beads-lifecycle.md`](packages/beads/docs/beads-lifecycle.md)
-- **`claude-code`**
-  - Match:
-    - `packages/claude-code/packages/ai/claude-code/package.nix`
-    - `packages/claude-code/**`
-  - Read:
-    - [`packages/claude-code/docs/claude-code-wrapper.md`](packages/claude-code/docs/claude-code-wrapper.md)
-    - [`packages/claude-code/docs/heron-brook-clamp.md`](packages/claude-code/docs/heron-brook-clamp.md)
-- **`delegate-sizing`**
-  - Match:
-    - `packages/delegate-sizing/**`
-  - Read:
-    - [`packages/delegate-sizing/docs/development.md`](packages/delegate-sizing/docs/development.md)
-- **`devenv`**
-  - Match:
-    - `.github/workflows/devenv-test.yml`
-    - `devenv.nix`
-    - `lib/ai/hm-helpers.nix`
-    - `packages/*/modules/devenv/**`
-  - Read:
-    - [`dev/fragments/devenv/ci-lean-closure.md`](dev/fragments/devenv/ci-lean-closure.md)
-    - [`dev/fragments/devenv/files-internals.md`](dev/fragments/devenv/files-internals.md)
-- **`facets`**
-  - Match:
-    - `checks/*/default.nix`
-    - `checks/facets/**`
-    - `flake.nix`
-    - `lib/facets.nix`
-    - `lib/facets/**`
-    - `lib/testing/**`
-    - `packages/*/checks.nix`
-    - `packages/*/packages/**`
-    - `packages/*/registry.nix`
-  - Read:
-    - [`dev/fragments/facets/package-ownership.md`](dev/fragments/facets/package-ownership.md)
-- **`flake`**
-  - Match:
-    - `flake.nix`
-    - `devenv.nix`
-  - Read:
-    - [`dev/fragments/flake/binary-cache.md`](dev/fragments/flake/binary-cache.md)
-- **`hm-modules`**
-  - Match:
-    - `packages/*/modules/homeManager/**`
-  - Read:
-    - [`dev/fragments/hm-modules/module-conventions.md`](dev/fragments/hm-modules/module-conventions.md)
-- **`ifd`**
-  - Match:
-    - `.github/actions/warm-ifd/**`
-    - `.github/workflows/ci.yml`
-    - `.github/workflows/devenv-test.yml`
-    - `.github/workflows/update.yml`
-    - `lib/facets/**`
-    - `lib/testing/**`
-    - `lib/packaging.nix`
-    - `packages/*/lib/packaging.nix`
-    - `packages/*/packages/**/*.nix`
-    - `packages/*/packages/**`
-  - Read:
-    - [`dev/fragments/overlays/ifd-patterns.md`](dev/fragments/overlays/ifd-patterns.md)
-- **`kimchi`**
-  - Match:
-    - `packages/kimchi/**`
-  - Read:
-    - [`packages/kimchi/docs/kimchi-factory.md`](packages/kimchi/docs/kimchi-factory.md)
-- **`kiro-settings`**
-  - Match:
-    - `lib/ai/ai-common.nix`
-    - `packages/kiro-cli/lib/packaging.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-  - Read:
-    - [`packages/kiro-cli/docs/settings-shape.md`](packages/kiro-cli/docs/settings-shape.md)
-- **`kiro-steering`**
-  - Match:
-    - `lib/ai/ai-common.nix`
-    - `lib/ai/transformers/kiro.nix`
-    - `packages/kiro-cli/**`
-  - Read:
-    - [`packages/kiro-cli/docs/steering-inclusion.md`](packages/kiro-cli/docs/steering-inclusion.md)
-- **`kiro-workflows`**
-  - Match:
-    - `packages/kiro-cli/packages/ai/kiro-cli/package.nix`
-    - `packages/kiro-cli/lib/packaging.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-  - Read:
-    - [`packages/kiro-cli/docs/workflow-gating.md`](packages/kiro-cli/docs/workflow-gating.md)
-- **`kiro-wrapper`**
-  - Match:
-    - `packages/kiro-cli/checks/kiro-fhs-contract.nix`
-    - `packages/kiro-cli/checks/kiro-wrapper-argv.nix`
-    - `lib/idempotentFlags.nix`
-    - `packages/kiro-cli/packages/ai/kiro-cli/package.nix`
-    - `packages/kiro-cli/lib/**`
-  - Read:
-    - [`packages/kiro-cli/docs/fhs-sandbox.md`](packages/kiro-cli/docs/fhs-sandbox.md)
-    - [`packages/kiro-cli/docs/launcher-argv.md`](packages/kiro-cli/docs/launcher-argv.md)
-- **`markdown-formatting`**
-  - Match:
-    - `**/*.md`
-    - `checks/markdown/doubled-words-fixtures.nix`
-    - `checks/markdown/doubled-words-fixtures.py`
-    - `checks/markdown/doubled-words.nix`
-    - `checks/markdown/doubled-words.py`
-    - `checks/markdown/fixtures/doubled-words/**`
-    - `checks/markdown/markdown-scan.nix`
-    - `checks/markdown/markdown-scanners.nix`
-    - `checks/markdown/split-code-spans.nix`
-    - `checks/markdown/split-code-spans.py`
-    - `treefmt.nix`
-  - Read:
-    - [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)
-- **`mcp-secrets`**
-  - Match:
-    - `checks/*/factory-eval.nix`
-    - `checks/*/module-eval.nix`
-    - `lib/ai/app/mkBackendTransform.nix`
-    - `lib/ai/mcpProxy.nix`
-    - `lib/ai/mcpServer/**`
-    - `lib/ai/sharedOptions.nix`
-    - `lib/mcp.nix`
-    - `lib/testing/factory-harness.nix`
-    - `lib/testing/module-harness.nix`
-    - `packages/*/checks/factory-eval.nix`
-    - `packages/*/checks/module-eval.nix`
-    - `packages/kiro-cli/lib/mcpSecrets.nix`
-    - `packages/kiro-cli/lib/mkKiro.nix`
-    - `packages/kiro-cli/lib/wrapPackage.nix`
-  - Read:
-    - [`dev/fragments/mcp-secrets/mcp-secrets.md`](dev/fragments/mcp-secrets/mcp-secrets.md)
-- **`mcp-servers`**
-  - Match:
-    - `packages/*/packages/ai/mcpServers/**`
-  - Read:
-    - [`dev/fragments/mcp-servers/js-server-packaging.md`](dev/fragments/mcp-servers/js-server-packaging.md)
-    - [`dev/fragments/mcp-servers/overlay-guide.md`](dev/fragments/mcp-servers/overlay-guide.md)
-- **`mcp-services`**
-  - Match:
-    - `checks/*/factory-eval.nix`
-    - `checks/*/module-eval.nix`
-    - `lib/ai/mcpServer/mkServiceModule.nix`
-    - `lib/ai/mcpServer/serviceSchema.nix`
-    - `lib/testing/factory-harness.nix`
-    - `lib/testing/module-harness.nix`
-    - `packages/*/checks/factory-eval.nix`
-    - `packages/*/checks/module-eval.nix`
-    - `packages/*/modules/mcp-server.nix`
-    - `packages/mcp-services/modules/homeManager/default.nix`
-  - Read:
-    - [`dev/fragments/mcp-services/service-host-contract.md`](dev/fragments/mcp-services/service-host-contract.md)
-- **`nix-standards`**
-  - Match:
-    - `**/*.nix`
-  - Read:
-    - [`dev/fragments/nix-standards/nix-standards.md`](dev/fragments/nix-standards/nix-standards.md)
-- **`overlays`**
-  - Match:
-    - `lib/facets/**`
-    - `lib/testing/**`
-    - `lib/packaging.nix`
-    - `packages/*/lib/packaging.nix`
-    - `packages/*/packages/**/*.nix`
-    - `packages/*/packages/**`
-  - Read:
-    - [`dev/fragments/overlays/cache-hit-parity.md`](dev/fragments/overlays/cache-hit-parity.md)
-    - [`dev/fragments/overlays/overlay-pattern.md`](dev/fragments/overlays/overlay-pattern.md)
-    - [`dev/fragments/overlays/unfree-guard.md`](dev/fragments/overlays/unfree-guard.md)
-- **`packaging`**
-  - Match:
-    - `config/update-targets.nix`
-    - `packages/**/*.nix`
-  - Read:
-    - [`dev/fragments/packaging/naming-conventions.md`](dev/fragments/packaging/naming-conventions.md)
-    - [`dev/fragments/packaging/platforms.md`](dev/fragments/packaging/platforms.md)
-- **`pipeline`**
-  - Match:
-    - `.github/actions/warm-ifd/**`
-    - `.github/workflows/ci.yml`
-    - `.github/workflows/update.yml`
-    - `config/fragment-categories.nix`
-    - `config/generate-update-ninja.nix`
-    - `config/update-targets.nix`
-    - `dev/ai.nix`
-    - `dev/generate.nix`
-    - `dev/scripts/ci-*.py`
-    - `dev/scripts/test-ci-*.py`
-    - `dev/scripts/test-update-*.py`
-    - `dev/scripts/update-*.py`
-    - `dev/scripts/update-*.sh`
-    - `dev/tasks/generate.nix`
-    - `lib/ai/transformers/**`
-    - `lib/fragments-registry.nix`
-    - `lib/fragments.nix`
-    - `lib/update.nix`
-    - `packages/*/registry.nix`
-  - Read:
-    - [`dev/fragments/pipeline/ci-update-workflow.md`](dev/fragments/pipeline/ci-update-workflow.md)
-    - [`dev/fragments/pipeline/fragment-pipeline.md`](dev/fragments/pipeline/fragment-pipeline.md)
-    - [`dev/fragments/pipeline/generation-architecture.md`](dev/fragments/pipeline/generation-architecture.md)
-    - [`dev/fragments/pipeline/update-pipeline.md`](dev/fragments/pipeline/update-pipeline.md)
-- **`semble-integration`**
-  - Match:
-    - `packages/semble/**`
-  - Read:
-    - [`packages/semble/docs/semble.md`](packages/semble/docs/semble.md)
-- **`shell-activation`**
-  - Match:
-    - `.envrc`
-    - `devenv.yaml`
-    - `lib/traceSource.nix`
-  - Read:
-    - [`dev/fragments/shell-activation/activation-mechanism.md`](dev/fragments/shell-activation/activation-mechanism.md)
-- **`stacked-workflows`**
-  - Match:
-    - `packages/stacked-workflows/**`
-  - Read:
-    - [`packages/stacked-workflows/docs/development.md`](packages/stacked-workflows/docs/development.md)
-
-<!-- rule: delegate-sizing-router -->
-
-## Delegate Sizing
-
-Before calling a subagent, spawning a delegate, or building a workflow, load the
-`delegate-sizing` skill when your harness provides it and size the model and
-effort explicitly; a delegate never inherits the session's model and effort.
-
-### Launch independent work together
-
-Before launching a delegate, ask what else is ready to run now. Briefs that
-share no state go out in one message, not in consecutive turns.
-
-A dependency graph deeper than two steps belongs in a workflow script, so stages
-overlap instead of queueing.
-
-Concurrency is still bounded: at most two external CLI delegates on one machine,
-and never two against the same working tree before the first has committed.
-
-### Orchestrator session
-
-Keep the main session conversational. It reasons with the operator, decides, and
-delegates the doing.
-
-Delegate bulk reading, searching and measurement, every edit-verify loop, and
-any run longer than a few minutes. Keep the decision, the brief, and the
-verification of what came back.
-
-Read a file into the session only to reason about it with the operator. Bulk
-output goes to disk and the delegate reports the conclusion.
-
-### Prefer the flat-rate pool
-
-When one pool bills per token and another is flat-rate, send long, iterative or
-context-heavy work to the flat-rate pool. Offloading there is not a budget
-trade-off.
-
-An unused allowance does not carry over. Spending it is free; hoarding it is a
-loss.
-
-### Verify by the artifact
-
-A delegate's exit code reports whether its process ended, not whether it did the
-work. Verify by the tree, the diff or the artifact it was asked to produce.
-
-Ask what else in the repository is derived from or gated on the files it
-touched, and check those too. Reviewing the diff proves the diff is good; it
-does not prove the tree is consistent.
-
-<!-- rule: semble -->
-
-Use `semble search` to discover code by behavior or meaning. Use exact text
-searches, filename searches, and direct reads when you know the identifier or
-path or need to verify a result.
-
-```bash
-semble search "authentication flow" ./my-project --max-snippet-lines 10
-semble search "save_pretrained" ./my-project
-semble search "save model to disk" ./my-project --top-k 10
-```
-
-Results are cached automatically on first run and invalidated when files change.
-
-`--content` selects one or more categories to search:
-
-```bash
-semble search "deployment guide" ./my-project --content docs
-semble search "database host port" ./my-project --content config
-semble search "authentication" ./my-project --content code docs
-semble search "authentication" ./my-project --content all
-```
-
-Use `semble find-related` to discover code similar to a known location. Pass the
-`file_path` and `line` from a prior search result:
-
-```bash
-semble find-related src/auth.py 42 ./my-project
-```
-
-The path defaults to the current directory when omitted; Git URLs are accepted.
-
-Pass several known paths or URLs when the question spans related repositories:
-
-```bash
-semble search "invoice endpoint" ./service-a ../service-b
-```
-
-Results from several repositories prefix `file_path` with a repository label.
-The `repos` map identifies each label's source. For a local source, replace the
-label with that source path before reading the file. For a URL, use a known
-checkout or repository read tool. When calling `semble find-related`, retain the
-returned `file_path` including its label and pass the same repository paths and
-content selection.
-
-### Workflow
-
-1. Search with a focused description of the behavior. Pass `--content` when
-   searching beyond code: `docs`, `config`, several categories such as
-   `code docs`, or `all`.
-2. Treat ranked results as candidates. Read enough surrounding source, callers,
-   and tests to verify their relevance before proposing an edit.
-3. Refine the query, expand the snippets or result count, or use exact text and
-   filename searches when results are incomplete or ambiguous. Search known
-   dependent or sibling repositories together when relevant.
-4. Optionally use `semble find-related` with a promising result's `file_path`
-   and a `line` within its returned range, such as `start_line`, to discover
-   similar implementations. Similarity results do not enumerate every caller or
-   reference; use exact searches or language-aware reference tools when
-   completeness matters.
-
-<!-- rule: stacked-workflows-router -->
-
-<!-- Fragment: packages/stacked-workflows/fragments/skill-routing.md -->
-
-## Skill Routing — MANDATORY
-
-**RULE: Before running any git-branchless, git-absorb, or git-revise command via
-Bash, check whether a `stack-*` skill covers the operation.** Skills carry
-pre-flight checks, dry-run previews, conflict guidance, and post-operation
-verification that the equivalent hand-run commands miss.
-
-Each skill's own description states which operations it covers.

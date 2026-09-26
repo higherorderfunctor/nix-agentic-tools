@@ -1017,6 +1017,51 @@ def dry_run(fixture):
     print("PASS dry_run: DRY_RUN wrote nothing; the same entry without it wrote for real")
 
 
+def project_root(fixture):
+    """A directory container at the backend root itself, as AGENTS.md uses."""
+    target = fixture.root / "AGENTS.md"
+    sibling = fixture.root / "README.md"
+    ledger = fixture.ledger("materialize/agents-md.manifest")
+    sibling.write_text("not ours\n")
+    declared = {"targets": [dir_target({"AGENTS.md": {"mode": "0444", "text": "ours\n"}},
+                                       path=".", ledger="materialize/agents-md.manifest")]}
+    drained = {"targets": [dir_target({}, path=".", ledger="materialize/agents-md.manifest")]}
+    witness = hashlib.sha256(b"ours\n").hexdigest()
+
+    # An unmanaged file already at the root (a hand-written AGENTS.md): backed
+    # up, then adopted.
+    target.write_text("hand written\n")
+    result = fixture.own(declared)
+    assert "existed but was not managed" in result.stderr, result.stderr
+    backups = fixture.backups()
+    assert [backup.read_text() for backup in backups] == ["hand written\n"], backups
+    assert target.read_text() == "ours\n" and stat.S_IMODE(target.stat().st_mode) == 0o444
+    assert ledger.read_text() == f"AGENTS.md\t{witness}\n", ledger.read_text()
+    print("PASS project_root: unmanaged file backed up then adopted")
+
+    # Identical bytes: no republish, no mtime churn.
+    os.utime(target, ns=(10**9, 10**9))
+    before, inode = snapshot(target), identity(target)
+    result = fixture.own(declared)
+    assert "WARNING" not in result.stderr, result.stderr
+    assert snapshot(target) == before and identity(target) == inode, "an unchanged unit was republished"
+    print("PASS project_root: identical bytes are a no-op")
+
+    # Retract: the unit and its ledger go; the root and its siblings stay.
+    fixture.own(drained)
+    assert not target.exists() and not ledger.exists()
+    assert fixture.root.is_dir() and sibling.read_text() == "not ours\n"
+    assert len(fixture.backups()) == 1, "an unmodified owned unit was backed up on removal"
+    print("PASS project_root: retract removed only the owned unit")
+
+    # A unit address still cannot leave the root.
+    escaping = {"targets": [dir_target({"../AGENTS.md": {"text": "x\n"}}, path=".",
+                                       ledger="materialize/agents-md.manifest")]}
+    fixture.own(escaping, succeeds=False)
+    assert not (fixture.root.parent / "AGENTS.md").exists()
+    print("PASS project_root: a traversing unit address is refused")
+
+
 CASES = {
     "drain": drain,
     "dry_run": dry_run,
@@ -1024,6 +1069,7 @@ CASES = {
     "legacy": legacy,
     "lock": lock,
     "modes": modes,
+    "project_root": project_root,
     "rejections": rejections,
     "remove_arms": remove_arms,
     "renderer": renderer,

@@ -1679,10 +1679,10 @@ in {
         devenv = evalDevenv config;
         expected =
           builtins.concatStringsSep "\n\n" [
-            "Shared context"
-            "Codex context"
             "<!-- rule: alpha -->\n\nAlpha rule"
             "<!-- rule: zeta -->\n\nZeta rule"
+            "Shared context"
+            "Codex context"
           ]
           + "\n";
       in
@@ -1780,7 +1780,6 @@ in {
         devenv = evalDevenv config;
         expected =
           builtins.concatStringsSep "\n\n" [
-            "Shared context"
             (
               "## Path-scoped rules\n\n"
               + "Before editing a path that matches an entry below, read every document listed\n"
@@ -1790,6 +1789,7 @@ in {
               + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)"
             )
             "<!-- rule: always -->\n\nAlways body"
+            "Shared context"
           ]
           + "\n";
       in

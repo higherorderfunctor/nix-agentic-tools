@@ -8,8 +8,9 @@
 # Imported by devenv.nix and evaluated by
 # checks/instructions/instructions-drift.nix, which compares the committed
 # files with what this module delivers. `isCI` is a parameter rather than a
-# `getEnv` read here so that check can pin it to false: the committed bytes
-# must not depend on the environment that evaluates them.
+# `getEnv` read here so the check stays pure. It gates package installation
+# only: the committed bytes must not depend on the environment that evaluates
+# them, which that check proves by evaluating both values.
 {isCI}: {
   config,
   lib,
@@ -30,10 +31,15 @@
   # A runtime rule at a root rule's key replaces it for that runtime: the
   # documented override. This repository sets no per-runtime rules itself, so
   # an overlap here is a program's rule silently hiding a fragment.
-  shadowed = lib.concatMap (runtime:
-    map (key: "ai.${runtime}.rules.${key}")
-    (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames config.ai.${runtime}.rules)))
-  (lib.filter (runtime: config.ai.${runtime}.enable) ["claude" "codex" "copilot" "kiro"]);
+  # The same holds for the stacked-workflows router merged into root rules
+  # below: `//` would drop a fragment category of the same name.
+  shadowed =
+    map (key: "the stacked-workflows rule `${key}`")
+    (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames swsRouter))
+    ++ lib.concatMap (runtime:
+      map (key: "ai.${runtime}.rules.${key}")
+      (lib.intersectLists (builtins.attrNames gen.rules) (builtins.attrNames config.ai.${runtime}.rules)))
+    (lib.filter (runtime: config.ai.${runtime}.enable) ["claude" "codex" "copilot" "kiro"]);
 in {
   assertions = [
     {
@@ -77,10 +83,12 @@ in {
     };
 
     # Semble stays outside the manual diagnostic closure but is pinned by this
-    # flake for every interactive shell. `enable` reads `isCI`, which the drift
-    # check pins to false, so the committed AGENTS.md always carries the rule.
+    # flake for every interactive shell. Only `install` reads `isCI`: the rule
+    # every runtime gets does not, so a shell entered with CI set writes the
+    # same committed AGENTS.md as any other.
     programs.semble = {
-      enable = !isCI;
+      enable = true;
+      install = !isCI;
       # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
       # follow already supplies their store paths. If a future grammar needs a
       # custom derivation, also expose that grammar alone in flake packages so

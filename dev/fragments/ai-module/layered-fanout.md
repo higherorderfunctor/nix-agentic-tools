@@ -340,13 +340,15 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   by name, so `checkRecord.nix` rejects a missing `key` or any other field.
   Codex lists a scoped rule that names `references` as an index entry (its globs
   plus links to those documents) and inlines every other rule, a scoped one
-  behind a prose scope note. `agentsmd.renderKeyed` writes the context, then the
-  `## Path-scoped rules` index, then the inlined rules, so a file with many
-  scoped rules stays under Codex's document limit. The builder adds the merged
-  context and publishes it on devenv. A limit is published even without content,
-  because the runtime reads the file whoever wrote it. The layout is the
-  Markdown formatter's fixed point (one blank line between units and after each
-  rule comment, one glob or link per index line), so a committed copy survives a
+  behind a prose scope note. `agentsmd.renderKeyed` writes the
+  `## Path-scoped rules` index, then the inlined rules, then the context: a file
+  with many scoped rules stays under Codex's document limit, and a long context
+  that does not (read at the 32 KiB default because the raised limit is absent
+  or untrusted) loses only its own tail. The builder adds the merged context and
+  publishes it on devenv. A limit is published even without content, because the
+  runtime reads the file whoever wrote it. The layout is the Markdown
+  formatter's fixed point (one blank line between units and after each rule
+  comment, one glob or link per index line), so a committed copy survives a
   formatter pass.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from

@@ -632,9 +632,12 @@
     };
     ```
 
-    Claude and Codex compose the guidance into their single always-loaded
-    `CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
-    `.kiro/steering/semble.md`.
+    Claude writes the guidance as the always-on rule file
+    `.claude/rules/semble.md`, and Codex inlines it in `AGENTS.md`. Kiro writes
+    it to `.kiro/steering/semble.md` under Home Manager and, under devenv,
+    where it shares the repository `AGENTS.md`, inlines it there.
+    `ai.programs.semble.install = false` keeps every rule but skips installing
+    the package, for a shell that must not carry it.
 
     `models` routes searches across embedding models by content: a search uses
     the entry whose content set equals its `--content` (or `defaultContent`)

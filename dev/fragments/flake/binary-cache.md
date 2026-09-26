@@ -1,7 +1,7 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-09-13 — native package shards retain the Numtide
-> substitution and Semble mirroring policy.
+> **Last verified:** 2026-09-25 — the diagnostic shell gates only Semble's
+> install on `isCI`, not its rule.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show b330b5af:dev/fragments/flake/binary-cache.md`.
@@ -50,6 +50,6 @@ and language selection. This proves customization without publishing a
 grammar-set-specific Semble derivation.
 
 This is separate from `devenv test` closure policy.
-`ai.codex.programs.semble.enable = !isCI` keeps the interactive package out of
-that cold runtime-test shell; it does not remove or weaken the flake check
-above.
+`ai.programs.semble.install = !isCI` (dev/ai.nix) keeps the interactive package
+out of that cold runtime-test shell while every runtime keeps the Semble rule;
+it does not remove or weaken the flake check above.

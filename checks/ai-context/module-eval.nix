@@ -288,7 +288,7 @@ in {
         agents = (deliveredFiles result.config)."AGENTS.md".text;
       in
         agents
-        == "Shared context.\n\n<!-- rule: shared -->\n\nShared rule.\n"
+        == "<!-- rule: shared -->\n\nShared rule.\n\nShared context.\n"
         && !(lib.hasInfix "---" agents)
     );
 

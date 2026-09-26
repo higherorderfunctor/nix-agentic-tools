@@ -43,10 +43,13 @@ in rec {
     + "  - Read:\n"
     + lib.concatMapStrings (path: item "[${code path}](${path})") references;
 
-  # Render the shared AGENTS.md target from named units: the context body,
-  # then the path-scoped index, then the inlined rules, each group in
-  # attribute-name order. The index follows the context directly because it
-  # is what points a reader at everything the file does not inline. The rule
+  # Render the shared AGENTS.md target from named units: the path-scoped
+  # index, then the inlined rules, each in attribute-name order, then the
+  # context body. The compact, always-applicable units go FIRST because a
+  # reader may stop early: Codex reads only the first `project_doc_max_bytes`
+  # (32 KiB by default) and drops the rest without a word, and a raised limit
+  # applies only where its project config is present and trusted. A long
+  # context therefore loses its own tail, never the index or a rule. The rule
   # comments keep key provenance without introducing frontmatter or another
   # metadata schema.
   #
@@ -64,8 +67,7 @@ in rec {
       then trimEnd (lib.removeSuffix "\n" text)
       else text;
     units =
-      lib.optional (context != null && context != "") context
-      ++ lib.optional (index != {}) (
+      lib.optional (index != {}) (
         ''
           ## Path-scoped rules
 
@@ -78,7 +80,8 @@ in rec {
       ++ lib.mapAttrsToList (
         name: body: "<!-- rule: ${name} -->\n\n${body}"
       )
-      rules;
+      rules
+      ++ lib.optional (context != null && context != "") context;
   in
     lib.optionalString (units != []) (lib.concatMapStringsSep "\n\n" trimEnd units + "\n");
 }

@@ -689,6 +689,41 @@ in {
         && devenv.enterShell == ""
     );
 
+    # `install = false` drops the launchers and cache guard on both backends
+    # and nothing else: the rule every runtime receives is unchanged.
+    module-semble-install-off-keeps-rules = mkTest "semble-install-off-keeps-rules" (
+      let
+        config = install: {
+          ai = {
+            codex.enable = true;
+            programs.semble = {
+              cli.instructions.enable = true;
+              enable = true;
+              inherit install;
+            };
+          };
+        };
+        hmOn = (evalHm (config true)).config;
+        hmOff = (evalHm (config false)).config;
+        devenvOn = (evalDevenv (config true)).config;
+        devenvOff = (evalDevenv (config false)).config;
+        # Codex installs its own CLI, so Semble's package is the difference.
+        sembleOnly = on: off: lib.subtractLists off on;
+        isSemble = packages: builtins.length packages == 1 && lib.hasInfix "semble" (builtins.baseNameOf (builtins.head packages));
+      in
+        isSemble (sembleOnly hmOn.home.packages hmOff.home.packages)
+        && isSemble (sembleOnly devenvOn.packages devenvOff.packages)
+        && sembleOnly hmOff.home.packages hmOn.home.packages == []
+        && sembleOnly devenvOff.packages devenvOn.packages == []
+        && hmOn.home.activation ? sembleCacheGuard
+        && !(hmOff.home.activation ? sembleCacheGuard)
+        && !(lib.hasInfix "semble-cache-guard" devenvOff.enterShell)
+        && lib.hasInfix "semble-cache-guard" devenvOn.enterShell
+        && hmOff.home.file.".codex/AGENTS.md".text == hmOn.home.file.".codex/AGENTS.md".text
+        && (deliveredFiles devenvOff)."AGENTS.md".text == (deliveredFiles devenvOn)."AGENTS.md".text
+        && lib.hasInfix "Use `semble search`" (deliveredFiles devenvOff)."AGENTS.md".text
+    );
+
     module-semble-hm-cache-wrapper = let
       package =
         builtins.head

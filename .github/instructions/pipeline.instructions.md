@@ -244,7 +244,8 @@ inside the required `test` job without evaluating or building Nix themselves.
 > **Last verified:** 2026-09-25 — category declaration is SPLIT: shared
 > categories in `config/fragment-categories.nix`, owner-specific ones in the
 > owning package's `registry.nix`, merged by `lib/facets/registry.nix`. The
-> orchestration layer produces content; `ai.*` renders and writes it.
+> orchestration layer produces content; `ai.*` renders and writes it, with
+> AGENTS.md's index and rules ahead of the context.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -345,9 +346,10 @@ them.
   commit 5a97f09.
 - `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
   AGENTS.md is a flat, always-loaded file, so it cannot enforce glob scopes. Its
-  `renderKeyed` writes the context, then a compact `## Path-scoped rules` index
-  of every scoped rule that names `references`, then the inlined rules; Codex
-  applies that index manually.
+  `renderKeyed` writes a compact `## Path-scoped rules` index of every scoped
+  rule that names `references`, then the inlined rules, then the context, so
+  Codex's default 32 KiB read keeps the index and every rule and cuts only the
+  context's tail; Codex applies that index manually.
 
 ### Orchestration details worth knowing
 

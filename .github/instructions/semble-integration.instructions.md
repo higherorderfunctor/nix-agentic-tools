@@ -7,15 +7,16 @@ applyTo: "packages/semble/**"
 
 # Semble integrations
 
-> **Last verified:** 2026-09-25 — `models` is a root list routed by exact
-> content set, with `defaultContent` and `defaultModel`; the CLI and the MCP
-> server route alike through `patches/models.patch`, and there is no `--model`.
-> `pathMappings` is an ordered root list of `{ language; content; patterns; }`
-> where the first match wins, validated against `extracted.json`, and
-> `language = null` means line chunking with no parser. `mcp.content` and
-> `mcp.rootExposure` are gone: `mcp.enable = false` with an MCP-backed subagent
-> is a Kiro agent-private server. Every installed package is a bin-only launcher
-> set that unsets PYTHONPATH. Model examples use the flake's
+> **Last verified:** 2026-09-25 — `install` gates only the package, never the
+> rules. `models` is a root list routed by exact content set, with
+> `defaultContent` and `defaultModel`; the CLI and the MCP server route alike
+> through `patches/models.patch`, and there is no `--model`. `pathMappings` is
+> an ordered root list of `{ language; content; patterns; }` where the first
+> match wins, validated against `extracted.json`, and `language = null` means
+> line chunking with no parser. `mcp.content` and `mcp.rootExposure` are gone:
+> `mcp.enable = false` with an MCP-backed subagent is a Kiro agent-private
+> server. Every installed package is a bin-only launcher set that unsets
+> PYTHONPATH. Model examples use the flake's
 > `lib.packaging.fetchHuggingFaceModel` and forward `files` as `passthru.files`,
 > which turns on the model2vec layout check.
 >
@@ -205,6 +206,10 @@ Manager writes it to `.kiro/steering/semble.md`, while devenv, where Kiro shares
 the repository AGENTS.md, inlines it there beside Codex's identical copy. The
 rule key `semble` is public API, so a repository that also keys an architecture
 rule by it should rename its own (this repository's is `semble-integration`).
+`ai.programs.semble.install = false` skips the launchers and the cache guard and
+nothing else, so the rules, and any committed file that carries them, do not
+depend on whether the package is installed. It is portable-only: installation is
+one decision per backend.
 
 Home Manager fixes the global cache at `${config.xdg.cacheHome}/semble`, even on
 Darwin where Semble's platform default would otherwise be `~/Library/Caches`.

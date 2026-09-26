@@ -34,28 +34,37 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     drv = self.packages.${system};
 
-    # `isCI` is pinned: Semble (and so its AGENTS.md rule) is gated on it, and
-    # the committed bytes must not depend on who evaluates them.
-    repo = harness.evalDevenvModules [(import ../../dev/ai.nix {isCI = false;})];
+    # dev/ai.nix gates Semble's install on `isCI`, and nothing else may read
+    # it: the committed bytes must not depend on who evaluates them. Both
+    # values are evaluated and their instruction plans must agree.
+    evalRepo = isCI: harness.evalDevenvModules [(import ../../dev/ai.nix {inherit isCI;})];
+    repo = evalRepo false;
+    repoCI = evalRepo true;
+    instructionPlans = evaluated:
+      map (target: lib.mapAttrs (_: unit: unit.text or null) target.units) (
+        (harness.ownPlan "internal" "ai:agents-md:materialize" evaluated).targets
+        ++ (harness.ownPlan "copilot" "ai:copilot:materialize-instructions" evaluated).targets
+      );
     failedAssertions = map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) repo.config.assertions);
     # The repository's own configuration drops nothing: no context or rule it
     # asks for lands in a file it has switched off, or anywhere `ai.*` cannot
     # deliver it.
     deliveryWarnings = lib.filter (lib.hasInfix "does not deliver it to") repo.config.warnings;
 
-    # The units one writer's directory target will write, as files.
-    unitsAt = runtime: writer: path: let
+    # The text of each unit one writer's directory target will write.
+    textsAt = runtime: writer: path: let
       targets = lib.filter (target: target.path == path) (harness.ownPlan runtime writer repo).targets;
     in
       if builtins.length targets != 1
       then throw "instructions-drift: expected one ${runtime} target at ${path}, found ${toString (builtins.length targets)}"
       else
         lib.mapAttrs (address: unit:
-          pkgs.writeText address (
-            unit.text
-            or (throw "instructions-drift: ${path}/${address} is not inline text")
-          ))
+          unit.text
+          or (throw "instructions-drift: ${path}/${address} is not inline text"))
         (builtins.head targets).units;
+    # The same units, as files.
+    unitsAt = runtime: writer: path: lib.mapAttrs pkgs.writeText (textsAt runtime writer path);
+    agentsMdText = (textsAt "internal" "ai:agents-md:materialize" ".")."AGENTS.md";
     agentsMd = unitsAt "internal" "ai:agents-md:materialize" ".";
     copilotContext = unitsAt "copilot" "ai:copilot:materialize-instructions" ".github";
     copilotInstructions = pkgs.linkFarm "expected-github-instructions" (unitsAt "copilot" "ai:copilot:materialize-instructions" ".github/instructions");
@@ -101,8 +110,28 @@
         "$sed" -n '1,80p' "$tmp/diff" >&2
       fi
     '';
+
+    # Codex reads only the first 32 KiB of AGENTS.md wherever this
+    # repository's raised `project_doc_max_bytes` is absent or untrusted (a
+    # fresh clone, a linked worktree). The index and every inlined rule must
+    # end inside that window; only the orientation's tail may fall past it.
+    codexDefaultLimit = 32768;
+    endOf = needle: let
+      parts = builtins.split (lib.escapeRegex needle) agentsMdText;
+    in
+      if builtins.length parts < 3
+      then throw "instructions-drift: AGENTS.md does not contain ${needle}"
+      else builtins.stringLength (builtins.head parts) + builtins.stringLength needle;
+    windowNeedles =
+      ["Before editing a path that matches an entry below, read every document listed"]
+      ++ map (key: "<!-- rule: ${key} -->") (builtins.attrNames repo.config.ai.internal.agentsMd."AGENTS.md".rules);
+    pastWindow = lib.filter (needle: endOf needle > codexDefaultLimit) windowNeedles;
   in {
-    instructions-drift = assert lib.assertMsg (failedAssertions == [])
+    instructions-drift = assert lib.assertMsg (pastWindow == [])
+    "instructions-drift: AGENTS.md puts these past Codex's default ${toString codexDefaultLimit}-byte read limit: ${lib.concatStringsSep ", " pastWindow}";
+    assert lib.assertMsg (instructionPlans repo == instructionPlans repoCI)
+    "instructions-drift: dev/ai.nix writes different instruction files when isCI is set; the committed bytes must not depend on the environment.";
+    assert lib.assertMsg (failedAssertions == [])
     "instructions-drift: dev/ai.nix fails its own module assertions:\n${lib.concatStringsSep "\n" failedAssertions}";
     assert lib.assertMsg (deliveryWarnings == [])
     "instructions-drift: dev/ai.nix asks for content ai.* does not deliver:\n${lib.concatStringsSep "\n" deliveryWarnings}";
