@@ -287,7 +287,7 @@
   # explicit entry (`environmentVariables.SHELL` included) wins. Claude has
   # no launcher and lowers the parts into `settings.env` instead.
   callbackArgs = {
-    inherit backend cfg config moduleEnvironmentVariables;
+    inherit backend cfg config moduleEnvironmentVariables options;
     inherit (cfg) normalized;
     launcherEnvironment =
       moduleEnvironmentVariables
@@ -325,7 +325,7 @@
     hasContent = normalizedHasContext || index != {} || rules != {};
   in {
     ai.internal.agentsMdTargets.${appRecord.name} = shared.key;
-    ai.internal.agentsMd = lib.mkIf (hasContent || shared ? maxBytes) {
+    ai.internal.agentsMd = lib.mkIf (hasContent || shared ? maxBytes || shared ? defaultMaxBytes) {
       ${shared.key} =
         {
           # A limit alone must yield to content another runtime supplies.
@@ -336,6 +336,9 @@
           inherit index rules;
         }
         // lib.optionalAttrs (shared ? maxBytes) {inherit (shared) maxBytes;}
+        // lib.optionalAttrs (shared ? defaultMaxBytes) {
+          defaultMaxBytes.${appRecord.name} = shared.defaultMaxBytes;
+        }
         // lib.optionalAttrs normalizedHasContext {
           context = aiCommon.readContent callbackArgs.mergedContext;
         };

@@ -182,6 +182,12 @@
     if value == null
     then ""
     else value.text;
+  # A final file entry's inline byte size, or null when it cannot be known
+  # at evaluation. A source-backed or disabled entry is not measured: reading
+  # a derivation output here would build it during evaluation.
+  inlineSize = entry:
+    lib.mapNullable builtins.stringLength
+    (lib.mapNullable (final: aiTypes.textSourceInlineText final.content) entry);
 in {
   # ── Markdown content records ───────────────────────────────────────
   # Context and rules share one text-source record. The type resolves source
@@ -249,20 +255,35 @@ in {
         // fields))
     rules;
 
-  # A final file entry's inline byte size against a limit. A source-backed
-  # or disabled entry is not measured: reading a derivation output here would
-  # build it during evaluation. `message` receives the measured size.
+  # The final entry's inline size against a hard limit. `message` receives
+  # the measured size.
   sizeAssertion = {
     entry,
     maxBytes,
     message,
   }: let
-    text = lib.mapNullable (final: aiTypes.textSourceInlineText final.content) entry;
-    size = lib.mapNullable builtins.stringLength text;
+    size = inlineSize entry;
   in {
     assertion = maxBytes == null || size == null || size <= maxBytes;
     message = message size;
   };
+
+  # The soft companion of `sizeAssertion`: a list holding one warning when a
+  # RAISED limit admits a file larger than the reader's own default, which is
+  # all the reader takes wherever the raised limit does not apply (Codex
+  # applies project config only in a trusted project, and evaluation cannot
+  # see trust). An unknown size stays silent, exactly as the hard check does.
+  sizeWarning = {
+    defaultBytes,
+    entry,
+    filename,
+    maxBytes,
+    reader,
+  }: let
+    size = inlineSize entry;
+  in
+    lib.optional (maxBytes != null && maxBytes > defaultBytes && size != null && size > defaultBytes)
+    "${filename} is ${toString size} bytes; ${reader} in an untrusted project reads only the first ${toString defaultBytes}. Trust the project in ${reader}, or shrink the always-loaded content.";
 
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags

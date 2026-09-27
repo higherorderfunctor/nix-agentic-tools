@@ -79,6 +79,17 @@
         visible = false;
         description = "Rendered path-scoped index entries keyed by stable rule identity.";
       };
+      defaultMaxBytes = lib.mkOption {
+        type = lib.types.attrsOf lib.types.ints.positive;
+        default = {};
+        internal = true;
+        visible = false;
+        description = ''
+          Per runtime, what it reads of this target where a raised `maxBytes`
+          does not apply (Codex's own default, outside a trusted project). A
+          file past it under a raised limit warns.
+        '';
+      };
       maxBytes = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.positive;
         default = null;
@@ -117,6 +128,15 @@
       '';
     })
   config.ai.internal.agentsMd;
+  sizeWarnings = lib.concatLists (lib.mapAttrsToList (filename: value:
+    lib.concatLists (lib.mapAttrsToList (reader: defaultBytes:
+      aiCommon.sizeWarning {
+        entry = config.ai.internal.files.${filename} or null;
+        inherit defaultBytes filename reader;
+        inherit (value) maxBytes;
+      })
+    value.defaultMaxBytes))
+  config.ai.internal.agentsMd);
   # Discover public app records from their option shape, including downstream
   # runtimes absent from this repository's first-party registry.
   runtimeNames = builtins.attrNames (lib.filterAttrs (_name: runtime:
@@ -256,6 +276,7 @@ in {
     (lib.optionalAttrs isDevenv (lib.mkMerge (
       [
         {assertions = sizeAssertions;}
+        (lib.optionalAttrs (options ? warnings) {warnings = sizeWarnings;})
         (lib.mkIf (config.ai.internal.agentsMd != {}) {
           # Do not inspect rendered bytes to discover whether a target exists.
           # The separate boolean inventory lets priority arbitration discard this

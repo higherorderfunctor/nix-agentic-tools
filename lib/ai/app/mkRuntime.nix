@@ -36,9 +36,11 @@
 #                                    #   transform owns the `home.packages` / `packages`
 #                                    #   lowering, so a factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
-#     sharedAgentsMd ? <absent>;     # callback (same args) → {key; index?; rules?; maxBytes?}:
-#                                    #   the devenv repository AGENTS.md contribution;
-#                                    #   the transform rejects any other field
+#     sharedAgentsMd ? <absent>;     # callback (same args) → {key; index?; rules?; maxBytes?;
+#                                    #   defaultMaxBytes?}: the devenv repository AGENTS.md
+#                                    #   contribution; `defaultMaxBytes` is what the runtime
+#                                    #   reads where a raised `maxBytes` does not apply, and
+#                                    #   warns past it. The transform rejects any other field
 #     contentTargets ? <absent>;     # callback (same args) → {context?; rules?}: the
 #                                    #   path each context/rule unit lands in, from the
 #                                    #   SAME bindings the delivery uses. A unit whose
@@ -60,7 +62,8 @@
 #
 # The callbacks receive ONE attrset, assembled in exactly one place —
 # `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
-# trusting a list here. It carries `backend`, `cfg`, `config`, `normalized`,
+# trusting a list here. It carries `backend`, `cfg`, `config`, `options`,
+# `normalized`,
 # every `merged*` pool, `resolvedSettings`, `resolvedShell`, `mergedContext`,
 # `launcherEnvironment` and `topHooks`; every callback takes `...`, so a
 # stale list here would mislead without ever breaking a build.
