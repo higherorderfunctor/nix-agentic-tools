@@ -6,7 +6,10 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm harnessNames mkTest;
+  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromMarkdownTree harnessNames markdownInput mkTest;
+  # A delivered Markdown file's text, from the evaluated `config`.
+  devenvMarkdown = config: deliveredMarkdown {inherit config;} (deliveredFiles config);
+  hmMarkdown = config: deliveredMarkdown {inherit config;} config.home.file;
 in {
   checks = {
     # ── A5a: final per-runtime literal file registry ────────────────────
@@ -180,8 +183,7 @@ in {
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
-        && devenvConfig.ai.internal.files."AGENTS.md".content.text == (deliveredFiles devenvConfig)."AGENTS.md".text
-        && !((deliveredFiles devenvConfig)."AGENTS.md" ? source)
+        && devenvConfig.ai.internal.files."AGENTS.md".content.text == devenvMarkdown devenvConfig "AGENTS.md"
     );
 
     module-runtime-files-shared-agentsmd-arbitration = mkTest "runtime-files-shared-agentsmd-arbitration" (
@@ -300,20 +302,24 @@ in {
             ai.${runtime}.files."AGENTS.md".content.source = file;
           });
         in
-          (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").value or null == "${file}";
+          (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").success
+          && fromMarkdownTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
+          && (markdownInput evaluated "AGENTS.md").source == file;
       in
         replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
-        && (deliveredFiles replaced.config)."AGENTS.md".text == "CONSUMER-REPLACEMENT"
+        && devenvMarkdown replaced.config "AGENTS.md" == "CONSUMER-REPLACEMENT"
         && !suppressed.config.ai.internal.files."AGENTS.md".content.enable
         && !((deliveredFiles suppressed.config) ? "AGENTS.md")
         && deduplicated.config.ai.internal.files."AGENTS.md".content.text == "SHARED-CONSUMER"
-        && (deliveredFiles deduplicated.config)."AGENTS.md".text == "SHARED-CONSUMER"
+        && devenvMarkdown deduplicated.config "AGENTS.md" == "SHARED-CONSUMER"
         && !divergent.success
-        && (deliveredFiles consumerOnly.config)."AGENTS.md".text or null == "CONSUMER-ONLY"
+        && devenvMarkdown consumerOnly.config "AGENTS.md" == "CONSUMER-ONLY"
+        # No shared owner registers this key, so Kimchi delivers the consumer's
+        # own entry, which states no Markdown format: inline, as written.
         && (deliveredFiles kimchiConsumerOnly.config)."AGENTS.md".text or null == "KIMCHI-CONSUMER-ONLY"
         && !((deliveredFiles kimchiConsumerOnly.config) ? "custom.md")
-        && (deliveredFiles kimchiContextOverride.config)."AGENTS.md".text or null == "KIMCHI-CONTEXT-OVERRIDE"
+        && devenvMarkdown kimchiContextOverride.config "AGENTS.md" == "KIMCHI-CONTEXT-OVERRIDE"
         && lib.all (assertion: assertion.assertion) kimchiContextOverride.config.assertions
         && !((deliveredFiles consumerOnlySuppressed.config) ? "AGENTS.md")
         && !((deliveredFiles consumerOnlySuppressed.config) ? "custom.md")
@@ -371,8 +377,8 @@ in {
       in
         lib.all (evaluated:
           (deliveredFiles evaluated.config) ? "AGENTS.md"
-          && lib.hasInfix "ACTIVE-SHARED-CONTEXT" (deliveredFiles evaluated.config)."AGENTS.md".text
-          && !(lib.hasInfix "DORMANT-" (deliveredFiles evaluated.config)."AGENTS.md".text))
+          && lib.hasInfix "ACTIVE-SHARED-CONTEXT" (devenvMarkdown evaluated.config "AGENTS.md")
+          && !(lib.hasInfix "DORMANT-" (devenvMarkdown evaluated.config "AGENTS.md")))
         evaluations
     );
 
@@ -422,7 +428,7 @@ in {
         && builtins.all (assertion: assertion.assertion) devenvDisabled.config.assertions
         && hmReplacement.config.home.file.".codex/AGENTS.md".text == "short"
         && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
-        && (deliveredFiles devenvReplacement.config)."AGENTS.md".text == "short"
+        && devenvMarkdown devenvReplacement.config "AGENTS.md" == "short"
         && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md")
     );
 
@@ -495,7 +501,7 @@ in {
         hmReplacement.config.home.file.".codex/AGENTS.md".text
         == "HM-REPLACEMENT"
         && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
-        && (deliveredFiles devenvReplacement.config)."AGENTS.md".text == "DEVENV-REPLACEMENT"
+        && devenvMarkdown devenvReplacement.config "AGENTS.md" == "DEVENV-REPLACEMENT"
         && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md")
         && !(hmKiroDisabled.config.home.file ? ".kiro/steering/AGENTS.md")
         && !((deliveredFiles devenvKiroDisabled.config) ? "AGENTS.md")
@@ -657,7 +663,8 @@ in {
         };
       in
         builtins.all (assertion: assertion.assertion) evaluated.config.assertions
-        && toString (deliveredFiles evaluated.config)."AGENTS.md".source == toString source
+        && fromMarkdownTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
+        && toString (markdownInput evaluated "AGENTS.md").source == toString source
     );
 
     module-runtime-files-discarded-composed-context-stays-lazy = mkTest "runtime-files-discarded-composed-context-stays-lazy" (
@@ -716,12 +723,12 @@ in {
           };
         };
       in
-        hmClaude.config.home.file.".claude/CLAUDE.md".text
+        hmMarkdown hmClaude.config ".claude/CLAUDE.md"
         == "CLAUDE-REPLACEMENT"
-        && (deliveredFiles devenvClaude.config).".claude/CLAUDE.md".text == "CLAUDE-REPLACEMENT"
-        && (deliveredFiles devenvCopilot.config).".github/copilot-instructions.md".text == "COPILOT-REPLACEMENT"
-        && hmKimchi.config.home.file.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
-        && (deliveredFiles devenvKimchi.config)."AGENTS.md".text == "KIMCHI-REPLACEMENT"
+        && devenvMarkdown devenvClaude.config ".claude/CLAUDE.md" == "CLAUDE-REPLACEMENT"
+        && devenvMarkdown devenvCopilot.config ".github/copilot-instructions.md" == "COPILOT-REPLACEMENT"
+        && hmMarkdown hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
+        && devenvMarkdown devenvKimchi.config "AGENTS.md" == "KIMCHI-REPLACEMENT"
     );
   };
 }

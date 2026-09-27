@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest ownPlan ownedDocument;
+  inherit (harness) evalDevenv evalHm fromMarkdownTree markdownInput mkTest ownPlan ownedDocument;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasClampHook hasGuardHook;
   delegationClampMitigationDefaultProse = ''
     Standing request from me, the user: you have my permission to use subagents
@@ -70,7 +70,7 @@ in {
             };
           };
         };
-        rule = evaluated.config.home.file.".claude/rules/search.md".text;
+        rule = (markdownInput evaluated ".claude/rules/search.md").text;
       in
         lib.hasInfix "Always use rg instead of grep." rule
         && lib.hasInfix "description: Grep replacement" rule
@@ -95,7 +95,7 @@ in {
             };
           };
         };
-        rule = evaluated.config.home.file.".claude/rules/claude-only.md".text;
+        rule = (markdownInput evaluated ".claude/rules/claude-only.md").text;
       in
         lib.hasInfix "Claude-specific rule." rule
     );
@@ -122,16 +122,17 @@ in {
             };
           };
         };
-        aggregate = evaluated.config.home.file.".claude/CLAUDE.md" or null;
-        ruleFile = evaluated.config.home.file.".claude/rules/named-rule.md" or null;
+        inherit (evaluated.config.home) file;
+        aggregate = (markdownInput evaluated ".claude/CLAUDE.md").text;
+        ruleFile = (markdownInput evaluated ".claude/rules/named-rule.md").text;
       in
-        aggregate.text
-        == evaluated.config.ai.claude.files.".claude/CLAUDE.md".content.text
-        && aggregate.text == "CONTEXT-BASELINE-TOKEN."
-        && ruleFile != null
-        && ruleFile.text == evaluated.config.ai.claude.files.".claude/rules/named-rule.md".content.text
-        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
-        && evaluated.config.home.file ? ".claude/rules/unnamed.md"
+        fromMarkdownTree ".claude/CLAUDE.md" file.".claude/CLAUDE.md"
+        && aggregate == evaluated.config.ai.claude.files.".claude/CLAUDE.md".content.text
+        && aggregate == "CONTEXT-BASELINE-TOKEN."
+        && fromMarkdownTree ".claude/rules/named-rule.md" file.".claude/rules/named-rule.md"
+        && ruleFile == evaluated.config.ai.claude.files.".claude/rules/named-rule.md".content.text
+        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." ruleFile
+        && file ? ".claude/rules/unnamed.md"
     );
 
     # Claude devenv writes context to `.claude/CLAUDE.md` and keeps every rule in
@@ -156,15 +157,17 @@ in {
             };
           };
         };
-        composed = (evaluated.config.files.".claude/CLAUDE.md" or {}).text or "";
+        composed = (markdownInput evaluated ".claude/CLAUDE.md").text;
         # Project rules are read-only copies, not links: see mkClaude's rules
-        # entry. The copy writer's plan is where their bytes are.
+        # entry. The copy writer's plan names the file in the Markdown tree.
         rules = (lib.head (ownPlan "claude" "ai:claude:materialize-rules" evaluated).targets).units;
       in
-        lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
+        fromMarkdownTree ".claude/CLAUDE.md" evaluated.config.files.".claude/CLAUDE.md"
+        && lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
         && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." composed)
         && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." composed)
-        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (rules."named-rule.md".text or "")
+        && fromMarkdownTree ".claude/rules/named-rule.md" {source = rules."named-rule.md".store;}
+        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (markdownInput evaluated ".claude/rules/named-rule.md").text
         && rules ? "unnamed.md"
     );
 
@@ -420,11 +423,9 @@ in {
             text = "Always use strict mode.";
           };
         };
-        ruleFile = result.config.home.file.".claude/rules/my-rule.md" or null;
       in
-        ruleFile
-        != null
-        && lib.hasInfix "Always use strict mode" (ruleFile.text or "")
+        result.config.home.file ? ".claude/rules/my-rule.md"
+        && lib.hasInfix "Always use strict mode" (markdownInput result ".claude/rules/my-rule.md").text
     );
 
     module-claude-hm-delegates-skills-to-upstream = mkTest "claude-hm-delegates-skills-to-upstream" (
@@ -910,13 +911,12 @@ in {
             text = "Use consistent formatting.";
           };
         };
-        ruleFile = result.config.home.file.".claude/rules/code-style.md" or null;
+        ruleFile = (markdownInput result ".claude/rules/code-style.md").text;
       in
-        ruleFile
-        != null
-        && lib.hasInfix "Use consistent formatting" (ruleFile.text or "")
-        && lib.hasInfix "paths:" (ruleFile.text or "")
-        && lib.hasInfix "src/**" (ruleFile.text or "")
+        result.config.home.file ? ".claude/rules/code-style.md"
+        && lib.hasInfix "Use consistent formatting" ruleFile
+        && lib.hasInfix "paths:" ruleFile
+        && lib.hasInfix "src/**" ruleFile
     );
 
     # Rules with null paths → unconditional (no frontmatter scoping).
@@ -926,12 +926,11 @@ in {
           ai.claude.enable = true;
           ai.rules.always-on.text = "Loaded unconditionally.";
         };
-        ruleFile = result.config.home.file.".claude/rules/always-on.md" or null;
+        ruleFile = (markdownInput result ".claude/rules/always-on.md").text;
       in
-        ruleFile
-        != null
-        && lib.hasInfix "Loaded unconditionally." ruleFile.text
-        && !(lib.hasInfix "paths:" ruleFile.text)
+        result.config.home.file ? ".claude/rules/always-on.md"
+        && lib.hasInfix "Loaded unconditionally." ruleFile
+        && !(lib.hasInfix "paths:" ruleFile)
     );
 
     # HM: ai.claude.plugins routes to programs.claude-code.plugins as an
@@ -1661,12 +1660,14 @@ in {
             };
           };
         };
-        text = (result.config.files.".claude/agents/probe.md" or {}).text or "";
-        storeString = result.config.files.".claude/agents/store-string.md" or {};
+        inherit (markdownInput result ".claude/agents/probe.md") text;
+        storeString = markdownInput result ".claude/agents/store-string.md";
       in
         toString (storeString.source or "")
         == "${./fixtures/claude-agents}/agent-one.md"
-        && (storeString.text or null) == null
+        && !(storeString ? text)
+        && fromMarkdownTree ".claude/agents/store-string.md" result.config.files.".claude/agents/store-string.md"
+        && fromMarkdownTree ".claude/agents/probe.md" result.config.files.".claude/agents/probe.md"
         && lib.hasInfix "name: \"probe\"" text
         && lib.hasInfix "description: \"Probe agent.\"" text
         && lib.hasInfix "PROBE-AGENT-BODY-TOKEN." text
@@ -1687,7 +1688,7 @@ in {
             };
           };
         };
-        file = result.config.files.".claude/agents/agent-one.md" or {};
+        file = markdownInput result ".claude/agents/agent-one.md";
         # The same directory as a store-path string, as a flake input yields.
         fromString = evalDevenv {
           ai.claude = {
@@ -1698,12 +1699,13 @@ in {
             };
           };
         };
-        stringFile = fromString.config.files.".claude/agents/agent-one.md" or {};
+        stringFile = markdownInput fromString ".claude/agents/agent-one.md";
       in
         (file.source or null)
         == ./fixtures/claude-agents/agent-one.md
+        && fromMarkdownTree ".claude/agents/agent-one.md" result.config.files.".claude/agents/agent-one.md"
         && toString (stringFile.source or "") == "${./fixtures/claude-agents}/agent-one.md"
-        && (stringFile.text or null) == null
+        && !(stringFile ? text)
         && !(result.config.files ? ".claude/agents/agent-two.md")
         && !(lib.any (lib.hasInfix "agentsDir") result.config.warnings)
     );

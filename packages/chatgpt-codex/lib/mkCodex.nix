@@ -1286,6 +1286,7 @@ in
                   enable = false;
                   text = agentsMd;
                 };
+                format = "markdown";
               }
               else {
                 content = {
@@ -1293,6 +1294,7 @@ in
                   enable = true;
                   text = agentsMd;
                 };
+                format = "markdown";
               }
             );
           })

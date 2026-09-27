@@ -121,6 +121,8 @@ _: {
         # The runtime registry that file and sharedOptions.nix share.
         "lib/ai/runtimes.nix"
         "lib/ai/sharedOptions.nix"
+        # The store tree the router delivers every generated Markdown file from.
+        "lib/markdown/**"
         "lib/testing/module-harness.nix"
         "packages/*/checks/module-eval.nix"
         # The five AI CLI factories, listed explicitly. `packages/*/lib/mk*.nix`
@@ -272,6 +274,7 @@ _: {
         "checks/markdown/markdown-scanners.nix"
         "checks/markdown/split-code-spans.nix"
         "checks/markdown/split-code-spans.py"
+        "lib/markdown/**"
         "treefmt.nix"
       ];
       sources = ["markdown-formatting"];
