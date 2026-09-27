@@ -876,7 +876,12 @@ in
           before Codex can silently truncate content beyond this limit. A value
           other than Codex's own default (32768) is also written to Codex's
           `project_doc_max_bytes` at default priority, so Codex reads as much
-          as this guard admits.
+          as this guard admits. On devenv that key lands in the project's
+          `.codex/config.toml`, which Codex applies only in a trusted project,
+          so when a raised limit admits a file larger than 32768 bytes,
+          evaluation warns that an untrusted session reads only the first
+          32768. Home Manager writes it to user config, which no trust gates,
+          so it does not warn.
         '';
       };
       native.settings = lib.mkOption {
@@ -914,6 +919,7 @@ in
       ...
     }:
       {
+        defaultMaxBytes = codexProjectDocMaxBytes;
         key = agentsMdPath "devenv" cfg;
         maxBytes = cfg.projectDocMaxBytes;
       }
@@ -1150,12 +1156,14 @@ in
               if agentsMd == ""
               then {
                 content = {
+                  _generated = true;
                   enable = false;
                   text = agentsMd;
                 };
               }
               else {
                 content = {
+                  _generated = true;
                   enable = true;
                   text = agentsMd;
                 };

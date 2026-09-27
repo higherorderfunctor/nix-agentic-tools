@@ -199,36 +199,49 @@
       (message ["ai" "claude" surface] "The devenv backend has no writer for this Claude surface."))
     ["marketplaces" "outputStyles" "plugins"]
   );
-  # A context or rule unit whose file is switched off. The unit was requested
-  # and resolved, and the file that would carry it has `content.enable =
-  # false`, so nothing delivers it: the drop that used to be silent. A file
-  # REPLACED with other content is the consumer's own bytes and stays quiet.
+  # A context or rule unit whose file is switched off or replaced. The unit
+  # was requested and resolved, and the file that would carry it either has
+  # `content.enable = false` or carries a consumer's own bytes instead of the
+  # generated ones, so nothing delivers it: the drop that used to be silent.
+  # A replacement is recognized by the `_generated` marker every generator
+  # sets inside its own `content` definition, which any consumer `content`
+  # definition discards whole (lib/ai/delivery-options.nix).
   #
   # The final entry is the runtime's own, except for a shared AGENTS.md key
-  # on devenv, whose final entry is the owner's; there the disable is named
+  # on devenv, whose final entry is the owner's; there the override is named
   # on whichever enabled runtime's public entry states it.
   finalEntry = path:
     if builtins.elem path sharedTargets
     then config.ai.internal.files.${path} or null
     else cfg.files.${path} or null;
-  switchedOff = path: let
-    entry = finalEntry path;
-  in
-    entry != null && !(runtimeFiles.isLive entry);
-  disablingRuntime = path: let
-    disables = name: let
+  switchedOff = entry: !(runtimeFiles.isLive entry);
+  replaced = entry: runtimeFiles.isLive entry && !(entry.content._generated or false);
+  overridingRuntime = test: path: let
+    overrides = name: let
       other = config.ai.${name} or {};
     in
       (other.enable or false)
       && (other.files or {}) ? ${path}
-      && !(runtimeFiles.isLive other.files.${path});
+      && test other.files.${path};
     candidates = builtins.attrNames (config.ai.internal.agentsMdTargets or {});
   in
     if builtins.elem path sharedTargets
-    then lib.findFirst disables runtime (lib.sort lib.lessThan candidates)
+    then lib.findFirst overrides runtime (lib.sort lib.lessThan candidates)
     else runtime;
+  # The reason a unit's file does not carry it, or null when it does.
+  dropReason = path: let
+    entry = finalEntry path;
+    option = test: tail: lib.showOption (["ai" (overridingRuntime test path) "files" path] ++ tail);
+  in
+    if entry == null
+    then null
+    else if switchedOff entry
+    then "${option switchedOff ["content" "enable"]} = false switches off `${path}`, the file that carries it"
+    else if replaced entry
+    then "${option replaced ["content"]} replaces `${path}`, the file that carries it, with its own bytes"
+    else null;
   offMessage = unit: path: remedy:
-    message unit "${lib.showOption ["ai" (disablingRuntime path) "files" path "content" "enable"]} = false switches off `${path}`, the file that carries it"
+    message unit (dropReason path)
     + ". Remove that override, or withhold it from ${runtime} with ${remedy}.";
   contextUnits = lib.optionals hasContext (
     lib.optional (aiCommon.hasContent (config.ai.context or null)) ["ai" "context"]
@@ -237,7 +250,7 @@
   contextWarnings = let
     path = contentTargets.context or null;
   in
-    lib.optionals (path != null && switchedOff path)
+    lib.optionals (path != null && dropReason path != null)
     (map (unit: offMessage unit path "${lib.showOption ["ai" runtime "normalized" "context"]} = lib.mkForce null") contextUnits);
   offRuleWarnings = lib.concatLists (lib.mapAttrsToList (name: path: let
     unit =
@@ -245,7 +258,7 @@
       then ["ai" runtime "rules" name]
       else ["ai" "rules" name];
   in
-    lib.optional (switchedOff path)
+    lib.optional (dropReason path != null)
     (offMessage unit path "${lib.showOption ["ai" runtime "rules" name "enable"]} = false"))
   (contentTargets.rules or {}));
 in

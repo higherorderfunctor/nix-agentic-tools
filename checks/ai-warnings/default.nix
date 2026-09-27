@@ -456,10 +456,10 @@ in {
         valid.instanceUrl == null && !(valid ? assertions) && !invalid.success
     );
     # A context or rule unit whose file is switched off (`content.enable =
-    # false`) warns, naming the unit, the file option that switched it off and
-    # a per-runtime way to withhold it; the warning is what makes the drop
-    # visible. Withholding the unit, replacing the file with other bytes, or
-    # having nothing to carry are all quiet.
+    # false`) or replaced with the consumer's own bytes warns, naming the
+    # unit, the file option that dropped it and a per-runtime way to withhold
+    # it; the warning is what makes the drop visible. Withholding the unit or
+    # having nothing to carry is quiet.
     ai-warnings-switched-off-files = harness.mkTest "ai-warnings-switched-off-files" (
       let
         offMessage = messages: unit: file: remedy:
@@ -525,6 +525,14 @@ in {
             rules.probe.text = "RULE";
           };
         };
+        # A whole-file replacement drops the units the generated file carried,
+        # on the shared devenv AGENTS.md and on each backend's own files.
+        replacedMessage = messages: unit: file: remedy:
+          lib.any (message:
+            lib.hasInfix "${unit} is set but" message
+            && lib.hasInfix "${file}.content replaces" message
+            && lib.hasInfix remedy message)
+          messages;
         replaced = evaluate "devenv" {
           ai = {
             codex = {
@@ -535,10 +543,64 @@ in {
             rules.probe.text = "RULE";
           };
         };
+        hmCodexReplaced = evaluate "hm" {
+          ai = {
+            codex = {
+              enable = true;
+              files.".codex/AGENTS.md".content.text = "MINE";
+            };
+            rules.probe.text = "RULE";
+          };
+        };
+        claudeReplaced = evaluate "devenv" {
+          ai = {
+            claude = {
+              enable = true;
+              files.".claude/rules/probe.md".content.source = pkgs.writeText "mine" "MINE";
+            };
+            rules.probe.text = "RULE";
+          };
+        };
+        # Changing how a generated file lands keeps its bytes: quiet.
+        symlinked = evaluate "hm" {
+          ai = {
+            claude = {
+              enable = true;
+              files.".claude/rules/probe.md".method = "symlink";
+            };
+            rules.probe.text = "RULE";
+          };
+        };
+        # Every runtime's ordinary generated files carry the `_generated`
+        # marker: with nothing overridden, no unit reads as replaced.
+        ordinary = mode:
+          evaluate mode {
+            ai = {
+              claude.enable = true;
+              codex.enable = true;
+              context.text = "CTX";
+              copilot.enable = true;
+              kimchi.enable = true;
+              kiro.enable = true;
+              rules = {
+                probe.text = "RULE";
+                scoped = {
+                  matcher = ["src/**"];
+                  text = "SCOPED";
+                };
+              };
+            };
+          };
         nothing = evaluate "devenv" {
           ai.codex = {
             enable = true;
             files."AGENTS.md".content.enable = false;
+          };
+        };
+        nothingReplaced = evaluate "devenv" {
+          ai.codex = {
+            enable = true;
+            files."AGENTS.md".content.text = "MINE";
           };
         };
       in
@@ -549,9 +611,17 @@ in {
         && offMessage hmCodexOff "ai.codex.rules.local" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.local.enable = false"
         && offMessage steeringOff "ai.kiro.rules.scoped" ''ai.kiro.files.".kiro/steering/scoped.md"'' "ai.kiro.rules.scoped.enable = false"
         && offMessage claudeOff "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
-        && !(contains "switches off" withheld)
+        && replacedMessage replaced "ai.rules.probe" ''ai.codex.files."AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && replacedMessage replaced "ai.context" ''ai.codex.files."AGENTS.md"'' "ai.codex.normalized.context = lib.mkForce null"
+        && replacedMessage hmCodexReplaced "ai.rules.probe" ''ai.codex.files.".codex/AGENTS.md"'' "ai.codex.rules.probe.enable = false"
+        && replacedMessage claudeReplaced "ai.rules.probe" ''ai.claude.files.".claude/rules/probe.md"'' "ai.claude.rules.probe.enable = false"
         && !(contains "switches off" replaced)
-        && !(contains "switches off" nothing)
+        && !(contains "the file that carries it" withheld)
+        && !(contains "the file that carries it" symlinked)
+        && !(contains "the file that carries it" nothing)
+        && !(contains "the file that carries it" (ordinary "hm"))
+        && !(contains "the file that carries it" (ordinary "devenv"))
+        && !(contains "the file that carries it" nothingReplaced)
     );
 
     ai-warnings-tombstones = harness.mkTest "ai-warnings-tombstones" (

@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-25 — L5 is the delivery router plus one adapter per
+> **Last verified:** 2026-09-26 — L5 is the delivery router plus one adapter per
 > backend; every runtime describes delivery once through the record-level
 > `config`, which `mkRuntime` makes the only delivery callback, and the delivery
 > matrix is generated from the layer for every runtime's files. Normalized pools
@@ -20,7 +20,10 @@
 > `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
 > `index` entries: Codex renders a scoped rule that names `references` as a
 > path-scoped index entry instead of inlining its body. The shared AGENTS.md map
-> lowers through the router as `internal`, as a read-only copy.
+> lowers through the router as `internal`, as a read-only copy, and a
+> contribution's `defaultMaxBytes` makes the owner warn past it under a raised
+> `maxBytes`. Generators mark their `content` with `_generated`, so a consumer's
+> replacement of a unit's file warns like a switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -336,24 +339,26 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex every
   rule; Kiro only unscoped always-on rules; Kimchi none), optional `index`
-  entries and an optional `maxBytes`, and nothing else: the builder reads those
-  by name, so `checkRecord.nix` rejects a missing `key` or any other field.
-  Codex lists a scoped rule that names `references` as an index entry (its globs
-  plus links to those documents) and inlines every other rule, a scoped one
-  behind a prose scope note. `agentsmd.renderKeyed` writes the
-  `## Path-scoped rules` index, then the inlined rules, then the context: a file
-  with many scoped rules stays under Codex's document limit, and a long context
-  that does not (read at the 32 KiB default because the raised limit is absent
-  or untrusted) loses only its own tail. The builder adds the merged context and
-  publishes it on devenv. A limit is published even without content, because the
-  runtime reads the file whoever wrote it. The layout is the Markdown
-  formatter's fixed point (one blank line between units and after each rule
-  comment, one glob or link per index line), so a committed copy survives a
-  formatter pass.
+  entries, an optional `maxBytes` and an optional `defaultMaxBytes` (what the
+  runtime reads where a raised `maxBytes` does not apply; past it the owner
+  warns), and nothing else: the builder reads those by name, so
+  `checkRecord.nix` rejects a missing `key` or any other field. Codex lists a
+  scoped rule that names `references` as an index entry (its globs plus links to
+  those documents) and inlines every other rule, a scoped one behind a prose
+  scope note. `agentsmd.renderKeyed` writes the `## Path-scoped rules` index,
+  then the inlined rules, then the context: a file with many scoped rules stays
+  under Codex's document limit, and a long context that does not (read at the 32
+  KiB default because the raised limit is absent or untrusted) loses only its
+  own tail. The builder adds the merged context and publishes it on devenv. A
+  limit is published even without content, because the runtime reads the file
+  whoever wrote it. The layout is the Markdown formatter's fixed point (one
+  blank line between units and after each rule comment, one glob or link per
+  index line), so a committed copy survives a formatter pass.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit
-  whose final file is switched off; `checkRecord.nix` rejects a stray field.
+  whose final file is switched off or replaced (no `content._generated`);
+  `checkRecord.nix` rejects a stray field.
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
   single-owner map → `lib/ai/app/sharedAgentsMd.nix`, which lowers that map
   through the devenv adapter as the pseudo-runtime `internal` (a read-only copy

@@ -49,7 +49,16 @@
     # The repository's own configuration drops nothing: no context or rule it
     # asks for lands in a file it has switched off, or anywhere `ai.*` cannot
     # deliver it.
+    # Scoped to delivery warnings on purpose: the Codex size warning below is
+    # expected on every shell entry while AGENTS.md is past 32 KiB.
     deliveryWarnings = lib.filter (lib.hasInfix "does not deliver it to") repo.config.warnings;
+    # dev/ai.nix raises Codex's limit, so an untrusted Codex reads only the
+    # first 32 KiB. The warning must fire exactly while the file is past it.
+    sizeWarnings = lib.filter (lib.hasInfix "in an untrusted project reads only the first") repo.config.warnings;
+    expectedSizeWarnings =
+      if builtins.stringLength agentsMdText > codexDefaultLimit
+      then 1
+      else 0;
 
     # The text of each unit one writer's directory target will write.
     textsAt = runtime: writer: path: let
@@ -133,6 +142,8 @@
     "instructions-drift: dev/ai.nix writes different instruction files when isCI is set; the committed bytes must not depend on the environment.";
     assert lib.assertMsg (failedAssertions == [])
     "instructions-drift: dev/ai.nix fails its own module assertions:\n${lib.concatStringsSep "\n" failedAssertions}";
+    assert lib.assertMsg (builtins.length sizeWarnings == expectedSizeWarnings)
+    "instructions-drift: expected ${toString expectedSizeWarnings} Codex size warning(s) for a ${toString (builtins.stringLength agentsMdText)}-byte AGENTS.md, got:\n${lib.concatStringsSep "\n" sizeWarnings}";
     assert lib.assertMsg (deliveryWarnings == [])
     "instructions-drift: dev/ai.nix asks for content ai.* does not deliver:\n${lib.concatStringsSep "\n" deliveryWarnings}";
       pkgs.runCommand "instructions-drift" {} ''
