@@ -6,7 +6,12 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit (harness) aiStubs deliveredFiles deliveredMarkdown evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  # The AGENTS.md text each backend builds into its Markdown tree:
+  # `.codex/AGENTS.md` under Home Manager, the shared project-root AGENTS.md
+  # on devenv.
+  hmAgentsMd = evaluated: deliveredMarkdown evaluated evaluated.config.home.file ".codex/AGENTS.md";
+  devenvAgentsMd = evaluated: deliveredMarkdown evaluated (deliveredFiles evaluated.config) "AGENTS.md";
   daemonSettings = evaluated:
     ownedDocument "codex" "${evaluated.config.ai.codex.configDir}/app-server-daemon/settings.json" evaluated;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
@@ -1200,7 +1205,7 @@ in {
             rules.command-guidance.text = "Explain every command before running it.";
           };
         };
-        agentsMd = evaluated.config.home.file.".codex/AGENTS.md".text;
+        agentsMd = hmAgentsMd evaluated;
         execpolicy = (execpolicyUnits evaluated)."command-policy.rules".text;
       in
         lib.hasInfix "Explain every command" agentsMd
@@ -1600,9 +1605,9 @@ in {
         devenvAgent = devenv.config.files.".codex/agents/reviewer.toml".source.value;
         claudeAgent = hm.config.programs.claude-code.agents.reviewer;
         emptyClaudeAgent = hm.config.programs.claude-code.agents.emptyTools;
-        emptyCopilotAgent = devenv.config.files.".github/agents/emptyTools.agent.md".text;
+        emptyCopilotAgent = deliveredMarkdown devenv devenv.config.files ".github/agents/emptyTools.agent.md";
         unrestrictedClaudeAgent = hm.config.programs.claude-code.agents.unrestricted;
-        copilotAgent = devenv.config.files.".github/agents/reviewer.agent.md".text;
+        copilotAgent = deliveredMarkdown devenv devenv.config.files ".github/agents/reviewer.agent.md";
       in
         hmAgent
         == expected
@@ -1825,9 +1830,9 @@ in {
           ]
           + "\n";
       in
-        hm.config.home.file.".codex/AGENTS.md".text
+        hmAgentsMd hm
         == expected
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+        && devenvAgentsMd devenv == expected
         && !(lib.hasInfix "---" expected)
     );
 
@@ -1841,7 +1846,7 @@ in {
         };
         empty = evalHm {ai.codex.enable = true;};
       in
-        hm.config.home.file.".codex/AGENTS.md".text
+        hmAgentsMd hm
         == "Shared context\n"
         && !(empty.config.home.file ? ".codex/AGENTS.md")
     );
@@ -1882,9 +1887,9 @@ in {
         devenv = evalDevenv config;
         expected = "<!-- rule: scoped -->\n\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule\n";
       in
-        hm.config.home.file.".codex/AGENTS.md".text
+        hmAgentsMd hm
         == expected
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+        && devenvAgentsMd devenv == expected
     );
 
     # A scoped rule that names the documents holding its text is listed, not
@@ -1932,9 +1937,9 @@ in {
           ]
           + "\n";
       in
-        hm.config.home.file.".codex/AGENTS.md".text
+        hmAgentsMd hm
         == expected
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+        && devenvAgentsMd devenv == expected
         && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? alpha
         && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)
     );
@@ -2101,8 +2106,8 @@ in {
           };
         };
       in
-        lib.hasInfix "Codex" evaluated.config.home.file.".codex/AGENTS.md".text
-        && !(lib.hasInfix "Shared" evaluated.config.home.file.".codex/AGENTS.md".text)
+        lib.hasInfix "Codex" (hmAgentsMd evaluated)
+        && !(lib.hasInfix "Shared" (hmAgentsMd evaluated))
     );
   };
 }

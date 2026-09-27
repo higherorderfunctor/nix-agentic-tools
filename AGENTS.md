@@ -55,6 +55,7 @@ for it. When several entries match, their guidance composes.
     - `lib/ai/runtime-files.nix`
     - `lib/ai/runtimes.nix`
     - `lib/ai/sharedOptions.nix`
+    - `lib/markdown/**`
     - `lib/testing/module-harness.nix`
     - `packages/*/checks/module-eval.nix`
     - `packages/chatgpt-codex/lib/mkCodex.nix`
@@ -209,6 +210,7 @@ for it. When several entries match, their guidance composes.
     - `checks/markdown/markdown-scanners.nix`
     - `checks/markdown/split-code-spans.nix`
     - `checks/markdown/split-code-spans.py`
+    - `lib/markdown/**`
     - `treefmt.nix`
   - Read:
     - [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)

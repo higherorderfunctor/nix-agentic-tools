@@ -15,6 +15,7 @@
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
   formats = import ./formats.nix {inherit lib pkgs;};
   helpers = import ./hm-helpers.nix {inherit lib;};
+  markdown = import ../markdown {inherit lib;} pkgs;
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
 
   # The methods this layer delivers today. The assertion below is an
@@ -88,6 +89,19 @@ in
     # Disabled records are not files; everything below sees live entries only.
     live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
 
+    # Every Markdown file this invocation delivers is built into ONE store tree
+    # at its target path, and delivered from there. `run` bytes do not exist
+    # until activation and a `value` has no Markdown renderer, so neither can
+    # be in it; the assertions below reject both combinations. Selected by
+    # `format` and the content's SHAPE, never by the text, so building the
+    # file map forces no bytes — and nothing here reads `rendered`, so there
+    # is no cycle through `resolve`.
+    inTree = entry: entry.format == "markdown" && entry.content.run == null && entry.content.value == null;
+    tree = markdown.mkTree {
+      name = "ai-${backend}-${runtime}-markdown";
+      files = lib.mapAttrs (_path: entry: aiTypes.textSourceFile entry.content) (lib.filterAttrs (_path: inTree) live);
+    };
+
     # Resolve through the shared rule after merging. Not at type level or in an
     # `apply`: both would read a sibling option while the option they belong to
     # is still merging, and `ai.<runtime>.files` carries an `apply` of its own.
@@ -101,9 +115,10 @@ in
           inherit backend entry path;
           inherit (cfg) methodFor;
         };
-        # Structured content becomes bytes once, here. The ORIGINAL content
-        # stays: a reconciled document declares the VALUE it owns leaves of,
-        # and that value cannot be recovered from the bytes.
+        # Structured content becomes bytes once, here, and Markdown becomes
+        # its file in the tree. The ORIGINAL content stays: a reconciled
+        # document declares the VALUE it owns leaves of, and that value cannot
+        # be recovered from the bytes.
         rendered =
           if entry.content.value != null
           then
@@ -114,6 +129,8 @@ in
             }
           else if entry.content.run != null
           then {inherit (entry.content) run;}
+          else if inTree entry
+          then {source = "${tree}/${path}";}
           else entry.content;
       };
     resolved = lib.mapAttrs resolve live;
@@ -393,6 +410,29 @@ in
             else "not a `source` at all"
           }. A single
           file is delivered by naming its own path.
+        '';
+      })
+      resolved
+      # A Markdown file is built into this invocation's tree, and the tree
+      # holds bytes that exist at BUILD time, one file per path.
+      ++ lib.mapAttrsToList (path: entry: {
+        assertion = entry.format != "markdown" || entry.content.run == null;
+        message = ''
+          ai.${runtime}.files."${path}" has format `markdown` but its bytes
+          come from `content.run`, which writes them at activation. They do not
+          exist when the Markdown tree is built, so the file cannot be in it:
+          state `format = "raw"`. If you never set `format` here, `markdown`
+          is the generated entry's default, which a replacement of the
+          content alone keeps.
+        '';
+      })
+      resolved
+      ++ lib.mapAttrsToList (path: entry: {
+        assertion = entry.format != "markdown" || !entry.recursive;
+        message = ''
+          ai.${runtime}.files."${path}" has format `markdown` and sets
+          `recursive`. A Markdown entry is ONE file in the Markdown tree; a
+          directory of files is delivered with `format = "raw"`.
         '';
       })
       resolved

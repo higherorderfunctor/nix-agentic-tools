@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-26 — L5 is the delivery router plus one adapter per
+> **Last verified:** 2026-09-27 — L5 is the delivery router plus one adapter per
 > backend; every runtime describes delivery once through the record-level
 > `config`, which `mkRuntime` makes the only delivery callback, and the delivery
 > matrix is generated from the layer for every runtime's files. Normalized pools
@@ -24,7 +24,8 @@
 > read-only copy, and a contribution's `defaultMaxBytes` makes the owner warn
 > past it under a raised `maxBytes`. Generators mark their `content` with
 > `_generated`, so a consumer's replacement of a unit's file warns like a
-> switch-off.
+> switch-off. Every generated Markdown file carries `format = "markdown"` and is
+> delivered from one store tree per router invocation (`lib/markdown`).
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -77,6 +78,7 @@
 │ L5: Native file sink                                       │
 │   - HM: home.file.*                                        │
 │   - Devenv: files.*                                        │
+│   - format = "markdown": a file in the invocation's tree   │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -371,7 +373,18 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L5 generic backend lowering → `lib/ai/deliver.nix` (the router) and
   `lib/ai/adapters/{hm,devenv}.nix`, called from
   `lib/ai/app/mkBackendTransform.nix`. `lib/ai/runtime-files.nix` keeps the
-  map's validation and the shape one entry takes in a native file sink.
+  map's validation and the shape one entry takes in a native file sink. The
+  router builds every `format = "markdown"` entry (text or source; `run` and
+  `recursive` are refused) into ONE store tree per invocation,
+  `ai-<backend>-<runtime>-markdown` from `lib/markdown`'s `mkTree`, at its
+  target path, and delivers `${tree}/<path>` by whatever method the entry
+  resolves to. Selection is by `format`, never by suffix or text, so building
+  the file map forces no bytes. The factories set it at `mkDefault` beside the
+  generated content (inside the whole-entry default for AGENTS.md). Checks read
+  a Markdown file's content through the harness's `markdownInput` (the tree's
+  input) and its delivery through `fromMarkdownTree` (`deliveredMarkdown` does
+  both): the delivered path is a derivation output, and reading it back would be
+  import-from-derivation.
 
 ### Adding a new concern X
 

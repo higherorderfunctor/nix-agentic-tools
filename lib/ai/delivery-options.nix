@@ -171,6 +171,12 @@
           Which renderer turns structured content into bytes. For a file whose
           leaves are reconciled it also names the on-disk container, which is
           why only `json` and `toml` can carry one.
+
+          `markdown` marks a whole Markdown file from `content.text` or
+          `content.source`: it is built into this runtime's Markdown store
+          tree at its target path and delivered from there. The factories set
+          it on the Markdown files they generate; a rule, context or agent file
+          set to `raw` is delivered as it is.
         '';
       };
       ledger = lib.mkOption {

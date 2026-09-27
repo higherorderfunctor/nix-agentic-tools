@@ -308,6 +308,7 @@ in
               else ".agent.md"
             }" {
               content = lib.mkDefault {text = lib.ai.agent.renderCopilot name content;};
+              format = lib.mkDefault "markdown";
             })
           mergedAgents;
         })
