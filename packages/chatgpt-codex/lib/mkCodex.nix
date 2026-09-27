@@ -1166,12 +1166,14 @@ in
               if agentsMd == ""
               then {
                 content = {
+                  _generated = true;
                   enable = false;
                   text = agentsMd;
                 };
               }
               else {
                 content = {
+                  _generated = true;
                   enable = true;
                   text = agentsMd;
                 };

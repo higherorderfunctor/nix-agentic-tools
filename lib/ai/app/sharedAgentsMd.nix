@@ -289,6 +289,7 @@ in {
             lib.mkDefault (ownership
               // {
                 content = {
+                  _generated = true;
                   enable = text != "";
                   inherit text;
                 };

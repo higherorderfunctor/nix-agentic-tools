@@ -3,24 +3,25 @@
 > **Last verified:** 2026-09-26 — AGENTS.md puts the index and rules before the
 > context. The repository AGENTS.md, Copilot's devenv context and instruction
 > files, and Kiro's devenv steering land as read-only copies; Codex indexes
-> scoped rules that name `references`; a unit whose file is switched off warns,
-> and so does a Codex AGENTS.md past 32 KiB under a raised limit. Semble derives
-> a Kiro agent-private MCP server from `mcp.enable = false` plus an MCP-backed
-> subagent. Every runtime describes delivery once through `mkRuntime`'s
-> record-level `config`, and both `mkRuntime` and the backend transforms reject
-> a backend spec carrying anything but `installPackage`, `migrationConfig` and
-> `options`, since an overridden or hand-built record reaches a transform
-> without the constructor. Kiro hook commands resolve packages through the
-> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
-> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
-> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
-> Claude devenv delivers `ai.agents` and `ai.claude.agentsDir` to
-> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
-> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
-> so a store-path string is a file, never a body naming its own path. File
-> content at `mkDefault` enables its entry; `content.enable = false` suppresses
-> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> scoped rules that name `references`; a unit whose file is switched off or
+> replaced warns, and so does a Codex AGENTS.md past 32 KiB under a raised
+> limit. Semble derives a Kiro agent-private MCP server from
+> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
+> delivery once through `mkRuntime`'s record-level `config`, and both
+> `mkRuntime` and the backend transforms reject a backend spec carrying anything
+> but `installPackage`, `migrationConfig` and `options`, since an overridden or
+> hand-built record reaches a transform without the constructor. Kiro hook
+> commands resolve packages through the shared `commandType`. Launchers bake the
+> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
+> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
+> through `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
+> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
+> `agent.fileContent` where it copies, so a store-path string is a file, never a
+> body naming its own path. File content at `mkDefault` enables its entry;
+> `content.enable = false` suppresses every content form. The builder entry
+> point is `lib.ai.app.mkRuntime`. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
@@ -516,8 +517,13 @@ runtime whose public entry disabled it. Every such warning has a per-runtime
 remedy, so it never repeats forever: `ai.<runtime>.rules.<name>.enable = false`
 for a rule, `ai.<runtime>.normalized.context = lib.mkForce null` for context
 (root and runtime context compose, so `ai.<runtime>.context.enable = false`
-would not withhold the root part). A file REPLACED with other bytes stays quiet:
-those are the consumer's bytes, not a switch-off.
+would not withhold the root part). A file REPLACED with the consumer's own bytes
+(`files.<path>.content.text = …`, or a `source`) drops the same units and warns
+the same way. Every generator sets an internal `content._generated` inside its
+own `content` definition; a consumer's `content` definition at ordinary priority
+discards that definition whole, so a live final entry without the marker is a
+replacement. A sibling-only override (`method`, `executable`) keeps the
+generated content and stays quiet.
 
 ### Assertion semantics
 

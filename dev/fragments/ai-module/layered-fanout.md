@@ -22,7 +22,8 @@
 > path-scoped index entry instead of inlining its body. The shared AGENTS.md map
 > lowers through the router as `internal`, as a read-only copy, and a
 > contribution's `defaultMaxBytes` makes the owner warn past it under a raised
-> `maxBytes`.
+> `maxBytes`. Generators mark their `content` with `_generated`, so a consumer's
+> replacement of a unit's file warns like a switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -356,7 +357,8 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit
-  whose final file is switched off; `checkRecord.nix` rejects a stray field.
+  whose final file is switched off or replaced (no `content._generated`);
+  `checkRecord.nix` rejects a stray field.
 - L4 shared AGENTS.md rendering and public-entry arbitration into the hidden
   single-owner map → `lib/ai/app/sharedAgentsMd.nix`, which lowers that map
   through the devenv adapter as the pseudo-runtime `internal` (a read-only copy

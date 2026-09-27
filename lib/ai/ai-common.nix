@@ -227,7 +227,11 @@ in {
   # INSIDE `mkDefault`, where `filterOverrides` can drop a discarded source
   # unread. Generated content explicitly enables its shared text-source record.
   contentFileEntry = value: {
-    content = lib.mkDefault (aiTypes.textSourceFile value // {enable = true;});
+    content = lib.mkDefault (aiTypes.textSourceFile value
+      // {
+        _generated = true;
+        enable = true;
+      });
   };
 
   # One file entry per rule, rendered through a runtime's transformer with the
@@ -244,6 +248,7 @@ in {
     lib.mapAttrs' (name: rule:
       lib.nameValuePair (path name) ({
           content = lib.mkDefault {
+            _generated = true;
             enable = true;
             text = fragments.mkRenderer transformer (context name) (rule
               // {
