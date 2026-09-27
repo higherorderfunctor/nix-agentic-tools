@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm lspEntryOf mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument;
+  inherit (harness) deliveredFiles evalDevenv evalHm lspEntryOf mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument ownPlan;
   settingsDocument = evaluated:
     ownedDocument "copilot" "${evaluated.config.ai.copilot.configDir}/settings.json" evaluated;
 in {
@@ -37,15 +37,15 @@ in {
           !assertion.assertion
           && lib.hasInfix "project-local" assertion.message)
         hm.config.assertions
-        && (devenv.config.files.".custom-github/copilot-instructions.md".text or "")
+        && ((deliveredFiles devenv.config).".custom-github/copilot-instructions.md".text or "")
         == "PROJECT-CONTEXT"
         && lib.hasInfix "SECURITY-RULE"
-        (devenv.config.files.".custom-github/instructions/security.instructions.md".text or "")
+        ((deliveredFiles devenv.config).".custom-github/instructions/security.instructions.md".text or "")
         && lib.hasInfix "Review the change."
-        (devenv.config.files.".custom-github/agents/reviewer.agent.md".text or "")
-        && devenv.config.files.".custom-github/skills/example/SKILL.md".source
+        ((deliveredFiles devenv.config).".custom-github/agents/reviewer.agent.md".text or "")
+        && (deliveredFiles devenv.config).".custom-github/skills/example/SKILL.md".source
         == ../../claude-code/checks/fixtures/claude-skills/skill-a/SKILL.md
-        && !(devenv.config.files ? ".github/instructions/security.instructions.md")
+        && !((deliveredFiles devenv.config) ? ".github/instructions/security.instructions.md")
     );
 
     # Copilot's normalized context/rules target github.com's project-local
@@ -91,12 +91,12 @@ in {
           };
         };
       in
-        result.config.files.".github/copilot-instructions.md".text
+        (deliveredFiles result.config).".github/copilot-instructions.md".text
         == "Project context\n\nCopilot project context"
-        && result.config.files.".github/instructions/security.instructions.md".text
+        && (deliveredFiles result.config).".github/instructions/security.instructions.md".text
         == "---\napplyTo: \"**/*.ts\"\n---\n\nValidate all user input."
         && lib.hasInfix "Shared project rule."
-        result.config.files.".github/instructions/shared.instructions.md".text
+        (deliveredFiles result.config).".github/instructions/shared.instructions.md".text
     );
 
     module-copilot-hm-context-and-rules-are-noop = mkTest "copilot-hm-context-and-rules-are-noop" (
@@ -138,16 +138,48 @@ in {
             };
           };
         };
-        contextFile = (evaluated.config.files.".github/copilot-instructions.md" or {}).text or "";
-        ruleFile = evaluated.config.files.".github/instructions/named-rule.instructions.md" or null;
+        contextFile = ((deliveredFiles evaluated.config).".github/copilot-instructions.md" or {}).text or "";
+        ruleFile = (deliveredFiles evaluated.config).".github/instructions/named-rule.instructions.md" or null;
       in
         lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
         && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
-        && !(evaluated.config.files ? ".config/github-copilot/copilot-instructions.md")
+        && !((deliveredFiles evaluated.config) ? ".config/github-copilot/copilot-instructions.md")
         && ruleFile != null
         && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
         && lib.hasInfix "UNNAMED-INSTR-TOKEN."
-        evaluated.config.files.".github/instructions/unnamed.instructions.md".text
+        (deliveredFiles evaluated.config).".github/instructions/unnamed.instructions.md".text
+    );
+
+    # github.com reads the COMMITTED tree, where a store symlink dangles, so
+    # on devenv the repository context and instruction files are read-only
+    # copies, each claimed by a directory ledger. The writer survives both
+    # N→0 and a disable, emitting empty targets that retract the copies.
+    module-copilot-devenv-instructions-are-copies = mkTest "copilot-devenv-instructions-are-copies" (
+      let
+        config = enable: {
+          ai.copilot = {
+            context.text = "CTX";
+            inherit enable;
+            rules.scoped = {
+              matcher = ["src/**"];
+              text = "RULE";
+            };
+          };
+        };
+        enabled = evalDevenv (config true);
+        disabled = evalDevenv (config false);
+        empty = evalDevenv {ai.copilot.enable = true;};
+        targets = evaluated: (ownPlan "copilot" "ai:copilot:materialize-instructions" evaluated).targets;
+        byPath = evaluated: lib.listToAttrs (map (target: lib.nameValuePair target.path target) (targets evaluated));
+      in
+        !(enabled.config.files ? ".github/copilot-instructions.md")
+        && !(enabled.config.files ? ".github/instructions/scoped.instructions.md")
+        && (byPath enabled).".github".units."copilot-instructions.md".text == "CTX"
+        && (byPath enabled).".github".ledger == "materialize/copilot-context.manifest"
+        && lib.hasInfix "RULE" (byPath enabled).".github/instructions".units."scoped.instructions.md".text
+        && (byPath enabled).".github/instructions".ledger == "materialize/copilot-instructions.manifest"
+        && lib.all (target: target.units == {}) (targets disabled)
+        && lib.all (target: target.units == {}) (targets empty)
     );
 
     # ── Task 4 (A3): Copilot HM/devenv fanout absorption ──────────
@@ -237,7 +269,7 @@ in {
         && repository (evalDevenv (withEffort {})) == {effortLevel = "high";}
         && repository (evalDevenv (withEffort {native.settings.effortLevel = "low";})) == {effortLevel = "low";}
         && repository customProjectDir == {effortLevel = "high";}
-        && !(customProjectDir.config.files ? ".custom-github/copilot/settings.json")
+        && !((deliveredFiles customProjectDir.config) ? ".custom-github/copilot/settings.json")
         && (settingsDocument (evalHm (withEffort {native.settings.effortLevel = null;}))).value == {}
         && repository (evalDevenv (withEffort {native.settings.effortLevel = null;})) == {}
     );
@@ -476,7 +508,7 @@ in {
           };
         };
       in
-        lspEntryOf "lspServers" (result.config.files.".github/lsp.json" or null) "typescript"
+        lspEntryOf "lspServers" ((deliveredFiles result.config).".github/lsp.json" or null) "typescript"
         == {
           args = ["--stdio"];
           command = "typescript-language-server";
@@ -622,7 +654,7 @@ in {
             agents.reviewer = "# Reviewer\n\nReview code carefully.";
           };
         };
-        agentFile = result.config.files.".github/agents/reviewer.agent.md" or null;
+        agentFile = (deliveredFiles result.config).".github/agents/reviewer.agent.md" or null;
       in
         agentFile
         != null
@@ -681,7 +713,7 @@ in {
           };
         };
         contextFile =
-          result.config.files.".github/copilot-instructions.md" or null;
+          (deliveredFiles result.config).".github/copilot-instructions.md" or null;
       in
         contextFile
         != null
@@ -716,7 +748,7 @@ in {
           };
         };
       in
-        (lspEntryOf "lspServers" (result.config.files.".github/lsp.json" or null) "typescript").command or null
+        (lspEntryOf "lspServers" ((deliveredFiles result.config).".github/lsp.json" or null) "typescript").command or null
         == "typescript-language-server"
     );
 
@@ -840,7 +872,7 @@ in {
           ai.copilot.enable = true;
           ai.agents.reviewer = "# Reviewer";
         };
-        agentFile = result.config.files.".github/agents/reviewer.agent.md" or null;
+        agentFile = (deliveredFiles result.config).".github/agents/reviewer.agent.md" or null;
       in
         agentFile
         != null

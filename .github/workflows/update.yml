@@ -24,7 +24,6 @@ permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   BRANCH_NAME: main
 
 defaults:
@@ -161,9 +160,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" prepare 2>&1 | tee .update-logs/prepare.log
       - name: Generate publishing App token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Publish completed dependency PR
         env:
@@ -174,14 +173,14 @@ jobs:
           bash "$GITHUB_WORKSPACE/automation/dev/scripts/update-publish.sh"
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" receipt
       - name: Upload published target receipt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: update-receipt-${{ matrix.name }}
           path: ${{ runner.temp }}/update-receipt.json
           if-no-files-found: error
       - name: Upload update diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: update-report-${{ matrix.name }}
           path: |
@@ -225,7 +224,7 @@ jobs:
           ref: ${{ needs.discover.outputs.base }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: update-receipt-*
           path: source/receipts
@@ -236,9 +235,9 @@ jobs:
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" collect
       - name: Generate publishing App token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Close stale dependency PRs
         env:

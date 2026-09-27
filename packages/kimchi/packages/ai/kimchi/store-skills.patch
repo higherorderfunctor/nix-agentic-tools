@@ -73,7 +73,7 @@
  }
 --- a/src/extensions/prompt-construction/prompt-enrichment.test.ts
 +++ b/src/extensions/prompt-construction/prompt-enrichment.test.ts
-@@ -386,12 +386,12 @@
+@@ -421,12 +421,12 @@
  			| undefined
  
  		// Bundled skills not already in the harness dir are contributed via a
@@ -86,6 +86,6 @@
 -		expect(paths.some((p) => existsSync(join(p, "dap-debugging")) || existsSync(join(p, "improve")))).toBe(true)
 +		// At least one contributed path is a bundled skill directory.
 +		expect(paths.some((p) => p.startsWith(bundledDir) && existsSync(join(p, "SKILL.md")))).toBe(true)
- 	})
- 
- 	it("contributes configured native skill paths through resources_discover", async () => {
+ 		const loaded = paths.map((path) => loadSkillsFromDir({ dir: path, source: "path" }))
+ 		const creator = loaded.flatMap((result) => result.skills).find((skill) => skill.name === "create-skill")
+ 		expect(creator).toBeDefined()

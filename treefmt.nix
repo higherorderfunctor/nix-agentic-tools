@@ -108,6 +108,15 @@
     ".direnv/**"
     ".pre-commit-config.yaml"
     "node_modules/**"
+    # Committed instruction files `ai.*` writes as read-only copies
+    # (dev/ai.nix). One file, one writer: a formatter pass would either fail
+    # on the 0444 mode or rewrite bytes the instructions-drift check then
+    # rejects, and module-generated rule text is not guaranteed to be a
+    # prettier fixed point. The drift check is their byte gate; the markdown
+    # scans in checks/markdown/ still read them.
+    "AGENTS.md"
+    ".github/copilot-instructions.md"
+    ".github/instructions/**"
     "result/**"
     "result-*/**"
     # Sentinel-tip scratch files. Prettier's markdown handler

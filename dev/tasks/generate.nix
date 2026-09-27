@@ -1,21 +1,11 @@
 # dev/tasks/generate.nix — Content generation devenv tasks.
-{
-  pkgs,
-  instr,
-  ...
-}: let
-  materializeInstructions = import ../../lib/materialize-repo-instructions.nix {inherit instr pkgs;};
-
+{pkgs, ...}: let
   # The Kimchi surface diagrams' render arguments. Shared verbatim with
   # checks/references/kimchi-surface-diagrams.nix, which re-renders the
   # same two files and fails on drift — so the task that fixes a drift
   # failure and the check that raises it cannot disagree about the
   # arguments. That file carries the reasoning.
   kimchiSurfaceRenders = import ../references/kimchi-surface/renders.nix {inherit (pkgs) lib;};
-  materialize = group: ''
-    ${bashPreamble}
-    exec ${pkgs.lib.getExe materializeInstructions} ${group} "$DEVENV_ROOT"
-  '';
   bashPreamble = ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -24,8 +14,8 @@
   log = ''log() { echo "==> $*" >&2; }'';
 
   # Copy one generated file out of the nix store into the working tree.
-  # Used by the two generate:repo:* tasks; the instruction files go
-  # through sync_file above instead.
+  # Used by the two generate:repo:* tasks; the instruction files are
+  # `ai.*`'s own copies and never pass through here.
   #
   # Unlinks the destination first so the copy is idempotent even when the
   # target is a store symlink: a plain `cp` would then either resolve to
@@ -102,10 +92,10 @@ in {
       '';
     };
 
-    # `.#repo-contributing` and `.#repo-readme` are DIRECTORY outputs, the
-    # same shape as `instructions-*`: treefmt runs inside the derivation,
-    # so the file copied out is already formatted and a drift check can
-    # compare it against the tracked copy without re-formatting first.
+    # `.#repo-contributing` and `.#repo-readme` are DIRECTORY outputs with
+    # treefmt run inside the derivation, so the file copied out is already
+    # formatted and a drift check can compare it against the tracked copy
+    # without re-formatting first.
     "generate:repo:contributing" = {
       description = "Generate CONTRIBUTING.md from fragments and nix data";
       before = ["generate:repo"];
@@ -147,77 +137,22 @@ in {
       '';
     };
 
-    "generate:instructions:agents" = {
-      description = "Generate AGENTS.md from fragments";
-      before = ["generate:instructions"];
-      exec = materialize "agents";
-    };
-
-    "generate:instructions:claude" = {
-      description = "Generate CLAUDE.md and Claude rule files from fragments";
-      before = ["generate:instructions"];
-      exec = materialize "claude";
-    };
-
-    "generate:instructions:copilot" = {
-      description = "Generate Copilot instruction files from fragments";
-      before = ["generate:instructions"];
-      exec = materialize "copilot";
-    };
-
-    "generate:instructions:kiro" = {
-      description = "Generate Kiro steering files from fragments";
-      before = ["generate:instructions"];
-      exec = materialize "kiro";
-    };
-
-    # ── Bootstrap ────────────────────────────────────────────────────
-    # Runs on every `devenv shell`, `direnv reload`, `devenv up`,
-    # `devenv reload` and manual `devenv test`. THIS is what replaces the
-    # deleted devenv `files.*` block: a fresh clone has no CLAUDE.md,
-    # .claude/rules/* or .kiro/steering/* (all gitignored), and this
-    # creates them as real files before the prompt appears.
-    #
-    # No `nix build` here — ${instr.*} are eval-time store paths, realized
-    # when devenv builds the shell itself. Steady-state cost is ~48 `cmp`s
-    # on small markdown files. Full-tree formatting is deliberately detached
-    # from shell entry, so keeping this materializer idempotent is what makes
-    # instruction freshness cheap enough to retain on every activation.
-    #
-    # after devenv:files — AGENTS.md is seeded from the same source before
-    # this materializer updates it. Cleanup deletes paths dropped from
-    # files.*, so running after it repairs any such deletion within the
-    # same shell entry. The migration can never leave the tree short a
-    # gitignored file.
-    #
-    # Deliberately a LEAF, not the mid-graph `generate:instructions`
-    # aggregate: devenv's RunMode::All walks incoming edges transitively
-    # from the root but outgoing edges only from the root, so hooking the
-    # aggregate here would be fragile (cachix/devenv#2337). Deliberately
-    # NOT `before devenv:treefmt:run` either — an unresolved task name in
-    # `before` is a hard error, which would couple this to treefmt.enable
-    # staying true, and the content is already a treefmt fixed point.
-    "generate:instructions:materialize" = {
-      description = "Materialize generated instruction files on shell entry";
-      after = ["devenv:files"];
-      before = ["devenv:enterShell"];
-      exec = materialize "all";
-    };
-
+    # The instruction files are `ai.*`'s own read-only copies (dev/ai.nix
+    # configures them); this aggregate only orders the two writers whose
+    # files are COMMITTED, so `generate:all` refreshes every tracked file in
+    # a worktree. It names no gitignored writer (Claude, Kiro), whose output
+    # a worktree has no use for, and it is not a second writer: each file
+    # still has exactly one.
     "generate:instructions" = {
-      description = "Generate all instruction files";
+      description = "Regenerate the committed instruction files (AGENTS.md, .github/)";
       after = [
-        "generate:instructions:agents"
-        "generate:instructions:claude"
-        "generate:instructions:copilot"
-        "generate:instructions:kiro"
+        "ai:agents-md:materialize"
+        "ai:copilot:materialize-instructions"
       ];
       exec = ''
         ${bashPreamble}
         ${log}
-        # Formatting happens inside the nix derivation (treefmt in
-        # runCommand). The task just copies pre-formatted store output.
-        log "All instruction files generated"
+        log "Committed instruction files regenerated"
       '';
     };
 

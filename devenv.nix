@@ -1,4 +1,3 @@
-# cspell:ignore sembleignore
 {
   config,
   pkgs,
@@ -19,17 +18,6 @@
   repoValidationChecks = repoValidation.mkCiChecks {
     gitHooksRun = gitHooksPackages.run;
     src = ./.;
-  };
-
-  # The four generated instruction-file derivations — same import as
-  # flake.nix, single source of truth. Returns { agents, claude, copilot,
-  # kiro } (plus gen / fmtDrv / runFmt). Both consumers must render
-  # identical bytes: the working tree is materialized from these exact
-  # derivations on every shell entry by generate:instructions:materialize,
-  # so a second rendering here would flip-flop the tree on every reload.
-  instr = import ./dev/instructions.nix {
-    inherit lib pkgs;
-    inherit (inputs) treefmt-nix;
   };
 
   # Stop-hook validator (runs the git-hooks suite when Claude hands control
@@ -165,12 +153,17 @@ in {
     ./packages/kimchi/modules/devenv
     ./packages/kiro-cli/modules/devenv
     ./packages/semble/modules/devenv
+    # This repository's `ai.*` configuration. It consumes `ai.*` exactly as
+    # any project would, fed the context and rules dev/generate.nix produces;
+    # checks/instructions/instructions-drift.nix evaluates the same module.
+    (import ./dev/ai.nix {inherit isCI;})
     # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
     # it would fan its skills into `ai.skills` UNPREFIXED (stack-*), which, once
     # installed user-global via nixos-config, would silently shadow the
     # project-scope copies (Claude precedence: Personal > Project). This dev
     # repo instead wires the same skills directly under a `dev-` prefix (see the
-    # `ai.skills` block below) so the in-repo copies remain distinctly invocable.
+    # `ai.skills` block in dev/ai.nix) so the in-repo copies remain distinctly
+    # invocable.
   ];
 
   # ── Overlays ──────────────────────────────────────────────────────────
@@ -188,14 +181,6 @@ in {
   # ── Binary Cache ──────────────────────────────────────────────────────
   cachix.pull = ["nix-agentic-tools"];
 
-  # Register the generator's real-file ownership with devenv and its delivery
-  # observer. Seed leaves existing bytes/mtime alone; the ordered instruction
-  # materializer remains responsible for updates and atomic replacement.
-  files."AGENTS.md" = {
-    copyMode = "seed";
-    source = "${instr.agents}/AGENTS.md";
-  };
-
   # ── Packages ──────────────────────────────────────────────────────────
   packages = with pkgs;
     [
@@ -210,7 +195,7 @@ in {
     # Fixture interpreters — `fixtures/kiro-primitives` is operator-run and
     # no flake check executes those suites: no workflow or check references the
     # suites, and devenv.nix itself never invokes either interpreter (the
-    # generate/materialize tasks and the enterTest assertions use interpolated
+    # generate tasks and the enterTest assertions use interpolated
     # store paths, per the isCI note above). Same reasoning and same gate as the
     # LSP servers below, kept as its own list so the rationale stays attached to
     # the packages it explains rather than being read as an LSP concern.
@@ -235,233 +220,6 @@ in {
       # Overlay packages — available via pkgs.ai.* after overlay
       pkgs.ai.agnix
     ];
-
-  # ── Unified AI Config ─────────────────────────────────────────────────
-  ai = {
-    # Every harness executes its commands under nix bash rather than the
-    # login shell. zsh's glob engine is superlinear in candidate entries
-    # scanned for a multi-component pattern, so a routine `/nix/store/*/bin`
-    # from an agent has taken this machine into a global OOM; bash is ~185x
-    # cheaper on the identical glob.
-    #
-    # A package, not a path: the store path is guaranteed to exist at
-    # activation and is GC-rooted by the generation referencing it. That
-    # matters because the runtimes fail QUIETLY otherwise — Claude silently
-    # resolves its own bash and Codex falls back to the password-database
-    # shell, which here is the very shell being moved away from.
-    #
-    # Copilot and Kimchi have no `shell` option (their selection is
-    # unestablished), so this root value simply does not reach them. Verified
-    # per runtime by `ai:shell:verify` — see the task below.
-    shell = pkgs.bash;
-
-    programs.delegate-sizing = {
-      enable = true;
-      # Enable the package's own presets here because this repository is its primary consumer.
-      whenToDelegate = {
-        "Launch independent work together".enable = true;
-        "Orchestrator session".enable = true;
-        "Prefer the flat-rate pool".enable = true;
-        "Verify by the artifact".enable = true;
-      };
-    };
-
-    claude = {
-      enable = true;
-      # The repository generator embeds this rule in CLAUDE.md.
-      files.".claude/rules/delegate-sizing-router.md".content.enable = false;
-      programs.delegate-sizing = {
-        extraRuntimes = ["codex"];
-        manualExternalDelegates = ["kiro"];
-      };
-    };
-    codex = {
-      enable = true;
-      # The repository generator owns the complete, portable AGENTS.md.
-      files."AGENTS.md".content.enable = false;
-      # Semble stays outside the manual diagnostic closure but is pinned by
-      # this flake for every interactive shell. The extra parsers cover files
-      # Semble recognizes but its upstream bundled grammar archive does not
-      # currently ship. Restrict the integration to Codex through the generated
-      # runtime program tree rather than a runtime selector.
-      programs.semble = {
-        enable = !isCI;
-        # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
-        # follow already supplies their store paths. If a future grammar needs a
-        # custom derivation, also expose that grammar alone in flake packages so
-        # the authenticated package sweep publishes it. Do not expose the
-        # grammar-patched Semble derivation.
-        grammars = with pkgs.tree-sitter-grammars; [
-          tree-sitter-awk
-          tree-sitter-jq
-        ];
-        # First match wins; list narrower patterns first.
-        pathMappings = [
-          {
-            language = "bash";
-            content = "code";
-            patterns = [
-              ".envrc"
-              "packages/claude-code/checks/fixtures/claude-hooks/post-edit"
-              "packages/claude-code/checks/fixtures/claude-hooks/pre-edit"
-            ];
-          }
-          {
-            language = "gitignore";
-            content = "config";
-            patterns = [
-              ".gitignore"
-              ".sembleignore"
-              "docs/.gitignore"
-            ];
-          }
-          {
-            language = "json";
-            content = "config";
-            patterns = [
-              "devenv.lock"
-              "flake.lock"
-            ];
-          }
-          {
-            language = "markdown";
-            content = "docs";
-            patterns = ["*.md.fixture"];
-          }
-        ];
-        # CLI only: no Semble MCP server, and the Semble CLI rule is on. Codex
-        # reads rules through AGENTS.md, which the repository generator owns
-        # (`files."AGENTS.md".content.enable = false` above), so the rule
-        # lands in `ai.codex.rules` but no file here renders it.
-        cli.instructions.enable = true;
-        mcp.enable = false;
-      };
-      # Temporarily disable Codex's OS sandbox for project sessions. The Home
-      # Manager layer has already migrated to named permissions, but this
-      # project override deliberately takes precedence while unrestricted
-      # execution is needed here.
-      native.settings = {
-        approval_policy = "never";
-        sandbox_mode = "danger-full-access";
-      };
-    };
-    copilot.enable = true;
-    # Kimchi's BINARY comes from this repo's overlay like every other runtime.
-    # Its config fanout is a separate, still-open problem: `configDir` is
-    # HOME-shaped while the writes land at a project path the binary does not
-    # read, so `.config/kimchi/**` is materialized-but-inert today. Enabling
-    # the runtime is still correct — it stops `kimchi` resolving to whatever
-    # the developer happens to have installed user-globally.
-    kimchi.enable = true;
-    kiro = {
-      enable = true;
-      # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
-      # a launcher-global option, so it reaches every subcommand including
-      # `acp`. Without it devenv's kiro-cli ran the legacy engine and
-      # hooks/slash-commands never loaded.
-      #
-      # This was `tui = true`. That option is now REMOVED: `--tui` selects the
-      # new TUI harness for the OLD engine, v3 already uses it, and it is going
-      # away with v3. It used to imply `--v3`, and that implication was
-      # load-bearing rather than decorative — bare `--tui` conflicts with the
-      # chat binary's default engine (v1) and the launcher supplies none — so
-      # `tui = true` only ever worked by dragging `--v3` along. Ask for the
-      # engine directly.
-      v3 = true;
-      # Dogfood the rollout unlock: surfaces `/workflow` and `/goal` plus the
-      # five bundled recipes. Inert without `v3` above, because workflow
-      # commands are only populated when the resolved engine is `kas` —
-      # patching the binary alone is not enough, and the failure is silent.
-      #
-      # Names come from `packages/kiro-cli/extracted.json` (`rolloutFeatures`),
-      # extracted from the binary rather than curated. UNCERTIFIED upstream:
-      # `workflows` is documented as "Dark-shipped at 0% until release
-      # certification is complete".
-      #
-      # STILL INERT FROM HERE, and knowingly so. Since kiro-cli 2.19.0 there is
-      # a THIRD gate — the `chat.enableWorkflows` setting, default false — and
-      # it is not in the workspace-override allowlist, so no project-local
-      # cli.json can satisfy it. Whoever wants `/workflow` in this shell sets it
-      # GLOBALLY (`kiro-cli settings chat.enableWorkflows true`, or
-      # `ai.kiro.native.settings.chat.enableWorkflows` under home-manager). This
-      # line still earns its place: it keeps the patched-package path
-      # exercised, and gate 3 is one global setting away.
-      # See packages/kiro-cli/docs/workflow-gating.md.
-      unlockedRolloutFeatures = ["workflows"];
-      # Dogfood `identity`. It replaces ONLY the vendor's opening sentence
-      # ("You are Kiro CLI, an agentic AI software engineer that runs in the
-      # command line."). Everything after it is preserved byte-for-byte — the
-      # terminal/no-GUI prose that keeps the agent surfacing file paths and
-      # command output instead of pointing at editor affordances. That
-      # preservation is the whole reason the option replaces a SENTENCE rather
-      # than the block, and it is what makes a persona safe to set here: the
-      # behavioral contract is untouched, only the self-description moves.
-      #
-      # This is segment 1 of msg0, ahead of steering, learnings and the file
-      # tree. The value may not contain a backtick or a dollar-brace — it is
-      # spliced into a JS template literal, and the splicer refuses both rather
-      # than emitting a bundle that dies at engine spawn.
-      #
-      # Expect flavor rather than behavior change: one line sits above the
-      # vendor's terse-engineer prose AND (because `workflows` is unlocked
-      # above) its ~4.8k-token workflow-orchestration block.
-      identity.text = ''
-        You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
-      '';
-      # NOTE: `workflowReminder` is not set because it does not need to be — it
-      # defaults to AUTO, which is on exactly when `workflows` is unlocked, so
-      # the line above already installs a `UserPromptSubmit` hook restating the
-      # orchestration contract each turn. Set `workflowReminder.enable = false`
-      # to opt this shell out.
-    };
-
-    skills = let
-      # Dev-repo self-consumption. The stacked-workflows skills are installed
-      # here under a `dev-` prefix so the in-repo copies never collide with — or
-      # get shadowed by — user-global installs (Claude precedence: Personal >
-      # Project, silent). Consumers and global installs stay unprefixed; only
-      # this dev shell prefixes.
-      prefixSkill = name: value: let
-        devName = "dev-${name}";
-      in
-        pkgs.runCommand "${devName}-skill" {} ''
-          cp -RL ${value} "$out"
-          chmod -R u+w "$out"
-          substituteInPlace "$out/SKILL.md" \
-            --replace-fail ${lib.escapeShellArg "name: ${name}"} ${lib.escapeShellArg "name: ${devName}"}
-        '';
-      prefixDev = lib.mapAttrs' (name: value: let
-        devName = "dev-${name}";
-      in
-        lib.nameValuePair devName (prefixSkill name value));
-    in
-      # stacked-workflows: re-key the deref'd, self-contained stack-* skill
-      # dirs (real reference files bundled inside each) as dev-stack-*.
-      prefixDev pkgs.stacked-workflows-content.passthru.skills
-      // {
-        # Dev skills (repo-local tooling, not published packages). Handed over
-        # as bare paths: `mkDevenvSkillEntries` (lib/ai/hm-helpers.nix) walks
-        # each directory with `readDir` and emits one `files.<path>.source`
-        # entry per leaf, for kind `regular` AND kind `symlink`. That is a
-        # per-file store realization, not a read — but granularity is what
-        # direnv keys on, so each leaf lands in `.devenv/input-paths.txt`
-        # individually, where a whole-directory store copy would register only
-        # the directory (mechanism in lib/traceSource.nix).
-        #
-        # Wrapping these in `lib/traceSource.nix` therefore cannot add a path:
-        # the per-file set is a strict superset of what that wrapper's
-        # regular-files-only walk reaches. The live `.devenv/input-paths.txt`
-        # already lists the symlinked leaves under
-        # `dev/skills/repo-review/references/`, which the wrapper's walk skips
-        # outright. Measured 2026-09-22 — bare and wrapped arms reloaded
-        # identically, 3/3 each, with an attribution control confirming
-        # nothing else walks `dev/skills/`.
-        index-repo-docs = ./dev/skills/index-repo-docs;
-        kimchi-surface-scan = ./dev/skills/kimchi-surface-scan;
-        pr-review-loop = ./dev/skills/pr-review-loop;
-        repo-review = ./dev/skills/repo-review;
-      };
-  };
 
   # ── treefmt ────────────────────────────────────────────────────────────
   treefmt = {
@@ -570,18 +328,6 @@ in {
     };
   };
 
-  # ── Copilot / Kiro MCP ────────────────────────────────────────────────
-  ai.copilot.mcpServers.agnix = {
-    type = "stdio";
-    package = pkgs.ai.mcpServers.agnix-mcp;
-    command = "${pkgs.ai.mcpServers.agnix-mcp}/bin/agnix-mcp";
-  };
-  ai.kiro.mcpServers.agnix = {
-    type = "stdio";
-    package = pkgs.ai.mcpServers.agnix-mcp;
-    command = "${pkgs.ai.mcpServers.agnix-mcp}/bin/agnix-mcp";
-  };
-
   # ── Shell Init ──────────────────────────────────────────────────────────
   enterShell = ''
     for dir in .claude/skills .github/skills .kiro/skills; do
@@ -678,28 +424,56 @@ in {
       shopt -s inherit_errexit 2>/dev/null || :
       nat_codex_probe_home="$(${pkgs.coreutils}/bin/mktemp -d)"
       trap '${pkgs.coreutils}/bin/rm -rf -- "$nat_codex_probe_home"' EXIT
+      # Trusted, as the developer's own Codex home trusts this project: Codex
+      # ignores a project `.codex/config.toml` otherwise, and with it the
+      # raised `project_doc_max_bytes`.
+      printf '[projects."%s"]\ntrust_level = "trusted"\n' "$DEVENV_ROOT" > "$nat_codex_probe_home/config.toml"
       CODEX_HOME="$nat_codex_probe_home" "$nat_codex_bin" debug prompt-input probe > "$nat_codex_probe_home/prompt.json"
       ${pkgs.gnugrep}/bin/grep -Fq -- '- dev-stack-fix:' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not discover dev-stack-fix"; exit 1; }
+      # AGENTS.md reaches Codex WHOLE. Codex drops a project document's tail
+      # past `project_doc_max_bytes` without a word, so the last line of the
+      # file, as the prompt's JSON escapes it, is the proof nothing was cut.
+      nat_agents_last="$(${pkgs.gnused}/bin/sed -n '/./h; ''${x;p}' AGENTS.md)"
+      nat_agents_last_json="$(${pkgs.jq}/bin/jq -rn --arg line "$nat_agents_last" '$line | tojson | .[1:-1]')"
+      ${pkgs.gnugrep}/bin/grep -Fq -- "$nat_agents_last_json" "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex truncated AGENTS.md (its last line is missing from the prompt)"; exit 1; }
+      # The index preamble, not its heading: the orientation mentions the
+      # heading by name, so the heading alone would pass a truncated file.
+      ${pkgs.gnugrep}/bin/grep -Fq -- 'Before editing a path that matches an entry below, read every document listed' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not receive the path-scoped rule index"; exit 1; }
+      ${pkgs.gnugrep}/bin/grep -Fq -- '<!-- rule: semble -->' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not receive the Semble CLI rule"; exit 1; }
+      # Again with Codex's DEFAULT 32 KiB limit: an untrusted home ignores the
+      # project `.codex/config.toml`, as a fresh clone or a linked worktree
+      # does. The index and every always-on rule must still arrive; only the
+      # orientation's tail may be cut.
+      nat_codex_default_home="$nat_codex_probe_home/default"
+      ${pkgs.coreutils}/bin/mkdir "$nat_codex_default_home"
+      CODEX_HOME="$nat_codex_default_home" "$nat_codex_bin" debug prompt-input probe > "$nat_codex_default_home/prompt.json"
+      for nat_needle in 'Before editing a path that matches an entry below, read every document listed' \
+                        '<!-- rule: delegate-sizing-router -->' \
+                        '<!-- rule: semble -->' \
+                        '<!-- rule: stacked-workflows-router -->'; do
+        ${pkgs.gnugrep}/bin/grep -Fq -- "$nat_needle" "$nat_codex_default_home/prompt.json" || { echo "FAIL: at Codex's default project_doc_max_bytes, AGENTS.md lost '$nat_needle'"; exit 1; }
+      done
     )
     test -f .github/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .github/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -f .kiro/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
 
-    # Repository-generated instruction projections must be REAL FILES, not
-    # absolute Nix-store symlinks, so they remain portable Git artifacts and
-    # can be committed when their projection is tracked. This is distinct
-    # from consumer `ai.<runtime>.files`, whose ordinary backend symlinks are
-    # supported by current Kiro. `test ! -L` is load-bearing because `test -f`
-    # follows symlinks. This remains a full-shell smoke assertion; the required
-    # instruction-materialization flake check exercises the exact copier in a
-    # temporary repository without depending on this working tree.
-    for f in AGENTS.md CLAUDE.md .claude/rules/nix-standards.md \
+    # Every instruction file `ai.*` writes here lands where its runtime reads
+    # it. Claude's context may link into the store (its loader follows a
+    # project CLAUDE.md link); the rest are read-only COPIES. A committed
+    # store symlink dangles everywhere else, Claude's scoped-rule loader
+    # skips one at project scope, and Kiro steering beside a developer's own
+    # stays a file. `test ! -L` is load-bearing because `test -f` follows
+    # symlinks. The drift check in `nix flake check` compares the committed
+    # bytes without depending on this tree.
+    test -f .claude/CLAUDE.md || { echo "FAIL: .claude/CLAUDE.md missing"; exit 1; }
+    for f in AGENTS.md .claude/rules/nix-standards.md \
              .github/copilot-instructions.md \
              .github/instructions/pipeline.instructions.md \
              .kiro/steering/pipeline.md; do
       test -f "$f" || { echo "FAIL: $f missing"; exit 1; }
       if [ -L "$f" ]; then
-        echo "FAIL: $f is a symlink (repository projections must be portable real files)"
+        echo "FAIL: $f is a symlink (ai.* must deliver it as a read-only copy)"
         exit 1
       fi
     done
@@ -709,7 +483,7 @@ in {
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
     checkTasks = (import ./dev/tasks/check.nix {}).tasks;
-    generateTasks = (import ./dev/tasks/generate.nix {inherit lib pkgs instr;}).tasks;
+    generateTasks = (import ./dev/tasks/generate.nix {inherit lib pkgs;}).tasks;
   in
     checkTasks
     // generateTasks
@@ -725,6 +499,32 @@ in {
         exec = lib.mkForce (lib.getExe runRepoHooks);
       };
       "devenv:treefmt:run".before = lib.mkForce [];
+
+      # One-shot migration. dev/generate.nix used to write these itself, and
+      # its materializer pruned stale files. `ai.*` now owns every instruction
+      # file and claims only what it wrote, so nothing else would ever remove
+      # these three, and each double-loads the orientation (Claude reads root
+      # CLAUDE.md beside .claude/CLAUDE.md; Kiro loads common.md `always`
+      # beside AGENTS.md) or carries a retired rule key. A file is removed only
+      # when it is an untracked regular file carrying the old generator's
+      # marker, so a developer's own file at one of these paths survives.
+      # Delete this task once no checkout predates the migration.
+      "legacy:retire-generated-instructions" = {
+        description = "Remove instruction files the old dev/generate.nix materializer left behind";
+        before = ["devenv:enterShell"];
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          cd "$DEVENV_ROOT"
+          for legacy in CLAUDE.md .kiro/steering/common.md .kiro/steering/semble.md; do
+            [ -f "$legacy" ] && [ ! -L "$legacy" ] || continue
+            [ -z "$(${pkgs.git}/bin/git ls-files -- "$legacy")" ] || continue
+            ${pkgs.gnugrep}/bin/grep -Fxq '<!-- Generated by dev/generate.nix -->' "$legacy" || continue
+            ${pkgs.coreutils}/bin/rm -f -- "$legacy"
+            printf 'Removed %s, left behind by the retired instruction generator\n' "$legacy"
+          done
+        '';
+      };
 
       # ── Update pipeline (ninja DAG) ──────────────────────────────────
       # ninja handles the full dependency graph with -j4 concurrency.

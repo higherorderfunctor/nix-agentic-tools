@@ -182,10 +182,20 @@ def clamp(script, root):
     run(argv, env=env, stdin=envelope, warning="cannot read payload")
 
 
-def manifest(script):
+def manifest(script, suffix="-ai-delivery-files.json"):
     words = shlex.split(Path(script).read_text().replace("\\\n", ""))
-    path = next(word for word in words if word.endswith("-ai-delivery-files.json"))
+    path = next(word for word in words if word.endswith(suffix))
     return json.loads(Path(path).read_text())
+
+
+def owned(script):
+    """Path -> the consumer options that write it, as the snapshot sees it."""
+    return manifest(script, "-ai-delivery-owned.json")
+
+
+def current(script):
+    """Every path delivered this generation: symlinks and owned copies."""
+    return manifest(script, "-ai-delivery-current-files.json")
 
 
 def wiring(script):
@@ -193,29 +203,36 @@ def wiring(script):
     assert "ai.kiro.lspServers" in desired[".custom-kiro/settings/lsp.json"]["option"]
     assert "ai.codex.native.settings" in desired[".codex/config.toml"]["option"]
     assert 'ai.codex.files."probe"' in desired["probe"]["option"]
+    # A shared AGENTS.md key is an owned COPY: never a symlink the report
+    # inspects, always a current path the retirement report skips.
+    names = owned(script)
+    assert "KIRO.md" not in desired and "CODEX.md" not in desired, desired
+    assert {"KIRO.md", "CODEX.md"} <= set(current(script)), current(script)
     # A shared AGENTS.md owner key belongs to the runtime whose context names
     # it, never to whichever runtime sorts first.
-    assert "ai.kiro." in desired["KIRO.md"]["option"], desired["KIRO.md"]
-    assert "ai.codex." not in desired["KIRO.md"]["option"], desired["KIRO.md"]
-    assert "ai.codex." in desired.get("CODEX.md", {}).get("option", ""), desired
+    assert "ai.kiro." in names["KIRO.md"], names["KIRO.md"]
+    assert "ai.codex." not in names["KIRO.md"], names["KIRO.md"]
+    assert "ai.codex." in names.get("CODEX.md", ""), names
     # Provenance is exact: a consumer file under a runtime config directory is
     # not an ai.* delivery and must not be observed as one.
     assert ".custom-kiro/consumer-owned.md" not in desired
+    assert ".custom-kiro/consumer-owned.md" not in names
 
 
 def kimchi_wiring(script):
     # Kimchi's devenv context lands in the project-root AGENTS.md whatever its
     # (Home Manager) context.filename says; the manifest must follow the file
     # actually written, not the option.
-    desired = manifest(script)
-    assert "ai.kimchi." in desired.get("AGENTS.md", {}).get("option", ""), desired
+    names = owned(script)
+    assert "ai.kimchi." in names.get("AGENTS.md", ""), names
+    assert "AGENTS.md" in current(script)
 
 
 def shared_agents_md_wiring(script):
     # Several runtimes write the one project-root AGENTS.md. The manifest names
     # every writer's options, so the runtime that actually supplied the text is
     # among them even when an empty one sorts first.
-    option = manifest(script).get("AGENTS.md", {}).get("option", "")
+    option = owned(script).get("AGENTS.md", "")
     assert "ai.kimchi." in option, option
     assert "ai.codex." in option, option
 

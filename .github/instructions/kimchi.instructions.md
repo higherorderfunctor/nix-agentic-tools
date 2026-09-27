@@ -7,7 +7,7 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-24 — the package builds from the release source
+> **Last verified:** 2026-09-26 — the package builds from the release source
 > that the extractor also reads, one pin for both, with pinned pnpm and Go
 > dependencies, and patches bundled-skill discovery to read store directories in
 > place; `ai.kimchi.native.settings` and `native.harnessSettings` are closed
@@ -306,10 +306,10 @@ through `this.globalSettings` or `getGlobalSettings()` (`defaultProjectTrust`,
 stops the extraction. Every Kimchi addition is user scope, because Kimchi reads
 them itself from `~/.config/kimchi/harness/settings.json`, never through pi's
 merged manager. It likewise rejects every `native.settings` key whose sidecar
-`project` flag is false (`gitTokens`, `onboarding`, `preferences`, `surveys`,
-`telemetry`, `teleport` in 1.1.30). Set these with Home Manager or through
-Kimchi itself. Home Manager and devenv reconcile the mutable JSON documents by
-owned leaf, preserving runtime-written siblings.
+`project` flag is false (`gitTokens`, `onboarding`, `preferences`, `region`,
+`surveys`, `telemetry`, `teleport` in 1.1.36). Set these with Home Manager or
+through Kimchi itself. Home Manager and devenv reconcile the mutable JSON
+documents by owned leaf, preserving runtime-written siblings.
 
 ## Agents: owned, writable copies
 

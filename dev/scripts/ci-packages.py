@@ -6,14 +6,11 @@ import json
 import re
 from pathlib import Path
 
+from artifacts import downloaded
 
 # Generated documents are checked by `test`. Patched Kiro has dedicated native
 # jobs without cache uploads; it must never enter the public build cache.
 EXCLUDED = {
-    "instructions-agents",
-    "instructions-claude",
-    "instructions-copilot",
-    "instructions-kiro",
     "kiro-cli-workflows",
     "repo-contributing",
     "repo-readme",
@@ -118,7 +115,7 @@ def main():
     elif args.command == "update-verify":
         validate_result_coverage(json.loads(args.packages.read_text()), json.loads(args.results.read_text()))
     else:
-        validate_coverage([json.loads(p.read_text()) for p in args.directory.glob("*/receipt.json")], args.count)
+        validate_coverage([json.loads(p.read_text()) for p in downloaded(args.directory, "receipt.json")], args.count)
 
 
 if __name__ == "__main__":

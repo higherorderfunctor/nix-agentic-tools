@@ -1,15 +1,19 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-25 — Semble derives a Kiro agent-private MCP server
-> from `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
-> delivery once through `mkRuntime`'s record-level `config`, and both
-> `mkRuntime` and the backend transforms reject a backend spec carrying anything
-> but `installPackage`, `migrationConfig` and `options`, since an overridden or
-> hand-built record reaches a transform without the constructor. Kiro hook
-> commands resolve packages through the shared `commandType`. Launchers bake the
-> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
-> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
-> through `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
+> **Last verified:** 2026-09-25 — AGENTS.md puts the index and rules before the
+> context. The repository AGENTS.md, Copilot's devenv context and instruction
+> files, and Kiro's devenv steering land as read-only copies; Codex indexes
+> scoped rules that name `references`; a unit whose file is switched off warns.
+> Semble derives a Kiro agent-private MCP server from `mcp.enable = false` plus
+> an MCP-backed subagent. Every runtime describes delivery once through
+> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
+> transforms reject a backend spec carrying anything but `installPackage`,
+> `migrationConfig` and `options`, since an overridden or hand-built record
+> reaches a transform without the constructor. Kiro hook commands resolve
+> packages through the shared `commandType`. Launchers bake the builder's one
+> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
+> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
+> `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
 > `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
 > (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
 > `agent.fileContent` where it copies, so a store-path string is a file, never a
@@ -138,8 +142,9 @@ remain gated. An opted-in owned writer therefore receives empty targets, so
 ordinary retraction removes only what the previous generation's ledger recorded
 and then drops the ledger. It cannot emit product files while disabled. The
 callers are writers whose files nothing else retracts: Claude's devenv rules
-copies, Codex's execpolicy copies, and Kiro's one-shot steering-copy retirement.
-A ledger-owned copy outlives a disable unless its writer opts in, because Home
+copies, Codex's execpolicy copies, and Kiro's steering writer (it materializes
+read-only copies on devenv and only drains an older ledger on Home Manager). A
+ledger-owned copy outlives a disable unless its writer opts in, because Home
 Manager's generation diff and `devenv:files:cleanup` only remove links. On Home
 Manager a directory writer is a PAIR of entries: the prune phase deletes the
 real files before `checkLinkTargets`, the write phase unlinks the drained
@@ -392,16 +397,22 @@ enabled ecosystem whose native model preserves the option's semantics):
   copilot-cli's user home. The transform derives structural `hasMergedContext`
   metadata before composition, so a final-file replacement or disable does not
   read discarded source-backed root/runtime context.
-- `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
-  AGENTS.md after context with trace comments. `matcher = null` means always-on;
-  non-empty glob lists lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot
-  `applyTo`, and a Codex prose scope preamble. Rules default enabled; a
-  per-runtime same-key rule with `enable = false` suppresses an inherited root
-  rule. Same-priority `text` definitions concatenate, and enabled rules require
-  non-empty text or a source path. Kiro alone retains native `manual`/`auto`
-  inclusion overrides. After B7 arbitration, a surviving inline Codex AGENTS.md
-  must fit `ai.codex.projectDocMaxBytes` (32 KiB by default), or evaluation
-  fails with a final-file diagnostic. A replacement or disable suppresses the
+- `ai.rules` — named Markdown rules. Codex writes these alphabetically to its
+  AGENTS.md ahead of the context, with trace comments. `matcher = null` means
+  always-on; non-empty glob lists lower to Claude `paths`, Kiro
+  `fileMatchPattern`, Copilot `applyTo`, and a Codex prose scope preamble. A
+  scoped rule that also names `references` (the documents holding its text)
+  becomes a Codex `## Path-scoped rules` index entry, rendered first in the
+  file, instead of an inlined body; runtimes with native scoping ignore the
+  field. Rules default enabled; a per-runtime same-key rule with
+  `enable = false` suppresses an inherited root rule. Same-priority `text`
+  definitions concatenate, and enabled rules require non-empty text or a source
+  path. Kiro alone retains native `manual`/`auto` inclusion overrides. After B7
+  arbitration, a surviving inline Codex AGENTS.md must fit
+  `ai.codex.projectDocMaxBytes` (32 KiB by default), or evaluation fails with a
+  final-file diagnostic. A raised limit is also written to Codex's own
+  `project_doc_max_bytes`, which Codex honors at project scope, so the file the
+  guard admits is the file Codex reads. A replacement or disable suppresses the
   generated bytes before they are read; a surviving store-backed `source` stays
   lazy and is therefore not size-checked at eval. Codex also rejects
   `matcher = []` as ambiguous; use `null` for always-on content or a non-empty
@@ -487,6 +498,20 @@ has not withdrawn with `ai.<runtime>.<pool>.<name> = null`
 (`config/ai-delivery.nix` `keyedSurfaces`). A PER-RUNTIME request a backend
 cannot deliver does warn (`lib/ai/delivery-warnings.nix`), because that one the
 consumer wrote directly and can delete.
+
+A context or rule unit that resolves for a runtime but lands in a file whose
+final entry has `content.enable = false` warns too, root or per-runtime: the
+file option that switched it off is the consumer's own, and the drop used to be
+silent (this repository's Codex rules vanished behind
+`files."AGENTS.md".content.enable = false`). The record's `contentTargets`
+callback names each unit's path from the same bindings its delivery uses; for a
+shared AGENTS.md key the final entry is the owner's and the message names the
+runtime whose public entry disabled it. Every such warning has a per-runtime
+remedy, so it never repeats forever: `ai.<runtime>.rules.<name>.enable = false`
+for a rule, `ai.<runtime>.normalized.context = lib.mkForce null` for context
+(root and runtime context compose, so `ai.<runtime>.context.enable = false`
+would not withhold the root part). A file REPLACED with other bytes stays quiet:
+those are the consumer's bytes, not a switch-off.
 
 ### Assertion semantics
 
@@ -578,9 +603,19 @@ runtime maps. Repository-local Codex/Kimchi/Kiro AGENTS.md retains one
 divergence-checking owner and enters the same architecture through hidden
 `ai.internal.files`, never through competing runtime writers. Public
 Codex/Kimchi/Kiro entries for a shared target arbitrate inside that owner before
-its single native sink: equal entries deduplicate, divergence fails, an ordinary
+its single writer: equal entries deduplicate, divergence fails, an ordinary
 entry replaces the generated default, and `content.enable = false` suppresses
-it.
+it. That owner goes through the same router as a runtime, named `internal`, with
+the `ai:agents-md:materialize` writer and a directory ledger at the project
+root: the file is a read-only copy, because a committed AGENTS.md that is a
+store symlink dangles everywhere else. Every definition of a shared entry,
+generated or projected, carries that writer, ledger and fact, so whichever wins
+still lands as the copy; an explicit `method = "symlink"` keeps the link.
+Copilot's devenv context and instruction files are copies for the same reason
+(github.com reads the committed tree), and Kiro's devenv steering is a copy so a
+developer's own steering beside it survives: each directory ledger claims only
+the files its writer wrote. `own` adopts a file whose bytes already match
+without a backup, so a `git pull` of a committed copy is silent.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
 files use `content.run` in an owned writer, runtime state keeps its typed
@@ -601,13 +636,13 @@ adapter's literal hosted root, so the host retains its own deep-merge and
 list-ordering semantics. Dynamic top-level roots remain forbidden because they
 recurse during option collection. Skills go through the map now: one entry per
 tree, expanded by Home Manager natively and walked by the router for devenv.
-Kiro steering uses ordinary symlinks after live 2.18.1 spikes confirmed startup
-discovery and same-session replacement reload in both global and project
-layouts; Kiro hooks stay real-file reconciled (`lib/ai/own.nix`, a `dir` target)
-because hook symlink behavior was not part of that result — the v3 scan keeps
-only `isFile()` entries. An enable-independent one-shot retirement, the same
-reconciler with a target that declares nothing, drains only the steering copies
-a legacy ledger records and then removes it.
+Kiro steering links on Home Manager (live 2.18.1 spikes confirmed startup
+discovery and same-session replacement reload) and is a read-only copy on
+devenv, claimed by the `ai:kiro:materialize-steering` directory ledger; Kiro
+hooks stay real-file reconciled (`lib/ai/own.nix`, a `dir` target) because the
+v3 scan keeps only `isFile()` entries. On Home Manager the same
+enable-independent writer declares nothing and only drains the steering copies
+an older ledger records.
 
 ### Documentation parity is capability parity
 

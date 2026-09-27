@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm harnessNames mkTest;
+  inherit (harness) deliveredFiles evalDevenv evalHm harnessNames mkTest;
 in {
   checks = {
     # ── A5a: final per-runtime literal file registry ────────────────────
@@ -180,8 +180,8 @@ in {
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
-        && devenvConfig.ai.internal.files."AGENTS.md".content.text == devenvConfig.files."AGENTS.md".text
-        && !(devenvConfig.files."AGENTS.md" ? source)
+        && devenvConfig.ai.internal.files."AGENTS.md".content.text == (deliveredFiles devenvConfig)."AGENTS.md".text
+        && !((deliveredFiles devenvConfig)."AGENTS.md" ? source)
     );
 
     module-runtime-files-shared-agentsmd-arbitration = mkTest "runtime-files-shared-agentsmd-arbitration" (
@@ -279,7 +279,7 @@ in {
           };
         };
         divergentContent = consumerOnlyDivergentEval.config.ai.internal.files."AGENTS.md".content;
-        consumerOnlyDivergent = builtins.tryEval (builtins.deepSeq consumerOnlyDivergentEval.config.files."AGENTS.md" true);
+        consumerOnlyDivergent = builtins.tryEval (builtins.deepSeq (deliveredFiles consumerOnlyDivergentEval.config)."AGENTS.md" true);
         divergentEnables =
           lib.sort (a: b: !a && b)
           (map (definition: definition.value."AGENTS.md".content.enable)
@@ -300,23 +300,23 @@ in {
             ai.${runtime}.files."AGENTS.md".content.source = file;
           });
         in
-          (builtins.tryEval "${evaluated.config.files."AGENTS.md".source}").value or null == "${file}";
+          (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").value or null == "${file}";
       in
         replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
-        && replaced.config.files."AGENTS.md".text == "CONSUMER-REPLACEMENT"
+        && (deliveredFiles replaced.config)."AGENTS.md".text == "CONSUMER-REPLACEMENT"
         && !suppressed.config.ai.internal.files."AGENTS.md".content.enable
-        && !(suppressed.config.files ? "AGENTS.md")
+        && !((deliveredFiles suppressed.config) ? "AGENTS.md")
         && deduplicated.config.ai.internal.files."AGENTS.md".content.text == "SHARED-CONSUMER"
-        && deduplicated.config.files."AGENTS.md".text == "SHARED-CONSUMER"
+        && (deliveredFiles deduplicated.config)."AGENTS.md".text == "SHARED-CONSUMER"
         && !divergent.success
-        && consumerOnly.config.files."AGENTS.md".text or null == "CONSUMER-ONLY"
-        && kimchiConsumerOnly.config.files."AGENTS.md".text or null == "KIMCHI-CONSUMER-ONLY"
-        && !(kimchiConsumerOnly.config.files ? "custom.md")
-        && kimchiContextOverride.config.files."AGENTS.md".text or null == "KIMCHI-CONTEXT-OVERRIDE"
+        && (deliveredFiles consumerOnly.config)."AGENTS.md".text or null == "CONSUMER-ONLY"
+        && (deliveredFiles kimchiConsumerOnly.config)."AGENTS.md".text or null == "KIMCHI-CONSUMER-ONLY"
+        && !((deliveredFiles kimchiConsumerOnly.config) ? "custom.md")
+        && (deliveredFiles kimchiContextOverride.config)."AGENTS.md".text or null == "KIMCHI-CONTEXT-OVERRIDE"
         && lib.all (assertion: assertion.assertion) kimchiContextOverride.config.assertions
-        && !(consumerOnlySuppressed.config.files ? "AGENTS.md")
-        && !(consumerOnlySuppressed.config.files ? "custom.md")
+        && !((deliveredFiles consumerOnlySuppressed.config) ? "AGENTS.md")
+        && !((deliveredFiles consumerOnlySuppressed.config) ? "custom.md")
         && !consumerOnlyDivergent.success
         && consumerOnlyDivergentCause
         && lib.all sourced ["codex" "kimchi" "kiro"]
@@ -370,9 +370,9 @@ in {
         ];
       in
         lib.all (evaluated:
-          evaluated.config.files ? "AGENTS.md"
-          && lib.hasInfix "ACTIVE-SHARED-CONTEXT" evaluated.config.files."AGENTS.md".text
-          && !(lib.hasInfix "DORMANT-" evaluated.config.files."AGENTS.md".text))
+          (deliveredFiles evaluated.config) ? "AGENTS.md"
+          && lib.hasInfix "ACTIVE-SHARED-CONTEXT" (deliveredFiles evaluated.config)."AGENTS.md".text
+          && !(lib.hasInfix "DORMANT-" (deliveredFiles evaluated.config)."AGENTS.md".text))
         evaluations
     );
 
@@ -422,8 +422,8 @@ in {
         && builtins.all (assertion: assertion.assertion) devenvDisabled.config.assertions
         && hmReplacement.config.home.file.".codex/AGENTS.md".text == "short"
         && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
-        && devenvReplacement.config.files."AGENTS.md".text == "short"
-        && !(devenvDisabled.config.files ? "AGENTS.md")
+        && (deliveredFiles devenvReplacement.config)."AGENTS.md".text == "short"
+        && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md")
     );
 
     module-runtime-files-discarded-codex-source-stays-lazy = mkTest "runtime-files-discarded-codex-source-stays-lazy" (
@@ -495,10 +495,10 @@ in {
         hmReplacement.config.home.file.".codex/AGENTS.md".text
         == "HM-REPLACEMENT"
         && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
-        && devenvReplacement.config.files."AGENTS.md".text == "DEVENV-REPLACEMENT"
-        && !(devenvDisabled.config.files ? "AGENTS.md")
+        && (deliveredFiles devenvReplacement.config)."AGENTS.md".text == "DEVENV-REPLACEMENT"
+        && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md")
         && !(hmKiroDisabled.config.home.file ? ".kiro/steering/AGENTS.md")
-        && !(devenvKiroDisabled.config.files ? "AGENTS.md")
+        && !((deliveredFiles devenvKiroDisabled.config) ? "AGENTS.md")
     );
 
     module-runtime-files-generated-empty-codex-source-omitted = mkTest "runtime-files-generated-empty-codex-source-omitted" (
@@ -524,8 +524,8 @@ in {
         };
       in
         !(hmCodex.config.home.file ? ".codex/AGENTS.md")
-        && !(devenvCodex.config.files ? "AGENTS.md")
-        && !(devenvKiro.config.files ? "AGENTS.md")
+        && !((deliveredFiles devenvCodex.config) ? "AGENTS.md")
+        && !((deliveredFiles devenvKiro.config) ? "AGENTS.md")
     );
 
     # Content at `mkDefault` is still content: the leaf-default idiom a
@@ -585,7 +585,7 @@ in {
         && rejected evalDevenv "codex" "AGENTS.md" {text = "";}
         # Control: the same entry with content evaluates.
         && (attempt evalHm "claude" "literal/empty.md" {text = "PRESENT";}).success
-        && !(disabled.config.files ? "AGENTS.md")
+        && !((deliveredFiles disabled.config) ? "AGENTS.md")
     );
 
     # `content.enable = false` is the one suppression lever, so it must reach
@@ -657,7 +657,7 @@ in {
         };
       in
         builtins.all (assertion: assertion.assertion) evaluated.config.assertions
-        && toString evaluated.config.files."AGENTS.md".source == toString source
+        && toString (deliveredFiles evaluated.config)."AGENTS.md".source == toString source
     );
 
     module-runtime-files-discarded-composed-context-stays-lazy = mkTest "runtime-files-discarded-composed-context-stays-lazy" (
@@ -718,10 +718,10 @@ in {
       in
         hmClaude.config.home.file.".claude/CLAUDE.md".text
         == "CLAUDE-REPLACEMENT"
-        && devenvClaude.config.files.".claude/CLAUDE.md".text == "CLAUDE-REPLACEMENT"
-        && devenvCopilot.config.files.".github/copilot-instructions.md".text == "COPILOT-REPLACEMENT"
+        && (deliveredFiles devenvClaude.config).".claude/CLAUDE.md".text == "CLAUDE-REPLACEMENT"
+        && (deliveredFiles devenvCopilot.config).".github/copilot-instructions.md".text == "COPILOT-REPLACEMENT"
         && hmKimchi.config.home.file.".config/kimchi/harness/AGENTS.md".text == "KIMCHI-REPLACEMENT"
-        && devenvKimchi.config.files."AGENTS.md".text == "KIMCHI-REPLACEMENT"
+        && (deliveredFiles devenvKimchi.config)."AGENTS.md".text == "KIMCHI-REPLACEMENT"
     );
   };
 }

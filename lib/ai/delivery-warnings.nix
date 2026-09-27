@@ -11,7 +11,15 @@
   backend,
   config,
   options ? {},
+  # Path each context/rule unit lands in (the record's `contentTargets`), the
+  # paths the shared AGENTS.md owner holds, and whether the runtime has
+  # context at all. All empty for a caller that knows none of them.
+  contentTargets ? {},
+  sharedTargets ? [],
+  hasContext ? false,
 }: let
+  aiCommon = import ./ai-common.nix {inherit lib;};
+  runtimeFiles = import ./runtime-files.nix {inherit lib;};
   policy = import ../../config/ai-delivery.nix {inherit lib;};
   runtime = appRecord.name;
   cfg = config.ai.${runtime};
@@ -191,9 +199,58 @@
       (message ["ai" "claude" surface] "The devenv backend has no writer for this Claude surface."))
     ["marketplaces" "outputStyles" "plugins"]
   );
+  # A context or rule unit whose file is switched off. The unit was requested
+  # and resolved, and the file that would carry it has `content.enable =
+  # false`, so nothing delivers it: the drop that used to be silent. A file
+  # REPLACED with other content is the consumer's own bytes and stays quiet.
+  #
+  # The final entry is the runtime's own, except for a shared AGENTS.md key
+  # on devenv, whose final entry is the owner's; there the disable is named
+  # on whichever enabled runtime's public entry states it.
+  finalEntry = path:
+    if builtins.elem path sharedTargets
+    then config.ai.internal.files.${path} or null
+    else cfg.files.${path} or null;
+  switchedOff = path: let
+    entry = finalEntry path;
+  in
+    entry != null && !(runtimeFiles.isLive entry);
+  disablingRuntime = path: let
+    disables = name: let
+      other = config.ai.${name} or {};
+    in
+      (other.enable or false)
+      && (other.files or {}) ? ${path}
+      && !(runtimeFiles.isLive other.files.${path});
+    candidates = builtins.attrNames (config.ai.internal.agentsMdTargets or {});
+  in
+    if builtins.elem path sharedTargets
+    then lib.findFirst disables runtime (lib.sort lib.lessThan candidates)
+    else runtime;
+  offMessage = unit: path: remedy:
+    message unit "${lib.showOption ["ai" (disablingRuntime path) "files" path "content" "enable"]} = false switches off `${path}`, the file that carries it"
+    + ". Remove that override, or withhold it from ${runtime} with ${remedy}.";
+  contextUnits = lib.optionals hasContext (
+    lib.optional (aiCommon.hasContent (config.ai.context or null)) ["ai" "context"]
+    ++ lib.optional (aiCommon.hasContent (cfg.context or null)) ["ai" runtime "context"]
+  );
+  contextWarnings = let
+    path = contentTargets.context or null;
+  in
+    lib.optionals (path != null && switchedOff path)
+    (map (unit: offMessage unit path "${lib.showOption ["ai" runtime "normalized" "context"]} = lib.mkForce null") contextUnits);
+  offRuleWarnings = lib.concatLists (lib.mapAttrsToList (name: path: let
+    unit =
+      if (cfg.rules or {}) ? ${name}
+      then ["ai" runtime "rules" name]
+      else ["ai" "rules" name];
+  in
+    lib.optional (switchedOff path)
+    (offMessage unit path "${lib.showOption ["ai" runtime "rules" name "enable"]} = false"))
+  (contentTargets.rules or {}));
 in
   if !cfg.enable
   then []
   else
     lib.unique
-    (rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings)
+    (rowWarnings ++ agentWarnings ++ ruleWarnings ++ hookWarnings ++ trustToolsWarnings ++ mcpWarnings ++ claudeWarnings ++ copilotWarnings ++ contextWarnings ++ offRuleWarnings)

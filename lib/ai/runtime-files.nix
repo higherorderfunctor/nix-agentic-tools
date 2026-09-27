@@ -68,11 +68,4 @@ in rec {
         `content.enable = false`. Invalid entries:
         ${lib.concatStringsSep ", " (builtins.attrNames malformed)}
       '';
-
-  # The shared repository AGENTS.md map lowers through here rather than
-  # through the router: it is one arbitrated target rather than a runtime's
-  # delivery description, and it has no methods, facts or writers.
-  liveFiles = files:
-    lib.mapAttrs (_target: sinkEntry)
-    (lib.filterAttrs (_target: isLive) files);
 }
