@@ -613,7 +613,7 @@ alejandra) and markdown (via prettier).
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-09-26 — package categories live in owner registries;
+> **Last verified:** 2026-09-27 — package categories live in owner registries;
 > `dev/generate.nix` turns them into `ai.rules` and `ai.*` writes every
 > runtime's files, AGENTS.md index first; devenv warns while AGENTS.md is past
 > 32 KiB.
@@ -730,7 +730,7 @@ Do NOT add fragments for content that is:
 - Discoverable by reading the code itself in under 10 seconds
 - Already covered by existing code comments (DRY)
 - A restatement of function signatures, file paths, or line numbers
-- Ephemeral (in-progress state goes in plan.md or memory, not fragments)
+- Ephemeral (in-progress state goes in memory, not fragments)
 
 Target under 150 lines per fragment. If a topic outgrows that, split by
 sub-concern with tighter scopes.

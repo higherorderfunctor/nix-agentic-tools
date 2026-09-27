@@ -185,7 +185,7 @@
         files = "\\.md$";
         # Same file set the other markdown scanners walk, for the reason
         # checks/markdown/markdown-scan.nix exists: one exclusion list, not three.
-        excludes = ["^docs/plans/kiro-v3-research-raw/" "^docs/plan\\.md$"];
+        excludes = ["^docs/plans/kiro-v3-research-raw/"];
         stages = ["pre-commit"];
       };
       stop = "judgment";

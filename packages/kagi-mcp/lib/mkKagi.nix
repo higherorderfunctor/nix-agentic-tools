@@ -9,17 +9,7 @@
 # path which already has working typed settings + auth
 # (`KAGI_API_KEY` via `settings.credentials.file` /
 # `settings.credentials.helper` sops-nix pass-through) declared in
-# `modules/mcp-servers/servers/kagi-mcp.nix`. nixos-config uses the
-# `lib.ai.mkStdioEntry` path today at the sentinel commit `f341bcb`:
-#
-#   kagi-mcp = inputs.nix-agentic-tools.lib.ai.mkStdioEntry pkgs {
-#     package = pkgs.nix-mcp-servers.kagi-mcp;
-#     settings.credentials.file =
-#       config.sops.secrets."${username}-kagi-api-key".path;
-#   };
-#
-# See docs/plan.md `A5` (port typed MCP server option schemas into
-# per-package dirs) for the relocation plan.
+# `packages/kagi-mcp/modules/mcp-server.nix`.
 {
   lib,
   pkgs,
@@ -33,8 +23,5 @@ lib.ai.mcpServer.mkMcpServer {
     command = "kagimcp";
     args = [];
   };
-  # Typed settings + auth live in modules/mcp-servers/servers/kagi-mcp.nix,
-  # consumed via lib.ai.mkStdioEntry. A5 relocates that module to
-  # packages/kagi-mcp/modules/mcp-server.nix.
   options = {};
 }

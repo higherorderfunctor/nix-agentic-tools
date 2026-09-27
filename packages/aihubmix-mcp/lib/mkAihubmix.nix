@@ -11,7 +11,7 @@
 # credential handling (runtime `cat` of a sops-managed file, never a
 # store-baked secret) is supplied by `lib.ai.mkStdioEntry` /
 # `lib.mcp.nix`. See packages/kagi-mcp/lib/mkKagi.nix for the same
-# split and docs/plan.md `A5` for the relocation plan.
+# split.
 {
   lib,
   pkgs,
