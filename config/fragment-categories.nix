@@ -3,16 +3,15 @@
 #
 # Declares shared/workspace categories. Owner-specific category rows live in
 # packages/<owner>/registry.nix. lib/facets/registry.nix evaluates both through
-# the options in lib/fragments-registry.nix; dev/generate.nix reads that result.
-# Each row pairs scope globs with the markdown sources composed into it.
+# the options in lib/fragments-registry.nix; dev/generate.nix reads that result
+# into one `ai.rules` entry per scoped category (dev/ai.nix). Each row pairs
+# scope globs with the markdown sources composed into it.
 #
 # Order within a `scopes` list is load-bearing: the globs are emitted verbatim
-# into the generated per-ecosystem frontmatter, so reordering them churns every
-# generated instruction file. `scopes = null` means "always-loaded" (no
-# scoping). Entries are sorted in BYTE order (LC_ALL=C) — what `lib.sort
-# lib.lessThan` produces, and what the path filter in
-# .github/workflows/devenv-test.yml uses (it lists `dev/generate.nix` before
-# `devenv.lock`, which a locale-aware sort would flip). So
+# as the rule's `matcher`, into every runtime's frontmatter and the AGENTS.md
+# index, so reordering them churns every generated instruction file.
+# `scopes = null` means "always-loaded" (no scoping). Entries are sorted in
+# BYTE order (LC_ALL=C) — what `lib.sort lib.lessThan` produces. So
 # `lib/fragments-registry.nix` correctly precedes `lib/fragments.nix`,
 # because `-` (0x2D) sorts below `.` (0x2E). A locale-aware collation that
 # ignores punctuation flips that pair; that is not the convention here, so do
@@ -49,11 +48,13 @@ _: {
     # ai-config-scope: whether a devenv-delivered runtime reads the
     # developer's user-global config, and why every runtime answers "yes".
     # Scoped to the factories and wrappers that COULD redirect a config root,
-    # plus devenv.nix where the runtimes are enabled. Deliberately NOT scoped
-    # to package recipes under `packages/*/packages/**` — a recipe packages a
-    # binary and never decides where that binary looks for config.
+    # plus dev/ai.nix and devenv.nix, where the runtimes are enabled.
+    # Deliberately NOT scoped to package recipes under `packages/*/packages/**`
+    # — a recipe packages a binary and never decides where that binary looks
+    # for config.
     ai-config-scope = {
       scopes = [
+        "dev/ai.nix"
         "devenv.nix"
         # The five AI CLI factories, listed explicitly. `packages/*/lib/mk*.nix`
         # used to stand here and matched 24 files — every MCP server factory,
@@ -399,6 +400,7 @@ _: {
         "config/fragment-categories.nix"
         "config/generate-update-ninja.nix"
         "config/update-targets.nix"
+        "dev/ai.nix"
         "dev/generate.nix"
         "dev/scripts/ci-*.py"
         "dev/scripts/test-ci-*.py"

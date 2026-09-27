@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest ownPlan ownedDocument;
+  inherit (harness) deliveredFiles evalDevenv evalHm mkTest ownPlan ownedDocument;
   kimchiDocument = path: ownedDocument "kimchi" path;
   hmConfigDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/config.json" evaluated;
   hmHarnessDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated;
@@ -161,7 +161,8 @@ in {
       in
         hm.config.home.file.".config/kimchi/harness/AGENTS.md".text
         == expected
-        && devenv.config.files."AGENTS.md".text == expected
+        # The shared repository AGENTS.md ends in one newline.
+        && (deliveredFiles devenv.config)."AGENTS.md".text == expected + "\n"
     );
     # ── Kimchi (mkRuntime factory participant) ──────────────────────────
     module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);
@@ -391,7 +392,7 @@ in {
             skills.example = ../../claude-code/checks/fixtures/claude-skills/skill-a;
           };
         };
-        files = result.config.files;
+        files = deliveredFiles result.config;
       in
         (projectConfigDocument result).value.redaction.enabled
         == false

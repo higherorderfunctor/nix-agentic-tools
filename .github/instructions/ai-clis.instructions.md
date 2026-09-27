@@ -7,13 +7,14 @@ applyTo: "packages/copilot-cli/checks/copilot-wrapper-argv.nix,packages/chatgpt-
 
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-09-24 — devenv reconciles settings into the fixed
+> **Last verified:** 2026-09-25 — devenv reconciles settings into the fixed
 > repository file `.github/copilot/settings.json` and writes LSP config to
 > `<projectDir>/lsp.json` (both measured at copilot-cli 1.0.88), so `configDir`
-> holds only the wrapper-aimed `mcp-config.json`. The repository file is read
-> from the git root, and its `effortLevel` by the interactive session only;
-> devenv warns on both. Keys and value kinds outside the repository schema, and
-> LSP server names Copilot rejects, throw at eval.
+> holds only the wrapper-aimed `mcp-config.json`. The repository context and
+> instruction files are read-only copies, never store symlinks. The repository
+> file is read from the git root, and its `effortLevel` by the interactive
+> session only; devenv warns on both. Keys and value kinds outside the
+> repository schema, and LSP server names Copilot rejects, throw at eval.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -67,10 +68,15 @@ The normalized context/rules model targets repository guidance consumed by
 github.com's Copilot reviewer. Devenv writes
 `<projectDir>/copilot-instructions.md` and
 `<projectDir>/instructions/<key>.instructions.md`; matcher globs become the
-comma-joined `applyTo` field and descriptions are forwarded. Home Manager keeps
-the same typed options to preserve exact backend schema parity, but emits
-nothing for either pool because copilot-cli user-global content is a separate
-product surface. This is an intentional capability-reducing degradation.
+comma-joined `applyTo` field and descriptions are forwarded. Both are read-only
+COPIES written by `ai:copilot:materialize-instructions`, one directory ledger
+each: github.com reads the committed tree, where a store symlink dangles. The
+ledgers claim only files the writer wrote, so a hand-written instruction file
+beside them survives, and the writer runs with Copilot disabled so both N→0 and
+a disable retract the copies. Home Manager keeps the same typed options to
+preserve exact backend schema parity, but emits nothing for either pool because
+copilot-cli user-global content is a separate product surface. This is an
+intentional capability-reducing degradation.
 
 ### Historical Home Manager named instructions and rules path
 

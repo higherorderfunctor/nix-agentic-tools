@@ -30,6 +30,10 @@
   # selects the Home Manager output root.
   projectHarnessDir = ".config/kimchi/harness";
   projectContextFilename = "AGENTS.md";
+  # The user harness directory, and the context file in it Home Manager
+  # writes; shared by the emitter and `contentTargets`.
+  userHarnessDir = cfg: "${cfg.configDir}/harness";
+  userContextPath = cfg: "${userHarnessDir cfg}/${cfg.context.filename}";
 
   # Kimchi 1.1.30's lifecycle events, FULL_COMMAND_HOOK_EVENTS
   # (src/extensions/hook-adapters/discovery.ts:29-50). Every portable event
@@ -196,7 +200,7 @@
     harness =
       if isDevenv
       then projectHarnessDir
-      else "${cfg.configDir}/harness";
+      else userHarnessDir cfg;
     harnessSettingsPath = "${harness}/settings.json";
     mcpPath =
       if isDevenv
@@ -446,7 +450,7 @@
       # User harness context stays runtime-owned. Project context joins the
       # shared repository AGENTS.md through the record's `sharedAgentsMd`.
       (lib.mkIf (hasMergedContext && !isDevenv) {
-        ai.kimchi.files."${harness}/${cfg.context.filename}" = contextEntry;
+        ai.kimchi.files.${userContextPath cfg} = contextEntry;
       })
 
       # agents/<name>.md — one real file per agent, in a real directory.
@@ -703,4 +707,15 @@ in
     # Context only, at a fixed key: context.filename names the Home Manager
     # harness file.
     sharedAgentsMd = _: {key = projectContextFilename;};
+    # Context only: Kimchi has no rules pool.
+    contentTargets = {
+      backend,
+      cfg,
+      ...
+    }: {
+      context =
+        if backend == "devenv"
+        then projectContextFilename
+        else userContextPath cfg;
+    };
   }

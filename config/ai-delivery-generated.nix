@@ -153,13 +153,13 @@
     {
       ecosystem = "codex";
       mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "context";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
-        "files"
-        "AGENTS.md"
+        "tasks"
+        "ai:agents-md:materialize"
       ];
     }
     {
@@ -178,25 +178,25 @@
     {
       ecosystem = "copilot";
       mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "context";
       target = "$DEVENV_ROOT/.github/copilot-instructions.md";
       writerAttr = [
-        "files"
-        ".github/copilot-instructions.md"
+        "tasks"
+        "ai:copilot:materialize-instructions"
       ];
     }
     {
       ecosystem = "kimchi";
       mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "context";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
-        "files"
-        "AGENTS.md"
+        "tasks"
+        "ai:agents-md:materialize"
       ];
     }
     {
@@ -213,26 +213,15 @@
       ];
     }
     {
-      additionalWriters = [
-        {
-          primitive = "ownPathManaged";
-          pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
-          target = "$DEVENV_ROOT/.kiro/steering/<legacy-owned-file>";
-          writerAttr = [
-            "tasks"
-            "ai:kiro:retire-steering-copies"
-          ];
-        }
-      ];
       ecosystem = "kiro";
       mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "context";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
-        "files"
-        "AGENTS.md"
+        "tasks"
+        "ai:agents-md:materialize"
       ];
     }
     {
@@ -680,13 +669,13 @@
       ];
       ecosystem = "codex";
       mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
-        "files"
-        "AGENTS.md"
+        "tasks"
+        "ai:agents-md:materialize"
       ];
     }
     {
@@ -727,36 +716,36 @@
     {
       ecosystem = "copilot";
       mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/.github/instructions/<name>.instructions.md";
       writerAttr = [
-        "files"
-        ".github/instructions/probe.instructions.md"
+        "tasks"
+        "ai:copilot:materialize-instructions"
       ];
     }
     {
       additionalWriters = [
         {
-          primitive = "ownPathDeclarative";
-          pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+          primitive = "ownPathManaged";
+          pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$DEVENV_ROOT/.kiro/steering/<name>.md";
           writerAttr = [
-            "files"
-            ".kiro/steering/scoped.md"
+            "tasks"
+            "ai:kiro:materialize-steering"
           ];
         }
       ];
       ecosystem = "kiro";
       mode = "devenv";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "rules";
       target = "$DEVENV_ROOT/AGENTS.md";
       writerAttr = [
-        "files"
-        "AGENTS.md"
+        "tasks"
+        "ai:agents-md:materialize"
       ];
     }
     {

@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm mkTest ownPlan tomlFormat;
+  inherit (harness) aiStubs deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm mkTest ownPlan tomlFormat;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
   # in the copy writer's plan, keyed by file name, not in home.file / files.
   execpolicyTarget = evaluated:
@@ -1677,16 +1677,18 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected = builtins.concatStringsSep "\n\n" [
-          "Shared context"
-          "Codex context"
-          "<!-- rule: alpha -->\nAlpha rule"
-          "<!-- rule: zeta -->\nZeta rule"
-        ];
+        expected =
+          builtins.concatStringsSep "\n\n" [
+            "<!-- rule: alpha -->\n\nAlpha rule"
+            "<!-- rule: zeta -->\n\nZeta rule"
+            "Shared context"
+            "Codex context"
+          ]
+          + "\n";
       in
         hm.config.home.file.".codex/AGENTS.md".text
         == expected
-        && devenv.config.files."AGENTS.md".text == expected
+        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
         && !(lib.hasInfix "---" expected)
     );
 
@@ -1701,7 +1703,7 @@ in {
         empty = evalHm {ai.codex.enable = true;};
       in
         hm.config.home.file.".codex/AGENTS.md".text
-        == "Shared context"
+        == "Shared context\n"
         && !(empty.config.home.file ? ".codex/AGENTS.md")
     );
 
@@ -1739,11 +1741,89 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected = "<!-- rule: scoped -->\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule";
+        expected = "<!-- rule: scoped -->\n\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule\n";
       in
         hm.config.home.file.".codex/AGENTS.md".text
         == expected
-        && devenv.config.files."AGENTS.md".text == expected
+        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+    );
+
+    # A scoped rule that names the documents holding its text is listed, not
+    # inlined: the flat file carries its globs and links, never its body. An
+    # unscoped rule with references stays inline, because an index entry with
+    # no globs could never tell the reader when to follow it.
+    module-codex-scoped-references-render-index = mkTest "codex-scoped-references-render-index" (
+      let
+        config = {
+          ai = {
+            codex.enable = true;
+            context.text = "Shared context";
+            rules = {
+              always = {
+                references = ["docs/always.md"];
+                text = "Always body";
+              };
+              beta = {
+                matcher = ["b/**"];
+                references = ["docs/b.md"];
+                text = "Beta body";
+              };
+              alpha = {
+                matcher = ["a/**" "lib/a.nix"];
+                references = ["docs/a.md" "docs/a-more.md"];
+                text = "Alpha body";
+              };
+            };
+          };
+        };
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        expected =
+          builtins.concatStringsSep "\n\n" [
+            (
+              "## Path-scoped rules\n\n"
+              + "Before editing a path that matches an entry below, read every document listed\n"
+              + "for it. When several entries match, their guidance composes.\n\n"
+              + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
+              + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
+              + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)"
+            )
+            "<!-- rule: always -->\n\nAlways body"
+            "Shared context"
+          ]
+          + "\n";
+      in
+        hm.config.home.file.".codex/AGENTS.md".text
+        == expected
+        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+        && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? alpha
+        && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)
+    );
+
+    # The guard and Codex's own limit are one number: a raised guard reaches
+    # config.toml on both backends, the default writes nothing, and an
+    # explicit native value still wins.
+    module-codex-project-doc-limit-reaches-native = mkTest "codex-project-doc-limit-reaches-native" (
+      let
+        settingsOf = eval: eval.config.ai.codex.native.settings;
+        raised = extra: {
+          ai.codex =
+            {
+              enable = true;
+              projectDocMaxBytes = 131072;
+            }
+            // extra;
+        };
+        hmRaised = evalHm (raised {});
+        devenvRaised = evalDevenv (raised {});
+        devenvDefault = evalDevenv {ai.codex.enable = true;};
+        explicit = evalDevenv (raised {native.settings.project_doc_max_bytes = 65536;});
+      in
+        (settingsOf hmRaised).project_doc_max_bytes
+        == 131072
+        && (settingsOf devenvRaised).project_doc_max_bytes == 131072
+        && !((settingsOf devenvDefault) ? project_doc_max_bytes)
+        && (settingsOf explicit).project_doc_max_bytes == 65536
     );
 
     module-codex-size-guard-byte-boundaries = mkTest "codex-size-guard-byte-boundaries" (
@@ -1756,7 +1836,9 @@ in {
               inherit projectDocMaxBytes;
             };
           };
-        sized = size: lib.concatStrings (lib.replicate size "x");
+        # The rendered file ends in one newline, so N bytes of context render
+        # to N + 1.
+        sized = size: lib.concatStrings (lib.replicate (size - 1) "x");
         below = evaluate (sized 32767) 32768;
         exact = evaluate (sized 32768) 32768;
         above = evaluate (sized 32769) 32768;
@@ -1783,7 +1865,7 @@ in {
         && diagnosticAssertion != null
         && lib.hasInfix "replace the final inline content" diagnosticAssertion.message
         && unicodeAssertion != null
-        && lib.hasInfix "renders to 2 bytes" unicodeAssertion.message
+        && lib.hasInfix "renders to 3 bytes" unicodeAssertion.message
         && lib.hasInfix "projectDocMaxBytes (1 bytes)" unicodeAssertion.message
         && lib.hasInfix "Trim or replace" unicodeAssertion.message
     );
@@ -1812,7 +1894,7 @@ in {
       in
         failed
         != null
-        && !(empty.config.files ? "AGENTS.md")
+        && !((deliveredFiles empty.config) ? "AGENTS.md")
     );
 
     module-codex-rule-runtime-replaces-root = mkTest "codex-rule-runtime-replaces-root" (

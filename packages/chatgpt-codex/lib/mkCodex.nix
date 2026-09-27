@@ -593,6 +593,10 @@
     "projects"
   ];
 
+  # Codex's own default for `project_doc_max_bytes`: it reads at most this
+  # many bytes of a project document and silently drops the rest.
+  codexProjectDocMaxBytes = 32768;
+
   renderScope = matcher:
     lib.optionalString (matcher != null) (
       "_Apply this guidance only when working with files matching: "
@@ -605,6 +609,18 @@
     + lib.ai.transformers.agentsmd.render {
       text = aiCommon.readContent rule;
     };
+
+  # AGENTS.md has no path scoping, so a scoped rule costs its whole body on
+  # every turn. One that names the documents holding its text becomes an
+  # index entry instead, and the agent reads the documents only when it edits
+  # a matching path. Every other rule is inlined as before.
+  isIndexedRule = rule: rule.matcher != null && rule.references != [];
+  agentsMdUnits = mergedRules: {
+    index =
+      lib.mapAttrs lib.ai.transformers.agentsmd.renderIndexEntry
+      (lib.filterAttrs (_name: isIndexedRule) mergedRules);
+    rules = lib.mapAttrs mkRuleBody (lib.filterAttrs (_name: rule: !(isIndexedRule rule)) mergedRules);
+  };
 
   isExecpolicyPathLike = content:
     builtins.isPath content
@@ -643,6 +659,13 @@
     if backend == "hm"
     then cfg.configDir
     else ".codex";
+  # The one AGENTS.md every context and rule unit lands in: the user file on
+  # Home Manager, the shared repository key on devenv. The emitters and
+  # `contentTargets` both read it.
+  agentsMdPath = backend: cfg:
+    if backend == "hm"
+    then "${cfg.configDir}/${cfg.context.filename}"
+    else cfg.context.filename;
   # The copies are ledger-owned, and nothing but this writer retracts them.
   # Declared outside the enable gate, and whether or not any rule is, so both
   # N→0 and the generation that DISABLES Codex drain what the previous one
@@ -766,10 +789,10 @@
     mergedContext,
     mergedRules,
   }:
-    lib.ai.transformers.agentsmd.renderKeyed {
-      context = aiCommon.readContent mergedContext;
-      rules = lib.mapAttrs mkRuleBody mergedRules;
-    };
+    lib.ai.transformers.agentsmd.renderKeyed ({
+        context = aiCommon.readContent mergedContext;
+      }
+      // agentsMdUnits mergedRules);
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -847,10 +870,13 @@ in
       # it landed and cannot restrict Codex skill or AGENTS.md discovery.
       projectDocMaxBytes = lib.mkOption {
         type = lib.types.ints.positive;
-        default = 32768;
+        default = codexProjectDocMaxBytes;
         description = ''
           Maximum byte size of the generated Codex AGENTS.md. Evaluation fails
-          before Codex can silently truncate content beyond this limit.
+          before Codex can silently truncate content beyond this limit. A value
+          other than Codex's own default (32768) is also written to Codex's
+          `project_doc_max_bytes` at default priority, so Codex reads as much
+          as this guard admits.
         '';
       };
       native.settings = lib.mkOption {
@@ -871,17 +897,27 @@ in
     };
 
     installPackage = codexInstallPackage;
-    migrationConfig = codexExecpolicyWriterConfig;
-    # Every rule, scope-prefixed, under Codex's size limit.
-    sharedAgentsMd = {
+    contentTargets = {
+      backend,
       cfg,
       mergedRules,
       ...
     }: {
-      key = cfg.context.filename;
-      maxBytes = cfg.projectDocMaxBytes;
-      rules = lib.mapAttrs mkRuleBody mergedRules;
+      context = agentsMdPath backend cfg;
+      rules = lib.mapAttrs (_name: _rule: agentsMdPath backend cfg) mergedRules;
     };
+    migrationConfig = codexExecpolicyWriterConfig;
+    # Every rule, scope-prefixed or indexed, under Codex's size limit.
+    sharedAgentsMd = {
+      cfg,
+      mergedRules,
+      ...
+    }:
+      {
+        key = agentsMdPath "devenv" cfg;
+        maxBytes = cfg.projectDocMaxBytes;
+      }
+      // agentsMdUnits mergedRules;
     config = {
       backend,
       cfg,
@@ -905,7 +941,7 @@ in
       settingsLedger = "toml-settings/codex-config-${builtins.hashString "sha256" configFile}.json";
       agentsMd = mkAgentsMd {inherit mergedContext mergedRules;};
       hasAgentsMdContent = hasMergedContext || mergedRules != {};
-      agentsMdTarget = "${cfg.configDir}/${cfg.context.filename}";
+      agentsMdTarget = agentsMdPath "hm" cfg;
       finalAgentsMdEntry = cfg.files.${agentsMdTarget} or null;
       hasNativeMcpServers = cfg.native.settings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
@@ -969,9 +1005,20 @@ in
           ));
         }
         {
-          ai.codex.native.settings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
-            model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
-          };
+          ai.codex.native.settings = lib.mkMerge [
+            (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+              model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+            })
+            # The size guard alone would let a raised limit pass evaluation
+            # while Codex still truncated at its own default. Codex honors
+            # this key from a trusted project's `.codex/config.toml` as well
+            # as from user config (measured with `codex debug prompt-input`
+            # on an 88 KB AGENTS.md: 744 of 2000 lines by default, all 2000
+            # with the key raised).
+            (lib.mkIf (cfg.projectDocMaxBytes != codexProjectDocMaxBytes) {
+              project_doc_max_bytes = lib.mkDefault cfg.projectDocMaxBytes;
+            })
+          ];
           assertions =
             mkAgentAssertions mergedAgents
             ++ mkExecpolicyAssertions cfg.execpolicyRules

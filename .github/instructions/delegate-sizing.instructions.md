@@ -7,9 +7,10 @@ applyTo: "packages/delegate-sizing/**"
 
 # Delegate sizing package
 
-> **Last verified:** 2026-09-21 — instruction presets use inner
+> **Last verified:** 2026-09-25 — instruction presets use inner
 > `defaultContent`, while shared text/source types auto-enable non-empty
-> consumer content and reject enabled empty records.
+> consumer content and reject enabled empty records. This repository receives
+> the rule through the program, not the generator.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -72,12 +73,12 @@ own heading. `router.nix` appends enabled `whenToDelegate` entries to that stub
 and supplies the result to both the factory and repository projections. With no
 enabled entries, the result is byte-identical to the source stub. `lib/rules.md`
 holds the six rules; `lib/render.nix` places them at the top of each runtime's
-skill, before the preamble. This repository includes that rule in
-`dev/generate.nix`'s root composition, which reaches AGENTS.md even with Codex
-CLI instructions disabled. Repository devenv config suppresses the native
-Claude, Codex and Kiro rule copies: Codex rules compose into the tracked
-AGENTS.md, and the other copies would duplicate the stub. Keep model tables and
-harness details in the generated skill.
+skill, before the preamble. This repository consumes the rule like any project:
+`dev/ai.nix` enables the program, which delivers it as Claude's
+`.claude/rules/delegate-sizing-router.md` and inline in AGENTS.md for Codex and
+Kiro (their byte-identical contributions deduplicate). Copilot does not receive
+it; the program supports Claude, Codex and Kiro. Keep model tables and harness
+details in the generated skill.
 
 Home Manager exposes generated diagnostics through its module-system `warnings`
 option. Devenv does not declare that option, so the common module uses

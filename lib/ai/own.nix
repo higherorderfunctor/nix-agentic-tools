@@ -80,7 +80,10 @@
     else
       lib.optional (!builtins.elem target.codec codecs)
       "${label} has unknown codec '${toString target.codec}' (expected ${lib.concatStringsSep "/" codecs})"
-      ++ lib.optional (traverses target.path) "${label} path must be relative and must not traverse"
+      # A directory container may be the backend root itself (`.`): the
+      # repository-root AGENTS.md is one unit of it. Its units are still one
+      # visible path segment each, so nothing below the root is reachable.
+      ++ lib.optional (traverses target.path && !(target.codec == "dir" && target.path == ".")) "${label} path must be relative and must not traverse"
       ++ lib.optional (traverses target.ledger) "${label} ledger '${target.ledger}' must be relative and must not traverse"
       # A native writer's lock guards one document's read-modify-write; a
       # directory's units are published one atomic file at a time.

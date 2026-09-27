@@ -94,8 +94,8 @@
         config.allowUnfree = true;
         overlays = [self.overlays.default];
       };
-    instructionsFor = system:
-      import ./dev/instructions.nix {
+    repoDocsFor = system:
+      import ./dev/repo-docs.nix {
         inherit lib;
         pkgs = pkgsFor system;
         inherit (inputs) treefmt-nix;
@@ -186,7 +186,6 @@
     checks = forAllSystems (system:
       repository.checksFor {
         inherit self updateRegistry;
-        instr = instructionsFor system;
         pkgs = pkgsFor system;
         rootModules = (import ./lib/testing/discover.nix {inherit lib;}) ./checks;
       });
@@ -197,30 +196,18 @@
 
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
-      # Bind the fragment-composition data ONCE for all four
-      # instruction-* derivations below. import is memoized so
-      # the file is read once, but a single explicit binding is
-      # clearer and cheaper to extend when a 5th ecosystem lands.
-      # Shared with devenv.nix — see dev/instructions.nix for why. The
-      # working tree is materialized from these exact derivations on every
-      # shell entry, so a second rendering here would flip-flop the tree.
-      instr = instructionsFor system;
+      repoDocs = repoDocsFor system;
     in
       repository.packagesFor {
         inherit pkgs system;
         rootPackages = {
-          # Instruction file derivations (from dev/generate.nix).
-          # Each ecosystem produces a content directory consumed by the
-          # `generate:instructions:*` devenv tasks.
-          instructions-agents = instr.agents;
-          instructions-claude = instr.claude;
-          instructions-copilot = instr.copilot;
-          instructions-kiro = instr.kiro;
-          # Repo-root documents, same pipeline. The `generate:repo:*` tasks
-          # build these by name; without them the tasks fail with
+          # Repo-root documents from dev/generate.nix. The `generate:repo:*`
+          # tasks build these by name; without them the tasks fail with
           # "attribute missing" and both files fall back to hand-editing.
-          repo-contributing = instr.repoContributing;
-          repo-readme = instr.repoReadme;
+          # The agent instruction files are not packages: `ai.*` writes them
+          # (dev/ai.nix).
+          repo-contributing = repoDocs.repoContributing;
+          repo-readme = repoDocs.repoReadme;
         };
       });
 

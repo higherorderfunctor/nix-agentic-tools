@@ -22,7 +22,8 @@
   # The pools whose option `mkBackendTransform.nix` declares through
   # `poolOption`, and so the only ones `poolOptions` can override.
   poolOptionPools = ["agents" "environmentVariables" "lspServers"];
-  sharedAgentsMdKeys = ["key" "maxBytes" "rules"];
+  sharedAgentsMdKeys = ["index" "key" "maxBytes" "rules"];
+  contentTargetsKeys = ["context" "rules"];
   unknownIn = allowed: attrs: lib.subtractLists allowed (builtins.attrNames attrs);
   listed = lib.concatStringsSep ", ";
 in {
@@ -53,9 +54,15 @@ in {
     && lib.assertMsg (unknownPoolOptions == [])
     "ai runtime ${name}: poolOptions carries ${listed unknownPoolOptions}; it takes only a pool the builder declares (${listed poolOptionPools}) that supportedPools names, plus agentsDir when that includes agents.";
 
+  contentTargets = name: result: let
+    unknown = unknownIn contentTargetsKeys result;
+  in
+    lib.assertMsg (unknown == [])
+    "ai runtime ${name}: contentTargets must return {context?; rules?}, but it also returned ${listed unknown}.";
+
   sharedAgentsMd = name: result: let
     unknown = unknownIn sharedAgentsMdKeys result;
   in
     lib.assertMsg (result ? key && unknown == [])
-    "ai runtime ${name}: sharedAgentsMd must return {key; rules?; maxBytes?}${lib.optionalString (unknown != []) ", but it also returned ${listed unknown}"}.";
+    "ai runtime ${name}: sharedAgentsMd must return {key; index?; rules?; maxBytes?}${lib.optionalString (unknown != []) ", but it also returned ${listed unknown}"}.";
 }

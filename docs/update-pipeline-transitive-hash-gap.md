@@ -585,9 +585,10 @@ package invisible to the push step.
   parent checkout (devenv-generated, gitignored).
 - Generated steering files (`.claude/rules/pipeline.md`,
   `.kiro/steering/pipeline.md`) are gitignored; only
-  `.github/instructions/pipeline.instructions.md` is tracked. After fragment
-  edits, run `devenv tasks run --mode before generate:instructions` locally to
-  refresh the gitignored copies.
+  `.github/instructions/pipeline.instructions.md` is tracked. `ai.*` rewrites
+  the gitignored copies on the next devenv shell entry; after fragment edits,
+  run `devenv tasks run --mode before generate:instructions` to refresh the
+  tracked ones.
 
 When resuming, re-read `feedback_no_manual_hashes.md` — the 2026-05-20 manual
 patching was a one-time exception, not a precedent.

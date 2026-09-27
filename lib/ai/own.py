@@ -386,6 +386,14 @@ class DirContainer:
             # it is already the witness of what is on disk.
             target.chmod(mode)
             return previous
+        if arm in ("backup_adopt", "backup_overwrite") and current == content:
+            # Someone else wrote exactly these bytes: a `git pull` or checkout
+            # of a committed copy, or a fresh worktree whose tree already
+            # carries it. There is nothing of theirs to lose, so a backup and
+            # a warning would only repeat on every such write. Adopt in place:
+            # the bytes and mtime stay, the mode and witness become ours.
+            target.chmod(mode)
+            return digest(content)
         if arm == "backup_adopt":
             self.backup(address, f"{target} existed but was not managed", "adopting")
         elif arm == "backup_overwrite":
