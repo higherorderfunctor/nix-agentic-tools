@@ -1364,24 +1364,26 @@ class HoldBackEscalationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as workspace, mock.patch.object(matrix.time, "sleep"), mock.patch.object(matrix.subprocess, "run", side_effect=fake_run):
             self.assertEqual(matrix.previous_status("o/r", run, "oxlint", Path(workspace)), ("HELD BACK", "u4", None))
         self.assertEqual(attempts, [False, False])
-
-    def escalate(self, receipts, overrides):
+    def escalate(self, receipts, overrides, flat=False):
         """Run the escalate command against fixture receipts; return (rc, stdout).
 
         `overrides` is Python source run against the loaded module `m` before
-        main(), replacing whatever would otherwise reach the GitHub API.
+        main(), replacing whatever would otherwise reach the GitHub API. `flat`
+        lays a lone receipt out the way download-artifact v5+ extracts a
+        pattern with exactly one match: straight into `receipts/`.
         """
         with tempfile.TemporaryDirectory() as root:
             source, temp = Path(root) / "source", Path(root) / "temp"
             (source / "receipts").mkdir(parents=True)
             temp.mkdir()
             for receipt in receipts:
-                folder = source / "receipts" / f"update-receipt-{receipt['name']}"
-                folder.mkdir()
+                folder = source / "receipts" / ("" if flat else f"update-receipt-{receipt['name']}")
+                folder.mkdir(exist_ok=True)
                 (folder / "update-receipt.json").write_text(json.dumps(receipt))
             environment = dict(os.environ, GITHUB_REPOSITORY="o/r", GITHUB_RUN_ID="9", RUNNER_TEMP=str(temp))
             script = (
                 "import importlib.util, json, sys\n"
+                f"sys.path.insert(0, {str(SCRIPTS)!r})\n"
                 f"spec = importlib.util.spec_from_file_location('m', {str(SCRIPTS / 'update-matrix.py')!r})\n"
                 "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
                 "m.previous_sweep = lambda *a, **k: {'id': 8, 'html_url': 'prev-url'}\n"
@@ -1451,6 +1453,12 @@ class HoldBackEscalationTest(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("Preparation log excerpt unavailable: could not read update-report-oxlint: HTTP 404.", output)
         self.assertIn("Full log: gh run download 9 --repo o/r --name update-report-oxlint", output)
+
+    def test_escalate_reads_a_lone_receipt_extracted_without_a_directory(self):
+        held = self.receipt("oxlint", "HELD BACK", "HELD BACK: oxlint (nix-update, formatter or commit failed)")
+        code, output = self.escalate([held], self.predecessor("HELD BACK"), flat=True)
+        self.assertEqual(code, 1, output)
+        self.assertIn("::error title=Update target held back twice::", output)
 
     def test_escalate_is_silent_and_cheap_when_nothing_is_held_back(self):
         code, output = self.escalate([self.receipt("beads", "UPDATED")], self.predecessor("HELD BACK"))

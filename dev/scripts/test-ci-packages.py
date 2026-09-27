@@ -3,6 +3,7 @@
 
 import copy
 import importlib.util
+import json
 import os
 import subprocess
 import tempfile
@@ -86,6 +87,19 @@ class CoverageTest(unittest.TestCase):
         for plans in (self.plans[:-1], [self.plans[0]] * 5, changed):
             with self.subTest(plans=plans), self.assertRaises(ValueError):
                 ci.validate_coverage(plans, 5)
+
+    def test_coverage_reads_both_download_artifact_layouts(self):
+        # download-artifact v5+ extracts a lone pattern match straight into
+        # the path, and two or more matches into per-artifact directories.
+        script = Path(__file__).with_name("ci-packages.py")
+        for count in (1, 2):
+            plans = [ci.partition(self.names, i, count) for i in range(count)]
+            with self.subTest(count=count), tempfile.TemporaryDirectory() as root:
+                for i, plan in enumerate(plans):
+                    folder = Path(root) / f"packages-x86_64-linux-{i}" if count > 1 else Path(root)
+                    folder.mkdir(exist_ok=True)
+                    (folder / "receipt.json").write_text(json.dumps(plan))
+                subprocess.run([os.sys.executable, str(script), "coverage", root, str(count)], check=True)
 
     def test_empty_enumeration_and_empty_shard_fail(self):
         for names in ([], ["alpha"]):

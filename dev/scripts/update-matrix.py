@@ -10,6 +10,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from artifacts import downloaded
+
 
 def discover(lock, targets, requested=""):
     inputs = lock["nodes"][lock["root"]]["inputs"]
@@ -334,7 +336,7 @@ def main():
         (temp / "update-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     elif args.command == "escalate":
         repo, run_id = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_RUN_ID"]
-        receipts = [json.loads(p.read_text()) for p in Path("receipts").glob("*/update-receipt.json")]
+        receipts = [json.loads(p.read_text()) for p in downloaded("receipts", "update-receipt.json")]
         held = {r["name"]: r.get("detail") or f"HELD BACK: {r['name']}" for r in receipts if r["status"] == "HELD BACK"}
         if not held:
             print("No target was held back this sweep.")
@@ -376,7 +378,7 @@ def main():
             raise SystemExit("; ".join(failures))
     else:
         matrix = json.loads(os.environ["UPDATE_MATRIX"])
-        receipts = [json.loads(p.read_text()) for p in Path("receipts").glob("*/update-receipt.json")]
+        receipts = [json.loads(p.read_text()) for p in downloaded("receipts", "update-receipt.json")]
         touched = collect(matrix, receipts, os.environ["UPDATE_BASE_SHA"])
         (temp / "touched-branches").write_text("".join(branch + "\n" for branch in touched))
         # Cleanup refuses to act without proof of a complete, published sweep.
