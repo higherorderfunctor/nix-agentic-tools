@@ -78,6 +78,10 @@
   # of the portable surfaces; the matrix has no cell for it by design.
     if runtime == "kimchi" && lib.hasSuffix "/harness/trust.json" path
     then []
+    # The Codex daemon's settings.json carries daemon policy (its updater),
+    # not one of the portable surfaces; the matrix has no cell for it either.
+    else if runtime == "codex" && path == ".codex/app-server-daemon/settings.json"
+    then []
     else if path == ".claude.json"
     then ["settings"]
     else if path == ".claude/settings.json"

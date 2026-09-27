@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-25 — L5 is the delivery router plus one adapter per
+> **Last verified:** 2026-09-26 — L5 is the delivery router plus one adapter per
 > backend; every runtime describes delivery once through the record-level
 > `config`, which `mkRuntime` makes the only delivery callback, and the delivery
 > matrix is generated from the layer for every runtime's files. Normalized pools
@@ -12,15 +12,16 @@
 > builder publishes each record's devenv shared AGENTS.md contribution, and its
 > key in `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`.
 > Claude's `.claude.json` has an ungated mode-narrowing command writer beside
-> its unpin ledger. The builder declares the per-runtime `agents`,
-> `environmentVariables` and `lspServers` options and an opt-in `agentsDir`; a
-> record's `poolOptions` carries only what differs. `checkRecord.nix` rejects a
-> `poolOptions` key the builder would not read and a stray field in the
-> `sharedAgentsMd` result. Every reconciled document is one
-> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
-> `index` entries: Codex renders a scoped rule that names `references` as a
-> path-scoped index entry instead of inlining its body. The shared AGENTS.md map
-> lowers through the router as `internal`, as a read-only copy.
+> its unpin ledger. Codex's daemon `settings.json` maps to no matrix cell. The
+> builder declares the per-runtime `agents`, `environmentVariables` and
+> `lspServers` options and an opt-in `agentsDir`; a record's `poolOptions`
+> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
+> builder would not read and a stray field in the `sharedAgentsMd` result. Every
+> reconciled document is one `helpers.mkReconciledDocument` call. A shared
+> AGENTS.md contribution may carry `index` entries: Codex renders a scoped rule
+> that names `references` as a path-scoped index entry instead of inlining its
+> body. The shared AGENTS.md map lowers through the router as `internal`, as a
+> read-only copy.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -283,7 +284,9 @@ skills use the real leaf walk. Shared devenv AGENTS.md currently comes from the
 typed `ai.internal.files` owner; Claude's native devenv MCP integration is
 observed at its existing upstream destination. Package wrappers have no file
 entry. Kimchi's `trust.json` (`ai.kimchi.projectTrust`) is a user-scope trust
-store, not a portable surface, so the specimen maps it to no cell.
+store, not a portable surface, so the specimen maps it to no cell. Codex's
+`app-server-daemon/settings.json` holds daemon updater policy, not a portable
+surface, and maps to no cell either.
 
 The production gate compares live absence against hand-authored gaps in both
 directions and verifies upstream sink correspondence. Its three body arms stay;

@@ -696,6 +696,8 @@ in {
         ai.codex = {
           enable = true;
           native.settings = {
+            # Null beats Home Manager's mkDefault, so this retracts that leaf.
+            features.daemon_auto_start = null;
             model = null;
             model_reasoning_effort = null;
           };
@@ -788,7 +790,7 @@ in {
         assert config["model"] == "nix-model-v2"
         assert config["sandbox_mode"] == "read-only"
         assert config["projects"]["/home/test/ad-hoc"]["trust_level"] == "trusted"
-        assert config["features"] == {"native_runtime": True}
+        assert config["features"] == {"daemon_auto_start": False, "native_runtime": True}
         assert "future_array" not in config
         assert config["mcp_servers"] == {"native": {"command": "/bin/native"}}
         assert config["shape"] == {"child": "table-v2"}
