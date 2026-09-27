@@ -34,7 +34,7 @@ pkgs.writeShellApplication {
 
     previous=""
     if [ -L "$current" ]; then
-      previous="$(readlink "$current")"
+      previous="$(${pkgs.coreutils}/bin/readlink "$current")"
     elif [ -e "$current" ]; then
       echo "ERROR: refusing to replace $current: it is not a symlink" >&2
       false
@@ -45,7 +45,7 @@ pkgs.writeShellApplication {
     # `stop` waits for in-flight turns for up to shutdownGraceSeconds (at most
     # 300) before it returns.
     stop_daemon() {
-      if ! CODEX_HOME="$codex_home" timeout 330 "$1" app-server daemon stop < /dev/null > /dev/null; then
+      if ! CODEX_HOME="$codex_home" ${pkgs.coreutils}/bin/timeout 330 "$1" app-server daemon stop < /dev/null > /dev/null; then
         echo "warning: could not stop the Codex app-server daemon; it keeps running $previous until it is stopped" >&2
       fi
     }
@@ -53,7 +53,7 @@ pkgs.writeShellApplication {
     if [ -z "$target" ]; then
       case "$previous" in
         ${builtins.storeDir}/*)
-          rm -f -- "$current"
+          ${pkgs.coreutils}/bin/rm -f -- "$current"
           if [ -x "$previous/bin/codex" ]; then
             stop_daemon "$previous/bin/codex"
           fi
@@ -64,13 +64,13 @@ pkgs.writeShellApplication {
 
     # The updater's eligibility marker, left by an earlier upstream-managed
     # selection. It names a release, never a store path.
-    rm -f -- "$root/auto-update-version"
+    ${pkgs.coreutils}/bin/rm -f -- "$root/auto-update-version"
     if [ "$previous" = "$target" ]; then
       exit 0
     fi
-    mkdir -p -- "$root"
-    ln -sfn -- "$target" "$root/.current.nix"
-    mv -Tf -- "$root/.current.nix" "$current"
+    ${pkgs.coreutils}/bin/mkdir -p -- "$root"
+    ${pkgs.coreutils}/bin/ln -sfn -- "$target" "$root/.current.nix"
+    ${pkgs.coreutils}/bin/mv -Tf -- "$root/.current.nix" "$current"
     if [ -n "$previous" ]; then
       stop_daemon "$target/bin/codex"
     fi
