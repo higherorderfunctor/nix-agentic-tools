@@ -918,6 +918,18 @@
     command policy uses `ai.codex.execpolicyRules` rather than Markdown
     `ai.rules`.
 
+    Codex 0.157+ runs tool calls in a shared background daemon, which runs
+    whatever package `~/.codex/packages/app-server-daemon/current` selects and
+    otherwise updates itself from GitHub every hour. Home Manager points that
+    selection at `ai.codex.package`, turns the updater off, and stops the daemon
+    after a switch that changes the package; `ai.codex.pinDaemonToPackage = false`
+    hands it back to upstream. Home Manager also defaults
+    `features.daemon_auto_start` to false, because a daemon keeps the environment
+    of whichever session started it. Devenv runs Codex with `--no-daemon`, so
+    project sessions use the project shell and the project's Codex version. It
+    rejects `pinDaemonToPackage = false` and `features.daemon_auto_start = true`,
+    which would do nothing there.
+
     </details>
 
     <details>

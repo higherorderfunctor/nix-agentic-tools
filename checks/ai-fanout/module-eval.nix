@@ -7,7 +7,7 @@
   ...
 }: let
   inherit (harness) aiStubs evalDevenv evalHm harnessNames hmLib mkTest;
-  inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
+  inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDaemonDefault;
   # Runtimes whose app record supports the normalized settings pool. Kiro is
   # excluded: it persists effort only per model, so it declares no
   # `ai.kiro.settings` (packages/kiro-cli/checks: kiro-settings-pool-excluded).
@@ -327,7 +327,7 @@ in {
       in
         (hm.config.programs.claude-code.settings.effortLevel or null)
         == "medium"
-        && hmCodexSettings hm == {model = "gpt-6-astra";}
+        && hmCodexSettings hm == withHmDaemonDefault {model = "gpt-6-astra";}
         && (devenv.config.files.".claude/settings.json".json.effortLevel or null) == "medium"
         && devenv.config.files.".codex/config.toml".source.value == {model = "gpt-6-astra";}
     );

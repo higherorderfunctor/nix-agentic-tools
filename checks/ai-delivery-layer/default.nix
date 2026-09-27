@@ -452,6 +452,7 @@ in {
       let
         evaluated = codexExtension true;
         expected = {
+          features.daemon_auto_start = false;
           model = "generated-model";
           model_reasoning_effort = "xhigh";
           ui.theme = "dark";

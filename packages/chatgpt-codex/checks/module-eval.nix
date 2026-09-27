@@ -6,7 +6,9 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm mkTest ownPlan tomlFormat;
+  inherit (harness) aiStubs evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  daemonSettings = evaluated:
+    ownedDocument "codex" "${evaluated.config.ai.codex.configDir}/app-server-daemon/settings.json" evaluated;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
   # in the copy writer's plan, keyed by file name, not in home.file / files.
   execpolicyTarget = evaluated:
@@ -19,7 +21,7 @@
       evaluated)
     .targets;
   execpolicyUnits = evaluated: (execpolicyTarget evaluated).units;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexExtracted codexSettingsActivation hmCodexSettings;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexExtracted codexSettingsActivation hmCodexSettings withHmDaemonDefault;
 in {
   checks = {
     # ── Codex package/factory enable vertical ───────────────────────
@@ -414,7 +416,7 @@ in {
         };
       in
         hmCodexSettings hm
-        == expected
+        == withHmDaemonDefault expected
         && devenv.config.files.".codex/config.toml".source.value == expected
     );
 
@@ -423,6 +425,8 @@ in {
         config.ai.codex = {
           enable = true;
           native.settings = {
+            # Null beats Home Manager's mkDefault, as it does every default.
+            features.daemon_auto_start = null;
             model = null;
             model_reasoning_effort = null;
           };
@@ -652,7 +656,7 @@ in {
         devenvSource = devenv.config.files.".codex/config.toml".source;
       in
         hmCodexSettings hm
-        == expected
+        == withHmDaemonDefault expected
         && devenvSource.value == expected
     );
 
@@ -903,7 +907,7 @@ in {
           };
       in
         withoutBackendRoots hmSettings
-        == withoutBackendRoots devenvSettings
+        == withHmDaemonDefault (withoutBackendRoots devenvSettings)
         && hmSettings.approval_policy.granular.rules
         && !hmSettings.approval_policy.granular.request_permissions
         && hmSettings.sandbox_mode == "workspace-write"
@@ -1023,7 +1027,7 @@ in {
           };
       in
         withoutBackendRoots hmSettings
-        == withoutBackendRoots devenvSettings
+        == withHmDaemonDefault (withoutBackendRoots devenvSettings)
         && hmSettings.default_permissions == "project-edit"
         && hmSettings.permissions.project-edit.filesystem.":minimal" == "read"
         && hmSettings.permissions.project-edit.filesystem.":workspace_roots"."**/*.env" == "deny"
@@ -1292,6 +1296,131 @@ in {
           );
       in
         copies evalHm && copies evalDevenv
+    );
+
+    # ── App-server daemon ───────────────────────────────────────────────────
+    # Home Manager selects the package the shared daemon runs and turns off
+    # upstream's updater and auto-start; devenv touches none of that and runs
+    # Codex with --no-daemon. The selector's behavior against the real daemon
+    # is chatgpt-codex-daemon-selection.nix; these hold the wiring.
+    module-codex-daemon-hm-pins-package = mkTest "codex-daemon-hm-pins-package" (
+      let
+        hm = evalHm {ai.codex.enable = true;};
+        select = hm.config.home.activation.codexDaemonSelect.text;
+        # A regex needle cannot carry store-path context.
+        packageRoot = builtins.unsafeDiscardStringContext "${aiStubs.chatgpt-codex}/${aiStubs.chatgpt-codex.passthru.codexPackage.root}";
+      in
+        # It rewrites a link in the user's Codex home, so DRY_RUN must echo it.
+        hasLiteral "run /nix/store/" select
+        && hasLiteral "/bin/codex-daemon-select \"$HOME\"/.codex ${packageRoot}" select
+        && (daemonSettings hm).value == {updater.autoUpdateEnabled = false;}
+        && (hmCodexSettings hm).features.daemon_auto_start == false
+        && lib.all (assertion: assertion.assertion) hm.config.assertions
+    );
+
+    module-codex-daemon-hm-opt-outs = mkTest "codex-daemon-hm-opt-outs" (
+      let
+        unpinned = evalHm {
+          ai.codex = {
+            enable = true;
+            pinDaemonToPackage = false;
+          };
+        };
+        autoStart = evalHm {
+          ai.codex = {
+            enable = true;
+            native.settings.features.daemon_auto_start = true;
+          };
+        };
+        disabled = evalHm {ai.codex.pinDaemonToPackage = true;};
+        releases = evaluated:
+          hasLiteral "/bin/codex-daemon-select \"$HOME\"/.codex ''\n" evaluated.config.home.activation.codexDaemonSelect.text;
+        settingsTarget = evaluated: lib.head (ownPlan "codex" "codexDaemonSettingsReconcile" evaluated).targets;
+      in
+        # Unpinned: the selection is released and the updater leaf retracted,
+        # while auto-start stays off; the two are independent.
+        releases unpinned
+        && (daemonSettings unpinned).value == {}
+        && (hmCodexSettings unpinned).features.daemon_auto_start == false
+        && lib.all (assertion: assertion.assertion) unpinned.config.assertions
+        && (hmCodexSettings autoStart).features.daemon_auto_start
+        # Disabled: both writers still run, so a store selection cannot
+        # outlive the package that GC removes, and the leaf is retracted.
+        && releases disabled
+        && (settingsTarget disabled).units == {}
+        && (settingsTarget disabled).ledger == (settingsTarget unpinned).ledger
+    );
+
+    module-codex-daemon-hm-needs-package-layout = mkTest "codex-daemon-hm-needs-package-layout" (
+      let
+        foreign = pkgs.writeShellScriptBin "codex" "";
+        failure = evaluated:
+          lib.findFirst (assertion: !assertion.assertion) null evaluated.config.assertions;
+        pinned = failure (evalHm {
+          ai.codex = {
+            enable = true;
+            package = foreign;
+          };
+        });
+      in
+        pinned
+        != null
+        && hasLiteral "pinDaemonToPackage = false" pinned.message
+        && failure (evalHm {
+          ai.codex = {
+            enable = true;
+            package = foreign;
+            pinDaemonToPackage = false;
+          };
+        })
+        == null
+    );
+
+    module-codex-daemon-devenv-runs-without-daemon = let
+      devenv = evalDevenv {ai.codex.enable = true;};
+    in
+      assert lib.all (assertion: assertion.assertion) devenv.config.assertions;
+      # devenv never writes user-scope daemon state.
+      assert !lib.any (name: lib.hasInfix "daemon" (lib.toLower name)) (lib.attrNames devenv.config.tasks);
+      assert !lib.any (lib.hasInfix "app-server-daemon") (lib.attrNames devenv.config.files);
+        mkWrapperGrepTest {
+          name = "codex-daemon-devenv-runs-without-daemon";
+          package = lib.head devenv.config.packages;
+          bin = "codex";
+          needles = ["--no-daemon"];
+        };
+
+    module-codex-daemon-devenv-rejects-daemon-settings = mkTest "codex-daemon-devenv-rejects-daemon-settings" (
+      let
+        failures = config:
+          map (assertion: assertion.message)
+          (lib.filter (assertion: !assertion.assertion) (evalDevenv config).config.assertions);
+        autoStart = failures {
+          ai.codex = {
+            enable = true;
+            native.settings.features.daemon_auto_start = true;
+          };
+        };
+        unpinned = failures {
+          ai.codex = {
+            enable = true;
+            pinDaemonToPackage = false;
+          };
+        };
+      in
+        builtins.length autoStart
+        == 1
+        && hasLiteral "daemon_auto_start = true has no" (lib.head autoStart)
+        && builtins.length unpinned == 1
+        && hasLiteral "pinDaemonToPackage is Home Manager-only" (lib.head unpinned)
+        # Off is what --no-daemon already means, so it is accepted.
+        && failures {
+          ai.codex = {
+            enable = true;
+            native.settings.features.daemon_auto_start = false;
+          };
+        }
+        == []
     );
 
     module-codex-trust-is-user-global = mkTest "codex-trust-is-user-global" (

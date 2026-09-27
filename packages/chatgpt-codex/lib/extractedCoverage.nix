@@ -34,14 +34,24 @@
       # plausible declarative counterpart — it REGISTERS a WebSocket
       # exec-server as a named remote environment, which sounds like durable
       # configuration. It is not, for a reason that is about this factory
-      # rather than about the command: the Nix option surface owns no codex
-      # server-process concept at all. Grep the module and lib trees for
-      # `exec-server`, `app-server`, `remote-control` or `environment-id` and
-      # the only hits are in THIS file. Registration therefore has nothing to
-      # be declared against, and inventing an option for it would mean
-      # modelling a daemon lifecycle the factory does not otherwise manage.
-      # If codex server processes ever gain a Nix surface, this entry — and
-      # its `--connect` flag below — are the first two to reclassify.
+      # rather than about the command: the only server-process surface the
+      # factory owns is WHICH PACKAGE the shared app-server daemon runs and
+      # whether upstream's updater may replace it (`ai.codex.pinDaemonToPackage`,
+      # Home Manager only). Grep the module and lib trees for `exec-server`,
+      # `remote-control` or `environment-id` and the only hits are in THIS
+      # file and in mkCodex.nix's launcher note. Registration therefore has
+      # nothing to be declared against, and inventing an option for it would
+      # mean modelling an exec-server lifecycle the factory does not manage.
+      # If that ever gains a Nix surface, this entry — and its `--connect`
+      # flag below — are the first two to reclassify.
+      #
+      # The `codex app-server daemon` lifecycle commands stay here although
+      # the daemon's package selection now has that surface. Activation writes
+      # the selection (`packages/app-server-daemon/current`) directly rather
+      # than replaying any of them, and runs only `stop`, after a switch that
+      # changed the package. Starting a daemon stays the user's operation: a
+      # daemon keeps the environment of whoever started it, so one started
+      # from activation would serve every session with activation's.
       developerTooling = [
         "codex app-server"
         "codex app-server daemon"
@@ -67,7 +77,9 @@
 
       # Codex is installed from the pinned Nix package. Letting its self-update
       # command mutate that immutable output would bypass the overlay/update
-      # pipeline and could not survive the next generation.
+      # pipeline and could not survive the next generation. Since 0.157 the
+      # daemon's updater runs the same bypass hourly on its own; Home
+      # Manager's store selection makes it ineligible and turns it off.
       nixOwnedPackageLifecycle = [
         "codex app-server daemon update"
         "codex update"
@@ -256,6 +268,10 @@
       # `--from-cli` and `--yes` control a daemon update invocation, which can
       # copy or pin a durable daemon package. The Nix package lifecycle remains
       # owned by the pinned derivation.
+      #
+      # `--no-daemon` stays here although devenv's launcher always passes it.
+      # That is fixed launcher policy (mkCodex.nix), not a setting a user
+      # declares, and Home Manager's launcher leaves it to the invocation.
       #
       # `--worktree` — read from UPSTREAM SOURCE, not from `--help`, because
       # the one-line help ("Run the session in a new managed Git worktree")

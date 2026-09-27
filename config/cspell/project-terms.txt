@@ -398,6 +398,8 @@ repros
 rerere
 rescan
 restager
+retarget
+retargets
 revertibility
 revset
 revsets

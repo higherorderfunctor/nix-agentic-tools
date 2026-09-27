@@ -335,7 +335,8 @@ Each names a fixable entry (set `extensions` or rename the server, or
 ## AI CLI Packages
 
 > **Last verified:** 2026-09-26 — chatgpt-codex installs upstream's complete
-> `codex-package-<target>` layout so its 0.157+ background daemon can start.
+> `codex-package-<target>` layout, and Home Manager pins Codex's background
+> daemon to that package while devenv runs Codex without the daemon.
 
 ### Overview
 
@@ -392,6 +393,56 @@ result passes the unfree guard unwrapped.
 **Python application** (kiro-gateway): Built with `mkDerivation` using a
 `python.withPackages` environment. The source is fetched via inline `rev` +
 `hash` with `fetchFromGitHub`.
+
+### Codex's app-server daemon: Home Manager selects its package
+
+Since 0.157 Codex runs a shared background app-server daemon. It always runs
+`$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
+it. Left to upstream, the first start copies the invoking package into
+`releases/`, and an hourly updater then replaces it from GitHub, so a Nix bump
+never reaches the process that runs every tool call.
+
+- **Home Manager** (`ai.codex.pinDaemonToPackage`, default on). Activation
+  (`packages/chatgpt-codex/lib/daemonSelect.nix`) points `current` straight at
+  `<package>/libexec/codex` and removes any `auto-update-version` marker. A
+  selection outside `releases/` with no marker never qualifies for the updater.
+  A reconciled `updater.autoUpdateEnabled = false` leaf in
+  `app-server-daemon/settings.json` is the second guard. A switch that changes
+  the target retargets first, then runs `daemon stop`; an unchanged target does
+  nothing. Disabling Codex or the pin removes a store-pointing `current`, so GC
+  cannot leave it dangling. `false` restores upstream's copy and updater.
+- **Auto-start is off in Home Manager** (`features.daemon_auto_start` defaults
+  to false; users can opt in). A daemon keeps the environment of whoever started
+  it and serves every later client with it. With sessions open across direnv or
+  devenv projects, the first launch would define every session's tool
+  environment.
+- **devenv never touches daemon state.** Its launcher always passes
+  `--no-daemon`, the only flag that skips auto-start AND refuses to attach to a
+  running daemon. Tools see the project shell, and the devenv-pinned version is
+  what runs. `pinDaemonToPackage = false` or `daemon_auto_start = true` in
+  devenv is an assertion, not a silent no-op. With the flag, `codex agents`,
+  `codex queue` and `--remote` refuse to run; `codex remote-control` and
+  `codex app-server daemon …` ignore it and still reach the user daemon.
+- A VM or sandbox home is out of scope: the sandbox will own that home.
+- `checks/chatgpt-codex-daemon-selection.nix` runs the rendered activation
+  against the real daemon: pin, unchanged re-pin, simulated bump, unpin. A
+  store-path `current` is outside upstream's documented layout, so a release
+  that stops honoring it fails there, in its update PR.
+
+**Settled — do not relitigate.**
+
+- **`codex app-server daemon update --from-cli --yes` is not the pin.** Probed
+  2026-09-26 on 0.157.1: each run copies about 374 MB into
+  `releases/local-<blake3>-<target>`, which is never pruned; the copy's patched
+  resources point into store paths nothing roots; Nix cannot predict the name;
+  and a second run with the same package still restarted the daemon.
+- **Activation stops the daemon and never restarts it.** Restarting on change is
+  the obvious shape, and the one prior Home Manager implementation found in
+  2026-09 does it. Here it would give the daemon home-manager's activation
+  environment, and every later session would run its tools in it.
+- **`daemon_auto_start = false` does not isolate devenv.** The TUI still
+  attaches to a daemon that is already running (`startup_orchestration.rs`,
+  `existing_daemon`). Only `--no-daemon` refuses it.
 
 ### Version Tracking
 
