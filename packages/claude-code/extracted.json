@@ -392,6 +392,9 @@
       "allowAllClaudeAiMcps": {
         "type": "boolean"
       },
+      "allowClaudeInChromeWithManagedMcp": {
+        "type": "boolean"
+      },
       "allowManagedHooksOnly": {
         "type": "boolean"
       },
@@ -821,6 +824,10 @@
       "availableModels": {
         "type": "array"
       },
+      "availableModelsMatch": {
+        "enum": ["exact", "prefix"],
+        "type": "string"
+      },
       "availableModels[]": {
         "type": "string"
       },
@@ -1205,6 +1212,12 @@
         "type": "string"
       },
       "deniedMcpServers[].serverUrl": {
+        "type": "string"
+      },
+      "deniedModels": {
+        "type": "array"
+      },
+      "deniedModels[]": {
         "type": "string"
       },
       "desktopSessionCleanupPeriodDays": {
@@ -1945,6 +1958,9 @@
       "maxEffortLevel": {
         "enum": ["high", "low", "max", "medium", "xhigh"],
         "type": "string"
+      },
+      "maxProseWidth": {
+        "type": "integer"
       },
       "minimumVersion": {
         "type": "string"
@@ -3298,6 +3314,7 @@
       "agent",
       "agentPushNotifEnabled",
       "allowAllClaudeAiMcps",
+      "allowClaudeInChromeWithManagedMcp",
       "allowManagedHooksOnly",
       "allowManagedMcpServersOnly",
       "allowManagedPermissionRulesOnly",
@@ -3321,6 +3338,7 @@
       "autoUpdatesChannel",
       "autoUploadSessions",
       "availableModels",
+      "availableModelsMatch",
       "awsAuthRefresh",
       "awsCredentialExport",
       "axScreenReader",
@@ -3337,6 +3355,7 @@
       "defaultShell",
       "defaultView",
       "deniedMcpServers",
+      "deniedModels",
       "desktopSessionCleanupPeriodDays",
       "dialogExpiry",
       "disableAgentView",
@@ -3388,6 +3407,7 @@
       "managedMcpServers",
       "managedSourcesBehavior",
       "maxEffortLevel",
+      "maxProseWidth",
       "minimumVersion",
       "model",
       "modelOverrides",
