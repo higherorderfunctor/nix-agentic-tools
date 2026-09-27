@@ -514,8 +514,12 @@ runs the named aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-09-14 — verifier status precedence retains hash repair
-> when incomplete coverage accompanies a fixed-output mismatch.
+> **Last verified:** 2026-09-26 — `--use-update-script` rows must resolve
+> `updateScript` to an executable file, gated by
+> `checks.update-script-executable`. Its positive control rigs one real, present
+> target's `updateScript` and runs it through the same
+> scriptTargets/presentTargets/table pipeline as the real rows, rather than
+> testing a hand-made directory off to the side.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -674,10 +678,15 @@ registry every package contributes a row to. It replaced the flat, top-level
   `file = repoPath ./packages/<namespace>/<package>/package.nix` derives the
   mutable repository-relative path from the module's actual location. Binary
   rows use `--use-update-script`, with `--override-filename` when needed.
-  Multiple roles sharing a source have one update target; Python source slices
-  can declare `passthru.updateSource` so completeness follows their common pin.
-  Derive counts from `nix eval --json .#updateTargets`; the sweep also includes
-  root input targets, so that count is not the sweep's PR ceiling.
+  nix-update runs the first element of `updateScript` as argv[0], so it must be
+  an executable FILE: a `writeShellApplication` output is a directory and needs
+  `lib.getExe`. `checks.update-script-executable` realizes argv[0] for every row
+  present on the checking system and fails on a non-executable one (an absent
+  row is listed, not silently skipped). Multiple roles sharing a source have one
+  update target; Python source slices can declare `passthru.updateSource` so
+  completeness follows their common pin. Derive counts from
+  `nix eval --json .#updateTargets`; the sweep also includes root input targets,
+  so that count is not the sweep's PR ceiling.
 - **`.#updateTargets`** — selected from `lib/facets/repository.nix`'s native
   module evaluation. It merges discovered owner registries with workspace policy
   ; ownership validation rejects competing package keys before priorities can
@@ -774,17 +783,18 @@ belt-and-braces, not the mechanism.
 
 ### Key files
 
-| File                                         | Role                                                           |
-| -------------------------------------------- | -------------------------------------------------------------- |
-| `checks/packaging/update-targets-parity.nix` | Flake check: declared `file` == resolver output + inline rev   |
-| `config/generate-update-ninja.nix`           | Generates `.update.ninja` DAG from flake.lock + updateTargets  |
-| `config/update-targets.nix`                  | Workspace update exclusions                                    |
-| `dev/scripts/resolve-recipe-file.sh`         | Deterministic recipe resolution (fetch-block identity + guard) |
-| `dev/scripts/update-common.sh`               | Shared functions (worktree, version, report, colors)           |
-| `dev/scripts/update-init.sh`                 | Pipeline initialization (clean stale state)                    |
-| `dev/scripts/update-input.sh`                | Per-input update script                                        |
-| `dev/scripts/update-pkg.sh`                  | Per-package update script (rev bump + nix-update)              |
-| `dev/scripts/update-report.sh`               | Report printer                                                 |
-| `lib/update.nix`                             | Declares `config.update.targets` (the option declaration)      |
-| `packages/<owner>/registry.nix`              | Owner update targets, source paths, and cache metadata         |
-| `.github/workflows/update.yml`               | CI workflow (Renovate-style per-dependency PRs)                |
+| File                                            | Role                                                           |
+| ----------------------------------------------- | -------------------------------------------------------------- |
+| `checks/packaging/update-script-executable.nix` | Flake check: every `--use-update-script` argv[0] is executable |
+| `checks/packaging/update-targets-parity.nix`    | Flake check: declared `file` == resolver output + inline rev   |
+| `config/generate-update-ninja.nix`              | Generates `.update.ninja` DAG from flake.lock + updateTargets  |
+| `config/update-targets.nix`                     | Workspace update exclusions                                    |
+| `dev/scripts/resolve-recipe-file.sh`            | Deterministic recipe resolution (fetch-block identity + guard) |
+| `dev/scripts/update-common.sh`                  | Shared functions (worktree, version, report, colors)           |
+| `dev/scripts/update-init.sh`                    | Pipeline initialization (clean stale state)                    |
+| `dev/scripts/update-input.sh`                   | Per-input update script                                        |
+| `dev/scripts/update-pkg.sh`                     | Per-package update script (rev bump + nix-update)              |
+| `dev/scripts/update-report.sh`                  | Report printer                                                 |
+| `lib/update.nix`                                | Declares `config.update.targets` (the option declaration)      |
+| `packages/<owner>/registry.nix`                 | Owner update targets, source paths, and cache metadata         |
+| `.github/workflows/update.yml`                  | CI workflow (Renovate-style per-dependency PRs)                |

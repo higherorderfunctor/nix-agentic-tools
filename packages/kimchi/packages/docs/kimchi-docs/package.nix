@@ -5,9 +5,9 @@
 }: let
   inherit (pkgs) lib;
 
-  snapshotDate = "2026-09-21";
-  contentHash = "sha256-7Fek5Fs99f0WXl2CjLtVmhOl0UBlZoocEWAlcYods5k=";
-  hash = "sha256-AS1Lxia1LOB/LpTV4sFe2siLWBziZURQSOeMStQtWHY=";
+  snapshotDate = "2026-09-27";
+  contentHash = "sha256-pH61YHKIrjoxdzLV7sIs+eP5rz3MHy9Icg+ODG9Qn3E=";
+  hash = "sha256-5K652f41i48nag6E+Pj7aeVRB+Ic2dAbmuXVN0Dh8gE=";
   recipe = repoPath ./package.nix;
 
   fetchDocs = pkgs.writeShellApplication {
@@ -102,7 +102,9 @@ in
     outputHashMode = "recursive";
     impureEnvVars = lib.fetchers.proxyImpureEnvVars;
 
-    passthru = {inherit updateScript;};
+    # The executable, not the derivation: writeShellApplication outputs a
+    # DIRECTORY ($out/bin/<name>), and nix-update runs `updateScript` as argv[0].
+    passthru.updateScript = lib.getExe updateScript;
 
     meta = {
       description = "Pinned snapshot of the Kimchi documentation site";

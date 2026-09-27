@@ -2000,6 +2000,59 @@ in {
         && lib.hasInfix "Trim or replace" unicodeAssertion.message
     );
 
+    # The soft companion of the size guard: on devenv a RAISED limit lands in
+    # trust-gated project config, so a file past Codex's own 32 KiB is all an
+    # untrusted project reads, and it warns. Home Manager writes the limit to
+    # user config, which no trust gates, so it stays silent. Both backends
+    # keep the hard guard, matched by its own message.
+    module-codex-size-warning-past-default = mkTest "codex-size-warning-past-default" (
+      let
+        sized = size: lib.concatStrings (lib.replicate (size - 1) "x");
+        hm = size: projectDocMaxBytes:
+          evalHm {
+            ai.codex = {
+              context.text = sized size;
+              enable = true;
+              inherit projectDocMaxBytes;
+            };
+          };
+        devenv = size: projectDocMaxBytes:
+          evalDevenv {
+            ai = {
+              codex = {
+                enable = true;
+                inherit projectDocMaxBytes;
+              };
+              context.text = sized size;
+            };
+          };
+        sizeWarnings = evaluated: lib.filter (lib.hasInfix "in an untrusted project reads only the first") evaluated.config.warnings;
+        sizeFailures = evaluated:
+          lib.filter (assertion: !assertion.assertion && lib.hasInfix "renders to 40000 bytes, exceeding" assertion.message)
+          evaluated.config.assertions;
+        failed = evaluated: lib.filter (assertion: !assertion.assertion) evaluated.config.assertions;
+        # A store-backed replacement cannot be measured at evaluation.
+        unknown = evalDevenv {
+          ai.codex = {
+            enable = true;
+            files."AGENTS.md".content.source = pkgs.writeText "big" (sized 40000);
+            projectDocMaxBytes = 131072;
+          };
+        };
+      in
+        lib.all (backend:
+          sizeWarnings (backend 32768 131072)
+          == []
+          && sizeWarnings (backend 40000 32768) == []
+          && sizeFailures (backend 40000 32768) != []
+          && failed (backend 40000 131072) == [])
+        [hm devenv]
+        && sizeWarnings (hm 40000 131072) == []
+        && sizeWarnings (devenv 40000 131072)
+        == ["AGENTS.md is 40000 bytes; codex in an untrusted project reads only the first 32768. Trust the project in codex, or shrink the always-loaded content."]
+        && sizeWarnings unknown == []
+    );
+
     module-codex-shared-size-guard-covers-kiro-only-content = mkTest "codex-shared-size-guard-covers-kiro-only-content" (
       let
         oversized = evalDevenv {
