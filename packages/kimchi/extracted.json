@@ -196,6 +196,13 @@
         "optional": true,
         "project": true
       },
+      "region": {
+        "typeExpression": "\"us\" | \"eu\"",
+        "type": "enum",
+        "enum": ["us", "eu"],
+        "optional": true,
+        "project": false
+      },
       "skillPaths": {
         "typeExpression": "string[]",
         "type": "array",
@@ -479,6 +486,11 @@
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "controls": "PII redaction override"
+      },
+      "KIMCHI_REGION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "account region whose endpoints Kimchi uses (us or eu); overrides config.json region, and an unknown value counts as unset"
       },
       "KIMCHI_REMOTE_ENDPOINT": {
         "consumerOverridable": true,
@@ -1449,7 +1461,7 @@
   },
   "provenance": {
     "extractorSchema": 3,
-    "kimchiVersion": "1.1.33",
+    "kimchiVersion": "1.1.36",
     "piVersion": "0.85.1"
   }
 }
