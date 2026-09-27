@@ -58,7 +58,7 @@
     "aarch64-darwin" = "aarch64-apple-darwin";
     "x86_64-linux" = "x86_64-unknown-linux-musl";
   };
-  packageRoot = "libexec/codex";
+  packageRoot = (import ../../../lib/packageLayout.nix).root;
 
   # The glibc-linked resources that get their interpreter and rpath patched.
   # Everything else in the package is static and must stay untouched.

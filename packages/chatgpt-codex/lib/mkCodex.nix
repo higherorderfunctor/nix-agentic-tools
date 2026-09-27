@@ -47,6 +47,7 @@
       inherit (cfg) package;
     };
   daemonSelect = import ./daemonSelect.nix pkgs;
+  packageLayout = import ./packageLayout.nix;
   jsonFormat = pkgs.formats.json {};
   tomlFormat = pkgs.formats.toml {};
 
@@ -723,7 +724,9 @@
   daemonSettingsFile = cfg: "${cfg.configDir}/app-server-daemon/settings.json";
   daemonSettingsLedger = cfg: "json-settings/codex-daemon-settings-${builtins.hashString "sha256" (daemonSettingsFile cfg)}.json";
   daemonSettingsWriter = "codexDaemonSettingsReconcile";
-  hasDaemonLayout = cfg: cfg.package ? passthru.codexPackage;
+  # Only the layout the selector can release: a package whose complete Codex
+  # package sits anywhere else would be pinned and then never unpinned.
+  hasDaemonLayout = cfg: (cfg.package.passthru.codexPackage.root or null) == packageLayout.root;
   isDaemonPinned = cfg: cfg.enable && cfg.pinDaemonToPackage && hasDaemonLayout cfg;
   codexDaemonWriterConfig = {
     backend,
@@ -1140,7 +1143,7 @@ in
               }
               {
                 assertion = !cfg.pinDaemonToPackage || hasDaemonLayout cfg;
-                message = "ai.codex.pinDaemonToPackage needs a package carrying upstream's complete Codex package layout (passthru.codexPackage), as this flake's chatgpt-codex does, and ai.codex.package does not. Set ai.codex.pinDaemonToPackage = false to leave the daemon to upstream's own copy and updater.";
+                message = "ai.codex.pinDaemonToPackage needs a package carrying upstream's complete Codex package at ${packageLayout.root} (passthru.codexPackage.root), as this flake's chatgpt-codex does, and ai.codex.package does not. Set ai.codex.pinDaemonToPackage = false to leave the daemon to upstream's own copy and updater.";
               }
             ]
             ++ lib.optionals (!isHm) [

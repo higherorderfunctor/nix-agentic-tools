@@ -1367,6 +1367,15 @@ in {
         pinned
         != null
         && hasLiteral "pinDaemonToPackage = false" pinned.message
+        # A complete package at another root would be pinned and then never
+        # released, because the selector only removes the shape it writes.
+        && failure (evalHm {
+          ai.codex = {
+            enable = true;
+            package = foreign // {passthru.codexPackage.root = "opt/codex";};
+          };
+        })
+        != null
         && failure (evalHm {
           ai.codex = {
             enable = true;

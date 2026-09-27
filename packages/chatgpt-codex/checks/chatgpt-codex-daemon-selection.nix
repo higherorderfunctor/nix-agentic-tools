@@ -6,9 +6,10 @@
 # documented `releases/<version>-<target>`, so this check is the canary for a
 # Codex release that stops honoring it: a bump that breaks it fails here, in
 # the update PR, rather than in a user's session. It drives the activation
-# text Home Manager renders, so wiring and script are exercised together, and
-# calls the selector directly only for the simulated bump, which needs a
-# second package root no module evaluation can name.
+# text Home Manager renders, so wiring and script are exercised together. It
+# calls the selector directly only where it needs a package root no module
+# evaluation can name: the simulated bump, and the stub roots whose stop fails
+# or hangs, which drive the selector's warn-and-continue paths.
 #
 # Linux only: the daemon's pid backend and /proc are what it inspects.
 {
@@ -20,6 +21,31 @@
   codex = harness.aiStubs.chatgpt-codex;
   root = "${codex}/${codex.passthru.codexPackage.root}";
   select = import ../lib/daemonSelect.nix pkgs;
+  # The same selector with both waits cut to seconds, so the check can
+  # outlast them without taking minutes.
+  quick = select.override {
+    selectLockSeconds = 1;
+    stopTimeoutSeconds = 2;
+  };
+  # Package roots whose `codex` only stands in for `app-server daemon stop`:
+  # it fails, hangs, or succeeds and leaves a marker in the Codex home.
+  stubRoot = name: body:
+    pkgs.writeTextFile {
+      name = "codex-stub-${name}";
+      destination = "/bin/codex";
+      executable = true;
+      text = ''
+        #!${pkgs.runtimeShell}
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${body}
+      '';
+    };
+  stubs = {
+    failing = stubRoot "failing" "exit 3";
+    hanging = stubRoot "hanging" "exec ${pkgs.coreutils}/bin/sleep 60";
+    stopping = stubRoot "stopping" '': > "$CODEX_HOME/stopped"'';
+  };
   # The selection and the updater leaf, in the order Home Manager runs them.
   activation = pinDaemonToPackage: let
     entries =
@@ -154,9 +180,47 @@ in {
         [ "$(readlink "$selection/current")" = "$foreign" ] \
           || fail "unpinning removed a current it did not write"
 
+        # A stop that fails or hangs only warns: activation still succeeds and
+        # keeps the new selection, and the warning names the command to run.
+        lock="$CODEX_HOME/app-server-daemon/daemon.lock"
+        selects() {
+          ${lib.getExe quick} "$CODEX_HOME" "$1" 2> "$TMPDIR/err" \
+            || fail "the selector failed activation: $(cat "$TMPDIR/err")"
+          cat "$TMPDIR/err" >&2
+          [ "$(readlink "$selection/current")" = "$1" ] || fail "$2 lost the selection"
+        }
+        warned() {
+          grep -qF "warning: $1" "$TMPDIR/err" || fail "no warning \"$1\" on stderr: $(cat "$TMPDIR/err")"
+        }
+
+        selects ${stubs.failing} "a failed stop"
+        warned "stopping the Codex app-server daemon failed with exit status 3; it may still be running $foreign until it exits. Stop it with: CODEX_HOME=$CODEX_HOME ${stubs.failing}/bin/codex app-server daemon stop"
+
+        began="$(date +%s)"
+        selects ${stubs.hanging} "a hung stop"
+        [ $(($(date +%s) - began)) -lt 20 ] || fail "the selector waited out a hung stop"
+        warned "stopping the Codex app-server daemon did not finish within 2s"
+
+        # Another lifecycle command holding the lock past the wait: the
+        # selection is made without it, with a warning, and the stop still runs.
+        flock "$lock" sleep 60 &
+        holder=$!
+        for _ in $(seq 50); do
+          flock -n "$lock" true || break
+          sleep 0.1
+        done
+        if flock -n "$lock" true; then
+          fail "the lock holder never took the operation lock"
+        fi
+        selects ${stubs.stopping} "a busy lock"
+        kill "$holder"
+        wait "$holder" || :
+        warned "the Codex daemon operation lock stayed busy for 1s"
+        [ -e "$CODEX_HOME/stopped" ] || fail "a busy lock skipped the stop"
+
         timeout 120 ${root}/bin/codex app-server daemon stop < /dev/null > /dev/null 2>&1 || :
         pkill -f "$TMPDIR" || :
-        echo "ok: Home Manager pins, keeps, retargets and releases the Codex daemon, and leaves a foreign selection alone" > "$out"
+        echo "ok: Home Manager pins, keeps, retargets and releases the Codex daemon, leaves a foreign selection alone, and only warns when the lock stays busy or a stop fails or hangs" > "$out"
       '';
   };
 }

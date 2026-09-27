@@ -29,90 +29,115 @@
 # environment; the next launch that needs one starts it with the user's.
 pkgs: let
   inherit (pkgs) lib;
-  # Upstream's bounds (codex-rs/app-server-daemon, rust-v0.157.1):
-  # MAX_SHUTDOWN_GRACE_SECONDS in settings.rs, OPERATION_LOCK_TIMEOUT in lib.rs.
-  maxShutdownGraceSeconds = 300;
-  operationLockSeconds = maxShutdownGraceSeconds + 75;
-  # A stop first waits for the operation lock, then signals the daemon and
-  # waits out its grace period. This bound outlasts both, so `timeout` only
-  # ends a stop that hangs past upstream's own limits.
-  stopTimeoutSeconds = operationLockSeconds + maxShutdownGraceSeconds + 30;
-  # How long activation waits for another lifecycle command before it selects
-  # without the lock. Every holder is short-lived: a start, a stop, a restart
-  # or an updater tick.
-  selectLockSeconds = 30;
-  # The only selection this module writes: `<store package>/libexec/codex`,
-  # package.nix's `packageRoot`. A `current` of any other shape, a
+  # The only selection this module writes: `<store package>/<root>`, the root
+  # packageLayout.nix names. A `current` of any other shape, a
   # home-manager-files link included, belongs to someone else and is left
-  # alone. chatgpt-codex-daemon-selection fails if the two ever disagree.
-  ownedSelection = "^${lib.escapeRegex builtins.storeDir}/[^/]+/libexec/codex$";
+  # alone.
+  ownedSelection = "^${lib.escapeRegex builtins.storeDir}/[^/]+/${lib.escapeRegex (import ./packageLayout.nix).root}$";
+  # The selector's whole worst case has to fit in activation's time limit. The
+  # tightest is Home Manager's NixOS module, whose unit gives ALL of activation
+  # `TimeoutStartSec = 5m`; a selector that outlives it gets the unit killed,
+  # which fails the switch and skips every later entry. nix-darwin and a
+  # standalone `home-manager switch` set no limit. This takes under half of
+  # the 5 minutes, leaving the rest to every other entry.
+  activationBudgetSeconds = 120;
+  # A stop still running after `--kill-after` more seconds is sent SIGKILL.
+  stopKillSeconds = 5;
 in
-  pkgs.writeShellApplication {
-    name = "codex-daemon-select";
-    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
-    runtimeInputs = [pkgs.coreutils pkgs.flock];
-    text = ''
-      shopt -s inherit_errexit 2>/dev/null || :
+  # `.override` exists for chatgpt-codex-daemon-selection only, which shortens
+  # both waits to drive their warnings in seconds.
+  lib.makeOverridable ({
+    # How long activation waits for another lifecycle command to release the
+    # operation lock before it selects without it. Every holder is short-lived:
+    # a start, a stop, a restart or an updater tick.
+    selectLockSeconds ? 20,
+    # Upstream's stop waits for the operation lock, sends SIGTERM, waits the
+    # daemon's `shutdown_grace_seconds` (60 by default) and then sends SIGKILL
+    # and waits 10s more (codex-rs/app-server-daemon, rust-v0.157.1:
+    # settings.rs, backend/pid.rs). A default stop therefore fits in this
+    # bound. A user who raised the grace toward upstream's 300s maximum can
+    # outlast it; `timeout` then ends only the CLI, and the warning says so.
+    stopTimeoutSeconds ? 90,
+  }:
+    assert lib.assertMsg (selectLockSeconds + stopTimeoutSeconds + stopKillSeconds <= activationBudgetSeconds)
+    "codex-daemon-select: waiting ${toString selectLockSeconds}s for the lock and ${toString (stopTimeoutSeconds + stopKillSeconds)}s for the stop exceeds its ${toString activationBudgetSeconds}s activation budget";
+      pkgs.writeShellApplication {
+        name = "codex-daemon-select";
+        bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+        runtimeInputs = [pkgs.coreutils pkgs.flock];
+        text = ''
+          shopt -s inherit_errexit 2>/dev/null || :
 
-      codex_home="$1"
-      target="''${2-}"
-      root="$codex_home/packages/app-server-daemon"
-      current="$root/current"
-      state="$codex_home/app-server-daemon"
-      owned_selection=${lib.escapeShellArg ownedSelection}
+          codex_home="$1"
+          target="''${2-}"
+          root="$codex_home/packages/app-server-daemon"
+          current="$root/current"
+          state="$codex_home/app-server-daemon"
+          owned_selection=${lib.escapeShellArg ownedSelection}
 
-      # Nothing selected and nothing to select: leave no trace, not even the
-      # lock file, in a home that never ran the daemon.
-      if [ -z "$target" ] && [ ! -L "$current" ] && [ ! -e "$current" ]; then
-        exit 0
-      fi
-
-      ${pkgs.coreutils}/bin/mkdir -p -- "$state"
-      exec 9>> "$state/daemon.lock"
-      if ! ${pkgs.flock}/bin/flock -w ${toString selectLockSeconds} 9; then
-        echo "warning: the Codex daemon operation lock stayed busy for ${toString selectLockSeconds}s; selecting the daemon package without it" >&2
-      fi
-
-      previous=""
-      if [ -L "$current" ]; then
-        previous="$(${pkgs.coreutils}/bin/readlink "$current")"
-      elif [ -e "$current" ]; then
-        echo "ERROR: refusing to replace $current: it is not a symlink" >&2
-        false
-      fi
-
-      stop_with=""
-      if [ -z "$target" ]; then
-        if [[ $previous =~ $owned_selection ]]; then
-          ${pkgs.coreutils}/bin/rm -f -- "$current"
-          if [ -x "$previous/bin/codex" ]; then
-            stop_with="$previous/bin/codex"
+          # Nothing selected and nothing to select: leave no trace, not even the
+          # lock file, in a home that never ran the daemon.
+          if [ -z "$target" ] && [ ! -L "$current" ] && [ ! -e "$current" ]; then
+            exit 0
           fi
-        fi
-      else
-        # The updater's eligibility marker, left by an earlier upstream-managed
-        # selection. It names a release, never a store path.
-        ${pkgs.coreutils}/bin/rm -f -- "$root/auto-update-version"
-        if [ "$previous" != "$target" ]; then
-          ${pkgs.coreutils}/bin/mkdir -p -- "$root"
-          ${pkgs.coreutils}/bin/ln -sfn -- "$target" "$root/.current.nix"
-          ${pkgs.coreutils}/bin/mv -Tf -- "$root/.current.nix" "$current"
-          if [ -n "$previous" ]; then
-            stop_with="$target/bin/codex"
-          fi
-        fi
-      fi
-      exec 9>&-
 
-      # A daemon that will not stop keeps serving the old package, which is
-      # stale rather than broken, so this warns and never fails activation.
-      # Only a changed target stops, so nothing retries it: the warning is the
-      # only signal. A stop that failed while still waiting for the operation
-      # lock never signalled the daemon at all.
-      if [ -n "$stop_with" ]; then
-        if ! CODEX_HOME="$codex_home" ${pkgs.coreutils}/bin/timeout ${toString stopTimeoutSeconds} "$stop_with" app-server daemon stop < /dev/null > /dev/null; then
-          echo "warning: could not stop the Codex app-server daemon; it keeps running $previous until it is stopped" >&2
-        fi
-      fi
-    '';
-  }
+          ${pkgs.coreutils}/bin/mkdir -p -- "$state"
+          exec 9>> "$state/daemon.lock"
+          if ! ${pkgs.flock}/bin/flock -w ${toString selectLockSeconds} 9; then
+            echo "warning: the Codex daemon operation lock stayed busy for ${toString selectLockSeconds}s; selecting the daemon package without it" >&2
+          fi
+
+          previous=""
+          if [ -L "$current" ]; then
+            previous="$(${pkgs.coreutils}/bin/readlink "$current")"
+          elif [ -e "$current" ]; then
+            echo "ERROR: refusing to replace $current: it is not a symlink" >&2
+            false
+          fi
+
+          stop_with=""
+          if [ -z "$target" ]; then
+            if [[ $previous =~ $owned_selection ]]; then
+              ${pkgs.coreutils}/bin/rm -f -- "$current"
+              if [ -x "$previous/bin/codex" ]; then
+                stop_with="$previous/bin/codex"
+              fi
+            fi
+          else
+            # The updater's eligibility marker, left by an earlier upstream-managed
+            # selection. It names a release, never a store path.
+            ${pkgs.coreutils}/bin/rm -f -- "$root/auto-update-version"
+            if [ "$previous" != "$target" ]; then
+              ${pkgs.coreutils}/bin/mkdir -p -- "$root"
+              ${pkgs.coreutils}/bin/ln -sfn -- "$target" "$root/.current.nix"
+              ${pkgs.coreutils}/bin/mv -Tf -- "$root/.current.nix" "$current"
+              if [ -n "$previous" ]; then
+                stop_with="$target/bin/codex"
+              fi
+            fi
+          fi
+          exec 9>&-
+
+          # A daemon that will not stop keeps serving the old package, which is
+          # stale rather than broken, so this warns and never fails activation.
+          # Only a changed target stops, so nothing retries it: the warning is the
+          # only signal. A stop ended while still waiting for the operation lock
+          # never signalled the daemon; one ended after its SIGTERM leaves the
+          # daemon to exit on its own. Either way it may still be running, and the
+          # warning names the command that stops it.
+          if [ -n "$stop_with" ]; then
+            status=0
+            CODEX_HOME="$codex_home" ${pkgs.coreutils}/bin/timeout --kill-after=${toString stopKillSeconds} ${toString stopTimeoutSeconds} \
+              "$stop_with" app-server daemon stop < /dev/null > /dev/null || status=$?
+            if [ "$status" -ne 0 ]; then
+              if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+                reason="did not finish within ${toString stopTimeoutSeconds}s"
+              else
+                reason="failed with exit status $status"
+              fi
+              printf 'warning: stopping the Codex app-server daemon %s; it may still be running %s until it exits. Stop it with: CODEX_HOME=%q %q app-server daemon stop\n' \
+                "$reason" "$previous" "$codex_home" "$stop_with" >&2
+            fi
+          fi
+        '';
+      }) {}
