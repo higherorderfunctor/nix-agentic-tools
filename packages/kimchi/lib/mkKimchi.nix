@@ -470,6 +470,7 @@
             # `builtins.isPath` alone would write the path as the agent's text.
             content = lib.mkDefault (lib.ai.agent.fileContent (lib.ai.agent.renderKimchi name value));
             entry = "kimchiAgents";
+            format = lib.mkDefault "markdown";
             ledger = agentsLedger;
             method = lib.mkDefault "copy-ro";
             mode = lib.mkDefault "0644";

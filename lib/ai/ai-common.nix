@@ -232,6 +232,7 @@ in {
         _generated = true;
         enable = true;
       });
+    format = lib.mkDefault "markdown";
   };
 
   # One file entry per rule, rendered through a runtime's transformer with the
@@ -256,6 +257,7 @@ in {
                 text = readContent rule;
               });
           };
+          format = lib.mkDefault "markdown";
         }
         // fields))
     rules;

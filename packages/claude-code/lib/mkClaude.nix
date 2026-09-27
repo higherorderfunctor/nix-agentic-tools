@@ -888,6 +888,7 @@ in
             ai.claude.files = lib.mapAttrs' (name: value:
               lib.nameValuePair ".claude/agents/${name}.md" {
                 content = lib.mkDefault ({enable = true;} // agent.fileContent (agent.renderClaude name value));
+                format = lib.mkDefault "markdown";
               })
             mergedAgents;
           }

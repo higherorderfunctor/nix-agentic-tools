@@ -183,7 +183,10 @@
         // lib.optionalAttrs entry.content.enable (aiTypes.textSourceFile entry.content)
         // lib.optionalAttrs (entry.content.run != null) {inherit (entry.content) run;}
         // lib.optionalAttrs (entry.content.value != null) {inherit (entry.content) value;};
-    };
+    }
+    # The aggregate is Markdown whoever supplies it, except for a body that
+    # writes it at activation: those bytes are not there to build a tree from.
+    // lib.optionalAttrs (entry.content.run == null) {format = "markdown";};
   claims = lib.concatMap (runtime: let
     cfg = config.ai.${runtime};
   in
@@ -293,6 +296,7 @@ in {
                   enable = text != "";
                   inherit text;
                 };
+                format = "markdown";
               }))
           generatedRendered;
         })

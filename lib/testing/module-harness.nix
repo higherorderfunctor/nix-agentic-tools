@@ -6,6 +6,7 @@
 }: let
   mcpLib = import ../mcp.nix {inherit lib;};
   aiBase = import ../ai {inherit lib;};
+  aiTypes = import ../ai/types.nix {inherit lib;};
   # The runtime registry, shared with lib/ai/sharedOptions.nix and
   # checks/modules/options-doc.nix. Importing it rather than restating the five names
   # is what makes the tests below GROW when a sixth runtime lands: a hardcoded
@@ -340,13 +341,13 @@
     if lib.length hits == 1
     then lib.head hits
     else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
-  # Every file devenv delivers, whichever writer lands it: the native `files`
-  # sink entries for symlinks, plus each unit of an owned writer's directory
-  # plan for a read-only copy, as `{text}` or `{source}` plus its `mode`. The
-  # shared AGENTS.md owner (`ai.internal`) is a writer like any runtime. Read
-  # it where a check asks what reaches the project tree rather than how: a
-  # file that moves from a symlink to a copy stays where the check looks.
-  # Takes the evaluated `config`.
+  # Every file a backend delivers, whichever writer lands it: the native sink
+  # entries for symlinks (devenv `files`, Home Manager `home.file`), plus each
+  # unit of an owned writer's directory plan for a copy, as `{text}` or
+  # `{source}` plus its `mode`. The shared AGENTS.md owner (`ai.internal`) is
+  # a writer like any runtime. Read it where a check asks what reaches the
+  # tree rather than how: a file that moves from a symlink to a copy stays
+  # where the check looks. Takes the evaluated `config`.
   deliveredFiles = config: let
     copiesOf = target:
       lib.optionals (target.codec == "dir") (lib.mapAttrsToList (address: unit: {
@@ -365,7 +366,40 @@
       (builtins.attrValues plans))
     (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) (harnessNames ++ ["internal"]));
   in
-    builtins.listToAttrs copies // config.files;
+    builtins.listToAttrs copies // (config.files or config.home.file);
+  # The `{text}` or `{source}` a Markdown file goes INTO its runtime's
+  # Markdown tree as. What is delivered is a store path into that tree, and
+  # reading it back would be import-from-derivation, so a check about a
+  # Markdown file's content reads it here and a check about where the file
+  # lands reads `deliveredFiles` / `home.file`. Found by the final entry: the
+  # shared AGENTS.md owner (`ai.internal`) wins, because on devenv it is the
+  # one that delivers a shared key; otherwise exactly one enabled runtime must
+  # carry the path. Takes the evaluated module (`evalHm …`, `evalDevenv …`).
+  markdownInput = evaluated: path: let
+    inherit (evaluated) config;
+    owners =
+      lib.filter (runtime: (config.ai.${runtime}.enable or false) && (config.ai.${runtime}.files or {}) ? ${path})
+      harnessNames;
+    entry =
+      if (config.ai.internal.files or {}) ? ${path}
+      then config.ai.internal.files.${path}
+      else if lib.length owners == 1
+      then config.ai.${lib.head owners}.files.${path}
+      else throw "module-test: expected exactly one ai.* entry for \"${path}\", found ${toString (lib.length owners)}";
+  in
+    if entry.format == "markdown" && entry.content.enable
+    then aiTypes.textSourceFile entry.content
+    else throw "module-test: \"${path}\" is not a live Markdown entry (format `${entry.format}`)";
+  # Whether a delivered file record (`home.file.<p>`, `files.<p>`, a
+  # `deliveredFiles` entry) is `path` inside a runtime's Markdown tree.
+  fromMarkdownTree = path: file: lib.hasSuffix "-markdown/${path}" (toString (file.source or ""));
+  # A delivered Markdown file's text, once the record it lands as (in `files`:
+  # `home.file`, devenv `files`, or `deliveredFiles`) is checked to BE its
+  # Markdown tree's file. Takes the evaluated module.
+  deliveredMarkdown = evaluated: files: path:
+    if fromMarkdownTree path files.${path}
+    then (markdownInput evaluated path).text
+    else throw "module-test: ${path} is not delivered from its Markdown tree";
   # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
   # Null unless `envelope` is the file's ONLY top-level key, so a bare
   # per-server map (which Copilot and Kiro both reject) never matches.
@@ -378,6 +412,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs deliveredFiles devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs deliveredFiles deliveredMarkdown devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs fromMarkdownTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   inherit testing;
 }

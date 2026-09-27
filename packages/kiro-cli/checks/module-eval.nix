@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm hasLiteral lspEntryOf mkTest mkWrapperGrepTest ownedDocument;
+  inherit (harness) deliveredFiles evalDevenv evalHm fromMarkdownTree hasLiteral lspEntryOf markdownInput mkTest mkWrapperGrepTest ownedDocument;
   cliDocument = evaluated:
     ownedDocument "kiro" "${evaluated.config.ai.kiro.configDir}/settings/cli.json" evaluated;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
@@ -194,10 +194,11 @@ in {
           };
         };
         steering = kiroSteeringContent evaluated;
-        contextFile = ((deliveredFiles evaluated.config)."AGENTS.md" or {}).text or "";
+        contextFile = (markdownInput evaluated "AGENTS.md").text;
         namedFile = steering."named-rule.md" or null;
       in
-        lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
+        fromMarkdownTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
+        && lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
         && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
         && !(steering ? "AGENTS.md")
         && namedFile != null
@@ -1952,7 +1953,8 @@ in {
         contextFile
         != null
         && lib.hasInfix "Project conventions" (contextFile.text or "")
-        && (result.config.home.file.".kiro/steering/AGENTS.md" or {}).text == contextFile.text
+        && fromMarkdownTree ".kiro/steering/AGENTS.md" result.config.home.file.".kiro/steering/AGENTS.md"
+        && (markdownInput result ".kiro/steering/AGENTS.md").text == contextFile.text
     );
 
     # HM: top-level ai.context fans out to kiro when per-CLI unset.
@@ -2964,11 +2966,9 @@ in {
             context.text = "Project conventions go here.";
           };
         };
-        contextFile = (deliveredFiles result.config)."AGENTS.md" or null;
       in
-        contextFile
-        != null
-        && lib.hasInfix "Project conventions" (contextFile.text or "")
+        fromMarkdownTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
+        && lib.hasInfix "Project conventions" (markdownInput result "AGENTS.md").text
         && !((kiroSteeringContent result) ? "AGENTS.md")
     );
 
@@ -2979,11 +2979,9 @@ in {
           ai.kiro.enable = true;
           ai.context.text = "Top-level context flows everywhere.";
         };
-        contextFile = (deliveredFiles result.config)."AGENTS.md" or null;
       in
-        contextFile
-        != null
-        && lib.hasInfix "Top-level context" (contextFile.text or "")
+        fromMarkdownTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
+        && lib.hasInfix "Top-level context" (markdownInput result "AGENTS.md").text
     );
 
     # Devenv: agent files written.
@@ -3249,13 +3247,14 @@ in {
         hm = evalHm config;
         dv = evalDevenv config;
       in
-        hm.config.home.file.".kiro/steering/enter-test.md".text
+        fromMarkdownTree ".kiro/steering/enter-test.md" hm.config.home.file.".kiro/steering/enter-test.md"
+        && (markdownInput hm ".kiro/steering/enter-test.md").text
         == hm.config.ai.kiro.files.".kiro/steering/enter-test.md".content.text
-        && hm.config.home.file.".kiro/steering/AGENTS.md".text
-        == hm.config.ai.kiro.files.".kiro/steering/AGENTS.md".content.text
-        && (deliveredFiles dv.config).".kiro/steering/enter-test.md".text
+        && fromMarkdownTree ".kiro/steering/AGENTS.md" hm.config.home.file.".kiro/steering/AGENTS.md"
+        && fromMarkdownTree ".kiro/steering/enter-test.md" (deliveredFiles dv.config).".kiro/steering/enter-test.md"
+        && (markdownInput dv ".kiro/steering/enter-test.md").text
         == dv.config.ai.kiro.files.".kiro/steering/enter-test.md".content.text
-        && lib.hasInfix "CONTEXT-TOKEN." (deliveredFiles dv.config)."AGENTS.md".text
+        && lib.hasInfix "CONTEXT-TOKEN." (markdownInput dv "AGENTS.md").text
         && !(dv.config.files ? ".kiro/steering/enter-test.md")
         && builtins.attrNames (steeringTargetOf "ai:kiro:materialize-steering" dv).units == ["enter-test.md"]
         # Home Manager's writer only retires older copies: it declares NO
@@ -3302,16 +3301,13 @@ in {
         };
         hm = evalHm cfg;
         dv = evalDevenv cfg;
-        hmEntry = hm.config.home.file.".kiro/steering/AGENTS.md" or null;
-        dvContext = (deliveredFiles dv.config)."AGENTS.md" or null;
-        dvRule = (deliveredFiles dv.config).".kiro/steering/symlinked.md" or null;
       in
-        hmEntry
-        != null
-        && hmEntry.text == "CONSUMER-CONTEXT."
+        fromMarkdownTree ".kiro/steering/AGENTS.md" hm.config.home.file.".kiro/steering/AGENTS.md"
+        && (markdownInput hm ".kiro/steering/AGENTS.md").text == "CONSUMER-CONTEXT."
         && !(hm.config.home.file ? ".kiro/steering/symlinked.md")
-        && dvContext.text == "SYMLINK-CTX-TOKEN.\n"
-        && dvRule == null
+        && fromMarkdownTree "AGENTS.md" (deliveredFiles dv.config)."AGENTS.md"
+        && (markdownInput dv "AGENTS.md").text == "SYMLINK-CTX-TOKEN.\n"
+        && !((deliveredFiles dv.config) ? ".kiro/steering/symlinked.md")
     );
 
     # Kiro HM: top-level ai.rules → a `<name>.md` steering entry with
@@ -3594,9 +3590,10 @@ in {
             rulesDir = ./fixtures/kiro-steering;
           };
         };
-        agents = (deliveredFiles result.config)."AGENTS.md".text;
+        agents = (markdownInput result "AGENTS.md").text;
       in
-        lib.hasInfix "<!-- rule: alpha -->" agents
+        fromMarkdownTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
+        && lib.hasInfix "<!-- rule: alpha -->" agents
         && lib.hasInfix "<!-- rule: beta -->" agents
         && lib.hasInfix "<!-- rule: gamma -->" agents
         && !(lib.hasInfix "notes" agents)

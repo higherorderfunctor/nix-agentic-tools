@@ -4,10 +4,10 @@
 #
 #   * The agent instruction files (AGENTS.md, .github/copilot-instructions.md,
 #     .github/instructions/) are `ai.*`'s own read-only copies. The expected
-#     bytes are the units its writers' plans carry for THIS repository's
-#     configuration (dev/ai.nix), evaluated the way devenv evaluates it. No
-#     second renderer exists to agree with: the check reads the one that
-#     writes the tree.
+#     files are the ones its writers' plans point at for THIS repository's
+#     configuration (dev/ai.nix), evaluated the way devenv evaluates it: the
+#     built files in each runtime's Markdown tree. No second renderer exists
+#     to agree with: the check reads the one that writes the tree.
 #   * README.md and CONTRIBUTING.md are human documents dev/generate.nix
 #     renders; the `repo-*` packages are what `generate:repo:*` copies out.
 #
@@ -41,7 +41,7 @@
     repo = evalRepo false;
     repoCI = evalRepo true;
     instructionPlans = evaluated:
-      map (target: lib.mapAttrs (_: unit: unit.text or null) target.units) (
+      map (target: lib.mapAttrs (_: unit: unit.store or unit.text or null) target.units) (
         (harness.ownPlan "internal" "ai:agents-md:materialize" evaluated).targets
         ++ (harness.ownPlan "copilot" "ai:copilot:materialize-instructions" evaluated).targets
       );
@@ -60,20 +60,15 @@
       then 1
       else 0;
 
-    # The text of each unit one writer's directory target will write.
-    textsAt = runtime: writer: path: let
+    # Each unit one writer's directory target will write, as the file it
+    # copies: the built file a Markdown unit points at, or its inline text.
+    unitsAt = runtime: writer: path: let
       targets = lib.filter (target: target.path == path) (harness.ownPlan runtime writer repo).targets;
     in
       if builtins.length targets != 1
       then throw "instructions-drift: expected one ${runtime} target at ${path}, found ${toString (builtins.length targets)}"
-      else
-        lib.mapAttrs (address: unit:
-          unit.text
-          or (throw "instructions-drift: ${path}/${address} is not inline text"))
-        (builtins.head targets).units;
-    # The same units, as files.
-    unitsAt = runtime: writer: path: lib.mapAttrs pkgs.writeText (textsAt runtime writer path);
-    agentsMdText = (textsAt "internal" "ai:agents-md:materialize" ".")."AGENTS.md";
+      else lib.mapAttrs (address: unit: unit.store or (pkgs.writeText address unit.text)) (builtins.head targets).units;
+    agentsMdText = (harness.markdownInput repo "AGENTS.md").text;
     agentsMd = unitsAt "internal" "ai:agents-md:materialize" ".";
     copilotContext = unitsAt "copilot" "ai:copilot:materialize-instructions" ".github";
     copilotInstructions = pkgs.linkFarm "expected-github-instructions" (unitsAt "copilot" "ai:copilot:materialize-instructions" ".github/instructions");

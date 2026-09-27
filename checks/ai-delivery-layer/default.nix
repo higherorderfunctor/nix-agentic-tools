@@ -13,8 +13,9 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm harnessNames hasLiteral mkTest ownPlan;
+  inherit (harness) deliveredFiles evalDevenv evalHm fromMarkdownTree harnessNames hasLiteral markdownInput mkTest ownPlan;
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
+  runtimeFiles = import ../../lib/ai/runtime-files.nix {inherit lib;};
   ownedControls = import ../ai-delivery/owned-fixtures.nix {inherit harness lib;};
 
   # A file that states no fact at all takes both defaults, which is the shape
@@ -253,6 +254,40 @@
     && lib.hasInfix "shopt -s inherit_errexit 2>/dev/null || :" body
     && lib.hasPrefix "(" body
     && !lib.any usesExit (lib.splitString "\n" body);
+
+  # Every runtime enabled, with each kind of Markdown a factory generates:
+  # context, an unscoped and a scoped rule, and an agent. Nothing defines a
+  # file entry itself, so every live entry below is a factory's.
+  markdownFixture.ai =
+    {
+      agents.probe = {
+        description = "probe";
+        instructions.text = "MARKDOWN-AGENT";
+      };
+      context.text = "MARKDOWN-CONTEXT";
+      rules = {
+        always.text = "MARKDOWN-ALWAYS";
+        scoped = {
+          matcher = ["src/**"];
+          text = "MARKDOWN-SCOPED";
+        };
+      };
+    }
+    // lib.genAttrs harnessNames (_: {enable = true;});
+  markdownEvaluations = {
+    devenv = evalDevenv markdownFixture;
+    hm = evalHm markdownFixture;
+  };
+  # The files a backend delivers out of a Markdown tree, keyed by target path.
+  treeFiles = evaluated: lib.filterAttrs fromMarkdownTree (deliveredFiles evaluated.config);
+  # Every live entry of every file map, the shared AGENTS.md owner's included.
+  liveEntries = evaluated:
+    lib.concatMap (runtime:
+      lib.mapAttrsToList (path: entry: entry // {inherit path runtime;})
+      (lib.filterAttrs (_path: runtimeFiles.isLive) (evaluated.config.ai.${runtime}.files or {})))
+    (harnessNames ++ ["internal"]);
+  # The assertion messages an evaluation fails with.
+  failedMessages = evaluated: map (assertion: assertion.message) (lib.filter (assertion: !assertion.assertion) evaluated.config.assertions);
 in {
   checks = {
     module-delivery-owned-entry-controls = mkTest "delivery-owned-entry-controls" (
@@ -353,7 +388,8 @@ in {
         (target devenv).path
         == ".claude/rules"
         && lib.attrNames (target devenv).units == ["probe.md"]
-        && lib.hasInfix "PROBE-RULE" (target devenv).units."probe.md".text
+        && fromMarkdownTree ".claude/rules/probe.md" {source = (target devenv).units."probe.md".store;}
+        && lib.hasInfix "PROBE-RULE" (markdownInput devenv ".claude/rules/probe.md").text
         && !(devenv.config.files ? ".claude/rules/probe.md")
         && devenv.config.tasks ? "ai:claude:materialize-rules"
         # N→0 keeps the writer, whose empty target retracts the last copies.
@@ -365,23 +401,24 @@ in {
         && (target disabled).ledger == (target devenv).ledger
         && disabled.config.tasks ? "ai:claude:materialize-rules"
         && !(disabled.config.files ? ".claude/rules/probe.md")
-        && lib.hasInfix "PROBE-RULE" hm.config.home.file.".claude/rules/probe.md".text
+        && fromMarkdownTree ".claude/rules/probe.md" hm.config.home.file.".claude/rules/probe.md"
+        && lib.hasInfix "PROBE-RULE" (markdownInput hm ".claude/rules/probe.md").text
     );
 
     module-delivery-normalized-rule-extension-reaches-files = mkTest "delivery-normalized-rule-extension-reaches-files" (
       lib.all (
         evaluate: let
-          cfg =
-            (evaluate {
-              ai.rules.inherited.text = "INHERITED-RULE";
-              ai.kiro = {
-                enable = true;
-                normalized.rules.extra = {
-                  matcher = ["src/**"];
-                  text = "EXTRA-RULE";
-                };
+          evaluated = evaluate {
+            ai.rules.inherited.text = "INHERITED-RULE";
+            ai.kiro = {
+              enable = true;
+              normalized.rules.extra = {
+                matcher = ["src/**"];
+                text = "EXTRA-RULE";
               };
-            }).config;
+            };
+          };
+          cfg = evaluated.config;
           files =
             if cfg ? home
             then cfg.home.file
@@ -391,9 +428,10 @@ in {
             then ".kiro/steering/inherited.md"
             else "AGENTS.md";
         in
-          files ? ${inheritedPath}
-          && lib.hasInfix "INHERITED-RULE" files.${inheritedPath}.text
-          && lib.hasInfix "EXTRA-RULE" files.".kiro/steering/extra.md".text
+          fromMarkdownTree inheritedPath files.${inheritedPath}
+          && lib.hasInfix "INHERITED-RULE" (markdownInput evaluated inheritedPath).text
+          && fromMarkdownTree ".kiro/steering/extra.md" files.".kiro/steering/extra.md"
+          && lib.hasInfix "EXTRA-RULE" (markdownInput evaluated ".kiro/steering/extra.md").text
           && lib.all (assertion: assertion.assertion) cfg.assertions
       ) [evalHm evalDevenv]
     );
@@ -558,7 +596,8 @@ in {
       in
         replaced.ai.internal.files."AGENTS.md".content.text
         == "THIRD-CLAIMANT"
-        && (deliveredFiles replaced)."AGENTS.md".text == "THIRD-CLAIMANT"
+        && fromMarkdownTree "AGENTS.md" (deliveredFiles replaced)."AGENTS.md"
+        && (markdownInput {config = replaced;} "AGENTS.md").text == "THIRD-CLAIMANT"
         && lib.all (assertion: assertion.assertion) replaced.assertions
         && !suppressed.ai.internal.files."AGENTS.md".content.enable
         && !((deliveredFiles suppressed) ? "AGENTS.md")
@@ -651,9 +690,11 @@ in {
       in
         divergentFails
         && lib.all (assertion: assertion.assertion) linked.assertions
-        && linked.files."AGENTS.md".text == "SAME"
+        && fromMarkdownTree "AGENTS.md" linked.files."AGENTS.md"
+        && (markdownInput {config = linked;} "AGENTS.md").text == "SAME"
         && !(copied.files ? "AGENTS.md")
-        && (deliveredFiles copied)."AGENTS.md".text == "GENERATED\n"
+        && fromMarkdownTree "AGENTS.md" (deliveredFiles copied)."AGENTS.md"
+        && (markdownInput {config = copied;} "AGENTS.md").text == "GENERATED\n"
         && (lib.head (ownPlan "internal" "ai:agents-md:materialize" {config = copied;}).targets).path == "."
     );
 
@@ -682,7 +723,8 @@ in {
         in
           builtins.attrNames cfg.ai.kiro.normalized.rules
           == ["forced"]
-          && lib.hasInfix "FORCED-RULE" files.".kiro/steering/forced.md".text
+          && fromMarkdownTree ".kiro/steering/forced.md" files.".kiro/steering/forced.md"
+          && lib.hasInfix "FORCED-RULE" (markdownInput evaluated ".kiro/steering/forced.md").text
           && !(files ? ".kiro/steering/inherited.md")
           && !(files ? ".kiro/steering/local.md")
           && !option.internal
@@ -1662,6 +1704,79 @@ in {
         delivers = entry: entry.source == source && !(entry ? text);
       in
         delivers hm && delivers devenv
+    );
+
+    # Every Markdown file a factory generates says so: a live `.md` entry
+    # with any other format would be delivered around the Markdown tree. The
+    # suffix is only this guard's heuristic; the router selects by `format`.
+    # The fixture defines no file entry of its own, so this also covers agents,
+    # whose content carries no `_generated` marker.
+    module-delivery-markdown-format-guard = mkTest "delivery-markdown-format-guard" (
+      lib.all (evaluated:
+        lib.all (entry: entry.format == "markdown")
+        (lib.filter (entry: lib.hasSuffix ".md" entry.path) (liveEntries evaluated)))
+      (lib.attrValues markdownEvaluations)
+    );
+
+    # With nothing yet processing the tree, each file in it is its input byte
+    # for byte, on both backends, and the tree holds exactly the live Markdown
+    # entries: every one of them, and nothing else.
+    module-delivery-markdown-tree-identity = let
+      expectedFile = evaluated: path: let
+        input = markdownInput evaluated path;
+      in
+        input.source or (pkgs.writeText (lib.strings.sanitizeDerivationName (baseNameOf path)) input.text);
+      markdownPaths = evaluated: lib.sort lib.lessThan (map (entry: entry.path) (lib.filter (entry: entry.format == "markdown") (liveEntries evaluated)));
+      compare = backend: evaluated:
+        assert lib.assertMsg (lib.attrNames (treeFiles evaluated) == markdownPaths evaluated)
+        "delivery-markdown-tree-identity: ${backend} delivers ${builtins.toJSON (lib.attrNames (treeFiles evaluated))} from Markdown trees, but its live Markdown entries are ${builtins.toJSON (markdownPaths evaluated)}";
+          lib.concatStrings (lib.mapAttrsToList (path: file: ''
+              cmp -- ${file.source} ${expectedFile evaluated path} || fail ${lib.escapeShellArg "${backend} ${path}"}
+            '')
+            (treeFiles evaluated));
+    in
+      pkgs.runCommand "module-test-delivery-markdown-tree-identity" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        fail() {
+          echo "FAIL: delivery-markdown-tree-identity: $1 differs from the input it was built from" >&2
+          exit 1
+        }
+        ${lib.concatStrings (lib.mapAttrsToList compare markdownEvaluations)}
+        echo PASS > "$out"
+      '';
+
+    # A Markdown entry is one file whose bytes exist when the tree is built.
+    # `content.run` writes its bytes at activation and `recursive` names a
+    # directory, so each is refused with its own message; the same entry as
+    # `raw` is the control.
+    module-delivery-markdown-rejects-run-and-recursive = mkTest "delivery-markdown-rejects-run-and-recursive" (
+      let
+        withEntry = format: entry:
+          failedMessages (evalDevenv {
+            ai.kiro = {
+              enable = true;
+              files.".kiro/steering/probe.md" = entry // {inherit format;};
+            };
+          });
+        runEntry = {
+          content.run = "printf probe";
+          entry = "steering";
+          ledger = "materialize/kiro-steering.manifest";
+          method = "copy-ro";
+        };
+        recursiveEntry = {
+          content.source = ./fixtures/probe-skill;
+          recursive = true;
+        };
+        names = needle: messages: lib.any (lib.hasInfix needle) messages;
+        runNeedle = "has format `markdown` but its bytes";
+        recursiveNeedle = "has format `markdown` and sets";
+      in
+        names runNeedle (withEntry "markdown" runEntry)
+        && !(names runNeedle (withEntry "raw" runEntry))
+        && names recursiveNeedle (withEntry "markdown" recursiveEntry)
+        && !(names recursiveNeedle (withEntry "raw" recursiveEntry))
     );
 
     module-delivery-writers-reach-every-runtime = mkTest "delivery-writers-reach-every-runtime" (

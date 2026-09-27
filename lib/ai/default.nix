@@ -9,6 +9,10 @@ in {
   # it as its default and a replacement delegates back to it.
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
+  # `(markdown pkgs).mkTree {name, files}`: the store tree every generated
+  # Markdown file is delivered from. It lives in lib/markdown/ because it is
+  # not ai-specific.
+  markdown = import ../markdown {inherit lib;};
   # `mkLauncher pkgs {package, name, exe, …}`: the shared launcher wrapper.
   mkLauncher = import ./launcher.nix;
   mcpServer = import ./mcpServer {inherit lib;};
