@@ -36,15 +36,14 @@ in {
         && devenv.config.packages == []
     );
 
-    # The two backends legitimately install DIFFERENT derivations here, and the
-    # asymmetry is the sandbox-safe Git SSH default rather than anything about
-    # Codex. Home Manager states it in Git's own config, so nothing has to reach
-    # Codex's process environment and the upstream package ships untouched.
-    # devenv has no `programs.git`, so the same default rides Codex's launcher
-    # wrapper — deliberately, because the alternative is exporting
-    # `GIT_SSH_COMMAND` into the project shell and rewriting Git for the
-    # developer's own session too. Net effect: enabling Codex on devenv always
-    # produces a wrapper. The VALUE it carries is asserted by
+    # The two backends legitimately install DIFFERENT derivations here. devenv's
+    # launcher always passes `--no-daemon` (see mkCodex.nix), so enabling Codex
+    # on devenv always produces a wrapper, whatever the environment pool holds.
+    # The pool would force one too: devenv has no `programs.git`, so the
+    # sandbox-safe Git SSH default rides Codex's launcher rather than being
+    # exported into the project shell. Home Manager states that default in
+    # Git's own config, so with nothing else to deliver the upstream package
+    # ships untouched. The SSH VALUE is asserted by
     # `module-ai-git-ssh-default-follows-harnesses`; this one is about shape.
     module-codex-enabled-installs-package = mkTest "codex-enabled-installs-package" (
       let

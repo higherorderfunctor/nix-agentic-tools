@@ -270,8 +270,8 @@
       # owned by the pinned derivation.
       #
       # `--no-daemon` stays here although devenv's launcher always passes it.
-      # That is fixed launcher policy (mkCodex.nix), not a setting a user
-      # declares, and Home Manager's launcher leaves it to the invocation.
+      # That is fixed launcher policy (`launcherFlags` below), not a setting a
+      # user declares, and Home Manager's launcher leaves it to the invocation.
       #
       # `--worktree` — read from UPSTREAM SOURCE, not from `--help`, because
       # the one-line help ("Run the session in a new managed Git worktree")
@@ -354,6 +354,16 @@
         "--worktree"
         "--yes"
       ];
+    };
+
+    # Root flags a launcher ALWAYS passes, per backend. mkCodex.nix reads this
+    # list to build the launcher, and chatgpt-codex-coverage fails when one is
+    # gone from the extracted root flags. Upstream dropping one is a launcher
+    # change to design, not a stale disposition to delete: without
+    # `--no-daemon`, a devenv session would attach to the user's daemon and run
+    # its tools in another shell's environment.
+    launcherFlags = {
+      devenv = ["--no-daemon"];
     };
   };
 

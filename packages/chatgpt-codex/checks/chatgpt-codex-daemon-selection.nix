@@ -38,7 +38,7 @@ in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     chatgpt-codex-daemon-selection =
       pkgs.runCommand "chatgpt-codex-daemon-selection" {
-        nativeBuildInputs = [pkgs.coreutils pkgs.jq pkgs.procps];
+        nativeBuildInputs = [pkgs.coreutils pkgs.flock pkgs.jq pkgs.procps];
       } ''
         ${harness.hmRunShim}
         fail() {
@@ -69,12 +69,22 @@ in {
           fi
         }
 
+        # Every start runs the selected package in place: no copy into
+        # releases/, and no updater. Upstream re-arms its updater after every
+        # start, so each start is checked, not just the first.
         start() {
           timeout 120 "$1/bin/codex" app-server daemon start < /dev/null > start.json \
             || fail "daemon start from $1 failed"
           pid="$(jq -er .pid start.json)" || fail "daemon start reported no pid: $(cat start.json)"
           exe="$(readlink "/proc/$pid/exe")"
           [ "$exe" = "$1/bin/codex" ] || fail "daemon runs $exe, not $1/bin/codex"
+          sleep 2
+          [ ! -e "$selection/releases" ] || fail "the daemon from $1 copied the package into releases/"
+          [ ! -e "$CODEX_HOME/app-server-daemon/daemon-updater.pid" ] \
+            || fail "the daemon from $1 started its updater"
+          if pgrep -f pid-update-loop > /dev/null; then
+            fail "a pid-update-loop process is running beside the daemon from $1"
+          fi
         }
         # Gone or a zombie: an orphaned daemon is reaped by this shell, the
         # sandbox's pid 1, only between commands.
@@ -99,17 +109,20 @@ in {
 
         start ${root}
         first="$pid"
-        # The daemon ran the store package in place: no copy, and no updater.
-        sleep 2
-        [ ! -e "$selection/releases" ] || fail "the daemon copied the package into releases/"
-        [ ! -e "$CODEX_HOME/app-server-daemon/daemon-updater.pid" ] \
-          || fail "the daemon started its updater"
-        if pgrep -f pid-update-loop > /dev/null; then
-          fail "a pid-update-loop process is running"
-        fi
 
-        # An unchanged package is a no-op: the running daemon is kept.
+        # An unchanged package is a no-op: the running daemon is kept. The
+        # selection waits for upstream's operation lock: a holder that marks
+        # its release must have marked it by the time the selection returns.
+        flock "$CODEX_HOME/app-server-daemon/daemon.lock" \
+          sh -c 'touch "$1/held"; sleep 2; touch "$1/released"' _ "$TMPDIR" &
+        for _ in $(seq 50); do
+          [ ! -e "$TMPDIR/held" ] || break
+          sleep 0.1
+        done
+        [ -e "$TMPDIR/held" ] || fail "the lock holder never took the operation lock"
         pin
+        [ -e "$TMPDIR/released" ] || fail "the selection ran while another command held the operation lock"
+        wait
         kill -0 "$first" 2> /dev/null || fail "re-pinning the same package stopped the daemon"
 
         # A bump: a different root is selected and the old daemon stopped,
@@ -133,9 +146,17 @@ in {
         [ "$(updater)" = '{}' ] || fail "unpinning left updater $(updater)"
         stopped "$pid" "unpinning must stop the store daemon"
 
+        # Unpinned or disabled, the selector releases only what it writes. A
+        # store link of any other shape, such as a home.file-managed one, stays.
+        foreign=${builtins.storeDir}/00000000000000000000000000000000-home-manager-files/.codex/packages/app-server-daemon/current
+        ln -s "$foreign" "$selection/current"
+        unpin
+        [ "$(readlink "$selection/current")" = "$foreign" ] \
+          || fail "unpinning removed a current it did not write"
+
         timeout 120 ${root}/bin/codex app-server daemon stop < /dev/null > /dev/null 2>&1 || :
         pkill -f "$TMPDIR" || :
-        echo "ok: Home Manager pins, keeps, retargets and releases the Codex daemon" > "$out"
+        echo "ok: Home Manager pins, keeps, retargets and releases the Codex daemon, and leaves a foreign selection alone" > "$out"
       '';
   };
 }

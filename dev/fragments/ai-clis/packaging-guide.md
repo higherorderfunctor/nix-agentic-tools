@@ -76,7 +76,13 @@ never reaches the process that runs every tool call.
   `app-server-daemon/settings.json` is the second guard. A switch that changes
   the target retargets first, then runs `daemon stop`; an unchanged target does
   nothing. Disabling Codex or the pin removes a store-pointing `current`, so GC
-  cannot leave it dangling. `false` restores upstream's copy and updater.
+  cannot leave it dangling. `false` restores upstream's copy and updater; that
+  copy has the same voice/zsh resources as `--from-cli` below, pointing into
+  store paths nothing roots, so they break after GC until the updater replaces
+  the copy. The selection runs under upstream's daemon operation lock
+  (`app-server-daemon/daemon.lock`), released before the stop, and an unpin
+  removes only a `current` of the shape it writes
+  (`<store>/<name>/libexec/codex`).
 - **Auto-start is off in Home Manager** (`features.daemon_auto_start` defaults
   to false; users can opt in). A daemon keeps the environment of whoever started
   it and serves every later client with it. With sessions open across direnv or
@@ -93,7 +99,10 @@ never reaches the process that runs every tool call.
 - `checks/chatgpt-codex-daemon-selection.nix` runs the rendered activation
   against the real daemon: pin, unchanged re-pin, simulated bump, unpin. A
   store-path `current` is outside upstream's documented layout, so a release
-  that stops honoring it fails there, in its update PR.
+  that stops honoring it fails there, in its update PR. `--no-daemon` is listed
+  in `extractedCoverage.nix` `cli.launcherFlags`, and chatgpt-codex-coverage
+  fails, as launcher policy rather than a stale disposition, if upstream drops
+  it.
 
 **Settled — do not relitigate.**
 

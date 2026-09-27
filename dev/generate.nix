@@ -750,7 +750,10 @@
     otherwise updates itself from GitHub every hour. Home Manager points that
     selection at `ai.codex.package`, turns the updater off, and stops the daemon
     after a switch that changes the package; `ai.codex.pinDaemonToPackage = false`
-    hands it back to upstream. Home Manager also defaults
+    hands it back to upstream. Upstream's copy of this package carries patched
+    voice and zsh resources that point into store paths no GC root holds, so they break
+    after garbage collection until its updater replaces the copy. Home Manager
+    also defaults
     `features.daemon_auto_start` to false, because a daemon keeps the environment
     of whichever session started it. Devenv runs Codex with `--no-daemon`, so
     project sessions use the project shell and the project's Codex version. It

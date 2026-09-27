@@ -31,6 +31,8 @@
   # version. Clap accepts the root flag before every subcommand; `codex agents`,
   # `codex queue` and `--remote` then refuse to run, and `codex remote-control`
   # and `codex app-server daemon …` ignore it and still reach the user daemon.
+  # The flag list is `cli.launcherFlags` in extractedCoverage.nix, where
+  # chatgpt-codex-coverage fails if upstream drops one.
   codexInstallPackage = {
     backend,
     cfg,
@@ -40,7 +42,7 @@
     lib.ai.mkLauncher pkgs {
       environmentVariables = launcherEnvironment;
       exe = "codex";
-      flags = lib.optionals (backend == "devenv") ["--add-flags" "--no-daemon"];
+      flags = lib.optionals (backend == "devenv") (lib.concatMap (flag: ["--add-flags" flag]) (import ./extractedCoverage.nix).cli.launcherFlags.devenv);
       name = "chatgpt-codex-wrapped";
       inherit (cfg) package;
     };
@@ -933,8 +935,11 @@ in
           `app-server-daemon/settings.json`, and on a switch that changes the
           package stops the daemon so the next launch starts the new one.
           `false` releases the selection and restores upstream's copy and
-          hourly self-update. Home Manager only: devenv's launcher always
-          runs Codex with `--no-daemon` and rejects this option.
+          hourly self-update. That copy is taken from this package, so its
+          patched `codex-resources/{voice,zsh}` point into store paths nothing
+          roots: they break after garbage collection until upstream's updater
+          replaces the copy. Home Manager only: devenv's launcher always runs
+          Codex with `--no-daemon` and rejects `false`.
         '';
       };
       # `profiles` was removed in 2026-09-19. It was locked out from the day
