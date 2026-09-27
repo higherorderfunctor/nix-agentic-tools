@@ -241,6 +241,7 @@ librt
 libsecret
 libsets
 libstdc
+libtinfo
 libx
 licence
 licences
@@ -348,6 +349,7 @@ peaceiris
 pgvector
 pinnable
 pkgs
+pkill
 pname
 posh
 posttooluse
@@ -357,6 +359,7 @@ prepatched
 prestart
 pretrained
 prio
+procps
 psql
 pthread
 purpleclay
@@ -395,6 +398,8 @@ repros
 rerere
 rescan
 restager
+retarget
+retargets
 revertibility
 revset
 revsets

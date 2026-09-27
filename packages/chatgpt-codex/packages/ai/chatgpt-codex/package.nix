@@ -1,27 +1,40 @@
-# ChatGPT Codex CLI — standalone derivation against per-platform release
-# tarballs.
+# ChatGPT Codex CLI — standalone derivation against upstream's per-platform
+# COMPLETE PACKAGE release tarballs.
 #
-# openai/codex ships the Rust CLI as per-platform `.tar.gz` archives on
-# GitHub Releases, tagged `rust-v<version>` (the repo also cuts unrelated
-# tags, hence `tagPrefix = "rust-v"` on the version check). Each archive
-# holds ONE flat file — the target-triple-named binary, e.g.
-# `codex-x86_64-unknown-linux-musl` — with no wrapper directory, so
-# `sourceRoot = "."` and the install renames it to `$out/bin/codex`.
+# openai/codex tags Rust releases `rust-v<version>` (the repo also cuts
+# unrelated tags, hence `tagPrefix = "rust-v"` on the version check) and
+# publishes each platform twice: loose per-binary archives
+# (`codex-<target>.tar.gz`, `codex-code-mode-host-<target>.tar.gz`, …) and one
+# `codex-package-<target>.tar.gz` holding the whole runtime package:
 #
-# The release publishes EIGHT separate binaries; we ship two. `codex` is the
-# CLI. `codex-code-mode-host` is the Code Mode execution host, and Codex
-# resolves it as a SIBLING of its own executable — so it must land in this
-# derivation's `bin/`, not merely somewhere on PATH. Without it, Codex 0.147.0
-# cannot run tool calls at all: it reports `failed to spawn code-mode host
-# .../bin/codex-code-mode-host: No such file or directory` and every command
-# fails closed. Both assets are pinned in lockstep by the update pipeline via
-# `extraAssets` (see lib/packaging.nix) precisely so a bump can never move one
-# without the other.
+#   codex-package.json      {layoutVersion, version, target, entrypoint, …}
+#   bin/codex               the CLI
+#   bin/codex-code-mode-host
+#   codex-path/rg           prepended to PATH for spawned commands
+#   codex-resources/        bwrap (Linux), zsh, voice runtime
 #
-# Standalone (not overrideAttrs): there is no nixpkgs base package to
-# inherit from, and the artifact is a self-contained binary. The Linux
-# build is `static-pie linked` against musl, so unlike claude-code /
-# kimchi it needs neither autoPatchelfHook nor an interpreter patch.
+# We install the complete package, verbatim, as `$out/libexec/codex`. Codex
+# finds its package by resolving its OWN executable: `bin/codex` must sit
+# in a directory named `bin` whose parent holds `codex-package.json`
+# (codex-rs/install-context). Since 0.157.0 `daemon_auto_start` is on by
+# default, and the daemon bootstrap (codex-rs/app-server-daemon,
+# prepare_install.rs) copies that package into
+# `$CODEX_HOME/packages/app-server-daemon/` before it will start. The loose
+# binaries carry no manifest, so a Codex installed from them dies at launch
+# with "this CLI has no complete local package". The copy also rejects any
+# symlink that leaves the package root, so every file under it must be a real
+# file: nothing in there may point at another store path.
+#
+# `$out/bin/{codex,codex-code-mode-host}` are relative symlinks into the
+# package. Exec resolves them, so `current_exe` (and the launcher's
+# `.codex-wrapped` link) lands on the real `libexec/codex/bin/codex`.
+#
+# The CLI, code-mode host, rg and bwrap are static (musl on Linux) and are
+# left byte-for-byte as shipped: codex verifies the bundled bwrap against a
+# digest compiled into the CLI, and the daemon checks the copied `bin/codex`
+# against the running executable. Only the glibc-linked optional resources
+# (zsh, the voice host and its bundled GStreamer) are repointed at the nix
+# glibc, and only on Linux.
 #
 # Free (Apache-2.0). ensureUnfreeCheck in default.nix passes free packages
 # through unwrapped.
@@ -32,55 +45,78 @@
   ...
 }: let
   ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl lib;
-  inherit (ourPkgs.stdenv.hostPlatform) system;
+  inherit (ourPkgs) fetchurl lib stdenv;
+  inherit (stdenv.hostPlatform) isLinux system;
   vu = packageLib // import ../../../lib/packaging.nix;
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   platformSrc = sources.${system} or (throw "chatgpt-codex: unsupported system ${system}");
-  # Absent only if the pipeline has not yet regenerated the sidecar with the
-  # nested asset. Throw rather than silently ship a Codex that cannot execute
-  # anything — a missing host is not a degraded mode, it is a dead tool loop.
-  codeModeHostSrc =
-    platformSrc.codeModeHost
-    or (throw "chatgpt-codex: ${system} sidecar has no codeModeHost entry — re-run the update script to repin both release assets");
+
+  # Nix system -> upstream Rust target: names the release asset and is what
+  # `codex-package.json` records as `target`.
+  targets = {
+    "aarch64-darwin" = "aarch64-apple-darwin";
+    "x86_64-linux" = "x86_64-unknown-linux-musl";
+  };
+  packageRoot = (import ../../../lib/packageLayout.nix).root;
+
+  # The glibc-linked resources that get their interpreter and rpath patched.
+  # Everything else in the package is static and must stay untouched.
+  patchedResourceDirs =
+    lib.concatMapStringsSep " " (r: "$out/${packageRoot}/codex-resources/${r}") ["voice" "zsh"];
 in
-  ourPkgs.stdenv.mkDerivation (finalAttrs: {
+  stdenv.mkDerivation (finalAttrs: {
     pname = "chatgpt-codex";
     inherit (sources) version;
     src = fetchurl {inherit (platformSrc) url hash;};
 
+    # The archive has no wrapper directory: bin/, codex-package.json,
+    # codex-path/ and codex-resources/ sit at its root.
     sourceRoot = ".";
     dontStrip = true;
+    # Generic ELF rewriting would touch the static binaries the header says
+    # must stay as shipped; the autoPatchelf call below is scoped instead.
+    dontAutoPatchelf = true;
+    dontPatchELF = true;
 
-    # The archive unpacks to a single `codex-<target-triple>` file; the
-    # glob keeps this platform-agnostic so a new platform key needs no
-    # install-phase edit.
+    nativeBuildInputs = lib.optionals isLinux [ourPkgs.autoPatchelfHook];
+    # zsh needs libtinfo; the voice host brings its own GStreamer and glib and
+    # needs nothing else beyond glibc.
+    buildInputs = lib.optionals isLinux [ourPkgs.ncurses];
+
     installPhase = ''
       runHook preInstall
-      install -Dm755 codex-* $out/bin/codex
-      # Unpacked AFTER the glob above, which would otherwise match both the
-      # CLI and the host and hand `install` two sources for one destination.
-      tar xzf ${fetchurl {inherit (codeModeHostSrc) url hash;}}
-      install -Dm755 codex-code-mode-host-* $out/bin/codex-code-mode-host
+      mkdir -p $out/${packageRoot} $out/bin
+      cp -R bin codex-package.json codex-path codex-resources $out/${packageRoot}/
+      for exe in codex codex-code-mode-host; do
+        ln -s ../${packageRoot}/bin/$exe $out/bin/$exe
+      done
       runHook postInstall
     '';
 
-    # Smoke test: a static binary either execs or it does not, so an
-    # honest `--version` is a complete check that the install produced a
-    # runnable `$out/bin/codex`.
+    # The archive ships the voice libraries read-only; patchelf rewrites in
+    # place.
+    postFixup = lib.optionalString isLinux ''
+      chmod -R u+w ${patchedResourceDirs}
+      autoPatchelf ${patchedResourceDirs}
+    '';
+
+    # Smoke test only. The package-layout contract Codex enforces at runtime
+    # is asserted by checks/chatgpt-codex-package-layout.nix.
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
       $out/bin/codex --version
-      # Existence + exec bit only. The host is a long-lived server that takes
-      # no `--version`, so running it would hang the build; what actually
-      # broke was the file not being there.
-      test -x $out/bin/codex-code-mode-host
       runHook postInstallCheck
     '';
 
     passthru = {
+      # Read by checks/chatgpt-codex-package-layout.nix, so the check asserts
+      # the layout this recipe says it produces rather than a copy of it.
+      codexPackage = {
+        root = packageRoot;
+        target = targets.${system};
+      };
       updateScript = vu.mkUpdateScript {
         sourcesFile = repoPath ../../../sources.json;
 
@@ -90,17 +126,13 @@ in
           repo = "openai/codex";
           tagPrefix = "rust-v";
         };
-        platforms = {
-          "x86_64-linux" = ver: "https://github.com/openai/codex/releases/download/rust-v${ver}/codex-x86_64-unknown-linux-musl.tar.gz";
-          "aarch64-darwin" = ver: "https://github.com/openai/codex/releases/download/rust-v${ver}/codex-aarch64-apple-darwin.tar.gz";
-        };
-        # Pinned in LOCKSTEP with the CLI above — same release tag, same
-        # regeneration. Hardcoding this URL in the overlay instead would
-        # survive a bump untouched and pair a new CLI with an old host.
-        extraAssets.codeModeHost = {
-          "x86_64-linux" = ver: "https://github.com/openai/codex/releases/download/rust-v${ver}/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz";
-          "aarch64-darwin" = ver: "https://github.com/openai/codex/releases/download/rust-v${ver}/codex-code-mode-host-aarch64-apple-darwin.tar.gz";
-        };
+        # ONE asset per platform: the complete package carries the CLI and
+        # the code-mode host together, so they cannot drift apart on a bump.
+        platforms =
+          lib.mapAttrs (
+            _: target: ver: "https://github.com/openai/codex/releases/download/rust-v${ver}/codex-package-${target}.tar.gz"
+          )
+          targets;
         # Regenerate the committed sidecar from the freshly-bumped binary
         # in the SAME update/chatgpt-codex PR (no intra-PR drift).
         extraExtract = vu.mkExtractRegen {

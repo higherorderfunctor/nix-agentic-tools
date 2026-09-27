@@ -71,6 +71,14 @@
     rootCanonicalFlags = map (flag: builtins.head flag.names) extracted.cli.commands.codex.flags;
     globalCanonicalFlags = map (flag: builtins.head flag.names) extracted.cli.globalFlags;
     featureMaturities = lib.unique (map (feature: feature.maturity) extracted.features);
+    rootFlagNames = lib.concatMap (flag: flag.names) extracted.cli.commands.codex.flags;
+    # A flag a launcher always passes is policy mkCodex.nix depends on. If
+    # upstream drops it, the exact check above also calls its disposition
+    # "stale, safe to delete"; this problem says why it is not.
+    launcherFlagProblems = lib.concatLists (lib.mapAttrsToList (backend: flags:
+      lib.optional (lib.subtractLists rootFlagNames flags != [])
+      "${backend} launcher flags ${builtins.toJSON (lib.subtractLists rootFlagNames flags)} are gone from upstream's root flags: they are mkCodex.nix launcher policy (extractedCoverage.nix cli.launcherFlags), so do not just delete the disposition; redesign the ${backend} launcher first")
+    coverage.cli.launcherFlags);
     problems = lib.concatLists [
       (exactProblems "CLI commands" commandNames coveredCommands)
       (duplicateProblems "dispositions" "CLI commands" coveredCommands)
@@ -94,6 +102,7 @@
       (subsetProblems "feature maturities" featureMaturities (builtins.attrNames coverage.features.maturities))
       (recordFieldProblems "model fields" (builtins.attrNames coverage.models) extracted.models)
       (exactProblems "provenance fields" (builtins.attrNames extracted.provenance) (builtins.attrNames coverage.provenance))
+      launcherFlagProblems
     ];
   in
     assert lib.assertMsg (problems == [])

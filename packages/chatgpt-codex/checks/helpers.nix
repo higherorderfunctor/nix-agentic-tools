@@ -1,4 +1,8 @@
-{harness, ...}: let
+{
+  harness,
+  lib,
+  ...
+}: let
   inherit (harness) evalHm ownedDocument;
 
   codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
@@ -16,6 +20,11 @@
 
   codexSettingsActivation = config:
     (evalHm config).config.home.activation.codexSettingsReconcile.text;
+
+  # Home Manager alone turns daemon auto-start off by default; devenv's
+  # launcher runs without a daemon instead. Parity checks compare the rest.
+  withHmDaemonDefault = settings:
+    lib.recursiveUpdate settings {features.daemon_auto_start = false;};
 in {
-  inherit codexExtracted codexSettingsActivation hmCodexSettings;
+  inherit codexExtracted codexSettingsActivation hmCodexSettings withHmDaemonDefault;
 }

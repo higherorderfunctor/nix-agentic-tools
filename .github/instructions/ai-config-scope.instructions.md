@@ -7,12 +7,8 @@ applyTo: "dev/ai.nix,devenv.nix,packages/chatgpt-codex/lib/mkCodex.nix,packages/
 
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-23 — Kimchi's devenv facet writes native project
-> paths and guards the three exact-cwd readers only when one is declared. Kimchi
-> keeps reading user config, and `ai.kimchi.configDir` remains a Home Manager
-> output option. Copilot is the only runtime that needs an additive flag instead
-> of native project merge. Kimchi's harness settings are declared under
-> `ai.kimchi.native.harnessSettings`.
+> **Last verified:** 2026-09-26 — devenv's Codex launcher runs without the
+> shared app-server daemon, so Codex's tool calls keep the launch environment.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
 > three factories side by side: no `ai.*` runtime redirects its config root, on
@@ -94,6 +90,11 @@ attrset, which writes the project **shell** and would leak every variable into
 the developer's interactive session and everything else running in it. That is
 process-scope containment and it is orthogonal to config scope — do not cite one
 as evidence about the other.
+
+Codex's shared app-server daemon would break that containment. The daemon keeps
+the environment of whichever client started it and runs every later client's
+tools in it. devenv's Codex launcher therefore always passes `--no-daemon`; see
+`packages/chatgpt-codex/docs/codex-daemon.md`.
 
 **Kimchi's project trust is a delivery dependency.** pi derives its project
 `CONFIG_DIR_NAME` from Kimchi's packaged

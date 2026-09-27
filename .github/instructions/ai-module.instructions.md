@@ -1273,18 +1273,19 @@ path types".
 > builder publishes each record's devenv shared AGENTS.md contribution, and its
 > key in `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`.
 > Claude's `.claude.json` has an ungated mode-narrowing command writer beside
-> its unpin ledger. The builder declares the per-runtime `agents`,
-> `environmentVariables` and `lspServers` options and an opt-in `agentsDir`; a
-> record's `poolOptions` carries only what differs. `checkRecord.nix` rejects a
-> `poolOptions` key the builder would not read and a stray field in the
-> `sharedAgentsMd` result. Every reconciled document is one
-> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
-> `index` entries: Codex renders a scoped rule that names `references` as a
-> path-scoped index entry instead of inlining its body. The shared AGENTS.md map
-> lowers through the router as `internal`, as a read-only copy, and a
-> contribution's `defaultMaxBytes` makes the owner warn past it under a raised
-> `maxBytes`. Generators mark their `content` with `_generated`, so a consumer's
-> replacement of a unit's file warns like a switch-off.
+> its unpin ledger. Codex's daemon `settings.json` maps to no matrix cell. The
+> builder declares the per-runtime `agents`, `environmentVariables` and
+> `lspServers` options and an opt-in `agentsDir`; a record's `poolOptions`
+> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
+> builder would not read and a stray field in the `sharedAgentsMd` result. Every
+> reconciled document is one `helpers.mkReconciledDocument` call. A shared
+> AGENTS.md contribution may carry `index` entries: Codex renders a scoped rule
+> that names `references` as a path-scoped index entry instead of inlining its
+> body. The shared AGENTS.md map lowers through the router as `internal`, as a
+> read-only copy, and a contribution's `defaultMaxBytes` makes the owner warn
+> past it under a raised `maxBytes`. Generators mark their `content` with
+> `_generated`, so a consumer's replacement of a unit's file warns like a
+> switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1547,7 +1548,9 @@ skills use the real leaf walk. Shared devenv AGENTS.md currently comes from the
 typed `ai.internal.files` owner; Claude's native devenv MCP integration is
 observed at its existing upstream destination. Package wrappers have no file
 entry. Kimchi's `trust.json` (`ai.kimchi.projectTrust`) is a user-scope trust
-store, not a portable surface, so the specimen maps it to no cell.
+store, not a portable surface, so the specimen maps it to no cell. Codex's
+`app-server-daemon/settings.json` holds daemon updater policy, not a portable
+surface, and maps to no cell either.
 
 The production gate compares live absence against hand-authored gaps in both
 directions and verifies upstream sink correspondence. Its three body arms stay;
@@ -1682,7 +1685,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-24 — the builder entry point is
+> **Last verified:** 2026-09-26 — devenv's Codex launcher always passes
+> `--no-daemon`, so it always wraps. The builder entry point is
 > `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
 > callback. Native file settings live under `ai.<runtime>.native`
 > (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
@@ -1863,13 +1867,12 @@ three runtimes demonstrably do not perform.
   `lib.ai.mkLauncher` (`lib/ai/launcher.nix`), which Copilot's wrapper also
   calls. The wrapper is skipped entirely when it has nothing to bake in, so a
   Codex with nothing to deliver still gets the bare upstream path.
-- **On devenv that empty case is unreachable in practice.** devenv has no
-  `programs.git`, so the sandbox-safe Git SSH default (`gitSshConfigWorkaround`,
-  on by default) lands in Codex's `environmentVariables` — which means enabling
-  Codex on devenv ALWAYS builds a wrapper, while Home Manager ships it bare.
-  That divergence is asserted by `module-codex-enabled-installs-package`; if you
-  are wondering why the two backends install different store paths, this is why,
-  and it is intended.
+- **On devenv that empty case is unreachable.** devenv's Codex launcher always
+  passes `--no-daemon` (`packages/chatgpt-codex/docs/codex-daemon.md` says why),
+  so enabling Codex on devenv ALWAYS builds a wrapper, whatever the environment
+  pool holds, while Home Manager ships it bare. That divergence is asserted by
+  `module-codex-enabled-installs-package`; if you are wondering why the two
+  backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it

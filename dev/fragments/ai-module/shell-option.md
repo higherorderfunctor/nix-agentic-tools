@@ -1,6 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-24 — the builder entry point is
+> **Last verified:** 2026-09-26 — devenv's Codex launcher always passes
+> `--no-daemon`, so it always wraps. The builder entry point is
 > `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
 > callback. Native file settings live under `ai.<runtime>.native`
 > (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
@@ -181,13 +182,12 @@ three runtimes demonstrably do not perform.
   `lib.ai.mkLauncher` (`lib/ai/launcher.nix`), which Copilot's wrapper also
   calls. The wrapper is skipped entirely when it has nothing to bake in, so a
   Codex with nothing to deliver still gets the bare upstream path.
-- **On devenv that empty case is unreachable in practice.** devenv has no
-  `programs.git`, so the sandbox-safe Git SSH default (`gitSshConfigWorkaround`,
-  on by default) lands in Codex's `environmentVariables` — which means enabling
-  Codex on devenv ALWAYS builds a wrapper, while Home Manager ships it bare.
-  That divergence is asserted by `module-codex-enabled-installs-package`; if you
-  are wondering why the two backends install different store paths, this is why,
-  and it is intended.
+- **On devenv that empty case is unreachable.** devenv's Codex launcher always
+  passes `--no-daemon` (`packages/chatgpt-codex/docs/codex-daemon.md` says why),
+  so enabling Codex on devenv ALWAYS builds a wrapper, whatever the environment
+  pool holds, while Home Manager ships it bare. That divergence is asserted by
+  `module-codex-enabled-installs-package`; if you are wondering why the two
+  backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it

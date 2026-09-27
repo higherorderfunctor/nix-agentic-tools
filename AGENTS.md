@@ -104,6 +104,11 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`packages/claude-code/docs/claude-code-wrapper.md`](packages/claude-code/docs/claude-code-wrapper.md)
     - [`packages/claude-code/docs/heron-brook-clamp.md`](packages/claude-code/docs/heron-brook-clamp.md)
+- **`codex-daemon`**
+  - Match:
+    - `packages/chatgpt-codex/**`
+  - Read:
+    - [`packages/chatgpt-codex/docs/codex-daemon.md`](packages/chatgpt-codex/docs/codex-daemon.md)
 - **`delegate-sizing`**
   - Match:
     - `packages/delegate-sizing/**`

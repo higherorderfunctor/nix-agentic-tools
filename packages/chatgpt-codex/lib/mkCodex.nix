@@ -12,15 +12,29 @@
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-  # Codex's launcher, installed identically by both backends. Codex takes its
+  # Codex's launcher, installed by both backends. Codex takes its
   # command shell from `SHELL` in its OWN process environment (via
   # `portable_pty`) and has no config key for it: `shell_environment_policy`
   # filters what SPAWNED commands inherit, which is a different thing. So the
   # launcher is the only declarative place for it and for the rest of the
   # environment pool. When `SHELL` is unset or not executable Codex falls back
   # to the PASSWORD-DATABASE shell, so leaving it unset is not neutral. With
-  # nothing to bake in, the bare upstream package is installed.
+  # nothing to bake in, the bare upstream package is installed (Home Manager
+  # only).
+  #
+  # devenv's launcher also always passes `--no-daemon`, the one flag that both
+  # skips auto-start AND refuses to attach to a daemon already running. A
+  # daemon is shared by every client and keeps the environment of whoever
+  # started it (codex-rs/app-server-daemon/README.md, rust-v0.157.1), and it
+  # runs the package Home Manager selected, so without the flag a project
+  # session would run its tools in another shell's environment and on another
+  # version. Clap accepts the root flag before every subcommand; `codex agents`,
+  # `codex queue` and `--remote` then refuse to run, and `codex remote-control`
+  # and `codex app-server daemon …` ignore it and still reach the user daemon.
+  # The flag list is `cli.launcherFlags` in extractedCoverage.nix, where
+  # chatgpt-codex-coverage fails if upstream drops one.
   codexInstallPackage = {
+    backend,
     cfg,
     launcherEnvironment,
     ...
@@ -28,9 +42,12 @@
     lib.ai.mkLauncher pkgs {
       environmentVariables = launcherEnvironment;
       exe = "codex";
+      flags = lib.optionals (backend == "devenv") (lib.concatMap (flag: ["--add-flags" flag]) (import ./extractedCoverage.nix).cli.launcherFlags.devenv);
       name = "chatgpt-codex-wrapped";
       inherit (cfg) package;
     };
+  daemonSelect = import ./daemonSelect.nix pkgs;
+  packageLayout = import ./packageLayout.nix;
   jsonFormat = pkgs.formats.json {};
   tomlFormat = pkgs.formats.toml {};
 
@@ -690,6 +707,51 @@
       runWhenDisabled = true;
     };
   };
+  # Home Manager owns the user-scope daemon state under the Codex home: which
+  # package the shared daemon runs (daemonSelect.nix) and one updater leaf in
+  # the daemon's settings.json. devenv writes neither; see its assertions.
+  #
+  # The leaf is the second guard, beside a selection the updater already
+  # rejects. Codex re-reads it on every updater tick (update_loop.rs), so it
+  # also retires an updater left running by an earlier upstream selection, and
+  # Codex's own writer rewrites only `remoteControlEnabled` and
+  # `featureOverrides` (settings.rs), so the leaf is safe to own.
+  #
+  # Both writers run while disabled, so the generation that disables Codex or
+  # the pin releases a store selection before GC can leave it dangling, and
+  # retracts the leaf.
+  daemonSelectWriter = "codexDaemonSelect";
+  daemonSettingsFile = cfg: "${cfg.configDir}/app-server-daemon/settings.json";
+  daemonSettingsLedger = cfg: "json-settings/codex-daemon-settings-${builtins.hashString "sha256" (daemonSettingsFile cfg)}.json";
+  daemonSettingsWriter = "codexDaemonSettingsReconcile";
+  # Only the layout the selector can release: a package whose complete Codex
+  # package sits anywhere else would be pinned and then never unpinned.
+  hasDaemonLayout = cfg: (cfg.package.passthru.codexPackage.root or null) == packageLayout.root;
+  isDaemonPinned = cfg: cfg.enable && cfg.pinDaemonToPackage && hasDaemonLayout cfg;
+  codexDaemonWriterConfig = {
+    backend,
+    cfg,
+    ...
+  }:
+    lib.optionalAttrs (backend == "hm") {
+      ai.codex.activation = {
+        ${daemonSelectWriter} = {
+          # The router supplies strict mode, the scoped subshell and the final
+          # newline, so the command ends at its last character.
+          command = ''run ${lib.getExe daemonSelect} "$HOME"/${lib.escapeShellArg cfg.configDir} ${lib.escapeShellArg (
+              lib.optionalString (isDaemonPinned cfg) "${cfg.package}/${cfg.package.passthru.codexPackage.root}"
+            )}'';
+          runWhenDisabled = true;
+        };
+        ${daemonSettingsWriter} = {
+          ledgers.${daemonSettingsLedger cfg} = {
+            codec = "json";
+            path = daemonSettingsFile cfg;
+          };
+          runWhenDisabled = true;
+        };
+      };
+    };
   mkExecpolicyEntries = prefix:
     lib.mapAttrs' (name: content:
       lib.nameValuePair "${prefix}/rules/${name}.rules" {
@@ -866,6 +928,23 @@ in
           it will run.
         '';
       };
+      pinDaemonToPackage = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Run Codex's shared app-server daemon from `ai.codex.package`. Home
+          Manager points `packages/app-server-daemon/current` in the Codex
+          home at the package, disables upstream's updater in
+          `app-server-daemon/settings.json`, and on a switch that changes the
+          package stops the daemon so the next launch starts the new one.
+          `false` releases the selection and restores upstream's copy and
+          hourly self-update. That copy is taken from this package, so its
+          patched `codex-resources/{voice,zsh}` point into store paths nothing
+          roots: they break after garbage collection until upstream's updater
+          replaces the copy. Home Manager only: devenv's launcher always runs
+          Codex with `--no-daemon` and rejects `false`.
+        '';
+      };
       # `profiles` was removed in 2026-09-19. It was locked out from the day
       # it landed and cannot restrict Codex skill or AGENTS.md discovery.
       projectDocMaxBytes = lib.mkOption {
@@ -911,7 +990,11 @@ in
       context = agentsMdPath backend cfg;
       rules = lib.mapAttrs (_name: _rule: agentsMdPath backend cfg) mergedRules;
     };
-    migrationConfig = codexExecpolicyWriterConfig;
+    migrationConfig = args:
+      lib.mkMerge [
+        (codexDaemonWriterConfig args)
+        (codexExecpolicyWriterConfig args)
+      ];
     # Every rule, scope-prefixed or indexed, under Codex's size limit.
     sharedAgentsMd = {
       cfg,
@@ -1058,8 +1141,32 @@ in
                 assertion = !(cfg.execpolicyRules ? default);
                 message = "ai.codex.execpolicyRules.default is reserved in Home Manager because Codex writes user allow-list decisions to rules/default.rules; choose another rule filename";
               }
+              {
+                assertion = !cfg.pinDaemonToPackage || hasDaemonLayout cfg;
+                message = "ai.codex.pinDaemonToPackage needs a package carrying upstream's complete Codex package at ${packageLayout.root} (passthru.codexPackage.root), as this flake's chatgpt-codex does, and ai.codex.package does not. Set ai.codex.pinDaemonToPackage = false to leave the daemon to upstream's own copy and updater.";
+              }
             ]
             ++ lib.optionals (!isHm) [
+              # The launcher's `--no-daemon` makes both of these no-ops in a
+              # project, so each is refused rather than silently dropped.
+              {
+                assertion = lib.attrByPath ["features" "daemon_auto_start"] null settings != true;
+                message = ''
+                  ai.codex.native.settings.features.daemon_auto_start = true has no
+                  effect under devenv: its Codex launcher always passes --no-daemon,
+                  so tool calls run in the project shell's environment. Enable the
+                  daemon in the Home Manager user-level configuration.
+                '';
+              }
+              {
+                assertion = cfg.pinDaemonToPackage;
+                message = ''
+                  ai.codex.pinDaemonToPackage is Home Manager-only: the daemon's
+                  package selection lives in the user's Codex home, which devenv
+                  never writes, and devenv's Codex launcher always passes
+                  --no-daemon. Move it to the Home Manager user-level configuration.
+                '';
+              }
               {
                 assertion = ignoredSettings == [];
                 message = ''
@@ -1128,6 +1235,25 @@ in
         }
 
         (lib.optionalAttrs isHm (lib.mkMerge [
+          (helpers.mkReconciledDocument {
+            content.value = lib.optionalAttrs cfg.pinDaemonToPackage {
+              updater.autoUpdateEnabled = false;
+            };
+            format = "json";
+            ledger = daemonSettingsLedger cfg;
+            path = daemonSettingsFile cfg;
+            runtime = "codex";
+            writer = daemonSettingsWriter;
+          })
+          {
+            # A daemon keeps the environment of whichever client started it,
+            # and serves every later client with it: per-client environment
+            # isolation is not provided (codex-rs/app-server-daemon/README.md,
+            # rust-v0.157.1). With sessions open across several direnv or
+            # devenv projects, the first launch would decide the tool
+            # environment of all of them, so auto-start is opt-in here.
+            ai.codex.native.settings.features.daemon_auto_start = lib.mkDefault false;
+          }
           # The user config is not wholly declarative: Codex's trust prompt
           # persists project decisions here via config/batchWrite. Reconcile
           # only Nix-owned leaves, retaining native trust/MCP/feature siblings.
