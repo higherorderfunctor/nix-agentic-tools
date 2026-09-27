@@ -1868,12 +1868,11 @@ three runtimes demonstrably do not perform.
   calls. The wrapper is skipped entirely when it has nothing to bake in, so a
   Codex with nothing to deliver still gets the bare upstream path.
 - **On devenv that empty case is unreachable.** devenv's Codex launcher always
-  passes `--no-daemon` (the app-server daemon section of the ai-clis packaging
-  guide says why), so enabling Codex on devenv ALWAYS builds a wrapper, whatever
-  the environment pool holds, while Home Manager ships it bare. That divergence
-  is asserted by `module-codex-enabled-installs-package`; if you are wondering
-  why the two backends install different store paths, this is why, and it is
-  intended.
+  passes `--no-daemon` (`packages/chatgpt-codex/docs/codex-daemon.md` says why),
+  so enabling Codex on devenv ALWAYS builds a wrapper, whatever the environment
+  pool holds, while Home Manager ships it bare. That divergence is asserted by
+  `module-codex-enabled-installs-package`; if you are wondering why the two
+  backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it

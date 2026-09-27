@@ -87,7 +87,7 @@ as evidence about the other.
 Codex's shared app-server daemon would break that containment. The daemon keeps
 the environment of whichever client started it and runs every later client's
 tools in it. devenv's Codex launcher therefore always passes `--no-daemon`; see
-the daemon section of `dev/fragments/ai-clis/packaging-guide.md`.
+`packages/chatgpt-codex/docs/codex-daemon.md`.
 
 **Kimchi's project trust is a delivery dependency.** pi derives its project
 `CONFIG_DIR_NAME` from Kimchi's packaged
