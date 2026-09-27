@@ -287,7 +287,7 @@
   # explicit entry (`environmentVariables.SHELL` included) wins. Claude has
   # no launcher and lowers the parts into `settings.env` instead.
   callbackArgs = {
-    inherit backend cfg config moduleEnvironmentVariables options;
+    inherit backend cfg config moduleEnvironmentVariables;
     inherit (cfg) normalized;
     launcherEnvironment =
       moduleEnvironmentVariables

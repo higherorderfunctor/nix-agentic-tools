@@ -62,8 +62,7 @@
 #
 # The callbacks receive ONE attrset, assembled in exactly one place —
 # `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
-# trusting a list here. It carries `backend`, `cfg`, `config`, `options`,
-# `normalized`,
+# trusting a list here. It carries `backend`, `cfg`, `config`, `normalized`,
 # every `merged*` pool, `resolvedSettings`, `resolvedShell`, `mergedContext`,
 # `launcherEnvironment` and `topHooks`; every callback takes `...`, so a
 # stale list here would mislead without ever breaking a build.

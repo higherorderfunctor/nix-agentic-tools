@@ -876,10 +876,12 @@ in
           before Codex can silently truncate content beyond this limit. A value
           other than Codex's own default (32768) is also written to Codex's
           `project_doc_max_bytes` at default priority, so Codex reads as much
-          as this guard admits in a trusted project. Codex applies project
-          config only there, so when a raised limit admits a file larger than
-          32768 bytes, evaluation warns that an untrusted session reads only
-          the first 32768.
+          as this guard admits. On devenv that key lands in the project's
+          `.codex/config.toml`, which Codex applies only in a trusted project,
+          so when a raised limit admits a file larger than 32768 bytes,
+          evaluation warns that an untrusted session reads only the first
+          32768. Home Manager writes it to user config, which no trust gates,
+          so it does not warn.
         '';
       };
       native.settings = lib.mkOption {
@@ -932,7 +934,6 @@ in
       mergedRules,
       mergedServers,
       mergedSkills,
-      options,
       resolvedSettings,
       topHooks,
       ...
@@ -1000,17 +1001,6 @@ in
         else "${config.devenv.state}/nix-agentic-tools/codex-skill-layout-b";
     in
       lib.mkMerge [
-        # Beside the hard guard below, on the same final entry. A caller
-        # without a `warnings` option (the options-doc evaluation) gets none.
-        (lib.optionalAttrs (isHm && options ? warnings) {
-          warnings = aiCommon.sizeWarning {
-            defaultBytes = codexProjectDocMaxBytes;
-            entry = finalAgentsMdEntry;
-            filename = agentsMdTarget;
-            maxBytes = cfg.projectDocMaxBytes;
-            reader = "codex";
-          };
-        })
         {
           ai.codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
             if isHm

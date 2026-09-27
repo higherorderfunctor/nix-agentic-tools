@@ -571,6 +571,26 @@ in {
             rules.probe.text = "RULE";
           };
         };
+        # Every runtime's ordinary generated files carry the `_generated`
+        # marker: with nothing overridden, no unit reads as replaced.
+        ordinary = mode:
+          evaluate mode {
+            ai = {
+              claude.enable = true;
+              codex.enable = true;
+              context.text = "CTX";
+              copilot.enable = true;
+              kimchi.enable = true;
+              kiro.enable = true;
+              rules = {
+                probe.text = "RULE";
+                scoped = {
+                  matcher = ["src/**"];
+                  text = "SCOPED";
+                };
+              };
+            };
+          };
         nothing = evaluate "devenv" {
           ai.codex = {
             enable = true;
@@ -599,6 +619,8 @@ in {
         && !(contains "the file that carries it" withheld)
         && !(contains "the file that carries it" symlinked)
         && !(contains "the file that carries it" nothing)
+        && !(contains "the file that carries it" (ordinary "hm"))
+        && !(contains "the file that carries it" (ordinary "devenv"))
         && !(contains "the file that carries it" nothingReplaced)
     );
 
