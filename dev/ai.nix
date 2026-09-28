@@ -10,8 +10,13 @@
 # files with what this module delivers. `isCI` is a parameter rather than a
 # `getEnv` read here so the check stays pure. It gates package installation
 # only: the committed bytes must not depend on the environment that evaluates
-# them, which that check proves by evaluating both values.
-{isCI}: {
+# them, which that check proves by evaluating both values. `treefmt-nix` is
+# a parameter for the same reason: the check evaluates this module alone, and
+# the house Markdown formatter is built from it.
+{
+  isCI,
+  treefmt-nix,
+}: {
   config,
   lib,
   pkgs,
@@ -53,6 +58,11 @@ in {
     # path-scoped rule per architecture-fragment category.
     context.text = gen.context;
     rules = gen.rules // swsRouter;
+
+    # Generated Markdown is formatted with the same treefmt config as every
+    # tracked file, so a committed projection is already what `nix fmt`
+    # produces. The check stays the lib default.
+    markdown.formatter = (import ./house-markdown.nix {inherit pkgs treefmt-nix;}).formatter;
 
     # Every harness executes its commands under nix bash rather than the
     # login shell. zsh's glob engine is superlinear in candidate entries

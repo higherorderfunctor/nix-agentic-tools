@@ -163,9 +163,10 @@ in {
       in
         fromMarkdownTree ".config/kimchi/harness/AGENTS.md" hm.config.home.file.".config/kimchi/harness/AGENTS.md"
         && (markdownInput hm ".config/kimchi/harness/AGENTS.md").text == expected
-        # The shared repository AGENTS.md ends in one newline.
+        # The shared repository AGENTS.md composes the same text; the
+        # formatter adds its trailing newline in the tree.
         && fromMarkdownTree "AGENTS.md" (deliveredFiles devenv.config)."AGENTS.md"
-        && (markdownInput devenv "AGENTS.md").text == expected + "\n"
+        && (markdownInput devenv "AGENTS.md").text == expected
     );
     # ── Kimchi (mkRuntime factory participant) ──────────────────────────
     module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);

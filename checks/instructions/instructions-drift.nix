@@ -6,8 +6,9 @@
 #     .github/instructions/) are `ai.*`'s own read-only copies. The expected
 #     files are the ones its writers' plans point at for THIS repository's
 #     configuration (dev/ai.nix), evaluated the way devenv evaluates it: the
-#     built files in each runtime's Markdown tree. No second renderer exists
-#     to agree with: the check reads the one that writes the tree.
+#     built files in each runtime's Markdown tree, already formatted by the
+#     house formatter and checked there. No second renderer exists to agree
+#     with: the check reads the one that writes the tree.
 #   * README.md and CONTRIBUTING.md are human documents dev/generate.nix
 #     renders; the `repo-*` packages are what `generate:repo:*` copies out.
 #
@@ -25,6 +26,7 @@
 # path filter to fall through.
 {
   harness,
+  inputs,
   lib,
   pkgs,
   self,
@@ -37,7 +39,13 @@
     # dev/ai.nix gates Semble's install on `isCI`, and nothing else may read
     # it: the committed bytes must not depend on who evaluates them. Both
     # values are evaluated and their instruction plans must agree.
-    evalRepo = isCI: harness.evalDevenvModules [(import ../../dev/ai.nix {inherit isCI;})];
+    evalRepo = isCI:
+      harness.evalDevenvModules [
+        (import ../../dev/ai.nix {
+          inherit isCI;
+          inherit (inputs) treefmt-nix;
+        })
+      ];
     repo = evalRepo false;
     repoCI = evalRepo true;
     instructionPlans = evaluated:

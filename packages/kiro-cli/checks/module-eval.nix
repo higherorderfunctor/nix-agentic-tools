@@ -3307,7 +3307,7 @@ in {
         && (markdownInput hm ".kiro/steering/AGENTS.md").text == "CONSUMER-CONTEXT."
         && !(hm.config.home.file ? ".kiro/steering/symlinked.md")
         && fromMarkdownTree "AGENTS.md" (deliveredFiles dv.config)."AGENTS.md"
-        && (markdownInput dv "AGENTS.md").text == "SYMLINK-CTX-TOKEN.\n"
+        && (markdownInput dv "AGENTS.md").text == "SYMLINK-CTX-TOKEN."
         && !((deliveredFiles dv.config) ? ".kiro/steering/symlinked.md")
     );
 

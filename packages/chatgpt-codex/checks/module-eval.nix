@@ -1821,14 +1821,14 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected =
-          builtins.concatStringsSep "\n\n" [
-            "<!-- rule: alpha -->\n\nAlpha rule"
-            "<!-- rule: zeta -->\n\nZeta rule"
-            "Shared context"
-            "Codex context"
-          ]
-          + "\n";
+        # The composed input, before the formatter settles blank lines and the
+        # trailing newline.
+        expected = builtins.concatStringsSep "\n\n" [
+          "<!-- rule: alpha -->\n\nAlpha rule"
+          "<!-- rule: zeta -->\n\nZeta rule"
+          "Shared context"
+          "Codex context"
+        ];
       in
         hmAgentsMd hm
         == expected
@@ -1847,7 +1847,7 @@ in {
         empty = evalHm {ai.codex.enable = true;};
       in
         hmAgentsMd hm
-        == "Shared context\n"
+        == "Shared context"
         && !(empty.config.home.file ? ".codex/AGENTS.md")
     );
 
@@ -1885,7 +1885,7 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected = "<!-- rule: scoped -->\n\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule\n";
+        expected = "<!-- rule: scoped -->\n\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule";
       in
         hmAgentsMd hm
         == expected
@@ -1922,20 +1922,18 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected =
-          builtins.concatStringsSep "\n\n" [
-            (
-              "## Path-scoped rules\n\n"
-              + "Before editing a path that matches an entry below, read every document listed\n"
-              + "for it. When several entries match, their guidance composes.\n\n"
-              + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
-              + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
-              + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)"
-            )
-            "<!-- rule: always -->\n\nAlways body"
-            "Shared context"
-          ]
-          + "\n";
+        expected = builtins.concatStringsSep "\n\n" [
+          (
+            "## Path-scoped rules\n\n"
+            + "Before editing a path that matches an entry below, read every document listed\n"
+            + "for it. When several entries match, their guidance composes.\n\n"
+            + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
+            + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
+            + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)\n"
+          )
+          "<!-- rule: always -->\n\nAlways body"
+          "Shared context"
+        ];
       in
         hmAgentsMd hm
         == expected
@@ -1973,8 +1971,10 @@ in {
     # Codex's limit is checked on the BUILT file, in the Markdown tree that
     # delivers it. Home Manager keys it by `.codex/AGENTS.md`, so a
     # replacement is measured as well as the generated file: the delivered
-    # file is exactly the tree `mkTree` builds with that limit, and that tree
-    # fails its build one byte past the limit. The byte arithmetic itself is
+    # file is exactly the tree `mkTree` builds with that limit (and the
+    # evaluation's formatter and check), and that tree fails its build one byte
+    # past the limit. The replacement ends in a newline so the formatter leaves
+    # its size alone. The byte arithmetic itself is
     # `checks/markdown/markdown-byte-limit-scripts.nix`.
     module-codex-agents-md-byte-limit = let
       path = ".codex/AGENTS.md";
@@ -1993,13 +1993,14 @@ in {
         evalHm {
           ai.codex = {
             enable = true;
-            files.${path}.content.text = lib.concatStrings (lib.replicate size "x");
+            files.${path}.content.text = lib.concatStrings (lib.replicate (size - 1) "x") + "\n";
           };
         };
       treeOf = evaluated:
         (aiBase.markdown pkgs).mkTree {
           name = "ai-hm-codex-markdown";
           files.${path} = markdownInput evaluated path;
+          inherit (evaluated.config.ai.markdown) check formatter;
           maxBytes = limit;
         };
       deliversFrom = tree: evaluated: evaluated.config.home.file.${path}.source == "${tree}/${path}";
@@ -2091,6 +2092,7 @@ in {
       tree = (aiBase.markdown pkgs).mkTree {
         name = "ai-devenv-internal-markdown";
         files."AGENTS.md" = markdownInput oversized "AGENTS.md";
+        inherit (oversized.config.ai.markdown) check formatter;
         maxBytes = limit;
       };
       failure = pkgs.testers.testBuildFailure tree;

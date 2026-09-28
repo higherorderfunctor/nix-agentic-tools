@@ -300,7 +300,7 @@ in {
       in
         fromMarkdownTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
         && agents
-        == "<!-- rule: shared -->\n\nShared rule.\n\nShared context.\n"
+        == "<!-- rule: shared -->\n\nShared rule.\n\nShared context."
         && !(lib.hasInfix "---" agents)
     );
 

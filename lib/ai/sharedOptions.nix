@@ -1,5 +1,6 @@
 # Declares cross-app options (ai.context, ai.mcpServers,
-# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks).
+# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and ai.markdown: how
+# every runtime's generated Markdown is formatted and checked.
 #
 # Imported by every mkRuntime module so per-app layers
 # (ai.<name>.mcpServers, etc.) compose with these top-level pools. Scalar
@@ -18,6 +19,7 @@
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
+  markdown = import ../markdown {inherit lib;} pkgs;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
@@ -154,6 +156,55 @@ in {
         native artifact.
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
+    };
+
+    markdown = {
+      formatter = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = markdown.defaultFormatter;
+        defaultText = lib.literalExpression "(lib.ai.markdown pkgs).defaultFormatter";
+        example = lib.literalExpression ''
+          let
+            fmt = inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+          in "''${lib.getExe fmt.config.package} --config-file ''${fmt.config.build.configFile} --tree-root . --walk filesystem --no-cache"
+        '';
+        description = ''
+          Shell snippet that formats the Markdown every enabled runtime is
+          delivered: rules, context, AGENTS.md and agents, including the text
+          you supply through `ai.*`. Each runtime's Markdown is built into one
+          store tree at its target paths, and this runs in the build sandbox
+          with that tree as its working directory, so it sees
+          `.claude/rules/foo.md`, `AGENTS.md` and so on, and formats in place.
+
+          The default runs prettier with `proseWrap = "always"` over every
+          `*.md` file. Setting this REPLACES the default; `null` formats
+          nothing. Opt one file out with
+          `ai.<runtime>.files."<path>".format = "raw"`.
+
+          Two traps for a treefmt formatter. Use the raw treefmt binary with
+          `--tree-root .`, not devenv's `treefmt` wrapper: the wrapper
+          hardcodes your project directory as the tree root, so in the sandbox
+          it formats the wrong tree. And your treefmt excludes apply by target
+          path inside the tree: excluding `AGENTS.md` skips it here too.
+        '';
+      };
+      check = lib.mkOption {
+        type = lib.types.lines;
+        default = "";
+        defaultText = lib.literalMD "the Markdown table-cell check (`(lib.ai.markdown pkgs).defaultCheck`: rumdl and markdownlint-cli2 MD056), contributed at normal priority so your definitions append to it";
+        description = ''
+          Shell snippet that checks each runtime's built Markdown tree, run in
+          the tree's install check with the installed tree as its working
+          directory. Paths are target-relative (`.claude/rules/foo.md`), and a
+          non-zero exit fails the build.
+
+          The default rejects a table whose rows disagree on their cell count.
+          Your definitions APPEND to it; `lib.mkForce` replaces it, and
+          `lib.mkForce ""` checks nothing. markdownlint-cli2 reads its
+          arguments as globs, so the default skips a path containing `[`,
+          `*` or `?` in that half of the check.
+        '';
+      };
     };
 
     mcpServers = lib.mkOption {
@@ -486,6 +537,13 @@ in {
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
     (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
+    # The default check, as a DEFINITION rather than the option default, so a
+    # consumer's definitions append to it. `mkOverride` at the ordinary
+    # priority rather than a plain value, and that is load-bearing: a plain
+    # definition is evaluated even when a consumer's `mkForce` wins, which
+    # would instantiate rumdl and markdownlint-cli2 for a check that never
+    # runs. Measured; do not "simplify" it to a plain string.
+    {ai.markdown.check = lib.mkOverride lib.modules.defaultOverridePriority markdown.defaultCheck;}
     # Drop the systemd path entirely in devenv. `mkIf false` would still define
     # an unknown option there; the option-tree probe is a build-time condition
     # and does not force config. Unsupported active declarations fail through

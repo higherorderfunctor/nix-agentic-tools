@@ -1,6 +1,7 @@
 # The markdown table-cell check: ONE definition, read by the prek hook in
-# `config/repo-validation.nix` and by the fixture suite in
-# `checks/markdown/markdown-table-cells-fixtures.nix`.
+# `config/repo-validation.nix`, by the fixture suite in
+# `checks/markdown/markdown-table-cells-fixtures.nix`, and by `defaultCheck` in
+# ./default.nix, the default check on the Markdown `ai.*` generates.
 {pkgs}: let
   shellStrict = import ../../config/shell-strict.nix;
 

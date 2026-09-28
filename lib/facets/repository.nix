@@ -23,6 +23,8 @@
         inherit repoPath;
         packageLib = import ../packaging.nix;
         fragmentsLib = import ../fragments.nix {inherit lib;};
+        # `markdownLib pkgs`: the builder generated Markdown is formatted in.
+        markdownLib = import ../markdown {inherit lib;};
         traceSource = import ../traceSource.nix {inherit lib;};
       };
     });
