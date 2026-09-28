@@ -6,10 +6,23 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm hasLiteral lspEntryOf mkTest mkWrapperGrepTest ownedDocument;
-  cliDocument = evaluated:
-    ownedDocument "kiro" "${evaluated.config.ai.kiro.configDir}/settings/cli.json" evaluated;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpDocTarget dvMcpTaskExec dvTaskExec hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpDocTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  inherit (harness) deliveredFiles evalDevenv evalHm hasLiteral lspEntryOf mkTest mkWrapperGrepTest;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
+  # The settings writer of one backend as a runnable script: Home Manager
+  # replays its prune entry and then its write entry (activation text needs
+  # home-manager's `run` helper in scope); devenv runs its task, whose `.exec`
+  # defines no such helper and must not get one.
+  mkSettingsWriter = backend: config: let
+    body =
+      if backend == "hm"
+      then let ev = evalHm config; in harness.hmRunShim + hmMcpPruneScript ev + "\n" + hmMcpWriteScript ev
+      else dvMcpTaskExec (evalDevenv config);
+  in
+    pkgs.writeShellScript "kiro-settings-${backend}" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${body}
+    '';
 in {
   checks = {
     module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
@@ -381,7 +394,7 @@ in {
     # Kiro HM: a secret url makes mcp.json a REAL-file activation write (NOT
     # a home.file symlink) that exports the url secret, envsubst's ONLY the
     # url var (header ${env:...} survive), and locks the file read-only
-    # (overwrite default + secret url -> owner-only 0400).
+    # (secret url -> owner-only 0400).
     module-kiro-hm-mcp-json-activation-secret-url = mkTest "kiro-hm-mcp-json-activation-secret-url" (
       let
         result = evalHm {
@@ -425,8 +438,8 @@ in {
         && lib.hasSuffix ")\n" script
     );
 
-    # Kiro HM: a plain (non-secret) http server still lands as a real-file
-    # overwrite write — locked world-readable 0444, no envsubst step.
+    # Kiro HM: a plain (non-secret) http server still lands as a read-only
+    # copy — world-readable 0444, no envsubst step.
     module-kiro-hm-mcp-json-plain-overwrite = mkTest "kiro-hm-mcp-json-plain-overwrite" (
       let
         result = evalHm {
@@ -446,50 +459,17 @@ in {
         && !(result.config.home.file ? ".kiro/settings/mcp.json")
     );
 
-    # Merge owns leaves only: the document target declares the producer and the
-    # directory target claims nothing, so the whole-file claim a previous
-    # overwrite generation recorded is RELEASED rather than deleted.
-    #
-    # Both activation entries exist in this mode too, which is the shape change
-    # the rework makes. There used to be a separate `retire-materialize-kiro-
-    # settings` entry for exactly this release, and a prune entry only under
-    # overwrite; `own` has one bundle, so the release happens in the prune
-    # phase of the same pair. The prune entry is REQUIRED here, not optional:
-    # the file it may have to hand over is a real file, and it must be gone (or
-    # released) before checkLinkTargets.
-    module-kiro-hm-mcp-json-merge-mode = mkTest "kiro-hm-mcp-json-merge-mode" (
-      let
-        result = evalHm {
-          ai.kiro = {
-            enable = true;
-            mcpWriteMode = "merge";
-            mcpServers.plain = {
-              type = "http";
-              url = "https://gw/mcp/";
-            };
-          };
-        };
-        activation = result.config.home.activation;
-      in
-        (hmMcpDocTarget result).units
-        ? "run"
-        && (hmMcpDirTarget result).units == {}
-        && (hmMcpDocTarget result).ledger == "json-settings/kiro-mcp-${builtins.hashString "sha256" ".kiro"}.json"
-        && activation ? "materialize-kiro-settings-prune"
-        && activation ? kiroMcpJson
-        && !(activation ? "retire-materialize-kiro-settings")
-    );
-
     # The N→0 regression: both backends keep their writer and their prune when
-    # the last server disappears in overwrite mode. Disabled modules remain
-    # inert. Non-empty pools are positive controls for the accessors.
+    # the last server disappears. Home Manager keeps owning the user-global
+    # mcp.json (an empty server map) and cli.json; devenv releases the project
+    # files. Disabled modules remain inert. Non-empty pools are positive
+    # controls for the accessors.
     module-kiro-mcp-empty-pool-still-prunes = mkTest "kiro-mcp-empty-pool-still-prunes" (
-      builtins.all (mode: let
+      let
         cfg = servers: {
           ai.kiro = {
             enable = true;
             mcpServers = servers;
-            mcpWriteMode = mode;
           };
         };
         full = cfg {
@@ -511,11 +491,12 @@ in {
         && lib.hasInfix "--phase prune" (hmMcpPruneScript hmEmpty)
         && lib.hasInfix "--phase all" (dvMcpTaskExec dvEmpty)
         && ownPlanArg (hmMcpPruneScript hmEmpty) == ownPlanArg (hmMcpWriteScript hmEmpty)
-        # The whole-file unit exists only for a NON-EMPTY overwrite pool, and
-        # the ledger is the same literal in both cases.
+        # Home Manager owns both user-global files whatever is declared;
+        # devenv claims a project file only when something is declared.
         && (hmMcpDirTarget hmFull).units ? "mcp.json"
         && (dvMcpDirTarget dvFull).units ? "mcp.json"
-        && (hmMcpDirTarget hmEmpty).units == {}
+        && builtins.attrNames (hmMcpDirTarget hmEmpty).units == ["cli.json" "mcp.json"]
+        && (hmMcpDirTarget hmEmpty).units."mcp.json".mode == "0444"
         && (dvMcpDirTarget dvEmpty).units == {}
         && builtins.all (target: target.ledger == "materialize/kiro-settings.manifest") [
           (hmMcpDirTarget hmFull)
@@ -523,32 +504,26 @@ in {
           (dvMcpDirTarget dvFull)
           (dvMcpDirTarget dvEmpty)
         ]
-        # The document target declares nothing under overwrite, which is what
-        # makes an emptied overwrite DELETE the file rather than release it.
-        && (hmMcpDocTarget hmEmpty).units == {}
+        # One target: the settings directory. No document ledger remains.
+        && builtins.length (harness.ownPlan "kiro" "kiroMcpJson" hmEmpty).targets == 1
+        && builtins.length (harness.ownPlan "kiro" "ai:kiro:materialize-mcp" dvEmpty).targets == 1
         && lib.elem "sops-nix" hmFull.config.home.activation.kiroMcpJson.after
         && lib.elem "checkLinkTargets" hmEmpty.config.home.activation."materialize-kiro-settings-prune".before
         && lib.elem "devenv:enterShell" task.before
         && lib.elem "devenv:files:cleanup" task.after
         && !((evalHm {ai.kiro.enable = false;}).config.home.activation ? kiroMcpJson)
-        && !((evalDevenv {ai.kiro.enable = false;}).config.tasks ? "ai:kiro:materialize-mcp"))
-      ["overwrite"]
+        && !((evalDevenv {ai.kiro.enable = false;}).config.tasks ? "ai:kiro:materialize-mcp")
     );
-
-    module-kiro-mcp-reconcile-runtime = import ./mcp-reconcile-runtime.nix {
-      inherit lib pkgs harness;
-    };
 
     # Execute the actual module writers against isolated roots. No Kiro
     # package build or invocation: only shell scripts, JSON templates and the
     # materializer's small tool closure. Replay HM prune then write.
     module-kiro-mcp-materialize-runtime = let
       plainUrl = "https://example.invalid/mcp";
-      cfg = mode: servers: {
+      cfg = servers: {
         ai.kiro = {
           enable = true;
           mcpServers = servers;
-          mcpWriteMode = mode;
         };
       };
       server = url: {
@@ -557,26 +532,13 @@ in {
           inherit url;
         };
       };
-      mkScript = backend: config: let
-        # The hm branch is HM activation entry text and needs home-manager's
-        # `run` helper in scope; the devenv task's `.exec` defines no such
-        # helper and must not get one.
-        body =
-          if backend == "hm"
-          then let ev = evalHm config; in harness.hmRunShim + hmMcpPruneScript ev + "\n" + hmMcpWriteScript ev
-          else dvMcpTaskExec (evalDevenv config);
-      in
-        pkgs.writeShellScript "kiro-mcp-${backend}" ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ${body}
-        '';
       runBackend = backend: let
-        script = mode: servers: mkScript backend (cfg mode servers);
-        empty = script "overwrite" {};
-        plain = script "overwrite" (server plainUrl);
-        secret = script "overwrite" (server {file = "credential-url";});
-        failedHelper = script "overwrite" (server {helper = "./failed-helper";});
+        isHm = backend == "hm";
+        script = servers: mkSettingsWriter backend (cfg servers);
+        empty = script {};
+        plain = script (server plainUrl);
+        secret = script (server {file = "credential-url";});
+        failedHelper = script (server {helper = "./failed-helper";});
       in ''
         export HOME="$TMPDIR/${backend}-home"
         export XDG_STATE_HOME="$TMPDIR/${backend}-state"
@@ -588,21 +550,34 @@ in {
         ledger="$XDG_STATE_HOME/nix-agentic-tools/materialize"
         manifest="$ledger/kiro-settings.manifest"
         backups="$ledger/kiro-settings.bak"
+        # The ledger line for mcp.json alone: Home Manager also claims cli.json.
+        mcp_witness() { sed -n 's/^mcp\.json\t//p' "$manifest"; }
 
-        # Empty-first must preserve a foreign file and its neighbors.
         printf '{"mcpServers":{"hand":{"url":"https://hand.invalid"}}}\n' > "$target"
         cp "$target" original
         printf 'neighbor\n' > "$HOME/.kiro/settings/unmanaged.json"
         ${empty}
-        cmp original "$target" || fail '${backend}: empty pool clobbered an unmanaged file'
-        [ ! -s "$manifest" ] || fail '${backend}: empty pool claimed an unmanaged file'
+        ${
+          if isHm
+          then ''
+            # Home Manager owns the user-global file even with no servers: a
+            # foreign file is adopted with a backup and replaced.
+            [ "$(cat "$target")" = '{"mcpServers":{}}' ] || fail 'hm: empty pool did not own mcp.json'
+            [ "$(stat -c %a "$target")" = 444 ] || fail 'hm: empty pool mode'
+          ''
+          else ''
+            # devenv claims nothing for an empty pool and preserves a foreign file.
+            cmp original "$target" || fail 'devenv: empty pool clobbered an unmanaged file'
+            [ ! -s "$manifest" ] || fail 'devenv: empty pool claimed an unmanaged file'
+          ''
+        }
 
-        # Adoption backs up, and the manifest hashes the rendered bytes.
+        # Adoption backs up once, and the manifest hashes the rendered bytes.
         ${plain}
         [ ! -L "$target" ] || fail '${backend}: managed file is a symlink'
         [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: default mode'
         cmp original "$backups"/mcp.json.* || fail '${backend}: adoption backup'
-        [ "$(cut -f 2 "$manifest")" = "$(sha256sum "$target" | cut -d ' ' -f 1)" ] \
+        [ "$(mcp_witness)" = "$(sha256sum "$target" | cut -d ' ' -f 1)" ] \
           || fail '${backend}: manifest did not hash actual content'
         touch -t 200001010000 "$target"
         before_mtime="$(stat -c %Y "$target")"
@@ -633,29 +608,37 @@ in {
         chmod +x failed-helper
         expect_failure ${failedHelper}
 
-        # Emptying the pool removes only the owned file. A later foreign file
-        # with that name is preserved because the manifest has been drained.
-        ${empty}
-        [ ! -e "$target" ] || fail '${backend}: N to zero did not prune'
-        [ ! -s "$manifest" ] || fail '${backend}: manifest was not drained'
-        cp original "$target"
-        ${empty}
-        cmp original "$target" || fail '${backend}: drained ownership still clobbered'
-
-        # Merge retirement and permissions have their own leaf-ownership
-        # corpus. Keep this whole-file corpus's overwrite checks unchanged.
-        rm "$target"
+        ${
+          if isHm
+          then ''
+            # Emptying the pool keeps the user-global file, with no servers.
+            ${empty}
+            [ "$(cat "$target")" = '{"mcpServers":{}}' ] || fail 'hm: N to zero did not empty the server map'
+            [ "$(mcp_witness)" = "$(sha256sum "$target" | cut -d ' ' -f 1)" ] || fail 'hm: N to zero manifest'
+            rm "$target"
+          ''
+          else ''
+            # Emptying the pool removes only the owned file. A later foreign file
+            # with that name is preserved because the manifest has been drained.
+            ${empty}
+            [ ! -e "$target" ] || fail 'devenv: N to zero did not prune'
+            [ ! -s "$manifest" ] || fail 'devenv: manifest was not drained'
+            cp original "$target"
+            ${empty}
+            cmp original "$target" || fail 'devenv: drained ownership still clobbered'
+            rm "$target"
+            # A drained ledger is ABSENT rather than a zero-byte file.
+            [ ! -e "$manifest" ] || fail 'devenv: drained ledger still on disk'
+          ''
+        }
         [ "$(cat "$HOME/.kiro/settings/unmanaged.json")" = neighbor ] || fail '${backend}: neighbor changed'
 
-        # Non-regular collisions must fail without falsely claiming ownership.
-        # The ledger was drained two steps above, and a drained ledger is now
-        # ABSENT rather than a zero-byte file, so "not claimed" is asserted as
-        # absence: a claim would write a line naming mcp.json.
+        # Non-regular collisions must fail without falsely claiming ownership:
+        # a claim would write a ledger line naming mcp.json.
         mkdir "$target"
-        [ ! -e "$manifest" ] || fail '${backend}: drained ledger still on disk'
         if ${plain}; then fail '${backend}: directory collision succeeded'; fi
         [ -d "$target" ] || fail '${backend}: directory collision was removed'
-        [ ! -e "$manifest" ] || fail '${backend}: directory was claimed'
+        [ ! -e "$manifest" ] || [ -z "$(mcp_witness)" ] || fail '${backend}: directory was claimed'
         rmdir "$target"
 
         # Writes must be anchored from any cwd: the HM activation inherits
@@ -666,7 +649,7 @@ in {
         ${plain}
         [ -f "$target" ] || fail '${backend}: root anchoring failed'
         [ ! -e .kiro ] || fail '${backend}: wrote under caller cwd'
-        ${lib.optionalString (backend == "devenv") ''
+        ${lib.optionalString (!isHm) ''
           # A RELATIVE credential path resolved against the project root while
           # the task still ran `cd "$DEVENV_ROOT"`; the renderer carries that
           # anchor now, so prove it from a foreign cwd with the secret present
@@ -692,6 +675,67 @@ in {
         echo 'PASS: kiro-mcp-materialize-runtime' > "$out"
       '';
 
+    # Kiro's own settings writers (the TUI and `kiro-cli settings`) write a
+    # temporary and rename it over cli.json, replacing a read-only copy. Model
+    # that rename and run the real writer again: the declaration comes back
+    # read-only, the in-app file is backed up exactly once, and Kiro state
+    # beside it is not touched.
+    module-kiro-cli-json-restore-runtime = let
+      runBackend = backend: let
+        config = {
+          ai.kiro = {
+            enable = true;
+            # A workspace-overridable key, so the devenv guard accepts it.
+            native.settings.chat.enableTangentMode = true;
+          };
+        };
+        evaluated =
+          if backend == "hm"
+          then evalHm config
+          else evalDevenv config;
+        target =
+          if backend == "hm"
+          then hmMcpDirTarget evaluated
+          else dvMcpDirTarget evaluated;
+        declared = pkgs.writeText "kiro-cli-json-declared" target.units."cli.json".text;
+        write = mkSettingsWriter backend config;
+      in ''
+        export HOME="$TMPDIR/${backend}-home"
+        export XDG_STATE_HOME="$TMPDIR/${backend}-state"
+        export DEVENV_ROOT="$HOME"
+        export DEVENV_STATE="$XDG_STATE_HOME"
+        settings="$HOME/.kiro/settings"
+        target="$settings/cli.json"
+        backups="$XDG_STATE_HOME/nix-agentic-tools/materialize/kiro-settings.bak"
+        mkdir -p "$settings"
+        printf '{"lastFeedCheck":1}\n' > "$settings/feed_state.json"
+        cp "$settings/feed_state.json" "$TMPDIR/${backend}-feed"
+
+        ${write}
+        cmp ${declared} "$target" || fail '${backend}: first write'
+        [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: first mode'
+
+        # Kiro's write: a new 0600 file renamed over the read-only copy.
+        printf '{"chat.defaultModel":"in-app"}' > "$settings/cli.json.1.tmp"
+        chmod 600 "$settings/cli.json.1.tmp"
+        cp "$settings/cli.json.1.tmp" "$TMPDIR/${backend}-in-app"
+        mv -f "$settings/cli.json.1.tmp" "$target"
+
+        ${write}
+        cmp ${declared} "$target" || fail '${backend}: declaration not restored'
+        [ "$(stat -c %a "$target")" = 444 ] || fail '${backend}: restored mode'
+        set -- "$backups"/cli.json.*
+        [ "$#" = 1 ] && [ -f "$1" ] || fail '${backend}: expected exactly one backup'
+        cmp "$TMPDIR/${backend}-in-app" "$1" || fail '${backend}: backup is not the in-app file'
+        cmp "$TMPDIR/${backend}-feed" "$settings/feed_state.json" || fail '${backend}: feed_state.json changed'
+      '';
+    in
+      pkgs.runCommand "module-test-kiro-cli-json-restore-runtime" {} ''
+        fail() { echo "FAIL: kiro-cli-json-restore-runtime: $1" >&2; exit 1; }
+        ${lib.concatMapStrings runBackend ["hm" "devenv"]}
+        echo 'PASS: kiro-cli-json-restore-runtime' > "$out"
+      '';
+
     # ── Kiro HM/devenv fanout ────────────────────────────────────
 
     # HM: package installation — verify home.packages populated.
@@ -705,18 +749,20 @@ in {
         builtins.length packages >= 1
     );
 
-    # HM: settings activation owns leaves and carries the declared content.
-    # The content is read from `_reconciledDocuments`, not from the activation
-    # body: the reconciler carries it as data in a store plan. The ledger path
-    # is asserted because it is the live migration contract every previously
-    # written ownership record hangs off.
+    # HM: the user-global cli.json is a read-only copy even with nothing
+    # declared, so an in-app setting never outlives the next activation. The
+    # content is read from the writer's plan, not from the activation body:
+    # the plan carries it as data in the store. The ledger is asserted because
+    # it is the live migration contract every recorded copy hangs off.
     module-kiro-hm-empty-settings-emits-writer = mkTest "kiro-hm-empty-settings-emits-writer" (
       let
         evaluated = evalHm {ai.kiro.enable = true;};
+        target = hmMcpDirTarget evaluated;
       in
-        lib.hasInfix "--phase all" evaluated.config.home.activation.kiroSettingsMerge.text
-        && lib.hasPrefix "json-settings/kiro-settings-" (cliDocument evaluated).ledger
-        && (cliDocument evaluated).value == {}
+        lib.hasInfix "--phase all" evaluated.config.home.activation.kiroMcpJson.text
+        && target.ledger == "materialize/kiro-settings.manifest"
+        && !(target.units."cli.json" ? mode)
+        && hmCliSettings evaluated == {}
     );
 
     module-kiro-hm-writes-settings-activation = mkTest "kiro-hm-writes-settings-activation" (
@@ -728,11 +774,11 @@ in {
           };
         };
       in
-        lib.hasInfix "--phase all" result.config.home.activation.kiroSettingsMerge.text
-        && (cliDocument result).value."chat.defaultModel" == "claude-sonnet-4"
+        lib.hasInfix "--phase all" result.config.home.activation.kiroMcpJson.text
+        && (hmCliSettings result)."chat.defaultModel" == "claude-sonnet-4"
     );
 
-    # Known Kiro model id reaches the cli.json merge.
+    # Known Kiro model id reaches cli.json.
     module-kiro-hm-default-model-known-accepted = mkTest "kiro-hm-default-model-known-accepted" (
       let
         result = evalHm {
@@ -742,7 +788,7 @@ in {
           };
         };
       in
-        (cliDocument result).value."chat.defaultModel" == "claude-opus-4.8"
+        (hmCliSettings result)."chat.defaultModel" == "claude-opus-4.8"
     );
 
     # Arbitrary (unknown) id is accepted (str branch of the soft enum).
@@ -755,7 +801,7 @@ in {
           };
         };
       in
-        (cliDocument result).value."chat.defaultModel" == "some-future-model"
+        (hmCliSettings result)."chat.defaultModel" == "some-future-model"
     );
 
     # v3 = true triggers the HM wrapper (appends --v3 to the launcher).
@@ -1259,7 +1305,7 @@ in {
             native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
-        text = (builtins.head (harness.ownPlan "kiro" "ai:kiro:settings-merge" result).targets).units.text;
+        text = (dvMcpDirTarget result).units."cli.json".text;
       in
         lib.hasInfix ''"chat.modelDefaults":{"claude-opus-5":{"effort":"high"}}'' text
         && !lib.hasInfix "chat.modelDefaults.claude-opus-5" text
@@ -1268,7 +1314,7 @@ in {
         && builtins.all (a: a.assertion) result.config.assertions
     );
 
-    # Parity: the HM activation merge carries the same nesting. Both backends
+    # Parity: the HM copy carries the same nesting. Both backends
     # share one `flattenKiroSettings`, and this is what pins that they do.
     module-kiro-hm-object-valued-setting-stays-nested = mkTest "kiro-hm-object-valued-setting-stays-nested" (
       let
@@ -1278,7 +1324,7 @@ in {
             native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
-        declared = (cliDocument result).value;
+        declared = hmCliSettings result;
       in
         declared."chat.modelDefaults"."claude-opus-5".effort
         == "high"
@@ -1297,7 +1343,7 @@ in {
             native.settings.chat.enableTangentMode = true;
           };
         };
-        text = (builtins.head (harness.ownPlan "kiro" "ai:kiro:settings-merge" result).targets).units.text;
+        text = (dvMcpDirTarget result).units."cli.json".text;
       in
         lib.hasInfix ''"chat.enableTangentMode":true'' text
         && !lib.hasInfix ''"chat":{'' text
@@ -2871,7 +2917,7 @@ in {
         target.path
         == ".kiro/settings"
         && target.units ? "mcp.json"
-        && (dvMcpDocTarget result).path == ".kiro/settings/mcp.json"
+        && (dvMcpDirTarget result).units."mcp.json".mode == "0444"
         # anchored to the project root without a `cd` in the task body
         && lib.hasInfix ''NAT_OWN_ROOT="$DEVENV_ROOT"'' (dvMcpTaskExec result)
         && !(result.config.files ? ".kiro/settings/mcp.json")
@@ -2934,7 +2980,8 @@ in {
         needles = ["KIRO_LOG_LEVEL" "debug"];
       };
 
-    # Devenv: settings/cli.json reconciles the flattened workspace settings.
+    # Devenv: settings/cli.json is a read-only copy of the flattened workspace
+    # settings, written only when something is declared.
     module-kiro-devenv-writes-settings-json = mkTest "kiro-devenv-writes-settings-json" (
       let
         result = evalDevenv {
@@ -2949,10 +2996,11 @@ in {
           };
         };
       in
-        (cliDocument result).value."chat.enableTangentMode"
-        == true
-        && lib.hasInfix "--phase all" result.config.tasks."ai:kiro:settings-merge".exec
+        dvCliSettings result
+        == {"chat.enableTangentMode" = true;}
+        && lib.hasInfix "--phase all" result.config.tasks."ai:kiro:materialize-mcp".exec
         && !(result.config.files ? ".kiro/settings/cli.json")
+        && !((dvMcpDirTarget (evalDevenv {ai.kiro.enable = true;})).units ? "cli.json")
     );
 
     # Devenv: Kiro context joins the shared repository-root AGENTS.md.
