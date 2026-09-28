@@ -1850,9 +1850,10 @@ in {
         && lib.hasInfix "Use strict mode always" (steeringFile.text or "")
         && lib.hasInfix "inclusion: fileMatch" (steeringFile.text or "")
         && lib.hasInfix "name: my-steering" (steeringFile.text or "")
-        # CRITICAL: fileMatchPattern MUST be a YAML array for multi-element
-        # paths, not a comma-joined string.
-        && lib.hasInfix "fileMatchPattern: [" (steeringFile.text or "")
+        # CRITICAL: fileMatchPattern MUST be a YAML list for multi-element
+        # paths, not a comma-joined string, and a block sequence rather than
+        # an inline array so a Markdown formatter cannot reflow it.
+        && lib.hasInfix "fileMatchPattern:\n  - \"src/**\"\n  - \"tests/**\"\n" (steeringFile.text or "")
     );
 
     # Explicit Kiro inclusion modes are carried by runtime-native rules, so the

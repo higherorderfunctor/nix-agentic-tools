@@ -11,11 +11,20 @@
 #   fragments.render { composed = ...; transform = ...; }
 {lib}: let
   # -- Builders ----------------------------------------------------------------
-  # Build YAML frontmatter block from an attrset.
+  # Build YAML frontmatter block from an attrset. A string value is emitted
+  # verbatim after `key: `; a non-empty list value becomes a block sequence
+  # of quoted strings, one `  - "<item>"` line each, the list shape a
+  # Markdown formatter leaves unchanged.
   mkFrontmatter = attrs:
     "---\n"
     + builtins.concatStringsSep "\n"
-    (lib.mapAttrsToList (k: v: "${k}: ${v}") attrs)
+    (lib.mapAttrsToList (k: v:
+      if v == []
+      then "${k}: []"
+      else if builtins.isList v
+      then "${k}:\n" + lib.concatMapStringsSep "\n" (item: "  - \"${item}\"") v
+      else "${k}: ${v}")
+    attrs)
     + "\n---\n";
 
   # Canonical fragment constructor.

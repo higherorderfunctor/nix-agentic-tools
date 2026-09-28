@@ -253,11 +253,12 @@ inside the required `test` job without evaluating or building Nix themselves.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-09-25 — category declaration is SPLIT: shared
+> **Last verified:** 2026-09-27 — category declaration is SPLIT: shared
 > categories in `config/fragment-categories.nix`, owner-specific ones in the
 > owning package's `registry.nix`, merged by `lib/facets/registry.nix`. The
 > orchestration layer produces content; `ai.*` renders and writes it, with
-> AGENTS.md's index and rules ahead of the context.
+> AGENTS.md's index and rules ahead of the context. Kiro's multi-path
+> `fileMatchPattern` is a block sequence, emitted by `mkFrontmatter`.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -275,9 +276,9 @@ fan out to many different consumers without duplication:
 1. **Primitives (`lib/fragments.nix`)** — pure, target-agnostic. Defines
    `mkFragment { text, description, inclusion, paths, priority }`,
    `compose { fragments, ... }` (priority sort + SHA256 dedup + concat),
-   `mkFrontmatter` (flat attrset → YAML header), and `render` (applies a
-   transform to a composed fragment). No file I/O, no ecosystem knowledge, no
-   hardcoded paths.
+   `mkFrontmatter` (flat attrset → YAML header; a list value becomes a block
+   sequence of quoted strings), and `render` (applies a transform to a composed
+   fragment). No file I/O, no ecosystem knowledge, no hardcoded paths.
 
 2. **Transforms (`lib/ai/transformers/`)** — pure per-ecosystem renderers over
    the shared fragment AST. `lib/ai/default.nix` exposes them as
@@ -352,10 +353,12 @@ them.
   set → `fileMatch`); an explicit mode overrides that derivation only for Kiro.
   `auto` requires non-empty name + description, and explicit `fileMatch`
   requires paths. The pattern uses a quoted string for single-element lists and
-  inline YAML array syntax for multi-element lists. Kiro docs explicitly require
-  array form for multi-pattern — a previous comma-joined string form was
-  silently interpreted as one literal pattern and matched nothing. Fix landed in
-  commit 5a97f09.
+  a YAML block sequence for multi-element lists. Kiro docs explicitly require a
+  list for multi-pattern — a previous comma-joined string form was silently
+  interpreted as one literal pattern and matched nothing. The list is a block
+  sequence, not an inline array, because prettier reflows a long inline array
+  into a multi-line flow array, which Kiro loads on every turn
+  (`packages/kiro-cli/docs/steering-inclusion.md`).
 - `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
   AGENTS.md is a flat, always-loaded file, so it cannot enforce glob scopes. Its
   `renderKeyed` writes a compact `## Path-scoped rules` index of every scoped
