@@ -4,37 +4,40 @@
 > through `ai.claude.files` on both backends and fails evaluation beside its
 > upstream module, and every delivery method writes the file itself. Every
 > enabled runtime installs a package; `installPackage` has no `null` opt-out.
-> Codex rejects a declared MCP OAuth client secret. AGENTS.md puts the index and
-> rules before the context. The repository AGENTS.md, Copilot's devenv context
-> and instruction files, and Kiro's devenv steering land as read-only copies;
-> Codex indexes scoped rules that name `references`; a unit whose file is
-> switched off or replaced warns, and so does a devenv Codex AGENTS.md past 32
-> KiB under a raised limit. Semble derives a Kiro agent-private MCP server from
-> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
-> delivery once through `mkRuntime`'s record-level `config`, and both
-> `mkRuntime` and the backend transforms reject a backend spec carrying anything
-> but `installPackage`, `migrationConfig` and `options`, since an overridden or
-> hand-built record reaches a transform without the constructor. Kiro hook
-> commands resolve packages through the shared `commandType`. Launchers bake the
-> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
-> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
-> through `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
-> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
-> `agent.fileContent` where it copies, so a store-path string is a file, never a
-> body naming its own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). A root request nothing per-runtime can withdraw
-> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
-> owned writable copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
-> declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Ledger-owned
-> copies whose files nothing else retracts opt into `runWhenDisabled`.
-> `ai.lspServers` renders whole files with each runtime's envelope, Copilot/Kiro
-> require `extensions`, and Copilot constrains server names.
+> Codex's `config.toml` is a read-only store symlink on both backends, its
+> daemon `settings.json` a Home Manager copy of `native.daemonSettings`, and Nix
+> declares the trust of every hook it generates; Codex rejects a declared MCP
+> OAuth client secret. AGENTS.md puts the index and rules before the context.
+> The repository AGENTS.md, Copilot's devenv context and instruction files, and
+> Kiro's devenv steering land as read-only copies; Codex indexes scoped rules
+> that name `references`; a unit whose file is switched off or replaced warns,
+> and so does a devenv Codex AGENTS.md past 32 KiB under a raised limit. Semble
+> derives a Kiro agent-private MCP server from `mcp.enable = false` plus an
+> MCP-backed subagent. Every runtime describes delivery once through
+> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
+> transforms reject a backend spec carrying anything but `installPackage`,
+> `migrationConfig` and `options`, since an overridden or hand-built record
+> reaches a transform without the constructor. Kiro hook commands resolve
+> packages through the shared `commandType`. Launchers bake the builder's one
+> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
+> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
+> `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and `ai.claude.agentsDir`
+> to `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot,
+> Kimchi, Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it
+> copies, so a store-path string is a file, never a body naming its own path.
+> File content at `mkDefault` enables its entry; `content.enable = false`
+> suppresses every content form. The builder entry point is
+> `lib.ai.app.mkRuntime`. Native file settings live under `ai.<runtime>.native`
+> (`native.settings`; Kimchi also `native.harnessSettings`). A root request
+> nothing per-runtime can withdraw (excluded or non-keyed pool) never warns.
+> Portable agents reach Kimchi as owned writable copies and portable hooks reach
+> its project `hooks.json` on devenv. Reasoning effort lowers to Claude, Codex,
+> Copilot and Kimchi, and Kiro declares no normalized settings pool; authored
+> prose and final delivery share one priority-aware text-source record with
+> enable semantics. Ledger-owned copies whose files nothing else retracts opt
+> into `runWhenDisabled`. `ai.lspServers` renders whole files with each
+> runtime's envelope, Copilot/Kiro require `extensions`, and Copilot constrains
+> server names.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -234,23 +237,19 @@ The ai module fans out TWO kinds of configuration:
   `xhigh` on both backends. Explicit native values override these defaults;
   normalized reasoning effort also overrides the native option default. Setting
   either native key to null omits it, allowing Codex's lower config layers or
-  runtime defaults to supply it. Home Manager reconciles exact declared leaves
-  into a writable `${configDir}/config.toml`; devenv writes a statically
-  Nix-owned trusted-project `.codex/config.toml`. An empty first HM generation
-  is a no-op, while an empty later generation uses the ownership manifest to
-  remove formerly managed leaves without deleting native state. Devenv rejects
-  provider, profile, notification, and telemetry keys that Codex documents as
-  ignored at project scope. The backend ownership difference is deliberate:
-  Codex's user-level trust prompt writes ad-hoc `projects.<path>.trust_level`
-  entries into the same file through `config/batchWrite`, while no project-local
-  writer has been observed. A versioned XDG-state manifest tracks Nix-owned leaf
-  paths so activation can reassert and retire them while preserving
-  unknown/native siblings, including siblings inside `projects`, `features`, and
-  `mcp_servers`. MCP configuration is composed into that shared user file or the
-  static project file through the same typed server pool. Stable security
-  settings type `allow_login_shell`, `approval_policy` (including granular
-  prompt categories), `approvals_reviewer`, `sandbox_mode`, and
-  `sandbox_workspace_write`. `default_permissions` and named `permissions`
+  runtime defaults to supply it. Both backends deliver `config.toml` as a
+  read-only store symlink: Home Manager always owns `${configDir}/config.toml`,
+  and devenv writes the trusted project's `.codex/config.toml` when something is
+  declared. Every Codex config writer writes a temporary beside the link's
+  target, so an in-app save (`/model`, `/experimental`, `codex mcp add`, the
+  trust prompt, `/hooks`) fails with "failed to persist config" and the link
+  survives; `chatgpt-codex-readonly-config` holds that against the pinned
+  binary. Devenv rejects provider, profile, notification, response-metadata,
+  realtime-endpoint and telemetry keys that Codex ignores at project scope. MCP
+  configuration is composed into either file through the same typed server pool.
+  Stable security settings type `allow_login_shell`, `approval_policy`
+  (including granular prompt categories), `approvals_reviewer`, `sandbox_mode`,
+  and `sandbox_workspace_write`. `default_permissions` and named `permissions`
   profiles type inheritance, workspace roots, filesystem access and scoped
   paths, deny-glob scan depth, and network proxy/domain/socket policy. Codex
   merges entries under the same named permission profile across user and project
@@ -264,8 +263,11 @@ The ai module fans out TWO kinds of configuration:
   `${configDir}/<name>.config.toml` user layer selected with
   `codex --profile <name>`) was removed 2026-09-19 as unreachable dead code; see
   the Settled bullet above. `projects.<path>.trust_level` is accepted only by
-  Home Manager's user-global file: devenv rejects it because a project cannot
-  bootstrap the trust required to load its own `.codex/config.toml`.
+  Home Manager's user-global file, where it is the only project trust Codex
+  keeps: one entry per clone, since Codex resolves a linked worktree to its main
+  checkout. Devenv rejects it because a project cannot bootstrap the trust
+  required to load its own `.codex/config.toml`; without Home Manager,
+  `~/.codex` is Codex's own and its trust prompt saves there.
   `ai.codex.execpolicyRules.<name>` writes native Starlark to
   `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
   separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
@@ -289,11 +291,25 @@ The ai module fans out TWO kinds of configuration:
   `commandWindows`, `statusMessage`, and `additionalContextLimit`, and a
   JSON-compatible tail remains for forward compatibility. Claude's and Codex's
   matcher groups both come from `lib.ai.hooks.mkMatcherBlockType`. Typed hooks
-  cannot coexist with inline `ai.codex.native.settings.hooks` at one layer
-  because Codex loads both additively and warns rather than applying normal
-  config precedence. Nix ownership does not make these native-policy hooks:
-  Codex still requires `/hooks` review and hash-based trust before user/project
-  handlers run.
+  cannot coexist with inline hook events in `ai.codex.native.settings.hooks` at
+  one layer because Codex loads both additively and warns rather than applying
+  normal config precedence; `hooks.state` may accompany either. Nix ownership
+  does not make these managed hooks: Codex runs a user or project handler only
+  while `hooks.state."<key>".trusted_hash` in user config or a session flag
+  matches its current hash, and `/hooks` cannot record that into the Nix-owned
+  config. So Nix derives the key and hash of every generated handler
+  (`hookTrustFor`): Home Manager writes them into user `config.toml` beside any
+  declared `hooks.state`, and devenv's launcher passes them as one
+  `-c hooks.state={…}` flag, because Codex splits a `-c` key path at every dot
+  and the keys are paths. devenv rejects `native.settings.hooks.state`, which
+  Codex ignores in project config. `chatgpt-codex-hook-trust` compares keys and
+  hashes with the pinned binary's `hooks/list`.
+- `ai.codex.native.daemonSettings` — freeform JSON for the shared app-server
+  daemon's `${configDir}/app-server-daemon/settings.json`, Home Manager only
+  (devenv runs Codex with `--no-daemon` and rejects a value). Codex renames over
+  that file when it saves it, so it is a read-only copy of
+  `materialize-codex-daemon-settings`, not a symlink; `pinDaemonToPackage`
+  defaults `updater.autoUpdateEnabled` to false.
 - `ai.copilot.projectDir` — the project-native `.github` root used by devenv for
   context, rules, agents, and skills. It is declared identically in both
   backends so generated option discovery and types cannot drift, but only devenv

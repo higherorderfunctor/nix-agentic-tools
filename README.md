@@ -338,15 +338,16 @@ over one is backed up and replaced at the next shell entry.
 Kimchi's user-global files live under `~/.config/kimchi`, which devenv never
 writes. Who manages each setting there depends on whether you use Home Manager:
 
-| User-global setting                                       | Home Manager                                                                                                                    | devenv only                                                     |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Harness `settings.json`, `mcp.json`, `permissions.json`   | Nix, as read-only copies; in-app changes are reset at the next activation                                                       | Kimchi                                                          |
-| Project trust (`harness/trust.json`)                      | Nix (`ai.kimchi.projectTrust`); the trust prompt's session-only answers still work                                              | Kimchi's trust prompt                                           |
-| `telemetry.enabled`, `region`                             | Nix, defaulting to Kimchi's `true` and `us`, also passed through the launcher                                                   | Kimchi, unless declared: then the launcher passes the Nix value |
-| `preferences.hideTips`, `skillPaths`                      | Nix, defaulting to Kimchi's first-launch values                                                                                 | Kimchi                                                          |
-| API key                                                   | Nix when `ai.kimchi.apiKey` is set (read from its secret at launch, so an in-app login has no effect); otherwise Kimchi's login | Same as Home Manager                                            |
-| Git tokens                                                | Nix for each host in `ai.kimchi.gitTokens` (read from secrets at activation); Kimchi for the rest                               | Kimchi                                                          |
-| Device id, migration state, onboarding and survey markers | Kimchi                                                                                                                          | Kimchi                                                          |
+| User-global setting                                            | Home Manager                                                                                                                    | devenv only                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Harness `settings.json`, `mcp.json`, `permissions.json`        | Nix, as read-only copies; in-app changes are reset at the next activation                                                       | Kimchi                                                          |
+| Project trust (`harness/trust.json`)                           | Nix (`ai.kimchi.projectTrust`); `defaultProjectTrust = "never"`, and `/trust` cannot persist (it may exit)                      | Kimchi's trust prompt                                           |
+| `telemetry.enabled`, `region`                                  | Nix; telemetry defaults off, region must be declared, and both reach the launcher                                               | Kimchi, unless declared: then the launcher passes the Nix value |
+| `preferences.hideTips`, `skillPaths`                           | Nix; tips are hidden and default skill paths include the ai.* directory                                                         | Kimchi                                                          |
+| API key                                                        | Nix when `ai.kimchi.apiKey` is set (read from its secret at launch, so an in-app login has no effect); otherwise Kimchi's login | Same as Home Manager                                            |
+| Git tokens                                                     | Nix for each host in `ai.kimchi.gitTokens` (read from secrets at activation); Kimchi for the rest                               | Kimchi                                                          |
+| `config.json` migration, onboarding and initial survey markers | Nix; `migrationState = "skip-forever"`, known markers seeded                                                                    | Kimchi                                                          |
+| Future survey markers and device id                            | A new survey may reset at activation; no device id when telemetry is off                                                        | Kimchi                                                          |
 
 Project settings, MCP servers, harness settings, permissions, agents, and hooks
 resolve under the exact working directory. The devenv wrapper rejects descendant
@@ -356,10 +357,11 @@ unrestricted. `skillPaths` defaults to unset: Kimchi reads the project list in
 place of the user's global one, so only an explicit list, empty included,
 replaces it.
 
-Trust gates every project-scope reader except root `AGENTS.md`. Declare it with
-Home Manager's `ai.kimchi.projectTrust`, grant it at Kimchi's prompt without
-Home Manager, set user-scope `defaultProjectTrust = "always"`, or pass
-`--approve` for CLI and TUI runs. ACP resolves trust separately.
+Trust gates every project-scope reader except root `AGENTS.md`. On a Home
+Manager machine, declare the root or a parent in `ai.kimchi.projectTrust` before
+a devenv project's Kimchi config is read. Without Home Manager, grant trust at
+Kimchi's prompt; `--approve` is a run-scoped CLI/TUI override, while ACP
+resolves trust separately.
 
 ### Copilot user-global settings
 
@@ -586,17 +588,50 @@ through `ai.copilot.*` with the same exported helpers when desired.
 <details>
 <summary><strong>Codex config ownership</strong></summary>
 
-Codex writes ad-hoc project trust into its user `config.toml`. Home Manager
-therefore keeps that file writable and reconciles only the exact TOML leaves
-declared by Nix, preserving native state and removing formerly managed leaves on
-later activations. It does **not** use a read-only store symlink.
+Settings are Nix's alone. Both backends deliver `config.toml` as a read-only
+store symlink: Home Manager always owns the user file under
+`ai.codex.configDir`, and devenv writes the trusted project's
+`.codex/config.toml` when something is declared. Codex refuses to save an in-app
+change into it (`/model`, `/experimental` and `codex mcp add` fail with "failed
+to persist config"), so declare those settings under `ai.codex.native.settings`.
 
-Devenv owns `.codex/config.toml` statically because no project-local Codex
-writer has been observed. User-global trust remains outside the project: trust
-the repository once when Codex prompts, or declare
-`ai.codex.native.settings.projects."<absolute-path>".trust_level` through Home
-Manager. Devenv rejects that bootstrap-global setting because project config
-cannot grant the trust required to load itself.
+Project trust lives in that file too. With Home Manager, declare each clone you
+trust:
+
+```nix
+ai.codex.native.settings.projects."/home/me/src/my-repo".trust_level = "trusted";
+```
+
+Codex matches the working directory or its repository root exactly, and resolves
+a linked worktree to its main checkout, so one entry covers a clone and its
+worktrees. In a directory with no entry the trust prompt cannot save its answer,
+so the interactive session can only quit there; `codex exec` is unaffected.
+Devenv rejects `projects` because project config cannot grant the trust required
+to load itself.
+
+Codex runs a hook only once its current hash is trusted, and `/hooks` cannot
+record trust into a Nix-owned file. Nix declares the trust of every hook it
+generates: Home Manager in user `config.toml`, devenv through its launcher.
+Declare trust for any other hook, such as a plugin's, in
+`ai.codex.native.settings.hooks.state` with Home Manager.
+
+Codex's user-global files live under `~/.codex`, which devenv never writes. Who
+manages each setting there depends on whether you use Home Manager:
+
+| User-global setting                                               | Home Manager                                                                                                  | devenv only                                                                                |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `config.toml`: model, features, MCP servers, preferences          | Nix, as a read-only store symlink; in-app saves fail                                                          | Codex                                                                                      |
+| Project trust (`projects` in `config.toml`)                       | Nix (`ai.codex.native.settings.projects`)                                                                     | Codex's trust prompt                                                                       |
+| Hook trust (`hooks.state` in `config.toml`)                       | Nix for the hooks it generates; `ai.codex.native.settings.hooks.state` for others                             | Codex's `/hooks`, except for the project hooks devenv generates, which its launcher trusts |
+| Daemon settings (`app-server-daemon/settings.json`)               | Nix (`ai.codex.native.daemonSettings`), as a read-only copy; an in-app change is reset at the next activation | Codex; devenv runs Codex without the daemon                                                |
+| Daemon package selection                                          | Nix (`ai.codex.pinDaemonToPackage`)                                                                           | Codex's own updater                                                                        |
+| Saved command approvals (`rules/default.rules`), sign-in, history | Codex                                                                                                         | Codex                                                                                      |
+
+Upgrading from a release that reconciled `config.toml`: before the first switch,
+move the real `~/.codex/config.toml` aside, along with any `config.toml.hm-bak`
+beside it, and declare your trusted clones. Home Manager refuses to replace a
+real file with its link, and with `backupFileExtension` set an existing backup
+blocks it too.
 
 Native-only settings remain under `ai.codex.native.settings`. Normalized
 settings live under `ai.codex.settings` and narrow `ai.settings` field by field.
