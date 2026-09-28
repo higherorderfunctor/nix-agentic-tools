@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1849" height="4318" viewBox="0 0 1849 4318" font-family="ui-monospace, 'JetBrains Mono', 'DejaVu Sans Mono', Menlo, Consolas, monospace" font-size="13.5">
+<svg xmlns="http://www.w3.org/2000/svg" width="1849" height="4972" viewBox="0 0 1849 4972" font-family="ui-monospace, 'JetBrains Mono', 'DejaVu Sans Mono', Menlo, Consolas, monospace" font-size="13.5">
 <rect width="100%" height="100%" fill="#0b0e14"/>
 <text x="12.0" y="26" fill="#e6edf3" font-size="17" font-weight="600">Kimchi CLI — endpoints and repointing</text>
-<text x="12.0" y="44" fill="#6b7684" font-size="11.5">kimchi 1.1.30</text>
+<text x="12.0" y="44" fill="#6b7684" font-size="11.5">kimchi 1.1.37</text>
 <rect x="0" y="54.0" width="1849" height="40" fill="#171c26"/>
 <text x="12.0" y="80.0" fill="#8ab4f8" font-size="14" font-weight="600">Ordinary model access</text>
 <rect x="0" y="94.0" width="1849" height="34" fill="#11151d"/>
@@ -13,20 +13,22 @@
 <line x1="0" y1="128.0" x2="1849" y2="128.0" stroke="#232a36" stroke-width="0.5"/>
 <text x="12.0" y="152.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Hosted inference — OpenAI wire</text>
 <text x="360.0" y="152.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://llm.kimchi.dev/openai/v1/chat/completions</text>
-<text x="1048.2" y="152.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint</text>
+<text x="1048.2" y="152.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, else</text>
+<text x="1048.2" y="172.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region</text>
 <text x="1315.2" y="152.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The agent loop has no model to call. Only a locally discovered</text>
 <text x="1315.2" y="172.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">or user-added provider row still answers.</text>
 <line x1="0" y1="186.0" x2="1849" y2="186.0" stroke="#232a36" stroke-width="0.5"/>
 <text x="12.0" y="210.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Hosted inference — Anthropic wire</text>
 <text x="360.0" y="210.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://llm.kimchi.dev/anthropic/v1/messages?beta=true</text>
-<text x="1048.2" y="210.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint</text>
+<text x="1048.2" y="210.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, else</text>
+<text x="1048.2" y="230.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region</text>
 <text x="1315.2" y="210.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Anthropic-provider catalog rows become uncallable. OpenAI-wire</text>
 <text x="1315.2" y="230.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">rows are unaffected.</text>
 <line x1="0" y1="244.0" x2="1849" y2="244.0" stroke="#232a36" stroke-width="0.5"/>
 <text x="12.0" y="268.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Hosted inference — experimental pool</text>
 <text x="360.0" y="268.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://llm.kimchi.dev/experimental/openai/v1/chat/completions</text>
-<text x="1048.2" y="268.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change — two string</text>
-<text x="1048.2" y="288.0" fill="#f0a868" font-weight="400" xml:space="preserve">literals</text>
+<text x="1048.2" y="268.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region only — not llmEndpoint.</text>
+<text x="1048.2" y="288.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">A source change through 1.1.34</text>
 <text x="1315.2" y="268.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Models behind --enable-experimental-features disappear. Off by</text>
 <text x="1315.2" y="288.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">default.</text>
 <line x1="0" y1="302.0" x2="1849" y2="302.0" stroke="#232a36" stroke-width="0.5"/>
@@ -37,435 +39,493 @@
 <line x1="0" y1="340.0" x2="1849" y2="340.0" stroke="#232a36" stroke-width="0.5"/>
 <text x="12.0" y="364.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Model / provider catalog</text>
 <text x="360.0" y="364.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://llm.kimchi.dev/v1/models/metadata?include_in_cli=true</text>
-<text x="1048.2" y="364.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint</text>
+<text x="1048.2" y="364.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint on the</text>
+<text x="1048.2" y="384.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">startup path and the</text>
+<text x="1048.2" y="404.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">browser/API-key login flow;</text>
+<text x="1048.2" y="424.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region only for in-TUI login,</text>
+<text x="1048.2" y="444.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">setup-tools, the setup wizard</text>
+<text x="1048.2" y="464.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">and ACP, which pass no</text>
+<text x="1048.2" y="484.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">endpoint</text>
 <text x="1315.2" y="364.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No Kimchi provider rows are written. One startup path reuses a</text>
 <text x="1315.2" y="384.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">cached models.json; the other registers nothing.</text>
-<line x1="0" y1="398.0" x2="1849" y2="398.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="422.0" fill="#9ecbff" font-weight="500" xml:space="preserve">API-key validation — model-refresh path</text>
-<text x="360.0" y="422.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same as the row above</text>
-<text x="1048.2" y="422.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint</text>
-<text x="1315.2" y="422.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">In-TUI Kimchi login accepts any string as a key.</text>
-<line x1="0" y1="436.0" x2="1849" y2="436.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="460.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session auto-naming</text>
-<text x="360.0" y="460.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {llmEndpoint}/chat/completions</text>
-<text x="1048.2" y="460.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, consumed</text>
-<text x="1048.2" y="480.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">raw</text>
-<text x="1315.2" y="460.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Sessions keep a deterministic locally generated name. Failure</text>
-<text x="1315.2" y="480.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">is caught at src/extensions/session-name.ts:126.</text>
-<rect x="0" y="504.0" width="1849" height="40" fill="#171c26"/>
-<text x="12.0" y="530.0" fill="#8ab4f8" font-size="14" font-weight="600">Additional calls — when the feature is used</text>
-<rect x="0" y="544.0" width="1849" height="34" fill="#11151d"/>
-<line x1="0" y1="578.0" x2="1849" y2="578.0" stroke="#232a36" stroke-width="1"/>
-<text x="12.0" y="566.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
-<text x="360.0" y="566.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
-<text x="1048.2" y="566.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
-<text x="1315.2" y="566.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
-<line x1="0" y1="578.0" x2="1849" y2="578.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="602.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Auto model recommendation</text>
-<text x="360.0" y="602.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://llm.kimchi.dev/v1/route</text>
-<text x="1048.2" y="602.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_ROUTER_ENDPOINT</text>
-<text x="1315.2" y="602.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Auto model selection stops. Explicitly named models still run.</text>
-<text x="1315.2" y="622.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Removed in 1.1.37 — section 4.3.</text>
-<line x1="0" y1="636.0" x2="1849" y2="636.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="660.0" fill="#9ecbff" font-weight="500" xml:space="preserve">web_search</text>
-<text x="360.0" y="660.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://llm.kimchi.dev/v1/search</text>
-<text x="1048.2" y="660.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change — one module</text>
-<text x="1048.2" y="680.0" fill="#f0a868" font-weight="400" xml:space="preserve">constant</text>
-<text x="1315.2" y="660.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The web_search tool stops working. Nothing else changes.</text>
-<line x1="0" y1="694.0" x2="1849" y2="694.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="718.0" fill="#9ecbff" font-weight="500" xml:space="preserve">web_fetch</text>
-<text x="360.0" y="718.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1048.2" y="718.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
-<text x="1315.2" y="718.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The web_fetch tool stops working.</text>
-<line x1="0" y1="732.0" x2="1849" y2="732.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="756.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Auto entitlement gate</text>
-<text x="360.0" y="756.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://app.kimchi.dev/api/v1/me</text>
-<text x="1048.2" y="756.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="756.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The gate fails closed: Auto is not offered, not discoverable,</text>
-<text x="1315.2" y="776.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">and an explicit --model kimchi-dev/auto throws. New in 1.1.29,</text>
-<text x="1315.2" y="796.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">removed in 1.1.37 — section 4.3.</text>
-<rect x="0" y="820.0" width="1849" height="40" fill="#171c26"/>
-<text x="12.0" y="846.0" fill="#8ab4f8" font-size="14" font-weight="600">Account, billing and reporting</text>
-<rect x="0" y="860.0" width="1849" height="34" fill="#11151d"/>
-<line x1="0" y1="894.0" x2="1849" y2="894.0" stroke="#232a36" stroke-width="1"/>
-<text x="12.0" y="882.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
-<text x="360.0" y="882.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
-<text x="1048.2" y="882.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
-<text x="1315.2" y="882.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="498.0" x2="1849" y2="498.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="522.0" fill="#9ecbff" font-weight="500" xml:space="preserve">API-key validation — model-refresh path</text>
+<text x="360.0" y="522.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same as the row above</text>
+<text x="1048.2" y="522.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region only — the sole caller</text>
+<text x="1048.2" y="542.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">passes no endpoint, so</text>
+<text x="1048.2" y="562.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">src/models.ts:18-19 falls back</text>
+<text x="1048.2" y="582.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">to the region</text>
+<text x="1315.2" y="522.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">In-TUI Kimchi login accepts any string as a key.</text>
+<line x1="0" y1="596.0" x2="1849" y2="596.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="620.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session auto-naming</text>
+<text x="360.0" y="620.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {llmEndpoint}/chat/completions</text>
+<text x="1048.2" y="620.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, consumed</text>
+<text x="1048.2" y="640.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">raw; else the region&#x27;s</text>
+<text x="1048.2" y="660.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">/openai/v1 base</text>
+<text x="1315.2" y="620.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Sessions keep a deterministic locally generated name. Failure</text>
+<text x="1315.2" y="640.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">is caught at src/extensions/session-name.ts:172.</text>
+<rect x="0" y="684.0" width="1849" height="40" fill="#171c26"/>
+<text x="12.0" y="710.0" fill="#8ab4f8" font-size="14" font-weight="600">Additional calls — when the feature is used</text>
+<rect x="0" y="724.0" width="1849" height="34" fill="#11151d"/>
+<line x1="0" y1="758.0" x2="1849" y2="758.0" stroke="#232a36" stroke-width="1"/>
+<text x="12.0" y="746.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
+<text x="360.0" y="746.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
+<text x="1048.2" y="746.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
+<text x="1315.2" y="746.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="758.0" x2="1849" y2="758.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="782.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Auto model recommendation</text>
+<text x="360.0" y="782.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://llm.kimchi.dev/v1/route (30:</text>
+<text x="360.0" y="802.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">src/extensions/router/router-client.ts:44-53; base 30:</text>
+<text x="360.0" y="822.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">src/extensions/router/router-config.ts:9,17)</text>
+<text x="1048.2" y="782.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_ROUTER_ENDPOINT</text>
+<text x="1315.2" y="782.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Auto model selection stops. Explicitly named models still run.</text>
+<text x="1315.2" y="802.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Removed in 1.1.37 — section 4.3.</text>
+<line x1="0" y1="836.0" x2="1849" y2="836.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="860.0" fill="#9ecbff" font-weight="500" xml:space="preserve">web_search</text>
+<text x="360.0" y="860.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://llm.kimchi.dev/v1/search</text>
+<text x="1048.2" y="860.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region only — not llmEndpoint.</text>
+<text x="1048.2" y="880.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">A source change through 1.1.34</text>
+<text x="1315.2" y="860.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The web_search tool stops working. Nothing else changes.</text>
 <line x1="0" y1="894.0" x2="1849" y2="894.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="918.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Authentication — browser login</text>
-<text x="360.0" y="918.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://app.kimchi.dev/cli-auth?callback=&lt;urlenc&gt;&amp;state=&lt;32-byte hex&gt;</text>
-<text x="1048.2" y="918.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_WEB_APP_URL</text>
-<text x="1315.2" y="918.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Browser login is unavailable. A key must come from</text>
-<text x="1315.2" y="938.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">KIMCHI_API_KEY or the config file.</text>
-<line x1="0" y1="952.0" x2="1849" y2="952.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="976.0" fill="#9ecbff" font-weight="500" xml:space="preserve">↳ callback receiver</text>
-<text x="360.0" y="976.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET http://127.0.0.1:&lt;ephemeral&gt;/callback?token=…&amp;state=…</text>
-<text x="1048.2" y="976.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
-<text x="1315.2" y="976.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Browser login cannot complete.</text>
-<line x1="0" y1="990.0" x2="1849" y2="990.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1014.0" fill="#9ecbff" font-weight="500" xml:space="preserve">API-key validation — setup-wizard path</text>
-<text x="360.0" y="1014.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.cast.ai/v1/llm/openai/supported-providers</text>
-<text x="1048.2" y="1014.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change — one module</text>
-<text x="1048.2" y="1034.0" fill="#f0a868" font-weight="400" xml:space="preserve">constant</text>
-<text x="1315.2" y="1014.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The wizard cannot check a key before writing it.</text>
-<line x1="0" y1="1048.0" x2="1849" y2="1048.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1072.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Account identity</text>
-<text x="360.0" y="1072.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://app.kimchi.dev/api/v1/me</text>
-<text x="1048.2" y="1072.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="1072.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Telemetry events lose userId and userEmail; the Auto gate fails</text>
-<text x="1315.2" y="1092.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">closed (through 1.1.36; 1.1.37 has no gate).</text>
-<line x1="0" y1="1106.0" x2="1849" y2="1106.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1130.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Credits status</text>
-<text x="360.0" y="1130.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://llm.kimchi.dev/v1/credits (built by</text>
-<text x="360.0" y="1150.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">src/extensions/billing/status.ts:157-160)</text>
-<text x="1048.2" y="1130.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, derived</text>
-<text x="1315.2" y="1130.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The status line and the /budget table show no spend figures. No</text>
-<text x="1315.2" y="1150.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">request is gated either way.</text>
-<line x1="0" y1="1164.0" x2="1849" y2="1164.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1188.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Budget status</text>
-<text x="360.0" y="1188.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://llm.kimchi.dev/v1/budget (same builder; 404 handling</text>
-<text x="360.0" y="1208.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">src/extensions/billing/status.ts:216-219)</text>
-<text x="1048.2" y="1188.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, derived</text>
-<text x="1315.2" y="1188.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Same as credits.</text>
-<line x1="0" y1="1222.0" x2="1849" y2="1222.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1246.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Spend enforcement</text>
-<text x="360.0" y="1246.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1048.2" y="1246.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="1246.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing client-side exists to disable. Enforcement is the</text>
-<text x="1315.2" y="1266.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">gateway&#x27;s and is visible only in-band.</text>
-<line x1="0" y1="1280.0" x2="1849" y2="1280.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1304.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Usage analytics — analytics</text>
-<text x="360.0" y="1304.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.cast.ai/ai-optimizer/v1beta/</text>
-<text x="360.0" y="1324.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">analytics?startTime&amp;endTime&amp;inferUserFromApiKey=true</text>
-<text x="1048.2" y="1304.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change — one module</text>
-<text x="1048.2" y="1324.0" fill="#f0a868" font-weight="400" xml:space="preserve">constant</text>
-<text x="1315.2" y="1304.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">kimchi stats returns nothing.</text>
-<line x1="0" y1="1338.0" x2="1849" y2="1338.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1362.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Usage analytics — productivity</text>
-<text x="360.0" y="1362.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.cast.ai/ai-optimizer/v1beta/</text>
-<text x="360.0" y="1382.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">productivity-metrics?from&amp;to&amp;inferUserFromApiKey=true[&amp;provider_name][&amp;metric_name</text>
-<text x="360.0" y="1402.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">s][&amp;session_id]</text>
-<text x="1048.2" y="1362.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
-<text x="1315.2" y="1362.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">kimchi stats returns nothing.</text>
-<line x1="0" y1="1416.0" x2="1849" y2="1416.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1440.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Usage analytics — timeseries</text>
-<text x="360.0" y="1440.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET</text>
-<text x="360.0" y="1460.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">https://api.cast.ai/ai-optimizer/v1beta/productivity-metrics:generateTimeseries?…</text>
-<text x="1048.2" y="1440.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
-<text x="1315.2" y="1440.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing. No caller exists at any version.</text>
-<line x1="0" y1="1474.0" x2="1849" y2="1474.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1498.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Compute quota usage</text>
-<text x="360.0" y="1498.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET</text>
-<text x="360.0" y="1518.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">https://app.kimchi.dev/api/ai-optimizer/v1beta/organizations/{orgId}/quotas:usage</text>
-<text x="1048.2" y="1498.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="1498.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The workspace picker shows no quota figures. This is compute</text>
-<text x="1315.2" y="1518.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">quota, not spend.</text>
-<line x1="0" y1="1532.0" x2="1849" y2="1532.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1556.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Telemetry — logs</text>
-<text x="360.0" y="1556.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://api.cast.ai/ai-optimizer/v1beta/logs:ingest</text>
-<text x="1048.2" y="1556.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config telemetry.endpoint</text>
-<text x="1315.2" y="1556.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No usage events leave the machine. No functional loss.</text>
-<line x1="0" y1="1570.0" x2="1849" y2="1570.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1594.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Telemetry — metrics</text>
-<text x="360.0" y="1594.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://api.cast.ai/ai-optimizer/v1beta/metrics:ingest</text>
-<text x="1048.2" y="1594.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config</text>
-<text x="1048.2" y="1614.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">telemetry.metricsEndpoint</text>
-<text x="1315.2" y="1594.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Same as logs.</text>
-<rect x="0" y="1638.0" width="1849" height="40" fill="#171c26"/>
-<text x="12.0" y="1664.0" fill="#8ab4f8" font-size="14" font-weight="600">Remote execution</text>
-<rect x="0" y="1678.0" width="1849" height="34" fill="#11151d"/>
-<line x1="0" y1="1712.0" x2="1849" y2="1712.0" stroke="#232a36" stroke-width="1"/>
-<text x="12.0" y="1700.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
-<text x="360.0" y="1700.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
-<text x="1048.2" y="1700.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
-<text x="1315.2" y="1700.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
-<line x1="0" y1="1712.0" x2="1849" y2="1712.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1736.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace authentication — org lookup</text>
-<text x="360.0" y="1736.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {control}/ai-optimizer/v1beta/workspace-tokens:verifyKey</text>
-<text x="1048.2" y="1736.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="1736.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">All remote execution stops at the first step.</text>
-<line x1="0" y1="1750.0" x2="1849" y2="1750.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1774.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace authentication — token mint</text>
-<text x="360.0" y="1774.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {control}/ai-optimizer/v1beta/workspace-tokens:exchange</text>
-<text x="1048.2" y="1774.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="1774.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The worker plane, both WebSockets and the ssh tunnel are all</text>
-<text x="1315.2" y="1794.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">unreachable.</text>
-<line x1="0" y1="1808.0" x2="1849" y2="1808.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1832.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — list</text>
-<text x="360.0" y="1832.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {control}/ai-optimizer/v1beta/organizations/{org}/</text>
-<text x="360.0" y="1852.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">workspaces?page.limit=200&amp;clientType=harness[&amp;page.cursor=…]</text>
-<text x="1048.2" y="1832.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="1832.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The remote-session picker is empty.</text>
-<line x1="0" y1="1866.0" x2="1849" y2="1866.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1890.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — get</text>
-<text x="360.0" y="1890.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}</text>
-<text x="1048.2" y="1890.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="1890.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Ownership probes fail.</text>
-<line x1="0" y1="1904.0" x2="1849" y2="1904.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1928.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — create / update /</text>
-<text x="12.0" y="1948.0" fill="#9ecbff" font-weight="500" xml:space="preserve">rename</text>
-<text x="360.0" y="1928.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">PUT {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}</text>
-<text x="1048.2" y="1928.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="1928.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No new workspaces can be created.</text>
-<line x1="0" y1="1962.0" x2="1849" y2="1962.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="1986.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — delete</text>
-<text x="360.0" y="1986.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">DELETE {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}</text>
-<text x="1048.2" y="1986.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="1986.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Workspaces can only be removed elsewhere.</text>
-<line x1="0" y1="2000.0" x2="1849" y2="2000.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2024.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — resume</text>
-<text x="360.0" y="2024.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}:resume</text>
-<text x="1048.2" y="2024.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="2024.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Connecting to a hibernated workspace fails; see section 4.4.</text>
-<line x1="0" y1="2038.0" x2="1849" y2="2038.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2062.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace quotas</text>
-<text x="360.0" y="2062.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {control}/ai-optimizer/v1beta/organizations/{org}/quotas:usage</text>
-<text x="1048.2" y="2062.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
-<text x="1315.2" y="2062.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The picker shows no quota figures. Presentational only.</text>
-<rect x="0" y="2086.0" width="1849" height="40" fill="#171c26"/>
-<text x="12.0" y="2112.0" fill="#8ab4f8" font-size="14" font-weight="600">Remote execution</text>
-<rect x="0" y="2126.0" width="1849" height="34" fill="#11151d"/>
-<line x1="0" y1="2160.0" x2="1849" y2="2160.0" stroke="#232a36" stroke-width="1"/>
-<text x="12.0" y="2148.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
-<text x="360.0" y="2148.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
-<text x="1048.2" y="2148.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
-<text x="1315.2" y="2148.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
-<line x1="0" y1="2160.0" x2="1849" y2="2160.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2184.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace readiness</text>
-<text x="360.0" y="2184.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {worker}/api/startupcompletedz</text>
-<text x="1048.2" y="2184.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none — server-assigned host</text>
-<text x="1315.2" y="2184.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Every remote connection times out at the readiness gate.</text>
-<line x1="0" y1="2198.0" x2="1849" y2="2198.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2222.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session management — list</text>
-<text x="360.0" y="2222.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {worker}/api/session?clientType=harness</text>
-<text x="1048.2" y="2222.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2222.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The session picker is empty.</text>
-<line x1="0" y1="2236.0" x2="1849" y2="2236.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2260.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session management — get</text>
-<text x="360.0" y="2260.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {worker}/api/session/{name}</text>
-<text x="1048.2" y="2260.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2260.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Reattach cannot verify a session.</text>
-<line x1="0" y1="2274.0" x2="1849" y2="2274.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2298.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session management — create</text>
-<text x="360.0" y="2298.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST (multipart) {worker}/api/session/{name}</text>
-<text x="1048.2" y="2298.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2298.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No remote session can start. This is the only genuine HTTP</text>
-<text x="1315.2" y="2318.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">upload in the whole surface.</text>
-<line x1="0" y1="2332.0" x2="1849" y2="2332.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2356.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session management — delete</text>
-<text x="360.0" y="2356.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">DELETE {worker}/api/session/{name}</text>
-<text x="1048.2" y="2356.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2356.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Sessions accumulate.</text>
-<line x1="0" y1="2370.0" x2="1849" y2="2370.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2394.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Git identity — global</text>
-<text x="360.0" y="2394.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">PUT {worker}/api/gitidentity</text>
-<text x="1048.2" y="2394.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2394.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Remote commits carry no identity.</text>
-<line x1="0" y1="2408.0" x2="1849" y2="2408.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2432.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Git identity — per host, create</text>
-<text x="360.0" y="2432.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {worker}/api/gitidentity/{host}</text>
-<text x="1048.2" y="2432.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2432.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Remote git against that host is unauthenticated.</text>
-<line x1="0" y1="2446.0" x2="1849" y2="2446.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2470.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Git identity — per host, update</text>
-<text x="360.0" y="2470.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">PUT {worker}/api/gitidentity/{host}</text>
-<text x="1048.2" y="2470.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2470.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Same.</text>
-<line x1="0" y1="2484.0" x2="1849" y2="2484.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2508.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Secret provisioning</text>
-<text x="360.0" y="2508.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">PUT {worker}/api/secrets</text>
-<text x="1048.2" y="2508.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2508.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The worker&#x27;s credential helper has no token to serve to git.</text>
-<rect x="0" y="2532.0" width="1849" height="40" fill="#171c26"/>
-<text x="12.0" y="2558.0" fill="#8ab4f8" font-size="14" font-weight="600">Remote execution</text>
-<rect x="0" y="2572.0" width="1849" height="34" fill="#11151d"/>
-<line x1="0" y1="2606.0" x2="1849" y2="2606.0" stroke="#232a36" stroke-width="1"/>
-<text x="12.0" y="2594.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
-<text x="360.0" y="2594.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
-<text x="1048.2" y="2594.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
-<text x="1315.2" y="2594.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
-<line x1="0" y1="2606.0" x2="1849" y2="2606.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2630.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Remote agents / cloud tasks</text>
-<text x="360.0" y="2630.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">wss://&lt;workspace-host&gt;/session/{name}/connect, ACP JSON-RPC framing</text>
-<text x="1048.2" y="2630.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2630.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">/remote-run and the dispatch_to_cloud_agent tool stop working.</text>
-<line x1="0" y1="2644.0" x2="1849" y2="2644.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2668.0" fill="#9ecbff" font-weight="500" xml:space="preserve">/teleport</text>
-<text x="360.0" y="2668.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same URL, raw-byte PTY framing</text>
-<text x="1048.2" y="2668.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
-<text x="1315.2" y="2668.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">/teleport and /terminal stop working.</text>
-<line x1="0" y1="2682.0" x2="1849" y2="2682.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2706.0" fill="#9ecbff" font-weight="500" xml:space="preserve">SSH / rsync tunnel</text>
-<text x="360.0" y="2706.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">wss://&lt;workspace-host&gt;:443/ssh (tools/proxy-helper/cmd/proxy/proxy.go:50; port</text>
-<text x="360.0" y="2726.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">flag defaults to 443 at :209 and the CLI never passes it, src/ssh-proxy.ts:68)</text>
-<text x="1048.2" y="2706.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none for the host; env</text>
-<text x="1048.2" y="2726.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">KIMCHI_PROXY_HELPER repoints</text>
-<text x="1048.2" y="2746.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">the helper binary, not the</text>
-<text x="1048.2" y="2766.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">target</text>
-<text x="1315.2" y="2706.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">File sync and /terminal stop working.</text>
-<line x1="0" y1="2780.0" x2="1849" y2="2780.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2804.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Project transfer</text>
-<text x="360.0" y="2804.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1048.2" y="2804.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="2804.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">File sync stops; remote sessions can still clone server-side.</text>
-<line x1="0" y1="2818.0" x2="1849" y2="2818.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2842.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Server-side clone</text>
-<text x="360.0" y="2842.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">— — details.git on the session-create body</text>
-<text x="1048.2" y="2842.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="2842.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Every remote session must be populated by rsync instead.</text>
-<line x1="0" y1="2856.0" x2="1849" y2="2856.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="2880.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Harness config sync</text>
-<text x="360.0" y="2880.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1048.2" y="2880.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="2880.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Remote sessions start with default settings, keybindings,</text>
-<text x="1315.2" y="2900.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">themes and model list.</text>
-<rect x="0" y="2924.0" width="1849" height="40" fill="#171c26"/>
-<text x="12.0" y="2950.0" fill="#8ab4f8" font-size="14" font-weight="600">Self-hosted model infrastructure</text>
-<rect x="0" y="2964.0" width="1849" height="34" fill="#11151d"/>
-<line x1="0" y1="2998.0" x2="1849" y2="2998.0" stroke="#232a36" stroke-width="1"/>
-<text x="12.0" y="2986.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
-<text x="360.0" y="2986.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
-<text x="1048.2" y="2986.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
-<text x="1315.2" y="2986.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
-<line x1="0" y1="2998.0" x2="1849" y2="2998.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3022.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Model deployment</text>
-<text x="360.0" y="3022.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">— — no endpoint is documented and none exists in any tree or binary</text>
-<text x="1048.2" y="3022.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="3022.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing in the CLI. It has no client for this.</text>
-<line x1="0" y1="3036.0" x2="1849" y2="3036.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3060.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Autoscaling / hibernation</text>
-<text x="360.0" y="3060.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">— — console UI only</text>
-<text x="1048.2" y="3060.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="3060.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing in the CLI.</text>
-<line x1="0" y1="3074.0" x2="1849" y2="3074.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3098.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Configured fallback</text>
-<text x="360.0" y="3098.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">— — a params.fallbacks field plus an anthropic-beta:</text>
-<text x="360.0" y="3118.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">server-side-fallback-2026-07-01 header on the Anthropic wire row of section 2.1</text>
-<text x="1048.2" y="3098.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="3098.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Not separately disableable; the decision is the gateway&#x27;s.</text>
-<line x1="0" y1="3132.0" x2="1849" y2="3132.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3156.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Hosted-model catalogue for a cluster</text>
-<text x="360.0" y="3156.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {host unresolved}/ai-optimizer/v1beta/organizations/{organizationId}/clusters/</text>
-<text x="360.0" y="3176.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">{clusterId}/hosted-models — documented only (docs/hosted-model-deployments.md:97),</text>
-<text x="360.0" y="3196.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">zero occurrences in any tree or binary</text>
-<text x="1048.2" y="3156.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="3156.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing in the CLI.</text>
-<line x1="0" y1="3210.0" x2="1849" y2="3210.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3234.0" fill="#9ecbff" font-weight="500" xml:space="preserve">In-cluster inference proxy</text>
-<text x="360.0" y="3234.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST</text>
-<text x="360.0" y="3254.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">http://castai-ai-optimizer-proxy.castai-agent.svc.cluster.local:443/openai/v1/</text>
-<text x="360.0" y="3274.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">chat/completions — documented only (docs/hosted-model-deployments.md:107,113)</text>
-<text x="1048.2" y="3234.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
-<text x="1315.2" y="3234.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing in the CLI.</text>
-<line x1="0" y1="3288.0" x2="1849" y2="3288.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3312.0" fill="#9ecbff" font-weight="500" xml:space="preserve">What the CLI actually sees</text>
-<text x="360.0" y="3312.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">the catalog GET of section 2.1</text>
-<text x="1048.2" y="3312.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint</text>
-<text x="1315.2" y="3312.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Covered in section 2.1.</text>
-<rect x="0" y="3336.0" width="1849" height="40" fill="#171c26"/>
-<text x="12.0" y="3362.0" fill="#8ab4f8" font-size="14" font-weight="600">Local and loopback surfaces</text>
-<rect x="0" y="3376.0" width="1849" height="34" fill="#11151d"/>
-<line x1="0" y1="3410.0" x2="1849" y2="3410.0" stroke="#232a36" stroke-width="1"/>
-<text x="12.0" y="3398.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
-<text x="360.0" y="3398.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
-<text x="1048.2" y="3398.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
-<text x="1315.2" y="3398.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
-<line x1="0" y1="3410.0" x2="1849" y2="3410.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3434.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local model discovery — list</text>
-<text x="360.0" y="3434.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {ollamaHost}/api/tags</text>
-<text x="1048.2" y="3434.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env OLLAMA_HOST, else</text>
-<text x="1048.2" y="3454.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">KIMCHI_OLLAMA_HOST, else</text>
-<text x="1048.2" y="3474.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">http://localhost:11434</text>
-<text x="1315.2" y="3434.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No locally discovered models are registered. Failure is already</text>
-<text x="1315.2" y="3454.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">silent by design.</text>
-<line x1="0" y1="3488.0" x2="1849" y2="3488.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3512.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local model discovery — probe</text>
-<text x="360.0" y="3512.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {ollamaHost}/api/show</text>
-<text x="1048.2" y="3512.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same</text>
-<text x="1315.2" y="3512.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Discovered models fall back to the tag entry&#x27;s defaults.</text>
-<line x1="0" y1="3526.0" x2="1849" y2="3526.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3550.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local inference</text>
-<text x="360.0" y="3550.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {ollamaHost}/v1/chat/completions (provider row src/ollama.ts:398-400)</text>
-<text x="1048.2" y="3550.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same</text>
-<text x="1315.2" y="3550.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Local models become uncallable. No Kimchi credential is</text>
-<text x="1315.2" y="3570.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">attached to this row; its apiKey is the sentinel</text>
-<text x="1315.2" y="3590.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">ollama-no-key-needed.</text>
-<line x1="0" y1="3604.0" x2="1849" y2="3604.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3628.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local llama.cpp router mode</text>
-<text x="360.0" y="3628.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET/POST</text>
-<text x="360.0" y="3648.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">http://127.0.0.1:8080/{models,models?reload=1,models/load,models/unload,models/</text>
-<text x="360.0" y="3668.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">sse,props}</text>
-<text x="1048.2" y="3628.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">upstream harness setting</text>
-<text x="1315.2" y="3628.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Router mode is unavailable. This belongs to the upstream</text>
-<text x="1315.2" y="3648.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">harness, not to Kimchi.</text>
-<line x1="0" y1="3682.0" x2="1849" y2="3682.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3706.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Provider OAuth callback receiver</text>
-<text x="360.0" y="3706.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET http://localhost:&lt;ephemeral&gt;/auth/callback</text>
-<text x="1048.2" y="3706.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
-<text x="1315.2" y="3706.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Provider OAuth logins cannot complete.</text>
-<line x1="0" y1="3720.0" x2="1849" y2="3720.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3744.0" fill="#9ecbff" font-weight="500" xml:space="preserve">MCP-App host server</text>
-<text x="360.0" y="3744.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">/events, /health, /app-bridge.bundle.js, /resource/…, /sandbox, /favicon.ico on</text>
-<text x="360.0" y="3764.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">127.0.0.1</text>
-<text x="1048.2" y="3744.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
-<text x="1315.2" y="3744.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">MCP apps do not render.</text>
-<line x1="0" y1="3778.0" x2="1849" y2="3778.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3802.0" fill="#9ecbff" font-weight="500" xml:space="preserve">MCP-App proxy server</text>
-<text x="360.0" y="3802.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST /proxy/tools/call and POST /proxy/ui/</text>
-<text x="360.0" y="3822.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">{consent,context,message,open-link,download-file,request-display-mode,generated-to</text>
-<text x="360.0" y="3842.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">ol-call-intent,heartbeat,complete} on 127.0.0.1:0</text>
-<text x="1048.2" y="3802.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
-<text x="1315.2" y="3802.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">MCP apps cannot call tools.</text>
-<line x1="0" y1="3856.0" x2="1849" y2="3856.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3880.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local MCP WebSocket</text>
-<text x="360.0" y="3880.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">ws://127.0.0.1:&lt;lockfile.port&gt;/mcp</text>
-<text x="1048.2" y="3880.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">lockfile-assigned</text>
-<text x="1315.2" y="3880.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">That MCP server is unreachable.</text>
-<line x1="0" y1="3894.0" x2="1849" y2="3894.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="3918.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Fixed-port local probe</text>
-<text x="360.0" y="3918.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">127.0.0.1:24543</text>
-<text x="1048.2" y="3918.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
-<text x="1315.2" y="3918.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The probe reports unavailable.</text>
-<rect x="0" y="3942.0" width="1849" height="40" fill="#171c26"/>
-<text x="12.0" y="3968.0" fill="#8ab4f8" font-size="14" font-weight="600">Distribution and self-update</text>
-<rect x="0" y="3982.0" width="1849" height="34" fill="#11151d"/>
-<line x1="0" y1="4016.0" x2="1849" y2="4016.0" stroke="#232a36" stroke-width="1"/>
-<text x="12.0" y="4004.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
-<text x="360.0" y="4004.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
-<text x="1048.2" y="4004.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
-<text x="1315.2" y="4004.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
-<line x1="0" y1="4016.0" x2="1849" y2="4016.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="4040.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Latest release lookup</text>
-<text x="360.0" y="4040.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.github.com/repos/getkimchi/kimchi/releases/latest</text>
-<text x="1048.2" y="4040.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change — constructor</text>
-<text x="1048.2" y="4060.0" fill="#f0a868" font-weight="400" xml:space="preserve">options exist but no call site</text>
-<text x="1048.2" y="4080.0" fill="#f0a868" font-weight="400" xml:space="preserve">passes them</text>
-<text x="1315.2" y="4040.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">kimchi update cannot find a new version. A packaged install is</text>
-<text x="1315.2" y="4060.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">unaffected.</text>
-<line x1="0" y1="4094.0" x2="1849" y2="4094.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="4118.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Release by tag</text>
-<text x="360.0" y="4118.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.github.com/repos/getkimchi/kimchi/releases/tags/{tag}</text>
-<text x="1048.2" y="4118.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
-<text x="1315.2" y="4118.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Pinned-version updates fail.</text>
-<line x1="0" y1="4132.0" x2="1849" y2="4132.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="4156.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Canary release</text>
-<text x="360.0" y="4156.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.github.com/repos/getkimchi/kimchi/releases/tags/canary</text>
-<text x="1048.2" y="4156.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
-<text x="1315.2" y="4156.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Canary updates fail.</text>
-<line x1="0" y1="4170.0" x2="1849" y2="4170.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="4194.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Checksums</text>
-<text x="360.0" y="4194.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://github.com/getkimchi/kimchi/releases/download/{tag}/checksums.txt</text>
-<text x="1048.2" y="4194.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
-<text x="1315.2" y="4194.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Updates abort before download.</text>
-<line x1="0" y1="4208.0" x2="1849" y2="4208.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="4232.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Binary archive</text>
-<text x="360.0" y="4232.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://github.com/getkimchi/kimchi/releases/download/{tag}/{asset}</text>
-<text x="1048.2" y="4232.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
-<text x="1315.2" y="4232.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Self-update cannot install.</text>
-<line x1="0" y1="4246.0" x2="1849" y2="4246.0" stroke="#232a36" stroke-width="0.5"/>
-<text x="12.0" y="4270.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Plugin version check</text>
-<text x="360.0" y="4270.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://registry.npmjs.org/…</text>
-<text x="1048.2" y="4270.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
-<text x="1315.2" y="4270.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The plugin version check is skipped.</text>
+<text x="12.0" y="918.0" fill="#9ecbff" font-weight="500" xml:space="preserve">web_fetch</text>
+<text x="360.0" y="918.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1048.2" y="918.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
+<text x="1315.2" y="918.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The web_fetch tool stops working.</text>
+<line x1="0" y1="932.0" x2="1849" y2="932.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="956.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Memory — embeddings</text>
+<text x="360.0" y="956.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {llmEndpoint}/embeddings — the vendored mem0 library builds an OpenAI client</text>
+<text x="360.0" y="976.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">with baseURL: config.baseURL and calls embeddings.create; that baseURL is</text>
+<text x="360.0" y="996.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">config.llmEndpoint; model bge-m3 at backend.ts:24</text>
+<text x="1048.2" y="956.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, consumed</text>
+<text x="1048.2" y="976.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">raw; else the region&#x27;s</text>
+<text x="1048.2" y="996.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">/openai/v1 base.</text>
+<text x="1048.2" y="1016.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">memoryEmbedding.model/.dims</text>
+<text x="1048.2" y="1036.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">change the model only</text>
+<text x="1315.2" y="956.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Recall and memory_search return nothing. Memory is opt-in and</text>
+<text x="1315.2" y="976.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">experimental, new in 1.1.33 — see below.</text>
+<line x1="0" y1="1050.0" x2="1849" y2="1050.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1074.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Memory — model check</text>
+<text x="360.0" y="1074.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {llmEndpoint}/models, once per capture-worker start, skipped when</text>
+<text x="360.0" y="1094.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">memoryExtraction.model is set</text>
+<text x="1048.2" y="1074.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same</text>
+<text x="1315.2" y="1074.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The worker assumes deepseek-v4-flash-0731 is served.</text>
+<line x1="0" y1="1108.0" x2="1849" y2="1108.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1132.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Memory — fact extraction</text>
+<text x="360.0" y="1132.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {llmEndpoint}/chat/completions</text>
+<text x="1048.2" y="1132.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same</text>
+<text x="1315.2" y="1132.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing new is remembered. The session itself is unaffected;</text>
+<text x="1315.2" y="1152.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">capture runs in a detached worker.</text>
+<line x1="0" y1="1166.0" x2="1849" y2="1166.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1190.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Auto entitlement gate</text>
+<text x="360.0" y="1190.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://app.kimchi.dev/api/v1/me (30:</text>
+<text x="360.0" y="1210.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">src/extensions/router/auto-default-gate.ts:87 → 30: src/api/me.ts:33; warmed at</text>
+<text x="360.0" y="1230.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">30: src/cli.ts:340)</text>
+<text x="1048.2" y="1190.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT</text>
+<text x="1315.2" y="1190.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The gate fails closed: Auto is not offered, not discoverable,</text>
+<text x="1315.2" y="1210.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">and an explicit --model kimchi-dev/auto throws. New in 1.1.29,</text>
+<text x="1315.2" y="1230.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">removed in 1.1.37 — section 4.3.</text>
+<rect x="0" y="1254.0" width="1849" height="40" fill="#171c26"/>
+<text x="12.0" y="1280.0" fill="#8ab4f8" font-size="14" font-weight="600">Account, billing and reporting</text>
+<rect x="0" y="1294.0" width="1849" height="34" fill="#11151d"/>
+<line x1="0" y1="1328.0" x2="1849" y2="1328.0" stroke="#232a36" stroke-width="1"/>
+<text x="12.0" y="1316.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
+<text x="360.0" y="1316.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
+<text x="1048.2" y="1316.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
+<text x="1315.2" y="1316.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="1328.0" x2="1849" y2="1328.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1352.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Authentication — browser login</text>
+<text x="360.0" y="1352.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://app.kimchi.dev/cli-auth?callback=&lt;urlenc&gt;&amp;state=&lt;32-byte hex&gt;</text>
+<text x="1048.2" y="1352.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_WEB_APP_URL, else</text>
+<text x="1048.2" y="1372.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region</text>
+<text x="1315.2" y="1352.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Browser login is unavailable. A key must come from</text>
+<text x="1315.2" y="1372.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">KIMCHI_API_KEY or the config file.</text>
+<line x1="0" y1="1386.0" x2="1849" y2="1386.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1410.0" fill="#9ecbff" font-weight="500" xml:space="preserve">↳ callback receiver</text>
+<text x="360.0" y="1410.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET http://127.0.0.1:&lt;ephemeral&gt;/callback?token=…&amp;state=…</text>
+<text x="1048.2" y="1410.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
+<text x="1315.2" y="1410.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Browser login cannot complete.</text>
+<line x1="0" y1="1424.0" x2="1849" y2="1424.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1448.0" fill="#9ecbff" font-weight="500" xml:space="preserve">API-key validation — setup-wizard path</text>
+<text x="360.0" y="1448.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.cast.ai/v1/llm/openai/supported-providers</text>
+<text x="1048.2" y="1448.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region only. A source change</text>
+<text x="1048.2" y="1468.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">through 1.1.34</text>
+<text x="1315.2" y="1448.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The wizard cannot check a key before writing it.</text>
+<line x1="0" y1="1482.0" x2="1849" y2="1482.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1506.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Account identity</text>
+<text x="360.0" y="1506.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://app.kimchi.dev/api/v1/me</text>
+<text x="1048.2" y="1506.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="1526.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="1506.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Telemetry events lose userId and userEmail. Through 1.1.36 the</text>
+<text x="1315.2" y="1526.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Auto gate also failed closed.</text>
+<line x1="0" y1="1540.0" x2="1849" y2="1540.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1564.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Credits status</text>
+<text x="360.0" y="1564.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://llm.kimchi.dev/v1/credits (built by</text>
+<text x="360.0" y="1584.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">src/extensions/billing/status.ts:164-167)</text>
+<text x="1048.2" y="1564.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, derived;</text>
+<text x="1048.2" y="1584.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="1564.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The status line and the /budget table show no spend figures. No</text>
+<text x="1315.2" y="1584.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">request is gated either way.</text>
+<line x1="0" y1="1598.0" x2="1849" y2="1598.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1622.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Budget status</text>
+<text x="360.0" y="1622.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://llm.kimchi.dev/v1/budget (same builder; 404 handling</text>
+<text x="360.0" y="1642.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">src/extensions/billing/status.ts:223-226)</text>
+<text x="1048.2" y="1622.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint, derived;</text>
+<text x="1048.2" y="1642.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="1622.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Same as credits.</text>
+<line x1="0" y1="1656.0" x2="1849" y2="1656.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1680.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Spend enforcement</text>
+<text x="360.0" y="1680.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1048.2" y="1680.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="1680.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing client-side exists to disable. Enforcement is the</text>
+<text x="1315.2" y="1700.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">gateway&#x27;s and is visible only in-band.</text>
+<line x1="0" y1="1714.0" x2="1849" y2="1714.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1738.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Usage analytics — analytics</text>
+<text x="360.0" y="1738.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.cast.ai/ai-optimizer/v1beta/</text>
+<text x="360.0" y="1758.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">analytics?startTime&amp;endTime&amp;inferUserFromApiKey=true</text>
+<text x="1048.2" y="1738.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region only. A source change</text>
+<text x="1048.2" y="1758.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">through 1.1.34</text>
+<text x="1315.2" y="1738.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">kimchi stats returns nothing.</text>
+<line x1="0" y1="1772.0" x2="1849" y2="1772.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1796.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Usage analytics — productivity</text>
+<text x="360.0" y="1796.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.cast.ai/ai-optimizer/v1beta/</text>
+<text x="360.0" y="1816.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">productivity-metrics?from&amp;to&amp;inferUserFromApiKey=true[&amp;provider_name][&amp;metric_name</text>
+<text x="360.0" y="1836.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">s][&amp;session_id]</text>
+<text x="1048.2" y="1796.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region only</text>
+<text x="1315.2" y="1796.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">kimchi stats returns nothing.</text>
+<line x1="0" y1="1850.0" x2="1849" y2="1850.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1874.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Usage analytics — timeseries</text>
+<text x="360.0" y="1874.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET</text>
+<text x="360.0" y="1894.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">https://api.cast.ai/ai-optimizer/v1beta/productivity-metrics:generateTimeseries?…</text>
+<text x="1048.2" y="1874.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">region only</text>
+<text x="1315.2" y="1874.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing. No caller exists at any version.</text>
+<line x1="0" y1="1908.0" x2="1849" y2="1908.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1932.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Compute quota usage</text>
+<text x="360.0" y="1932.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET</text>
+<text x="360.0" y="1952.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">https://app.kimchi.dev/api/ai-optimizer/v1beta/organizations/{orgId}/quotas:usage</text>
+<text x="1048.2" y="1932.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="1952.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="1932.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The workspace picker shows no quota figures. This is compute</text>
+<text x="1315.2" y="1952.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">quota, not spend.</text>
+<line x1="0" y1="1966.0" x2="1849" y2="1966.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="1990.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Telemetry — logs</text>
+<text x="360.0" y="1990.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://api.cast.ai/ai-optimizer/v1beta/logs:ingest</text>
+<text x="1048.2" y="1990.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config telemetry.endpoint,</text>
+<text x="1048.2" y="2010.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="1990.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No usage events leave the machine. No functional loss.</text>
+<line x1="0" y1="2024.0" x2="1849" y2="2024.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2048.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Telemetry — metrics</text>
+<text x="360.0" y="2048.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST https://api.cast.ai/ai-optimizer/v1beta/metrics:ingest</text>
+<text x="1048.2" y="2048.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config</text>
+<text x="1048.2" y="2068.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">telemetry.metricsEndpoint,</text>
+<text x="1048.2" y="2088.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2048.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Same as logs.</text>
+<rect x="0" y="2112.0" width="1849" height="40" fill="#171c26"/>
+<text x="12.0" y="2138.0" fill="#8ab4f8" font-size="14" font-weight="600">Remote execution</text>
+<rect x="0" y="2152.0" width="1849" height="34" fill="#11151d"/>
+<line x1="0" y1="2186.0" x2="1849" y2="2186.0" stroke="#232a36" stroke-width="1"/>
+<text x="12.0" y="2174.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
+<text x="360.0" y="2174.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
+<text x="1048.2" y="2174.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
+<text x="1315.2" y="2174.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="2186.0" x2="1849" y2="2186.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2210.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace authentication — org lookup</text>
+<text x="360.0" y="2210.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {control}/ai-optimizer/v1beta/workspace-tokens:verifyKey</text>
+<text x="1048.2" y="2210.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="2230.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2210.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">All remote execution stops at the first step.</text>
+<line x1="0" y1="2244.0" x2="1849" y2="2244.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2268.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace authentication — token mint</text>
+<text x="360.0" y="2268.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {control}/ai-optimizer/v1beta/workspace-tokens:exchange</text>
+<text x="1048.2" y="2268.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="2288.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2268.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The worker plane, both WebSockets and the ssh tunnel are all</text>
+<text x="1315.2" y="2288.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">unreachable.</text>
+<line x1="0" y1="2302.0" x2="1849" y2="2302.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2326.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — list</text>
+<text x="360.0" y="2326.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {control}/ai-optimizer/v1beta/organizations/{org}/</text>
+<text x="360.0" y="2346.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">workspaces?page.limit=200&amp;clientType=harness[&amp;page.cursor=…]</text>
+<text x="1048.2" y="2326.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="2346.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2326.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The remote-session picker is empty.</text>
+<line x1="0" y1="2360.0" x2="1849" y2="2360.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2384.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — get</text>
+<text x="360.0" y="2384.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}</text>
+<text x="1048.2" y="2384.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="2404.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2384.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Ownership probes fail.</text>
+<line x1="0" y1="2418.0" x2="1849" y2="2418.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2442.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — create / update /</text>
+<text x="12.0" y="2462.0" fill="#9ecbff" font-weight="500" xml:space="preserve">rename</text>
+<text x="360.0" y="2442.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">PUT {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}</text>
+<text x="1048.2" y="2442.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="2462.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2442.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No new workspaces can be created.</text>
+<line x1="0" y1="2476.0" x2="1849" y2="2476.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2500.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — delete</text>
+<text x="360.0" y="2500.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">DELETE {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}</text>
+<text x="1048.2" y="2500.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="2520.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2500.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Workspaces can only be removed elsewhere.</text>
+<line x1="0" y1="2534.0" x2="1849" y2="2534.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2558.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace lifecycle — resume</text>
+<text x="360.0" y="2558.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}:resume</text>
+<text x="1048.2" y="2558.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="2578.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2558.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Connecting to a hibernated workspace fails; see section 4.4.</text>
+<line x1="0" y1="2592.0" x2="1849" y2="2592.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2616.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace quotas</text>
+<text x="360.0" y="2616.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {control}/ai-optimizer/v1beta/organizations/{org}/quotas:usage</text>
+<text x="1048.2" y="2616.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env KIMCHI_REMOTE_ENDPOINT,</text>
+<text x="1048.2" y="2636.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">else region</text>
+<text x="1315.2" y="2616.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The picker shows no quota figures. Presentational only.</text>
+<rect x="0" y="2660.0" width="1849" height="40" fill="#171c26"/>
+<text x="12.0" y="2686.0" fill="#8ab4f8" font-size="14" font-weight="600">Remote execution</text>
+<rect x="0" y="2700.0" width="1849" height="34" fill="#11151d"/>
+<line x1="0" y1="2734.0" x2="1849" y2="2734.0" stroke="#232a36" stroke-width="1"/>
+<text x="12.0" y="2722.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
+<text x="360.0" y="2722.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
+<text x="1048.2" y="2722.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
+<text x="1315.2" y="2722.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="2734.0" x2="1849" y2="2734.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2758.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Workspace readiness</text>
+<text x="360.0" y="2758.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {worker}/api/startupcompletedz</text>
+<text x="1048.2" y="2758.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none — server-assigned host</text>
+<text x="1315.2" y="2758.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Every remote connection times out at the readiness gate.</text>
+<line x1="0" y1="2772.0" x2="1849" y2="2772.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2796.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session management — list</text>
+<text x="360.0" y="2796.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {worker}/api/session?clientType=harness</text>
+<text x="1048.2" y="2796.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="2796.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The session picker is empty.</text>
+<line x1="0" y1="2810.0" x2="1849" y2="2810.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2834.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session management — get</text>
+<text x="360.0" y="2834.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {worker}/api/session/{name}</text>
+<text x="1048.2" y="2834.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="2834.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Reattach cannot verify a session.</text>
+<line x1="0" y1="2848.0" x2="1849" y2="2848.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2872.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session management — create</text>
+<text x="360.0" y="2872.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST (multipart) {worker}/api/session/{name}; since 1.1.32 a cloud subagent&#x27;s</text>
+<text x="360.0" y="2892.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">session also carries tags.parent_session_id, the local session id</text>
+<text x="1048.2" y="2872.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="2872.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No remote session can start. This is the only genuine HTTP</text>
+<text x="1315.2" y="2892.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">upload in the whole surface.</text>
+<line x1="0" y1="2906.0" x2="1849" y2="2906.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2930.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Session management — delete</text>
+<text x="360.0" y="2930.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">DELETE {worker}/api/session/{name}</text>
+<text x="1048.2" y="2930.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="2930.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Sessions accumulate.</text>
+<line x1="0" y1="2944.0" x2="1849" y2="2944.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="2968.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Git identity — global</text>
+<text x="360.0" y="2968.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">PUT {worker}/api/gitidentity</text>
+<text x="1048.2" y="2968.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="2968.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Remote commits carry no identity.</text>
+<line x1="0" y1="2982.0" x2="1849" y2="2982.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3006.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Git identity — per host, create</text>
+<text x="360.0" y="3006.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {worker}/api/gitidentity/{host}</text>
+<text x="1048.2" y="3006.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="3006.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Remote git against that host is unauthenticated.</text>
+<line x1="0" y1="3020.0" x2="1849" y2="3020.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3044.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Git identity — per host, update</text>
+<text x="360.0" y="3044.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">PUT {worker}/api/gitidentity/{host}</text>
+<text x="1048.2" y="3044.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="3044.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Same.</text>
+<line x1="0" y1="3058.0" x2="1849" y2="3058.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3082.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Secret provisioning</text>
+<text x="360.0" y="3082.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">PUT {worker}/api/secrets</text>
+<text x="1048.2" y="3082.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="3082.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The worker&#x27;s credential helper has no token to serve to git.</text>
+<rect x="0" y="3106.0" width="1849" height="40" fill="#171c26"/>
+<text x="12.0" y="3132.0" fill="#8ab4f8" font-size="14" font-weight="600">Remote execution</text>
+<rect x="0" y="3146.0" width="1849" height="34" fill="#11151d"/>
+<line x1="0" y1="3180.0" x2="1849" y2="3180.0" stroke="#232a36" stroke-width="1"/>
+<text x="12.0" y="3168.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
+<text x="360.0" y="3168.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
+<text x="1048.2" y="3168.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
+<text x="1315.2" y="3168.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="3180.0" x2="1849" y2="3180.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3204.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Remote agents / cloud tasks</text>
+<text x="360.0" y="3204.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">wss://&lt;workspace-host&gt;/session/{name}/connect, ACP JSON-RPC framing</text>
+<text x="1048.2" y="3204.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="3204.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">/remote-run and the dispatch_to_cloud_agent tool stop working.</text>
+<line x1="0" y1="3218.0" x2="1849" y2="3218.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3242.0" fill="#9ecbff" font-weight="500" xml:space="preserve">/teleport</text>
+<text x="360.0" y="3242.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same URL, raw-byte PTY framing</text>
+<text x="1048.2" y="3242.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none</text>
+<text x="1315.2" y="3242.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">/teleport and /terminal stop working.</text>
+<line x1="0" y1="3256.0" x2="1849" y2="3256.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3280.0" fill="#9ecbff" font-weight="500" xml:space="preserve">SSH / rsync tunnel</text>
+<text x="360.0" y="3280.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">wss://&lt;workspace-host&gt;:443/ssh (tools/proxy-helper/cmd/proxy/proxy.go:50; port</text>
+<text x="360.0" y="3300.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">flag defaults to 443 at :209 and the CLI never passes it, src/ssh-proxy.ts:68)</text>
+<text x="1048.2" y="3280.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">none for the host; env</text>
+<text x="1048.2" y="3300.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">KIMCHI_PROXY_HELPER repoints</text>
+<text x="1048.2" y="3320.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">the helper binary, not the</text>
+<text x="1048.2" y="3340.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">target. The helper&#x27;s own</text>
+<text x="1048.2" y="3360.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">control-plane handshake reads</text>
+<text x="1048.2" y="3380.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">KIMCHI_REMOTE_ENDPOINT and</text>
+<text x="1048.2" y="3400.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">otherwise the US host, never</text>
+<text x="1048.2" y="3420.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">the region — section 4.10</text>
+<text x="1315.2" y="3280.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">File sync and /terminal stop working.</text>
+<line x1="0" y1="3434.0" x2="1849" y2="3434.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3458.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Project transfer</text>
+<text x="360.0" y="3458.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1048.2" y="3458.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="3458.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">File sync stops; remote sessions can still clone server-side.</text>
+<line x1="0" y1="3472.0" x2="1849" y2="3472.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3496.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Server-side clone</text>
+<text x="360.0" y="3496.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">— — details.git on the session-create body</text>
+<text x="1048.2" y="3496.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="3496.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Every remote session must be populated by rsync instead.</text>
+<line x1="0" y1="3510.0" x2="1849" y2="3510.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3534.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Harness config sync</text>
+<text x="360.0" y="3534.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1048.2" y="3534.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="3534.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Remote sessions start with default settings, keybindings,</text>
+<text x="1315.2" y="3554.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">themes and model list.</text>
+<rect x="0" y="3578.0" width="1849" height="40" fill="#171c26"/>
+<text x="12.0" y="3604.0" fill="#8ab4f8" font-size="14" font-weight="600">Self-hosted model infrastructure</text>
+<rect x="0" y="3618.0" width="1849" height="34" fill="#11151d"/>
+<line x1="0" y1="3652.0" x2="1849" y2="3652.0" stroke="#232a36" stroke-width="1"/>
+<text x="12.0" y="3640.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
+<text x="360.0" y="3640.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
+<text x="1048.2" y="3640.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
+<text x="1315.2" y="3640.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="3652.0" x2="1849" y2="3652.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3676.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Model deployment</text>
+<text x="360.0" y="3676.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">— — no endpoint is documented and none exists in any tree or binary</text>
+<text x="1048.2" y="3676.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="3676.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing in the CLI. It has no client for this.</text>
+<line x1="0" y1="3690.0" x2="1849" y2="3690.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3714.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Autoscaling / hibernation</text>
+<text x="360.0" y="3714.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">— — console UI only</text>
+<text x="1048.2" y="3714.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="3714.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing in the CLI.</text>
+<line x1="0" y1="3728.0" x2="1849" y2="3728.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3752.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Configured fallback</text>
+<text x="360.0" y="3752.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">— — a params.fallbacks field plus an anthropic-beta:</text>
+<text x="360.0" y="3772.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">server-side-fallback-2026-07-01 header on the Anthropic wire row of section 2.1</text>
+<text x="1048.2" y="3752.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="3752.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Not separately disableable; the decision is the gateway&#x27;s.</text>
+<line x1="0" y1="3786.0" x2="1849" y2="3786.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3810.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Hosted-model catalogue for a cluster</text>
+<text x="360.0" y="3810.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {host unresolved}/ai-optimizer/v1beta/organizations/{organizationId}/clusters/</text>
+<text x="360.0" y="3830.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">{clusterId}/hosted-models — documented only (docs/hosted-model-deployments.md:97),</text>
+<text x="360.0" y="3850.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">zero occurrences in any tree or binary</text>
+<text x="1048.2" y="3810.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="3810.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing in the CLI.</text>
+<line x1="0" y1="3864.0" x2="1849" y2="3864.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3888.0" fill="#9ecbff" font-weight="500" xml:space="preserve">In-cluster inference proxy</text>
+<text x="360.0" y="3888.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST</text>
+<text x="360.0" y="3908.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">http://castai-ai-optimizer-proxy.castai-agent.svc.cluster.local:443/openai/v1/</text>
+<text x="360.0" y="3928.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">chat/completions — documented only (docs/hosted-model-deployments.md:107,113)</text>
+<text x="1048.2" y="3888.0" fill="#6b7684" font-weight="400" xml:space="preserve">—</text>
+<text x="1315.2" y="3888.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Nothing in the CLI.</text>
+<line x1="0" y1="3942.0" x2="1849" y2="3942.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="3966.0" fill="#9ecbff" font-weight="500" xml:space="preserve">What the CLI actually sees</text>
+<text x="360.0" y="3966.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">the catalog GET of section 2.1</text>
+<text x="1048.2" y="3966.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">config llmEndpoint</text>
+<text x="1315.2" y="3966.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Covered in section 2.1.</text>
+<rect x="0" y="3990.0" width="1849" height="40" fill="#171c26"/>
+<text x="12.0" y="4016.0" fill="#8ab4f8" font-size="14" font-weight="600">Local and loopback surfaces</text>
+<rect x="0" y="4030.0" width="1849" height="34" fill="#11151d"/>
+<line x1="0" y1="4064.0" x2="1849" y2="4064.0" stroke="#232a36" stroke-width="1"/>
+<text x="12.0" y="4052.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
+<text x="360.0" y="4052.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
+<text x="1048.2" y="4052.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
+<text x="1315.2" y="4052.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="4064.0" x2="1849" y2="4064.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4088.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local model discovery — list</text>
+<text x="360.0" y="4088.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET {ollamaHost}/api/tags</text>
+<text x="1048.2" y="4088.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">env OLLAMA_HOST, else</text>
+<text x="1048.2" y="4108.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">KIMCHI_OLLAMA_HOST, else</text>
+<text x="1048.2" y="4128.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">http://localhost:11434</text>
+<text x="1315.2" y="4088.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">No locally discovered models are registered. Failure is already</text>
+<text x="1315.2" y="4108.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">silent by design.</text>
+<line x1="0" y1="4142.0" x2="1849" y2="4142.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4166.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local model discovery — probe</text>
+<text x="360.0" y="4166.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {ollamaHost}/api/show</text>
+<text x="1048.2" y="4166.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same</text>
+<text x="1315.2" y="4166.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Discovered models fall back to the tag entry&#x27;s defaults.</text>
+<line x1="0" y1="4180.0" x2="1849" y2="4180.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4204.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local inference</text>
+<text x="360.0" y="4204.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST {ollamaHost}/v1/chat/completions (provider row src/ollama.ts:398-400)</text>
+<text x="1048.2" y="4204.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">same</text>
+<text x="1315.2" y="4204.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Local models become uncallable. No Kimchi credential is</text>
+<text x="1315.2" y="4224.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">attached to this row; its apiKey is the sentinel</text>
+<text x="1315.2" y="4244.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">ollama-no-key-needed.</text>
+<line x1="0" y1="4258.0" x2="1849" y2="4258.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4282.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local llama.cpp router mode</text>
+<text x="360.0" y="4282.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET/POST</text>
+<text x="360.0" y="4302.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">http://127.0.0.1:8080/{models,models?reload=1,models/load,models/unload,models/</text>
+<text x="360.0" y="4322.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">sse,props}</text>
+<text x="1048.2" y="4282.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">upstream harness setting</text>
+<text x="1315.2" y="4282.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Router mode is unavailable. This belongs to the upstream</text>
+<text x="1315.2" y="4302.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">harness, not to Kimchi.</text>
+<line x1="0" y1="4336.0" x2="1849" y2="4336.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4360.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Provider OAuth callback receiver</text>
+<text x="360.0" y="4360.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET http://localhost:&lt;ephemeral&gt;/auth/callback</text>
+<text x="1048.2" y="4360.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
+<text x="1315.2" y="4360.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Provider OAuth logins cannot complete.</text>
+<line x1="0" y1="4374.0" x2="1849" y2="4374.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4398.0" fill="#9ecbff" font-weight="500" xml:space="preserve">MCP-App host server</text>
+<text x="360.0" y="4398.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">/events, /health, /app-bridge.bundle.js, /resource/…, /sandbox, /favicon.ico on</text>
+<text x="360.0" y="4418.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">127.0.0.1</text>
+<text x="1048.2" y="4398.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
+<text x="1315.2" y="4398.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">MCP apps do not render.</text>
+<line x1="0" y1="4432.0" x2="1849" y2="4432.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4456.0" fill="#9ecbff" font-weight="500" xml:space="preserve">MCP-App proxy server</text>
+<text x="360.0" y="4456.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">POST /proxy/tools/call and POST /proxy/ui/</text>
+<text x="360.0" y="4476.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">{consent,context,message,open-link,download-file,request-display-mode,generated-to</text>
+<text x="360.0" y="4496.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">ol-call-intent,heartbeat,complete} on 127.0.0.1:0</text>
+<text x="1048.2" y="4456.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
+<text x="1315.2" y="4456.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">MCP apps cannot call tools.</text>
+<line x1="0" y1="4510.0" x2="1849" y2="4510.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4534.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Local MCP WebSocket</text>
+<text x="360.0" y="4534.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">ws://127.0.0.1:&lt;lockfile.port&gt;/mcp</text>
+<text x="1048.2" y="4534.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">lockfile-assigned</text>
+<text x="1315.2" y="4534.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">That MCP server is unreachable.</text>
+<line x1="0" y1="4548.0" x2="1849" y2="4548.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4572.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Fixed-port local probe</text>
+<text x="360.0" y="4572.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">127.0.0.1:24543</text>
+<text x="1048.2" y="4572.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">not applicable</text>
+<text x="1315.2" y="4572.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The probe reports unavailable.</text>
+<rect x="0" y="4596.0" width="1849" height="40" fill="#171c26"/>
+<text x="12.0" y="4622.0" fill="#8ab4f8" font-size="14" font-weight="600">Distribution and self-update</text>
+<rect x="0" y="4636.0" width="1849" height="34" fill="#11151d"/>
+<line x1="0" y1="4670.0" x2="1849" y2="4670.0" stroke="#232a36" stroke-width="1"/>
+<text x="12.0" y="4658.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">CAPABILITY</text>
+<text x="360.0" y="4658.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">ENDPOINT</text>
+<text x="1048.2" y="4658.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">REPOINT</text>
+<text x="1315.2" y="4658.0" fill="#6b7684" font-size="11.5" font-weight="600" letter-spacing="0.6">IF DISABLED</text>
+<line x1="0" y1="4670.0" x2="1849" y2="4670.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4694.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Latest release lookup</text>
+<text x="360.0" y="4694.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.github.com/repos/getkimchi/kimchi/releases/latest</text>
+<text x="1048.2" y="4694.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change — constructor</text>
+<text x="1048.2" y="4714.0" fill="#f0a868" font-weight="400" xml:space="preserve">options exist but no call site</text>
+<text x="1048.2" y="4734.0" fill="#f0a868" font-weight="400" xml:space="preserve">passes them</text>
+<text x="1315.2" y="4694.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">kimchi update cannot find a new version. A packaged install is</text>
+<text x="1315.2" y="4714.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">unaffected.</text>
+<line x1="0" y1="4748.0" x2="1849" y2="4748.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4772.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Release by tag</text>
+<text x="360.0" y="4772.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.github.com/repos/getkimchi/kimchi/releases/tags/{tag}</text>
+<text x="1048.2" y="4772.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
+<text x="1315.2" y="4772.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Pinned-version updates fail.</text>
+<line x1="0" y1="4786.0" x2="1849" y2="4786.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4810.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Canary release</text>
+<text x="360.0" y="4810.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://api.github.com/repos/getkimchi/kimchi/releases/tags/canary</text>
+<text x="1048.2" y="4810.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
+<text x="1315.2" y="4810.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Canary updates fail.</text>
+<line x1="0" y1="4824.0" x2="1849" y2="4824.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4848.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Checksums</text>
+<text x="360.0" y="4848.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://github.com/getkimchi/kimchi/releases/download/{tag}/checksums.txt</text>
+<text x="1048.2" y="4848.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
+<text x="1315.2" y="4848.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Updates abort before download.</text>
+<line x1="0" y1="4862.0" x2="1849" y2="4862.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4886.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Binary archive</text>
+<text x="360.0" y="4886.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://github.com/getkimchi/kimchi/releases/download/{tag}/{asset}</text>
+<text x="1048.2" y="4886.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
+<text x="1315.2" y="4886.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">Self-update cannot install.</text>
+<line x1="0" y1="4900.0" x2="1849" y2="4900.0" stroke="#232a36" stroke-width="0.5"/>
+<text x="12.0" y="4924.0" fill="#9ecbff" font-weight="500" xml:space="preserve">Plugin version check</text>
+<text x="360.0" y="4924.0" fill="#7ee7c7" font-weight="400" xml:space="preserve">GET https://registry.npmjs.org/…</text>
+<text x="1048.2" y="4924.0" fill="#f0a868" font-weight="400" xml:space="preserve">source change</text>
+<text x="1315.2" y="4924.0" fill="#b8c2cc" font-weight="400" xml:space="preserve">The plugin version check is skipped.</text>
 </svg>

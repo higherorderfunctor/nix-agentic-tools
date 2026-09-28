@@ -100,17 +100,27 @@ At the time of writing the store held nine trees, covering 1.1.21, 1.1.25,
 ### When no tree exists for the version you want
 
 A rescan normally starts on a version nobody has built from source, which is
-exactly the case neither loop above can help with. Realize one:
+exactly the case neither loop above can help with. It is also the common case
+after a garbage collection: on 2026-09-28 the first loop found one tree, the
+pinned 1.1.37, where it had found nine a week earlier. Fetch the release tree
+directly; nothing needs to build:
 
-1. Use a checkout whose kimchi package builds from source.
-2. Set `version` and `extraction.kimchiSource` (`url` and `hash`, from
-   `nix store prefetch-file --json --unpack`) in `packages/kimchi/sources.json`
-   to the release you want.
-3. Build it. The realized `-source` path is then both the tree to read and its
-   own identification — you supplied the hash, so no inference is involved.
+```bash
+nix store prefetch-file --json --unpack \
+  "https://github.com/getkimchi/kimchi/archive/refs/tags/v<version>.tar.gz"
+```
 
-This is the only way to get a tree for an unrealized version, and it beats the
-binary route in section 2 for anything more than a couple of call sites.
+`storePath` in the output is the unpacked tree, and `hash` is its NAR hash — the
+same value `extraction.kimchiSource.hash` pins for that release. So the fetch is
+its own identification: the tag is in the URL you supplied, and the hash can be
+checked against any pin this repository ever recorded with
+`git log --all -p -- packages/kimchi/sources.json`. On 2026-09-28 the 1.1.30,
+1.1.31, 1.1.32, 1.1.33 and 1.1.36 fetches matched their recorded pins exactly.
+Fetch every release since the last census, not just the newest, so each change
+can be bisected to the version that landed it.
+
+This beats the binary route in section 2 for anything more than a couple of call
+sites.
 
 ## 2. With no source tree, read the binary
 
@@ -125,7 +135,8 @@ Lines are enormous. Re-wrap on `;{}` boundaries at about 600 characters before
 grepping, or every match returns the same line. Use the bundle only to confirm
 that something is present or absent in a version with no tree. A source citation
 beats a bundle offset every time, and the reference marks bundle-only citations
-`B30:L…` for exactly that reason.
+`B<version>:L…` (`B30`, `B36`) for exactly that reason. A vendored library that
+only the binary contains — mem0, since 1.1.33 — is the other legitimate use.
 
 ## 3. Attribution is the job. Finding paths is not
 
@@ -166,7 +177,16 @@ llm.kimchi.dev/anthropic       Anthropic wire; vendored Anthropic SDK rebound he
 app.kimchi.dev/api             sandbox control plane AND account identity
 <workspace>.remote.kimchi.dev  per-workspace worker; host is server-assigned
 api.cast.ai                    telemetry ingest, /stats analytics, key validation
+llm.eu.kimchi.dev              EU counterparts of the three region hosts above,
+app.eu.kimchi.dev                selected by KIMCHI_REGION or the config key
+api.eu.cast.ai                   region (1.1.35 on)
 ```
+
+From 1.1.35 every first-party host but the worker comes from `src/regions.ts`,
+and each surface layers its own override on top of the region. Read that file
+first, then trace which override wins per call site: `llmEndpoint` beats the
+region for inference but not for web search. The Go ssh helper under `tools/`
+keeps its own hard-coded base and does not follow the region.
 
 `api.kimchi.dev` does not appear in any tree or in the binary. The documentation
 page that names it is stale.
@@ -174,8 +194,11 @@ page that names it is stale.
 ## 6. What an endpoint diff will not show you
 
 The endpoint surface was frozen across 1.1.21 to 1.1.30: nothing was added,
-removed or rehosted. What changed is **when** calls fire. A rescan that diffs
-endpoint lists alone will report "no change" and miss everything that matters.
+removed or rehosted. 1.1.31 to 1.1.37 did add, remove and move endpoints, but
+the changes that mattered most there were still about **when** calls fire —
+memory calls that only exist once an experimental resource is enabled, and a
+region that moves hosts without any path changing. A rescan that diffs endpoint
+lists alone sees that both exist, but not when they fire or which host wins.
 Check at least:
 
 - **`KIMCHI_REMOTE_RUN` polarity.** It inverted from opt-in to opt-out in
@@ -186,6 +209,11 @@ Check at least:
   endpoint table still lists under their old host.
 - **Default-on telemetry.** Check whether a call fires unasked, not only whether
   its endpoint exists.
+- **Opt-in resources.** `src/resources/definitions.ts` lists every extension
+  with its `defaultEnabled`. An extension that is off by default can still carry
+  a whole new endpoint family.
+- **The region registry.** A host that follows the region at one call site and a
+  hard-coded base at another is a split a path diff cannot show.
 
 Write these into the reference's "what did change" table with the version each
 landed in. That table, not the matrix, is what a reader needs on a bump.
@@ -208,7 +236,7 @@ check that raised it. Bump the version in `subtitle` THERE; a hand-typed
 
 That check re-renders both SVGs from the tracked markdown and fails on any byte
 difference, so a markdown edit committed without regenerating cannot reach main.
-The committed pair renders at 1834x3418 and 1849x4278; an unchanged reference
+The committed pair renders at 1834x3552 and 1849x4972; an unchanged reference
 must reproduce those exactly.
 
 To read a projection in a terminal instead, or to check one capability without

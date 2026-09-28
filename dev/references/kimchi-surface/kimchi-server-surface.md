@@ -2,30 +2,36 @@
 
 This is a census of every network endpoint the Kimchi CLI can reach, what each
 one is for, how its target is changed, and what stops working if it is
-unreachable. It was built from six released source trees — 1.1.21, 1.1.25,
-1.1.26, 1.1.27, 1.1.29 and 1.1.30 — plus the three intermediate trees 1.1.22,
-1.1.23 and 1.1.24 used for bisecting, the shipped 1.1.30 binary
+unreachable. It describes **1.1.37**. The 1.1.37 source tree is the one the
+package pins (identified by its NAR hash against
+`extraction.kimchiSource.hash`); the 1.1.30 to 1.1.36 release trees were fetched
+by tag for bisecting, and the hashes of 1.1.30–1.1.33 and 1.1.36 match the pins
+this repository recorded for those versions. The 1.1.21 to 1.1.30 history rests
+on the earlier trees 1.1.21 through 1.1.27 and 1.1.29, the shipped 1.1.30 binary
 (`kimchi-1.1.30/bin/kimchi` and its sibling `share/kimchi/bin/proxy-helper`),
-and a 2026-09-21 scrape of the documentation site. Every endpoint claim below is
-cited to a file and line in a named version. Unprefixed citations such as
-`src/models.ts:32` are the **1.1.30** tree; a version prefix such as `21: src/…`
-names another. `B30:L…` indexes the strings dump of the 1.1.30 binary and is
-used only where no source citation exists, which is confined to the vendored
-SDKs and the upstream harness in section 6.
+and a 2026-09-21 scrape of the documentation site, which was not repeated.
 
-The Auto router rows alone were rechecked against the 1.1.36 and 1.1.37 trees,
-which is where the router was removed; citations prefixed `36:` and `37:` name
-those. Nothing else was scanned again past 1.1.30.
+Every endpoint claim below is cited to a file and line in a named version.
+Unprefixed citations such as `src/models.ts:31` are the **1.1.37** tree; a
+version prefix such as `30: src/…` names another, and marks a row that no longer
+exists at 1.1.37. `B30:L…` and `B36:L…` index the strings dumps of the 1.1.30
+and 1.1.36 binaries and are used only where no source citation exists: the
+vendored SDKs and the upstream harness in section 6, and the vendored memory
+library of section 2.2. The harness citations still describe 1.1.37 because the
+bundled `@earendil-works/pi-*` packages are 0.85.1 at 1.1.30 and 1.1.37 alike,
+Kimchi's `pi-ai` patch is byte-identical across that range, and its
+`pi-coding-agent` patch changed only how `AgentSession` assembles messages.
 
 ## 1. Hosts
 
-| Host                                                 | Role                                                                                                                                  | Default base URL                                                                                                                                                                        | Repoint mechanism                                                                                                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `llm.kimchi.dev`                                     | Inference gateway, plus a small control plane at the root: model metadata, model router (through 1.1.36), web search, credits, budget | `https://llm.kimchi.dev` (`src/models.ts:16`) and `https://llm.kimchi.dev/openai/v1` (`src/config.ts:11`) — see section 4.6 for why there are two                                       | config key `llmEndpoint` in `~/.config/kimchi/config.json`, or a trusted project `.kimchi/config.json`. **No environment variable exists**                      |
-| `app.kimchi.dev`                                     | Remote-workspace control plane under `/api`, account identity, and the browser login page at `/cli-auth`                              | `https://app.kimchi.dev/api` (`src/sandbox/cloud/http.ts:4-7`, `src/api/me.ts:19-23`, `tools/proxy-helper/pkg/cast/cast.go:203`); web app `https://app.kimchi.dev` (`src/config.ts:41`) | env `KIMCHI_REMOTE_ENDPOINT` for the API base (the **whole** base including `/api`); env `KIMCHI_WEB_APP_URL` for the login page. No config key for either      |
-| `<workspace>.remote.kimchi.dev`                      | Per-workspace worker: sessions, git identity, secrets, and the agent/terminal WebSocket                                               | none — the host arrives as the `uri` field of the workspace record and is parsed by `src/sandbox/cloud/uri.ts:3-29`                                                                     | none; server-assigned                                                                                                                                           |
-| `api.cast.ai`                                        | Telemetry ingest, usage analytics, and API-key validation in the setup wizard                                                         | `https://api.cast.ai` (`src/extensions/stats/api.ts:14`, `src/auth/validator.ts:9`, `src/config.ts:12-13`)                                                                              | telemetry only: config keys `telemetry.endpoint` and `telemetry.metricsEndpoint` (`src/config.ts:425-470`). The analytics and validation bases have no override |
-| `api.github.com`, `github.com`, `registry.npmjs.org` | Release lookup, checksums, binary archives, and a plugin version check                                                                | `src/update/github.ts:8-9`, `src/integrations/constants.ts:7`                                                                                                                           | none exposed; constructor options exist but no production call site passes them                                                                                 |
+| Host                                                       | Role                                                                                                                                  | Default base URL                                                                                                                                                                                                                                                 | Repoint mechanism                                                                                                                                                                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `llm.kimchi.dev`                                           | Inference gateway, plus a small control plane at the root: model metadata, model router (through 1.1.36), web search, credits, budget | `https://llm.kimchi.dev` (`src/regions.ts:28`, used when `llmEndpoint` is unset at `src/models.ts:20`) and `https://llm.kimchi.dev/openai/v1` (`src/regions.ts:86-88`, the `llmEndpoint` default at `src/config.ts:595`) — see section 4.6 for why there are two | the region (section 4.10); then config key `llmEndpoint` in `~/.config/kimchi/config.json`, or a trusted project `.kimchi/config.json`, for everything except web search and the experimental pool                        |
+| `app.kimchi.dev`                                           | Remote-workspace control plane under `/api`, account identity, and the browser login page at `/cli-auth`                              | `https://app.kimchi.dev/api` (`src/regions.ts:81-83`, consumed at `src/sandbox/cloud/http.ts:5-8` and `src/api/me.ts:20-24`; the Go helper's own copy at `tools/proxy-helper/pkg/cast/cast.go:203`); web app `https://app.kimchi.dev` (`src/regions.ts:27`)      | the region; env `KIMCHI_REMOTE_ENDPOINT` overrides the API base (the **whole** base including `/api`), env `KIMCHI_WEB_APP_URL` the login page (`src/config.ts:655-662`). The Go helper ignores the region — section 4.10 |
+| `<workspace>.remote.kimchi.dev`                            | Per-workspace worker: sessions, git identity, secrets, and the agent/terminal WebSocket                                               | none — the host arrives as the `uri` field of the workspace record and is parsed by `src/sandbox/cloud/uri.ts:3-29`                                                                                                                                              | none; server-assigned                                                                                                                                                                                                     |
+| `api.cast.ai`                                              | Telemetry ingest, usage analytics, and API-key validation in the setup wizard                                                         | `https://api.cast.ai` (`src/regions.ts:29`; paths built at `:105-116`, analytics base at `src/extensions/stats/api.ts:26`)                                                                                                                                       | the region; for telemetry only, config keys `telemetry.endpoint` and `telemetry.metricsEndpoint` win over it (`src/config.ts:520-521`). Analytics and validation follow the region and nothing else                       |
+| `llm.eu.kimchi.dev`, `app.eu.kimchi.dev`, `api.eu.cast.ai` | The EU counterparts of the three rows above, new in 1.1.35. Every path on those rows exists under the EU host too                     | `src/regions.ts:31-37`                                                                                                                                                                                                                                           | env `KIMCHI_REGION=eu`, or `region: "eu"` in the global config file, which login writes. The login picker offers EU only with experimental features on (`src/regions.ts:74-78`)                                           |
+| `api.github.com`, `github.com`, `registry.npmjs.org`       | Release lookup, checksums, binary archives, and a plugin version check                                                                | `src/update/github.ts:8-9`, `src/integrations/constants.ts:12`                                                                                                                                                                                                   | none exposed; constructor options exist but no production call site passes them                                                                                                                                           |
 
 `app.kimchi.dev/api` and `api.cast.ai` front the same `ai-optimizer` service
 under different path conventions, which is why both serve
@@ -34,35 +40,43 @@ under different path conventions, which is why both serve
 (`tools/proxy-helper/pkg/cast/cast.go:203`), and its symbols are
 `github.com/castai/kimchi/tools/proxy-helper/pkg/cast.*`.
 
-**`api.kimchi.dev` does not exist.** Zero occurrences across all nine source
-trees examined and zero in the binary. It appears only on one documentation
+**`api.kimchi.dev` does not exist.** Zero occurrences in every source tree from
+1.1.21 to 1.1.37 and zero in either binary. It appears only on one documentation
 page, spelled with an unhyphenated `aioptimizer` service segment that appears in
 no artifact of any version.
 
 ## 2. Capabilities
 
 Columns are the same in every table. `Repoint` says exactly how the target is
-changed: a config-file key, an environment variable, or `source change` where
-the target is a hard-coded constant. Rows whose `Endpoint` is `—` are real
-findings, not gaps; they are explained in section 2.8.
+changed: a config-file key, an environment variable, `region` where the only
+choice is between the hosts of section 1 (section 4.10), or `source change`
+where the target is a hard-coded constant. Every `https://` URL below is the
+default US host. Rows whose `Endpoint` is `—` are real findings, not gaps; they
+are explained in section 2.8.
 
 ### 2.1 Ordinary model access
 
-| Capability                              | What the server does                                                    | What comes back                                   | Endpoint                                                                                                                                                                 | Repoint                             | If disabled                                                                                                                     |
-| --------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Hosted inference — OpenAI wire          | Runs the model explicitly named in the request.                         | Generated response, tool-call requests or stream. | `POST https://llm.kimchi.dev/openai/v1/chat/completions` (`src/models.ts:32`, provider row `:269-282`)                                                                   | config `llmEndpoint`                | The agent loop has no model to call. Only a locally discovered or user-added provider row still answers.                        |
-| Hosted inference — Anthropic wire       | Runs the named model, for catalog rows whose `provider` is `anthropic`. | Generated response, tool-call requests or stream. | `POST https://llm.kimchi.dev/anthropic/v1/messages?beta=true` (`src/models.ts:36`, selected at `:289-291`; the `?beta=true` suffix is the vendored SDK's, `B30:L272989`) | config `llmEndpoint`                | Anthropic-provider catalog rows become uncallable. OpenAI-wire rows are unaffected.                                             |
-| Hosted inference — experimental pool    | Runs the named model on a separate pool.                                | Same as the ordinary wire.                        | `POST https://llm.kimchi.dev/experimental/openai/v1/chat/completions` (`src/models.ts:409`, `src/environment-models.ts:33`)                                              | source change — two string literals | Models behind `--enable-experimental-features` disappear. Off by default.                                                       |
-| Provider proxy                          | Relays the request to the selected external provider/model.             | That provider's response, relayed back.           | `—` (note a)                                                                                                                                                             | —                                   | Nothing. It is not a separate call.                                                                                             |
-| Model / provider catalog                | Lists available models, capabilities and limits.                        | Metadata; no generated answer.                    | `GET https://llm.kimchi.dev/v1/models/metadata?include_in_cli=true` (`src/models.ts:28-29`)                                                                              | config `llmEndpoint`                | No Kimchi provider rows are written. One startup path reuses a cached `models.json`; the other registers nothing (section 4.9). |
-| API-key validation — model-refresh path | Answers the catalog request, or refuses with 401.                       | The catalog body; a 401 means the key is bad.     | same as the row above (`src/models.ts:372-374`)                                                                                                                          | config `llmEndpoint`                | In-TUI Kimchi login accepts any string as a key.                                                                                |
-| Session auto-naming                     | Runs one small fixed model over the first turn's text.                  | A short session title.                            | `POST {llmEndpoint}/chat/completions` (`src/extensions/session-name.ts:136`, model `deepseek-v4-flash` at `:19`)                                                         | config `llmEndpoint`, consumed raw  | Sessions keep a deterministic locally generated name. Failure is caught at `src/extensions/session-name.ts:126`.                |
+| Capability                              | What the server does                                                    | What comes back                                   | Endpoint                                                                                                                                                                 | Repoint                                                                                                                                                                                                                                                                                                                                                                                                                       | If disabled                                                                                                                     |
+| --------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Hosted inference — OpenAI wire          | Runs the model explicitly named in the request.                         | Generated response, tool-call requests or stream. | `POST https://llm.kimchi.dev/openai/v1/chat/completions` (`src/models.ts:31`, provider row `:252-260`)                                                                   | config `llmEndpoint`, else region                                                                                                                                                                                                                                                                                                                                                                                             | The agent loop has no model to call. Only a locally discovered or user-added provider row still answers.                        |
+| Hosted inference — Anthropic wire       | Runs the named model, for catalog rows whose `provider` is `anthropic`. | Generated response, tool-call requests or stream. | `POST https://llm.kimchi.dev/anthropic/v1/messages?beta=true` (`src/models.ts:35`, selected at `:265-269`; the `?beta=true` suffix is the vendored SDK's, `B30:L272989`) | config `llmEndpoint`, else region                                                                                                                                                                                                                                                                                                                                                                                             | Anthropic-provider catalog rows become uncallable. OpenAI-wire rows are unaffected.                                             |
+| Hosted inference — experimental pool    | Runs the named model on a separate pool.                                | Same as the ordinary wire.                        | `POST https://llm.kimchi.dev/experimental/openai/v1/chat/completions` (`src/regions.ts:96-98`, read at `src/models.ts:385` and `src/environment-models.ts:28`)           | region only — **not** `llmEndpoint`. A source change through 1.1.34                                                                                                                                                                                                                                                                                                                                                           | Models behind `--enable-experimental-features` disappear. Off by default.                                                       |
+| Provider proxy                          | Relays the request to the selected external provider/model.             | That provider's response, relayed back.           | `—` (note a)                                                                                                                                                             | —                                                                                                                                                                                                                                                                                                                                                                                                                             | Nothing. It is not a separate call.                                                                                             |
+| Model / provider catalog                | Lists available models, capabilities and limits.                        | Metadata; no generated answer.                    | `GET https://llm.kimchi.dev/v1/models/metadata?include_in_cli=true` (`src/models.ts:27-28`)                                                                              | config `llmEndpoint` on the startup path (`src/cli.ts:441-443,471-473`) and the browser/API-key login flow (`src/extensions/login/flow.ts:210`); **region only** for in-TUI login, `setup-tools`, the setup wizard and ACP, which pass no endpoint (`src/extensions/login/index.ts:37`, `src/commands/setup-tools.ts:96`, `src/commands/_helpers.ts:112`, `src/setup-wizard/steps/done.ts:20`, `src/modes/acp/server.ts:506`) | No Kimchi provider rows are written. One startup path reuses a cached `models.json`; the other registers nothing (section 4.5). |
+| API-key validation — model-refresh path | Answers the catalog request, or refuses with 401.                       | The catalog body; a 401 means the key is bad.     | same as the row above (`src/models.ts:350-352`)                                                                                                                          | **region only** — the sole caller passes no endpoint (`src/extensions/login/index.ts:32`), so `src/models.ts:18-19` falls back to the region                                                                                                                                                                                                                                                                                  | In-TUI Kimchi login accepts any string as a key.                                                                                |
+| Session auto-naming                     | Runs one small fixed model over the first turn's text.                  | A short session title.                            | `POST {llmEndpoint}/chat/completions` (`src/extensions/session-name.ts:136`, model `deepseek-v4-flash-0731` at `:19`, renamed from `deepseek-v4-flash` in 1.1.32)        | config `llmEndpoint`, consumed raw; else the region's `/openai/v1` base                                                                                                                                                                                                                                                                                                                                                       | Sessions keep a deterministic locally generated name. Failure is caught at `src/extensions/session-name.ts:172`.                |
 
 Auth on every row: `Authorization: Bearer <KIMCHI_API_KEY>`, added by the
 provider row's `authHeader: true` **in addition to** whatever the vendored SDK
 sets natively, so the Anthropic path carries both a Bearer and an `X-Api-Key`.
 Every row also sends `User-Agent: kimchi/<version>` and
-`X-Provider-Type: <upstream>` (`src/models.ts:269-282`).
+`X-Provider-Type: <upstream>` (`src/models.ts:247-260`).
+
+Since 1.1.34 the catalog can also carry backend-routed virtual models, any
+`kimchi-dev` id starting with `auto`. They go out on the OpenAI wire row under
+their virtual id, and the backend names the concrete model in the response
+(`src/extensions/auto-model/constants.ts:26-38`). They are not a separate
+endpoint.
 
 Usage tags travel in the request **body** as `payload.tags`, gated on
 `model.provider.startsWith("kimchi-dev")`. The documentation describes `X-Tags`
@@ -71,25 +85,29 @@ sends neither.
 
 ### 2.2 Additional calls — when the feature is used
 
-| Capability                | What the server does                                                         | What comes back                                         | Endpoint                                                                                                                                    | Repoint                             | If disabled                                                                                                                                                         |
-| ------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auto model recommendation | Ranks models for a prompt; the CLI then calls a selected model.              | Model IDs and scores; no answer yet.                    | `POST https://llm.kimchi.dev/v1/route` (`src/extensions/router/router-client.ts:44-53`; base `src/extensions/router/router-config.ts:9,17`) | env `KIMCHI_ROUTER_ENDPOINT`        | Auto model selection stops. Explicitly named models still run. **Removed in 1.1.37** — section 4.3.                                                                 |
-| `web_search`              | Handles a search query and its options. Underlying search engine is unknown. | Titles, URLs and snippets.                              | `POST https://llm.kimchi.dev/v1/search` (`src/extensions/web-search/execute-handler.ts:12`, sole use `:64-66`)                              | source change — one module constant | The `web_search` tool stops working. Nothing else changes.                                                                                                          |
-| `web_fetch`               | Nothing. The CLI contacts the target site itself.                            | The page, converted to markdown locally.                | `—` (note b)                                                                                                                                | not applicable                      | The `web_fetch` tool stops working.                                                                                                                                 |
-| Auto entitlement gate     | Looks up the authenticated user once at startup.                             | User ID and profile fields; the `email` domain decides. | `GET https://app.kimchi.dev/api/v1/me` (`src/extensions/router/auto-default-gate.ts:87` → `src/api/me.ts:33`; warmed at `src/cli.ts:340`)   | env `KIMCHI_REMOTE_ENDPOINT`        | The gate fails closed: Auto is not offered, not discoverable, and an explicit `--model kimchi-dev/auto` throws. New in 1.1.29, **removed in 1.1.37** — section 4.3. |
+| Capability                | What the server does                                                         | What comes back                                         | Endpoint                                                                                                                                                                                                                                                                                                               | Repoint                                                                                                                        | If disabled                                                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auto model recommendation | Ranks models for a prompt; the CLI then calls a selected model.              | Model IDs and scores; no answer yet.                    | `POST https://llm.kimchi.dev/v1/route` (`30: src/extensions/router/router-client.ts:44-53`; base `30: src/extensions/router/router-config.ts:9,17`)                                                                                                                                                                    | env `KIMCHI_ROUTER_ENDPOINT`                                                                                                   | Auto model selection stops. Explicitly named models still run. **Removed in 1.1.37** — section 4.3.                                                                 |
+| `web_search`              | Handles a search query and its options. Underlying search engine is unknown. | Titles, URLs and snippets.                              | `POST https://llm.kimchi.dev/v1/search` (`src/regions.ts:101-103`, sole use `src/extensions/web-search/execute-handler.ts:63-65`)                                                                                                                                                                                      | region only — **not** `llmEndpoint`. A source change through 1.1.34                                                            | The `web_search` tool stops working. Nothing else changes.                                                                                                          |
+| `web_fetch`               | Nothing. The CLI contacts the target site itself.                            | The page, converted to markdown locally.                | `—` (note b)                                                                                                                                                                                                                                                                                                           | not applicable                                                                                                                 | The `web_fetch` tool stops working.                                                                                                                                 |
+| Memory — embeddings       | Embeds stored facts and recall queries with a fixed open-weight model.       | One vector per input.                                   | `POST {llmEndpoint}/embeddings` — the vendored mem0 library builds an OpenAI client with `baseURL: config.baseURL` and calls `embeddings.create` (`B36:L567839-567844`); that `baseURL` is `config.llmEndpoint` (`src/extensions/memory/embedder.ts:101-117`, `backend.ts:271-287`); model `bge-m3` at `backend.ts:24` | config `llmEndpoint`, consumed raw; else the region's `/openai/v1` base. `memoryEmbedding.model`/`.dims` change the model only | Recall and `memory_search` return nothing. Memory is opt-in and experimental, new in 1.1.33 — see below.                                                            |
+| Memory — model check      | Lists the models the key may call.                                           | Model ids.                                              | `GET {llmEndpoint}/models` (`src/extensions/memory/backend.ts:100-116`), once per capture-worker start, skipped when `memoryExtraction.model` is set                                                                                                                                                                   | same                                                                                                                           | The worker assumes `deepseek-v4-flash-0731` is served.                                                                                                              |
+| Memory — fact extraction  | Runs a fixed model over a slice of the conversation at temperature 0.        | A JSON list of durable facts.                           | `POST {llmEndpoint}/chat/completions` (`src/extensions/memory/capture-worker.ts:265-300`, body tagged `memory:extraction` at `:290`; model at `backend.ts:59`)                                                                                                                                                         | same                                                                                                                           | Nothing new is remembered. The session itself is unaffected; capture runs in a detached worker.                                                                     |
+| Auto entitlement gate     | Looks up the authenticated user once at startup.                             | User ID and profile fields; the `email` domain decides. | `GET https://app.kimchi.dev/api/v1/me` (`30: src/extensions/router/auto-default-gate.ts:87` → `30: src/api/me.ts:33`; warmed at `30: src/cli.ts:340`)                                                                                                                                                                  | env `KIMCHI_REMOTE_ENDPOINT`                                                                                                   | The gate fails closed: Auto is not offered, not discoverable, and an explicit `--model kimchi-dev/auto` throws. New in 1.1.29, **removed in 1.1.37** — section 4.3. |
 
-`/v1/route` authenticates with `X-API-Key`, not a Bearer
-(`src/extensions/router/router-client.ts:49`) — the only Kimchi endpoint that
-does. Its body is `{query}` and nothing else; its timeout is 5 s and it has no
-retry wrapper. Inbound `Authorization` and `X-API-Key` headers are both dropped
-by an allowlist filter that admits only `X-Session-Id`, `X-Conversation-Id`,
-`X-Turn-Index`, `X-Parent-Session-Id` and `traceparent`
+Through 1.1.36, `/v1/route` authenticated with `X-API-Key`, not a Bearer
+(`30: src/extensions/router/router-client.ts:49`) — the only Kimchi endpoint
+that did. Its body was `{query}` and nothing else; its timeout was 5 s and it
+had no retry wrapper. Inbound `Authorization` and `X-API-Key` headers are both
+dropped by an allowlist filter that admits only `X-Session-Id`,
+`X-Conversation-Id`, `X-Turn-Index`, `X-Parent-Session-Id` and `traceparent`
 (`src/extensions/telemetry/provider-headers.ts:3-9`).
 
 `/v1/search` passes no `retry` option, so it inherits `DEFAULT_MAX_RETRIES = 10`
-from `src/utils/http.ts:5`. Its response is validated only for an object
-carrying an array `sources`
-(`src/extensions/web-search/execute-handler.ts:93-97`); the server also returns
+from `src/utils/http.ts:7`, and since 1.1.33 the retryable set includes the
+Cloudflare origin failures 520–522 as well as 524 (`src/utils/http.ts:1-3`). Its
+response is validated only for an object carrying an array `sources`
+(`src/extensions/web-search/execute-handler.ts:92-96`); the server also returns
 an `answer` field that the response type does not declare and the formatter
 never reads, so it is discarded before the model sees it.
 
@@ -98,29 +116,53 @@ resolution** (`src/extensions/web-fetch/url-validator.ts:1-6`): scheme check,
 localhost aliases, cloud metadata hosts, IPv4 private prefixes, `172.16/12`,
 IPv6 loopback, `fc`/`fd`.
 
+The three memory rows fire only after
+`kimchi resources enable extensions.memory` or `KIMCHI_ENABLE_RESOURCES`: the
+resource is marked experimental and `defaultEnabled: false`
+(`src/resources/definitions.ts:124-132`), and was so from its first release.
+Once enabled, what leaves the machine is the conversation itself. A detached
+worker is spawned on compaction, at shutdown, and after every 10 new user
+messages (`src/extensions/memory/capture.ts:24-31`, `index.ts:356`,
+`config.ts:73`), and it sends user messages and up to 1,000 characters of each
+assistant reply to the extraction model. The PII redactor runs on the extracted
+facts before they are stored (`src/extensions/memory/capture-worker.ts:1093`),
+not on the text sent for extraction. Facts and their vectors are stored locally
+in SQLite; there is no remote memory store. `KIMCHI_MEMORY_CAPTURE=off` stops
+capture but not recall (`src/extensions/memory/capture.ts:25,42-44,155`).
+
+Every write goes in with `infer: false` (for instance
+`src/extensions/memory/capture-worker.ts:1102`), so the vendored library's own
+LLM client is configured but never called. While memory is enabled a second
+process-wide `fetch` wrapper adds a `memory:embedding` tag to the body of
+`/embeddings` requests whose origin matches `llmEndpoint`, and to nothing else
+(`src/extensions/memory/backend.ts:133-150`).
+
 ### 2.3 Account, billing and reporting
 
-| Capability                             | What the server does                                        | What comes back                                                          | Endpoint                                                                                                                                                                               | Repoint                             | If disabled                                                                                                      |
-| -------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Authentication — browser login         | Validates credentials and access.                           | Access granted or denied; the key is handed back to a loopback callback. | `GET https://app.kimchi.dev/cli-auth?callback=<urlenc>&state=<32-byte hex>` (`src/cli-auth/index.ts:66`; browser navigation, note c)                                                   | env `KIMCHI_WEB_APP_URL`            | Browser login is unavailable. A key must come from `KIMCHI_API_KEY` or the config file.                          |
-| ↳ callback receiver                    | Nothing remote — a transient local server receives the key. | The API key, in a query parameter.                                       | `GET http://127.0.0.1:<ephemeral>/callback?token=…&state=…` (`src/cli-auth/callback-server.ts:5,135,155`)                                                                              | not applicable                      | Browser login cannot complete.                                                                                   |
-| API-key validation — setup-wizard path | Validates the pasted key.                                   | The supported-provider list, or an error.                                | `GET https://api.cast.ai/v1/llm/openai/supported-providers` (`src/auth/validator.ts:9`, callers `src/setup-wizard/steps/auth.ts:44,111`)                                               | source change — one module constant | The wizard cannot check a key before writing it.                                                                 |
-| Account identity                       | Looks up the authenticated user.                            | User ID and profile fields.                                              | `GET https://app.kimchi.dev/api/v1/me` (`src/api/me.ts:33,37-41`)                                                                                                                      | env `KIMCHI_REMOTE_ENDPOINT`        | Telemetry events lose `userId` and `userEmail`; the Auto gate fails closed (through 1.1.36; 1.1.37 has no gate). |
-| Credits status                         | Reports balance, tier and credit state.                     | Billing and allowance information.                                       | `GET https://llm.kimchi.dev/v1/credits` (built by `src/extensions/billing/status.ts:157-160`)                                                                                          | config `llmEndpoint`, derived       | The status line and the `/budget` table show no spend figures. No request is gated either way.                   |
-| Budget status                          | Reports configured budgets and spend against them.          | Budget entries; a 404 means "no budget configured".                      | `GET https://llm.kimchi.dev/v1/budget` (same builder; 404 handling `src/extensions/billing/status.ts:216-219`)                                                                         | config `llmEndpoint`, derived       | Same as credits.                                                                                                 |
-| Spend enforcement                      | Applies configured spending limits to requests.             | Requests proceed or are restricted.                                      | `—` (note d)                                                                                                                                                                           | —                                   | Nothing client-side exists to disable. Enforcement is the gateway's and is visible only in-band.                 |
-| Usage analytics — analytics            | Aggregates usage, costs and productivity measurements.      | Reports and metrics.                                                     | `GET https://api.cast.ai/ai-optimizer/v1beta/analytics?startTime&endTime&inferUserFromApiKey=true` (`src/extensions/stats/api.ts:52-63`)                                               | source change — one module constant | `kimchi stats` returns nothing.                                                                                  |
-| Usage analytics — productivity         | Aggregates the same data per metric.                        | Metric series.                                                           | `GET https://api.cast.ai/ai-optimizer/v1beta/productivity-metrics?from&to&inferUserFromApiKey=true[&provider_name][&metric_names][&session_id]` (`src/extensions/stats/api.ts:68-104`) | source change                       | `kimchi stats` returns nothing.                                                                                  |
-| Usage analytics — timeseries           | Declared by the client; never invoked.                      | Time series.                                                             | `GET https://api.cast.ai/ai-optimizer/v1beta/productivity-metrics:generateTimeseries?…` (`src/extensions/stats/api.ts:107-140`, note e)                                                | source change                       | Nothing. No caller exists at any version.                                                                        |
-| Compute quota usage                    | Reports workspace allowances and usage.                     | Limits and usage information.                                            | `GET https://app.kimchi.dev/api/ai-optimizer/v1beta/organizations/{orgId}/quotas:usage` (`src/sandbox/cloud/quota.ts:27`)                                                              | env `KIMCHI_REMOTE_ENDPOINT`        | The workspace picker shows no quota figures. This is compute quota, not spend.                                   |
-| Telemetry — logs                       | Receives client-generated events and logs.                  | Acknowledgement; no model answer.                                        | `POST https://api.cast.ai/ai-optimizer/v1beta/logs:ingest` (`src/extensions/telemetry/transport.ts:97-131`, default `src/config.ts:12`)                                                | config `telemetry.endpoint`         | No usage events leave the machine. No functional loss.                                                           |
-| Telemetry — metrics                    | Receives client-generated metrics.                          | Acknowledgement; no model answer.                                        | `POST https://api.cast.ai/ai-optimizer/v1beta/metrics:ingest` (`src/extensions/telemetry/transport.ts:149-201`, default `src/config.ts:13`)                                            | config `telemetry.metricsEndpoint`  | Same as logs.                                                                                                    |
+| Capability                             | What the server does                                        | What comes back                                                          | Endpoint                                                                                                                                                                               | Repoint                                         | If disabled                                                                                      |
+| -------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Authentication — browser login         | Validates credentials and access.                           | Access granted or denied; the key is handed back to a loopback callback. | `GET https://app.kimchi.dev/cli-auth?callback=<urlenc>&state=<32-byte hex>` (`src/cli-auth/index.ts:67`, base `:48`; browser navigation, note c)                                       | env `KIMCHI_WEB_APP_URL`, else region           | Browser login is unavailable. A key must come from `KIMCHI_API_KEY` or the config file.          |
+| ↳ callback receiver                    | Nothing remote — a transient local server receives the key. | The API key, in a query parameter.                                       | `GET http://127.0.0.1:<ephemeral>/callback?token=…&state=…` (`src/cli-auth/callback-server.ts:5,135,155`)                                                                              | not applicable                                  | Browser login cannot complete.                                                                   |
+| API-key validation — setup-wizard path | Validates the pasted key.                                   | The supported-provider list, or an error.                                | `GET https://api.cast.ai/v1/llm/openai/supported-providers` (`src/regions.ts:106-108`, read at `src/auth/validator.ts:41`; callers `src/setup-wizard/steps/auth.ts:44,111`)            | region only. A source change through 1.1.34     | The wizard cannot check a key before writing it.                                                 |
+| Account identity                       | Looks up the authenticated user.                            | User ID and profile fields.                                              | `GET https://app.kimchi.dev/api/v1/me` (`src/api/me.ts:34,38-42`)                                                                                                                      | env `KIMCHI_REMOTE_ENDPOINT`, else region       | Telemetry events lose `userId` and `userEmail`. Through 1.1.36 the Auto gate also failed closed. |
+| Credits status                         | Reports balance, tier and credit state.                     | Billing and allowance information.                                       | `GET https://llm.kimchi.dev/v1/credits` (built by `src/extensions/billing/status.ts:164-167`)                                                                                          | config `llmEndpoint`, derived; else region      | The status line and the `/budget` table show no spend figures. No request is gated either way.   |
+| Budget status                          | Reports configured budgets and spend against them.          | Budget entries; a 404 means "no budget configured".                      | `GET https://llm.kimchi.dev/v1/budget` (same builder; 404 handling `src/extensions/billing/status.ts:223-226`)                                                                         | config `llmEndpoint`, derived; else region      | Same as credits.                                                                                 |
+| Spend enforcement                      | Applies configured spending limits to requests.             | Requests proceed or are restricted.                                      | `—` (note d)                                                                                                                                                                           | —                                               | Nothing client-side exists to disable. Enforcement is the gateway's and is visible only in-band. |
+| Usage analytics — analytics            | Aggregates usage, costs and productivity measurements.      | Reports and metrics.                                                     | `GET https://api.cast.ai/ai-optimizer/v1beta/analytics?startTime&endTime&inferUserFromApiKey=true` (`src/extensions/stats/api.ts:51-62`, base `:26`)                                   | region only. A source change through 1.1.34     | `kimchi stats` returns nothing.                                                                  |
+| Usage analytics — productivity         | Aggregates the same data per metric.                        | Metric series.                                                           | `GET https://api.cast.ai/ai-optimizer/v1beta/productivity-metrics?from&to&inferUserFromApiKey=true[&provider_name][&metric_names][&session_id]` (`src/extensions/stats/api.ts:67-103`) | region only                                     | `kimchi stats` returns nothing.                                                                  |
+| Usage analytics — timeseries           | Declared by the client; never invoked.                      | Time series.                                                             | `GET https://api.cast.ai/ai-optimizer/v1beta/productivity-metrics:generateTimeseries?…` (`src/extensions/stats/api.ts:106-139`, note e)                                                | region only                                     | Nothing. No caller exists at any version.                                                        |
+| Compute quota usage                    | Reports workspace allowances and usage.                     | Limits and usage information.                                            | `GET https://app.kimchi.dev/api/ai-optimizer/v1beta/organizations/{orgId}/quotas:usage` (`src/sandbox/cloud/quota.ts:27`)                                                              | env `KIMCHI_REMOTE_ENDPOINT`, else region       | The workspace picker shows no quota figures. This is compute quota, not spend.                   |
+| Telemetry — logs                       | Receives client-generated events and logs.                  | Acknowledgement; no model answer.                                        | `POST https://api.cast.ai/ai-optimizer/v1beta/logs:ingest` (`src/extensions/telemetry/transport.ts:97-131`, default `src/config.ts:520` from `src/regions.ts:110-112`)                 | config `telemetry.endpoint`, else region        | No usage events leave the machine. No functional loss.                                           |
+| Telemetry — metrics                    | Receives client-generated metrics.                          | Acknowledgement; no model answer.                                        | `POST https://api.cast.ai/ai-optimizer/v1beta/metrics:ingest` (`src/extensions/telemetry/transport.ts:149-201`, default `src/config.ts:521` from `src/regions.ts:114-116`)             | config `telemetry.metricsEndpoint`, else region | Same as logs.                                                                                    |
 
 The credential is a Cast AI platform key — the login helper's own return
 annotation names the shape, `castai_v1_…` (`src/cli-auth/index.ts:39`), and the
 redactor pattern `/castai_v1_[A-Za-z0-9_-]{8,}/g`
 (`src/extensions/pii-redaction/redactor.ts:68`) matches it. The same credential
-authenticates `llm.kimchi.dev`, `app.kimchi.dev/api` and `api.cast.ai`.
+authenticates `llm.kimchi.dev`, `app.kimchi.dev/api` and `api.cast.ai`. The
+client treats a key as valid in one region only: switching region at login
+discards the saved key and forces a fresh one
+(`src/extensions/login/flow.ts:376-378`).
 
 Browser login issues **zero** CLI-originated HTTP requests: browser → loopback
 callback → write key. Validation is skipped deliberately, with the reason stated
@@ -130,10 +172,10 @@ round trip may hit a different environment
 
 Unlike every other first-party call, the two billing endpoints use raw `fetch`
 with a 5 s `AbortSignal.timeout` and no retry; any throw or non-`ok` response
-returns `undefined` (`src/extensions/billing/status.ts:170-180,206-220`).
+returns `undefined` (`src/extensions/billing/status.ts:177-187,213-227`).
 
 `telemetry.headers` in the config file replaces the derived
-`Authorization: Bearer` outright (`src/config.ts:444-451`), which is the only
+`Authorization: Bearer` outright (`src/config.ts:495-502`), which is the only
 way to send telemetry somewhere with different auth.
 
 ### 2.4 Remote execution
@@ -145,47 +187,48 @@ A read-only ownership probe runs verify → get → exchange, with no upsert and
 resume (`src/sandbox/cloud/auth.ts:133-141`).
 
 **Control plane**, base `https://app.kimchi.dev/api`
-(`src/sandbox/cloud/http.ts:4-7`). All calls carry
-`Authorization: Bearer <KIMCHI_API_KEY>` and a 30 s default timeout.
+(`src/sandbox/cloud/http.ts:5-8`: `KIMCHI_REMOTE_ENDPOINT`, else the region).
+All calls carry `Authorization: Bearer <KIMCHI_API_KEY>` and a 30 s default
+timeout.
 
-| Capability                                     | What the server does                                                 | What comes back                                            | Endpoint                                                                                                                                                                                | Repoint                      | If disabled                                                               |
-| ---------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------- |
-| Workspace authentication — org lookup          | Authorizes the key and names the org it belongs to.                  | `{organizationId}`, and a `userID` the client never reads. | `POST {control}/ai-optimizer/v1beta/workspace-tokens:verifyKey` (`src/sandbox/cloud/keys.ts:9`; no body at all, `:10-20`)                                                               | env `KIMCHI_REMOTE_ENDPOINT` | All remote execution stops at the first step.                             |
-| Workspace authentication — token mint          | Issues a connection token scoped to one workspace.                   | `{token, expireTime?}`.                                    | `POST {control}/ai-optimizer/v1beta/workspace-tokens:exchange` (`src/sandbox/cloud/auth.ts:233`, body `{workspaceId}` at `:242`)                                                        | env `KIMCHI_REMOTE_ENDPOINT` | The worker plane, both WebSockets and the ssh tunnel are all unreachable. |
-| Workspace lifecycle — list                     | Lists workspaces for the org.                                        | Workspace IDs, resources and status.                       | `GET {control}/ai-optimizer/v1beta/organizations/{org}/workspaces?page.limit=200&clientType=harness[&page.cursor=…]` (`src/sandbox/cloud/workspaces.ts:28-33`, 10-page cap at `:10-11`) | env `KIMCHI_REMOTE_ENDPOINT` | The remote-session picker is empty.                                       |
-| Workspace lifecycle — get                      | Returns one workspace record.                                        | Status, resources, and the worker `uri`.                   | `GET {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}` (`src/sandbox/cloud/auth.ts:152`)                                                                               | env `KIMCHI_REMOTE_ENDPOINT` | Ownership probes fail.                                                    |
-| Workspace lifecycle — create / update / rename | Creates or updates a workspace, idempotently.                        | The full workspace record, including `uri`.                | `PUT {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}` (`src/sandbox/cloud/auth.ts:188-209`)                                                                           | env `KIMCHI_REMOTE_ENDPOINT` | No new workspaces can be created.                                         |
-| Workspace lifecycle — delete                   | Deletes a workspace.                                                 | Nothing.                                                   | `DELETE {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}` (`src/sandbox/cloud/workspaces.ts:98`)                                                                       | env `KIMCHI_REMOTE_ENDPOINT` | Workspaces can only be removed elsewhere.                                 |
-| Workspace lifecycle — resume                   | Wakes a hibernated workspace by scaling its pod back to one replica. | Nothing the client reads on success.                       | `POST {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}:resume` (`src/sandbox/cloud/auth.ts:92`, body `{}` at `:101`)                                                   | env `KIMCHI_REMOTE_ENDPOINT` | Connecting to a hibernated workspace fails; see section 4.4.              |
-| Workspace quotas                               | Reports workspace allowances and usage.                              | Limits and usage information.                              | `GET {control}/ai-optimizer/v1beta/organizations/{org}/quotas:usage` (`src/sandbox/cloud/quota.ts:27`)                                                                                  | env `KIMCHI_REMOTE_ENDPOINT` | The picker shows no quota figures. Presentational only.                   |
+| Capability                                     | What the server does                                                 | What comes back                                                                                                                                     | Endpoint                                                                                                                                                                                                                                                                           | Repoint                                   | If disabled                                                               |
+| ---------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| Workspace authentication — org lookup          | Authorizes the key and names the org it belongs to.                  | `{organizationId}`, and a `userID` the client never reads.                                                                                          | `POST {control}/ai-optimizer/v1beta/workspace-tokens:verifyKey` (`src/sandbox/cloud/keys.ts:9`; no body at all, `:10-20`)                                                                                                                                                          | env `KIMCHI_REMOTE_ENDPOINT`, else region | All remote execution stops at the first step.                             |
+| Workspace authentication — token mint          | Issues a connection token scoped to one workspace.                   | `{token, expireTime?}`.                                                                                                                             | `POST {control}/ai-optimizer/v1beta/workspace-tokens:exchange` (`src/sandbox/cloud/auth.ts:236`, body `{workspaceId}` at `:245`)                                                                                                                                                   | env `KIMCHI_REMOTE_ENDPOINT`, else region | The worker plane, both WebSockets and the ssh tunnel are all unreachable. |
+| Workspace lifecycle — list                     | Lists workspaces for the org.                                        | Workspace IDs, resources and status.                                                                                                                | `GET {control}/ai-optimizer/v1beta/organizations/{org}/workspaces?page.limit=200&clientType=harness[&page.cursor=…]` (`src/sandbox/cloud/workspaces.ts:27-32`, 10-page cap at `:9-10`)                                                                                             | env `KIMCHI_REMOTE_ENDPOINT`, else region | The remote-session picker is empty.                                       |
+| Workspace lifecycle — get                      | Returns one workspace record.                                        | Status, resources, and the worker `uri`.                                                                                                            | `GET {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}` (`src/sandbox/cloud/auth.ts:152`)                                                                                                                                                                          | env `KIMCHI_REMOTE_ENDPOINT`, else region | Ownership probes fail.                                                    |
+| Workspace lifecycle — create / update / rename | Creates or updates a workspace, idempotently.                        | The full workspace record, including `uri`; since 1.1.34 its sizes are read from `spec.resources` only (`src/sandbox/cloud/workspaces.ts:144-157`). | `PUT {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}` (`src/sandbox/cloud/auth.ts:188-212`; since 1.1.34 a create carries `spec: {resources, dependencies, egressPolicy}` from `kimchi_workspace.yaml` at `:203-208`, replacing the top-level `resources` field) | env `KIMCHI_REMOTE_ENDPOINT`, else region | No new workspaces can be created.                                         |
+| Workspace lifecycle — delete                   | Deletes a workspace.                                                 | Nothing.                                                                                                                                            | `DELETE {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}` (`src/sandbox/cloud/workspaces.ts:97`)                                                                                                                                                                  | env `KIMCHI_REMOTE_ENDPOINT`, else region | Workspaces can only be removed elsewhere.                                 |
+| Workspace lifecycle — resume                   | Wakes a hibernated workspace by scaling its pod back to one replica. | Nothing the client reads on success.                                                                                                                | `POST {control}/ai-optimizer/v1beta/organizations/{org}/workspaces/{id}:resume` (`src/sandbox/cloud/auth.ts:92`, body `{}` at `:101`)                                                                                                                                              | env `KIMCHI_REMOTE_ENDPOINT`, else region | Connecting to a hibernated workspace fails; see section 4.4.              |
+| Workspace quotas                               | Reports workspace allowances and usage.                              | Limits and usage information.                                                                                                                       | `GET {control}/ai-optimizer/v1beta/organizations/{org}/quotas:usage` (`src/sandbox/cloud/quota.ts:27`)                                                                                                                                                                             | env `KIMCHI_REMOTE_ENDPOINT`, else region | The picker shows no quota figures. Presentational only.                   |
 
 **Workspace worker**, base `https://<workspace-host>`, derived from the control
 plane's `uri` by rewriting `wss://` to `https://`
 (`src/sandbox/worker/client.ts:169-181`; anything that is not a `ws`, `wss`,
 `http` or `https` scheme throws). Auth: `Authorization: Bearer <connectToken>`.
 
-| Capability                      | What the server does                                                                       | What comes back                           | Endpoint                                                                                                                              | Repoint                     | If disabled                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------- |
-| Workspace readiness             | Reports whether the workspace gateway has attached and traffic is routable.                | 2xx or not; no body.                      | `GET {worker}/api/startupcompletedz` (`src/sandbox/cloud/readiness.ts:51`; semantics `:89-91`; 1.5 s poll, 10-minute budget `:10-12`) | none — server-assigned host | Every remote connection times out at the readiness gate.                                |
-| Session management — list       | Lists sessions in the workspace.                                                           | A map keyed by session name.              | `GET {worker}/api/session?clientType=harness` (`src/sandbox/worker/sessions.ts:5-9`)                                                  | none                        | The session picker is empty.                                                            |
-| Session management — get        | Returns one session.                                                                       | Session status; 404 means it is gone.     | `GET {worker}/api/session/{name}` (`src/sandbox/worker/sessions.ts:11-14`)                                                            | none                        | Reattach cannot verify a session.                                                       |
-| Session management — create     | Creates a session, optionally cloning a repository and accepting an uploaded history file. | 201 and the session record.               | `POST (multipart) {worker}/api/session/{name}` (`src/sandbox/worker/sessions.ts:16-29` → `client.ts:113-118`)                         | none                        | No remote session can start. This is the only genuine HTTP upload in the whole surface. |
-| Session management — delete     | Deletes a session.                                                                         | Nothing.                                  | `DELETE {worker}/api/session/{name}` (`src/sandbox/worker/sessions.ts:31-33`)                                                         | none                        | Sessions accumulate.                                                                    |
-| Git identity — global           | Sets the workspace's git user.                                                             | Nothing.                                  | `PUT {worker}/api/gitidentity` (`src/sandbox/worker/git-identity.ts:18`, body `{user:{name?,email?}}`)                                | none                        | Remote commits carry no identity.                                                       |
-| Git identity — per host, create | Registers a git identity for one host.                                                     | The identity; 409 when it already exists. | `POST {worker}/api/gitidentity/{host}` (`src/sandbox/worker/git-identity.ts:35`, 409 retried as PUT at `:61-68`)                      | none                        | Remote git against that host is unauthenticated.                                        |
-| Git identity — per host, update | Updates an existing per-host identity.                                                     | The identity.                             | `PUT {worker}/api/gitidentity/{host}` (`src/sandbox/worker/git-identity.ts:44`)                                                       | none                        | Same.                                                                                   |
-| Secret provisioning             | Stores a named secret for the workspace.                                                   | Nothing.                                  | `PUT {worker}/api/secrets` (`src/sandbox/worker/secrets.ts:15-24`; value is base64-encoded, not encrypted, `:19`)                     | none                        | The worker's credential helper has no token to serve to git.                            |
+| Capability                      | What the server does                                                                       | What comes back                           | Endpoint                                                                                                                                                                                                                                                                  | Repoint                     | If disabled                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------- |
+| Workspace readiness             | Reports whether the workspace gateway has attached and traffic is routable.                | 2xx or not; no body.                      | `GET {worker}/api/startupcompletedz` (`src/sandbox/cloud/readiness.ts:51`; semantics `:89-91`; 1.5 s poll, 10-minute budget `:10-12`)                                                                                                                                     | none — server-assigned host | Every remote connection times out at the readiness gate.                                |
+| Session management — list       | Lists sessions in the workspace.                                                           | A map keyed by session name.              | `GET {worker}/api/session?clientType=harness` (`src/sandbox/worker/sessions.ts:5-9`)                                                                                                                                                                                      | none                        | The session picker is empty.                                                            |
+| Session management — get        | Returns one session.                                                                       | Session status; 404 means it is gone.     | `GET {worker}/api/session/{name}` (`src/sandbox/worker/sessions.ts:11-14`)                                                                                                                                                                                                | none                        | Reattach cannot verify a session.                                                       |
+| Session management — create     | Creates a session, optionally cloning a repository and accepting an uploaded history file. | 201 and the session record.               | `POST (multipart) {worker}/api/session/{name}` (`src/sandbox/worker/sessions.ts:16-29` → `client.ts:113-118`); since 1.1.32 a cloud subagent's session also carries `tags.parent_session_id`, the local session id (`src/extensions/agents/manager/agent-manager.ts:463`) | none                        | No remote session can start. This is the only genuine HTTP upload in the whole surface. |
+| Session management — delete     | Deletes a session.                                                                         | Nothing.                                  | `DELETE {worker}/api/session/{name}` (`src/sandbox/worker/sessions.ts:31-33`)                                                                                                                                                                                             | none                        | Sessions accumulate.                                                                    |
+| Git identity — global           | Sets the workspace's git user.                                                             | Nothing.                                  | `PUT {worker}/api/gitidentity` (`src/sandbox/worker/git-identity.ts:18`, body `{user:{name?,email?}}`)                                                                                                                                                                    | none                        | Remote commits carry no identity.                                                       |
+| Git identity — per host, create | Registers a git identity for one host.                                                     | The identity; 409 when it already exists. | `POST {worker}/api/gitidentity/{host}` (`src/sandbox/worker/git-identity.ts:35`, 409 retried as PUT at `:61-68`)                                                                                                                                                          | none                        | Remote git against that host is unauthenticated.                                        |
+| Git identity — per host, update | Updates an existing per-host identity.                                                     | The identity.                             | `PUT {worker}/api/gitidentity/{host}` (`src/sandbox/worker/git-identity.ts:44`)                                                                                                                                                                                           | none                        | Same.                                                                                   |
+| Secret provisioning             | Stores a named secret for the workspace.                                                   | Nothing.                                  | `PUT {worker}/api/secrets` (`src/sandbox/worker/secrets.ts:15-24`; value is base64-encoded, not encrypted, `:19`)                                                                                                                                                         | none                        | The worker's credential helper has no token to serve to git.                            |
 
 **Streams and transfer.**
 
-| Capability                  | What the server does                                                    | What comes back                                           | Endpoint                                                                                                                                                              | Repoint                                                                                 | If disabled                                                                      |
-| --------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Remote agents / cloud tasks | Runs the agent harness, tools and subsequent model requests remotely.   | Progress, task results and file changes.                  | `wss://<workspace-host>/session/{name}/connect`, ACP JSON-RPC framing (`src/sandbox/worker/acp-client.ts:462-466`)                                                    | none                                                                                    | `/remote-run` and the `dispatch_to_cloud_agent` tool stop working.               |
-| `/teleport`                 | Starts a remote terminal/agent session using transferred local context. | An interactive, persistent remote terminal.               | same URL, raw-byte PTY framing (`src/extensions/teleport/overlay/tab-manager.ts:117`)                                                                                 | none                                                                                    | `/teleport` and `/terminal` stop working.                                        |
-| SSH / rsync tunnel          | Splices raw bytes for an ssh `ProxyCommand`.                            | The ssh stream.                                           | `wss://<workspace-host>:443/ssh` (`tools/proxy-helper/cmd/proxy/proxy.go:50`; port flag defaults to 443 at `:209` and the CLI never passes it, `src/ssh-proxy.ts:68`) | none for the host; env `KIMCHI_PROXY_HELPER` repoints the helper binary, not the target | File sync and `/terminal` stop working.                                          |
-| Project transfer            | Receives files or clones a repository; supports transfers back.         | Remote working tree or downloaded files.                  | `—` (note f)                                                                                                                                                          | —                                                                                       | File sync stops; remote sessions can still clone server-side.                    |
-| Server-side clone           | The workspace clones the repository itself.                             | A populated remote working tree.                          | `—` (note f) — `details.git` on the session-create body (`src/sandbox/worker/types.ts:9-10`)                                                                          | —                                                                                       | Every remote session must be populated by rsync instead.                         |
-| Harness config sync         | Nothing remote — rsync copies a fixed allowlist.                        | A populated `~/.config/kimchi/harness/` in the workspace. | `—` (note f)                                                                                                                                                          | —                                                                                       | Remote sessions start with default settings, keybindings, themes and model list. |
+| Capability                  | What the server does                                                    | What comes back                                           | Endpoint                                                                                                                                                              | Repoint                                                                                                                                                                                                                     | If disabled                                                                      |
+| --------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Remote agents / cloud tasks | Runs the agent harness, tools and subsequent model requests remotely.   | Progress, task results and file changes.                  | `wss://<workspace-host>/session/{name}/connect`, ACP JSON-RPC framing (`src/sandbox/worker/acp-client.ts:462-466`)                                                    | none                                                                                                                                                                                                                        | `/remote-run` and the `dispatch_to_cloud_agent` tool stop working.               |
+| `/teleport`                 | Starts a remote terminal/agent session using transferred local context. | An interactive, persistent remote terminal.               | same URL, raw-byte PTY framing (`src/extensions/teleport/overlay/tab-manager.ts:117`)                                                                                 | none                                                                                                                                                                                                                        | `/teleport` and `/terminal` stop working.                                        |
+| SSH / rsync tunnel          | Splices raw bytes for an ssh `ProxyCommand`.                            | The ssh stream.                                           | `wss://<workspace-host>:443/ssh` (`tools/proxy-helper/cmd/proxy/proxy.go:50`; port flag defaults to 443 at `:209` and the CLI never passes it, `src/ssh-proxy.ts:68`) | none for the host; env `KIMCHI_PROXY_HELPER` repoints the helper binary, not the target. The helper's own control-plane handshake reads `KIMCHI_REMOTE_ENDPOINT` and otherwise the US host, never the region — section 4.10 | File sync and `/terminal` stop working.                                          |
+| Project transfer            | Receives files or clones a repository; supports transfers back.         | Remote working tree or downloaded files.                  | `—` (note f)                                                                                                                                                          | —                                                                                                                                                                                                                           | File sync stops; remote sessions can still clone server-side.                    |
+| Server-side clone           | The workspace clones the repository itself.                             | A populated remote working tree.                          | `—` (note f) — `details.git` on the session-create body (`src/sandbox/worker/types.ts:15-21`)                                                                         | —                                                                                                                                                                                                                           | Every remote session must be populated by rsync instead.                         |
+| Harness config sync         | Nothing remote — rsync copies a fixed allowlist.                        | A populated `~/.config/kimchi/harness/` in the workspace. | `—` (note f)                                                                                                                                                          | —                                                                                                                                                                                                                           | Remote sessions start with default settings, keybindings, themes and model list. |
 
 Secrets are named `git-token-${host.replace(/[^A-Za-z0-9_-]/g,"_")}`
 (`src/extensions/teleport/provisioning/git-provision.ts:31-33`) and written
@@ -212,8 +255,9 @@ the `sessionFile` multipart part.
 | What the CLI actually sees           | Lists available models, capabilities and limits.                         | `is_serverless` is the only signal, and it does not mark a self-hosted deployment. | the catalog `GET` of section 2.1                                                                                                                                                                                | config `llmEndpoint` | Covered in section 2.1.                                    |
 
 There is no client code for the hosted-model surface at any version. Zero hits
-across the 1.1.21, 1.1.27 and 1.1.30 trees for `hosted-model`, `hostedModel`,
-`clusterId`, `scaleToZero`, `aioptimizer` or `castai-ai-optimizer-proxy`.
+across the 1.1.21, 1.1.27, 1.1.30 and 1.1.37 trees for `hosted-model`,
+`hostedModel`, `clusterId`, `scaleToZero`, `aioptimizer` or
+`castai-ai-optimizer-proxy`.
 
 The documentation asserts at `docs/hosted-autoscaling.md:23` that "All scaling
 configuration is also available programmatically through the Kimchi API" and
@@ -228,7 +272,7 @@ other.
 `is_serverless` does not distinguish hosted from local. Kimchi hard-codes it
 `true` in both places it manufactures metadata locally — for discovered local
 models (`src/ollama.ts:443`) and when reconstructing from a cached `models.json`
-(`src/models.ts:321`), so the real value is lost on every cache round trip. It
+(`src/models.ts:297`), so the real value is lost on every cache round trip. It
 also steers model selection, not just display order: `resolveModelRole`
 (`src/integrations/models.ts:125-179`) resolves the `main`/`coding`/`sub` roles
 exclusively from serverless models.
@@ -271,7 +315,7 @@ appears in it.
 | Canary release        | Returns the canary release.                           | Tag and URL.                                     | `GET https://api.github.com/repos/getkimchi/kimchi/releases/tags/canary` (`src/update/github.ts:134`)                       | source change                                                                                            | Canary updates fail.                                                         |
 | Checksums             | Serves the release checksum file.                     | `checksums.txt`.                                 | `GET https://github.com/getkimchi/kimchi/releases/download/{tag}/checksums.txt` (`src/update/github.ts:169`)                | source change                                                                                            | Updates abort before download.                                               |
 | Binary archive        | Serves the release archive.                           | `kimchi_{os}_{arch}.tar.gz` (`.zip` on Windows). | `GET https://github.com/getkimchi/kimchi/releases/download/{tag}/{asset}` (`src/update/github.ts:191`, name built at `:69`) | source change                                                                                            | Self-update cannot install.                                                  |
-| Plugin version check  | Reports the published version of the opencode plugin. | Registry metadata.                               | `GET https://registry.npmjs.org/…` (`src/integrations/constants.ts:7`)                                                      | source change                                                                                            | The plugin version check is skipped.                                         |
+| Plugin version check  | Reports the published version of the opencode plugin. | Registry metadata.                               | `GET https://registry.npmjs.org/…` (`src/integrations/constants.ts:12`)                                                     | source change                                                                                            | The plugin version check is skipped.                                         |
 
 Homebrew installations are detected and self-update is refused.
 
@@ -281,9 +325,9 @@ Each of these is a finding, not a missing cell.
 
 **(a) Provider proxy.** There is no relay endpoint. The choice of upstream
 provider is made at catalog ingest, not at request time: the base-path family
-picks the wire protocol (`src/models.ts:289-291`), the catalog `slug` goes on
+picks the wire protocol (`src/models.ts:265-269`), the catalog `slug` goes on
 the wire verbatim as `model`, and `X-Provider-Type: <upstream>`
-(`src/models.ts:273`) is attribution rather than routing. The
+(`src/models.ts:249`) is attribution rather than routing. The
 `kimchi-dev/<provider>` identifiers are local map keys.
 
 **(b) `web_fetch`.** The CLI fetches the target origin itself, either through a
@@ -326,8 +370,8 @@ allowlist: `settings.json`, `keybindings.json`, `themes/`, `models.json`.
 and the documentation. See section 2.5.
 
 **(h) Configured fallback.** `upstream.compat` is copied wholesale from the
-vendored catalogue rather than field-picked (`src/models.ts:237-239,254`, pinned
-by `models.test.ts:187-192`), so `params.fallbacks` and the server-side-fallback
+vendored catalogue rather than field-picked (`src/models.ts:213-215,230`, pinned
+by `models.test.ts:200-205`), so `params.fallbacks` and the server-side-fallback
 beta header do ship — to `https://llm.kimchi.dev/anthropic`, where the decision
 is made. No client retry path ever switches models; both retry stacks re-issue
 the identical request.
@@ -336,38 +380,42 @@ the identical request.
 
 Surfaces whose target is settable without touching code:
 
-| Surface                                             | Mechanism        | Key or variable                                                                             | Implementation                                                                                                                          |
-| --------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Inference, catalog, credits, budget, session naming | config file only | `llmEndpoint` in `~/.config/kimchi/config.json`, or a trusted project `.kimchi/config.json` | `src/config.ts:11,517,536`; normalized at `src/models.ts:19-26`; billing derives its base at `src/extensions/billing/status.ts:157-160` |
-| Auto model router                                   | environment      | `KIMCHI_ROUTER_ENDPOINT`                                                                    | `src/extensions/router/router-config.ts:9,17`. **Removed in 1.1.37**: nothing reads the variable any more — section 4.3                 |
-| Remote control plane and account identity           | environment      | `KIMCHI_REMOTE_ENDPOINT` — the whole base including `/api`                                  | `src/sandbox/cloud/http.ts:4-7`; a second identical copy at `src/api/me.ts:19-23`                                                       |
-| Browser login page                                  | environment      | `KIMCHI_WEB_APP_URL`                                                                        | `src/config.ts:41`, used at `src/cli-auth/index.ts:47,66`                                                                               |
-| Telemetry logs ingest                               | config file      | `telemetry.endpoint`                                                                        | `src/config.ts:425-470`, default `:12`                                                                                                  |
-| Telemetry metrics ingest                            | config file      | `telemetry.metricsEndpoint`                                                                 | `src/config.ts:425-470`, default `:13`                                                                                                  |
-| Telemetry auth header                               | config file      | `telemetry.headers` — replaces the derived Bearer outright                                  | `src/config.ts:444-451`                                                                                                                 |
-| Local model host                                    | environment      | `OLLAMA_HOST`, else `KIMCHI_OLLAMA_HOST`                                                    | `src/ollama.ts:19,125`                                                                                                                  |
-| Proxy-helper binary (not its target)                | environment      | `KIMCHI_PROXY_HELPER`                                                                       | `src/ssh-proxy.ts`                                                                                                                      |
-| All outbound traffic, as an ordinary forward proxy  | environment      | `KIMCHI_PROXY` / `KIMCHI_NO_PROXY`                                                          | `src/http/proxy.ts`, an undici `EnvHttpProxyAgent`. Unrelated to model routing                                                          |
+| Surface                                                                                                                                        | Mechanism                     | Key or variable                                                                                                               | Implementation                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Every first-party host except the workspace worker                                                                                             | environment, then config file | `KIMCHI_REGION` (`us` or `eu`), else `region` in the **global** `~/.config/kimchi/config.json`; unknown values count as unset | `src/config.ts:450-454`, `:589`; hosts at `src/regions.ts:23-38`. New in 1.1.35 — section 4.10                                                                                 |
+| Inference, startup and login-flow catalog, credits, budget, session naming, memory (section 2.1 lists the catalog refreshes it does not reach) | config file, over the region  | `llmEndpoint` in `~/.config/kimchi/config.json`, or a trusted project `.kimchi/config.json`                                   | `src/config.ts:570-595`; normalized at `src/models.ts:18-25`; billing derives its base at `src/extensions/billing/status.ts:164-167`                                           |
+| Auto model router (through 1.1.36)                                                                                                             | environment                   | `KIMCHI_ROUTER_ENDPOINT`                                                                                                      | `30: src/extensions/router/router-config.ts:9,17`. **Removed in 1.1.37**: nothing reads the variable any more — section 4.3                                                    |
+| Remote control plane and account identity                                                                                                      | environment, over the region  | `KIMCHI_REMOTE_ENDPOINT` — the whole base including `/api`                                                                    | `src/config.ts:660`, consumed at `src/sandbox/cloud/http.ts:5-8` and `src/api/me.ts:20-24`; the Go helper reads it on its own at `tools/proxy-helper/pkg/cast/cast.go:213-218` |
+| Browser login page                                                                                                                             | environment, over the region  | `KIMCHI_WEB_APP_URL`                                                                                                          | `src/config.ts:659`, used at `src/cli-auth/index.ts:48,67`                                                                                                                     |
+| Telemetry logs ingest                                                                                                                          | config file, over the region  | `telemetry.endpoint`                                                                                                          | `src/config.ts:473-523`, default `:520`                                                                                                                                        |
+| Telemetry metrics ingest                                                                                                                       | config file, over the region  | `telemetry.metricsEndpoint`                                                                                                   | `src/config.ts:473-523`, default `:521`                                                                                                                                        |
+| Telemetry auth header                                                                                                                          | config file                   | `telemetry.headers` — replaces the derived Bearer outright                                                                    | `src/config.ts:495-502`                                                                                                                                                        |
+| Local model host                                                                                                                               | environment                   | `OLLAMA_HOST`, else `KIMCHI_OLLAMA_HOST`                                                                                      | `src/ollama.ts:19,125`                                                                                                                                                         |
+| Proxy-helper binary (not its target)                                                                                                           | environment                   | `KIMCHI_PROXY_HELPER`                                                                                                         | `src/ssh-proxy.ts`                                                                                                                                                             |
+| All outbound traffic, as an ordinary forward proxy                                                                                             | environment                   | `KIMCHI_PROXY` / `KIMCHI_NO_PROXY`                                                                                            | `src/http/proxy.ts`, an undici `EnvHttpProxyAgent`. Unrelated to model routing                                                                                                 |
 
-Surfaces that need a source change, with the size of the change:
+Surfaces that follow the region but cannot be sent to an arbitrary host without
+a source change, with the size of the change:
 
-| Surface                            | What to change                                                               | Size                                                                                                                                                                                                                                      |
-| ---------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `web_search`                       | `SEARCH_ENDPOINT` at `src/extensions/web-search/execute-handler.ts:12`       | **one line.** A module-level `export const` with exactly one use, at `:64-66`. The module reads no environment variable and no config key other than `loadConfig().apiKey` (`:101`)                                                       |
-| Experimental inference pool        | two literals: `src/models.ts:409` and `src/environment-models.ts:33`         | two lines, and they must agree                                                                                                                                                                                                            |
-| Setup-wizard key validation        | `VALIDATION_ENDPOINT` at `src/auth/validator.ts:9`                           | one line. The validator function already accepts an `endpoint?` option (`:13`); both callers pass none (`src/setup-wizard/steps/auth.ts:44,111`)                                                                                          |
-| Usage analytics — all three routes | `BASE_URL` at `src/extensions/stats/api.ts:14`                               | one line. The client constructor already accepts `baseUrl?` (`:18,27`); the single construction site passes only the key (`src/extensions/stats/index.ts:16-22`), and the exported `createStatsClient` (`api.ts:146-148`) is never called |
-| Release lookup, checksums, archive | `DEFAULT_API_BASE` and `DEFAULT_DOWNLOAD_BASE` at `src/update/github.ts:8-9` | two lines. The client accepts `apiBase`/`downloadBase` options; neither call site passes them (`src/update/workflow.ts:80,205`)                                                                                                           |
-| Plugin version check               | `NPM_REGISTRY_BASE_URL` at `src/integrations/constants.ts:7`                 | one line                                                                                                                                                                                                                                  |
+| Surface                            | What to change                                                               | Size                                                                                                                                                                                                                                                                            |
+| ---------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web_search`                       | `searchUrl` at `src/regions.ts:101-103`                                      | **one line.** One use, at `src/extensions/web-search/execute-handler.ts:64`. The module reads no environment variable and no config key other than `loadConfig().apiKey` (`:100`)                                                                                               |
+| Experimental inference pool        | `experimentalOpenAiBaseUrl` at `src/regions.ts:96-98`                        | one line. Through 1.1.34 it was two literals that had to agree                                                                                                                                                                                                                  |
+| Setup-wizard key validation        | `keyValidationUrl` at `src/regions.ts:106-108`                               | one line. The validator function already accepts an `endpoint?` option (`src/auth/validator.ts:13`); both callers pass none (`src/setup-wizard/steps/auth.ts:44,111`)                                                                                                           |
+| Usage analytics — all three routes | `castApiUrl` in `REGIONS` (`src/regions.ts:29,36`)                           | one line per region. The client constructor already accepts `baseUrl?` (`src/extensions/stats/api.ts:17,26`); the single construction site passes only the key (`src/extensions/stats/index.ts:16-22`), and the exported `createStatsClient` (`api.ts:145-147`) is never called |
+| A third region                     | one entry in `REGIONS` (`src/regions.ts:23-38`)                              | one object literal. Region ids come from its keys, so validation, the picker and `kimchi config region` pick it up                                                                                                                                                              |
+| Release lookup, checksums, archive | `DEFAULT_API_BASE` and `DEFAULT_DOWNLOAD_BASE` at `src/update/github.ts:8-9` | two lines, and not region-aware. The client accepts `apiBase`/`downloadBase` options; neither call site passes them (`src/update/workflow.ts:80,205`)                                                                                                                           |
+| Plugin version check               | `NPM_REGISTRY_BASE_URL` at `src/integrations/constants.ts:12`                | one line, not region-aware                                                                                                                                                                                                                                                      |
 
 Two things that are **not** repoint mechanisms:
 
 - Hand-editing a Kimchi provider's `baseUrl` in `models.json`.
-  `readExistingProviders` (`src/models.ts:353-370`) drops and regenerates every
+  `readExistingProviders` (`src/models.ts:331-348`) drops and regenerates every
   `kimchi-dev*` and `kimchi-experimental` row on each refresh, preserving only
   user-added providers. The edit is erased on the next successful catalog fetch.
-- `KIMCHI_LLM_ENDPOINT`. It is a module constant (`src/config.ts:11`), not an
-  environment variable. Exporting it accomplishes nothing.
+- `KIMCHI_LLM_ENDPOINT`. Nothing reads it. Through 1.1.34 it was the name of a
+  module constant (`30: src/config.ts:11`), never an environment variable, and
+  1.1.35 removed even that. Exporting it accomplishes nothing.
 
 ## 4. Behavior that is not visible from the endpoint list
 
@@ -424,7 +472,7 @@ function isModelCompletionFetch(input: RequestInfo | URL): boolean {
 ```
 
 The match is on the **path of any URL**, and the only other gate is
-`response.ok` (`:77`). The hook attached at `src/cli.ts:632-636` is a billing
+`response.ok` (`:77`). The hook attached at `src/cli.ts:639-643` is a billing
 refresh, which fires `GET /v1/credits` and `GET /v1/budget` against
 `llm.kimchi.dev` — so a completion served by a different provider entirely,
 including a locally hosted one, still produces two Kimchi billing GETs.
@@ -433,27 +481,35 @@ The same patch sets `user-agent: kimchi/<version>` on **every outbound request
 in the process** that does not already carry one (`:72-73`). That includes MCP
 HTTP transports and `web_fetch`.
 
-### 4.3 The `@cast.ai` account gate on Auto, new in 1.1.29
+### 4.3 Auto: a client router gated to `@cast.ai` (1.1.29–1.1.36), then a backend-routed model
 
-`src/extensions/router/auto-default-gate.ts` is absent from the 1.1.21, 1.1.25,
-1.1.26 and 1.1.27 trees and present in 1.1.29 and 1.1.30 (checked by `ls` in
-each). It calls `getMe` (`:87`) and compares the domain after the last `@` for
-exact equality (`:66-71`), so `user@sub.cast.ai` does not match and neither does
-`user@notcast.ai`.
+Everything down to the 1.1.37 paragraph describes code that no longer exists,
+and its citations carry the `30:` prefix.
+
+`30: src/extensions/router/auto-default-gate.ts` is absent from the 1.1.21,
+1.1.25, 1.1.26 and 1.1.27 trees and present from 1.1.29 through 1.1.36 (checked
+by `ls` in each). It calls `getMe` (`:87`) and compares the domain after the
+last `@` for exact equality (`:66-71`), so `user@sub.cast.ai` does not match and
+neither does `user@notcast.ai`.
 
 It gates four things, not just the default:
 
-| Consumer                                                  | Effect when the gate says no                  |
-| --------------------------------------------------------- | --------------------------------------------- |
-| `src/extensions/router/model-discovery.ts:10`             | Auto is not discoverable as a model           |
-| `src/extensions/orchestration/model-roles-command.ts:350` | Auto is absent from the model-roles command   |
-| `src/cli.ts:574`                                          | an explicit `--model kimchi-dev/auto` throws  |
-| `src/extensions/router/index.ts:101`                      | Auto is never resolved as the session default |
+| Consumer                                                      | Effect when the gate says no                  |
+| ------------------------------------------------------------- | --------------------------------------------- |
+| `30: src/extensions/router/model-discovery.ts:10`             | Auto is not discoverable as a model           |
+| `30: src/extensions/orchestration/model-roles-command.ts:350` | Auto is absent from the model-roles command   |
+| `30: src/cli.ts:574`                                          | an explicit `--model kimchi-dev/auto` throws  |
+| `30: src/extensions/router/index.ts:101`                      | Auto is never resolved as the session default |
 
 `isExperimentalFeaturesEnabled()` is an alternative satisfier for the first two
 but not for the other two. For an account that does not match, `POST /v1/route`
 never fires at all. For an account that matches, Auto becomes the persisted
 default without the user choosing it, and `/v1/route` fires.
+
+From 1.1.34 through 1.1.36 the client router shared the session with its
+replacement: `36: src/cli.ts:744-747` registers both the router and a new
+`auto-model` extension that recognizes backend-routed catalog ids and reads the
+concrete pick back from the response (`36: src/extensions/auto-model/index.ts`).
 
 **1.1.37 removed all of this.** The release deletes `src/extensions/router/`
 outright, and with it `POST /v1/route`, `KIMCHI_ROUTER_ENDPOINT` (last read at
@@ -462,17 +518,17 @@ replacement variable or config key exists. Auto is now a model the backend
 routes itself: any `kimchi-dev` catalog model whose id starts with `auto` is
 sent as that id to the ordinary inference wire of section 2.1, and the backend
 reports the concrete pick in the response `model` field
-(`37: src/extensions/auto-model/constants.ts:35`, `isAutoRoutedModel`). Its
-target therefore moves with `llmEndpoint`, like every other inference call.
+(`src/extensions/auto-model/constants.ts:35`, `isAutoRoutedModel`). Its target
+therefore moves with `llmEndpoint`, like every other inference call.
 
 What changes for a reader is when Auto takes over. With no client gate, a fresh
 main session installs `kimchi-dev/auto` as the persisted default model once per
 install for **every** account whose catalog advertises `auto`, writes the
 `autoDefaultApplied` marker, and tells the user
-(`37: src/extensions/auto-model/index.ts:269-291`). The backend catalog is now
-the only thing deciding who gets it. `getMe` is back to its two telemetry
-callers (`37: src/extensions/telemetry/pre-session.ts:44`,
-`37: src/extensions/telemetry/session-context.ts:339`), and nothing warms it at
+(`src/extensions/auto-model/index.ts:269-291`). The backend catalog is now the
+only thing deciding who gets it. `getMe` is back to its two telemetry callers
+(`src/extensions/telemetry/pre-session.ts:44`,
+`src/extensions/telemetry/session-context.ts:339`), and nothing warms it at
 startup for Auto any more.
 
 ### 4.4 Connecting wakes a hibernated workspace, with no prompt
@@ -496,11 +552,11 @@ The rejection the client swallows is narrower than it looks: it accepts any 4xx
 whose body contains `"not suspended"` (`:117-119`), and the server's actual
 answer is a 400 carrying
 `{"message":"resume workspace: workspace is not suspended"}`
-(`auth.test.ts:295-296`). Other 400s — for instance workspace creation being
+(`auth.test.ts:319-320`). Other 400s — for instance workspace creation being
 disabled — propagate, and a failed resume aborts before the token exchange.
 
 A related surprise on the same plane: a 429 does not always mean quota
-exhausted. `src/sandbox/cloud/http.ts:42-50` parses
+exhausted. `src/sandbox/cloud/http.ts:43-51` parses
 `{"message":"quota exceeded: …"}`, but `http.test.ts:93-103` pins a second 429
 shape with no such prefix, returned for a validation failure on the user's own
 workspace resource request.
@@ -508,8 +564,8 @@ workspace resource request.
 ### 4.5 A local model server is probed at every startup
 
 Both startup paths probe it. The path with an API key present at launch calls
-`discoverOllamaProvider` (`src/environment-models.ts:36`); the path without
-calls `injectOllamaProvider` (`src/cli.ts:434` and `:463`). Failure is silent by
+`discoverOllamaProvider` (`src/environment-models.ts:33`); the path without
+calls `injectOllamaProvider` (`src/cli.ts:450` and `:478`). Failure is silent by
 design (`src/ollama.ts:5-9`), so the probe leaves no trace when nothing is
 listening. Host precedence is `$OLLAMA_HOST`, then `$KIMCHI_OLLAMA_HOST`, then
 `http://localhost:11434` (`src/ollama.ts:19,121,125`).
@@ -517,47 +573,58 @@ listening. Host precedence is `$OLLAMA_HOST`, then `$KIMCHI_OLLAMA_HOST`, then
 Only one of the two startup paths writes `models.json`. With `KIMCHI_API_KEY`
 present at launch, providers are registered in memory only and nothing is
 persisted — the comment gives the reason, that the shared cache belongs to the
-config account rather than to the override (`src/environment-models.ts:22`).
+config account rather than to the override (`src/environment-models.ts:17`).
 
 ### 4.6 `llmEndpoint` carries two incompatible shapes
 
 One config key, two legal shapes written by two code paths, and nothing
-reconciles them.
+reconciles them. The table uses the US hosts; the EU region behaves the same
+with `llm.eu.kimchi.dev`.
 
-| Stored value                       | How it gets there                                                                  | Models and inference                                                                                      | Session auto-naming                                                   |
-| ---------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| unset                              | fresh install                                                                      | correct — `KIMCHI_API` root (`src/models.ts:16`)                                                          | correct — the `src/config.ts:11` default already carries `/openai/v1` |
-| `https://llm.kimchi.dev`           | API-key login default; press Enter (`src/extensions/login/flow.ts:29,318,328,445`) | correct                                                                                                   | `https://llm.kimchi.dev/chat/completions` — the sub-path is lost      |
-| `https://llm.kimchi.dev/openai/v1` | the user pastes back the value the key reports by default                          | `…/openai/v1/openai/v1`, `…/openai/v1/anthropic` and `…/openai/v1/v1/models/metadata` — all three doubled | correct                                                               |
+| Stored value                       | How it gets there                                                                                                              | Models and inference                                                                                      | Session auto-naming and memory                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| unset                              | fresh install, or browser login, which deletes any stored value (`src/extensions/login/flow.ts:397` → `src/config.ts:887-898`) | correct — the region's root (`src/models.ts:20`)                                                          | correct — the `src/config.ts:595` default already carries `/openai/v1`                        |
+| `https://llm.kimchi.dev`           | API-key login default; press Enter (`src/extensions/login/flow.ts:353,363,486-488`, `src/login-command-patch.ts:257,277`)      | correct                                                                                                   | `https://llm.kimchi.dev/chat/completions`, `/embeddings` and `/models` — the sub-path is lost |
+| `https://llm.kimchi.dev/openai/v1` | the user pastes back the value the key reports by default                                                                      | `…/openai/v1/openai/v1`, `…/openai/v1/anthropic` and `…/openai/v1/v1/models/metadata` — all three doubled | correct                                                                                       |
 
-`normalizeKimchiEndpoint` (`src/models.ts:19-26`) fixes only a missing scheme
+`normalizeKimchiEndpoint` (`src/models.ts:18-25`) fixes only a missing scheme
 and trailing slashes; it never strips a sub-path, and
 `chatCompletionsApi`/`anthropicMessagesApi`/`modelsMetadataApi`
-(`src/models.ts:28-37`) each append their own.
-`src/extensions/session-name.ts:136` assumes the suffix is already present. The
-only consumer that tolerates both is the billing base builder, which strips a
-trailing `/openai/v1` case-insensitively
-(`src/extensions/billing/status.ts:157-160`). The test suite pins only the
-working shape, which is why the divergence survived.
+(`src/models.ts:27-36`) each append their own.
+`src/extensions/session-name.ts:136` and the three memory calls of section 2.2
+assume the suffix is already present. The only consumer that tolerates both is
+the billing base builder, which strips a trailing `/openai/v1`
+case-insensitively (`src/extensions/billing/status.ts:164-168`). The test suite
+pins only the working shape, which is why the divergence survived.
 
 Two consequences worth stating plainly. First, no value satisfies both the chat
 consumer and the metadata consumer, so a single custom base cannot be correct
 for every call. Second, reading `models.json` is not sufficient to know where
 inference goes: a project-scoped `llmEndpoint` installs an in-memory `baseUrl`
-override on the `kimchi-dev` provider (`src/extensions/login/index.ts:19,46-48`)
+override on the `kimchi-dev` provider (`src/extensions/login/index.ts:19,45-47`)
 while the persisted file still shows the gateway URL, and a test pins that
 intent — `models.json` is a global file and a project-local `llmEndpoint` must
-never be written into it (`models.test.ts:752`).
+never be written into it (`models.test.ts:765`).
+
+A stored `llmEndpoint` also outranks the region for every consumer above, so
+`KIMCHI_REGION=eu` on top of an API-key login made in the US region still sends
+inference, the startup catalog fetch, billing, session naming and memory to
+`llm.kimchi.dev`, while web search and the experimental pool follow the region.
+Not every catalog fetch honors it: in-TUI login's key validation and model
+refresh, `setup-tools`, the setup wizard and ACP pass no endpoint and go to the
+region's host even when `llmEndpoint` points at a proxy (section 2.1). Section
+4.10 has the rest of that split.
 
 Since 1.1.27 a project-scoped value is read only from a trusted project
-(`src/config.ts:6,517`, `isProjectScopeAllowed`; zero occurrences in the 1.1.21
+(`src/config.ts:6,570`, `isProjectScopeAllowed`; zero occurrences in the 1.1.21
 `config.ts`). That closes a path by which a cloned repository could silently
 repoint every prompt, and it also means a per-repository override is inert in an
-untrusted directory.
+untrusted directory. The region is deliberately not project-scoped at all
+(`src/config.ts:588-589`).
 
 ### 4.7 Telemetry is on by default and the wizard does not ask
 
-The default is `const defaultEnabled = true` (`src/config.ts:455`).
+The default is `const defaultEnabled = true` (`src/config.ts:505`).
 
 `promptTelemetry` has no prompt. The entire function is a notice followed by an
 unconditional write:
@@ -578,7 +645,7 @@ existing explicit choice (`src/commands/setup-tools.ts:77-86`). That asymmetry
 is easy to miss.
 
 Opting out emits one final attributed event by design:
-`src/commands/config.ts:52-65` writes `false`, then forces the in-memory flag
+`src/commands/config.ts:55-68` writes `false`, then forces the in-memory flag
 back to `true` with a comment saying why, so the `config_changed` event still
 ships, carrying the account UUID and a top-level `userEmail`.
 
@@ -590,15 +657,33 @@ messages are truncated to 300 characters.
 
 Free-text now flows through it and did not at 1.1.21.
 `src/extensions/telemetry/feedback.ts` is absent from the 1.1.21, 1.1.25, 1.1.26
-and 1.1.27 trees and present in 1.1.29 and 1.1.30. It clamps a user-authored
-reason to `MAX_REASON_LENGTH = 300` (`:53,60-61`) and ships it as `answer_value`
-with a `reason_truncated` flag. At 1.1.21 the survey emitter could only send a
-lookup from a fixed option list and dropped the event on a miss.
+and 1.1.27 trees and present from 1.1.29 on. It clamps a user-authored reason to
+`MAX_REASON_LENGTH = 300` (`:53,60-61`) and ships it as `answer_value` with a
+`reason_truncated` flag. At 1.1.21 the survey emitter could only send a lookup
+from a fixed option list and dropped the event on a miss.
 
 Telemetry fan-out to other tools is a configuration surface, not a call Kimchi
 makes: `kimchi setup-tools` writes the two ingest URLs plus a bearer header into
-`~/.claude/settings.json` (`src/integrations/claude-code.ts:26-34`) and into an
-opencode plugin config. The HTTP call is then made by those tools.
+`~/.claude/settings.json` (`src/integrations/claude-code.ts:33-45`) and into an
+opencode plugin config. The HTTP call is then made by those tools. Since 1.1.35
+those are the region's ingest URLs, and removal recognizes either region's
+(`src/integrations/constants.ts:7-10`).
+
+Two additions since 1.1.30 ride the same default-on channel. From 1.1.34 every
+gated tool decision emits a `claude_code.tool_decision` record carrying the tool
+name, the provider's tool-call id, accept or reject, and where the decision came
+from — enums only, no arguments
+(`src/extensions/telemetry/handlers/permissions.ts:60-81`). From 1.1.34 the
+feedback event also names the concrete model a routed request resolved to, as
+`routing_model` (`src/extensions/telemetry/feedback.ts:37,96`); the
+`auto_model_used` boolean ran alongside it until 1.1.37 removed it.
+
+The vendored memory library has its own telemetry: mem0 3.1.8 posts sampled
+events to `https://us.i.posthog.com/i/v0/e/` unless `MEM0_TELEMETRY` is
+`"false"` (`B36:L577835`, `B36:L579601`). Kimchi sets that variable to `"false"`
+before every import of the library, but only when it is unset, so an explicit
+value wins (`src/extensions/memory/backend.ts:319-323`). With memory off the
+library is never loaded.
 
 ### 4.8 Spend exhaustion has two distinct server outcomes
 
@@ -621,8 +706,8 @@ verdict out of the inference response (`:2`, `:21` non-retryable with exit code
 deadline that the CLI parses (`:146-161`).
 
 Warnings come from two producers, not one. The credits threshold is
-`LOW_CREDITS_THRESHOLD_USD = 5` (`:74`, used at `:363`); budget warnings fire at
-90% and 100% via `budgetStatus` (`:662`), and a soft organization-scoped cap
+`LOW_CREDITS_THRESHOLD_USD = 5` (`:74`, used at `:370`); budget warnings fire at
+90% and 100% via `budgetStatus` (`:669`), and a soft organization-scoped cap
 deliberately never reaches the exhausted state even above 100%.
 
 The same error module documents the rest of the gateway's protocol: HTTP 410 for
@@ -631,31 +716,76 @@ model retirement, parsed into replacement, alternatives and docs hints
 policy table (`:1-32`), where infrastructure failures exit 74; and upstream
 shapes such as `Hosted_vllmException` leaking through (`:101-102`).
 
-### 4.9 Two more that change when calls fire
+### 4.9 Two more that changed when the router fired (through 1.1.36)
+
+Both describe the client router that 1.1.37 deleted; they stay because a reader
+of an older pin still needs them.
 
 **Auto's routing POST is not issued where it is staged.** The
 `before_agent_start` handler ends at `stageAutoRoutingAttempt` and fetches
-nothing (`src/extensions/router/index.ts:164`); the fetch runs inside the Auto
-provider when the model request starts (`api-provider.ts:134`). Two
+nothing (`30: src/extensions/router/index.ts:164`); the fetch runs inside the
+Auto provider when the model request starts (`30: api-provider.ts:134`). Two
 consequences: the routing call is aborted by the same signal as the model
 request, and "one POST per session" holds only on success — every failure path
-resets the state to unresolved (`router/index.ts:165-168`) and
+resets the state to unresolved (`30: router/index.ts:165-168`) and
 `before_agent_start` re-arms on unresolved (`:152-157`), so a session whose
 router keeps failing issues one POST per user turn indefinitely.
 
 **What is in that POST is the whole prompt, unredacted by default.**
 `prepareRouterQuery` redacts only when `getRedactionConfig().enabled`
-(`src/extensions/router/router-query.ts:17`), and the default is disabled —
+(`30: src/extensions/router/router-query.ts:17`), and the default is disabled —
 precedence is `KIMCHI_REDACTION_ENABLED`, then `redaction.enabled` in the config
-file, then `false` (`src/extensions/pii-redaction/config.ts:33-48`). A test pins
-that a former token budget was removed, so the whole prompt goes
-(`router-query.test.ts:45-51`). Images become a marker rather than an upload.
+file, then `false` (`src/extensions/pii-redaction/config.ts:33-48`, unchanged at
+1.1.37). A test pins that a former token budget was removed, so the whole prompt
+goes (`30: router-query.test.ts:45-51`). Images become a marker rather than an
+upload.
 
-## 5. Version behavior, 1.1.21 through 1.1.30
+### 4.10 Region selection, new in 1.1.35, and the one component it misses
 
-### The endpoint surface is frozen
+`src/regions.ts` calls itself the single source of truth for every external
+endpoint (`:1-3`). The region is `KIMCHI_REGION` when that names a region, else
+`region` in the global config file, else `us` (`src/config.ts:450-454`). Login
+writes it next to the key (`src/config.ts:891`), and `kimchi config region` only
+reports it; changing region means logging in again
+(`src/commands/config.ts:105-130`). The picker offers EU only with experimental
+features on, but the gate is on selection alone: a stored `region: "eu"` or
+`KIMCHI_REGION=eu` resolves either way (`src/regions.ts:62-78`). The same
+comment says EU endpoints are not generally available yet.
 
-`diff -rq` of the 1.1.21 tree against the 1.1.30 tree, re-run for this document:
+The region is the default for every first-party host except the workspace
+worker, and each surface has its own override on top of it:
+
+| Surface                                                                            | What wins over the region                                                                                 |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Inference, startup and login-flow catalog, credits, budget, session naming, memory | config `llmEndpoint` (in-TUI login, setup and ACP catalog refreshes follow the region only — section 2.1) |
+| Control plane, account identity, quota                                             | env `KIMCHI_REMOTE_ENDPOINT`                                                                              |
+| Browser login page, and every billing or key link shown to the user                | env `KIMCHI_WEB_APP_URL`                                                                                  |
+| Telemetry ingest                                                                   | config `telemetry.endpoint` / `telemetry.metricsEndpoint`                                                 |
+| Web search, experimental pool, setup-wizard key validation, `kimchi stats`         | nothing                                                                                                   |
+
+Resolution is memoized, keyed on `KIMCHI_REGION` and the global config file's
+modification time and size, so a login made by another process is picked up
+(`src/config.ts:619-652`).
+
+**The ssh and rsync tunnel does not follow the region.** `runProxy` hands the Go
+helper only the API key (`src/ssh-proxy.ts:64-70`), and the helper runs its own
+handshake — verify key, find the workspace, exchange a token — against
+`KIMCHI_REMOTE_ENDPOINT` or else the hard-coded US base
+(`tools/proxy-helper/pkg/cast/cast.go:203,213-218`,
+`tools/proxy-helper/cmd/proxy/proxy.go:203`). `tools/` is byte-identical from
+1.1.21 to 1.1.37. So for an EU account every TypeScript control-plane call goes
+to `app.eu.kimchi.dev/api`, while `/sync`, `/terminal` and rsync transfer
+authenticate against `app.kimchi.dev/api` with an EU key, which the client
+itself treats as valid in its own region only. Exporting
+`KIMCHI_REMOTE_ENDPOINT=https://app.eu.kimchi.dev/api` covers both, because the
+helper inherits the environment. Whether the US host actually refuses an EU key
+is unresolved (section 7).
+
+## 5. Version behavior, 1.1.21 through 1.1.37
+
+### 1.1.21 to 1.1.30: the endpoint surface is frozen
+
+`diff -rq` of the 1.1.21 tree against the 1.1.30 tree:
 
 ```
 IDENTICAL  src/api                    IDENTICAL  src/extensions/billing
@@ -668,42 +798,70 @@ IDENTICAL  tools                      IDENTICAL  src/update/github.ts
 ```
 
 Byte-identical, not merely equivalent. `src/update` differs only in
-`settings.ts`, which carries no endpoint. Endpoint-literal counts over `src/`
-and `tools/` corroborate:
+`settings.ts`, which carries no endpoint. **Zero endpoints were added, removed
+or rehosted across that range.** The single literal that moved is `/v1/me`, and
+the two extra occurrences are the entitlement gate of section 4.3.
 
-| Literal             | 1.1.21 | 1.1.30 |
-| ------------------- | ------ | ------ |
-| `llm.kimchi.dev`    | 91     | 91     |
-| `app.kimchi.dev`    | 35     | 35     |
-| `api.cast.ai`       | 32     | 32     |
-| `remote.kimchi.dev` | 39     | 39     |
-| `api.kimchi.dev`    | 0      | 0      |
-| `/v1/me`            | 9      | 11     |
+### 1.1.31 to 1.1.37: rehosted by region, one path removed, three added
 
-**Zero endpoints were added, removed or rehosted across the range.** The single
-literal that moved is `/v1/me`, and the two extra occurrences are the
-entitlement gate of section 4.3. Every row in section 2 is present and
-identically hosted at 1.1.21 as well as at 1.1.30.
+The same comparison against 1.1.37 leaves `src/http`, `src/ollama.ts`,
+`src/ssh-proxy.ts`, `src/update/github.ts`, `src/extensions/web-fetch` and
+`tools` byte-identical; every other directory above changed. Endpoint-literal
+counts over `src/` and `tools/`:
+
+| Literal             | 1.1.21 | 1.1.30 | 1.1.37 |
+| ------------------- | ------ | ------ | ------ |
+| `llm.kimchi.dev`    | 91     | 91     | 86     |
+| `app.kimchi.dev`    | 35     | 35     | 30     |
+| `api.cast.ai`       | 32     | 32     | 29     |
+| `remote.kimchi.dev` | 39     | 39     | 39     |
+| `api.kimchi.dev`    | 0      | 0      | 0      |
+| `/v1/me`            | 9      | 11     | 11     |
+| `llm.eu.kimchi.dev` | 0      | 0      | 17     |
+| `app.eu.kimchi.dev` | 0      | 0      | 13     |
+| `api.eu.cast.ai`    | 0      | 0      | 20     |
+
+The counts are plain substring matches. The unchanged `/v1/me` total at 1.1.37
+is a coincidence, not the gate surviving: the two gate literals left with the
+router (section 4.3), and two unrelated matches came in — `/v1/messages` in a
+comment at `src/models.ts:202` and `/v1/metrics` at
+`src/extensions/telemetry/handlers/permissions.test.ts:11`. A delimited
+`/v1/me\b` count is 9.
+
+The US counts fell because the per-module constants were folded into
+`src/regions.ts`, not because a US endpoint went away. The only host literals in
+non-test source that 1.1.37 has and 1.1.30 lacks are the three EU hosts. The
+path-shaped literals that changed are `/v1/route` (gone) and `/embeddings`,
+`models` and a relative `chat/completions` (the memory calls of section 2.2).
 
 ### What did change is when calls fire
 
 Each landing below was bisected directly against the trees named in the scope
 note.
 
-| Change                                                                         | Landed     | Why it matters                                                                                                        |
-| ------------------------------------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------- |
-| `isRemoteRunEnabled` rewritten from opt-in to opt-out                          | **1.1.22** | the whole of section 2.4 becomes reachable without a setting — section 4.1                                            |
-| `dispatch_to_cloud_agent`, a model-callable tool that reaches remote compute   | **1.1.23** | the model, not only the user, can start a remote run — section 4.1                                                    |
-| `/v1/models/metadata` response schema rewritten                                | **1.1.23** | same URL, method and auth; the body changed — below                                                                   |
-| MCP OAuth tokens moved to the OS keychain                                      | 1.1.26     | credential storage, not an endpoint change                                                                            |
-| Project `.kimchi/config.json` gated on project trust                           | **1.1.27** | a per-repository `llmEndpoint` no longer applies in an untrusted directory — section 4.6                              |
-| `@cast.ai` account gate on Auto, a third `/v1/me` caller                       | **1.1.29** | decides whether `/v1/route` ever fires — section 4.3                                                                  |
-| Free-text survey capture shipped to `logs:ingest`                              | **1.1.29** | user-authored prose now leaves the machine — section 4.7                                                              |
-| Auto-default-applied marker written to `settings.json`                         | 1.1.30     | cosmetic                                                                                                              |
-| Client-side router, `/v1/route`, `KIMCHI_ROUTER_ENDPOINT` and the gate removed | **1.1.37** | Auto becomes a backend-routed catalog model and the default for any account whose catalog advertises it — section 4.3 |
+| Change                                                                                                       | Landed     | Why it matters                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isRemoteRunEnabled` rewritten from opt-in to opt-out                                                        | **1.1.22** | the whole of section 2.4 becomes reachable without a setting — section 4.1                                                                                                                         |
+| `dispatch_to_cloud_agent`, a model-callable tool that reaches remote compute                                 | **1.1.23** | the model, not only the user, can start a remote run — section 4.1                                                                                                                                 |
+| `/v1/models/metadata` response schema rewritten                                                              | **1.1.23** | same URL, method and auth; the body changed — below                                                                                                                                                |
+| MCP OAuth tokens moved to the OS keychain                                                                    | 1.1.26     | credential storage, not an endpoint change                                                                                                                                                         |
+| Project `.kimchi/config.json` gated on project trust                                                         | **1.1.27** | a per-repository `llmEndpoint` no longer applies in an untrusted directory — section 4.6                                                                                                           |
+| `@cast.ai` account gate on Auto, a third `/v1/me` caller                                                     | **1.1.29** | decides whether `/v1/route` ever fires — section 4.3                                                                                                                                               |
+| Free-text survey capture shipped to `logs:ingest`                                                            | **1.1.29** | user-authored prose now leaves the machine — section 4.7                                                                                                                                           |
+| Auto-default-applied marker written to `settings.json`                                                       | 1.1.30     | cosmetic                                                                                                                                                                                           |
+| Session-naming model renamed to `deepseek-v4-flash-0731`                                                     | 1.1.32     | same endpoint and trigger — section 2.1                                                                                                                                                            |
+| Cloud subagent sessions tagged with the local session id                                                     | 1.1.32     | `tags.parent_session_id` on the worker session-create body — section 2.4                                                                                                                           |
+| Memory extension: embeddings, model list and fact extraction against `llmEndpoint`                           | **1.1.33** | opt-in and experimental, but once on it sends conversation text to the gateway from a detached worker — section 2.2                                                                                |
+| Cloudflare 520–522 added to the shared retryable set                                                         | 1.1.33     | every `fetchWithRetry` caller retries those too, `/v1/search` up to 10 times — section 2.2                                                                                                         |
+| Backend-routed `auto*` catalog models, alongside the client router                                           | **1.1.34** | Auto can be served without `/v1/route` — section 4.3                                                                                                                                               |
+| Workspace create sends `spec: {resources, dependencies, egressPolicy}`; responses read only `spec.resources` | **1.1.34** | a request and response change on a surviving endpoint — section 2.4                                                                                                                                |
+| `claude_code.tool_decision` telemetry per gated tool decision; feedback names the routed model               | **1.1.34** | more default-on events, enums and model ids only — section 4.7                                                                                                                                     |
+| Region registry, `KIMCHI_REGION`, EU hosts                                                                   | **1.1.35** | every first-party host but the worker moves with the region; web search, the experimental pool, key validation and stats can be repointed at all; the Go ssh helper does not follow — section 4.10 |
+| Client-side router, `/v1/route`, `KIMCHI_ROUTER_ENDPOINT` and the gate removed                               | **1.1.37** | Auto becomes a backend-routed catalog model and the default for any account whose catalog advertises it — section 4.3                                                                              |
 
-The 1.1.23 metadata rewrite is the only request or response change to a
-surviving endpoint:
+Two request or response changes touch a surviving endpoint. The 1.1.34
+workspace-create `spec` is described in section 2.4. The 1.1.23 metadata rewrite
+is the other:
 
 ```diff
 -	status?: "active" | "sunset" | "deprecated"
@@ -717,15 +875,15 @@ surviving endpoint:
 
 Deprecation state is now derived from the new fields rather than read from
 `status`. A catalog response written to the pre-1.1.23 schema is parsed without
-error by 1.1.30 and classified as having no deprecation state at all, so a model
-marked `status: "sunset"` in such a response would be offered as active.
+error from 1.1.23 on and classified as having no deprecation state at all, so a
+model marked `status: "sunset"` in such a response would be offered as active.
 
 One boundary to keep: the analysis in section 6 of the vendored SDK surface, and
 the `?beta=true` suffix on the Anthropic wire, describe the harness version
-bundled by 1.1.27 and 1.1.30 (`@earendil-works/pi-*` 0.85.1). The 1.1.21 tree
-bundles 0.84.1. Neither package is present in any Kimchi tree, so section 6 must
-not be back-dated to 1.1.21. Kimchi's patches against the harness touch nothing
-in the Anthropic transport at either version.
+bundled by 1.1.27, 1.1.30 and 1.1.37 (`@earendil-works/pi-*` 0.85.1). The 1.1.21
+tree bundles 0.84.1. Neither package is present in any Kimchi tree, so section 6
+must not be back-dated to 1.1.21. Kimchi's patches against the harness touch
+nothing in the Anthropic transport at any of those versions.
 
 ## 6. Looks first-party but is not
 
@@ -741,17 +899,18 @@ uncalled. The one documented re-registration is an OpenAI OAuth provider
 
 ### Vendored SDK resource tables
 
-| Paths                                                                                                                                                                                                                | Owner                                            | Why it is not Kimchi                                                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `/v1/messages` (non-beta), `/v1/messages/count_tokens`                                                                                                                                                               | Anthropic SDK                                    | the harness only ever calls `beta.messages.create`                                                                                  |
-| `/v1/messages/batches*`, `/v1/models`, `/v1/models/{id}`, `/v1/files`, `/v1/complete`, `/v1/skills`, `/v1/organizations/*`                                                                                           | Anthropic SDK                                    | no first-party caller                                                                                                               |
-| `/v1/agents`, `/v1/dreams`, `/v1/memory_stores/*`, `/v1/vaults`, `/v1/user_profiles`                                                                                                                                 | Anthropic SDK beta                               | no first-party caller                                                                                                               |
-| `/v1/tunnels`, `/v1/tunnels/{certificates,reveal_token,rotate_token}`                                                                                                                                                | Anthropic SDK beta                               | the worst trap in the corpus — it reads exactly like the ssh tunnel of section 2.4, which has no REST surface at all                |
-| `/v1/environments/*` including `/work`, `/heartbeat`, `/stop`, `/archive`                                                                                                                                            | Anthropic SDK beta                               | second worst — reads exactly like a remote-workspace lifecycle API. The real one is the control plane of section 2.4                |
-| `/v1/deployments*`, `/v1/deployment_runs*` including `/pause`, `/unpause`                                                                                                                                            | Anthropic SDK beta                               | `pause`/`unpause` reads like hibernate and wake. The real wake is the `:resume` row of section 2.4                                  |
-| `/deployments/{model}{path}`                                                                                                                                                                                         | the Azure-flavoured client inside the OpenAI SDK | a second `/deployments` false positive, identifiable by its `api-key` header                                                        |
-| `/responses`, `/responses/compact`, `/embeddings`, `/batches`, `/files`, `/uploads`, `/moderations`, `/images/*`, `/audio/*`, `/assistants`, `/threads`, `/vector_stores`, `/evals`, `/realtime/*`, `/fine_tuning/*` | OpenAI SDK                                       | `buildModelsConfig` never emits `api: "openai-responses"` (`src/models.ts:278,291`), so even the responses transport is unreachable |
-| `/organization/{costs,usage/*,spend_alerts,users,invites,roles,audit_logs,admin_api_keys}`                                                                                                                           | OpenAI SDK                                       | the tempting false positives for account and billing. Kimchi's rebinding covers the inference surfaces only                         |
+| Paths                                                                                                                                                                                                                | Owner                                            | Why it is not Kimchi                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/v1/messages` (non-beta), `/v1/messages/count_tokens`                                                                                                                                                               | Anthropic SDK                                    | the harness only ever calls `beta.messages.create`                                                                                                                                                                                                             |
+| `/v1/messages/batches*`, `/v1/models`, `/v1/models/{id}`, `/v1/files`, `/v1/complete`, `/v1/skills`, `/v1/organizations/*`                                                                                           | Anthropic SDK                                    | no first-party caller                                                                                                                                                                                                                                          |
+| `/v1/agents`, `/v1/dreams`, `/v1/memory_stores/*`, `/v1/vaults`, `/v1/user_profiles`                                                                                                                                 | Anthropic SDK beta                               | no first-party caller                                                                                                                                                                                                                                          |
+| `/v1/tunnels`, `/v1/tunnels/{certificates,reveal_token,rotate_token}`                                                                                                                                                | Anthropic SDK beta                               | the worst trap in the corpus — it reads exactly like the ssh tunnel of section 2.4, which has no REST surface at all                                                                                                                                           |
+| `/v1/environments/*` including `/work`, `/heartbeat`, `/stop`, `/archive`                                                                                                                                            | Anthropic SDK beta                               | second worst — reads exactly like a remote-workspace lifecycle API. The real one is the control plane of section 2.4                                                                                                                                           |
+| `/v1/deployments*`, `/v1/deployment_runs*` including `/pause`, `/unpause`                                                                                                                                            | Anthropic SDK beta                               | `pause`/`unpause` reads like hibernate and wake. The real wake is the `:resume` row of section 2.4                                                                                                                                                             |
+| `/deployments/{model}{path}`                                                                                                                                                                                         | the Azure-flavoured client inside the OpenAI SDK | a second `/deployments` false positive, identifiable by its `api-key` header                                                                                                                                                                                   |
+| `/responses`, `/responses/compact`, `/embeddings`, `/batches`, `/files`, `/uploads`, `/moderations`, `/images/*`, `/audio/*`, `/assistants`, `/threads`, `/vector_stores`, `/evals`, `/realtime/*`, `/fine_tuning/*` | OpenAI SDK                                       | `buildModelsConfig` never emits `api: "openai-responses"` (`src/models.ts:256,269`), so even the responses transport is unreachable                                                                                                                            |
+| `/organization/{costs,usage/*,spend_alerts,users,invites,roles,audit_logs,admin_api_keys}`                                                                                                                           | OpenAI SDK                                       | the tempting false positives for account and billing. Kimchi's rebinding covers the inference surfaces only                                                                                                                                                    |
+| `https://api.openai.com/v1` as the default LLM base, the Together and LM Studio embedders, and PostHog at `https://us.i.posthog.com/i/v0/e/` (`B36:L577835`)                                                         | mem0 OSS 3.1.8, bundled since 1.1.33             | Kimchi passes its own `baseURL` for the embedder and LLM (`src/extensions/memory/backend.ts:271-296`), writes with `infer: false` so the LLM client is never called, and switches the PostHog telemetry off unless the user set `MEM0_TELEMETRY` (section 4.7) |
 
 ### Upstream harness
 
@@ -887,27 +1046,39 @@ every released tarball.
     table actually misfires. The failure is silent either way, because session
     naming catches and falls back. _Settles with:_ one authenticated POST to
     each. Requires a live API key.
-14. **`api.kimchi.dev`.** Absent from every source tree examined and from the
-    binary, and the one page naming it also misspells the service segment.
+14. **`api.kimchi.dev`.** Absent from every source tree examined and from both
+    binaries, and the one page naming it also misspells the service segment.
     "Never existed, or planned and never shipped" is much better supported than
     "retired alias", but it is not proof. _Settles with:_ a DNS or TLS probe, or
     releases earlier than 1.1.21.
+15. **Whether `app.kimchi.dev/api` accepts a key issued in the EU region.** It
+    decides whether `/sync`, `/terminal` and rsync work for an EU account
+    without `KIMCHI_REMOTE_ENDPOINT` set (section 4.10). The client assumes not.
+    _Settles with:_ one `POST …/workspace-tokens:verifyKey` with an EU key
+    against each host.
+16. **Whether the EU hosts serve every path the US hosts do.** The client builds
+    the same paths under both, but calls EU not generally available and hides it
+    behind experimental features. _Settles with:_ a DNS and TLS probe of the
+    three EU hosts, then one authenticated GET per path family.
 
 ## Appendix — counts
 
-| Class                                                                  | Count                                       |
-| ---------------------------------------------------------------------- | ------------------------------------------- |
-| `llm.kimchi.dev`                                                       | 9                                           |
-| `app.kimchi.dev`                                                       | 10 (including the browser login navigation) |
-| per-workspace worker                                                   | 10 (9 HTTP plus the agent WebSocket)        |
-| ssh tunnel                                                             | 1                                           |
-| `api.cast.ai`                                                          | 6 (one of them declared and never called)   |
-| distribution and self-update                                           | 6                                           |
-| **Total remote endpoints**                                             | **42**                                      |
-| local and loopback                                                     | about 22                                    |
-| implemented in the worker client, zero callers, absent from the binary | 5                                           |
-| documented only, unproven                                              | 4                                           |
-| vendored SDK and upstream-harness literals excluded                    | about 150                                   |
+| Class                                                                  | Count at 1.1.37                                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `llm.kimchi.dev`                                                       | 11 (1.1.30 had 9: `/v1/route` went, the three memory calls came)    |
+| `app.kimchi.dev`                                                       | 10 (including the browser login navigation)                         |
+| per-workspace worker                                                   | 10 (9 HTTP plus the agent WebSocket)                                |
+| ssh tunnel                                                             | 1                                                                   |
+| `api.cast.ai`                                                          | 6 (one of them declared and never called)                           |
+| distribution and self-update                                           | 6                                                                   |
+| **Total remote endpoints**                                             | **44**                                                              |
+| of which reachable under an EU host as well                            | 27 — every row above except the worker, the tunnel and distribution |
+| local and loopback                                                     | about 22                                                            |
+| implemented in the worker client, zero callers, absent from the binary | 5                                                                   |
+| documented only, unproven                                              | 4                                                                   |
+| vendored SDK and upstream-harness literals excluded                    | about 150, plus the mem0 defaults of section 6                      |
 
-All 42 are present and identically hosted at 1.1.21, 1.1.27 and 1.1.30. What
-changed across that range is when they fire, not which they are.
+The 42 endpoints of 1.1.30 were present and identically hosted at 1.1.21 and
+1.1.27; what changed across that range is when they fire, not which they are.
+From 1.1.31 to 1.1.37 one was removed, three were added, and all but the worker,
+tunnel and distribution rows gained a second host.
