@@ -212,8 +212,9 @@ in {
       # a THIRD gate — the `chat.enableWorkflows` setting, default false — and
       # it is not in the workspace-override allowlist, so no project-local
       # cli.json can satisfy it. Whoever wants `/workflow` in this shell sets it
-      # GLOBALLY (`kiro-cli settings chat.enableWorkflows true`, or
-      # `ai.kiro.native.settings.chat.enableWorkflows` under home-manager). This
+      # GLOBALLY (`ai.kiro.native.settings.chat.enableWorkflows` under
+      # home-manager, or `kiro-cli settings chat.enableWorkflows true` without
+      # it: home-manager owns the global cli.json and reverts that). This
       # line still earns its place: it keeps the patched-package path
       # exercised, and gate 3 is one global setting away.
       # See packages/kiro-cli/docs/workflow-gating.md.
