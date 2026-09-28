@@ -340,13 +340,13 @@
     if lib.length hits == 1
     then lib.head hits
     else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
-  # Every file devenv delivers, whichever writer lands it: the native `files`
-  # sink entries for symlinks, plus each unit of an owned writer's directory
-  # plan for a read-only copy, as `{text}` or `{source}` plus its `mode`. The
-  # shared AGENTS.md owner (`ai.internal`) is a writer like any runtime. Read
-  # it where a check asks what reaches the project tree rather than how: a
-  # file that moves from a symlink to a copy stays where the check looks.
-  # Takes the evaluated `config`.
+  # Every file a backend delivers, whichever writer lands it: the native sink
+  # entries for symlinks (devenv `files`, Home Manager `home.file`), plus each
+  # unit of an owned writer's directory plan for a read-only copy, as `{text}`
+  # or `{source}` plus its `mode`. The shared AGENTS.md owner (`ai.internal`)
+  # is a writer like any runtime. Read it where a check asks what reaches the
+  # tree rather than how: a file that moves from a symlink to a copy stays
+  # where the check looks. Takes the evaluated `config`.
   deliveredFiles = config: let
     copiesOf = target:
       lib.optionals (target.codec == "dir") (lib.mapAttrsToList (address: unit: {
@@ -365,7 +365,7 @@
       (builtins.attrValues plans))
     (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) (harnessNames ++ ["internal"]));
   in
-    builtins.listToAttrs copies // config.files;
+    builtins.listToAttrs copies // config.files or config.home.file;
   # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
   # Null unless `envelope` is the file's ONLY top-level key, so a bare
   # per-server map (which Copilot and Kiro both reject) never matches.

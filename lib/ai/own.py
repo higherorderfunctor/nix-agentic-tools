@@ -25,7 +25,7 @@ old bash reader treats a JSON line as a filename). Keeping both formats costs
 one reader and one writer each and buys zero migration code.
 """
 
-# cspell:ignore fchmod fdopen
+# cspell:ignore fchmod fdopen keepends
 
 from __future__ import annotations
 
@@ -452,10 +452,14 @@ class DocContainer:
         # leaf cannot have a mode of its own -- every one of them lives in the
         # same file -- but the file can, and one caller needs it.
         self.mode = mode
+        # Leading `//` comment lines a runtime writes above the JSON object
+        # (Copilot heads its state file `config.json` with two). Kept verbatim
+        # and written back, so neither side strips the other's bytes.
+        self.header = ""
         if codec == "json":
-            self.parse: Callable[[str], Any] = json.loads
+            self.parse: Callable[[str], Any] = self.parse_commented_json
             self.serialize: Callable[[Any], str] = (
-                lambda document: json.dumps(document, indent=2) + "\n"
+                lambda document: self.header + json.dumps(document, indent=2) + "\n"
             )
             self.empty: Callable[[], MutableMapping[str, Any]] = dict
             self.new_table: Callable[[], MutableMapping[str, Any]] = dict
@@ -492,9 +496,25 @@ class DocContainer:
             self.document = self.parse(text)
         else:
             self.identity = MISSING
+            self.header = ""
             self.document = self.empty()
         if not isinstance(self.document, MutableMapping):
             raise ValueError(f"settings must be an object at {self.path}")
+
+    def parse_commented_json(self, text: str) -> Any:
+        """JSON after any leading full-line `//` comments, which it remembers.
+
+        Only lines before the first other line count: a `//` further down is
+        inside the object (a URL, say), and json.loads judges it there.
+        """
+        lines = text.splitlines(keepends=True)
+        count = 0
+        while count < len(lines) and lines[count].lstrip().startswith("//"):
+            count += 1
+        self.header = "".join(
+            line if line.endswith("\n") else line + "\n" for line in lines[:count]
+        )
+        return json.loads("".join(lines[count:]))
 
     @staticmethod
     def stale_order(addresses: set[tuple[str, ...]]) -> list[tuple[str, ...]]:
@@ -560,8 +580,8 @@ class DocContainer:
         `retiring` is a target that declares nothing any more. When its
         retraction leaves the document serializing to nothing but an empty
         object, every byte in it was ours, so the file goes rather than
-        staying behind as `{}`. A TOML comment the user added survives
-        serialization and keeps the file. An empty document is
+        staying behind as `{}`. A comment survives serialization and keeps the
+        file: one the user added to TOML, or a JSON document's `//` header. An empty document is
         not inert everywhere: Kimchi fills its permission scalars' defaults
         for any project file that exists, so a leftover `{}` would keep
         overriding the user's `defaultMode` after the declaration is gone
