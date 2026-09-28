@@ -160,7 +160,7 @@ They are recorded so a rescan can see what moved.
 
 ```text
 llm.kimchi.dev                 inference gateway + control plane
-                               (models/metadata, route, search, credits, budget)
+                               (models/metadata, route through 1.1.36, search, credits, budget)
 llm.kimchi.dev/openai/v1       OpenAI wire; vendored OpenAI SDK rebound here
 llm.kimchi.dev/anthropic       Anthropic wire; vendored Anthropic SDK rebound here
 app.kimchi.dev/api             sandbox control plane AND account identity

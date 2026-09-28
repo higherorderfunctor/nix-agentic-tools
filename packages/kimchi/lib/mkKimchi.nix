@@ -34,6 +34,131 @@
   # writes; shared by the emitter and `contentTargets`.
   userHarnessDir = cfg: "${cfg.configDir}/harness";
   userContextPath = cfg: "${userHarnessDir cfg}/${cfg.context.filename}";
+  # Home Manager's Auto model default: below `mkDefault` (1000), so a
+  # consumer's own key-level mkDefault wins, and above the option default
+  # (1500), which a non-null value at the same priority would conflict with.
+  autoModelPriority = 1200;
+
+  # Home Manager defaults the model to Kimchi's Auto router and owns the
+  # choice, instead of leaving it to Kimchi 1.1.37, which installs Auto as
+  # the saved default itself once per install: on a fresh main-session launch
+  # with no --model, on a `kimchi-dev` model that is not already Auto, when
+  # the catalog advertises `kimchi-dev/auto` and the user harness
+  # settings.json lacks `autoDefaultApplied: true`
+  # (src/extensions/auto-model/index.ts:253-291). It persists
+  # defaultProvider, defaultModel and the marker through writeJson
+  # (src/config.ts:831-842), which renames a temporary over the file
+  # (src/config/json.ts:154-159): that silently replaces a store symlink in a
+  # writable directory, and in a read-only one the temporary write throws, so
+  # the session stays on Auto and retries every launch.
+  #
+  # A module of the option TYPE, not a definition of the option: an outer
+  # definition would sit at normal priority, and the outer option's
+  # filterOverrides would drop a consumer's whole-attrset
+  # `harnessSettings = lib.mkDefault {…}` before the submodule saw it. Here
+  # every consumer definition, whole-attrset or per key, reaches the
+  # submodule and competes per key.
+  #
+  # The pair sits at `autoModelPriority` and is coupled: a consumer who
+  # declares either half at a priority below 1200 (mkDefault and stronger,
+  # null included) gets neither half from here, so a lone `defaultModel` on
+  # another provider never pairs with `kimchi-dev`. Weaker declarations
+  # (mkOptionDefault, mkOverride above 1200) lose to the default, and
+  # mkOverride 1200 is a conflict error. `highestPrio` reads only definition
+  # priorities, never values, so the test cannot recurse.
+  #
+  # An account whose catalog lacks `auto` still starts: pi 0.85.1's
+  # findInitialModel skips a saved default the registry does not hold and
+  # falls back, silently, to the model it picks when no default is declared
+  # (dist/core/model-resolver.js:501-529). Any saved default, Auto included,
+  # also turns off the global `multiModel` default on a fresh launch whose
+  # model is not on `kimchi-dev` (auto-model/index.ts:104-106,255-259), so
+  # such an account loses multi-model, and `multiModel = true` takes effect
+  # only with `defaultModel = null`.
+  #
+  # A saved Auto default is not a lock. Kimchi persists a startup `--model`
+  # given over a routed Auto default (auto-model/index.ts:215-229), as it
+  # does `/model` set-default, the set_model tool and ACP model changes, into
+  # the writable user file; that choice holds until the next activation
+  # restores the owned leaves.
+  #
+  # The marker stays declared, at `mkDefault`, for a consumer who declares a
+  # non-Auto `kimchi-dev` model or nulls the pair: without it Kimchi would
+  # replace that choice. null and false differ: null hands the marker back to
+  # Kimchi (Auto installs once), while false re-arms the install after every
+  # activation, because Kimchi reads only `=== true`, writes true, and
+  # activation restores the owned false.
+  #
+  # Home Manager only: Kimchi reads the marker from the user file alone
+  # (src/config.ts:22,812-814), devenv rejects user-scope harness keys, and a
+  # project `defaultModel` would put every devenv Kimchi behind project trust
+  # and the exact-cwd launch guard.
+  hmHarnessDefaults = {options, ...}: let
+    consumerDeclared = lib.any (name: options.${name}.highestPrio < autoModelPriority) ["defaultModel" "defaultProvider"];
+    autoDefault = value:
+      lib.mkOverride autoModelPriority (
+        if consumerDeclared
+        then null
+        else value
+      );
+  in {
+    config = {
+      autoDefaultApplied = lib.mkDefault true;
+      defaultModel = autoDefault "auto";
+      defaultProvider = autoDefault "kimchi-dev";
+    };
+  };
+
+  # Both native files are typed from packages/kimchi/extracted.json by
+  # ./extracted.nix. The submodules are closed: a key Kimchi does not read is
+  # an unknown-option error, not bytes nothing reads. Declared per backend
+  # because only Home Manager's harness type carries `hmHarnessDefaults`.
+  nativeOptions = backend: let
+    isHm = backend == "hm";
+  in {
+    settings = lib.mkOption {
+      type = lib.types.submodule {options = sidecar.settingsOptions;};
+      default = {};
+      description = ''
+        Kimchi `config.json`, typed from the keys the pinned Kimchi reads
+        (packages/kimchi/extracted.json). Reconciled by leaf in
+        <configDir>/config.json on Home Manager activation or
+        .kimchi/config.json on devenv shell entry. Devenv rejects keys Kimchi
+        reads only from the user file. `apiKey` has no option here: it is a
+        secret, delivered by `ai.kimchi.apiKey`.
+      '';
+    };
+
+    harnessSettings = lib.mkOption {
+      type = lib.types.submodule ([{options = sidecar.harnessSettingsOptions;}] ++ lib.optional isHm hmHarnessDefaults);
+      default = {};
+      description =
+        ''
+          Kimchi and pi harness `settings.json`, typed from the keys the pinned
+          Kimchi and pi read (packages/kimchi/extracted.json). Reconciled by
+          leaf in <configDir>/harness/settings.json on Home Manager activation
+          or .config/kimchi/harness/settings.json on devenv shell entry. Kimchi
+          mutates the user file at runtime, so both backends preserve unowned
+          settings and retract retired leaves.
+        ''
+        + lib.optionalString isHm ''
+          Home Manager defaults the model to Kimchi's Auto router,
+          `defaultProvider = "kimchi-dev"` and `defaultModel = "auto"`, at
+          priority 1200, below `mkDefault`. Declaring either key at `mkDefault`
+          or stronger, null included, replaces both; a weaker declaration loses
+          to the default. Any saved default, Auto included, turns off Kimchi's
+          global `multiModel` default on a fresh launch whose model is not on
+          `kimchi-dev`, so `multiModel = true` needs `defaultModel = null`; an
+          account whose catalog lacks Auto gets the model Kimchi picks when
+          none is declared, with multi-model off. The default is not a lock: a
+          `kimchi --model X` launch, `/model` set-default or an ACP model change
+          persists into the writable user file until the next activation. Home
+          Manager also declares `autoDefaultApplied = true` at `mkDefault`, so
+          Kimchi never installs Auto as the saved default over a model declared
+          here.
+        '';
+    };
+  };
 
   # Kimchi 1.1.30's lifecycle events, FULL_COMMAND_HOOK_EVENTS
   # (src/extensions/hook-adapters/discovery.ts:29-50). Every portable event
@@ -636,35 +761,6 @@ in
         '';
       };
 
-      # Both native files are typed from packages/kimchi/extracted.json by
-      # ./extracted.nix. The submodules are closed: a key Kimchi does not read
-      # is an unknown-option error, not bytes nothing reads.
-      native.settings = lib.mkOption {
-        type = lib.types.submodule {options = sidecar.settingsOptions;};
-        default = {};
-        description = ''
-          Kimchi `config.json`, typed from the keys the pinned Kimchi reads
-          (packages/kimchi/extracted.json). Reconciled by leaf in
-          <configDir>/config.json on Home Manager activation or
-          .kimchi/config.json on devenv shell entry. Devenv rejects keys Kimchi
-          reads only from the user file. `apiKey` has no option here: it is a
-          secret, delivered by `ai.kimchi.apiKey`.
-        '';
-      };
-
-      native.harnessSettings = lib.mkOption {
-        type = lib.types.submodule {options = sidecar.harnessSettingsOptions;};
-        default = {};
-        description = ''
-          Kimchi and pi harness `settings.json`, typed from the keys the pinned
-          Kimchi and pi read (packages/kimchi/extracted.json). Reconciled by
-          leaf in <configDir>/harness/settings.json on Home Manager activation
-          or .config/kimchi/harness/settings.json on devenv shell entry. Kimchi
-          mutates the user file at runtime, so both backends preserve unowned
-          settings and retract retired leaves.
-        '';
-      };
-
       hooks = lib.mkOption {
         type = sharedHooks.mkHooksType hookEvents;
         default = {};
@@ -701,6 +797,9 @@ in
         description = "Override telemetry via KIMCHI_TELEMETRY_ENABLED env var.";
       };
     };
+
+    hm.options.native = nativeOptions "hm";
+    devenv.options.native = nativeOptions "devenv";
 
     config = kimchiDelivery;
     installPackage = kimchiInstallPackage;
