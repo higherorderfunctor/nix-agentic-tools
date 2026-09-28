@@ -13,7 +13,7 @@
 #     `<prefix>${VAR}<suffix>` sentinel; because Kiro will not expand it,
 #     WE substitute it at activation with `envsubst` from the decrypted
 #     secret (collected in `urlSecretEnv`), writing a real private
-#     mcp.json. See `mkMcpJsonScript` / `ai.kiro.mcpWriteMode`.
+#     mcp.json. See `mkMcpJsonScript`.
 #
 # Placeholder and export are derived from ONE `deriveEnvVar`, so they
 # always match. The two var maps are kept SEPARATE — they are injected

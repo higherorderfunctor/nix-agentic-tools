@@ -7,7 +7,7 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-09-27 — Claude's settings and MCP files are Nix-owned
+> **Last verified:** 2026-09-28 — Claude's settings and MCP files are Nix-owned
 > read-only links. Proxy ownership is explicit and keyed by server name, so each
 > owner gets its own daemon; every ecosystem renders servers via `renderServer`.
 >

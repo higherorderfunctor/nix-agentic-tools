@@ -23,12 +23,12 @@
       else ["tasks"]
     )
     ++ [name];
-  viewFor = mode: runtime: strategy: let
+  viewFor = mode: runtime: let
     evaluated = (
       if mode == "hm"
       then harness.evalHm
       else harness.evalDevenv
-    ) (specimen.config mode runtime strategy);
+    ) (specimen.config mode runtime);
     inherit (evaluated) config;
     cfg = config.ai.${runtime};
     # The shared AGENTS.md owner holds these typed entries on devenv. It is
@@ -97,8 +97,8 @@
         ];
     in
       lib.concatMap (surface:
-        map (destination:
-          {
+        map (
+          destination: {
             inherit primitive surface;
             ecosystem = runtime;
             inherit mode;
@@ -106,7 +106,7 @@
             inherit (destination) writerAttr;
             pruneTrigger = facts.pruneTrigger mode primitive;
             # Ordering chooses a representative, not a writer name. The body gate
-            # still observes every distinct imperative strategy and HM phase.
+            # still observes every distinct imperative writer and HM phase.
             order =
               (
                 if path == ".claude.json"
@@ -127,43 +127,29 @@
                 if destination.phase == "prune"
                 then 10
                 else 0
-              )
-              + (
-                if runtime == "kiro" && surface == "mcpServers" && strategy == "merge"
-                then 5
-                else 0
               );
           }
-          // lib.optionalAttrs (runtime == "kiro" && surface == "mcpServers") {
-            condition = facts.mcpConditions.${strategy};
-          })
+        )
         destinations) (specimen.surfacesFor runtime path);
   in {
     inherit cfg config files names;
     records = lib.concatLists (lib.mapAttrsToList observe files);
   };
-  views = lib.genAttrs schema.modes (mode:
-    lib.genAttrs schema.ecosystems (runtime:
-      lib.genAttrs (
-        if runtime == "kiro"
-        then specimen.modes
-        else ["overwrite"]
-      ) (viewFor mode runtime)));
-  recordViews = lib.concatMap (mode: lib.concatMap (runtime: builtins.attrValues views.${mode}.${runtime}) schema.ecosystems) schema.modes;
+  views = lib.genAttrs schema.modes (mode: lib.genAttrs schema.ecosystems (viewFor mode));
+  recordViews = lib.concatMap (mode: map (runtime: views.${mode}.${runtime}) schema.ecosystems) schema.modes;
   liveRecords = lib.concatMap (view: view.records) recordViews;
   retirementsFor = mode: runtime: let
-    runtimeViews = builtins.attrValues views.${mode}.${runtime};
-    view = views.${mode}.${runtime}.overwrite;
+    view = views.${mode}.${runtime};
     # A ledger is claimed only by an entry it actually OWNS on this backend. A
     # linked entry may still name the ledger (Kiro steering links on Home
     # Manager, copies on devenv), and there the writer only retires.
-    owns = v: path: entry:
+    owns = path: entry:
       builtins.elem (deliveryMethod.resolve {
         inherit entry path;
-        inherit (v.cfg) methodFor;
+        inherit (view.cfg) methodFor;
         backend = mode;
       }) ["copy-ro" "shared"];
-    claimed = lib.concatMap (v: lib.mapAttrsToList (_path: entry: entry.ledger) (lib.filterAttrs (owns v) v.files)) runtimeViews;
+    claimed = lib.mapAttrsToList (_path: entry: entry.ledger) (lib.filterAttrs owns view.files);
     ledgerRows = writerName: writer: ledger: declaration: let
       primitive =
         if declaration.codec == "dir"
@@ -196,7 +182,7 @@
   # Several specimen names can describe one templated declarative destination.
   # Imperative phases keep their actual names so no removal writer disappears.
   signature = row:
-    builtins.toJSON ([(facts.key row) row.target row.primitive (row.condition or null)]
+    builtins.toJSON ([(facts.key row) row.target row.primitive]
       ++ lib.optionals (row.primitive != "ownPathDeclarative") row.writerAttr);
   unique = lib.foldl' (acc: row:
     if lib.any (previous: signature previous == signature row) acc

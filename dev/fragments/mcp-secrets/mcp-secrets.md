@@ -1,8 +1,9 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-09-27 — Claude's settings and MCP files are Nix-owned
+> **Last verified:** 2026-09-28 — Claude's settings and MCP files are Nix-owned
 > read-only links. Proxy ownership is explicit and keyed by server name, so each
-> owner gets its own daemon; every ecosystem renders servers via `renderServer`.
+> owner gets its own daemon; every ecosystem renders servers via `renderServer`;
+> Kiro's mcp.json is always a read-only copy.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -375,18 +376,17 @@ to placeholder strings BEFORE `renderServer`; anything else that sees the raw
 attrset fails loud rather than serializing the secret's file path. Every
 ecosystem renders via `renderServer`; there is no second MCP transform.
 
-### mcp.json is a real file, governed by `ai.kiro.mcpWriteMode`
+### mcp.json is a read-only copy
 
-mcp.json is NOT a `home.file`/`files` store symlink — it is assembled as a real
-file by `mkMcpJsonScript` (HM `home.activation`, devenv `enterShell`), shared so
-both backends stay at parity. Uniform real-file delivery is what lets a secret
-url land and removes the symlink↔real-file toggle + the devenv `files.*`
-silent-skip on a flipped name.
-
-- `overwrite` (default) — re-assemble every activation, `chmod` read-only (0400
-  with a secret url, else 0444). Nix-owned; hand edits don't survive.
-- `merge` — `jq '.[0] * .[1]'` (Nix wins, write-if-absent), left writeable
-  (0600/0644). Hand-added servers/edits survive.
+mcp.json is NOT a `home.file`/`files` store symlink. `mkMcpJsonScript` renders
+it, and the `kiroMcpJson` writer (HM activation, devenv
+`ai:kiro:materialize-mcp`) lands it as a real read-only copy: 0400 with a secret
+url, else 0444. Both backends share the renderer, so they stay at parity. A real
+file is what lets a secret url land, and a copy survives `kiro-cli mcp add` or a
+hand edit renaming a new file over the path: the next activation or shell entry
+backs the edit up and restores the declaration. Home Manager always owns the
+user-global file (an empty server map when nothing is declared); devenv writes
+the project file only when a server is declared.
 
 ### Gotchas
 
@@ -395,11 +395,6 @@ silent-skip on a flipped name.
 - `--classic` (non-v3) ships the literal header placeholder → failed auth, not a
   leak; the factory wrapper forces `--v3`.
 - Static tokens only; rotate = re-export + restart (no refresh hook).
-
-### Deferred (not yet built)
-
-`mcpWriteMode`/merge generalization to Copilot `mcp-config.json`, the settings
-files, and devenv-merge broadly. Only the Kiro slice ships today.
 
 Claude's files are not merge candidates: its `.claude/settings.json` and its
 `.mcp.json` files (the Home Manager personal plugin's and the devenv project's)

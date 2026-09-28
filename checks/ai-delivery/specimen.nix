@@ -1,8 +1,6 @@
 # Independent populated declarations at the runtime options' DEFAULT directories.
-# The two Kiro strategies share a specimen; only mcpWriteMode varies.
 {lib}: {
-  modes = ["merge" "overwrite"];
-  config = mode: runtime: strategy: {
+  config = mode: runtime: {
     ai =
       {
         agents.probe = {
@@ -53,7 +51,6 @@
             kiro = {
               agents.probe.prompt = {text = "probe";};
               hooksJson.probe = ''{"event":"pre-commit"}'';
-              mcpWriteMode = strategy;
               native.settings =
                 if mode == "hm"
                 then {chat.defaultModel = "probe";}

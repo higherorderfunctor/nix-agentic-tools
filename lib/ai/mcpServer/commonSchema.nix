@@ -27,8 +27,9 @@
 #       (Kiro does not env-substitute the url field, verified against
 #       2.13.0), so the launcher instead assembles it into a real,
 #       private `mcp.json` at activation from the decrypted secret (see
-#       `ai.kiro.mcpWriteMode`). Both are delivered for Kiro only; other
-#       ecosystems throw on a credential value. See secretValue.nix.
+#       `mkMcpJsonScript` in mkKiro.nix). Both are delivered for Kiro
+#       only; other ecosystems throw on a credential value. See
+#       secretValue.nix.
 #       Used by services.mcp-servers outputs and lib.ai.externalServers.
 {lib, ...}: let
   secretValue = import ./secretValue.nix lib;
@@ -190,7 +191,7 @@ in {
         url field, so a credential url is not injected as a
         `''${env:VAR}` placeholder at launch like a header — instead the
         Kiro launcher assembles it into a real, private `mcp.json` at
-        activation from the decrypted secret (see `ai.kiro.mcpWriteMode`).
+        activation from the decrypted secret.
         Delivered for Kiro only; other ecosystems throw on a credential
         url. See secretValue.nix.
       '';
