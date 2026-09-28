@@ -80,6 +80,7 @@
           in {
             options = {
               ai.kiro = {
+                _maxBytes = attrs;
                 _ownPlans = attrs;
                 activation = lib.mkOption {
                   type = schema.writerMapType;

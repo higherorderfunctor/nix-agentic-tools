@@ -8,12 +8,17 @@
 #
 # `stdenvNoCC.mkDerivation`, not `runCommand`: the phases are the extension
 # points, and `runCommand` skips them.
-{lib}: pkgs: {
+{lib}: pkgs: let
+  inherit (import ./byte-limit.nix pkgs) byteLimitCheck;
+in {
   # `files` is keyed by TARGET-relative path; each value is `{text}` or
-  # `{source}`, the shape `aiTypes.textSourceFile` returns.
+  # `{source}`, the shape `aiTypes.textSourceFile` returns. `maxBytes` is
+  # keyed the same way, each value `{bytes; hint}`: the built file at that
+  # path must not be larger, checked after the tree is installed.
   mkTree = {
     name,
     files,
+    maxBytes ? {},
     passthru ? {},
   }: let
     # `writeText` rather than `builtins.toFile`: generated text can carry
@@ -51,6 +56,16 @@
           }
         '')}
         runHook postInstall
+      '';
+      doInstallCheck = maxBytes != {};
+      installCheckPhase = ''
+        runHook preInstallCheck
+        cd "$out"
+        ${lib.concatStrings (lib.mapAttrsToList (path: limit: ''
+            ${lib.getExe byteLimitCheck} ${lib.escapeShellArgs [path (toString limit.bytes) name limit.hint]}
+          '')
+          maxBytes)}
+        runHook postInstallCheck
       '';
     };
 }

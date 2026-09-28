@@ -374,22 +374,25 @@
   # lands reads `deliveredFiles` / `home.file`. Found by the final entry: the
   # shared AGENTS.md owner (`ai.internal`) wins, because on devenv it is the
   # one that delivers a shared key; otherwise exactly one enabled runtime must
-  # carry the path. Takes the evaluated module (`evalHm …`, `evalDevenv …`).
+  # carry the path. A path with a byte limit is in the tree whatever its
+  # format, as the router builds it. Takes the evaluated module (`evalHm …`,
+  # `evalDevenv …`).
   markdownInput = evaluated: path: let
     inherit (evaluated) config;
     owners =
       lib.filter (runtime: (config.ai.${runtime}.enable or false) && (config.ai.${runtime}.files or {}) ? ${path})
       harnessNames;
-    entry =
+    owner =
       if (config.ai.internal.files or {}) ? ${path}
-      then config.ai.internal.files.${path}
+      then "internal"
       else if lib.length owners == 1
-      then config.ai.${lib.head owners}.files.${path}
+      then lib.head owners
       else throw "module-test: expected exactly one ai.* entry for \"${path}\", found ${toString (lib.length owners)}";
+    entry = config.ai.${owner}.files.${path};
   in
-    if entry.format == "markdown" && entry.content.enable
+    if (entry.format == "markdown" || config.ai.${owner}._maxBytes ? ${path}) && entry.content.enable
     then aiTypes.textSourceFile entry.content
-    else throw "module-test: \"${path}\" is not a live Markdown entry (format `${entry.format}`)";
+    else throw "module-test: \"${path}\" is not a live Markdown tree entry (format `${entry.format}`, no byte limit)";
   # Whether a delivered file record (`home.file.<p>`, `files.<p>`, a
   # `deliveredFiles` entry) is `path` inside a runtime's Markdown tree.
   fromMarkdownTree = path: file: lib.hasSuffix "-markdown/${path}" (toString (file.source or ""));
@@ -400,6 +403,10 @@
     if fromMarkdownTree path files.${path}
     then (markdownInput evaluated path).text
     else throw "module-test: ${path} is not delivered from its Markdown tree";
+  # The shell-entry lines of a devenv evaluation that run the AGENTS.md
+  # window notice, matched by the notice's store path. Takes the evaluated
+  # module.
+  windowNoticeLines = evaluated: lib.filter (lib.hasInfix "/bin/ai-markdown-window-notice ") (lib.splitString "\n" evaluated.config.enterShell);
   # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
   # Null unless `envelope` is the file's ONLY top-level key, so a bare
   # per-server map (which Copilot and Kiro both reject) never matches.
@@ -412,6 +419,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs deliveredFiles deliveredMarkdown devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs fromMarkdownTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs deliveredFiles deliveredMarkdown devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs fromMarkdownTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
   inherit testing;
 }

@@ -158,8 +158,9 @@ in {
     codex = {
       enable = true;
       # AGENTS.md carries the whole orientation plus the path-scoped index,
-      # well past Codex's 32 KiB default. `ai.*` fails evaluation above this
-      # limit and writes it to Codex's own `project_doc_max_bytes`, so Codex
+      # well past Codex's 32 KiB default. `ai.*` fails the build of the
+      # Markdown tree holding AGENTS.md (its install check) above this limit,
+      # and writes the limit to Codex's own `project_doc_max_bytes`, so Codex
       # reads the whole file instead of silently dropping its tail.
       projectDocMaxBytes = 131072;
       # Temporarily disable Codex's OS sandbox for project sessions. The Home

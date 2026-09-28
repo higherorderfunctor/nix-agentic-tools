@@ -46,5 +46,8 @@ in
                 (delivery.afterEdges writer)
                 (delivery.commandBody writer));
         }
+        # Only where the evaluation declares `warnings`, the seam
+        # mkBackendTransform.nix uses for its own.
+        (lib.optionalAttrs (options ? warnings) {inherit (delivery) warnings;})
       ]
     )

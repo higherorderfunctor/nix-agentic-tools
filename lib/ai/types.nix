@@ -135,15 +135,6 @@ in {
 
   inherit textSourceUsesSource;
 
-  # The inline text an enabled record delivers, or null when it is disabled or
-  # a `source` supplies it. Reading `text` of a source-backed record would
-  # `readFile` the source at evaluation time, which for a derivation output is
-  # import-from-derivation; callers that measure bytes stay lazy through this.
-  textSourceInlineText = value:
-    if !value.enable || textSourceUsesSource value
-    then null
-    else value.text;
-
   # An optional text source lowered to its text when enabled, or to null so a
   # renderer's null-pruning drops the key. The type rejects enabled empty
   # text, so this only decides whether the value is enabled.
