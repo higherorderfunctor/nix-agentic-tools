@@ -849,14 +849,12 @@
             (ai.mcpServers or ai.codex.mcpServers) without a client secret.
           ''
           else ''
-            Remove it. A public client needs no secret: keep oauth.client_id alone,
-            or omit it so `codex mcp login` registers a client through a client
-            ID metadata document or dynamic client registration. A confidential
-            client has no Nix-declared route: add that server at runtime with
-            `codex mcp add <name> --url ... --oauth-client-id ...
-            --oauth-client-secret ...`, which writes the user-level config.toml.
-            Home Manager reconciles only the leaves it declares there, so that
-            entry survives a switch.
+            Remove it. Codex takes this secret only as a literal in config.toml,
+            so a confidential OAuth client can't be declared through Nix. For a
+            server that accepts a static credential, set proxy.enable with the
+            credential under proxy.headers (Home Manager's local credential proxy,
+            so Codex sees only a loopback URL), or name an environment variable
+            with codex.bearerTokenEnvVar or codex.envHttpHeaders.
           ''
         );
     })

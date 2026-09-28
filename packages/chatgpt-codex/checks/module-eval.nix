@@ -1739,8 +1739,9 @@ in {
             !assertion.assertion
             && lib.hasInfix ".oauth.client_secret would copy" assertion.message)
           result.config.assertions;
-        # Agent tables get the role-layer remedy, server tables the runtime
-        # `codex mcp add` one; never the other's.
+        # Agent tables get the role-layer remedy, server tables the Nix-managed
+        # credential routes; never the other's, and neither points at a runtime
+        # `codex mcp` command, since Nix owns MCP configuration.
         rejectsExactly = paths: result: let
           failures = secretFailures result;
         in
@@ -1755,11 +1756,12 @@ in {
                   then serverRemedy
                   else agentRemedy
                 )
-                assertion.message))
+                assertion.message)
+              && !(lib.hasInfix "codex mcp " assertion.message))
             failures)
           paths);
         agentRemedy = "Codex role layers ignore mcp_servers";
-        serverRemedy = "codex mcp add <name>";
+        serverRemedy = "set proxy.enable with the";
         pooledPaths = {
           "ai.agents.reviewer.codex.mcp_servers.tracker" = agentRemedy;
           "ai.codex.agents.auditor.codex.mcp_servers.tracker" = agentRemedy;
