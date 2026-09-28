@@ -16,8 +16,9 @@ Per-platform binary packages store versions and hashes in a
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-28 — source paths and ownership guidance follow
+> native package assembly; generated Markdown is formatted in `mkTree`;
+> standalone scripts use `lib/strict-shell-application.nix`.
 >
 > Full lineage:
 > `git show 6d2fbeef:dev/fragments/nix-standards/nix-standards.md`.
@@ -64,6 +65,12 @@ exempt body lives in a file the whole-line scan reads (`lib/`,
 `packages/*/lib/`, `lib/packaging.nix`), silence it with a `# bare-commands: ok`
 marker on the line, as `mkClaudeExtract` does — never by adding a store path the
 phase does not need.
+
+**A new standalone script** goes through `lib/strict-shell-application.nix`
+(`import <relative path>/lib/strict-shell-application.nix pkgs {name; text;}`),
+the one `writeShellApplication` that adds the full strict-mode header and the
+shared shellcheck flags from `config/shell-strict.nix`. Do not restate
+`bashOptions` or the `shopt` line by hand.
 
 **Enforcement:** `checks/shell/bare-commands.nix` (part of `nix flake check`)
 runs two scans.
@@ -178,7 +185,10 @@ cp "$src/file.md" ./output/
 
 If the output needs to be formatted, either:
 
-1. Format inside the nix derivation (add formatter to build inputs)
+1. Format inside the nix derivation. For Markdown, build it with
+   `(lib.ai.markdown pkgs).mkTree` (`lib/markdown`), the one builder that runs a
+   formatter and a check over a tree of files; do not hand-roll a prettier
+   derivation.
 2. Format the working tree copy after `cp`
 
 **Destinations may themselves be store symlinks.** Anything declared in devenv's

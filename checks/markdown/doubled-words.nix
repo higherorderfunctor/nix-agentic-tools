@@ -12,7 +12,7 @@
 # is not a backstop for anything, it is the ONLY thing that can see the
 # defect:
 #
-#   - prettier (`settings.proseWrap = "always"` in treefmt.nix) reflows the
+#   - prettier (`proseWrap = "always"`, lib/markdown/prose-style.nix) reflows the
 #     paragraph and reproduces the duplicate verbatim. It also decides
 #     which side of a newline the pair lands on, which is why the scanner
 #     has to handle both.

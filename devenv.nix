@@ -156,7 +156,10 @@ in {
     # This repository's `ai.*` configuration. It consumes `ai.*` exactly as
     # any project would, fed the context and rules dev/generate.nix produces;
     # checks/instructions/instructions-drift.nix evaluates the same module.
-    (import ./dev/ai.nix {inherit isCI;})
+    (import ./dev/ai.nix {
+      inherit isCI;
+      inherit (inputs) treefmt-nix;
+    })
     # NOTE: the stacked-workflows devenv module is NOT imported here. Enabling
     # it would fan its skills into `ai.skills` UNPREFIXED (stack-*), which, once
     # installed user-global via nixos-config, would silently shadow the

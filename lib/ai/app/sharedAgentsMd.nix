@@ -182,9 +182,11 @@
         // lib.optionalAttrs (entry.content.run != null) {inherit (entry.content) run;}
         // lib.optionalAttrs (entry.content.value != null) {inherit (entry.content) value;};
     }
-    # The aggregate is Markdown whoever supplies it, except for a body that
-    # writes it at activation: those bytes are not there to build a tree from.
-    // lib.optionalAttrs (entry.content.run == null) {format = "markdown";};
+    # The entry's own format, stated or not: a replacement is Markdown only
+    # when it says so, exactly as Codex's AGENTS.md on Home Manager, where a
+    # consumer definition discards the whole generated entry, `format` with
+    # it. Only the generated aggregate below states `markdown` itself.
+    // {inherit (entry) format;};
   claims = lib.concatMap (runtime: let
     cfg = config.ai.${runtime};
   in

@@ -1,5 +1,6 @@
 # Declares cross-app options (ai.context, ai.mcpServers,
-# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks).
+# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and ai.markdown: how
+# every runtime's generated Markdown is formatted and checked.
 #
 # Imported by every mkRuntime module so per-app layers
 # (ai.<name>.mcpServers, etc.) compose with these top-level pools. Scalar
@@ -18,6 +19,7 @@
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
+  markdown = import ../markdown {inherit lib;} pkgs;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
@@ -154,6 +156,77 @@ in {
         native artifact.
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
+    };
+
+    markdown = {
+      check = lib.mkOption {
+        type = lib.types.lines;
+        default = "";
+        defaultText = lib.literalMD "the Markdown table-cell check (`(lib.ai.markdown pkgs).defaultCheck`: rumdl and markdownlint-cli2 MD056), contributed at normal priority so your definitions append to it";
+        description = ''
+          Shell snippet that checks each runtime's built Markdown tree, run in
+          the tree's install check with a copy of the installed tree as its
+          working directory. Paths are target-relative (`.claude/rules/foo.md`), and a
+          non-zero exit fails the build. A check must not write to its working
+          directory: it runs in the build's copy of the tree, so anything it
+          writes or changes there is discarded, never delivered.
+
+          The default rejects a table whose rows disagree on their cell count.
+          Your definitions APPEND to it; `lib.mkForce` replaces it, and
+          `lib.mkForce ""` checks nothing. It sees exactly the files the
+          formatter sees; see `ai.markdown.formatter` for what is excluded.
+          markdownlint-cli2 reads its arguments as globs,
+          so the default skips a path containing `[`, `*` or `?` in that half
+          of the check.
+        '';
+      };
+      formatter = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = markdown.defaultFormatter;
+        defaultText = lib.literalExpression "(lib.ai.markdown pkgs).defaultFormatter";
+        example = lib.literalExpression ''
+          let
+            fmt = inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+          in "''${lib.getExe fmt.config.package} --config-file ''${fmt.config.build.configFile} --tree-root . --walk filesystem --no-cache"
+        '';
+        description = ''
+          Shell snippet that formats the Markdown every enabled runtime is
+          delivered as rules, context, AGENTS.md and agents, including the
+          text you supply for those through `ai.*`. Skills are not included
+          (see below). Each runtime's Markdown is built into one store tree
+          at its target paths, and this runs in the build sandbox with that
+          tree as its working directory, so it sees
+          `.claude/rules/foo.md`, `AGENTS.md` and so on, and formats in place.
+          Every file in the tree is Markdown, whatever its name.
+
+          The default runs prettier with `proseWrap = "always"` over every
+          file in the tree. Setting this REPLACES the default; `null` formats
+          nothing. Opt one file out with
+          `ai.<runtime>.files."<path>".format = "raw"`: it is delivered as
+          written, and a byte limit on its path is still checked. Replacing a
+          generated Markdown file with `content.run` also requires
+          `format = "raw"`: the file keeps its generated `markdown` format,
+          and `run` bytes do not exist when the tree is built. A
+          replacement of AGENTS.md (`ai.codex.files.".codex/AGENTS.md"` on
+          Home Manager, any runtime's `files."AGENTS.md"` on devenv) replaces
+          the whole generated entry, so it is delivered as written unless it
+          states `format = "markdown"`, on both backends.
+
+          Two kinds of Markdown are excluded, so they are neither formatted
+          nor checked. Skills (`ai.skills`, `ai.<runtime>.skills` and
+          `skillsDir`), whether a single SKILL.md or a skill directory, are
+          delivered as written on every runtime and both backends. Home
+          Manager Claude agents, commands and output styles are delivered
+          through upstream `programs.claude-code.agents`, `.commands` and
+          `.outputStyles`.
+
+          Two traps for a treefmt formatter. Use the raw treefmt binary with
+          `--tree-root .`, not devenv's `treefmt` wrapper: the wrapper
+          hardcodes your project directory as the tree root, so in the sandbox
+          it formats the wrong tree. And your treefmt excludes apply by target
+          path inside the tree: excluding `AGENTS.md` skips it here too.
+        '';
+      };
     };
 
     mcpServers = lib.mkOption {
@@ -486,6 +559,13 @@ in {
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
     (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
+    # The default check, as a DEFINITION rather than the option default, so a
+    # consumer's definitions append to it. `mkOverride` at the ordinary
+    # priority rather than a plain value, and that is load-bearing: a plain
+    # definition is evaluated even when a consumer's `mkForce` wins, which
+    # would instantiate rumdl and markdownlint-cli2 for a check that never
+    # runs. Measured; do not "simplify" it to a plain string.
+    {ai.markdown.check = lib.mkOverride lib.modules.defaultOverridePriority markdown.defaultCheck;}
     # Drop the systemd path entirely in devenv. `mkIf false` would still define
     # an unknown option there; the option-tree probe is a build-time condition
     # and does not force config. Unsupported active declarations fail through
@@ -494,16 +574,20 @@ in {
       systemd.user.services = mcpProxy.systemdUnitsFor managedProxyServers;
     })
     {
-      # THE one sanctioned root-pool write in this repo. Every other module
-      # writes `ai.<runtime>.<pool>`, enforced by the provenance guard in
-      # `checks/module-provenance/helpers.nix` (`rootPoolViolations`), which allowlists this
-      # FILE — see `rootPoolAllowedFiles` there.
+      # Root-pool writes are sanctioned only from the module that declares
+      # the option: these `*Dir` expansions, and the `ai.markdown.check`
+      # default above. Every other module writes `ai.<runtime>.<pool>`,
+      # enforced by `rootPoolViolations` in
+      # `checks/module-provenance/helpers.nix`, which permits a root
+      # definition only from a file that declares the option (`declaredIn`
+      # there).
       #
-      # It is legitimate because the DESTINATION is the root pool by
-      # definition: `ai.rulesDir` is itself a ROOT option, so expanding it onto
-      # any per-runtime pool would silently relocate a consumer's own
-      # declaration to a level they never wrote. This module declares those
-      # options, so it is the one place with nowhere else to expand to.
+      # The expansions are legitimate because the DESTINATION is the root
+      # pool by definition: `ai.rulesDir` is itself a ROOT option, so
+      # expanding it onto any per-runtime pool would silently relocate a
+      # consumer's own declaration to a level they never wrote. This module
+      # declares those options, so it is the one place with nowhere else to
+      # expand to.
       ai = {
         rules = lib.mkIf (config.ai.rulesDir != null) (
           lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)

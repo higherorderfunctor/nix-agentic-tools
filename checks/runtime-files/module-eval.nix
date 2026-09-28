@@ -6,10 +6,9 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromMarkdownTree harnessNames markdownInput mkTest;
+  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv evalHm fromLimitedTree harnessNames markdownInput mkTest;
   # A delivered Markdown file's text, from the evaluated `config`.
-  devenvMarkdown = config: deliveredMarkdown {inherit config;} (deliveredFiles config);
-  hmMarkdown = config: deliveredMarkdown {inherit config;} config.home.file;
+  markdownOf = config: deliveredMarkdown {inherit config;};
 in {
   checks = {
     # ── A5a: final per-runtime literal file registry ────────────────────
@@ -183,7 +182,7 @@ in {
         && devenvConfig.ai.internal.agentsMd ? "AGENTS.md"
         && devenvConfig.ai.kiro.files ? ".kiro/steering/scoped.md"
         && devenvConfig.ai.internal.files ? "AGENTS.md"
-        && devenvConfig.ai.internal.files."AGENTS.md".content.text == devenvMarkdown devenvConfig "AGENTS.md"
+        && devenvConfig.ai.internal.files."AGENTS.md".content.text == markdownOf devenvConfig "AGENTS.md"
     );
 
     module-runtime-files-shared-agentsmd-arbitration = mkTest "runtime-files-shared-agentsmd-arbitration" (
@@ -303,23 +302,24 @@ in {
           });
         in
           (builtins.tryEval "${(deliveredFiles evaluated.config)."AGENTS.md".source}").success
-          && fromMarkdownTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
+          && fromLimitedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
           && (markdownInput evaluated "AGENTS.md").source == file;
       in
         replaced.config.ai.internal.files."AGENTS.md".content.text
         == "CONSUMER-REPLACEMENT"
-        && devenvMarkdown replaced.config "AGENTS.md" == "CONSUMER-REPLACEMENT"
+        && markdownOf replaced.config "AGENTS.md" == "CONSUMER-REPLACEMENT"
         && !suppressed.config.ai.internal.files."AGENTS.md".content.enable
         && !((deliveredFiles suppressed.config) ? "AGENTS.md")
         && deduplicated.config.ai.internal.files."AGENTS.md".content.text == "SHARED-CONSUMER"
-        && devenvMarkdown deduplicated.config "AGENTS.md" == "SHARED-CONSUMER"
+        && markdownOf deduplicated.config "AGENTS.md" == "SHARED-CONSUMER"
         && !divergent.success
-        && devenvMarkdown consumerOnly.config "AGENTS.md" == "CONSUMER-ONLY"
+        && markdownOf consumerOnly.config "AGENTS.md" == "CONSUMER-ONLY"
         # No shared owner registers this key, so Kimchi delivers the consumer's
         # own entry, which states no Markdown format: inline, as written.
         && (deliveredFiles kimchiConsumerOnly.config)."AGENTS.md".text or null == "KIMCHI-CONSUMER-ONLY"
         && !((deliveredFiles kimchiConsumerOnly.config) ? "custom.md")
-        && devenvMarkdown kimchiContextOverride.config "AGENTS.md" == "KIMCHI-CONTEXT-OVERRIDE"
+        # The override states no `format` and Codex is off, so no limit: inline.
+        && (deliveredFiles kimchiContextOverride.config)."AGENTS.md".text or null == "KIMCHI-CONTEXT-OVERRIDE"
         && lib.all (assertion: assertion.assertion) kimchiContextOverride.config.assertions
         && !((deliveredFiles consumerOnlySuppressed.config) ? "AGENTS.md")
         && !((deliveredFiles consumerOnlySuppressed.config) ? "custom.md")
@@ -377,8 +377,8 @@ in {
       in
         lib.all (evaluated:
           (deliveredFiles evaluated.config) ? "AGENTS.md"
-          && lib.hasInfix "ACTIVE-SHARED-CONTEXT" (devenvMarkdown evaluated.config "AGENTS.md")
-          && !(lib.hasInfix "DORMANT-" (devenvMarkdown evaluated.config "AGENTS.md")))
+          && lib.hasInfix "ACTIVE-SHARED-CONTEXT" (markdownOf evaluated.config "AGENTS.md")
+          && !(lib.hasInfix "DORMANT-" (markdownOf evaluated.config "AGENTS.md")))
         evaluations
     );
 
@@ -430,7 +430,7 @@ in {
     in
       assert lib.assertMsg (lib.all passes [hmReplacement hmDisabled devenvReplacement devenvDisabled])
       "runtime-files-byte-limit-follows-final-entry: a fixture fails its assertions";
-      assert lib.assertMsg (hmMarkdown hmReplacement.config ".codex/AGENTS.md" == "short" && devenvMarkdown devenvReplacement.config "AGENTS.md" == "short")
+      assert lib.assertMsg (markdownOf hmReplacement.config ".codex/AGENTS.md" == "short" && markdownOf devenvReplacement.config "AGENTS.md" == "short")
       "runtime-files-byte-limit-follows-final-entry: the replacement is not what the tree is built from";
       assert lib.assertMsg (hmReplacement.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 8 && devenvReplacement.config.ai.internal._maxBytes."AGENTS.md".bytes == 8)
       "runtime-files-byte-limit-follows-final-entry: the replacement's path lost its limit";
@@ -510,10 +510,10 @@ in {
           };
         };
       in
-        hmMarkdown hmReplacement.config ".codex/AGENTS.md"
+        markdownOf hmReplacement.config ".codex/AGENTS.md"
         == "HM-REPLACEMENT"
         && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
-        && devenvMarkdown devenvReplacement.config "AGENTS.md" == "DEVENV-REPLACEMENT"
+        && markdownOf devenvReplacement.config "AGENTS.md" == "DEVENV-REPLACEMENT"
         && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md")
         && !(hmKiroDisabled.config.home.file ? ".kiro/steering/AGENTS.md")
         && !((deliveredFiles devenvKiroDisabled.config) ? "AGENTS.md")
@@ -656,7 +656,7 @@ in {
     );
 
     # A store-backed replacement of the shared AGENTS.md stays lazy: its size
-    # limit is measured when the Markdown tree is built, never by reading it
+    # limit is measured when its limited tree is built, never by reading it
     # during evaluation. The source is a derivation that fails to build.
     module-runtime-files-shared-agentsmd-source-stays-lazy = mkTest "runtime-files-shared-agentsmd-source-stays-lazy" (
       let
@@ -675,7 +675,7 @@ in {
         };
       in
         builtins.all (assertion: assertion.assertion) evaluated.config.assertions
-        && fromMarkdownTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
+        && fromLimitedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
         && toString (markdownInput evaluated "AGENTS.md").source == toString source
     );
 
@@ -735,12 +735,14 @@ in {
           };
         };
       in
-        hmMarkdown hmClaude.config ".claude/CLAUDE.md"
+        markdownOf hmClaude.config ".claude/CLAUDE.md"
         == "CLAUDE-REPLACEMENT"
-        && devenvMarkdown devenvClaude.config ".claude/CLAUDE.md" == "CLAUDE-REPLACEMENT"
-        && devenvMarkdown devenvCopilot.config ".github/copilot-instructions.md" == "COPILOT-REPLACEMENT"
-        && hmMarkdown hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
-        && devenvMarkdown devenvKimchi.config "AGENTS.md" == "KIMCHI-REPLACEMENT"
+        && markdownOf devenvClaude.config ".claude/CLAUDE.md" == "CLAUDE-REPLACEMENT"
+        && markdownOf devenvCopilot.config ".github/copilot-instructions.md" == "COPILOT-REPLACEMENT"
+        && markdownOf hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
+        # No `format` and no limit on the shared AGENTS.md, so `raw`: inline,
+        # as written.
+        && (deliveredFiles devenvKimchi.config)."AGENTS.md".text or null == "KIMCHI-REPLACEMENT"
     );
   };
 }

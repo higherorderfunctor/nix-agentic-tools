@@ -1,19 +1,31 @@
 ### Markdown Formatting
 
-`treefmt` owns markdown wrapping. Prettier runs with
-`settings.proseWrap = "always"` (see `treefmt.nix`), so it reflows every
-paragraph to 80 columns on format. **Do not hand-wrap prose** — the line breaks
-you author are discarded, and hand-wrapping is what created the defect below.
+`treefmt` owns markdown wrapping. Prettier runs with `proseWrap = "always"`,
+defined once in `lib/markdown/prose-style.nix` and read by `treefmt.nix`, so it
+reflows every paragraph to 80 columns on format. **Do not hand-wrap prose** —
+the line breaks you author are discarded, and hand-wrapping is what created the
+defect below.
+
+Generated `ai.*` Markdown is formatted where it is built, not in the working
+tree: each runtime's files are one store tree, and `ai.markdown.formatter` runs
+in it (default: prettier in the same prose style). This repository sets it to
+treefmt with `treefmt.nix` (`dev/house-markdown.nix`), so a committed projection
+such as AGENTS.md is already what `nix fmt` produces and `treefmt.nix` excludes
+none of them. `ai.markdown.check` runs the table-cell check below on the same
+tree.
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-09-27 — the pipe-in-a-table-cell defect is gated by
-> `markdown-table-cells` (rumdl primary, markdownlint backup; same MD056 rule
-> number, disjoint coverage — do not deduplicate them), defined once in
-> `lib/markdown/table-cells.nix`. Corrects an earlier draft of this section that
-> blamed hand-padding, required every row to agree on cell count, and shipped a
-> hand-check awk snippet; the real failure modes are version-dependent formatter
-> behavior and `prettier-ignore` hiding the defect outright.
+> **Last verified:** 2026-09-27 — generated `ai.*` Markdown is formatted and
+> table-checked in its store tree (`ai.markdown`), and the prose style is
+> defined once in `lib/markdown/prose-style.nix`. The pipe-in-a-table-cell
+> defect is gated by `markdown-table-cells` (rumdl primary, markdownlint backup;
+> same MD056 rule number, disjoint coverage — do not deduplicate them), defined
+> once in `lib/markdown/table-cells.nix`. Corrects an earlier draft of this
+> section that blamed hand-padding, required every row to agree on cell count,
+> and shipped a hand-check awk snippet; the real failure modes are
+> version-dependent formatter behavior and `prettier-ignore` hiding the defect
+> outright.
 >
 > Full lineage:
 > `git show 4705317b:dev/fragments/markdown-formatting/markdown-formatting.md`.

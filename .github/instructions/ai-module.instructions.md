@@ -12,9 +12,11 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > files, and Kiro's devenv steering land as read-only copies; Codex indexes
 > scoped rules that name `references`; a unit whose file is switched off or
 > replaced warns. Codex's AGENTS.md byte limit is checked on the built file in
-> its Markdown tree, and a devenv shell entry warns while AGENTS.md is past 32
-> KiB under a raised limit. Semble derives a Kiro agent-private MCP server from
-> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
+> its Markdown tree, or unformatted in a limited tree when it is `raw`; a
+> replacement of it is `raw` on both backends unless it states
+> `format = "markdown"`, and a devenv shell entry warns while AGENTS.md is past
+> 32 KiB under a raised limit. Semble derives a Kiro agent-private MCP server
+> from `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
 > delivery once through `mkRuntime`'s record-level `config`, and both
 > `mkRuntime` and the backend transforms reject a backend spec carrying anything
 > but `installPackage`, `migrationConfig` and `options`, since an overridden or
@@ -421,24 +423,27 @@ enabled ecosystem whose native model preserves the option's semantics):
   on the BUILT file: the limit is an `_maxBytes` record keyed by path
   (`ai.codex._maxBytes.".codex/AGENTS.md"` on Home Manager,
   `ai.internal._maxBytes.<key>` from the shared contributions' `maxBytes` on
-  devenv), the router builds a limited path into the Markdown tree whatever its
-  `format`, and the tree's install check (`byteLimitCheck` in `lib/markdown`)
-  fails the build past it. Keyed by path, it measures whichever entry wins after
-  B7 arbitration, a consumer's inline or store-backed replacement included, and
-  never reads bytes at eval. A `content.run` body at a limited path has no bytes
-  at build time; the router warns that its limit is not checked. A raised limit
-  is also written to Codex's own `project_doc_max_bytes`, which Codex honors at
-  project scope, so the file the limit admits is the file Codex reads. On devenv
-  the key lands in the project's `.codex/config.toml`, which Codex applies only
-  in a trusted project, so an untrusted session still reads 32 KiB. For each
-  reader whose `defaultMaxBytes` is below a raised `maxBytes`,
-  `sharedAgentsMd.nix` adds an `enterShell` line running `windowNotice` on
-  `$DEVENV_ROOT/<key>`, which warns on every shell entry while the file on disk
-  is past that default. Home Manager writes the key to user config, which no
-  trust gates, so it does not warn. This repository raises the limit and its
-  AGENTS.md is past 32 KiB, so its devenv shell entry warns on purpose until the
-  orientation shrinks. Codex also rejects `matcher = []` as ambiguous; use
-  `null` for always-on content or a non-empty list for scoped content.
+  devenv), the router builds a limited path into a tree whatever its `format`
+  (the Markdown tree for `markdown`, otherwise a limited tree that neither
+  formats nor checks it, so `raw` delivers the file as written; a replacement of
+  the AGENTS.md that states no `format` is `raw` on both backends), and the
+  tree's install check (`byteLimitCheck` in `lib/markdown`) fails the build past
+  it. Keyed by path, it measures whichever entry wins after B7 arbitration, a
+  consumer's inline or store-backed replacement included, and never reads bytes
+  at eval. A `content.run` body at a limited path has no bytes at build time;
+  the router warns that its limit is not checked. A raised limit is also written
+  to Codex's own `project_doc_max_bytes`, which Codex honors at project scope,
+  so the file the limit admits is the file Codex reads. On devenv the key lands
+  in the project's `.codex/config.toml`, which Codex applies only in a trusted
+  project, so an untrusted session still reads 32 KiB. For each reader whose
+  `defaultMaxBytes` is below a raised `maxBytes`, `sharedAgentsMd.nix` adds an
+  `enterShell` line running `windowNotice` on `$DEVENV_ROOT/<key>`, which warns
+  on every shell entry while the file on disk is past that default. Home Manager
+  writes the key to user config, which no trust gates, so it does not warn. This
+  repository raises the limit and its AGENTS.md is past 32 KiB, so its devenv
+  shell entry warns on purpose until the orientation shrinks. Codex also rejects
+  `matcher = []` as ambiguous; use `null` for always-on content or a non-empty
+  list for scoped content.
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP
@@ -862,9 +867,10 @@ package-provenance guard (see `collision-semantics.md`).
 ## ai.\* Pool Composition and Collision Semantics
 
 > **Last verified:** 2026-09-27 — Semble's CLI rule gate is `cli.instructions`.
-> A shared target's byte limit is checked on the built final file. Merged pools
-> are public `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and
-> a text-source record crosses into them with only its winning arm. Path claims
+> A shared target's byte limit is checked on the built final file, in the
+> limited tree when that file is `raw`. Merged pools are public
+> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
+> text-source record crosses into them with only its winning arm. Path claims
 > fail across runtimes except the shared AGENTS.md target, matched on the key
 > each record's `sharedAgentsMd` callback declares. Rules and context use
 > entry-local `enable` suppression; delivery entries default `content` alone,
@@ -1132,9 +1138,11 @@ native sink; a disabled runtime's declared map remains inert. The generated
 composition is a lazy default there, so ordinary replacements and disabled
 records arbitrate at B7 without reading discarded source-backed generator
 content; equal runtime entries deduplicate and divergent ones fail. Byte limits
-are keyed by path and checked on the surviving final entry's BUILT file in its
-Markdown tree, inline or store-backed alike; nothing is measured at eval, so a
-store-backed `source` stays lazy without IFD.
+are keyed by path and checked on the surviving final entry's BUILT file in the
+tree that delivers it (its Markdown tree, or the measure-only limited tree when
+it is `raw`, as a replacement that states no `format` is), inline or
+store-backed alike; nothing is measured at eval, so a store-backed `source`
+stays lazy without IFD.
 
 ### Adding a normalized pool
 
@@ -1269,7 +1277,7 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-27 — L5 is the delivery router plus one adapter per
+> **Last verified:** 2026-09-28 — L5 is the delivery router plus one adapter per
 > backend; every runtime describes delivery once through the record-level
 > `config`, which `mkRuntime` makes the only delivery callback, and the delivery
 > matrix is generated from the layer for every runtime's files. Normalized pools
@@ -1281,8 +1289,10 @@ path types".
 > builder publishes each record's devenv shared AGENTS.md contribution, and its
 > key in `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`.
 > Claude's `.claude.json` has an ungated mode-narrowing command writer beside
-> its unpin ledger. Codex's daemon `settings.json` maps to no matrix cell. The
-> builder declares the per-runtime `agents`, `environmentVariables` and
+> its unpin ledger. A limited non-Markdown file is measured in its own
+> unformatted tree, and an AGENTS.md replacement is Markdown only when it states
+> so, on both backends. Codex's daemon `settings.json` maps to no matrix cell.
+> The builder declares the per-runtime `agents`, `environmentVariables` and
 > `lspServers` options and an opt-in `agentsDir`; a record's `poolOptions`
 > carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
 > builder would not read and a stray field in the `sharedAgentsMd` result. Every
@@ -1296,7 +1306,10 @@ path types".
 > their `content` with `_generated`, so a consumer's replacement of a unit's
 > file warns like a switch-off. Every generated Markdown file carries
 > `format = "markdown"` and is delivered from one store tree per router
-> invocation (`lib/markdown`).
+> invocation (`lib/markdown`), formatted and checked there by
+> `ai.markdown.formatter` and `ai.markdown.check`; skills are `raw` and stay
+> outside it, and the `ai.markdown.formatter` description is the one list of
+> what is excluded.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1629,8 +1642,9 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   own tail. The builder adds the merged context and publishes it on devenv. A
   limit is published even without content, because the runtime reads the file
   whoever wrote it. The layout is the Markdown formatter's fixed point (one
-  blank line between units and after each rule comment, one glob or link per
-  index line), so a committed copy survives a formatter pass.
+  blank line between units and after each rule comment, one trailing newline,
+  one glob or link per index line), so it is sane with
+  `ai.markdown.formatter = null` and a formatter pass leaves it unchanged.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit
@@ -1652,16 +1666,42 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   target path, and delivers `${tree}/<path>` by whatever method the entry
   resolves to. Selection is by `format`, never by suffix or text, so building
   the file map forces no bytes. A path with a byte limit (`_maxBytes`, declared
-  per runtime and on `ai.internal` from `deliveryOptions.maxBytesOption`) joins
-  the tree whatever its format, so a consumer replacement that dropped the
-  generated `format` is still measured; the tree's install check fails the build
-  past the limit, and a limited `run` or `value` entry, which has no bytes in
-  the tree, makes the router warn instead. The factories set it at `mkDefault`
-  beside the generated content (inside the whole-entry default for AGENTS.md).
-  Checks read a Markdown file's content through the harness's `markdownInput`
-  (the tree's input) and its delivery through `fromMarkdownTree`
-  (`deliveredMarkdown` does both): the delivered path is a derivation output,
-  and reading it back would be import-from-derivation.
+  per runtime and on `ai.internal` from `deliveryOptions.maxBytesOption`) is
+  measured whatever its format: a limited entry that is NOT `markdown` (an
+  explicit `raw`, or an AGENTS.md replacement with no `format`) goes into a
+  second tree, `ai-<backend>-<runtime>-limited`, with no formatter and no check,
+  so `raw` still delivers the file as written. Each tree's install check fails
+  the build past a limit, and a limited `run` entry (no bytes until activation)
+  or `value` entry (rendered outside the tree) makes the router warn instead.
+  The factories set `format` at `mkDefault` beside the content, so a
+  content-only replacement stays Markdown, except for AGENTS.md: Codex's Home
+  Manager entry and the shared devenv aggregate are whole-entry defaults, so a
+  replacement discards `format` with them and is `raw` unless it states
+  `markdown`. The shared AGENTS.md owner forwards a projected entry's `format`
+  as it stands, so both backends agree; only the generated aggregate states
+  `markdown` itself. The Markdown tree runs `ai.markdown.formatter` in
+  `buildPhase` and `ai.markdown.check` in `installCheckPhase`, both with the
+  tree as the working directory, so paths are target-relative. The check runs in
+  the build's copy of the tree, never in `$out`, because a tool that wrote into
+  `$out` would ship its files as Markdown (rumdl's cache once did). `$out` is
+  not made read-only instead, because `testers.testBuildFailure` writes its log
+  there. `module-delivery-markdown-tree-holds-only-delivered` lists the built
+  trees with the defaults on. It holds only Markdown, so both defaults process
+  every file in it rather than a `*.md` glob. Both are root options in
+  `sharedOptions.nix`: the formatter defaults to prettier in the house prose
+  style (`lib/markdown/prose-style.nix`), `null` disables it; the check's
+  default (the table-cell check) is a definition at the ordinary priority
+  through `mkOverride`, so consumer definitions append and a `lib.mkForce` never
+  builds the linters. Some Markdown sits outside every tree; the
+  `ai.markdown.formatter` description is the one list of it, and the generated
+  README section restates it for users. The mechanism: `mkSkillFiles` sets no
+  `format` on a single SKILL.md, and a skill directory is `recursive`, which the
+  router rejects for `markdown` (`module-delivery-markdown-format-guard` asserts
+  it); Home Manager Claude agents, commands and output styles route to upstream
+  `programs.claude-code.*`. Checks read a file's tree input through the
+  harness's `markdownInput` and its delivery through `fromMarkdownTree` /
+  `fromLimitedTree` (`deliveredMarkdown` does both): the delivered path is a
+  derivation output, and reading it back would be import-from-derivation.
 
 ### Adding a new concern X
 

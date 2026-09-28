@@ -7,7 +7,7 @@
 #
 # Division of labour with treefmt:
 #
-#   - prettier (`settings.proseWrap = "always"` in treefmt.nix) is the
+#   - prettier (`proseWrap = "always"`, lib/markdown/prose-style.nix) is the
 #     PRIMARY guardrail. It treats a code span as an unbreakable token, so
 #     it joins any split span on format and can never emit one. Regressions
 #     are caught by checks/repository/formatting.nix, which already gates the tree.

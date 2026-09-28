@@ -5,9 +5,11 @@
 > files, and Kiro's devenv steering land as read-only copies; Codex indexes
 > scoped rules that name `references`; a unit whose file is switched off or
 > replaced warns. Codex's AGENTS.md byte limit is checked on the built file in
-> its Markdown tree, and a devenv shell entry warns while AGENTS.md is past 32
-> KiB under a raised limit. Semble derives a Kiro agent-private MCP server from
-> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
+> its Markdown tree, or unformatted in a limited tree when it is `raw`; a
+> replacement of it is `raw` on both backends unless it states
+> `format = "markdown"`, and a devenv shell entry warns while AGENTS.md is past
+> 32 KiB under a raised limit. Semble derives a Kiro agent-private MCP server
+> from `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
 > delivery once through `mkRuntime`'s record-level `config`, and both
 > `mkRuntime` and the backend transforms reject a backend spec carrying anything
 > but `installPackage`, `migrationConfig` and `options`, since an overridden or
@@ -414,24 +416,27 @@ enabled ecosystem whose native model preserves the option's semantics):
   on the BUILT file: the limit is an `_maxBytes` record keyed by path
   (`ai.codex._maxBytes.".codex/AGENTS.md"` on Home Manager,
   `ai.internal._maxBytes.<key>` from the shared contributions' `maxBytes` on
-  devenv), the router builds a limited path into the Markdown tree whatever its
-  `format`, and the tree's install check (`byteLimitCheck` in `lib/markdown`)
-  fails the build past it. Keyed by path, it measures whichever entry wins after
-  B7 arbitration, a consumer's inline or store-backed replacement included, and
-  never reads bytes at eval. A `content.run` body at a limited path has no bytes
-  at build time; the router warns that its limit is not checked. A raised limit
-  is also written to Codex's own `project_doc_max_bytes`, which Codex honors at
-  project scope, so the file the limit admits is the file Codex reads. On devenv
-  the key lands in the project's `.codex/config.toml`, which Codex applies only
-  in a trusted project, so an untrusted session still reads 32 KiB. For each
-  reader whose `defaultMaxBytes` is below a raised `maxBytes`,
-  `sharedAgentsMd.nix` adds an `enterShell` line running `windowNotice` on
-  `$DEVENV_ROOT/<key>`, which warns on every shell entry while the file on disk
-  is past that default. Home Manager writes the key to user config, which no
-  trust gates, so it does not warn. This repository raises the limit and its
-  AGENTS.md is past 32 KiB, so its devenv shell entry warns on purpose until the
-  orientation shrinks. Codex also rejects `matcher = []` as ambiguous; use
-  `null` for always-on content or a non-empty list for scoped content.
+  devenv), the router builds a limited path into a tree whatever its `format`
+  (the Markdown tree for `markdown`, otherwise a limited tree that neither
+  formats nor checks it, so `raw` delivers the file as written; a replacement of
+  the AGENTS.md that states no `format` is `raw` on both backends), and the
+  tree's install check (`byteLimitCheck` in `lib/markdown`) fails the build past
+  it. Keyed by path, it measures whichever entry wins after B7 arbitration, a
+  consumer's inline or store-backed replacement included, and never reads bytes
+  at eval. A `content.run` body at a limited path has no bytes at build time;
+  the router warns that its limit is not checked. A raised limit is also written
+  to Codex's own `project_doc_max_bytes`, which Codex honors at project scope,
+  so the file the limit admits is the file Codex reads. On devenv the key lands
+  in the project's `.codex/config.toml`, which Codex applies only in a trusted
+  project, so an untrusted session still reads 32 KiB. For each reader whose
+  `defaultMaxBytes` is below a raised `maxBytes`, `sharedAgentsMd.nix` adds an
+  `enterShell` line running `windowNotice` on `$DEVENV_ROOT/<key>`, which warns
+  on every shell entry while the file on disk is past that default. Home Manager
+  writes the key to user config, which no trust gates, so it does not warn. This
+  repository raises the limit and its AGENTS.md is past 32 KiB, so its devenv
+  shell entry warns on purpose until the orientation shrinks. Codex also rejects
+  `matcher = []` as ambiguous; use `null` for always-on content or a non-empty
+  list for scoped content.
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP

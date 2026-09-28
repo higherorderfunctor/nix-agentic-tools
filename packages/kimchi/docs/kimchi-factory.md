@@ -1,6 +1,6 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-26 — the package builds from the release source
+> **Last verified:** 2026-09-27 — the package builds from the release source
 > that the extractor also reads, one pin for both, with pinned pnpm and Go
 > dependencies, and patches bundled-skill discovery to read store directories in
 > place; `ai.kimchi.native.settings` and `native.harnessSettings` are closed
@@ -15,8 +15,9 @@
 > project paths; the mutable JSON documents (`config.json`, harness
 > `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
 > reconcile by leaf through the shared delivery router; agents are owned
-> writable copies, copied from a store-path string as from a path; portable
-> hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
+> writable copies out of the runtime's formatted and checked Markdown tree, a
+> store-path string being that tree's input as a path is; portable hooks reach
+> `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
 > `trust.json.lock`; an ungated HM `kimchiConfigMode` writer narrows the
 > credential-bearing user `config.json` to owner-only; `mkPrep` builds only the
 > launcher, from the builder's `launcherEnvironment`, and one record-level
@@ -330,12 +331,14 @@ matches its lowercase builtins exactly, `agent-types.ts:12`, so dropping it
 would widen the agent and translating it would fail silently), and root Markdown
 (written for Claude, and Kimchi ignores `name:` and reads `model: sonnet` as a
 model id). Markdown under `ai.kimchi.agents` or `ai.kimchi.agentsDir` is
-Kimchi's own and lands verbatim. A path-like entry, a store-path string such as
-a flake input's `"${src}/a.md"` included, is copied from that source by
-`lib.ai.agent.fileContent`, which tests `isPathLike`; `builtins.isPath` alone
-would write the path itself as the agent's text. Locked by
-`module-kimchi-agents-rejected` and, for the string form on both backends,
-`module-kimchi-agents`.
+Kimchi's own and is not translated, but it is built into the runtime's Markdown
+tree, where `ai.markdown.formatter` and `ai.markdown.check` process it; set
+`ai.kimchi.files."<path>".format = "raw"` to deliver one agent file verbatim. A
+path-like entry, a store-path string such as a flake input's `"${src}/a.md"`
+included, is that tree's input through `lib.ai.agent.fileContent`, which tests
+`isPathLike`; `builtins.isPath` alone would write the path itself as the agent's
+text. Locked by `module-kimchi-agents-rejected` and, for the string form on both
+backends, `module-kimchi-agents`.
 
 ## Hooks: project `hooks.json` only
 

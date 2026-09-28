@@ -1,9 +1,10 @@
 # Delegate sizing package
 
-> **Last verified:** 2026-09-25 — instruction presets use inner
-> `defaultContent`, while shared text/source types auto-enable non-empty
-> consumer content and reject enabled empty records. This repository receives
-> the rule through the program, not the generator.
+> **Last verified:** 2026-09-27 — skills are built with `markdown.mkTree` and
+> its default formatter; instruction presets use inner `defaultContent`, while
+> shared text/source types auto-enable non-empty consumer content and reject
+> enabled empty records. This repository receives the rule through the program,
+> not the generator.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -58,8 +59,9 @@ Claude helper carries `curl` and `jq`; the Codex helper carries GNU `timeout`,
 `jq` and Python 3. It deliberately does not carry the `codex` CLI, which comes
 from the consumer's own runtime configuration. Both helpers read account limits
 without launching a model turn. Their absolute store paths are embedded in the
-skills without creating a dependency cycle. Skill derivations format their
-Markdown with Prettier; the preview functions read those built files.
+skills without creating a dependency cycle. Each skill is built with
+`markdown.mkTree` (lib/markdown) and formatted by its default formatter, the
+house prose style; the preview functions read those built files.
 
 `fragments/skill-routing.md` contains a one-sentence always-on stub under its
 own heading. `router.nix` appends enabled `whenToDelegate` entries to that stub

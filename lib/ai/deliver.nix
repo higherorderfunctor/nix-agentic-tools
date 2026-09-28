@@ -90,26 +90,39 @@ in
     live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
 
     # Every Markdown file this invocation delivers is built into ONE store tree
-    # at its target path, and delivered from there. `run` bytes do not exist
-    # until activation and a `value` has no Markdown renderer, so neither can
-    # be in it; the assertions below reject both combinations. Selected by
-    # `format` and the content's SHAPE, never by the text, so building the
-    # file map forces no bytes — and nothing here reads `rendered`, so there
-    # is no cycle through `resolve`.
+    # at its target path, formatted and checked there by `ai.markdown`, and
+    # delivered from there. `run` bytes do not exist until activation and a
+    # `value` has no Markdown renderer, so neither can be in it: an assertion
+    # below rejects Markdown with `run`, and `formats.render` throws for
+    # Markdown with `value`. Selected by `format` and the content's SHAPE,
+    # never by the text, so building the file map forces no bytes — and
+    # nothing here reads `rendered`, so there is no cycle through `resolve`.
     #
-    # A path with a byte limit joins the tree whatever its format, and the
-    # tree's install check measures it. The limit is keyed by path because a
-    # consumer's replacement discards the generated entry's `format` with the
-    # rest of it, and the file the reader takes is the replacement.
+    # A path with a byte limit is measured whatever its format, so a limited
+    # file that is NOT `markdown` goes into a second tree that only measures
+    # it: no formatter and no check, so `raw` still delivers the file as
+    # written. The limit is keyed by path because a consumer's replacement
+    # discards the generated entry's `format` with the rest of it, and the
+    # file the reader takes is the replacement.
     limits = cfg._maxBytes;
-    inTree = path: entry:
-      entry.content.run == null && entry.content.value == null && (entry.format == "markdown" || limits ? ${path});
-    treeEntries = lib.filterAttrs inTree live;
-    tree = markdown.mkTree {
-      name = "ai-${backend}-${runtime}-markdown";
-      files = lib.mapAttrs (_path: entry: aiTypes.textSourceFile entry.content) treeEntries;
-      maxBytes = lib.filterAttrs (path: _limit: treeEntries ? ${path}) limits;
-    };
+    builtWithTree = entry: entry.content.run == null && entry.content.value == null;
+    markdownEntries = lib.filterAttrs (_path: entry: builtWithTree entry && entry.format == "markdown") live;
+    limitedEntries = lib.filterAttrs (path: entry: builtWithTree entry && entry.format != "markdown" && limits ? ${path}) live;
+    mkTree = kind: entries: processing:
+      markdown.mkTree ({
+          name = "ai-${backend}-${runtime}-${kind}";
+          files = lib.mapAttrs (_path: entry: aiTypes.textSourceFile entry.content) entries;
+          maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
+        }
+        // processing);
+    markdownTree = mkTree "markdown" markdownEntries {inherit (config.ai.markdown) check formatter;};
+    limitedTree = mkTree "limited" limitedEntries {};
+    treeOf = path:
+      if markdownEntries ? ${path}
+      then markdownTree
+      else if limitedEntries ? ${path}
+      then limitedTree
+      else null;
 
     # Resolve through the shared rule after merging. Not at type level or in an
     # `apply`: both would read a sibling option while the option they belong to
@@ -138,8 +151,8 @@ in
             }
           else if entry.content.run != null
           then {inherit (entry.content) run;}
-          else if inTree path entry
-          then {source = "${tree}/${path}";}
+          else if treeOf path != null
+          then {source = "${treeOf path}/${path}";}
           else entry.content;
       };
     resolved = lib.mapAttrs resolve live;
@@ -392,7 +405,7 @@ in
         then "is written at activation (`content.run`)"
         else "is rendered from `content.value`, outside the Markdown tree";
     in "ai.${runtime}.files.\"${path}\" ${origin}, so its ${toString limits.${path}.bytes}-byte limit is not checked.")
-    (lib.filterAttrs (path: entry: limits ? ${path} && !(inTree path entry)) live);
+    (lib.filterAttrs (path: entry: limits ? ${path} && !(builtWithTree entry)) live);
 
     # Everything the layer can check about a delivery description, said where
     # the option path is still known. Silently dropping a file is the one

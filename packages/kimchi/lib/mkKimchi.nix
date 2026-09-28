@@ -531,8 +531,11 @@ in
         Kimchi agents, one `<name>.md` each: Home Manager writes
         `<configDir>/harness/agents/`, devenv a trusted project's
         `.kimchi/agents/`. A portable `{ description, instructions }` record
-        renders to Kimchi frontmatter plus body; Markdown here is Kimchi's
-        own and lands verbatim. Entries replace root `ai.agents` at the same
+        renders to Kimchi frontmatter plus body. Markdown here is Kimchi's
+        own and is not translated, but it is built into the runtime's
+        Markdown tree, where `ai.markdown.formatter` and `ai.markdown.check`
+        process it; set `ai.kimchi.files."<path>".format = "raw"` to deliver
+        one agent file as written. Entries replace root `ai.agents` at the same
         key and null suppresses one. Root Markdown and a record's
         Claude/Copilot `tools` list have no Kimchi reading and fail
         evaluation, naming this option as the remedy. Each file is a real,

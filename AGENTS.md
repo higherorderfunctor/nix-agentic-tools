@@ -210,6 +210,7 @@ for it. When several entries match, their guidance composes.
     - `checks/markdown/markdown-scanners.nix`
     - `checks/markdown/split-code-spans.nix`
     - `checks/markdown/split-code-spans.py`
+    - `dev/house-markdown.nix`
     - `lib/markdown/**`
     - `treefmt.nix`
   - Read:
@@ -286,6 +287,7 @@ for it. When several entries match, their guidance composes.
     - `config/update-targets.nix`
     - `dev/ai.nix`
     - `dev/generate.nix`
+    - `dev/house-markdown.nix`
     - `dev/scripts/ci-*.py`
     - `dev/scripts/test-ci-*.py`
     - `dev/scripts/test-update-*.py`

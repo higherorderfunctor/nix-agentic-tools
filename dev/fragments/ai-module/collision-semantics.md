@@ -1,9 +1,10 @@
 ## ai.\* Pool Composition and Collision Semantics
 
 > **Last verified:** 2026-09-27 — Semble's CLI rule gate is `cli.instructions`.
-> A shared target's byte limit is checked on the built final file. Merged pools
-> are public `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and
-> a text-source record crosses into them with only its winning arm. Path claims
+> A shared target's byte limit is checked on the built final file, in the
+> limited tree when that file is `raw`. Merged pools are public
+> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
+> text-source record crosses into them with only its winning arm. Path claims
 > fail across runtimes except the shared AGENTS.md target, matched on the key
 > each record's `sharedAgentsMd` callback declares. Rules and context use
 > entry-local `enable` suppression; delivery entries default `content` alone,
@@ -271,9 +272,11 @@ native sink; a disabled runtime's declared map remains inert. The generated
 composition is a lazy default there, so ordinary replacements and disabled
 records arbitrate at B7 without reading discarded source-backed generator
 content; equal runtime entries deduplicate and divergent ones fail. Byte limits
-are keyed by path and checked on the surviving final entry's BUILT file in its
-Markdown tree, inline or store-backed alike; nothing is measured at eval, so a
-store-backed `source` stays lazy without IFD.
+are keyed by path and checked on the surviving final entry's BUILT file in the
+tree that delivers it (its Markdown tree, or the measure-only limited tree when
+it is `raw`, as a replacement that states no `format` is), inline or
+store-backed alike; nothing is measured at eval, so a store-backed `source`
+stays lazy without IFD.
 
 ### Adding a normalized pool
 

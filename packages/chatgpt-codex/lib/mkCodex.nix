@@ -952,8 +952,10 @@ in
         default = codexProjectDocMaxBytes;
         description = ''
           Maximum byte size of the Codex AGENTS.md, generated or a replacement
-          you supply. The build of the Markdown tree holding the file fails
-          before Codex can silently truncate content beyond this limit. A value
+          you supply. The build of the tree holding the file (its Markdown
+          tree, or the measure-only limited tree when it is `raw`, which
+          includes a replacement that states no `format`) fails before Codex
+          can silently truncate content beyond this limit. A value
           other than Codex's own default (32768) is also written to Codex's
           `project_doc_max_bytes` at default priority, so Codex reads as much
           as this limit admits. On devenv that key lands in the project's

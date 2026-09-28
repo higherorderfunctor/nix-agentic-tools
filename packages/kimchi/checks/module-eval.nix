@@ -714,8 +714,10 @@ in {
     # WRITABLE real file in a real directory, never a store symlink: no
     # home.file or devenv files entry, a dir ledger, mode 0644. A portable
     # record renders without `name:` (the filename is the name); native
-    # Markdown lands verbatim. An empty declaration still emits the writer, so
-    # removing the last agent retracts it.
+    # Markdown is not translated, so it is the Markdown tree's input as
+    # written, and the tree's formatter and check then process it. An empty
+    # declaration still emits the writer, so removing the last agent
+    # retracts it.
     module-kimchi-agents = mkTest "kimchi-agents" (
       let
         hm = evalHm agentConfig;

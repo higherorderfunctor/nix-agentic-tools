@@ -374,8 +374,9 @@
   # lands reads `deliveredFiles` / `home.file`. Found by the final entry: the
   # shared AGENTS.md owner (`ai.internal`) wins, because on devenv it is the
   # one that delivers a shared key; otherwise exactly one enabled runtime must
-  # carry the path. A path with a byte limit is in the tree whatever its
-  # format, as the router builds it. Takes the evaluated module (`evalHm …`,
+  # carry the path. A path with a byte limit is in a tree whatever its
+  # format, as the router builds it: the Markdown tree for `markdown`, the
+  # measure-only limited tree otherwise. Takes the evaluated module (`evalHm …`,
   # `evalDevenv …`).
   markdownInput = evaluated: path: let
     inherit (evaluated) config;
@@ -394,15 +395,21 @@
     then aiTypes.textSourceFile entry.content
     else throw "module-test: \"${path}\" is not a live Markdown tree entry (format `${entry.format}`, no byte limit)";
   # Whether a delivered file record (`home.file.<p>`, `files.<p>`, a
-  # `deliveredFiles` entry) is `path` inside a runtime's Markdown tree.
-  fromMarkdownTree = path: file: lib.hasSuffix "-markdown/${path}" (toString (file.source or ""));
-  # A delivered Markdown file's text, once the record it lands as (in `files`:
-  # `home.file`, devenv `files`, or `deliveredFiles`) is checked to BE its
-  # Markdown tree's file. Takes the evaluated module.
-  deliveredMarkdown = evaluated: files: path:
-    if fromMarkdownTree path files.${path}
+  # `deliveredFiles` entry) is `path` inside a runtime's Markdown tree, or
+  # inside its limited tree, which measures a limited non-Markdown file and
+  # neither formats nor checks it.
+  fromTree = kind: path: file: lib.hasSuffix "-${kind}/${path}" (toString (file.source or ""));
+  fromLimitedTree = fromTree "limited";
+  fromMarkdownTree = fromTree "markdown";
+  # The text a delivered file's tree was built from, once the record it lands
+  # as (its `deliveredFiles` entry, on either backend) is checked to BE that
+  # tree's file. Takes the evaluated module.
+  deliveredMarkdown = evaluated: path: let
+    file = (deliveredFiles evaluated.config).${path};
+  in
+    if fromMarkdownTree path file || fromLimitedTree path file
     then (markdownInput evaluated path).text
-    else throw "module-test: ${path} is not delivered from its Markdown tree";
+    else throw "module-test: ${path} is not delivered from its Markdown or limited tree";
   # The shell-entry lines of a devenv evaluation that run the AGENTS.md
   # window notice, matched by the notice's store path. Takes the evaluated
   # module.
@@ -419,6 +426,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs deliveredFiles deliveredMarkdown devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs fromMarkdownTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
+  inherit aiBase aiStubs deliveredFiles deliveredMarkdown devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs fromLimitedTree fromMarkdownTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
   inherit testing;
 }

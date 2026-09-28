@@ -6,12 +6,12 @@
   harness,
   ...
 }: let
-  inherit (harness) aiBase aiStubs deliveredFiles deliveredMarkdown evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromMarkdownTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
+  inherit (harness) aiBase aiStubs deliveredFiles deliveredMarkdown evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromLimitedTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
   # The AGENTS.md text each backend builds into its Markdown tree:
   # `.codex/AGENTS.md` under Home Manager, the shared project-root AGENTS.md
   # on devenv.
-  hmAgentsMd = evaluated: deliveredMarkdown evaluated evaluated.config.home.file ".codex/AGENTS.md";
-  devenvAgentsMd = evaluated: deliveredMarkdown evaluated (deliveredFiles evaluated.config) "AGENTS.md";
+  hmAgentsMd = evaluated: deliveredMarkdown evaluated ".codex/AGENTS.md";
+  devenvAgentsMd = evaluated: deliveredMarkdown evaluated "AGENTS.md";
   daemonSettings = evaluated:
     ownedDocument "codex" "${evaluated.config.ai.codex.configDir}/app-server-daemon/settings.json" evaluated;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
@@ -1605,9 +1605,9 @@ in {
         devenvAgent = devenv.config.files.".codex/agents/reviewer.toml".source.value;
         claudeAgent = hm.config.programs.claude-code.agents.reviewer;
         emptyClaudeAgent = hm.config.programs.claude-code.agents.emptyTools;
-        emptyCopilotAgent = deliveredMarkdown devenv devenv.config.files ".github/agents/emptyTools.agent.md";
+        emptyCopilotAgent = deliveredMarkdown devenv ".github/agents/emptyTools.agent.md";
         unrestrictedClaudeAgent = hm.config.programs.claude-code.agents.unrestricted;
-        copilotAgent = deliveredMarkdown devenv devenv.config.files ".github/agents/reviewer.agent.md";
+        copilotAgent = deliveredMarkdown devenv ".github/agents/reviewer.agent.md";
       in
         hmAgent
         == expected
@@ -1970,10 +1970,12 @@ in {
         && (settingsOf explicit).project_doc_max_bytes == 65536
     );
 
-    # Codex's limit is checked on the BUILT file, in the Markdown tree that
-    # delivers it. Home Manager keys it by `.codex/AGENTS.md`, so a
-    # replacement is measured as well as the generated file: the delivered
-    # file is exactly the tree `mkTree` builds with that limit, and that tree
+    # Codex's limit is checked on the BUILT file, in the tree that delivers
+    # it. Home Manager keys it by `.codex/AGENTS.md`, so a replacement is
+    # measured as well as the generated file: the generated file is exactly
+    # the Markdown tree `mkTree` builds with that limit (and the evaluation's
+    # formatter and check), a replacement with no `format` is `raw` and
+    # exactly the limited tree built with the limit alone, and that tree
     # fails its build one byte past the limit. The byte arithmetic itself is
     # `checks/markdown/markdown-byte-limit-scripts.nix`.
     module-codex-agents-md-byte-limit = let
@@ -1993,28 +1995,35 @@ in {
         evalHm {
           ai.codex = {
             enable = true;
-            files.${path}.content.text = lib.concatStrings (lib.replicate size "x");
+            files.${path}.content.text = lib.concatStrings (lib.replicate (size - 1) "x") + "\n";
           };
         };
-      treeOf = evaluated:
+      markdownTree = evaluated:
         (aiBase.markdown pkgs).mkTree {
           name = "ai-hm-codex-markdown";
+          files.${path} = markdownInput evaluated path;
+          inherit (evaluated.config.ai.markdown) check formatter;
+          maxBytes = limit;
+        };
+      limitedTree = evaluated:
+        (aiBase.markdown pkgs).mkTree {
+          name = "ai-hm-codex-limited";
           files.${path} = markdownInput evaluated path;
           maxBytes = limit;
         };
       deliversFrom = tree: evaluated: evaluated.config.home.file.${path}.source == "${tree}/${path}";
       exact = replaced 32768;
       above = replaced 32769;
-      failure = pkgs.testers.testBuildFailure (treeOf above);
+      failure = pkgs.testers.testBuildFailure (limitedTree above);
     in
       assert lib.assertMsg (generated.config.ai.codex._maxBytes == limit && exact.config.ai.codex._maxBytes == limit)
       "codex-agents-md-byte-limit: ai.codex._maxBytes is not the 32768-byte limit on ${path}";
-      assert lib.assertMsg (lib.all (evaluated: deliversFrom (treeOf evaluated) evaluated) [generated exact above])
+      assert lib.assertMsg (deliversFrom (markdownTree generated) generated && lib.all (evaluated: deliversFrom (limitedTree evaluated) evaluated) [exact above])
       "codex-agents-md-byte-limit: ${path} is not delivered from a tree carrying its limit";
         pkgs.runCommand "module-test-codex-agents-md-byte-limit" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          test -f ${treeOf exact}/${path}
+          test -f ${limitedTree exact}/${path}
           grep -q -F ${lib.escapeShellArg "${path} renders to 32769 bytes, exceeding its limit (32768 bytes). ${hint}"} ${failure}/testBuildFailure.log
           echo PASS > "$out"
         '';
@@ -2046,7 +2055,8 @@ in {
             projectDocMaxBytes = 131072;
           };
         };
-        # A store-backed replacement is in the shared tree, under the limit.
+        # A store-backed replacement with no `format` is `raw`, as on Home
+        # Manager: it is in the shared limited tree, under the limit.
         replaced = evalDevenv {
           ai.codex = {
             enable = true;
@@ -2060,10 +2070,86 @@ in {
         && windowNoticeLines (devenv 131072) == expected
         && windowNoticeLines replaced == expected
         && replaced.config.ai.internal._maxBytes."AGENTS.md".bytes == 131072
-        && fromMarkdownTree "AGENTS.md" (deliveredFiles replaced.config)."AGENTS.md"
+        && fromLimitedTree "AGENTS.md" (deliveredFiles replaced.config)."AGENTS.md"
         && hm.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 131072
         && hm.config.warnings == []
     );
+
+    # `format = "raw"` delivers AGENTS.md as written on both backends. It is
+    # built into the limited tree, which measures it and neither formats nor
+    # checks it: the three spaces in the text survive, where the default
+    # formatter would collapse them to one. Past the limit the same entry
+    # still fails the build. The devenv entry reaches the shared AGENTS.md
+    # owner with its own format.
+    module-codex-raw-agents-md-is-measured-not-formatted = let
+      text = "RAW   REPLACEMENT\n";
+      raw.content.text = text;
+      raw.format = "raw";
+      hm = projectDocMaxBytes:
+        evalHm {
+          ai.codex = {
+            enable = true;
+            files.".codex/AGENTS.md" = raw;
+            inherit projectDocMaxBytes;
+          };
+        };
+      devenv = projectDocMaxBytes:
+        evalDevenv {
+          ai.codex = {
+            enable = true;
+            files."AGENTS.md" = raw;
+            inherit projectDocMaxBytes;
+          };
+        };
+      # The tree the router must deliver each from: the text alone, under the
+      # evaluation's own limit.
+      cases = {
+        hm = evaluated: {
+          delivered = evaluated.config.home.file.".codex/AGENTS.md".source;
+          maxBytes = evaluated.config.ai.codex._maxBytes;
+          name = "ai-hm-codex-limited";
+          path = ".codex/AGENTS.md";
+        };
+        devenv = evaluated: {
+          delivered = (deliveredFiles evaluated.config)."AGENTS.md".source;
+          maxBytes = evaluated.config.ai.internal._maxBytes;
+          name = "ai-devenv-internal-limited";
+          path = "AGENTS.md";
+        };
+      };
+      expectedTree = case:
+        (aiBase.markdown pkgs).mkTree {
+          inherit (case) maxBytes name;
+          files.${case.path}.text = text;
+        };
+      checked = backend: evaluated: let
+        case = cases.${backend} evaluated;
+        tree = expectedTree case;
+      in
+        assert lib.assertMsg (case.delivered == "${tree}/${case.path}")
+        "codex-raw-agents-md-is-measured-not-formatted: ${backend} ${case.path} is not delivered from the limited tree built from its text"; tree;
+      fits = {
+        devenv = checked "devenv" (devenv 32768);
+        hm = checked "hm" (hm 32768);
+      };
+      # 16 bytes: the 18-byte text is past it.
+      past = lib.mapAttrs (_backend: pkgs.testers.testBuildFailure) {
+        devenv = checked "devenv" (devenv 16);
+        hm = checked "hm" (hm 16);
+      };
+      expected = pkgs.writeText "raw-agents-md" text;
+    in
+      assert lib.assertMsg ((devenv 32768).config.ai.internal.files."AGENTS.md".format == "raw")
+      "codex-raw-agents-md-is-measured-not-formatted: the shared AGENTS.md owner did not take the entry's `raw` format";
+        pkgs.runCommand "module-test-codex-raw-agents-md-is-measured-not-formatted" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          cmp -- ${fits.hm}/.codex/AGENTS.md ${expected}
+          cmp -- ${fits.devenv}/AGENTS.md ${expected}
+          grep -q -F ${lib.escapeShellArg ".codex/AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes)."} ${past.hm}/testBuildFailure.log
+          grep -q -F ${lib.escapeShellArg "AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes)."} ${past.devenv}/testBuildFailure.log
+          echo PASS > "$out"
+        '';
 
     # The shared AGENTS.md carries the limit of every runtime that reads it,
     # whoever supplies the content: here Codex's limit, and Kiro's rule alone.
@@ -2090,6 +2176,7 @@ in {
       tree = (aiBase.markdown pkgs).mkTree {
         name = "ai-devenv-internal-markdown";
         files."AGENTS.md" = markdownInput oversized "AGENTS.md";
+        inherit (oversized.config.ai.markdown) check formatter;
         maxBytes = limit;
       };
       failure = pkgs.testers.testBuildFailure tree;
