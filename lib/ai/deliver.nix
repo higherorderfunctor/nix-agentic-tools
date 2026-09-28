@@ -21,7 +21,7 @@
   # EXHAUSTIVENESS guard: a method added to `deliveryMethod.methods` without a
   # bucket here would otherwise resolve for a file that nothing then writes.
   owningMethods = ["copy-ro" "shared"];
-  routed = ["copy-ro" "shared" "symlink" "upstream"];
+  routed = ["copy-ro" "shared" "symlink"];
 
   # Abstract ordering tokens → the node each backend actually has. A token with
   # no node on this backend is DROPPED rather than translated into a name that
@@ -38,32 +38,11 @@
     devenv.shell = "devenv:enterShell";
     hm.linkCheck = "checkLinkTargets";
   };
-
-  # The roots an `upstream` sink may land under, per backend. This is not a
-  # policy about which options deserve a sink — it is the module system's
-  # constraint, measured on this file: a fragment whose TOP-LEVEL attribute
-  # name comes from a configuration value forces `ai.<runtime>.files` while
-  # the module system is still collecting the definitions that option is made
-  # of, and evaluation dies with `error: infinite recursion encountered`. An
-  # adapter can therefore only host a sink under a root it states as a
-  # LITERAL, and these are the roots each adapter already writes.
-  #
-  # It is also why the list is as SHORT as it is. Hosting a root makes that
-  # root's sub-names derived, so anything read under it forces the whole file
-  # map: adding `home` made `config.home.packages` force every runtime's
-  # entries, and `checks/ai-context` caught it — a `rulesDir` that only has to
-  # be valid when something reads the rules stopped being lazy. These two
-  # roots are the ones a delegated surface actually lands in.
-  upstreamRoots = {
-    devenv = ["files"];
-    hm = ["programs"];
-  };
 in
   {
     backend,
     cfg,
     config,
-    options,
     runtime,
   }: let
     edges = tokens: names: lib.filter (node: node != null) (map (token: tokens.${backend}.${token} or null) names);
@@ -234,45 +213,6 @@ in
           }
       )
       owningWriters;
-    # An upstream entry hands its content to another module's option. The
-    # VALUE travels, never the rendered bytes: the option that owns the file
-    # owns how it is written, which is the whole point of delegating it.
-    sunk = lib.attrValues (bucket "upstream");
-    upstreamValue = entry: let
-      contentOption = options.ai.${runtime}.files.valueMeta.attrs.${entry.path}.configuration.options.content;
-      field =
-        if entry.content.value != null
-        then "value"
-        else if aiTypes.textSourceUsesSource entry.content
-        then "source"
-        else "text";
-      # The FIELD's own option, not `content.${field}` of each raw content
-      # definition. Its definitions have had their top-level properties
-      # discharged and priority-filtered, so `content.value = mkForce {…}`,
-      # `mkDefault {…}` or `mkIf c {…}` arrives as the value it wraps. The raw
-      # field would get a second override wrapped around the first; the host
-      # strips only the outer one, and the inner property lands in the
-      # document as literal `_type`/`priority`/`content` keys.
-      fieldOption = contentOption.valueMeta.configuration.options.${field};
-      # The content option's filter left only definitions at its winning
-      # priority and stripped that wrapper before the submodule saw them, so
-      # the field option cannot report it. Outer wins, as when the module
-      # system pushes a property down an attribute path: a non-default content
-      # priority is every survivor's, and otherwise the field's own is.
-      priority =
-        if contentOption.highestPrio == lib.modules.defaultOverridePriority
-        then fieldOption.highestPrio
-        else contentOption.highestPrio;
-    in
-      # Moving the evaluated VALUE makes defaults ordinary definitions in the
-      # host module: a generated `mkDefault` leaf would then conflict with a
-      # consumer's own definition of it, and `mkBefore`/`mkAfter` list order
-      # would be lost. Alias the surviving field definitions instead, which
-      # keeps the entry's priority and the nested leaf/list properties for the
-      # host option's own merge.
-      builtins.seq entry.content.${field} (
-        lib.modules.mkAliasAndWrapDefsWithPriority lib.id (fieldOption // {highestPrio = priority;})
-      );
     # Merged into CONSTANT attribute paths: a list of fragments whose length
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
@@ -333,23 +273,6 @@ in
       )
       (bucket "symlink");
 
-    # ── upstream: the bytes are another module's to write ────────────────
-    #
-    # The content is handed to the option `sink` names and no file is
-    # delivered for it here. That is how a surface another module owns — an
-    # upstream `programs.<cli>` option, or a document a backend deep-merges —
-    # stays IN this runtime's delivery description instead of vanishing from
-    # it, with the same facts, enable gate and override boundary as a file this
-    # layer writes itself.
-    #
-    # Handed to the adapter one ROOT at a time, because that root is the one
-    # attribute name the adapter has to state as a literal; see the
-    # `upstreamRoots` table above for what happens otherwise.
-    upstreamRoots = upstreamRoots.${backend};
-    upstreamUnder = root:
-      lib.mkMerge (map (entry: lib.setAttrByPath (lib.tail entry.sink) (upstreamValue entry))
-        (lib.filter (entry: entry.sink != [] && lib.head entry.sink == root) sunk));
-
     owned = {
       activation = mergeBundles ["home" "activation"];
       enterTest = lib.concatStringsSep "\n" (lib.filter (body: body != "") (map (bundle: bundle.enterTest or "") bundles));
@@ -396,36 +319,6 @@ in
         '';
       })
       resolved
-      # `sink` and `upstream` are one declaration in two fields: a sink with
-      # another method is ignored, and an upstream entry without one has
-      # nowhere to put its bytes.
-      ++ lib.mapAttrsToList (path: entry: {
-        assertion = (entry.method == "upstream") == (entry.sink != []);
-        message = ''
-          ai.${runtime}.files."${path}" ${
-            if entry.method == "upstream"
-            then "is delivered as `upstream`, so it needs the `sink` that names the option owning it"
-            else "names a `sink`, which only `method = \"upstream\"` reads"
-          }.
-          An upstream file is handed to another module's option; nothing in the
-          delivery layer writes it.
-        '';
-      })
-      resolved
-      ++ map (entry: {
-        assertion =
-          lib.elem (lib.head entry.sink) upstreamRoots.${backend}
-          && options ? ${lib.head entry.sink};
-        message = ''
-          ai.${runtime}.files."${entry.path}" hands its content to
-          `${lib.concatStringsSep "." entry.sink}`, whose root the ${backend}
-          adapter does not host. It writes upstream sinks under
-          ${lib.concatMapStringsSep " and " (root: "`${root}`") upstreamRoots.${backend}}
-          only, because an attribute name it cannot state as a literal forces
-          ai.${runtime}.files while that option is still collecting its own
-          definitions.
-        '';
-      }) (lib.filter (entry: entry.sink != []) sunk)
       ++ lib.mapAttrsToList (path: entry: {
         assertion = entry.content.run == null || lib.elem entry.method owningMethods;
         message = ''

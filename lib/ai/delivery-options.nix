@@ -223,17 +223,6 @@
           needs.
         '';
       };
-      sink = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [];
-        example = ["files" ".claude/settings.json" "json"];
-        description = ''
-          For a file handed upstream instead of written here, the attribute
-          path of the option that owns it. That is how a surface delegated to
-          another module still appears in this runtime's delivery description
-          rather than vanishing from it.
-        '';
-      };
     };
   };
 
