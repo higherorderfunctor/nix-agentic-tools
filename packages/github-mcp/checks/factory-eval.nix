@@ -8,7 +8,7 @@
   inherit (import ../../../lib/testing/factory-harness.nix {inherit lib pkgs harness;}) mkTest;
 in {
   checks = {
-    # ── loadServer per-package relocation tests (A5) ────────────────
+    # ── loadServer per-package relocation tests ─────────────────────
     factory-loadServer-github-mcp-from-package-dir = mkTest "loadServer-github-mcp-from-package-dir" (
       let
         mcpLib = import ../../../lib/mcp.nix {inherit lib;};

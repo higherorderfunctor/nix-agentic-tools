@@ -179,7 +179,7 @@ Fragments must focus on what the CODE ITSELF DOES NOT TELL YOU:
 - File paths/line numbers (they decay, grep finds them)
 - Repeated from code comments (DRY — code comments are closer)
 - Anything `/init` or the model could figure out alone
-- Ephemeral state (HITL progress, backlog — those are plan.md/memory)
+- Ephemeral state (HITL progress, backlog — those belong in memory)
 
 ### 4. Self-maintenance is a design requirement
 

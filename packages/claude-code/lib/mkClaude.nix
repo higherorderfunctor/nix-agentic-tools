@@ -3,9 +3,6 @@
 # Returns a backend-agnostic app record describing the Claude AI app.
 # Backend-specific module functions are produced by applying
 # `hmTransform` (HM) or `devenvTransform` (devenv) to this record.
-#
-# Fanout (skills, mcpServers, and rule files) absorbed in
-# Task 3 (A2).
 {
   lib,
   pkgs,

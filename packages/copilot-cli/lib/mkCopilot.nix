@@ -4,18 +4,6 @@
 # Backend-specific module functions are produced by applying
 # `hmTransform` (HM) or `devenvTransform` (devenv) to this record.
 #
-# Fanout absorbed in Task 4 (A3): settings.json activation merge,
-# mcp-config.json static write, per-instruction rule files under the native
-# project directory, and skills routing to that same project directory.
-#
-# Fanout absorbed in Task 4b (A3 gap-fill): lspServers typed LSP
-# config write, environmentVariables fed into the symlinkJoin wrapper on both
-# backends (devenv's `env` blob was retired 2026-08-10), agents + agentsDir
-# option pair writing under `${configDir}/agents/`, and the HM
-# symlinkJoin wrapper that injects `--additional-mcp-config` so the
-# rendered mcp-config.json actually gets loaded by the copilot
-# binary at runtime.
-#
 # ── PROVISIONAL: backend is standing in for PRODUCT ──────────────────
 #
 # "Copilot" is TWO products under one option namespace, and this module
@@ -207,10 +195,7 @@ in
       # `/settings` and the other in-CLI toggles rewrite both files. Home
       # Manager owns the user `settings.json`; devenv owns the repository
       # settings file. Folder trust is not among those writes: Copilot records
-      # it as `trustedFolders` in `~/.copilot/config.json`. Full typed surface
-      # (editor integration, telemetry, typed model selection) is tracked in
-      # docs/plan.md "Ideal architecture gate → Absorption backlog" under the
-      # copilot-cli absorption item.
+      # it as `trustedFolders` in `~/.copilot/config.json`.
       native.settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};

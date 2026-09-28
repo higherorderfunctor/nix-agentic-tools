@@ -182,7 +182,7 @@ in {
         && lib.all (target: target.units == {}) (targets empty)
     );
 
-    # ── Task 4 (A3): Copilot HM/devenv fanout absorption ──────────
+    # ── Copilot HM/devenv fanout ──────────────────────────────────
     module-copilot-hm-wraps-package = mkTest "copilot-hm-wraps-package" (
       let
         result = evalHm {
@@ -471,7 +471,7 @@ in {
         && !(lib.any (p: p.name == "copilot-cli-wrapped") result.config.packages)
     );
 
-    # ── Task 4b: Copilot feature-gap closure ───────────────────────
+    # ── Copilot feature-gap closure ────────────────────────────────
     # lspServers → the `lspServers` envelope: `~/.copilot/lsp-config.json`
     # (HM, user scope) and `.github/lsp.json` (devenv, repository scope).
     module-copilot-hm-writes-lsp-config-json = mkTest "copilot-hm-writes-lsp-config-json" (

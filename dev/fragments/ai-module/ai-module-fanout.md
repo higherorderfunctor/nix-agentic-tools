@@ -1,6 +1,6 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-26 — AGENTS.md puts the index and rules before the
+> **Last verified:** 2026-09-27 — AGENTS.md puts the index and rules before the
 > context. The repository AGENTS.md, Copilot's devenv context and instruction
 > files, and Kiro's devenv steering land as read-only copies; Codex indexes
 > scoped rules that name `references`; a unit whose file is switched off or
@@ -543,9 +543,6 @@ inline-hook ownership check.
 
 - The package wrapping (Bun runtime) for claude-code — handled in
   `packages/claude-code/packages/ai/claude-code/package.nix` at overlay level.
-
-See the backlog item "ai.claude.\* full passthrough" for the ongoing work to
-expose more `programs.claude-code.*` options via `ai.claude.*`.
 
 ### Config parity
 

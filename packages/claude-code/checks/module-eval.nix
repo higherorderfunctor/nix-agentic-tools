@@ -168,7 +168,7 @@ in {
         && rules ? "unnamed.md"
     );
 
-    # ── Task 3 (A2): Claude HM/devenv fanout absorption ────────────
+    # ── Claude HM/devenv fanout ────────────────────────────────────
     module-claude-hm-delegates-programs-claude-code = mkTest "claude-hm-delegates-programs-claude-code" (
       let
         result = evalHm {
@@ -725,7 +725,7 @@ in {
         (result.config.programs.claude-code.settings.env.ENABLE_LSP_TOOL or null) == "1"
     );
 
-    # ── Task 5 (A4b): Claude launch-effort unpin reconciler ────────
+    # ── Claude launch-effort unpin reconciler ──────────────────────
 
     # Default reconciler: flags from the committed sidecar are reconciled into
     # ~/.claude.json. The declared leaves and the document they land in are

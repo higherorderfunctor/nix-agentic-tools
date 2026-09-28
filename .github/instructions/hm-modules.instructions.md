@@ -7,7 +7,7 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-25 — Semble's `pathMappings` and model routing live
+> **Last verified:** 2026-09-27 — Semble's `pathMappings` and model routing live
 > at the program root. Native file settings live under `ai.<runtime>.native`
 > (`native.settings`; Kimchi also `native.harnessSettings`). Shared documents,
 > each declared by `facts.harnessWrites` (the router, never a factory, calls
@@ -374,8 +374,7 @@ become `home.file.".claude/rules/<name>.md".text`).
 files, computing fingerprints, merging runtime-mutable config files, resetting
 cached state.
 
-**`outOfStoreSymlink`** is NOT used in this repo's modules. See the backlog item
-about runtime state dirs for Claude's `~/.claude/projects`, which would need it.
+**`outOfStoreSymlink`** is NOT used in this repo's modules.
 
 ### Config parity rule (HM ↔ devenv)
 

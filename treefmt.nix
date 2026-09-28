@@ -119,13 +119,6 @@
     ".github/instructions/**"
     "result/**"
     "result-*/**"
-    # Sentinel-tip scratch files. Prettier's markdown handler
-    # mangles Nix globs like `modules/devenv/*.nix` into
-    # `modules/devenv/_.nix` (it reads `*...*` as italic and
-    # garbles the replacement), and re-indents deliberately
-    # hand-formatted lists. These files are cspell-excluded
-    # and never merge to main — leave them as-authored.
-    "docs/plan.md"
     # Verbatim research snapshot preserved for semantic retrieval (see
     # its README). The ungroomed sources carry mis-nested and
     # newline-straddling code spans, and prettier's span-joining mangles

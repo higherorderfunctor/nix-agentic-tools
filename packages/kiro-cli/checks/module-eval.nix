@@ -692,7 +692,7 @@ in {
         echo 'PASS: kiro-mcp-materialize-runtime' > "$out"
       '';
 
-    # ── Task 5 (A4): Kiro HM/devenv fanout absorption ────────────
+    # ── Kiro HM/devenv fanout ────────────────────────────────────
 
     # HM: package installation — verify home.packages populated.
     module-kiro-hm-wraps-package = mkTest "kiro-hm-wraps-package" (

@@ -11,9 +11,8 @@
 # coverage neither check claims to have lost.
 #
 # WHICH FILES: every `.md` in the source tree, minus treefmt's own markdown
-# exclusions, which are three:
+# exclusions, which are two:
 #
-#   - `docs/plan.md` — sentinel-tip scratch that never merges.
 #   - `docs/plans/kiro-v3-research-raw/` — a verbatim research snapshot whose
 #     as-authored text is deliberately preserved (see the treefmt.nix comment
 #     for the mangling that reformatting it causes).
@@ -87,7 +86,6 @@ in
         -path './docs/plans/kiro-v3-research-raw' -prune -o \
         -path './dev/probes/kiro-steering/fixture' -prune -o \
         -type f -name '*.md' \
-        ! -path './docs/plan.md' \
         -print0 > "$TMPDIR/markdown-files"
 
       mapfile -d "" -t files < "$TMPDIR/markdown-files"
