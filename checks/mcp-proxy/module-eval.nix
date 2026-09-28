@@ -7,7 +7,7 @@
   ...
 }: let
   inherit (import ../../lib/testing/mcp-fixtures.nix {inherit lib pkgs harness;}) mcpProxyLib proxySampleServer;
-  inherit (harness) evalDevenv evalHm mcpLib mkTest;
+  inherit (harness) claudeMcpPath claudeMcpServers evalDevenv evalHm mcpLib mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
 in {
   checks = {
@@ -32,7 +32,7 @@ in {
           };
         };
         services = lib.filterAttrs (name: _: lib.hasPrefix "mcp-proxy-" name) result.config.systemd.user.services;
-        claudeEntry = result.config.programs.claude-code.mcpServers.shared;
+        claudeEntry = (claudeMcpServers "hm" result).shared;
         codexEntry = (hmCodexSettings result).mcp_servers.shared;
         rendered = builtins.toJSON [claudeEntry codexEntry];
       in
@@ -61,7 +61,7 @@ in {
         };
       in
         !(result.config.systemd.user.services ? mcp-proxy-unused)
-        && !(result.config.programs.claude-code.mcpServers ? unused)
+        && !(claudeMcpServers "hm" result ? unused)
     );
 
     # A runtime-scoped declaration owns its managed proxy directly and receives
@@ -75,7 +75,7 @@ in {
             mcpServers.direct = proxySampleServer;
           };
         };
-        entry = result.config.programs.claude-code.mcpServers.direct;
+        entry = (claudeMcpServers "hm" result).direct;
       in
         result.config.systemd.user.services ? mcp-proxy-direct
         && entry.url == "http://127.0.0.1:9501/"
@@ -92,7 +92,8 @@ in {
         };
       in
         result.config.systemd.user.services ? mcp-proxy-direct
-        && !(result.config.programs.claude-code ? mcpServers)
+        && claudeMcpServers "hm" result == {}
+        && !(result.config.home.file ? ${claudeMcpPath "hm"})
     );
 
     # The MCP key is the managed-unit ownership key. Reusing it at two runtime
@@ -161,7 +162,7 @@ in {
             mcpServers.shared = proxySampleServer;
           };
         };
-        claudeEntry = result.config.programs.claude-code.mcpServers.shared;
+        claudeEntry = (claudeMcpServers "hm" result).shared;
         codexEntry = (hmCodexSettings result).mcp_servers.shared;
         failed = builtins.filter (assertion: !assertion.assertion) result.config.assertions;
       in

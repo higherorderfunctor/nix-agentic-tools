@@ -274,7 +274,9 @@ in {
         Copilot gets `{ lspServers.<name> = { … }; }` with `command`, `args`,
         `fileExtensions` and any `initializationOptions`; Claude gets one
         entry per server, with an `extensionToLanguage` map when `extensions`
-        is set. Copilot and Kiro route files to servers by extension alone,
+        is set. Claude receives them on Home Manager only, in its personal
+        plugin's `.lsp.json`; devenv has no Claude LSP route and warns.
+        Copilot and Kiro route files to servers by extension alone,
         so every server they receive must set `extensions`, and Copilot
         additionally requires the server name to be non-empty ASCII letters,
         digits, `_` and `-`; evaluation throws otherwise, rather than render a
@@ -297,7 +299,8 @@ in {
         values remain Claude/Copilot-only and cause a clear assertion when
         Codex or Kimchi is enabled; `ai.kimchi.agents` takes Kimchi-native
         Markdown. Each entry becomes a file:
-        - Claude  → ~/.claude/agents/<name>.md
+        - Claude  → ~/.claude/agents/<name>.md (HM) or
+                    .claude/agents/<name>.md (devenv)
         - Copilot → .github/agents/<name>.agent.md (devenv) or
                     ~/.copilot/agents/<name>.md (HM)
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
@@ -396,8 +399,8 @@ in {
         Codex itself runs with.
 
         Claude does NOT consume this pool — it has no wrapper here, and
-        `ai.claude.native.settings.env` is its native equivalent (upstream writes
-        it into `~/.claude/settings.json`).
+        `ai.claude.native.settings.env` is its native equivalent (written into
+        `.claude/settings.json`).
       '';
     };
 

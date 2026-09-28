@@ -1,9 +1,13 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-27 — Semble's `pathMappings` and model routing live
-> at the program root. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Shared documents,
-> each declared by `facts.harnessWrites` (the router, never a factory, calls
+> **Last verified:** 2026-09-27 — no runtime flips an upstream
+> `programs.<cli>.enable`; skills reach Claude through `mkSkillFiles`, and
+> Claude has no wrapper. Claude's devenv `.claude/settings.json` and `.mcp.json`
+> are written only when non-empty; other devenv writes are unconditional.
+> Semble's `pathMappings` and model routing live at the program root. Native
+> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> `native.harnessSettings`). Shared documents, each declared by
+> `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
 > on HM activation and devenv shell entry where the CLI writes that copy
 > (Copilot's user settings.json on HM, its repository settings on devenv), a
@@ -72,43 +76,10 @@ config = mkMerge [
 ];
 ```
 
-**A per-CLI block flips the corresponding `programs.<cli>.enable` when an
-upstream module exists:**
-
-```nix
-(mkIf cfg.claude.enable {
-  programs.claude-code.enable = mkDefault true;
-  # ... rest of claude fanout
-})
-```
-
-Codex and Kimchi have no upstream Home Manager modules, so their blocks install
-their selected packages directly. For upstream-backed runtimes, `mkDefault` lets
-the consumer override with `programs.claude-code.enable = false` explicitly if
-they want to turn it off while keeping `ai.claude.enable = true` for other
-reasons. In practice they don't — it's an escape hatch.
-
-**hasModule checks upstream availability**:
-
-```nix
-hasModule = path: (attrByPath path null options) != null;
-```
-
-This queries the OPTION space, not the config values. Used in assertions to
-verify `programs.copilot-cli.enable` exists as an option path before trying to
-reference it. Different from runtime checks — runs at eval time.
-
-**Nested mkIf for conditional fanout:**
-
-```nix
-(mkIf (cfg.lspServers != {} && hasModule ["programs" "claude-code" "settings"]) {
-  programs.claude-code.settings.env.ENABLE_LSP_TOOL = mkDefault "1";
-})
-```
-
-Check both the data condition (`lspServers != {}`) and the module availability
-(`hasModule ...`) before touching an upstream option path. Keeps the module
-robust to consumers who haven't imported everything.
+**No per-CLI block flips an upstream `programs.<cli>.enable`.** Every runtime
+installs its package through the shared backend transform and delivers its files
+through `ai.<runtime>.files`, so a consumer sets `ai.<cli>.enable` once and
+there is no second module to import, enable or keep in step.
 
 ### Assertion conventions
 
@@ -119,9 +90,10 @@ itself isn't enabled:
 ```nix
 config = mkMerge [
   {
+    # ILLUSTRATIVE ONLY — the shape, not a real assertion of this repo.
     assertions = [
-      { assertion = cfg.copilot.enable -> hasModule ["programs" "copilot-cli" "enable"];
-        message = "ai.copilot.enable requires programs.copilot-cli to be available."; }
+      { assertion = cfg.claude.plugins == {} || cfg.claude.enable;
+        message = "ai.claude.plugins is set but ai.claude.enable is false."; }
       # ...
     ];
   }
@@ -131,12 +103,13 @@ config = mkMerge [
 
 **Precise messages naming the option path.** Don't say "module error" or
 "configuration invalid." Say
-`ai.copilot.enable requires programs.copilot-cli to be available`.
+`ai.claude.plugins.<name> would land at ~/.claude/skills/<name>, which an ai.skills entry already owns`.
 
 ### Package override pattern
 
 **Every per-CLI submodule exposes a `package` option.** Consumers can swap out
-the package entirely. Wrapping pattern (claude-code, copilot-cli, kiro-cli):
+the package entirely. Wrapping pattern (copilot-cli, kiro-cli; Claude has no
+wrapper):
 
 ```nix
 pkgs.symlinkJoin {
@@ -325,10 +298,11 @@ erasing native state. A `mkIf (cfg.native.settings != {})` around one of these
 writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on it —
 it evaluates every imperative writer under a populated AND an empty declaration.
 
-Devenv-side writes are unconditional (always write the file when
-`enable = true`). This is intentional: devenv files are project-local symlinks,
-not home-dir writes. An empty `{}` settings file is harmless — the CLI merges it
-with global config. Upstream devenv claude does the same (unconditional).
+Devenv-side writes are otherwise unconditional (always write the file when
+`enable = true`): devenv files are project-local symlinks, not home-dir writes.
+Claude is the exception. Its devenv `.claude/settings.json` and `.mcp.json` are
+emitted only when non-empty, because either one would shadow a project's own
+committed file, so an empty declaration writes nothing there.
 
 **Secrets at activation time, not eval time.** Sops-nix paths
 (`cfg.userId.file`) are read by the activation script at run time via
@@ -512,36 +486,25 @@ string:
 This matters when passing values to options that gate on `lib.isPath` or
 `builtins.isPath`:
 
-- **Upstream HM `programs.claude-code.skills`.** MODERN home-manager's
-  `mkSkillEntry` gates on
-  `lib.hm.strings.isPathLike content && lib.pathIsDirectory content`.
-  `isPathLike` accepts store-path STRINGS, so a string that resolves (via IFD)
-  to a directory takes the recursive-directory branch and materializes
-  correctly; its fall-through also uses `isPathLike` (`{ source = content; }`),
-  never writing a store path as text. This is why skill packages can feed
-  store-path strings through `lib/ai/mkSkillPackageModule.nix` — verified
-  against the pinned home-manager source (2026-07). It requires an HM pin recent
-  enough to carry `isPathLike` in `mkSkillEntry`. **Historically
-  (pre-`isPathLike`)** it checked the strict `lib.isPath`, and a string input
-  silently fell through to writing the value as **TEXT CONTENT** to
-  `.claude/skills/<name>/SKILL.md` — a single line like
+- **Skill trees.** Both backends go through
+  `lib/ai/hm-helpers.nix:mkSkillFiles`, which asks `builtins.readFileType` —
+  agnostic to path versus string — and the devenv walk in `lib/ai/formats.nix`
+  does the same. That is why skill packages can feed store-path strings through
+  `lib/ai/mkSkillPackageModule.nix`. Our helper checked the strict `lib.isPath`
+  until commit `1f1ad35`, and a string input fell through to writing the value
+  as **TEXT CONTENT** to `.claude/skills/<name>/SKILL.md` — a single line like
   `/nix/store/abc-skills/stack-fix` instead of real YAML frontmatter, so Claude
   couldn't load the skill.
 
-- Our own skill helper had the same bug until commit `1f1ad35`. Both backends go
-  through `lib/ai/hm-helpers.nix:mkSkillFiles` now, which asks
-  `builtins.readFileType` — agnostic to path versus string — and the devenv walk
-  in `lib/ai/formats.nix` does the same.
-
-**How to apply.** For **skills** on a modern HM pin either form works (path
-literal OR store-path string), so the skill packages deliberately use strings.
-But the type distinction still bites for values flowing into sinks that gate on
-the STRICT `lib.isPath` — `cfg.context` writes a string as **text**, not a
-symlink — and for older HM pins. (`mkSourceEntry`, the helper this used to name
-first, is deleted: its last caller was the single-file skill branch, which now
-states `content.source` unconditionally.) When the sink's tolerance is unknown,
-the safe form is a `./` path literal (introduce a module-relative one in the
-`let` block so filtering doesn't coerce it to a string):
+**How to apply.** Skills take either form (path literal OR store-path string),
+so the skill packages deliberately use strings. But the type distinction still
+bites for values flowing into sinks that gate on the STRICT `lib.isPath` —
+`cfg.context` writes a string as **text**, not a symlink. (`mkSourceEntry`, the
+helper this used to name first, is deleted: its last caller was the single-file
+skill branch, which now states `content.source` unconditionally.) When the
+sink's tolerance is unknown, the safe form is a `./` path literal (introduce a
+module-relative one in the `let` block so filtering doesn't coerce it to a
+string):
 
 ```nix
 { ... }: let
@@ -550,7 +513,7 @@ the safe form is a `./` path literal (introduce a module-relative one in the
   skillsRepo = ../../packages/foo/skills;
 in {
   config = mkIf cfg.enable {
-    programs.claude-code.skills = {
+    ai.skills = {
       # `path + "/suffix"` returns a path (type preserved)
       bar = skillsRepo + "/bar";
     };
@@ -558,17 +521,17 @@ in {
 }
 ```
 
-**Historical failure mode (pre-`isPathLike`).** Surfaced 2026-04-08 during
-skills-fanout-fix Task 3: the stacked-workflows HM module used
+**Historical failure mode.** Surfaced 2026-04-08 during skills-fanout-fix Task
+3: the stacked-workflows HM module used
 `swsContent.passthru.skillsDir + "/stack-*"` where `skillsDir` came from
-`builtins.path` (a string). Against the then-strict `mkSkillEntry`, every
-consumer had garbage `~/.claude/skills/stack-*/SKILL.md` files (the store path
-written as text) for weeks. Worked around in commit `5a14a0c` with a
-module-relative `skillsRepo` path literal; the root cause is gone now that
-upstream `mkSkillEntry` uses `isPathLike` (above).
+`builtins.path` (a string). Against the then-strict Home Manager `mkSkillEntry`,
+every consumer had garbage `~/.claude/skills/stack-*/SKILL.md` files (the store
+path written as text) for weeks. Worked around in commit `5a14a0c` with a
+module-relative `skillsRepo` path literal; the root cause is gone now that every
+skill goes through `mkSkillFiles` (above).
 
-**Both our helper and modern upstream are string-tolerant.** Our `mkSkillFiles`
-and modern upstream `mkSkillEntry` both accept path-typed values AND store-path
-strings. A generated store-path string remains a supported, deliberate pattern
-even though this repository no longer ships a first-party producer. Reserve the
-`./`-literal discipline for the strict-`isPath` sinks noted above.
+**`mkSkillFiles` is string-tolerant.** It accepts path-typed values AND
+store-path strings. A generated store-path string remains a supported,
+deliberate pattern even though this repository no longer ships a first-party
+producer. Reserve the `./`-literal discipline for the strict-`isPath` sinks
+noted above.

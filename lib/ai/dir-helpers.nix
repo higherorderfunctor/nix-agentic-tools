@@ -109,9 +109,9 @@ in rec {
 
   # Claude-only hook files. Default filter accepts any regular
   # file — Claude hooks are shell scripts and typically have
-  # no extension. Returns `attrsOf lines` via readFile so the
-  # existing `programs.claude-code.hooks` option (which
-  # expects inline script text) accepts the output directly.
+  # no extension. Returns `attrsOf lines` via readFile so
+  # `ai.claude.hookScripts` (inline script text) accepts the
+  # output directly.
   hooksFromDir = arg: let
     cfg = resolveDirArg (_: true) arg;
     entries = builtins.readDir cfg.path;

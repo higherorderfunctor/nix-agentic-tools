@@ -7,7 +7,7 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-26 — the package builds from the release source
+> **Last verified:** 2026-09-27 — the package builds from the release source
 > that the extractor also reads, one pin for both, with pinned pnpm and Go
 > dependencies, and patches bundled-skill discovery to read store directories in
 > place; `ai.kimchi.native.settings` and `native.harnessSettings` are closed
@@ -233,8 +233,7 @@ paths; an explicit list, empty included, still lands. Locked by
 one unknown key invalidates the whole file. The user file is hard-coded to
 `~/.config/kimchi/harness/permissions.json` (`config.ts:35`), so its HM path
 ignores `configDir`. A list leaf is owned whole: a rule `/permissions … save`
-appends to a declared `allow` or `deny` is dropped on the next activation, the
-same trade Claude's reconciled permissions make.
+appends to a declared `allow` or `deny` is dropped on the next activation.
 
 The scalars do not inherit per key. Kimchi fills `defaultMode` and
 `classifierTimeoutMs` with its defaults for any project file that exists, and

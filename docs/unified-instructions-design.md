@@ -33,8 +33,8 @@ factory. Apply the same shape to:
 - **Guidance** (`ai.context` + `ai.rules`) — this document.
 - **MCP servers** (`ai.mcpServers` + `ai.<cli>.mcpServers`) — typed schema at
   `lib/ai/mcpServer/commonSchema.nix`; per-ecosystem `renderServer` translates
-  typed shape → native on-disk form (Claude's `programs.claude-code.mcpServers`,
-  Kiro's `mcp.json`, Copilot's `--additional-mcp-config` target, Codex's native
+  typed shape → native on-disk form (Claude's `.mcp.json`, Kiro's `mcp.json`,
+  Copilot's `--additional-mcp-config` target, Codex's native
   `[mcp_servers.<name>]` TOML tables).
 - **Skills** (`ai.skills` + `ai.<cli>.skills`) — SKILL.md progressive
   disclosure, mostly convergent across ecosystems; transformer still handles
@@ -354,8 +354,9 @@ override file.
    options added; merge + pass-through landed. **Shipped:** commits 8f0c16b,
    7dad0b8.
 3. **Per-CLI factories.**
-   - **Claude:** context delegates to `programs.claude-code.context`; rules emit
-     to `.claude/rules/<name>.md` via `claudeTransformer`. Shipped 8f0c16b,
+   - **Claude:** context → `.claude/<context.filename>` (HM
+     `~/.claude/CLAUDE.md`) through `ai.claude.files`; rules emit to
+     `.claude/rules/<name>.md` via `claudeTransformer`. Shipped 8f0c16b,
      7dad0b8.
    - **Kiro:** context → HM `<configDir>/steering/AGENTS.md` or devenv repo-root
      `AGENTS.md`; rules → `<configDir>/steering/<name>.md` via

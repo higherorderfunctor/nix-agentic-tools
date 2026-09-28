@@ -8,26 +8,6 @@
     writerAttr = [];
     pruneTrigger = "none";
   };
-  delegated = mode: attr: target: {
-    inherit target;
-    primitive = "upstream";
-    writerAttr =
-      (
-        if mode == "hm"
-        then ["programs" "claude-code"]
-        else ["claude" "code"]
-      )
-      ++ [attr];
-    pruneTrigger =
-      if mode == "hm"
-      then "Upstream Home Manager projection, then generation diff on switch."
-      else "Upstream devenv files projection, then files:cleanup on SHELL ENTRY ONLY.";
-    reason = "This factory hands ${attr} to the consumer's upstream Claude module; its implementation and pin are outside this policy.";
-    reverifyCommand =
-      if mode == "hm"
-      then ''rg -n 'home.file|settings|personalPlugin|mcpServers|lspServers|agents|skills|hooks' "$HM_SOURCE/modules/programs/claude-code/default.nix"; home-manager build --flake "$CONSUMER_FLAKE"''
-      else ''rg -n 'files|mcpServers|mcpContent' "$(nix eval --raw --expr '(builtins.getFlake (toString ./.)).inputs.devenv.outPath')/src/modules/integrations/claude.nix"'';
-  };
   probe = option: nonEmpty: empty: {
     base = {};
     inherit option;
@@ -76,9 +56,6 @@
     hm = value;
   };
   handDefinitions = {
-    agents = {
-      claude = {hm = delegated "hm" "agents" "$HOME/.claude/agents/<name>.md";};
-    };
     context = {
       copilot = {hm = absent "Home Manager context is deliberately inert: the .github context surface is project-scoped.";};
     };
@@ -90,7 +67,6 @@
       kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
     };
     hooks = {
-      claude = {hm = (delegated "hm" "settings" "$HOME/.claude/settings.json (hooks)") // {additionalWriters = [(delegated "hm" "hooks" "$HOME/.claude/hooks/<name>")];};};
       copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
       # Kimchi's own lifecycle reader takes only a trusted project's
       # .kimchi/hooks.json and .kimchi/hooks.local.json; its user-scope routes
@@ -98,33 +74,17 @@
       kimchi = {hm = absent "Kimchi reads its own lifecycle hooks only from a trusted project's .kimchi/hooks.json (src/extensions/kimchi-hooks/definition.ts:25-37). It has two user-scope routes, and neither is a sink Home Manager can own. A configured pi package's hooks/hooks.json would make Home Manager own the `packages` list in harness/settings.json and clobber `kimchi install`. The opt-in Claude Code hook adapter (extensions.claude-code-hook-adapter, defaultEnabled false, src/resources/definitions.ts:75-80) reads ~/.claude/settings.json (src/extensions/claude-code-hook-adapter/definition.ts:25-28), so a shared hook Claude already receives also fires in Kimchi once a user enables it, with nothing written for Kimchi. The bash-hook directory filters the bash tool only and is not a lifecycle sink.";};
     };
     lspServers = {
-      claude = {
-        devenv = absent "Parity gap: Claude devenv exists but never consumes mergedLspServers or writes LSP configuration.";
-        hm = delegated "hm" "lspServers" "$HOME/.claude/skills/claude-code-home-manager/.lsp.json";
-      };
+      claude.devenv = absent "Parity gap: Claude devenv exists but never consumes mergedLspServers or writes LSP configuration.";
       codex = both (absent "Codex's supportedPools excludes lspServers.");
       kimchi = both (absent "Kimchi's supportedPools excludes lspServers.");
     };
-    mcpServers = {
-      claude = {
-        devenv = delegated "devenv" "mcpServers" "$DEVENV_ROOT/.mcp.json";
-        hm = delegated "hm" "mcpServers" "$HOME/.claude/skills/claude-code-home-manager/.mcp.json";
-      };
-    };
     permissions = {
-      claude = {hm = delegated "hm" "settings" "$HOME/.claude/settings.json (permissions)";};
       copilot = both (absent "No permissions option or translation exists; arbitrary native.settings keys do not establish a permissions contract.");
       kiro = {devenv = absent "Kiro reads permissions only from ~/.kiro/settings/ (global) or ~/.kiro/workspace-roots/<hash>/, never a project .kiro/, so a devenv-written permissions.yaml would never be read (packages/kiro-cli/lib/mkKiro.nix:1524-1528, the comment establishing those read paths above the permissions option). Agent-local permission records remain part of agents.";};
     };
     rules = {
       copilot = {hm = absent "Home Manager rules are deliberately inert; the agents pool is a separate surface, not a rules fallback.";};
       kimchi = both (absent "Kimchi's supportedPools excludes rules.");
-    };
-    settings = {
-      claude = {hm = delegated "hm" "settings" "$HOME/.claude/settings.json";};
-    };
-    skills = {
-      claude = {hm = delegated "hm" "skills" "$HOME/.claude/skills/<name>/<leaf>";};
     };
   };
   hand = builtins.listToAttrs (lib.concatMap (surface:

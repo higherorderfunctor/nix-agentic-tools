@@ -14,6 +14,19 @@
       ];
     }
     {
+      ecosystem = "claude";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "agents";
+      target = "$HOME/.claude/agents/<name>.md";
+      writerAttr = [
+        "home"
+        "file"
+        ".claude/agents/probe.md"
+      ];
+    }
+    {
       ecosystem = "codex";
       mode = "devenv";
       primitive = "ownPathDeclarative";
@@ -283,6 +296,31 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathDeclarative";
+          pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+          target = "$HOME/.claude/hooks/<name>";
+          writerAttr = [
+            "home"
+            "file"
+            ".claude/hooks/probe"
+          ];
+        }
+      ];
+      ecosystem = "claude";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "hooks";
+      target = "$HOME/.claude/settings.json";
+      writerAttr = [
+        "home"
+        "file"
+        ".claude/settings.json"
+      ];
+    }
+    {
       ecosystem = "codex";
       mode = "devenv";
       primitive = "ownPathDeclarative";
@@ -357,6 +395,31 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathDeclarative";
+          pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+          target = "$HOME/.claude/skills/nix-agentic-tools/.claude-plugin/plugin.json";
+          writerAttr = [
+            "home"
+            "file"
+            ".claude/skills/nix-agentic-tools/.claude-plugin/plugin.json"
+          ];
+        }
+      ];
+      ecosystem = "claude";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "lspServers";
+      target = "$HOME/.claude/skills/nix-agentic-tools/.lsp.json";
+      writerAttr = [
+        "home"
+        "file"
+        ".claude/skills/nix-agentic-tools/.lsp.json"
+      ];
+    }
+    {
       ecosystem = "copilot";
       mode = "devenv";
       primitive = "ownPathDeclarative";
@@ -404,6 +467,43 @@
         "home"
         "file"
         ".kiro/settings/lsp.json"
+      ];
+    }
+    {
+      ecosystem = "claude";
+      mode = "devenv";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      surface = "mcpServers";
+      target = "$DEVENV_ROOT/.mcp.json";
+      writerAttr = [
+        "files"
+        ".mcp.json"
+      ];
+    }
+    {
+      additionalWriters = [
+        {
+          primitive = "ownPathDeclarative";
+          pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+          target = "$HOME/.claude/skills/nix-agentic-tools/.claude-plugin/plugin.json";
+          writerAttr = [
+            "home"
+            "file"
+            ".claude/skills/nix-agentic-tools/.claude-plugin/plugin.json"
+          ];
+        }
+      ];
+      ecosystem = "claude";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "mcpServers";
+      target = "$HOME/.claude/skills/nix-agentic-tools/.mcp.json";
+      writerAttr = [
+        "home"
+        "file"
+        ".claude/skills/nix-agentic-tools/.mcp.json"
       ];
     }
     {
@@ -564,6 +664,19 @@
       target = "$DEVENV_ROOT/.claude/settings.json";
       writerAttr = [
         "files"
+        ".claude/settings.json"
+      ];
+    }
+    {
+      ecosystem = "claude";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "permissions";
+      target = "$HOME/.claude/settings.json";
+      writerAttr = [
+        "home"
+        "file"
         ".claude/settings.json"
       ];
     }
@@ -774,6 +887,31 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownLeaves";
+          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          target = "$HOME/.claude.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "claudeUnpinLaunchEffort"
+          ];
+        }
+      ];
+      ecosystem = "claude";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "settings";
+      target = "$HOME/.claude/settings.json";
+      writerAttr = [
+        "home"
+        "file"
+        ".claude/settings.json"
+      ];
+    }
+    {
       ecosystem = "codex";
       mode = "devenv";
       primitive = "ownPathDeclarative";
@@ -909,6 +1047,19 @@
       ];
     }
     {
+      ecosystem = "claude";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "skills";
+      target = "$HOME/.claude/skills/<name>";
+      writerAttr = [
+        "home"
+        "file"
+        ".claude/skills/probe"
+      ];
+    }
+    {
       ecosystem = "codex";
       mode = "devenv";
       primitive = "ownPathDeclarative";
@@ -1009,18 +1160,5 @@
       ];
     }
   ];
-  supplements = {
-    "settings/claude/hm" = [
-      {
-        primitive = "ownLeaves";
-        pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
-        target = "$HOME/.claude.json";
-        writerAttr = [
-          "home"
-          "activation"
-          "claudeUnpinLaunchEffort"
-        ];
-      }
-    ];
-  };
+  supplements = {};
 }

@@ -1,9 +1,8 @@
-## claude-code Wrapper Chain
+## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-09-22 — native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Source paths and ownership guidance follow native
-> package assembly.
+> **Last verified:** 2026-09-27 — `ai.*` delivers Claude's plugins itself: the
+> MCP/LSP personal plugin as per-file links under `nix-agentic-tools/`, consumer
+> plugins as one directory link each. `$out/bin/claude` is the unwrapped binary.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -12,38 +11,41 @@ Claude Code ships as a **pre-built compiled binary** (a Bun single-exec). The
 base package (`packages/claude-code/packages/ai/claude-code/package.nix`)
 installs it directly as `$out/bin/claude`.
 
-### There is no wrapper on the live path
+### There is no wrapper
 
-The plugin integration comes from **home-manager's** `programs.claude-code`
-module (not nixpkgs'), and it has two mutually exclusive delivery paths, chosen
-from the packaged Claude Code version:
+`$out/bin/claude` is the pre-built binary itself, installed by the shared
+backend transform on both backends. Claude Code 2.1.157 and later discovers a
+plugin as a personal plugin at `<configDir>/skills/<name>` (yes, `skills/`, not
+`plugins/`), so nothing needs a `--plugin-dir` argument. Home Manager's own
+Claude module wraps the binary for older versions; `ai.*` does not use that
+module and does not port the wrapper, so a package override older than 2.1.157
+loses personal plugins.
 
-- **2.1.157 and later — personal plugins, no wrapper.** Upstream sets
-  `finalPackage = cfg.package`, so `$out/bin/claude` is the pre-built binary
-  itself. Each plugin is symlinked as a whole directory at
-  `<configDir>/skills/<name>` (yes, `skills/`, not `plugins/`) and discovered
-  from there. **This is the live path** — `packages/claude-code/sources.json`
-  tracks 2.1.245.
-- **2.1.76 through 2.1.156, or a package with no detectable version — the legacy
-  `--plugin-dir` wrapper.** Upstream wraps the binary in a `symlinkJoin` whose
-  `$out/bin/claude` is a short bash script that execs `.claude-wrapped`, passing
-  one `--plugin-dir` plus its store path per plugin. Upstream warns on this
-  path; strict-parser subcommands such as `claude rc` may reject the arguments.
-  Below 2.1.76 an upstream assertion fails outright.
+Two kinds of plugin land there, both Home Manager only (personal plugins are
+user-scope):
 
-Only whole-directory symlinks work for a plugin. Recursive linking materializes
-a real directory of per-file symlinks, and Claude Code's `agents/` and
-`commands/` scanners accept only regular files, so every agent and command would
-be silently dropped.
+- **The MCP/LSP personal plugin** at `~/.claude/skills/nix-agentic-tools/`: a
+  real directory of per-file links to `.claude-plugin/plugin.json`, `.mcp.json`
+  and `.lsp.json`, emitted only when MCP or LSP servers exist. A plugin is
+  Claude's only user-scope LSP route. The manifest name is `hm`, which is the
+  MCP tool namespace (`mcp__plugin_hm_<server>__<tool>`), so the directory name
+  can change without renaming any tool.
+- **Consumer plugins** (`ai.claude.plugins`) via `mkPluginEntry` in
+  `packages/claude-code/lib/plugin.nix`, each ONE directory link. Only
+  whole-directory links work for these: recursive linking materializes a real
+  directory of per-file symlinks, and Claude Code's `agents/` and `commands/`
+  scanners accept only regular files, so every agent and command would be
+  silently dropped. `mkPluginEntry` links a source's top-level entries and
+  synthesizes `.claude-plugin/plugin.json` when the source has none.
 
 ### `<name>` is the attribute key
 
 `ai.claude.plugins` is an attrset (`attrsOf (either package path)`), and the key
-is what upstream uses verbatim as `<name>` above. It is deliberately not derived
-from the source: upstream's deprecated list form derives names with
-`baseNameOf`, which turns a bare flake-input store path into an unstable
-`<hash>-source` that gets renamed by every unrelated input bump. Upstream
-asserts these names are unique among themselves and disjoint from skill names.
+is used verbatim as `<name>` above and as a synthesized manifest's `name`. It is
+deliberately not derived from the source: `baseNameOf` turns a bare flake-input
+store path into an unstable `<hash>-source` that gets renamed by every unrelated
+input bump. An assertion keeps the keys disjoint from skill names and from
+`nix-agentic-tools`.
 
 ### The base package
 

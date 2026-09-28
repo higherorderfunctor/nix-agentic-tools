@@ -415,8 +415,8 @@ in {
     servers;
   };
 
-  # Claude: one `programs.claude-code.lspServers.<name>` entry, with an
-  # `extensionToLanguage` mapping of the same shape as Copilot's.
+  # Claude: one `.lsp.json` entry of a plugin, with an `extensionToLanguage`
+  # mapping of the same shape as Copilot's.
   mkClaudeLspConfig = name: server:
     {
       command = lspCommand name server;
