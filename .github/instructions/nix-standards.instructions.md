@@ -16,8 +16,8 @@ Per-platform binary packages store versions and hashes in a
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
-> native package assembly.
+> **Last verified:** 2026-09-27 — source paths and ownership guidance follow
+> native package assembly; generated Markdown is formatted in `mkTree`.
 >
 > Full lineage:
 > `git show 6d2fbeef:dev/fragments/nix-standards/nix-standards.md`.
@@ -178,7 +178,10 @@ cp "$src/file.md" ./output/
 
 If the output needs to be formatted, either:
 
-1. Format inside the nix derivation (add formatter to build inputs)
+1. Format inside the nix derivation. For Markdown, build it with
+   `(lib.ai.markdown pkgs).mkTree` (`lib/markdown`), the one builder that runs a
+   formatter and a check over a tree of files; do not hand-roll a prettier
+   derivation.
 2. Format the working tree copy after `cp`
 
 **Destinations may themselves be store symlinks.** Anything declared in devenv's

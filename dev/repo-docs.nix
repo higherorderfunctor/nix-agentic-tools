@@ -1,6 +1,7 @@
 # dev/repo-docs.nix — the two generated repo-root documents (README.md,
-# CONTRIBUTING.md), rendered from dev/generate.nix and formatted in the
-# sandbox.
+# CONTRIBUTING.md), rendered from dev/generate.nix and formatted and checked
+# in the sandbox by the same builder and house formatter as the generated
+# agent Markdown (lib/markdown, dev/house-markdown.nix).
 #
 # These are HUMAN documents, not agent steering, so they stay with the
 # generator. The agent instruction files are `ai.*`'s to write (dev/ai.nix).
@@ -14,30 +15,20 @@
   treefmt-nix,
 }: let
   gen = import ./generate.nix {inherit lib pkgs;};
+  markdown = import ../lib/markdown {inherit lib;} pkgs;
+  house = import ./house-markdown.nix {inherit pkgs treefmt-nix;};
 
-  # treefmt for use inside derivations. Same config as treefmt.nix
-  # but with projectRootFile disabled — no .git in nix sandbox.
-  fmtDrv =
-    (treefmt-nix.lib.evalModule pkgs (
-      lib.recursiveUpdate (import ../treefmt.nix) {projectRootFile = null;}
-    ))
-    .config
-    .build
-    .wrapper;
-
-  # A directory holding one generated file, formatted with treefmt before
-  # the derivation finishes, so the copy `generate:repo:*` drops in the
-  # working tree is already what the formatter would produce. The store
-  # file is read-only; chmod makes the derivation's own $out writable for
-  # treefmt.
-  formattedDoc = name: filename: text:
-    pkgs.runCommand name {nativeBuildInputs = [fmtDrv];} ''
-      mkdir -p $out
-      cp ${pkgs.writeText filename text} $out/${filename}
-      chmod -R u+w $out
-      treefmt --no-cache --walk filesystem --tree-root $out
-    '';
+  # One generated file, built, formatted and checked the way `ai.*` builds
+  # generated Markdown, so the copy `generate:repo:*` drops in the working
+  # tree is already what the formatter would produce.
+  doc = name: filename: text:
+    markdown.mkTree {
+      inherit name;
+      files.${filename}.text = text;
+      inherit (house) formatter;
+      check = markdown.defaultCheck;
+    };
 in {
-  repoContributing = formattedDoc "repo-contributing" "CONTRIBUTING.md" gen.contributingMd;
-  repoReadme = formattedDoc "repo-readme" "README.md" gen.readmeMd;
+  repoContributing = doc "repo-contributing" "CONTRIBUTING.md" gen.contributingMd;
+  repoReadme = doc "repo-readme" "README.md" gen.readmeMd;
 }

@@ -279,6 +279,30 @@
     devenv = evalDevenv markdownFixture;
     hm = evalHm markdownFixture;
   };
+  # The same fixture with the formatter and the check switched off.
+  unprocessedFixture = lib.recursiveUpdate markdownFixture {
+    ai.markdown = {
+      check = lib.mkForce "";
+      formatter = null;
+    };
+  };
+  unprocessedEvaluations = {
+    devenv = evalDevenv unprocessedFixture;
+    hm = evalHm unprocessedFixture;
+  };
+  # One Claude rule, so one small tree.
+  claudeRule = extra: text:
+    evalDevenv (lib.recursiveUpdate {
+        ai = {
+          claude.enable = true;
+          rules.probe.text = text;
+        };
+      }
+      extra);
+  claudeRulePath = ".claude/rules/probe.md";
+  # The tree a delivered path points into, from the store path it is
+  # delivered from.
+  treeOf = evaluated: path: lib.removeSuffix "/${path}" (deliveredFiles evaluated.config).${path}.source;
   # The files a backend delivers out of a Markdown tree, keyed by target path.
   treeFiles = evaluated: lib.filterAttrs fromMarkdownTree (deliveredFiles evaluated.config);
   # Every live entry of every file map, the shared AGENTS.md owner's included.
@@ -695,7 +719,7 @@ in {
         && (markdownInput {config = linked;} "AGENTS.md").text == "SAME"
         && !(copied.files ? "AGENTS.md")
         && fromMarkdownTree "AGENTS.md" (deliveredFiles copied)."AGENTS.md"
-        && (markdownInput {config = copied;} "AGENTS.md").text == "GENERATED\n"
+        && (markdownInput {config = copied;} "AGENTS.md").text == "GENERATED"
         && (lib.head (ownPlan "internal" "ai:agents-md:materialize" {config = copied;}).targets).path == "."
     );
 
@@ -1719,8 +1743,8 @@ in {
       (lib.attrValues markdownEvaluations)
     );
 
-    # With nothing yet processing the tree, each file in it is its input byte
-    # for byte, on both backends, and the tree holds exactly the live Markdown
+    # With the formatter off, each file in the tree is its input byte for
+    # byte, on both backends, and the tree holds exactly the live Markdown
     # entries: every one of them, and nothing else.
     module-delivery-markdown-tree-identity = let
       expectedFile = evaluated: path: let
@@ -1743,9 +1767,113 @@ in {
           echo "FAIL: delivery-markdown-tree-identity: $1 differs from the input it was built from" >&2
           exit 1
         }
-        ${lib.concatStrings (lib.mapAttrsToList compare markdownEvaluations)}
+        ${lib.concatStrings (lib.mapAttrsToList compare unprocessedEvaluations)}
         echo PASS > "$out"
       '';
+
+    # The default formatter runs: a one-line paragraph far past 80 columns
+    # comes out wrapped at 80, every word kept.
+    module-delivery-markdown-formatter-wraps = let
+      words = lib.genList (n: "word${toString n}") 60;
+      built = (deliveredFiles (claudeRule {} (lib.concatStringsSep " " words)).config).${claudeRulePath}.source;
+    in
+      pkgs.runCommand "module-test-delivery-markdown-formatter-wraps" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        fail() {
+          echo "FAIL: delivery-markdown-formatter-wraps: $1" >&2
+          cat ${built} >&2
+          exit 1
+        }
+        [ -z "$(awk 'length > 80' ${built})" ] || fail "a line is longer than 80 columns"
+        [ "$(grep -c word ${built})" -gt 1 ] || fail "the paragraph was not wrapped"
+        [ "$(tr -s ' \n' '\n\n' <${built} | grep -c '^word')" -eq ${toString (builtins.length words)} ] \
+          || fail "the wrapped paragraph lost or gained a word"
+        echo PASS > "$out"
+      '';
+
+    # The default check names a finding by its TARGET path. A tree whose check
+    # fails cannot be a dependency, so the tree is built with the check off
+    # and the default check (the option's value) runs in a copy of it.
+    module-delivery-markdown-check-reports-target-paths = let
+      broken = claudeRule {
+        ai.markdown = {
+          check = lib.mkForce "";
+          formatter = null;
+        };
+      } "| a | b |\n| - |\n| 1 | 2 |\n";
+      defaultCheck = (claudeRule {} "probe").config.ai.markdown.check;
+    in
+      pkgs.runCommand "module-test-delivery-markdown-check-reports-target-paths" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export HOME="$TMPDIR"
+        cp -R ${treeOf broken claudeRulePath} tree
+        chmod -R u+w tree
+        cd tree
+        if (
+          ${defaultCheck}
+        ) >"$TMPDIR/log" 2>&1; then
+          echo "FAIL: delivery-markdown-check-reports-target-paths: the check passed a broken table" >&2
+          exit 1
+        fi
+        grep -q -F ${lib.escapeShellArg "${claudeRulePath}:"} "$TMPDIR/log" || {
+          echo "FAIL: delivery-markdown-check-reports-target-paths: no finding names ${claudeRulePath}:" >&2
+          cat "$TMPDIR/log" >&2
+          exit 1
+        }
+        echo PASS > "$out"
+      '';
+
+    # The default check stays unevaluated when a consumer forces the check
+    # out: with both linters replaced by a throw, the tree still
+    # instantiates. The control, with the default check in place, must hit
+    # the throw, or the test proves nothing.
+    module-delivery-markdown-check-stays-lazy = mkTest "delivery-markdown-check-stays-lazy" (
+      let
+        poisoned =
+          pkgs.ai.devTools
+          // {
+            markdownlint-cli2 = throw "markdownlint-cli2 instantiated";
+            rumdl = throw "rumdl instantiated";
+          };
+        withPoison = config:
+          harness.evalDevenvWithSpecialArgs {pkgs = pkgs // {ai = pkgs.ai // {devTools = poisoned;};};} config;
+        treeInstantiates = extra:
+          (builtins.tryEval (builtins.seq (treeOf (withPoison (lib.recursiveUpdate {
+                ai = {
+                  claude.enable = true;
+                  rules.probe.text = "probe";
+                };
+              }
+              extra))
+            claudeRulePath)
+            true)).success;
+      in
+        treeInstantiates {ai.markdown.check = lib.mkForce "";}
+        && !(treeInstantiates {})
+    );
+
+    # A consumer's check APPENDS to the default, and the tree is built with
+    # the result: the delivered file is exactly the tree `mkTree` builds with
+    # both checks.
+    module-delivery-markdown-check-appends = mkTest "delivery-markdown-check-appends" (
+      let
+        sentinel = "echo consumer-check-sentinel";
+        evaluated = claudeRule {ai.markdown.check = sentinel;} "probe";
+        inherit (evaluated.config.ai.markdown) check;
+        tree = (harness.aiBase.markdown pkgs).mkTree {
+          name = "ai-devenv-claude-markdown";
+          files.${claudeRulePath} = markdownInput evaluated claudeRulePath;
+          inherit check;
+          inherit (evaluated.config.ai.markdown) formatter;
+        };
+      in
+        # Compared as text: a regex may not carry the linters' store paths.
+        lib.hasInfix sentinel (builtins.unsafeDiscardStringContext check)
+        && lib.hasInfix (builtins.unsafeDiscardStringContext (harness.aiBase.markdown pkgs).defaultCheck) (builtins.unsafeDiscardStringContext check)
+        && treeOf evaluated claudeRulePath == "${tree}"
+    );
 
     # A Markdown entry is one file whose bytes exist when the tree is built.
     # `content.run` writes its bytes at activation and `recursive` names a

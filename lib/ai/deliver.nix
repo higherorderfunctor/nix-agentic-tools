@@ -90,7 +90,8 @@ in
     live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
 
     # Every Markdown file this invocation delivers is built into ONE store tree
-    # at its target path, and delivered from there. `run` bytes do not exist
+    # at its target path, formatted and checked there by `ai.markdown`, and
+    # delivered from there. `run` bytes do not exist
     # until activation and a `value` has no Markdown renderer, so neither can
     # be in it; the assertions below reject both combinations. Selected by
     # `format` and the content's SHAPE, never by the text, so building the
@@ -108,6 +109,7 @@ in
     tree = markdown.mkTree {
       name = "ai-${backend}-${runtime}-markdown";
       files = lib.mapAttrs (_path: entry: aiTypes.textSourceFile entry.content) treeEntries;
+      inherit (config.ai.markdown) check formatter;
       maxBytes = lib.filterAttrs (path: _limit: treeEntries ? ${path}) limits;
     };
 

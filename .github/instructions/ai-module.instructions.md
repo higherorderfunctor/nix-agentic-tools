@@ -1296,7 +1296,8 @@ path types".
 > their `content` with `_generated`, so a consumer's replacement of a unit's
 > file warns like a switch-off. Every generated Markdown file carries
 > `format = "markdown"` and is delivered from one store tree per router
-> invocation (`lib/markdown`).
+> invocation (`lib/markdown`), formatted and checked there by
+> `ai.markdown.formatter` and `ai.markdown.check`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1628,9 +1629,10 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   KiB default because the raised limit is absent or untrusted) loses only its
   own tail. The builder adds the merged context and publishes it on devenv. A
   limit is published even without content, because the runtime reads the file
-  whoever wrote it. The layout is the Markdown formatter's fixed point (one
-  blank line between units and after each rule comment, one glob or link per
-  index line), so a committed copy survives a formatter pass.
+  whoever wrote it. The renderer joins units with one blank line and leaves
+  blank-line runs and the trailing newline to the formatter, which settles them
+  in the tree; it keeps one glob or link per index line, which no formatter
+  re-wraps.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit
@@ -1656,10 +1658,17 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   the tree whatever its format, so a consumer replacement that dropped the
   generated `format` is still measured; the tree's install check fails the build
   past the limit, and a limited `run` or `value` entry, which has no bytes in
-  the tree, makes the router warn instead. The factories set it at `mkDefault`
-  beside the generated content (inside the whole-entry default for AGENTS.md).
-  Checks read a Markdown file's content through the harness's `markdownInput`
-  (the tree's input) and its delivery through `fromMarkdownTree`
+  the tree, makes the router warn instead. The tree runs `ai.markdown.formatter`
+  in `buildPhase` and `ai.markdown.check` in `installCheckPhase`, both with the
+  tree as the working directory, so paths are target-relative. Both are root
+  options in `sharedOptions.nix`: the formatter defaults to prettier in the
+  house prose style (`lib/markdown/prose-style.nix`), `null` disables it; the
+  check's default (the table-cell check) is a definition at the ordinary
+  priority through `mkOverride`, so consumer definitions append and a
+  `lib.mkForce` never builds the linters. The factories set `format` at
+  `mkDefault` beside the generated content (inside the whole-entry default for
+  AGENTS.md). Checks read a Markdown file's content through the harness's
+  `markdownInput` (the tree's input) and its delivery through `fromMarkdownTree`
   (`deliveredMarkdown` does both): the delivered path is a derivation output,
   and reading it back would be import-from-derivation.
 

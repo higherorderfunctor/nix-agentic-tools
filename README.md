@@ -428,6 +428,47 @@ remains an explicit consumer root.
 </details>
 
 <details>
+<summary><strong>Generated Markdown formatting</strong></summary>
+
+Every Markdown file `ai.*` generates (rules, context, `AGENTS.md`, agents) is
+built into one store tree per runtime at its target paths, formatted, and
+checked, before it is delivered. That includes the prose and agent files you
+supply through `ai.*`.
+
+- **Formatter:** prettier with `proseWrap = "always"` by default. Setting
+  `ai.markdown.formatter` replaces it; `null` turns formatting off.
+- **Check:** rumdl and markdownlint-cli2 MD056 by default, which reject a table
+  whose rows disagree on their cell count. Definitions of `ai.markdown.check`
+  append to it; `lib.mkForce` replaces it and `lib.mkForce ""` turns it off.
+- **One file:** `ai.<runtime>.files."<path>".format = "raw"` delivers that file
+  as written.
+
+Both snippets run in the build sandbox with the tree as the working directory,
+so paths are target-relative (`.claude/rules/foo.md`). To format with your own
+treefmt config (needs a `treefmt-nix` input):
+
+```nix
+ai.markdown.formatter = let
+  fmt = inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+in "${lib.getExe fmt.config.package} --config-file ${fmt.config.build.configFile} --tree-root . --walk filesystem --no-cache";
+```
+
+Under flake-parts, build the same string from `perSystem`'s
+`config.treefmt.package` and `config.treefmt.build.configFile`.
+
+- Do not use devenv's `treefmt` wrapper (`config.treefmt.config.build.wrapper`).
+  It hardcodes your project directory as the tree root, so in the sandbox it
+  formats the wrong tree.
+- Your treefmt excludes apply by target path inside the tree. Excluding
+  `AGENTS.md` or `.github/instructions/**` skips those files here too.
+- markdownlint-cli2 reads its arguments as globs, so the default check's second
+  half skips a path containing `[`, `*` or `?`.
+
+`mkAgenticShell` generates no Markdown, so it has no equivalent option.
+
+</details>
+
+<details>
 <summary><strong>Semble code search</strong></summary>
 
 Semble never enables AI runtimes implicitly. The program switch enables its

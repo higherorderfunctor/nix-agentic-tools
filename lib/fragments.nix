@@ -72,10 +72,7 @@
         result = [];
       }
       sorted;
-    # Annotate each fragment with its source path (if known). The blank line
-    # after the comment is the Markdown formatter's fixed point: without it
-    # prettier inserts one, so composed text delivered verbatim (never
-    # formatted) would differ from a formatted copy of the same file.
+    # Annotate each fragment with its source path (if known).
     annotate = f: let
       label =
         if f.source or null != null

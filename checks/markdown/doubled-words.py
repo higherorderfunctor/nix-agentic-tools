@@ -10,7 +10,7 @@ three, which is what this scanner exists to close.
 
 ── The hard part: an 80-column reflow splits the pair ────────────────
 
-`treefmt`'s prettier runs `proseWrap = "always"` (see treefmt.nix), so
+`treefmt`'s prettier runs `proseWrap = "always"` (lib/markdown/prose-style.nix), so
 authored line breaks are discarded and prose is re-wrapped to 80 columns.
 A duplicated word therefore lands across a newline roughly as often as it
 lands on one line:
