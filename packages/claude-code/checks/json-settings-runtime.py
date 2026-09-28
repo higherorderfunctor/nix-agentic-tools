@@ -29,6 +29,15 @@ def exercise(case, bash, mode, use_xdg):
     home = root / "home"
     state = root / "state" if use_xdg else home / ".local/state"
     config = home / case["configFile"]
+    # Leading `//` comment lines the application writes above its JSON, which
+    # the reconciler must keep. Only the application's own writes carry them.
+    header = case.get("header", "")
+
+    def load():
+        text = config.read_text()
+        assert text.startswith(header), text
+        return json.loads(text[len(header):])
+
     environment = dict(os.environ, HOME=str(home))
     environment.pop("XDG_STATE_HOME", None)
     if use_xdg:
@@ -85,11 +94,11 @@ def exercise(case, bash, mode, use_xdg):
     # The application adds unowned siblings after Nix has claimed its leaves.
     # Model a native atomic replacement so even a read-only file mode works.
     native_file = config.with_suffix(".native")
-    native_file.write_text(json.dumps(merge(case["first"], case["native"])))
+    native_file.write_text(header + json.dumps(merge(case["first"], case["native"])))
     native_file.chmod(mode)
     native_file.replace(config)
     activate(1)
-    assert json.loads(config.read_text()) == merge(case["second"], case["native"])
+    assert load() == merge(case["second"], case["native"])
     assert stat.S_IMODE(config.stat().st_mode) == mode
 
     os.utime(config, ns=(1000000000, 1000000000))
@@ -119,7 +128,7 @@ def exercise(case, bash, mode, use_xdg):
     manifest.write_bytes(before_manifest[0])
 
     activate(2)
-    assert json.loads(config.read_text()) == case["native"]
+    assert load() == case["native"]
     assert stat.S_IMODE(config.stat().st_mode) == mode
     assert not manifest.exists()
     before = snapshot(config)

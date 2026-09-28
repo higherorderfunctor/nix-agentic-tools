@@ -1264,27 +1264,29 @@ path types".
 > matrix is generated from the layer for every runtime's files. Normalized pools
 > carry only a text-source record's winning arm. Claude's devenv rules and
 > Codex's execpolicy rules are read-only copies whose writers survive a disable.
-> Copilot reconciles its user settings.json on HM and the repository
-> `.github/copilot/settings.json` on devenv. Kiro's `cli.json` and `mcp.json`
-> are read-only copies in one directory ledger. Kimchi's settings files are
-> read-only copies of one `kimchiFiles` writer; only its HM user `config.json`
-> is a reconciled document. Kiro excludes the normalized `settings` pool. Native
-> file settings live under `ai.<runtime>.native`. The builder publishes each
-> record's devenv shared AGENTS.md contribution, and its key in
-> `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`. Claude's
-> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
-> ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
-> declares the per-runtime `agents`, `environmentVariables` and `lspServers`
-> options and an opt-in `agentsDir`; a record's `poolOptions` carries only what
-> differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
-> read and a stray field in the `sharedAgentsMd` result. Every reconciled
-> document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
-> contribution may carry `index` entries: Codex renders a scoped rule that names
-> `references` as a path-scoped index entry instead of inlining its body. The
-> shared AGENTS.md map lowers through the router as `internal`, as a read-only
-> copy, and a contribution's `defaultMaxBytes` makes the owner warn past it
-> under a raised `maxBytes`. Generators mark their `content` with `_generated`,
-> so a consumer's replacement of a unit's file warns like a switch-off.
+> Copilot's settings files are read-only copies of one
+> `materialize-copilot-config` writer; its only reconciled document is the HM
+> `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
+> `mcp.json` are read-only copies in one directory ledger. Kimchi's settings
+> files are read-only copies of one `kimchiFiles` writer; only its HM user
+> `config.json` is a reconciled document. Kiro excludes the normalized
+> `settings` pool. Native file settings live under `ai.<runtime>.native`. The
+> builder publishes each record's devenv shared AGENTS.md contribution, and its
+> key in `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`.
+> Claude's `.claude.json` has an ungated mode-narrowing command writer beside
+> its unpin ledger. Codex's daemon `settings.json` maps to no matrix cell. The
+> builder declares the per-runtime `agents`, `environmentVariables` and
+> `lspServers` options and an opt-in `agentsDir`; a record's `poolOptions`
+> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
+> builder would not read and a stray field in the `sharedAgentsMd` result. Every
+> reconciled document is one `helpers.mkReconciledDocument` call. A shared
+> AGENTS.md contribution may carry `index` entries: Codex renders a scoped rule
+> that names `references` as a path-scoped index entry instead of inlining its
+> body. The shared AGENTS.md map lowers through the router as `internal`, as a
+> read-only copy, and a contribution's `defaultMaxBytes` makes the owner warn
+> past it under a raised `maxBytes`. Generators mark their `content` with
+> `_generated`, so a consumer's replacement of a unit's file warns like a
+> switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1403,12 +1405,13 @@ path types".
   `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
   `enterTest`. Empty declarations retain their writers so prior leaves can be
   retracted. Existing file modes and unowned leaves survive; a new file is 0600.
-  The fact is per backend when the CLI writes only one copy. Copilot writes both
-  of its settings copies (`/model`, `/settings` and their `--repo` forms), so
-  one writer, `copilotSettingsMerge`, reconciles the user settings.json on HM
-  and the repository `.github/copilot/settings.json` on devenv. Codex's project
-  config remains a static source because its native writer is user-scoped. Each
-  such document is one `helpers.mkReconciledDocument` call
+  The fact is per backend when the CLI writes only one copy. Copilot's HM
+  `config.json` is the same shape: a state file whose one Nix-owned leaf is
+  `trustedFolders`, written by `copilotTrustedFolders` and declared only on HM.
+  Its settings files are not documents: every key Copilot writes there is
+  configuration, so they are read-only copies of `materialize-copilot-config`.
+  Codex's project config remains a static source because its native writer is
+  user-scoped. Each such document is one `helpers.mkReconciledDocument` call
   (`lib/ai/hm-helpers.nix`), which emits the writer with its ledger and the file
   entry that names both, so the pair cannot drift. Its `entry` and `ledger` stay
   literals at the call site: both are upgrade contracts.
