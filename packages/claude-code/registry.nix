@@ -6,8 +6,8 @@
   # two agree.
   checks.cacheHitParity.claude-code = {consumerPath = ["ai" "claude-code"];};
   documentation.aiCliDescriptions.claude-code = "Claude Code CLI";
-  # claude-code: wrapper chain plus the heron_brook delegation-clamp
-  # mitigation. Spans the claude-code overlay package and the
+  # claude-code: package and plugin delivery plus the heron_brook
+  # delegation-clamp mitigation. Spans the claude-code overlay package and the
   # factory-built module.
   fragments.categories.claude-code = {
     scopes = [

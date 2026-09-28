@@ -284,8 +284,7 @@ paths; an explicit list, empty included, still lands. Locked by
 one unknown key invalidates the whole file. The user file is hard-coded to
 `~/.config/kimchi/harness/permissions.json` (`config.ts:35`), so its HM path
 ignores `configDir`. A list leaf is owned whole: a rule `/permissions … save`
-appends to a declared `allow` or `deny` is dropped on the next activation, the
-same trade Claude's reconciled permissions make.
+appends to a declared `allow` or `deny` is dropped on the next activation.
 
 The scalars do not inherit per key. Kimchi fills `defaultMode` and
 `classifierTimeoutMs` with its defaults for any project file that exists, and

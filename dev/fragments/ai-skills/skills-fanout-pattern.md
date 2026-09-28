@@ -1,8 +1,9 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-09-22 — Kimchi's Layout B directory is
-> backend-specific: Home Manager uses the user harness, while devenv uses
-> Kimchi's native project root.
+> **Last verified:** 2026-09-27 — Claude's skills go through `mkSkillFiles` like
+> every other Layout B runtime. Kimchi's Layout B directory is backend-specific:
+> Home Manager uses the user harness, while devenv uses Kimchi's native project
+> root.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -17,7 +18,7 @@ its scanner discovers Layout A, where the skill directory itself is a symlink.
 
 | Branch  | HM route                             | Native directories                           | Layout |
 | ------- | ------------------------------------ | -------------------------------------------- | ------ |
-| Claude  | `programs.claude-code.skills`        | `.claude/skills`                             | B      |
+| Claude  | `mkSkillFiles`                       | `.claude/skills`                             | B      |
 | Codex   | `mkSkillFiles` (`recursive = false`) | `.agents/skills`                             | A      |
 | Copilot | `mkSkillFiles`                       | `.copilot/skills`                            | B      |
 | Kimchi  | `mkSkillFiles`                       | HM `harness/skills`; devenv `.kimchi/skills` | B      |

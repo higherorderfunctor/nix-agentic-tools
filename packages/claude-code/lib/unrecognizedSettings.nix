@@ -256,7 +256,8 @@ in rec {
     go index (splitPath entry);
 
   # The whole check, as a list of `assertions` entries. Identical on both
-  # backends by construction — call it once from each projection's mkMerge.
+  # backends by construction — call it once from the runtime's shared
+  # config callback, which serves both.
   #
   # Arguments:
   #   declared    sidecar `settings` record, or null when the sidecar predates

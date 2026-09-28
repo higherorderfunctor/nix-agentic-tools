@@ -2,8 +2,8 @@
   # ── The unrecognized-key guard on the freeform native.settings tail ────
   #
   # These four cases exist because the guard is built ONCE
-  # (`nativeFileAssertions` in mkClaude.nix) and consumed by BOTH
-  # projections' mkMerge lists. Nothing else in this file forces
+  # (`nativeFileAssertions` in mkClaude.nix) and consumed once by the shared
+  # config callback, which serves both backends. Nothing else in this file forces
   # `config.assertions` for claude, so without them the check would ship to CI
   # never having been evaluated on either backend.
   #

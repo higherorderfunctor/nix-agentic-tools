@@ -191,14 +191,10 @@
     ++ lib.optional (get effortPath != null && copilotRepositorySettings ? effortLevel)
     "${lib.showOption effortPath} reaches copilot through devenv in interactive sessions only (reason: devenv delivers it as the repository effortLevel, which copilot -p, --acp and --server ignore; they read effort from the user settings file). Set ai.copilot.native.settings.effortLevel = null to withhold it."
   );
-  claudeWarnings = lib.optionals (runtime == "claude" && backend == "devenv") (
-    lib.optional (nonEmpty (cfg.native.settings.mcpServers or null))
-    (message ["ai" "claude" "native" "settings" "mcpServers"] "MCP belongs under ai.claude.mcpServers; this key is removed from settings.json.")
-    ++ lib.concatMap (surface:
-      lib.optional (nonEmpty (cfg.${surface} or {}))
-      (message ["ai" "claude" surface] "The devenv backend has no writer for this Claude surface."))
-    ["marketplaces" "outputStyles" "plugins"]
-  );
+  # Personal plugins are user-scope; a project has nowhere to put one.
+  claudeWarnings =
+    lib.optional (runtime == "claude" && backend == "devenv" && nonEmpty (cfg.plugins or {}))
+    (message ["ai" "claude" "plugins"] "The devenv backend has no writer for this Claude surface.");
   # A context or rule unit whose file is switched off or replaced. The unit
   # was requested and resolved, and the file that would carry it either has
   # `content.enable = false` or carries a consumer's own bytes instead of the

@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit (harness) aiStubs claudeSettings deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   daemonSettings = evaluated:
     ownedDocument "codex" "${evaluated.config.ai.codex.configDir}/app-server-daemon/settings.json" evaluated;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
@@ -1598,10 +1598,10 @@ in {
         };
         hmAgent = hm.config.home.file.".codex/agents/reviewer.toml".source.value;
         devenvAgent = devenv.config.files.".codex/agents/reviewer.toml".source.value;
-        claudeAgent = hm.config.programs.claude-code.agents.reviewer;
-        emptyClaudeAgent = hm.config.programs.claude-code.agents.emptyTools;
+        claudeAgent = hm.config.home.file.".claude/agents/reviewer.md".text;
+        emptyClaudeAgent = hm.config.home.file.".claude/agents/emptyTools.md".text;
         emptyCopilotAgent = devenv.config.files.".github/agents/emptyTools.agent.md".text;
-        unrestrictedClaudeAgent = hm.config.programs.claude-code.agents.unrestricted;
+        unrestrictedClaudeAgent = hm.config.home.file.".claude/agents/unrestricted.md".text;
         copilotAgent = devenv.config.files.".github/agents/reviewer.agent.md".text;
       in
         hmAgent
@@ -1870,7 +1870,7 @@ in {
         blocks = hmHooks.hooks.PreToolUse;
         sharedHandler = builtins.head (builtins.head blocks).hooks;
         nativeHandler = builtins.head (builtins.elemAt blocks 1).hooks;
-        claudeBlocks = hm.config.programs.claude-code.settings.hooks.PreToolUse;
+        claudeBlocks = (claudeSettings hm).hooks.PreToolUse;
       in
         hmHooks
         == devenvHooks

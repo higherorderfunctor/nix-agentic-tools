@@ -1,6 +1,6 @@
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-09-24 — directory-generated per-runtime entries
+> **Last verified:** 2026-09-27 — directory-generated per-runtime entries
 > replace or null-suppress same-key root entries under the normalized keyed-pool
 > contract; see "Consumer patterns" below. The builder expands every per-runtime
 > Dir option, `agentsDir` included, outside the enable gate. Full lineage:
@@ -81,8 +81,7 @@ bakes into the store at eval time with transformer frontmatter injected.
 A `home.file.<dir>.source = <path>` with `recursive = true` takes the
 destination dir over — no other derivation can contribute files alongside.
 Per-file expansion preserves that escape hatch. This matters in Claude's rules
-dir, which a consumer may also populate directly from
-`programs.claude-code.marketplaces` or via a separate module.
+dir, which a consumer may also populate directly or via a separate module.
 
 ### Pitfall — path type strictness
 

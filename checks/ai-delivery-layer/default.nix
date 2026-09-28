@@ -201,9 +201,6 @@
     then
       lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "home.file ${builtins.toJSON path}" entry) config.home.file)
       + lib.concatStrings (lib.mapAttrsToList (name: entry: renderEntry "home.activation ${builtins.toJSON name}" entry) config.home.activation)
-      # Claude's HM settings.json is written by upstream's programs.claude-code
-      # module, so the factory's delivery ends at this option, not home.file.
-      + lib.optionalString (config.programs.claude-code ? settings) (renderEntry "programs.claude-code.settings" config.programs.claude-code.settings)
     else
       lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "files ${builtins.toJSON path}" entry) config.files)
       + lib.concatStrings (lib.mapAttrsToList (name: task: renderEntry "tasks ${builtins.toJSON name}" task) config.tasks)
@@ -1472,7 +1469,7 @@ in {
             };
           };
         };
-        hm = (evalHm (delegated ["programs" "claude-code" "probeDelegated"])).config;
+        hm = (evalHm (delegated ["programs" "git" "settings" "probeDelegated"])).config;
         devenv = (evalDevenv (delegated ["files" ".kiro/delegated.json" "json"])).config;
         # A sink is read by `upstream` and by nothing else, and an upstream
         # entry with no sink has nowhere to put its bytes.
@@ -1483,13 +1480,13 @@ in {
       in
         # The VALUE reaches the option, not the rendered bytes: the sink owns
         # the rendering from here.
-        hm.programs.claude-code.probeDelegated
+        hm.programs.git.settings.probeDelegated
         == {probe = true;}
         && !(hm.home.file ? ".kiro/delegated.json")
         # devenv's deep-merge sink: the same path, handed to devenv's own
         # JSON merge instead of written as a store symlink.
         && devenv.files.".kiro/delegated.json" == {json = {probe = true;};}
-        && failures (delegated ["programs" "claude-code" "probeDelegated"]) == []
+        && failures (delegated ["programs" "git" "settings" "probeDelegated"]) == []
         && says "it needs the `sink`" (failures {
           ai.kiro = {
             enable = true;
@@ -1504,7 +1501,7 @@ in {
             enable = true;
             files.".kiro/delegated.json" = {
               content.text = "{}";
-              sink = ["programs" "claude-code" "probeDelegated"];
+              sink = ["programs" "git" "settings" "probeDelegated"];
             };
           };
         })

@@ -112,24 +112,6 @@
           default = {};
           description = "Git configuration.";
         };
-        mcp = {
-          enable = lib.mkEnableOption "shared MCP server registry";
-          servers = lib.mkOption {
-            type = lib.types.attrsOf lib.types.anything;
-            default = {};
-            description = "Shared MCP server definitions.";
-          };
-        };
-      };
-      # Stub: upstream programs.claude-code (not defined in this repo).
-      # Collapsed to attrsOf anything because options-doc filters to
-      # `ai.*` prefixes anyway — per-option typed stubs here produce
-      # no doc output, just maintenance churn each time a new
-      # `ai.claude.*` route lands. Freeform absorbs everything.
-      programs.claude-code = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
-        description = "Upstream programs.claude-code stub (out of doc scope).";
       };
       systemd.user = {
         paths = lib.mkOption {
@@ -165,13 +147,6 @@
         type = lib.types.listOf lib.types.anything;
         default = [];
         description = "Module assertions.";
-      };
-      # Stub: upstream devenv claude.code (not defined in this repo).
-      # Collapsed per the same rationale as programs.claude-code above.
-      claude.code = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
-        description = "Upstream devenv claude.code stub (out of doc scope).";
       };
       # Stub: devenv's enterShell hook. The kiro-cli devenv module
       # assembles settings/mcp.json through it (a real file, not a store
@@ -265,8 +240,6 @@
   hmPrefixes = [
     "ai."
     "glab."
-    "programs.copilot-cli."
-    "programs.kiro-cli."
     "services.mcp-servers."
     "stacked-workflows."
   ];
@@ -297,9 +270,7 @@
 
   devenvPrefixes = [
     "ai."
-    "copilot."
     "glab."
-    "kiro."
     "services.beads."
     "stacked-workflows."
   ];
