@@ -272,9 +272,11 @@
       # into `[mcp_servers.<name>.oauth] client_secret` in config.toml. A Nix
       # counterpart would put the secret in the store, so this ledger treats
       # no path as a supported counterpart for it, the freeform per-server
-      # `codex` block (lib/ai/mcpServer/commonSchema.nix) included. That block
-      # can still render `oauth.client_secret`, which upstream reads as of
-      # 0.158. When an assertion rejects that key there, delete this sentence.
+      # `codex` block (lib/ai/mcpServer/commonSchema.nix) included.
+      # `mkOAuthClientSecretAssertions` in mkCodex.nix rejects
+      # `oauth.client_secret` on that block and on every other typed route into
+      # the table (module-codex-mcp-oauth-client-secret-fail). Raw
+      # `ai.codex.files` content is not inspected.
       runtimeOwnedState = [
         "--available"
         "--device-auth"
