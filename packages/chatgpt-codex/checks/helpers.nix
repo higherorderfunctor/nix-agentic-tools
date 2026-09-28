@@ -1,30 +1,16 @@
-{
-  harness,
-  lib,
-  ...
-}: let
-  inherit (harness) evalHm ownedDocument;
-
+{lib, ...}: let
   codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
 
-  # Codex HM settings never become a home.file source: its user config.toml is
-  # a native write target, so Nix owns leaves rather than the whole file. The
-  # declared value therefore travels as data inside the reconciler's store
-  # plan, which is a derivation — reading it back would be
-  # import-from-derivation inside `nix flake check`. `_reconciledDocuments` is
-  # the eval-visible record of that same declaration, so the semantic parity
-  # tests still compare the exact desired value, and they compare a VALUE
-  # rather than a substring of generated shell.
+  # The value Home Manager renders into the user config.toml, read from the
+  # file entry both backends share rather than from the generated store file,
+  # which would be import-from-derivation inside `nix flake check`.
   hmCodexSettings = evaluated:
-    (ownedDocument "codex" "${evaluated.config.ai.codex.configDir}/config.toml" evaluated).value;
-
-  codexSettingsActivation = config:
-    (evalHm config).config.home.activation.codexSettingsReconcile.text;
+    evaluated.config.ai.codex.files."${evaluated.config.ai.codex.configDir}/config.toml".content.value;
 
   # Home Manager alone turns daemon auto-start off by default; devenv's
   # launcher runs without a daemon instead. Parity checks compare the rest.
   withHmDaemonDefault = settings:
     lib.recursiveUpdate settings {features.daemon_auto_start = false;};
 in {
-  inherit codexExtracted codexSettingsActivation hmCodexSettings withHmDaemonDefault;
+  inherit codexExtracted hmCodexSettings withHmDaemonDefault;
 }

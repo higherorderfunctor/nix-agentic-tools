@@ -46,7 +46,8 @@
     hanging = stubRoot "hanging" "exec ${pkgs.coreutils}/bin/sleep 60";
     stopping = stubRoot "stopping" '': > "$CODEX_HOME/stopped"'';
   };
-  # The selection and the updater leaf, in the order Home Manager runs them.
+  # The settings copy and the selection, in the order Home Manager runs them:
+  # the copy's prune entry, then its write entry, then the selector.
   activation = pinDaemonToPackage: let
     entries =
       (harness.evalHm {
@@ -59,7 +60,9 @@
       .home
       .activation;
   in
-    entries.codexDaemonSettingsReconcile.text + entries.codexDaemonSelect.text;
+    entries.materialize-codex-daemon-settings-prune.text
+    + entries.materialize-codex-daemon-settings.text
+    + entries.codexDaemonSelect.text;
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     chatgpt-codex-daemon-selection =
@@ -86,13 +89,10 @@ in {
         selection="$CODEX_HOME/packages/app-server-daemon"
         settings="$CODEX_HOME/app-server-daemon/settings.json"
         mkdir -p "$selection"
-        # Retracting the last leaf removes the file the writer created.
+        # Home Manager owns the file whether or not the pin writes into it.
         updater() {
-          if [ -e "$settings" ]; then
-            jq -c '.updater // {}' "$settings"
-          else
-            echo '{}'
-          fi
+          [ -f "$settings" ] && [ ! -L "$settings" ] || fail "no delivered copy at $settings"
+          jq -c '.updater // {}' "$settings"
         }
 
         # Every start runs the selected package in place: no copy into
@@ -132,6 +132,7 @@ in {
         [ ! -e "$selection/auto-update-version" ] || fail "pin left the updater marker"
 
         [ "$(updater)" = '{"autoUpdateEnabled":false}' ] || fail "pin wrote updater $(updater)"
+        [ "$(stat -c %a "$settings")" = 444 ] || fail "the settings copy is mode $(stat -c %a "$settings")"
 
         start ${root}
         first="$pid"
