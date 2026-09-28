@@ -17,8 +17,8 @@ in {
     # record is built and where a transform reads it: the exported records are
     # plain attrsets, so an override (`r // {hm = …;}`) or a hand-built record
     # reaches `hmTransform` / `devenvTransform` without passing `mkRuntime`.
-    # The record-level `config` and the untouched record are the positive
-    # controls.
+    # The record-level `config`, a callback `installPackage` and the untouched
+    # record are the positive controls.
     factory-mkRuntime-rejects-backend-seam = mkTest "mkRuntime-rejects-backend-seam" (
       let
         base = {
@@ -58,7 +58,7 @@ in {
         ["devenv" "hm"]
         && rejected (base // {defaults.outputPath = null;})
         && (builtins.tryEval (ai.app.mkRuntime (base // {config = _: {};}))).success
-        && (builtins.tryEval (ai.app.mkRuntime (base // {hm.installPackage = null;}))).success
+        && (builtins.tryEval (ai.app.mkRuntime (base // {hm.installPackage = _: pkgs.hello;}))).success
     );
 
     # The record's `poolOptions` and the value its `sharedAgentsMd` callback

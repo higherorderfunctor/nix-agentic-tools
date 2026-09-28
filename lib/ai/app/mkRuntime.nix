@@ -32,9 +32,9 @@
 #     installPackage ? (_: cfg.package);
 #                                    # callback (same args as `config`) returning the
 #                                    #   derivation to install. OMIT to install the plain
-#                                    #   `cfg.package`; `null` opts out entirely. The
-#                                    #   transform owns the `home.packages` / `packages`
-#                                    #   lowering, so a factory never writes either.
+#                                    #   `cfg.package`. The transform owns the
+#                                    #   `home.packages` / `packages` lowering, so a
+#                                    #   factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
 #     sharedAgentsMd ? <absent>;     # callback (same args) → {key; index?; rules?; maxBytes?;
 #                                    #   defaultMaxBytes?}: the devenv repository AGENTS.md
@@ -77,8 +77,6 @@
   rulesDescription ? null,
   poolOptions ? {},
   config ? null,
-  # Presence matters: `null` is the documented opt-out, so an absent callback
-  # is told apart from it through `args` below.
   installPackage ? null,
   migrationConfig ? null,
   sharedAgentsMd ? null,
@@ -104,13 +102,13 @@
   # Optional so a record built without it still evaluates; features that
   # need it must degrade rather than throw.
   pkgs ? null,
-} @ args:
+}:
 assert (import ./checkRecord.nix {inherit lib;}).record {inherit name defaults hm devenv poolOptions supportedPools;};
   {
     inherit name defaults options poolOptions supportedPools hm devenv pkgs;
   }
   // lib.optionalAttrs (config != null) {inherit config;}
-  // lib.optionalAttrs (args ? installPackage) {inherit installPackage;}
+  // lib.optionalAttrs (installPackage != null) {inherit installPackage;}
   // lib.optionalAttrs (migrationConfig != null) {inherit migrationConfig;}
   // lib.optionalAttrs (sharedAgentsMd != null) {inherit sharedAgentsMd;}
   // lib.optionalAttrs (contentTargets != null) {inherit contentTargets;}
