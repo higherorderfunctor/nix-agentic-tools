@@ -109,7 +109,7 @@
       deliveryConstraint = "Keys outside Copilot's repository settings schema, and values of the wrong kind, fail module assertions. Copilot reads the file from the git root of a trusted folder, and reads its effortLevel in interactive sessions only.";
     }
     // lib.optionalAttrs (key row == "settings/kimchi/devenv") {
-      deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys reconcile into the fixed project harness path.";
+      deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys land as a read-only copy at the fixed project harness path.";
     }
     // lib.optionalAttrs (key row == "settings/kiro/devenv") {
       deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";

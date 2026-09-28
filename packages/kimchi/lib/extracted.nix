@@ -37,7 +37,7 @@
   inherit (lib) types;
   json = (pkgs.formats.json {}).type;
 
-  # Kimchi 1.1.30 reads each modelRoles value as a provider/model string, and
+  # Kimchi 1.1.37 reads each modelRoles value as a provider/model string, and
   # for delegable roles also a non-empty list of them. Anything else is
   # discarded with a warning at runtime
   # (src/extensions/orchestration/model-roles.ts:83-91, 117-122 and 144-181),
@@ -59,6 +59,7 @@
 
   exclusions = {
     "settings.apiKey" = "a secret; set `ai.kimchi.apiKey`, which reads it from a file at launch instead of writing it into the Nix store";
+    "settings.gitTokens" = "secrets; set `ai.kimchi.gitTokens`, which Home Manager reads from files at activation instead of writing them into the Nix store";
   };
 
   refinements = {

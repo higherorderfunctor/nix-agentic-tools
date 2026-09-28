@@ -142,7 +142,7 @@ function literalValue(node, ts, checker, seen = new Set()) {
 
 // Every interface, type alias, function and variable declaration, by name,
 // across the files that can matter: pi's, and the Kimchi modules reachable
-// from src/entry.ts. A bare name is not an identity — Kimchi 1.1.30 ships two
+// from src/entry.ts. A bare name is not an identity — Kimchi 1.1.37 ships two
 // model-metadata.ts files with different schemas, one of them dead — so a
 // lookup by name must match exactly one declaration or the extraction stops.
 function declarationIndex(sourceFiles, ts) {
@@ -386,7 +386,7 @@ function unwrapExpression(expression, ts) {
 // Attribute each parsed object in config.ts to the file it was read from by
 // following the parse argument back to readFileSync's path, then the path
 // through constants, defaults, `??`/`||` fallbacks, and in-file call sites.
-// Kimchi 1.1.30 parses harness/settings.json in config.ts
+// Kimchi 1.1.37 parses harness/settings.json in config.ts
 // (readAutoDefaultApplied), so "every JSON.parse here is config.json" no
 // longer holds; an unattributable parse fails rather than being guessed.
 function discoverConfigKeys(sourceFile, checker, ts) {
@@ -894,7 +894,7 @@ function extractConfig(
   analysisChecker,
   ts,
 ) {
-  // Every name below is resolved as config.ts itself sees it: Kimchi 1.1.30
+  // Every name below is resolved as config.ts itself sees it: Kimchi 1.1.37
   // also declares a loadConfig in extensions/permissions/config.ts.
   const configDeclaration = (name, predicate) =>
     declarationInScope(sourceFile, name, predicate, checker, ts);
