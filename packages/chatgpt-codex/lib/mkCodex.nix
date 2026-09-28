@@ -820,6 +820,79 @@
     })
     agents;
 
+  # Codex reads `[mcp_servers.<name>.oauth] client_secret` as of rust-v0.158.0
+  # (codex-rs/config/src/mcp_types.rs, McpServerOAuthConfig) and has no
+  # environment-variable or file reference for it: `codex mcp add
+  # --oauth-client-secret` writes the literal. Every declared route renders
+  # through the store (devenv's config.toml and agent layers, Home Manager's
+  # reconcile plan), so each is refused rather than warned about.
+  #
+  # `tables` maps the option path of one server table to `{ agentScoped, table }`,
+  # where `agentScoped` marks a table declared under an agent's codex extension.
+  mkOAuthClientSecretAssertions = tables:
+    lib.mapAttrsToList (optionPath: {
+      agentScoped,
+      table,
+    }: {
+      assertion = !(lib.hasAttrByPath ["oauth" "client_secret"] table);
+      message =
+        ''
+          ${optionPath}.oauth.client_secret would copy an OAuth client secret
+          into the world-readable Nix store: Codex reads it only as a literal in
+          its config and has no environment-variable or file reference for it.
+        ''
+        + (
+          if agentScoped
+          then ''
+            Remove it. Codex role layers ignore mcp_servers, so this server never
+            takes effect from an agent either way: declare it at top level
+            (ai.mcpServers or ai.codex.mcpServers) without a client secret.
+          ''
+          else ''
+            Remove it. A public client needs no secret: keep oauth.client_id alone,
+            or omit it so `codex mcp login` registers a client through a client
+            ID metadata document or dynamic client registration. A confidential
+            client has no Nix-declared route: add that server at runtime with
+            `codex mcp add <name> --url ... --oauth-client-id ...
+            --oauth-client-secret ...`, which writes the user-level config.toml.
+            Home Manager reconciles only the leaves it declares there, so that
+            entry survives a switch.
+          ''
+        );
+    })
+    tables;
+
+  # Server tables that lower into `[mcp_servers.<name>]`, keyed by the option
+  # path that declares each one. A per-runtime entry replaces a root entry at
+  # the same key, so its path names the declaration that actually renders.
+  # Agent layers are included although rust-v0.158.0 discards `mcp_servers`
+  # from a role file (codex-rs/core/src/agent/role_tests.rs,
+  # apply_role_cannot_expand_parent_authority): the file is in the store all
+  # the same.
+  oauthSecretTables = {
+    cfg,
+    mergedAgents,
+    mergedServers,
+  }: let
+    owner = pool: name:
+      if (cfg.${pool}.${name} or null) != null
+      then "ai.codex.${pool}"
+      else "ai.${pool}";
+    serverTables = agentScoped: prefix: servers:
+      lib.optionalAttrs (builtins.isAttrs servers)
+      (lib.mapAttrs' (name: table: lib.nameValuePair "${prefix}.${name}" {inherit agentScoped table;}) servers);
+  in
+    lib.mapAttrs' (name: server:
+      lib.nameValuePair "${owner "mcpServers" name}.${name}.codex" {
+        agentScoped = false;
+        table = server.codex or {};
+      })
+    mergedServers
+    // serverTables false "ai.codex.native.settings.mcp_servers" (cfg.native.settings.mcp_servers or {})
+    // lib.concatMapAttrs (name: value:
+      serverTables true "${owner "agents" name}.${name}.codex.mcp_servers" (value.codex.mcp_servers or {}))
+    (lib.filterAttrs (_: agent.isSemantic) mergedAgents);
+
   mkAgentEntries = prefix: agents:
     lib.mapAttrs' (name: value:
       lib.nameValuePair "${prefix}/agents/${name}.toml" {
@@ -882,8 +955,9 @@ in
         at the same key; null suppresses an inherited agent. Each record
         becomes one standalone TOML layer under the active config directory's
         `agents/` child. Put normal Codex config keys such as model,
-        model_reasoning_effort, sandbox_mode, mcp_servers, and skills.config
-        under the record's `codex` extension.
+        model_reasoning_effort, sandbox_mode, and skills.config under the
+        record's `codex` extension. Codex role layers ignore mcp_servers
+        (rust-v0.158.0), so declare MCP servers at top level instead.
       '';
     };
 
@@ -1111,6 +1185,7 @@ in
           assertions =
             mkAgentAssertions mergedAgents
             ++ mkExecpolicyAssertions cfg.execpolicyRules
+            ++ mkOAuthClientSecretAssertions (oauthSecretTables {inherit cfg mergedAgents mergedServers;})
             ++ mkSkillNameAssertions mergedSkills
             ++ [
               {

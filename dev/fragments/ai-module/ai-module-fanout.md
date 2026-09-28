@@ -1,27 +1,27 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-27 — AGENTS.md puts the index and rules before the
-> context. The repository AGENTS.md, Copilot's devenv context and instruction
-> files, and Kiro's devenv steering land as read-only copies; Codex indexes
-> scoped rules that name `references`; a unit whose file is switched off or
-> replaced warns, and so does a devenv Codex AGENTS.md past 32 KiB under a
-> raised limit. Semble derives a Kiro agent-private MCP server from
-> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
-> delivery once through `mkRuntime`'s record-level `config`, and both
-> `mkRuntime` and the backend transforms reject a backend spec carrying anything
-> but `installPackage`, `migrationConfig` and `options`, since an overridden or
-> hand-built record reaches a transform without the constructor. Kiro hook
-> commands resolve packages through the shared `commandType`. Launchers bake the
-> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
-> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
-> through `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
-> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
-> `agent.fileContent` where it copies, so a store-path string is a file, never a
-> body naming its own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-28 — Codex rejects a declared MCP OAuth client
+> secret. AGENTS.md puts the index and rules before the context. The repository
+> AGENTS.md, Copilot's devenv context and instruction files, and Kiro's devenv
+> steering land as read-only copies; Codex indexes scoped rules that name
+> `references`; a unit whose file is switched off or replaced warns, and so does
+> a devenv Codex AGENTS.md past 32 KiB under a raised limit. Semble derives a
+> Kiro agent-private MCP server from `mcp.enable = false` plus an MCP-backed
+> subagent. Every runtime describes delivery once through `mkRuntime`'s
+> record-level `config`, and both `mkRuntime` and the backend transforms reject
+> a backend spec carrying anything but `installPackage`, `migrationConfig` and
+> `options`, since an overridden or hand-built record reaches a transform
+> without the constructor. Kiro hook commands resolve packages through the
+> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
+> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
+> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
+> Claude devenv delivers `ai.agents` and `ai.claude.agentsDir` to
+> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
+> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
+> so a store-path string is a file, never a body naming its own path. File
+> content at `mkDefault` enables its entry; `content.enable = false` suppresses
+> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
+> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
@@ -435,7 +435,11 @@ enabled ecosystem whose native model preserves the option's semantics):
   approval fields live under each server's `codex` block and lower from camel
   case to native snake case. Literal `httpHeaders` are store-visible;
   `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
-  values never enter generated TOML. Direct
+  values never enter generated TOML. `oauth.client_secret` has no such
+  indirection upstream, so an assertion rejects it on both backends on every
+  typed route into an `[mcp_servers.<name>.oauth]` table: each server's `codex`
+  block, `native.settings.mcp_servers`, and an agent's `codex.mcp_servers`. Raw
+  `ai.codex.files` content is not inspected. Direct
   `ai.codex.native.settings.mcp_servers` cannot be combined with either typed
   pool because their table ownership would be ambiguous. Credential-injecting
   `proxy.enable` entries lower at their declaration scope before pool merging: a

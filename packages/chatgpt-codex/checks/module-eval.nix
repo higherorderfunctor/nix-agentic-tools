@@ -1699,6 +1699,117 @@ in {
         result.config.assertions
     );
 
+    # Each route into an `[mcp_servers.<name>.oauth]` table refuses a client
+    # secret on both backends and names the declaration that renders it. The
+    # `replaced` server proves the path follows pool precedence: its root
+    # entry carries a secret that the runtime entry replaces and never renders.
+    module-codex-mcp-oauth-client-secret-fail = mkTest "codex-mcp-oauth-client-secret-fail" (
+      let
+        oauth = {
+          client_id = "confidential-client";
+          client_secret = "must-not-reach-the-store";
+        };
+        remote = extra: {url = "https://example.test/mcp";} // extra;
+        reviewAgent = {
+          description = "Review.";
+          instructions.text = "Review carefully.";
+          codex.mcp_servers.tracker = remote {inherit oauth;};
+        };
+        pooled.ai = {
+          agents.reviewer = reviewAgent;
+          codex = {
+            enable = true;
+            agents.auditor = reviewAgent;
+            mcpServers = {
+              local = remote {codex.oauth = oauth;};
+              replaced = remote {codex.oauth.client_id = "public-client";};
+            };
+          };
+          mcpServers = {
+            replaced = remote {codex.oauth = oauth;};
+            shared = remote {codex.oauth = oauth;};
+          };
+        };
+        native.ai.codex = {
+          enable = true;
+          native.settings.mcp_servers.direct = remote {inherit oauth;};
+        };
+        secretFailures = result:
+          builtins.filter (assertion:
+            !assertion.assertion
+            && lib.hasInfix ".oauth.client_secret would copy" assertion.message)
+          result.config.assertions;
+        # Agent tables get the role-layer remedy, server tables the runtime
+        # `codex mcp add` one; never the other's.
+        rejectsExactly = paths: result: let
+          failures = secretFailures result;
+        in
+          builtins.length failures
+          == builtins.length (builtins.attrNames paths)
+          && lib.all lib.id (lib.mapAttrsToList (path: remedy:
+            builtins.any (assertion:
+              lib.hasPrefix "${path}.oauth.client_secret would copy" assertion.message
+              && lib.hasInfix remedy assertion.message
+              && !(lib.hasInfix (
+                  if remedy == agentRemedy
+                  then serverRemedy
+                  else agentRemedy
+                )
+                assertion.message))
+            failures)
+          paths);
+        agentRemedy = "Codex role layers ignore mcp_servers";
+        serverRemedy = "codex mcp add <name>";
+        pooledPaths = {
+          "ai.agents.reviewer.codex.mcp_servers.tracker" = agentRemedy;
+          "ai.codex.agents.auditor.codex.mcp_servers.tracker" = agentRemedy;
+          "ai.codex.mcpServers.local.codex" = serverRemedy;
+          "ai.mcpServers.shared.codex" = serverRemedy;
+        };
+        nativePaths."ai.codex.native.settings.mcp_servers.direct" = serverRemedy;
+      in
+        builtins.all (evaluate:
+          rejectsExactly pooledPaths (evaluate pooled)
+          && rejectsExactly nativePaths (evaluate native))
+        [evalDevenv evalHm]
+    );
+
+    # Positive control: an OAuth table without a secret evaluates and renders
+    # unchanged on both backends.
+    module-codex-mcp-oauth-public-client-renders = mkTest "codex-mcp-oauth-public-client-renders" (
+      let
+        config.ai = {
+          codex.enable = true;
+          mcpServers.remote = {
+            url = "https://example.test/mcp";
+            codex = {
+              oauth = {
+                callback_port = 8765;
+                client_id = "public-client";
+              };
+              scopes = ["read"];
+            };
+          };
+        };
+        expected = {
+          oauth = {
+            callback_port = 8765;
+            client_id = "public-client";
+          };
+          scopes = ["read"];
+          url = "https://example.test/mcp";
+        };
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        failed = result: builtins.filter (assertion: !assertion.assertion) result.config.assertions;
+      in
+        failed hm
+        == []
+        && failed devenv == []
+        && (hmCodexSettings hm).mcp_servers.remote == expected
+        && devenv.config.files.".codex/config.toml".source.value.mcp_servers.remote == expected
+    );
+
     module-codex-agent-defaults-parity = mkTest "codex-agent-defaults-parity" (
       let
         config.ai.codex = {
