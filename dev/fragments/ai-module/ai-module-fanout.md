@@ -2,30 +2,30 @@
 
 > **Last verified:** 2026-09-28 — Claude delivers every surface as its own file
 > through `ai.claude.files` on both backends and fails evaluation beside its
-> upstream module, no runtime flips an upstream `programs.<cli>` or devenv
-> integration, and the `upstream` delivery method is gone: every method writes
-> the file itself. Codex rejects a declared MCP OAuth client secret. AGENTS.md
-> puts the index and rules before the context. The repository AGENTS.md,
-> Copilot's devenv context and instruction files, and Kiro's devenv steering
-> land as read-only copies; Codex indexes scoped rules that name `references`; a
-> unit whose file is switched off or replaced warns, and so does a devenv Codex
-> AGENTS.md past 32 KiB under a raised limit. Semble derives a Kiro
-> agent-private MCP server from `mcp.enable = false` plus an MCP-backed
-> subagent. Every runtime describes delivery once through `mkRuntime`'s
-> record-level `config`, and both `mkRuntime` and the backend transforms reject
-> a backend spec carrying anything but `installPackage`, `migrationConfig` and
-> `options`, since an overridden or hand-built record reaches a transform
-> without the constructor. Kiro hook commands resolve packages through the
-> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
-> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
-> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
-> Claude delivers `ai.agents` and `ai.claude.agentsDir` to
-> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
-> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
-> so a store-path string is a file, never a body naming its own path. File
-> content at `mkDefault` enables its entry; `content.enable = false` suppresses
-> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> upstream module, and every delivery method writes the file itself. Every
+> enabled runtime installs a package; `installPackage` has no `null` opt-out.
+> Codex rejects a declared MCP OAuth client secret. AGENTS.md puts the index and
+> rules before the context. The repository AGENTS.md, Copilot's devenv context
+> and instruction files, and Kiro's devenv steering land as read-only copies;
+> Codex indexes scoped rules that name `references`; a unit whose file is
+> switched off or replaced warns, and so does a devenv Codex AGENTS.md past 32
+> KiB under a raised limit. Semble derives a Kiro agent-private MCP server from
+> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
+> delivery once through `mkRuntime`'s record-level `config`, and both
+> `mkRuntime` and the backend transforms reject a backend spec carrying anything
+> but `installPackage`, `migrationConfig` and `options`, since an overridden or
+> hand-built record reaches a transform without the constructor. Kiro hook
+> commands resolve packages through the shared `commandType`. Launchers bake the
+> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
+> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
+> through `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
+> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
+> `agent.fileContent` where it copies, so a store-path string is a file, never a
+> body naming its own path. File content at `mkDefault` enables its entry;
+> `content.enable = false` suppresses every content form. The builder entry
+> point is `lib.ai.app.mkRuntime`. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned writable copies and portable hooks reach its project `hooks.json` on
@@ -123,7 +123,8 @@ runtime, lowering it to `home.packages` on Home Manager and `packages` on devenv
 without being written twice per runtime. A backend spec that says nothing
 installs the plain `cfg.package`; one that wraps its binary supplies an
 `installPackage` callback taking the same arguments as `config`, on the record
-or on one backend spec, which wins; `installPackage = null` opts out.
+or on one backend spec, which wins. There is no opt-out: every enabled runtime
+installs a package.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and

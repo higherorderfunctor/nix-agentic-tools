@@ -25,8 +25,8 @@ in {
     # `lib/ai/app/mkBackendTransform.nix` now owns installation and defaults to
     # installing `cfg.package`, so saying nothing installs the plain package
     # rather than nothing. This table pins the delivery CHANNEL per runtime per
-    # backend, which is the half a default cannot enforce: it catches a factory
-    # that opts out of installing for a reason that stops being true.
+    # backend, which is the half a default cannot enforce: whether each one
+    # installs a wrapper or the bare package.
     module-every-runtime-installs-package = mkTest "every-runtime-installs-package" (
       let
         # The SHAPE of each runtime's installed derivation per backend, not merely

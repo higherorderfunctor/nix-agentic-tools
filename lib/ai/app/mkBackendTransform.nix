@@ -358,8 +358,8 @@
     else [];
   runtimeSinkFiles = builtins.removeAttrs cfg.files sharedAgentsMdTargets;
   # ── Package installation ───────────────────────────────────────────────
-  # Owned HERE, not by each factory. An enabled runtime installs SOMETHING
-  # unless its record or backend spec opts out EXPLICITLY.
+  # Owned HERE, not by each factory. An enabled runtime always installs
+  # something.
   #
   # The default is load-bearing: a record that says nothing about packages
   # installs `cfg.package`. It used to be the reverse — installation
@@ -371,12 +371,9 @@
   #
   # `installPackage` accepts the same callback args as `config`, so a factory
   # that wraps its binary derives the wrapper once and never repeats the
-  # lowering. `null` is the documented opt-out; no runtime uses it.
+  # lowering.
   installPackageFn = backendSpec.installPackage or appRecord.installPackage or (_: cfg.package);
-  rawInstalledPackages =
-    if installPackageFn == null
-    then []
-    else [(installPackageFn callbackArgs)];
+  rawInstalledPackages = [(installPackageFn callbackArgs)];
   installedPackages =
     if options ? warnings
     then rawInstalledPackages
