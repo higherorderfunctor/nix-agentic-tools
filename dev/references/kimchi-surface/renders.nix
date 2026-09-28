@@ -35,14 +35,14 @@
     capabilities = {
       out = "kimchi-capabilities.svg";
       title = "Kimchi CLI — server-side capabilities";
-      subtitle = "kimchi 1.1.30";
+      subtitle = "kimchi 1.1.37";
       cols = "0,1,2";
       widths = "46,90,80";
     };
     endpoints = {
       out = "kimchi-endpoints.svg";
       title = "Kimchi CLI — endpoints and repointing";
-      subtitle = "kimchi 1.1.30";
+      subtitle = "kimchi 1.1.37";
       cols = "0,3,4,5";
       widths = "40,82,30,63";
     };
