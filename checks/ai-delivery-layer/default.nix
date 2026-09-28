@@ -60,15 +60,11 @@
           (evaluate (lib.recursiveUpdate base {
             ai.copilot.files.${path}.content.value = added;
           })).config;
-        files =
-          if cfg ? home
-          then cfg.home.file
-          else cfg.files;
         expected = lib.recursiveUpdate original added;
       in
         cfg.ai.copilot.files.${path}.content.value
         == expected
-        && builtins.fromJSON files.${path}.text == expected
+        && builtins.fromJSON (deliveredFiles cfg).${path}.text == expected
         && lib.all (assertion: assertion.assertion) cfg.assertions
     ) [
       {

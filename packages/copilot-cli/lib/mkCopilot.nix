@@ -35,6 +35,71 @@
   # `projectDir` says: copilot-cli 1.0.88 opens it (and
   # `settings.local.json` beside it) from the git root of a trusted folder.
   repositorySettingsPath = ".github/copilot/settings.json";
+  # Every key Copilot writes into a settings file is configuration, and it
+  # writes by renaming a temporary over the path (measured at copilot-cli
+  # 1.0.88: `/settings`, `/model` and `--experimental` for settings.json,
+  # `copilot mcp add` for mcp-config.json; its LSP disable toggle writes
+  # lsp-config.json, inferred from the binary). That replaces a store
+  # symlink or a 0444 file alike, so these files are read-only copies: the
+  # next activation or shell entry backs the in-app file up and restores the
+  # declaration, where a symlink would block Home Manager's link check. One
+  # writer owns every copy through one directory ledger: Home Manager's
+  # `configDir` (the user settings.json, mcp-config.json and lsp-config.json),
+  # devenv's `.github/copilot` (the repository settings file). It runs while
+  # Copilot is disabled too, so a disable retracts the copies.
+  configWriter = "materialize-copilot-config";
+  configLedger = "materialize/copilot-config.manifest";
+  configWriterConfig = {
+    backend,
+    cfg,
+    ...
+  }: {
+    ai.copilot.activation.${configWriter} = {
+      entry = {
+        devenv = "ai:copilot:materialize-config";
+        hm = configWriter;
+      };
+      ledgers.${configLedger} = {
+        codec = "dir";
+        path =
+          if backend == "hm"
+          then cfg.configDir
+          else dirOf repositorySettingsPath;
+      };
+      pruneEntry.hm = "materialize-copilot-config-prune";
+      runWhenDisabled = true;
+    };
+  };
+  copyFields = {
+    entry = configWriter;
+    format = "json";
+    ledger = configLedger;
+    method = "copy-ro";
+  };
+  # Copilot keeps folder trust only in its state file `config.json`
+  # (`trustedFolders`, written by `folderTrustAddTrusted`), beside sign-in,
+  # session and acknowledgement state it rewrites at will. Home Manager owns
+  # that one leaf, `[]` included, and leaves every other key to Copilot. The
+  # writer runs while Copilot is disabled, so a disable retracts the leaf.
+  # The ledger is hashed from the config directory so two configured roots
+  # never share ownership records.
+  trustWriter = "copilotTrustedFolders";
+  trustLedger = cfg: "json-settings/copilot-config-${builtins.hashString "sha256" cfg.configDir}.json";
+  trustPath = cfg: "${cfg.configDir}/config.json";
+  trustWriterConfig = {
+    backend,
+    cfg,
+    ...
+  }:
+    lib.optionalAttrs (backend == "hm") {
+      ai.copilot.activation.${trustWriter} = {
+        ledgers.${trustLedger cfg} = {
+          codec = "json";
+          path = trustPath cfg;
+        };
+        runWhenDisabled = true;
+      };
+    };
   # github.com's reviewer and cloud agents read the COMMITTED tree, where a
   # store symlink dangles, so on devenv the instruction files and the
   # repository context are read-only copies. Each has a directory ledger that
@@ -189,17 +254,19 @@ in
           placement.
         '';
       };
-      # Copilot-specific freeform settings. Each backend reconciles exactly
-      # these leaves into the settings file it delivers, retracting one this
-      # generation drops and leaving Copilot's own writes alone: `/model`,
-      # `/settings` and the other in-CLI toggles rewrite both files. Home
-      # Manager owns the user `settings.json`; devenv owns the repository
-      # settings file. Folder trust is not among those writes: Copilot records
-      # it as `trustedFolders` in `~/.copilot/config.json`.
+      # Copilot-specific freeform settings, written as the whole settings
+      # file each backend delivers. Folder trust is not a settings key:
+      # Copilot records it in its state file, so it has its own option below.
       native.settings = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
-        description = "Freeform Copilot settings; null leaves are dropped. Both backends reconcile the declared leaves on activation or shell entry and leave the keys Copilot writes itself alone. Home Manager owns them inside `settings.json` under `configDir`, which every Copilot mode reads. devenv owns them inside `.github/copilot/settings.json`, the fixed repository settings path (independent of `projectDir`). Copilot reads that file from the git root, only in a trusted folder, and reads its `effortLevel` only in interactive sessions. devenv rejects keys outside Copilot's repository schema, and values of the wrong kind, at evaluation. `ai.settings.reasoningEffort` lowers to `effortLevel` here at default priority.";
+        description = "Freeform Copilot settings; null leaves are dropped. Each backend writes them as a whole read-only file, so a change made inside Copilot (`/settings`, `/model` and their `--repo` forms) lasts only until the next activation or shell entry, which backs it up and restores the declaration. Home Manager always owns `settings.json` under `configDir`, which every Copilot mode reads (`{}` when nothing is declared). devenv owns `.github/copilot/settings.json`, the fixed repository settings path (independent of `projectDir`), only when something is declared. Copilot reads that file from the git root, only in a trusted folder, and reads its `effortLevel` only in interactive sessions. devenv rejects keys outside Copilot's repository schema, and values of the wrong kind, at evaluation. `ai.settings.reasoningEffort` lowers to `effortLevel` here at default priority.";
+      };
+      trustedFolders = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["/home/me/src"];
+        description = "Absolute folders Copilot trusts; a folder covers everything below it. Trust is what makes Copilot read a repository's `.github/copilot/settings.json`, hooks, MCP servers and skills. Home Manager owns the `trustedFolders` key of Copilot's state file `<configDir>/config.json`, empty list included, and restores it on every activation, so a folder trusted at Copilot's prompt stays trusted only until the next switch. devenv rejects a non-empty value: the file is user-global, and devenv never writes `$HOME`. Without Home Manager, Copilot's trust prompt manages the list.";
       };
     };
     # ONE delivery description for both backends.
@@ -231,13 +298,6 @@ in
         if isHm
         then cfg.configDir
         else cfg.projectDir;
-      # LITERALS at the declaration site. The user ledger is hashed from the
-      # config directory so two configured roots never share ownership
-      # records; the repository file has one fixed path per project.
-      settingsLedger =
-        if isHm
-        then "json-settings/copilot-settings-${builtins.hashString "sha256" cfg.configDir}.json"
-        else "json-settings/copilot-repository-settings.json";
       settingsPath =
         if isHm
         then "${cfg.configDir}/settings.json"
@@ -247,6 +307,7 @@ in
       settings = aiCommon.filterNulls cfg.native.settings;
       unknownRepositorySettings = builtins.filter (key: !(repositorySettingKinds ? ${key})) (builtins.attrNames settings);
       mistypedRepositorySettings = builtins.filter (key: repositorySettingKinds ? ${key} && !(repositorySettingKinds.${key} settings.${key})) (builtins.attrNames settings);
+      relativeTrustedFolders = builtins.filter (folder: !(lib.hasPrefix "/" folder)) cfg.trustedFolders;
     in
       lib.mkMerge [
         # `projectDir` is shared for option-tree parity and discoverability, but
@@ -262,6 +323,10 @@ in
                 through Home Manager. Configure it through the devenv module.
               '';
             }
+            {
+              assertion = relativeTrustedFolders == [];
+              message = "ai.copilot.trustedFolders entries must be absolute paths; Copilot compares trust against the absolute working directory, so ${lib.concatStringsSep ", " relativeTrustedFolders} could never match.";
+            }
           ];
         })
 
@@ -271,15 +336,19 @@ in
         # from the repository root (upstream README "Repository-level
         # configuration"), which is why devenv writes under `projectDir`
         # rather than beside the wrapper-aimed `configDir`.
-        (lib.mkIf (mergedLspServers != {}) {
+        # Home Manager's user file is a read-only copy it always owns (see
+        # `configWriter`); the repository file is a plain generated file.
+        (lib.mkIf (isHm || mergedLspServers != {}) {
           ai.copilot.files.${
             if isHm
             then "${cfg.configDir}/lsp-config.json"
             else "${cfg.projectDir}/lsp.json"
-          } = {
-            content.value = aiCommon.mkCopilotLspFile mergedLspServers;
-            format = "json";
-          };
+          } =
+            {
+              content.value = aiCommon.mkCopilotLspFile mergedLspServers;
+              format = "json";
+            }
+            // lib.optionalAttrs isHm copyFields;
         })
 
         # One file per agent. The CLI reads `<name>.md`; github.com requires the
@@ -298,12 +367,17 @@ in
         })
 
         # mcp-config.json — the wrapper points `--additional-mcp-config` at this
-        # exact path on both backends, which is what makes it LIVE.
-        (lib.mkIf (mergedServers != {}) {
-          ai.copilot.files."${cfg.configDir}/mcp-config.json" = {
-            content.value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            format = "json";
-          };
+        # exact path on both backends, which is what makes it LIVE. Home
+        # Manager's is also the file `copilot mcp add` rewrites, so it is a
+        # read-only copy Home Manager always owns (see `configWriter`). devenv's
+        # sits in the wrapper-aimed directory, which Copilot never writes.
+        (lib.mkIf (isHm || mergedServers != {}) {
+          ai.copilot.files."${cfg.configDir}/mcp-config.json" =
+            {
+              content.value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+              format = "json";
+            }
+            // lib.optionalAttrs isHm copyFields;
         })
 
         # Skills — one entry per tree beside whichever config dir this product
@@ -348,32 +422,39 @@ in
         })
 
         # settings.json on Home Manager, the repository settings file on
-        # devenv. Copilot rewrites both while it runs (`/model`, `/settings`,
-        # and their `--repo` forms), so each backend owns only the leaves
-        # declared here and leaves every native sibling alone. The writer is
-        # declared whether or not there are leaves: an empty declaration
-        # RETRACTS what the previous generation owned, and with no prior
-        # ownership it leaves an externally managed file untouched — which is
-        # what a consumer enabling Copilot purely for MCP or skills fanout
-        # needs, and what keeps a committed team file intact.
-        (helpers.mkReconciledDocument {
-          content.value = settings;
-          entry = {
-            devenv = "ai:copilot:settings-merge";
-            hm = "copilotSettingsMerge";
-          };
-          format = "json";
-          ledger = settingsLedger;
-          path = settingsPath;
-          runtime = "copilot";
-          writer = "copilotSettingsMerge";
+        # devenv: a read-only copy of the declaration (see `configWriter`).
+        # Home Manager always owns the user-global file; devenv claims the
+        # repository file only when something is declared, so enabling
+        # Copilot for MCP or skills alone leaves a committed team file intact.
+        (lib.mkIf (isHm || settings != {}) {
+          ai.copilot.files.${settingsPath} = copyFields // {content.value = settings;};
         })
+
+        # Folder trust, the one leaf Home Manager owns in Copilot's state file
+        # (see `trustWriter`).
+        (lib.optionalAttrs isHm (helpers.mkReconciledDocument {
+          content.value.trustedFolders = cfg.trustedFolders;
+          format = "json";
+          ledger = trustLedger cfg;
+          path = trustPath cfg;
+          runtime = "copilot";
+          writer = trustWriter;
+        }))
 
         # The repository schema is narrower than the user one. A name outside
         # it has no effect and a mistyped value voids the whole file, so both
         # fail evaluation here rather than land as a silently dead write.
         (lib.optionalAttrs (!isHm) {
           assertions = [
+            # An explicit exclusion, not a silent no-op: trust lives only in
+            # the user's HOME, which devenv never writes.
+            {
+              assertion = cfg.trustedFolders == [];
+              message = ''
+                ai.copilot.trustedFolders is user scope: Copilot reads folder trust only from ~/.copilot/config.json, and devenv writes only inside the project.
+                Set it with Home Manager. Without Home Manager that file is Copilot's own, and its trust prompt saves the decision there.
+              '';
+            }
             {
               assertion = unknownRepositorySettings == [];
               message = ''
@@ -407,8 +488,13 @@ in
         context = contextPath cfg;
         rules = lib.mapAttrs (name: _rule: instructionPath cfg name) mergedRules;
       };
+    migrationConfig = args:
+      lib.mkMerge [
+        (configWriterConfig args)
+        (trustWriterConfig args)
+        (lib.optionalAttrs (args.backend == "devenv") (instructionsWriterConfig args))
+      ];
     devenv = {
-      migrationConfig = instructionsWriterConfig;
       # Package installation. ENV wiring needs no wrapper — devenv has a
       # native `env` attrset. MCP config DOES, and that is why `cfg.package`
       # alone was NOT enough here.
@@ -439,8 +525,7 @@ in
         # `packages` wrapper points `--additional-mcp-config` at it — and it is
         # the only file devenv writes here. Project-scope files Copilot reads
         # live under `.github/` instead: LSP config under `projectDir`, and
-        # repository settings reconciled into the fixed
-        # `.github/copilot/settings.json`.
+        # repository settings in the fixed `.github/copilot/settings.json`.
         configDir = lib.mkOption {
           type = lib.types.str;
           default = ".config/github-copilot";
@@ -449,9 +534,9 @@ in
             `mcp-config.json`, which the wrapped `copilot` is pointed at via
             `--additional-mcp-config`.
 
-            Settings are not written here: devenv reconciles them into the
+            Settings are not written here: devenv writes them to the
             repository settings file `.github/copilot/settings.json`, and
-            writes LSP servers to `<projectDir>/lsp.json`.
+            LSP servers to `<projectDir>/lsp.json`.
 
             This is NOT the directory github.com's Copilot code review reads —
             that consumes committed files under `projectDir` (`.github`), and
