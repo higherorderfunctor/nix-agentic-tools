@@ -347,6 +347,34 @@
         ai.kimchi.native.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
       })
 
+      # Kimchi 1.1.37 installs Auto as the saved default once per install: on
+      # a fresh main-session launch with no --model, on a `kimchi-dev` model
+      # that is not already Auto, when the catalog advertises
+      # `kimchi-dev/auto` and the user harness settings.json lacks
+      # `autoDefaultApplied: true` (src/extensions/auto-model/index.ts:
+      # 253-291). It then persists defaultProvider, defaultModel and the
+      # marker itself through writeJson (src/config.ts:831-842), which
+      # writes a temporary and renames it over the file
+      # (src/config/json.ts:154-159): that silently replaces a store symlink
+      # in a writable directory, and in a read-only one the temporary write
+      # throws, so the session stays on Auto and retries every launch.
+      # Model selection is configuration Nix owns, so whenever Nix manages
+      # this document it declares the marker and the harness never writes a
+      # model selection of its own; a user who wants Auto declares
+      # defaultProvider = "kimchi-dev" and defaultModel = "auto". Declared
+      # whether or not a default model is: the user who declared none is
+      # exactly the one Kimchi would otherwise pick a model for. A default,
+      # so an explicit value wins, but the two overrides differ: null hands
+      # the marker back to Kimchi (Auto installs once), while false re-arms
+      # the install after every activation, because Kimchi reads only
+      # `=== true`, writes true, and activation restores the owned false.
+      # Home Manager only: Kimchi reads the marker from the user file alone
+      # (src/config.ts:22,812-814), and devenv rejects user-scope harness
+      # keys.
+      (lib.mkIf (!isDevenv) {
+        ai.kimchi.native.harnessSettings.autoDefaultApplied = lib.mkDefault true;
+      })
+
       (document {
         content.value = filteredSettings;
         # Devenv requires a namespace; HM ordering names stay stable.
@@ -661,7 +689,10 @@ in
           leaf in <configDir>/harness/settings.json on Home Manager activation
           or .config/kimchi/harness/settings.json on devenv shell entry. Kimchi
           mutates the user file at runtime, so both backends preserve unowned
-          settings and retract retired leaves.
+          settings and retract retired leaves. Home Manager declares
+          `autoDefaultApplied = true` at default priority, so Kimchi never
+          installs Auto as the saved default model on its own; to use Auto,
+          declare `defaultProvider = "kimchi-dev"` and `defaultModel = "auto"`.
         '';
       };
 

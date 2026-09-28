@@ -1,6 +1,6 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-26 — the package builds from the release source
+> **Last verified:** 2026-09-28 — the package builds from the release source
 > that the extractor also reads, one pin for both, with pinned pnpm and Go
 > dependencies, and patches bundled-skill discovery to read store directories in
 > place; `ai.kimchi.native.settings` and `native.harnessSettings` are closed
@@ -21,8 +21,10 @@
 > credential-bearing user `config.json` to owner-only; `mkPrep` builds only the
 > launcher, from the builder's `launcherEnvironment`, and one record-level
 > `config` and `installPackage` serve both backends; the builder publishes
-> devenv context to the shared root `AGENTS.md` from `sharedAgentsMd`. Full
-> lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> devenv context to the shared root `AGENTS.md` from `sharedAgentsMd`; HM
+> declares `autoDefaultApplied = true` at default priority so Kimchi 1.1.37
+> never persists Auto as the default model itself. Full lineage:
+> `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -48,6 +50,23 @@ alone creates that exact-cwd, trust-gated file: Kimchi applies it only in a
 trusted project, and the wrapper refuses launches below the devenv root. That is
 the uniform consequence of any project harness setting, and the only way to
 deliver effort at project scope.
+
+Model selection is configuration Nix owns, but Kimchi 1.1.37 installs Auto as
+the saved default model itself unless the user harness `settings.json` carries
+`autoDefaultApplied: true` (the trigger and the write are described at the
+declaration in `mkKimchi.nix`). So whenever HM manages that document it declares
+`native.harnessSettings.autoDefaultApplied = true` at `mkDefault` priority,
+whether or not a default model is declared. A user who wants Auto declares
+`defaultProvider = "kimchi-dev"` and `defaultModel = "auto"`. The two explicit
+overrides are not equivalent. `null` hands the marker back to Kimchi, retracting
+one a previous generation owned, so Auto installs once and Kimchi's own marker
+holds after that. `false` is a trap: Kimchi reads only `=== true`, installs Auto
+and writes `true`, and every activation restores the owned `false`, so Auto is
+reinstalled after each one. Devenv is an explicit exclusion: Kimchi reads the
+marker only from the user file and devenv rejects user-scope keys, so a
+devenv-only user's first fresh launch runs on Auto and persists it in their user
+file; a project `defaultModel` outranks it on later launches. Locked by
+`module-kimchi-auto-default-marker`.
 
 `packages/kimchi/extracted.json` measures the two native settings surfaces and
 the environment variables Kimchi and pi read, and `lib/extracted.nix` is its

@@ -207,10 +207,18 @@ in {
     # previously written ownership record hangs off.
     #
     # The values ARE empty: every typed sub-option defaults to null or {},
-    # and `filterNulls` recurses, so an undeclared Kimchi owns no leaf.
+    # and `filterNulls` recurses, so an undeclared Kimchi owns no leaf. The
+    # one module-declared harness leaf, `autoDefaultApplied`, is nulled here
+    # so the harness document is empty too (module-kimchi-auto-default-marker
+    # covers the marker itself).
     module-kimchi-hm-empty-settings-emits-writers = mkTest "kimchi-hm-empty-settings-emits-writers" (
       let
-        evaluated = evalHm {ai.kimchi.enable = true;};
+        evaluated = evalHm {
+          ai.kimchi = {
+            enable = true;
+            native.harnessSettings.autoDefaultApplied = null;
+          };
+        };
         activation = evaluated.config.home.activation;
       in
         lib.hasInfix "--phase all" activation.kimchiConfigMerge.text
@@ -254,6 +262,46 @@ in {
         result.config.tasks ? "ai:kimchi:harness-settings-merge"
         && (projectHarnessDocument result).value.hideThinkingBlock
         && !(result.config.files ? ".config/kimchi/harness/settings.json")
+    );
+
+    # Kimchi 1.1.37 persists Auto as the default model once per install
+    # unless the user harness settings.json already carries
+    # `autoDefaultApplied: true`. Home Manager declares the marker whether or
+    # not a default model is declared, at default priority, so an explicit
+    # value wins at eval time. This asserts priority only: at runtime null
+    # hands the marker back to Kimchi, while false re-arms Auto after every
+    # activation. Devenv cannot carry it (user scope), so it must add
+    # nothing there and must not trip its own user-scope rejection.
+    module-kimchi-auto-default-marker = mkTest "kimchi-auto-default-marker" (
+      let
+        hmHarness = harnessSettings:
+          (hmHarnessDocument (evalHm {
+            ai.kimchi = {
+              enable = true;
+              native = {inherit harnessSettings;};
+            };
+          }))
+          .value;
+        undeclared = hmHarness {};
+        declaredModel = hmHarness {
+          defaultModel = "some-model";
+          defaultProvider = "kimchi-dev";
+        };
+        optedOut = hmHarness {autoDefaultApplied = false;};
+        nulled = hmHarness {autoDefaultApplied = null;};
+        devenv = evalDevenv {ai.kimchi.enable = true;};
+      in
+        # positive: marker with and without a declared default model
+        undeclared.autoDefaultApplied or null
+        == true
+        && declaredModel.autoDefaultApplied or null == true
+        && declaredModel.defaultModel or null == "some-model"
+        # negative: an explicit user value wins over the module default
+        && optedOut.autoDefaultApplied or null == false
+        && !(nulled ? autoDefaultApplied)
+        # devenv: no marker in the project file, and no assertion fires
+        && !((projectHarnessDocument devenv).value ? autoDefaultApplied)
+        && failedAssertions devenv == []
     );
 
     # Kimchi persists the normalized values unchanged at pi's
