@@ -23,7 +23,7 @@ def document(*names):
 
 class ModelExtraction(unittest.TestCase):
     def test_current_snapshot_covers_both_observed_accounts(self):
-        # Kiro 2.22.1, 2026-09-19: work account + isolated free account.
+        # Kiro 2.22.1, 2026-09-19: one account + a second, isolated free account.
         observed = set("""
             auto claude-haiku-4.5 claude-opus-4.5 claude-opus-4.6
             claude-opus-4.7 claude-opus-4.8 claude-opus-5 claude-sonnet-4

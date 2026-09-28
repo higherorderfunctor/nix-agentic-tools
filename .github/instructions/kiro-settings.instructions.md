@@ -55,12 +55,12 @@ normalization is reviewed.
 
 **Settled — do not relitigate:** Kiro 2.22.1 requires login for
 `chat --list-models --format json` under an isolated home. The same version
-returned 14 IDs for a work account and nine for a free account on 2026-09-19,
-with 19 distinct IDs between them. The native binary and its embedded archives
-did not contain Opus 5 or Sonnet 5 IDs. Kiro Crew's static registry also omitted
-them; newer IDs appeared in UI fixtures, not a maintained complete catalog. A
-free CI account, a binary string scan, or Crew's fallback registry cannot
-establish a complete suggestion list.
+returned 14 IDs for one account and nine for a second, free account on
+2026-09-19, with 19 distinct IDs between them. The native binary and its
+embedded archives did not contain Opus 5 or Sonnet 5 IDs. Kiro Crew's static
+registry also omitted them; newer IDs appeared in UI fixtures, not a maintained
+complete catalog. A free CI account, a binary string scan, or Crew's fallback
+registry cannot establish a complete suggestion list.
 
 ### Flat settings and object values
 

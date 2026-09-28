@@ -7,10 +7,8 @@ applyTo: "packages/delegate-sizing/**"
 
 # Delegate sizing package
 
-> **Last verified:** 2026-09-25 — instruction presets use inner
-> `defaultContent`, while shared text/source types auto-enable non-empty
-> consumer content and reject enabled empty records. This repository receives
-> the rule through the program, not the generator.
+> **Last verified:** 2026-09-27 — Kiro's default launch uses `--model auto`; its
+> manual-only purpose line renders only with the launch block.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -53,12 +51,13 @@ consumer who sets only `enable = true` therefore retains the package prose. The
 source runtime's settings control its external launch even when its skill is
 disabled: an enabled Codex CLI may still serve Claude delegates without
 installing its own sizing skill. `settings.<block>.enable = false` omits an
-instruction block; it does not remove models from the table. Set `text` directly
-or use `source` to replace a block's package preset. The consumer supplies the
-omitted instructions when needed. Kiro's default external launch is manual-only
-and pins Luna for fixture probes. Before adding Kiro to `extraRuntimes`,
-override its `settings.launch.text` or `.source` with instructions that apply
-the selected model and effort.
+instruction block; it does not remove models from the table. Disabling Kiro's
+launch block also drops the manual-only purpose line that points at it. Set
+`text` directly or use `source` to replace a block's package preset. The
+consumer supplies the omitted instructions when needed. Kiro's default external
+launch is manual-only and launches fixture probes with `--model auto`. Before
+adding Kiro to `extraRuntimes`, override its `settings.launch.text` or `.source`
+with instructions that apply the selected model and effort.
 
 Usage helpers are packaged applications with their own runtime closures. The
 Claude helper carries `curl` and `jq`; the Codex helper carries GNU `timeout`,

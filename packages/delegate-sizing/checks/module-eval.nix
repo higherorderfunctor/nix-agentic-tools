@@ -323,6 +323,8 @@
       lib.hasInfix "codex exec --model <slug> --config 'model_reasoning_effort=\"<level>\"' --json --output-last-message <out>.md - < <prompt-file>" claude
       && lib.hasInfix "## manual-only external delegate sizing\n" claude
       && lib.hasInfix "### kiro\n" claude
+      && lib.hasInfix "kiro-cli chat --no-interactive --model auto \"<prompt>\"" claude
+      && lib.hasInfix "For a Kiro external delegate, follow its launch block below." claude
       && lib.hasInfix "Not a candidate for auto-selection; use only when the user names it." claude
       && lib.hasInfix "(anthropic)" claude
       && lib.hasInfix "(openai)" claude
@@ -373,6 +375,8 @@
       && !(lib.hasInfix "api.anthropic.com/api/oauth/usage" customizedClaude)
       && !(lib.hasInfix "maxEffortLevel" customizedClaude)
       && !(lib.hasInfix "kiro-cli chat --no-interactive" customizedClaude)
+      && !(lib.hasInfix "--model auto" customizedClaude)
+      && !(lib.hasInfix "follow its launch block below" customizedClaude)
       && !(lib.hasInfix "_kiro/config/template" customizedClaude)
       && !(disabled.config.ai.codex.skills ? delegate-sizing)
       && !(disabled.config.ai.codex.rules ? delegate-sizing-router)

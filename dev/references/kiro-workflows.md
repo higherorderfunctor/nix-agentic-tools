@@ -5,7 +5,7 @@ reader who was not present for the experiments.
 
 **Provenance labels.** Every heading that makes a behavioral claim carries one
 as its primary label. Some add a qualifier naming which part of the section it
-applies to — `(Contract, table Measured)`, `(Measured, this environment)`,
+applies to — `(Contract, list Measured)`, `(Measured, this environment)`,
 `(Measured once)` — so read the qualifier where one is present rather than
 assuming the whole section shares the primary label's strength:
 
@@ -16,8 +16,9 @@ assuming the whole section shares the primary label's strength:
   authoritative where a measurement contradicts it, and at least one place it
   does (§3.4).
 - **(Measured)** — established empirically on 2026-07-31 / 2026-08-01 against
-  `kiro-cli 2.16.0` (kas bundle `2.16.0-9ec8655…`). The evidence is given
-  inline.
+  `kiro-cli 2.16.0` (kas bundle `2.16.0-9ec8655…`), unless the section states
+  its own version and date (§10's listing-field and `auto` effort claims:
+  `kiro-cli 2.24.1`, 2026-09-27). The evidence is given inline.
 - **(Inferred)** — a conclusion that goes beyond what was directly observed,
   whether drawn from contract text or reasoned from measured behavior such as a
   timing trace. Treated as the weakest class either way. **No section heading
@@ -2061,7 +2062,7 @@ placements work: staged unit test, orchestrator subagent, and in-workflow step.
 Prefer the in-workflow step — it keeps the assertion inside the artifact that
 needs it, and it costs one step node you were probably not using.
 
-## 10. Model and effort selection (Contract, table Measured)
+## 10. Model and effort selection (Contract, listing fields and `auto` effort Measured)
 
 Set `modelId` / `effortLevel` per step, or once at workflow level as a default.
 Resolution cascades **step > workflow > parent session**; omit a field (or set
@@ -2074,17 +2075,11 @@ fails at session creation with no fallback:
 kiro-cli chat --list-models -f json
 ```
 
-Credit multipliers (the `rate_multiplier` field, `rate_unit: "Credit"`) as of
-`kiro-cli 2.16.0`:
-
-| model               | credit multiplier |
-| ------------------- | ----------------- |
-| `gpt-5.6-luna`      | 0.1×              |
-| `claude-haiku-4.5`  | 0.4×              |
-| `gpt-5.6-terra`     | 1.0×              |
-| `claude-sonnet-4.6` | 1.3×              |
-| `claude-opus-5`     | 2.2×              |
-| `gpt-5.6-sol`       | 2.4×              |
+Measured on `kiro-cli 2.24.1` (2026-09-27): the same listing reports each
+model's credit multiplier live, in its `rate_multiplier` field
+(`rate_unit: "Credit"`), so read it there rather than from a copied table. The
+`auto` model option (`--model auto` on the CLI) has no effort control; its entry
+in the ACP `_kiro/config/template` reports `hasEffort: false`.
 
 Effort levels are model-dependent (`low`, `medium`, `high`, `xhigh`, `max`); an
 unsupported level is reconciled to the model's default at session creation
@@ -2098,11 +2093,11 @@ step. Omit `modelId` unless a specific model is actually required; omitting it
 inherits from the workflow level, then the parent session, which is the correct
 default.
 
-Pinning a cheap model to mechanical steps is worthwhile — 27 workers at ~3.5
-iterations each on `claude-haiku-4.5` (0.4×) instead of `claude-opus-5` (2.2×)
-is a 5.5× cost reduction on work that runs one shell command. Watch for the
-empty captured outputs in §7.3, and note that changing model mid-experiment
-confounds timing comparisons (§6.1).
+For mechanical steps, such as the 27-worker, ~3.5-iteration one-shell-command
+pool measured here, compare the candidates' live `rate_multiplier` values
+(above) and pin the cheapest adequate model (Inferred). Watch for the empty
+captured outputs in §7.3, and note that changing model mid-experiment confounds
+timing comparisons (§6.1).
 
 ## 11. Adopting this in another repository
 
