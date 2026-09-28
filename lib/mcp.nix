@@ -81,11 +81,11 @@
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
   # ── Credentials option generator ──────────────────────────────────
-  # MOVED to lib/credentials.nix and re-exported here unchanged, so every
-  # MCP server module keeps the exact option type it had. The move
-  # happened when packages/glab — not an MCP server — needed the same
-  # runtime-secret primitives. Do not fork a second copy back into this
-  # file; add to credentials.nix instead.
+  # MOVED to lib/credentials.nix and re-exported here, so every MCP server
+  # module keeps the option type it had. The move happened when
+  # packages/glab — not an MCP server — needed the same runtime-secret
+  # primitives. Do not fork a second copy back into this file; add to
+  # credentials.nix instead.
   inherit (credentialsLib) mkCredentialsOption mkCredentialsSnippet;
 
   credentialsLib = import ./credentials.nix {inherit lib;};

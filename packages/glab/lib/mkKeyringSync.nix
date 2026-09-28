@@ -10,13 +10,22 @@
 }: let
   credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
 
-  hostAssignment = credentialsLib.mkSecretAssignment pkgs "glab_sync_host" cfg.host;
   tokenAssignment = credentialsLib.mkSecretAssignment pkgs "glab_sync_token" cfg.token;
 
   apiHost = cfg.settings.api_host or null;
   apiProtocol = cfg.settings.api_protocol or null;
   gitProtocol = cfg.settings.git_protocol or null;
+  host = cfg.settings.host or null;
   sshHost = cfg.settings.ssh_host or null;
+
+  # Unset settings render as the empty string; the script decides what an
+  # empty value means.
+  shellValue = value:
+    lib.escapeShellArg (
+      if value == null
+      then ""
+      else value
+    );
 
   optionalLoginArg = flag: value:
     lib.optionalString (value != null) ''
@@ -52,14 +61,10 @@
       >/dev/null 2>&1 || :
     glab_sync_probe_stored=false
 
-    ${hostAssignment}
     ${tokenAssignment}
 
-    glab_sync_api_protocol=${lib.escapeShellArg (
-      if apiProtocol == null
-      then ""
-      else apiProtocol
-    )}
+    glab_sync_host=${shellValue host}
+    glab_sync_api_protocol=${shellValue apiProtocol}
     if [ -z "$glab_sync_api_protocol" ]; then
       case "$glab_sync_host" in
         http://*) glab_sync_api_protocol=http ;;

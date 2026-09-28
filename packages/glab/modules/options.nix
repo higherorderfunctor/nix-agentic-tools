@@ -26,7 +26,7 @@
   # Key partitioning + env-var mapping live in ONE place, shared with
   # ../lib/mkGlab.nix, which renders the exports these options describe.
   glabSchema = import ../lib/schema.nix {inherit lib;};
-  inherit (glabSchema) byName envVarOf secretKeys settingKeys;
+  inherit (glabSchema) byName checkExtraSettings envVarOf secretKeys settingKeys;
 
   typeFor = k:
     if k.type == "bool"
@@ -51,10 +51,18 @@
       '';
     };
 
+  # A reference only — `file` or `helper`, resolved at runtime. The shared
+  # credential option carries a generic description; upstream's own text
+  # replaces it so each key still documents what it is.
   mkSecretFor = name:
-    credentialsLib.mkSecretOption {
-      envVar = envVarOf name;
-      inherit (byName.${name}) description;
+    credentialsLib.mkCredentialsOption (envVarOf name)
+    // {
+      description = ''
+        ${byName.${name}.description}
+
+        Set exactly one of `file` or `helper`. Both resolve at runtime, so
+        the value never enters the Nix store. Mapped to ${envVarOf name}.
+      '';
     };
 in {
   options.glab =
@@ -168,7 +176,20 @@ in {
           differently after a version bump, it has gained an override and
           belongs in `settings` instead (bump the package: the option is
           generated, so it will appear on its own).
+
+          Values are literals in the Nix store, so a key that would reach a
+          token is rejected: any token key (`token`, `job_token`,
+          `oauth2_refresh_token`, `refresh_token`, or any other key named
+          `token` or `*_token`) or any env var glab reads one from
+          (`gitlab_token`, `gitlab_access_token`, `oauth_token`, and
+          `ci_job_token`, which glab reads under CI auto-login and in
+          `glab ci run-trig`, …), compared upper-cased. Set the secret's
+          own option to a `file` or `helper` reference.
         '';
+        # `apply` rather than `types.addCheck`: a type error prints the
+        # offending definition, which here is the secret itself. The shared
+        # check names only the keys.
+        apply = checkExtraSettings;
       };
     }
     // builtins.listToAttrs (map (n: {

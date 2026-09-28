@@ -6,6 +6,7 @@
     "default": "gitlab.com",
     "description": "Configure host for API endpoint. Defaults to the host itself.",
     "envVars": ["GITLAB_API_HOST"],
+    "ciEnvVars": ["CI_SERVER_FQDN"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -17,6 +18,7 @@
     "default": "https",
     "description": "What protocol to use to access the API endpoint. Supported values: 'http', 'https'.",
     "envVars": ["GLAB_API_PROTOCOL", "API_PROTOCOL"],
+    "ciEnvVars": ["CI_SERVER_PROTOCOL"],
     "userSettable": true,
     "keyring": false,
     "fallback": true
@@ -28,6 +30,10 @@
     "default": "",
     "description": "The domains of associated Artifact Registries. These are used to configure the\nDocker credential helper. Only list a domain here if it is actually backed by\nGitLab Artifact Registry: the credential helper tries this key first, and a\nsuccessful token exchange is used as-is, with no fallback to\ncontainer_registry_domains. A container-registry domain listed here by mistake\ngets an artifact-registry token the registry rejects, and 'docker pull' hard-fails.",
     "envVars": ["GLAB_ARTIFACT_REGISTRY_DOMAINS", "ARTIFACT_REGISTRY_DOMAINS"],
+    "ciEnvVars": [
+      "GLAB_ARTIFACT_REGISTRY_DOMAINS",
+      "ARTIFACT_REGISTRY_DOMAINS"
+    ],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -39,6 +45,7 @@
     "default": "",
     "description": "Prefix used by 'glab stack' when naming generated branches. Defaults to the\ncurrent user's username (from 'os/user.Current'), falling back to 'glab-stack' if unavailable.",
     "envVars": ["GLAB_BRANCH_PREFIX", "BRANCH_PREFIX"],
+    "ciEnvVars": ["GLAB_BRANCH_PREFIX", "BRANCH_PREFIX"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -50,6 +57,7 @@
     "default": "",
     "description": "What browser glab should run when opening links. This global config cannot be overridden by hostname.",
     "envVars": ["GLAB_BROWSER", "BROWSER"],
+    "ciEnvVars": ["GLAB_BROWSER", "BROWSER"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -61,6 +69,7 @@
     "default": "",
     "description": "Path to a CA certificate (PEM) used to verify the GitLab server's\nTLS certificate. Useful for self-signed or private certificate authorities.",
     "envVars": ["GLAB_CA_CERT", "CA_CERT"],
+    "ciEnvVars": ["CI_SERVER_TLS_CA_FILE"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -72,6 +81,7 @@
     "default": "true",
     "description": "Allow glab to automatically check for updates and notify you when there are new updates.\nSetting the environment variable to true also forces a check, bypassing the once-a-day interval.",
     "envVars": ["GLAB_CHECK_UPDATE", "CHECK_UPDATE"],
+    "ciEnvVars": ["GLAB_CHECK_UPDATE", "CHECK_UPDATE"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -83,6 +93,7 @@
     "default": "",
     "description": "Path to a client certificate (PEM) used for mutual TLS authentication.",
     "envVars": ["GLAB_CLIENT_CERT", "CLIENT_CERT"],
+    "ciEnvVars": ["CI_SERVER_TLS_CERT_FILE"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -94,6 +105,7 @@
     "default": "",
     "description": "OAuth application client ID. Required when authenticating with OAuth\nagainst a self-managed GitLab instance.",
     "envVars": ["GITLAB_CLIENT_ID"],
+    "ciEnvVars": ["GITLAB_CLIENT_ID"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -105,6 +117,7 @@
     "default": "",
     "description": "Path to the private key (PEM) that matches client_cert.",
     "envVars": ["GLAB_CLIENT_KEY", "CLIENT_KEY"],
+    "ciEnvVars": ["CI_SERVER_TLS_KEY_FILE"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -119,6 +132,10 @@
       "GLAB_CONTAINER_REGISTRY_DOMAINS",
       "CONTAINER_REGISTRY_DOMAINS"
     ],
+    "ciEnvVars": [
+      "GLAB_CONTAINER_REGISTRY_DOMAINS",
+      "CONTAINER_REGISTRY_DOMAINS"
+    ],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -130,6 +147,7 @@
     "default": "",
     "description": "Custom HTTP headers to add to all HTTP requests made by glab. Each header must use exactly one of value, valueFromEnv, or valueFromCommand. A command must print the complete header value on one line. glab runs it once for each process.\n- name: Proxy-Authorization\n  valueFromCommand: token-helper --audience example\n- name: Cf-Access-Client-Secret\n  valueFromEnv: MY_SECRET_VALUE",
     "envVars": ["CUSTOM_HEADERS"],
+    "ciEnvVars": ["CUSTOM_HEADERS"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -141,6 +159,7 @@
     "default": "false",
     "description": "Output more logging information, including underlying Git commands, expanded aliases, and DNS error details.",
     "envVars": ["GLAB_DEBUG"],
+    "ciEnvVars": ["GLAB_DEBUG"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -152,6 +171,7 @@
     "default": "true",
     "description": "Whether or not to display hyperlinks in terminal output. Defaults to true (enabled for TTYs). Set to false to disable. Force hyperlinks in non-TTY environments by setting FORCE_HYPERLINKS=1.",
     "envVars": ["GLAB_DISPLAY_HYPERLINKS", "DISPLAY_HYPERLINKS"],
+    "ciEnvVars": ["GLAB_DISPLAY_HYPERLINKS", "DISPLAY_HYPERLINKS"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -163,6 +183,7 @@
     "default": "",
     "description": "Automatically download Duo CLI binary without prompting (true/false).",
     "envVars": ["GLAB_DUO_CLI_AUTO_DOWNLOAD", "DUO_CLI_AUTO_DOWNLOAD"],
+    "ciEnvVars": ["GLAB_DUO_CLI_AUTO_DOWNLOAD", "DUO_CLI_AUTO_DOWNLOAD"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -174,6 +195,7 @@
     "default": "",
     "description": "Automatically run GitLab Duo CLI without prompting (true/false). Set to true to skip the confirmation prompt.",
     "envVars": ["GLAB_DUO_CLI_AUTO_RUN", "DUO_CLI_AUTO_RUN"],
+    "ciEnvVars": ["GLAB_DUO_CLI_AUTO_RUN", "DUO_CLI_AUTO_RUN"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -185,6 +207,7 @@
     "default": "",
     "description": "SHA256 checksum of the installed Duo CLI binary (automatically set).",
     "envVars": ["DUO_CLI_BINARY_CHECKSUM"],
+    "ciEnvVars": ["DUO_CLI_BINARY_CHECKSUM"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -196,6 +219,7 @@
     "default": "",
     "description": "Path to the installed Duo CLI binary (automatically set). Default: ~/.config/glab-cli/bin/duo",
     "envVars": ["GLAB_DUO_CLI_BINARY_PATH"],
+    "ciEnvVars": ["GLAB_DUO_CLI_BINARY_PATH"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -207,6 +231,7 @@
     "default": "",
     "description": "Version of the installed Duo CLI binary (automatically set).",
     "envVars": ["DUO_CLI_BINARY_VERSION"],
+    "ciEnvVars": ["DUO_CLI_BINARY_VERSION"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -218,6 +243,7 @@
     "default": "",
     "description": "Last time an update check was performed (automatically set).",
     "envVars": ["DUO_CLI_LAST_UPDATE_CHECK"],
+    "ciEnvVars": ["DUO_CLI_LAST_UPDATE_CHECK"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -229,6 +255,7 @@
     "default": "",
     "description": "What editor glab should run when creating issues, merge requests, etc. This global config cannot be overridden by hostname.",
     "envVars": ["GLAB_EDITOR", "VISUAL", "EDITOR"],
+    "ciEnvVars": ["GLAB_EDITOR", "VISUAL", "EDITOR"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -240,6 +267,7 @@
     "default": "ssh",
     "description": "What protocol to use when performing Git operations. Supported values: 'ssh', 'https'.",
     "envVars": ["GLAB_GIT_PROTOCOL", "GIT_PROTOCOL"],
+    "ciEnvVars": ["GLAB_GIT_PROTOCOL", "GIT_PROTOCOL"],
     "userSettable": true,
     "keyring": false,
     "fallback": true
@@ -251,6 +279,7 @@
     "default": "",
     "description": "Your desired pager command to use, such as 'less -R'. Takes precedence over the PAGER environment variable. GLAB_PAGER takes precedence over both.",
     "envVars": ["GLAB_PAGER"],
+    "ciEnvVars": ["GLAB_PAGER"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -262,6 +291,7 @@
     "default": "dark",
     "description": "Set your desired Markdown renderer style. Available options are [dark, light, notty]. To set a custom style, refer to https://github.com/charmbracelet/glamour#styles",
     "envVars": ["GLAB_GLAMOUR_STYLE", "GLAMOUR_STYLE"],
+    "ciEnvVars": ["GLAB_GLAMOUR_STYLE", "GLAMOUR_STYLE"],
     "userSettable": true,
     "keyring": false,
     "fallback": true
@@ -273,6 +303,7 @@
     "default": "gitlab.com",
     "description": "Default GitLab hostname to use.",
     "envVars": ["GITLAB_HOST", "GITLAB_URI", "GL_HOST"],
+    "ciEnvVars": ["CI_SERVER_FQDN"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -284,6 +315,7 @@
     "default": "",
     "description": "CLI-managed flag indicating the host was authenticated via OAuth.",
     "envVars": ["GLAB_IS_OAUTH2"],
+    "ciEnvVars": ["GLAB_IS_OAUTH2"],
     "userSettable": false,
     "keyring": false,
     "fallback": false
@@ -295,6 +327,7 @@
     "default": "",
     "description": "CI job token used for Job-Token authentication. Typically populated\nautomatically from CI_JOB_TOKEN when CI auto-login is enabled.",
     "envVars": ["JOB_TOKEN"],
+    "ciEnvVars": ["CI_JOB_TOKEN"],
     "userSettable": true,
     "keyring": true,
     "fallback": false
@@ -306,6 +339,7 @@
     "default": "v1.100.0",
     "description": "Last glab version a post-upgrade banner was shown for (automatically set).",
     "envVars": ["LAST_SEEN_VERSION"],
+    "ciEnvVars": ["LAST_SEEN_VERSION"],
     "userSettable": true,
     "keyring": false,
     "fallback": true
@@ -317,6 +351,7 @@
     "default": "",
     "description": "Last update check timestamp, used for checking when the last update check was performed.",
     "envVars": ["LAST_UPDATE_CHECK_TIMESTAMP"],
+    "ciEnvVars": ["LAST_UPDATE_CHECK_TIMESTAMP"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -328,6 +363,7 @@
     "default": "v1.100.0",
     "description": "Last glab version 'glab whatsnew' rendered notes for (automatically set).",
     "envVars": ["LAST_WHATSNEW_VERSION"],
+    "ciEnvVars": ["LAST_WHATSNEW_VERSION"],
     "userSettable": true,
     "keyring": false,
     "fallback": true
@@ -339,6 +375,7 @@
     "default": "false",
     "description": "Set to true (1) to disable prompts, or false (0) to enable them.",
     "envVars": ["GLAB_NO_PROMPT", "NO_PROMPT", "PROMPT_DISABLED"],
+    "ciEnvVars": ["GLAB_NO_PROMPT", "NO_PROMPT", "PROMPT_DISABLED"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -350,6 +387,7 @@
     "default": "true",
     "description": "Show a notice when an installed agent skill (bundled or remote) has updates available.",
     "envVars": ["GLAB_NOTIFY_SKILL_UPDATES"],
+    "ciEnvVars": ["GLAB_NOTIFY_SKILL_UPDATES"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -361,6 +399,7 @@
     "default": "",
     "description": "CLI-managed OAuth token expiry timestamp.",
     "envVars": ["OAUTH2_EXPIRY_DATE"],
+    "ciEnvVars": ["OAUTH2_EXPIRY_DATE"],
     "userSettable": false,
     "keyring": false,
     "fallback": false
@@ -372,6 +411,7 @@
     "default": "",
     "description": "CLI-managed OAuth refresh token. Written by 'glab auth login'.",
     "envVars": ["OAUTH2_REFRESH_TOKEN"],
+    "ciEnvVars": ["OAUTH2_REFRESH_TOKEN"],
     "userSettable": false,
     "keyring": true,
     "fallback": false
@@ -383,6 +423,7 @@
     "default": "",
     "description": "Automatically download the Orbit CLI binary without prompting (true/false).",
     "envVars": ["GLAB_ORBIT_CLI_AUTO_DOWNLOAD", "ORBIT_CLI_AUTO_DOWNLOAD"],
+    "ciEnvVars": ["GLAB_ORBIT_CLI_AUTO_DOWNLOAD", "ORBIT_CLI_AUTO_DOWNLOAD"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -394,6 +435,7 @@
     "default": "",
     "description": "Automatically run the Orbit CLI without prompting (true/false). Set to true to skip the confirmation prompt.",
     "envVars": ["GLAB_ORBIT_CLI_AUTO_RUN", "ORBIT_CLI_AUTO_RUN"],
+    "ciEnvVars": ["GLAB_ORBIT_CLI_AUTO_RUN", "ORBIT_CLI_AUTO_RUN"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -405,6 +447,7 @@
     "default": "",
     "description": "SHA256 checksum of the installed Orbit CLI binary (automatically set).",
     "envVars": ["ORBIT_CLI_BINARY_CHECKSUM"],
+    "ciEnvVars": ["ORBIT_CLI_BINARY_CHECKSUM"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -416,6 +459,7 @@
     "default": "",
     "description": "Path to the installed Orbit CLI binary (automatically set). Default: ~/.config/glab-cli/bin/orbit",
     "envVars": ["GLAB_ORBIT_CLI_BINARY_PATH"],
+    "ciEnvVars": ["GLAB_ORBIT_CLI_BINARY_PATH"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -427,6 +471,7 @@
     "default": "",
     "description": "Version of the installed Orbit CLI binary (automatically set).",
     "envVars": ["ORBIT_CLI_BINARY_VERSION"],
+    "ciEnvVars": ["ORBIT_CLI_BINARY_VERSION"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -438,6 +483,7 @@
     "default": "",
     "description": "Last time an Orbit CLI update check was performed (automatically set).",
     "envVars": ["ORBIT_CLI_LAST_UPDATE_CHECK"],
+    "ciEnvVars": ["ORBIT_CLI_LAST_UPDATE_CHECK"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -449,6 +495,7 @@
     "default": "",
     "description": "Custom proxy for this host. Overrides environment proxy settings when set.",
     "envVars": ["GLAB_PROXY", "PROXY"],
+    "ciEnvVars": ["GLAB_PROXY", "PROXY"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -460,6 +507,7 @@
     "default": "",
     "description": "CLI-managed refresh token; superseded by oauth2_refresh_token.",
     "envVars": ["REFRESH_TOKEN"],
+    "ciEnvVars": ["REFRESH_TOKEN"],
     "userSettable": false,
     "keyring": false,
     "fallback": false
@@ -478,6 +526,14 @@
       "REMOTE_NICKNAME",
       "GIT_REMOTE_NICKNAME"
     ],
+    "ciEnvVars": [
+      "GLAB_REMOTE_ALIAS",
+      "GIT_REMOTE_URL_VAR",
+      "GIT_REMOTE_ALIAS",
+      "REMOTE_ALIAS",
+      "REMOTE_NICKNAME",
+      "GIT_REMOTE_NICKNAME"
+    ],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -489,6 +545,7 @@
     "default": "true",
     "description": "Show a one-time post-upgrade banner pointing at 'glab whatsnew' when a new version is detected.",
     "envVars": ["GLAB_SHOW_WHATS_NEW"],
+    "ciEnvVars": ["GLAB_SHOW_WHATS_NEW"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -500,6 +557,7 @@
     "default": "",
     "description": "Skip TLS certificate verification when talking to this host (true/false).\nEmpty is treated as false. Use only for development; do not enable in production.",
     "envVars": ["GLAB_SKIP_TLS_VERIFY", "SKIP_TLS_VERIFY"],
+    "ciEnvVars": ["GLAB_SKIP_TLS_VERIFY", "SKIP_TLS_VERIFY"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -511,6 +569,7 @@
     "default": "",
     "description": "Alternate hostname for SSH Git operations (e.g., 'ssh.example.com' or 'git.example.com').\nUse this when SSH uses a different hostname than HTTP/API operations.\nOnly affects SSH cloning and Git operations.",
     "envVars": ["GITLAB_SSH_HOST"],
+    "ciEnvVars": ["GITLAB_SSH_HOST", "CI_SERVER_SHELL_SSH_HOST"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -522,6 +581,7 @@
     "default": "",
     "description": "Subfolder where GitLab is installed (e.g., 'gitlab' for https://example.com/gitlab/).\nUse this when GitLab is hosted at a subfolder rather than domain root.\nSupports nested paths (e.g., 'apps/gitlab' for https://example.com/apps/gitlab/).\nSlashes are automatically trimmed, so 'gitlab', '/gitlab', and 'gitlab/' are equivalent.\nOnly applies to HTTP/HTTPS operations (API and Git clone).",
     "envVars": ["GITLAB_SUBFOLDER"],
+    "ciEnvVars": ["GITLAB_SUBFOLDER", "CI_SERVER_URL"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -533,6 +593,7 @@
     "default": "true",
     "description": "Set to false (0) to disable sending usage data to your GitLab instance or true (1) to enable.\nSee https://docs.gitlab.com/administration/settings/usage_statistics/\nfor more information",
     "envVars": ["GLAB_SEND_TELEMETRY"],
+    "ciEnvVars": ["GLAB_SEND_TELEMETRY"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -544,6 +605,7 @@
     "default": "",
     "description": "Your GitLab access token. To get one, read https://docs.gitlab.com/user/profile/personal_access_tokens/",
     "envVars": ["GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN"],
+    "ciEnvVars": ["GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN"],
     "userSettable": true,
     "keyring": true,
     "fallback": false
@@ -555,6 +617,7 @@
     "default": "",
     "description": "Store the host's credentials in the operating system's keyring (true/false).\nSet automatically by 'glab auth login', which defaults to 'true' when a keyring\nbackend is available. Empty is treated as false (plaintext file storage).",
     "envVars": ["GLAB_USE_KEYRING", "USE_KEYRING"],
+    "ciEnvVars": ["GLAB_USE_KEYRING", "USE_KEYRING"],
     "userSettable": true,
     "keyring": false,
     "fallback": false
@@ -566,6 +629,7 @@
     "default": "",
     "description": "Username associated with the configured token. Set automatically on login.",
     "envVars": ["GLAB_USER"],
+    "ciEnvVars": ["GLAB_USER"],
     "userSettable": true,
     "keyring": false,
     "fallback": false

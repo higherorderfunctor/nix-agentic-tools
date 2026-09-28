@@ -8,6 +8,17 @@
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
+  inherit (import ../lib/schema.nix {inherit lib;}) secretKeys;
+
+  # A stand-in glab: the strict-mode header, then `body`. The logging stubs
+  # pass a line that records their argv; the plain ones pass "".
+  mkStub = body:
+    (pkgs.writeShellScriptBin "glab" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${body}
+    '')
+    .overrideAttrs (_: {version = "0-test";});
 in {
   checks = {
     # ── glab ───────────────────────────────────────────────────────────
@@ -29,9 +40,10 @@ in {
         builtins.elem "git_protocol" settingNames
         && builtins.elem "check_update" settingNames
         && builtins.elem "glamour_style" settingNames
-        # host/token/job_token are secret-capable and live at the top level,
-        # so they must NOT also appear as plain settings.
-        && !(builtins.elem "host" settingNames)
+        # `host` is not a credential upstream, so it is an ordinary setting.
+        && builtins.elem "host" settingNames
+        # token/job_token are secrets and live at the top level as
+        # references, so they must NOT also appear as literal settings.
         && !(builtins.elem "token" settingNames)
         && !(builtins.elem "job_token" settingNames)
         # custom_headers is list-typed and has no single-env-var spelling.
@@ -39,35 +51,131 @@ in {
         && builtins.length settingNames > 20
     );
 
-    # The three-branch union must accept each branch, and the type system
-    # (not a runtime throw) is what forbids setting two at once.
+    # The secret union must accept each reference branch, and the type
+    # system (not a runtime throw) is what forbids setting two at once.
     module-glab-secret-branches-accepted = mkTest "glab-secret-branches-accepted" (
       let
         ev = evalHm {
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
+            settings.host = "gitlab.example.com";
             token.file = "/run/secrets/gitlab-token";
             job_token.helper = "/run/wrappers/bin/job-token";
           };
         };
       in
-        ev.config.glab.host
-        == {plain = "gitlab.example.com";}
+        ev.config.glab.settings.host
+        == "gitlab.example.com"
         && ev.config.glab.token == {file = "/run/secrets/gitlab-token";}
         && ev.config.glab.job_token == {helper = "/run/wrappers/bin/job-token";}
         && builtins.length ev.config.home.packages == 1
     );
 
+    # No secret key accepts a literal: a `plain` value would be interpolated
+    # into the world-readable store. Every key the schema marks as a
+    # credential must reject it at the TYPE level, and the same key must
+    # accept a `file` reference — the positive control that proves the
+    # rejection is the type's doing and not some unrelated eval failure.
+    # The key list comes from the schema, so a credential key upstream adds
+    # later is covered without editing this test.
+    module-glab-secrets-reject-literal = mkTest "glab-secrets-reject-literal" (
+      let
+        evaluates = key: branch:
+          (builtins.tryEval (builtins.deepSeq
+            (evalHm {glab.${key}.${branch} = "value";}).config.glab.${key}
+            true)).success;
+      in
+        secretKeys
+        != []
+        && builtins.elem "token" secretKeys
+        && builtins.all (key: !(evaluates key "plain") && evaluates key "file") secretKeys
+    );
+
+    # extraSettings exports each key upper-cased as a literal, so a key that
+    # lands on a secret's env var would put that secret in the store — and
+    # override a configured `token.file`. It must fail to evaluate. The
+    # rejected keys cover a key name (`job_token`), an env var that is not a
+    # key name (`gitlab_token`), an alias, mixed case, and a token the
+    # keyring flag misses (`refresh_token`, by key and by env var), the
+    # CI auto-login spelling of `job_token` (`ci_job_token`), which only
+    # `ciEnvVars` names, and token-named keys the schema does not know
+    # (`new_upstream_token`, mixed-case `Foo_Token`); an ordinary new key
+    # and `gitlab_ci`, a non-secret CI switch, are the positive controls.
+    module-glab-extra-settings-reject-secrets = mkTest "glab-extra-settings-reject-secrets" (
+      let
+        evaluates = extra:
+          (builtins.tryEval (builtins.deepSeq
+            (evalHm {
+              glab = {
+                enable = true;
+                settings.host = "gitlab.example.com";
+                token.file = "/run/secrets/gitlab-token";
+                extraSettings = extra;
+              };
+            }).config.glab.extraSettings
+            true)).success;
+      in
+        builtins.all (key: !(evaluates {${key} = "LITERAL";}))
+        ["gitlab_token" "job_token" "GITLAB_ACCESS_TOKEN" "Oauth_Token" "refresh_token" "REFRESH_TOKEN" "ci_job_token" "CI_JOB_TOKEN" "new_upstream_token" "Foo_Token"]
+        && evaluates {brand_new_key = "value";}
+        && evaluates {gitlab_ci = "true";}
+    );
+
+    # `lib.glab.mkGlab` takes an UNTYPED cfg, so none of the module's type
+    # errors reach it. A literal must still fail there rather than being
+    # dropped: a stale `token.plain` or `host`, an extraSettings key on a
+    # secret's env var (the CI auto-login CI_JOB_TOKEN included) or with a
+    # token name the schema does not know, or a secret passed as a
+    # `settings` key. `token.file`, an ordinary and a CI
+    # extraSettings key, and `settings.host` are the positive controls that
+    # prove the failures are these checks' doing.
+    module-glab-lib-rejects-literals = mkTest "glab-lib-rejects-literals" (
+      let
+        stub = mkStub "";
+        script = extra:
+          (import ../lib/mkGlab.nix {
+            inherit lib pkgs;
+            cfg =
+              {
+                package = stub;
+                configDir = null;
+                settings.host = "gitlab.example.com";
+                extraSettings = {};
+              }
+              // extra;
+          }).passthru.wrapperText;
+        wraps = extra: (builtins.tryEval (builtins.deepSeq (script extra) true)).success;
+      in
+        wraps {token.file = "/run/secrets/gitlab-token";}
+        && wraps {extraSettings.brand_new_key = "value";}
+        && wraps {extraSettings.gitlab_ci = "true";}
+        && lib.hasInfix "export GITLAB_HOST" (script {})
+        && !(wraps {token.plain = "LITERAL";})
+        && !(wraps {token = "LITERAL";})
+        && !(wraps {host.plain = "gitlab.example.com";})
+        && !(wraps {extraSettings.gitlab_token = "LITERAL";})
+        && !(wraps {extraSettings.job_token = "LITERAL";})
+        && !(wraps {extraSettings.refresh_token = "LITERAL";})
+        && !(wraps {extraSettings.REFRESH_TOKEN = "LITERAL";})
+        && !(wraps {extraSettings.ci_job_token = "LITERAL";})
+        && !(wraps {extraSettings.CI_JOB_TOKEN = "LITERAL";})
+        && !(wraps {extraSettings.new_upstream_token = "LITERAL";})
+        && !(wraps {extraSettings.Foo_Token = "LITERAL";})
+        && !(wraps {settings.token = "LITERAL";})
+        && !(wraps {settings.job_token = "LITERAL";})
+        && !(wraps {settings.oauth2_refresh_token = "LITERAL";})
+        && !(wraps {settings.refresh_token = "LITERAL";})
+    );
+
     # The whole point of the wrapper: a `file` secret must appear as a
-    # RUNTIME read, and its contents must never be interpolated. A `plain`
-    # value is allowed in the script; a file path is only ever `cat`ed.
+    # RUNTIME read, and its contents must never be interpolated. A file
+    # path is only ever `cat`ed; ordinary settings are exported literally.
     module-glab-wrapper-reads-secrets-at-runtime = mkTest "glab-wrapper-reads-secrets-at-runtime" (
       let
         ev = evalHm {
           glab = {
             enable = true;
-            host.file = "/run/secrets/gitlab-url";
+            settings.host = "gitlab.example.com";
             token.file = "/run/secrets/gitlab-token";
             settings.git_protocol = "ssh";
             extraSettings.brand_new_key = "value";
@@ -79,9 +187,10 @@ in {
         script = wrapped.passthru.wrapperText;
       in
         # Secrets: read at invocation, never baked.
-        lib.hasInfix ''GITLAB_HOST="$('' script
-        && lib.hasInfix "/run/secrets/gitlab-url" script
-        && lib.hasInfix ''GITLAB_TOKEN="$('' script
+        lib.hasInfix ''GITLAB_TOKEN="$('' script
+        && lib.hasInfix "/run/secrets/gitlab-token" script
+        # The host is a setting, exported as a literal.
+        && lib.hasInfix "GITLAB_HOST=gitlab.example.com" script
         # Non-secret setting exports under its real env var. Asserting the
         # assignment and the export, NOT the quoting: nixpkgs'
         # `escapeShellArg` elides quotes for shell-safe values, so
@@ -107,9 +216,11 @@ in {
         ev = evalHm {
           glab = {
             enable = true;
-            host.file = "/run/secrets/gitlab-url";
             keyringSync.enable = true;
-            settings.git_protocol = "ssh";
+            settings = {
+              git_protocol = "ssh";
+              host = "gitlab.example.com";
+            };
             token.file = "/run/secrets/gitlab-token";
           };
         };
@@ -133,11 +244,11 @@ in {
         && pathUnit.Path.PathExists == pendingFile
         && pathUnit.Install.WantedBy == ["graphical-session.target"]
         && lib.hasInfix pendingFile activation
-        # Splitting after the only probe invocation proves both runtime secret
-        # paths occur later in the generated script, not merely somewhere in it.
+        # Splitting after the only probe invocation proves the runtime secret
+        # path occurs later in the generated script, not merely somewhere in it.
         && lib.hasInfix "secret-tool store" sync.scriptText
-        && lib.hasInfix "/run/secrets/gitlab-url" scriptAfterProbe
         && lib.hasInfix "/run/secrets/gitlab-token" scriptAfterProbe
+        && lib.hasInfix "glab_sync_host=gitlab.example.com" sync.scriptText
         && lib.hasInfix "--stdin" sync.scriptText
         && lib.hasInfix "--use-keyring" sync.scriptText
         && !(lib.hasInfix "--insecure-storage" sync.scriptText)
@@ -156,17 +267,23 @@ in {
         devenv = evalDevenv {
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
             keyringSync.enable = true;
+            settings.host = "gitlab.example.com";
             token.file = "/run/secrets/gitlab-token";
           };
         };
-        plainToken = evalHm {
+        noToken = evalHm {
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
             keyringSync.enable = true;
-            token.plain = "store-visible-token";
+            settings.host = "gitlab.example.com";
+          };
+        };
+        noHost = evalHm {
+          glab = {
+            enable = true;
+            keyringSync.enable = true;
+            token.file = "/run/secrets/gitlab-token";
           };
         };
         disabled = evalHm {glab.keyringSync.enable = true;};
@@ -175,8 +292,11 @@ in {
         "glab.keyringSync.enable is Home Manager-only: devenv may consume a user's existing keyring, but a repository shell must not own login or graphical-session services."
         (failedMessages devenv)
         && builtins.elem
-        "glab.keyringSync.enable requires glab.token.file or glab.token.helper; token.plain would already expose the token through the Nix store."
-        (failedMessages plainToken)
+        "glab.keyringSync.enable requires glab.token.file or glab.token.helper."
+        (failedMessages noToken)
+        && builtins.elem
+        "glab.keyringSync.enable requires glab.settings.host so the token cannot be stored for the wrong instance."
+        (failedMessages noHost)
         && builtins.elem
         "glab.keyringSync.enable requires glab.enable."
         (failedMessages disabled)
@@ -196,7 +316,7 @@ in {
         ev = evalDevenv {
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
+            settings.host = "gitlab.example.com";
           };
         };
       in
@@ -213,7 +333,7 @@ in {
       let
         base = {
           enable = true;
-          host.plain = "gitlab.example.com";
+          settings.host = "gitlab.example.com";
         };
         hm = evalHm {glab = base;};
         dv = evalDevenv {glab = base;};
@@ -235,7 +355,7 @@ in {
           };
           glab = {
             enable = true;
-            host.plain = "gitlab.example.com";
+            settings.host = "gitlab.example.com";
           };
         };
         hmEval = evalHm base;
@@ -269,21 +389,14 @@ in {
     # stronger, since a leftover directory from an earlier run cannot
     # satisfy them.
     module-glab-preflight-runtime = let
-      stub =
-        (pkgs.writeShellScriptBin "glab" ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
-        '')
-      .overrideAttrs (_: {version = "0-test";});
+      stub = mkStub ''
+        printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
+      '';
       cfg = {
         enable = true;
         package = stub;
         configDir = "glab-preflight-cfg";
-        host.plain = "https://gitlab.example.com/some/path";
-        token.plain = "t0ken";
-        job_token = null;
-        settings = {};
+        settings.host = "https://gitlab.example.com/some/path";
         extraSettings = {};
       };
       wrapped = import ../lib/mkGlab.nix {inherit lib pkgs cfg;};
@@ -363,13 +476,9 @@ in {
     # reseeded on every invocation. Now a fixed-string compare, which has no
     # escaping question at all.
     module-glab-ipv6-host-fast-path = let
-      stub =
-        (pkgs.writeShellScriptBin "glab" ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
-        '')
-      .overrideAttrs (_: {version = "0-test";});
+      stub = mkStub ''
+        printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
+      '';
       wrapped = import ../lib/mkGlab.nix {
         inherit lib pkgs;
         cfg = {
@@ -378,10 +487,7 @@ in {
           # Build-relative, for the reason given on
           # module-glab-preflight-runtime.
           configDir = "glab-ipv6-cfg";
-          host.plain = "http://[2001:db8::1]/gitlab";
-          token.plain = "t0ken";
-          job_token = null;
-          settings = {};
+          settings.host = "http://[2001:db8::1]/gitlab";
           extraSettings = {};
         };
       };
@@ -430,23 +536,14 @@ in {
     # that REPLACES the environment (Claude Code's MCP `env` field) can
     # spawn this with no HOME at all.
     module-glab-preflight-no-home = let
-      stub =
-        (pkgs.writeShellScriptBin "glab" ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          echo "REACHED-PROGRAM"
-        '')
-      .overrideAttrs (_: {version = "0-test";});
+      stub = mkStub ''echo "REACHED-PROGRAM"'';
       wrapped = import ../lib/mkGlab.nix {
         inherit lib pkgs;
         cfg = {
           enable = true;
           package = stub;
           configDir = null;
-          host.plain = "gitlab.example.com";
-          token.plain = "t0ken";
-          job_token = null;
-          settings = {};
+          settings.host = "gitlab.example.com";
           extraSettings = {};
         };
       };
@@ -490,13 +587,9 @@ in {
     # contradicting how it is actually reached. Separate test because it
     # needs a differently-configured wrapper.
     module-glab-seeds-http-protocol = let
-      stub =
-        (pkgs.writeShellScriptBin "glab" ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
-        '')
-      .overrideAttrs (_: {version = "0-test";});
+      stub = mkStub ''
+        printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
+      '';
       mkWrapped = cfgDir: hostValue:
         import ../lib/mkGlab.nix {
           inherit lib pkgs;
@@ -504,10 +597,7 @@ in {
             enable = true;
             package = stub;
             configDir = cfgDir;
-            host.plain = hostValue;
-            token.plain = "t0ken";
-            job_token = null;
-            settings = {};
+            settings.host = hostValue;
             extraSettings = {};
           };
         };

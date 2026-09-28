@@ -1,5 +1,6 @@
-# Builds a glab wrapped to supply its host URL, token and settings from
-# module configuration at INVOCATION time.
+# Builds a glab wrapped to export its settings (host included) from module
+# configuration and to resolve its secret keys (the keyring-flagged ones:
+# token, job_token, oauth2_refresh_token) at INVOCATION time.
 #
 # ── Why a wrapper and not a config file ─────────────────────────────
 # glab's own config lives at `$GLAB_CONFIG_DIR/config.yml` (default
@@ -37,10 +38,10 @@
 
   # Key partitioning + env-var mapping live in ONE place, shared with
   # ../modules/options.nix, which declares the options these exports
-  # render. `secretKeys` is already deduplicated and deterministically
-  # ordered there, so the generated script is stable.
+  # render. `secretKeys` is deterministically ordered there, so the
+  # generated script is stable.
   glabSchema = import ./schema.nix {inherit lib;};
-  inherit (glabSchema) envVarOf secretKeys;
+  inherit (glabSchema) checkExtraSettings checkSettings envVarOf secretKeys;
 
   # A synchronized token must be read back through glab's keyring-aware config
   # path. Exporting GITLAB_TOKEN here would take precedence over that stored
@@ -57,7 +58,9 @@
 
   # Non-secret settings: plain exports, no store-visibility concern.
   # Booleans become "true"/"false", which is what glab's own bool parser
-  # accepts alongside 1/0.
+  # accepts alongside 1/0. `checkSettings` rejects a key that is not a
+  # setting key: the module's submodule cannot declare one, but a direct
+  # `lib.glab.mkGlab` caller could pass `settings.token`.
   renderValue = v:
     if builtins.isBool v
     then
@@ -73,16 +76,18 @@
     (lib.mapAttrsToList (name: value: ''
       ${envVarOf name}=${lib.escapeShellArg (renderValue value)}
       export ${envVarOf name}'')
-    (lib.filterAttrs (_: v: v != null) cfg.settings));
+    (lib.filterAttrs (_: v: v != null) (checkSettings cfg.settings)));
 
   # extraSettings uses the uppercase fallback, matching what glab does
-  # for any key with no explicit EnvVars override.
+  # for any key with no explicit EnvVars override. `checkExtraSettings`
+  # rejects a key that would land on a secret's env var; the option applies
+  # it too, and repeating it here covers direct `lib.glab.mkGlab` callers.
   extraExports =
     lib.concatStringsSep "\n"
     (lib.mapAttrsToList (name: value: ''
       ${lib.toUpper name}=${lib.escapeShellArg value}
       export ${lib.toUpper name}'')
-    cfg.extraSettings);
+    (checkExtraSettings cfg.extraSettings));
 
   exports =
     lib.concatStringsSep "\n"
@@ -256,26 +261,33 @@
 
   wrapper = pkgs.writeShellScript "glab-wrapper" wrapperText;
 in
-  pkgs.symlinkJoin {
-    name = "glab-wrapped-${cfg.package.version}";
-    paths = [cfg.package];
+  # `cfg` is untyped on the public `lib.glab.mkGlab` path, so the module's
+  # type errors do not reach it. `host` used to be a secret key here; since
+  # nothing reads `cfg.host` any more, a caller still passing it would get a
+  # wrapper that silently talks to gitlab.com.
+  if cfg ? host
+  then throw "lib.glab.mkGlab: `cfg.host` is no longer read. Pass the hostname as the literal `cfg.settings.host`."
+  else
+    pkgs.symlinkJoin {
+      name = "glab-wrapped-${cfg.package.version}";
+      paths = [cfg.package];
 
-    # Replace only bin/glab. Everything else in the join — man pages,
-    # bash/fish/zsh completions — is upstream's, untouched.
-    postBuild = ''
-      rm -f "$out/bin/glab"
-      ln -s "${wrapper}" "$out/bin/glab"
-    '';
+      # Replace only bin/glab. Everything else in the join — man pages,
+      # bash/fish/zsh completions — is upstream's, untouched.
+      postBuild = ''
+        rm -f "$out/bin/glab"
+        ln -s "${wrapper}" "$out/bin/glab"
+      '';
 
-    # The script SOURCE, not its store path. packages/glab/checks/module-eval.nix
-    # asserts on it, and reading the path back would be import-from-
-    # derivation inside `nix flake check` — a string costs nothing.
-    passthru = {inherit wrapperText;};
+      # The script SOURCE, not its store path. packages/glab/checks/module-eval.nix
+      # asserts on it, and reading the path back would be import-from-
+      # derivation inside `nix flake check` — a string costs nothing.
+      passthru = {inherit wrapperText;};
 
-    meta =
-      cfg.package.meta
-      // {
-        description = "${cfg.package.meta.description or "GitLab CLI"} (wrapped with declarative configuration)";
-        mainProgram = "glab";
-      };
-  }
+      meta =
+        cfg.package.meta
+        // {
+          description = "${cfg.package.meta.description or "GitLab CLI"} (wrapped with declarative configuration)";
+          mainProgram = "glab";
+        };
+    }

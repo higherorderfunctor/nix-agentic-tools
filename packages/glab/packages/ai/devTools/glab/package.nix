@@ -204,9 +204,15 @@
   # the recorded list is the EFFECTIVE resolution order including that
   # uppercase fallback.
   #
-  # `EnvKeyEquivalence` layers CI-autologin overrides on top when
-  # GLAB_ENABLE_CI_AUTOLOGIN and GITLAB_CI are BOTH "true". Neither is
-  # set in a Nix build sandbox, so the schema path is what gets recorded.
+  # `EnvKeyEquivalence` REPLACES a key's env vars with upstream's
+  # `ciAutologinEnvOverrides` when GLAB_ENABLE_CI_AUTOLOGIN and GITLAB_CI
+  # are both "true" (internal/config/config_mapping.go). The dump resolves
+  # every key twice, with both switches set explicitly off (`envVars`) and
+  # on (`ciEnvVars`), so neither list depends on the build environment.
+  # The CI list is not decoration: it is how `job_token` reaches
+  # CI_JOB_TOKEN, a token env var the schema path never names, and
+  # ../../../../lib/schema.nix reserves it from `extraSettings`. The map is
+  # unexported, so resolving under CI is the only way to read it.
   schemaDumpSrc = writeText "glab-schema-dump.go" ''
     package main
 
@@ -225,9 +231,26 @@
     	Default      string   `json:"default"`
     	Description  string   `json:"description"`
     	EnvVars      []string `json:"envVars"`
+    	CIEnvVars    []string `json:"ciEnvVars"`
     	UserSettable bool     `json:"userSettable"`
     	Keyring      bool     `json:"keyring"`
     	Fallback     bool     `json:"fallback"`
+    }
+
+    // resolve returns EnvKeyEquivalence(name) with CI auto-login off or
+    // on. Both switches are set either way, so an ambient GITLAB_CI can
+    // never leak into the recorded schema.
+    func resolve(name string, ci bool) []string {
+    	v := "false"
+    	if ci {
+    		v = "true"
+    	}
+    	for _, sw := range []string{"GLAB_ENABLE_CI_AUTOLOGIN", "GITLAB_CI"} {
+    		if err := os.Setenv(sw, v); err != nil {
+    			panic(err)
+    		}
+    	}
+    	return config.EnvKeyEquivalence(name)
     }
 
     func main() {
@@ -261,7 +284,8 @@
     			Type:         typ,
     			Default:      kd.Default,
     			Description:  kd.Description,
-    			EnvVars:      config.EnvKeyEquivalence(kd.Name),
+    			EnvVars:      resolve(kd.Name, false),
+    			CIEnvVars:    resolve(kd.Name, true),
     			UserSettable: kd.UserSettable,
     			Keyring:      kd.Keyring,
     			Fallback:     kd.Fallback,
@@ -352,6 +376,14 @@
         || fail "token no longer resolves GITLAB_TOKEN"
       jq -e 'any(.[]; .name == "telemetry" and (.envVars | index("GLAB_SEND_TELEMETRY")))' schema.json >/dev/null \
         || fail "telemetry no longer resolves GLAB_SEND_TELEMETRY"
+
+      # The CI list is what the extraSettings reservation reads CI_JOB_TOKEN
+      # from. An empty one means the second resolution never ran, and a
+      # job_token without CI_JOB_TOKEN means the overrides moved.
+      jq -e 'all(.[]; (.ciEnvVars | length) > 0)' schema.json >/dev/null \
+        || fail "some keys resolved to no CI auto-login env vars (EnvKeyEquivalence changed shape)"
+      jq -e 'any(.[]; .name == "job_token" and (.ciEnvVars | index("CI_JOB_TOKEN")))' schema.json >/dev/null \
+        || fail "job_token no longer resolves CI_JOB_TOKEN under CI auto-login"
 
       cp schema.json "$out"
     '';
