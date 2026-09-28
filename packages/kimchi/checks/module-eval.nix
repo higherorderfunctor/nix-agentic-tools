@@ -208,15 +208,19 @@ in {
     #
     # The values ARE empty: every typed sub-option defaults to null or {},
     # and `filterNulls` recurses, so an undeclared Kimchi owns no leaf. The
-    # one module-declared harness leaf, `autoDefaultApplied`, is nulled here
-    # so the harness document is empty too (module-kimchi-auto-default-marker
-    # covers the marker itself).
+    # module-declared harness leaves, the Auto model pair and
+    # `autoDefaultApplied`, are nulled here so the harness document is empty
+    # too; nulling `defaultModel` alone drops both halves of the pair
+    # (module-kimchi-auto-default-marker covers them).
     module-kimchi-hm-empty-settings-emits-writers = mkTest "kimchi-hm-empty-settings-emits-writers" (
       let
         evaluated = evalHm {
           ai.kimchi = {
             enable = true;
-            native.harnessSettings.autoDefaultApplied = null;
+            native.harnessSettings = {
+              autoDefaultApplied = null;
+              defaultModel = null;
+            };
           };
         };
         activation = evaluated.config.home.activation;
@@ -264,14 +268,18 @@ in {
         && !(result.config.files ? ".config/kimchi/harness/settings.json")
     );
 
-    # Kimchi 1.1.37 persists Auto as the default model once per install
-    # unless the user harness settings.json already carries
-    # `autoDefaultApplied: true`. Home Manager declares the marker whether or
-    # not a default model is declared, at default priority, so an explicit
-    # value wins at eval time. This asserts priority only: at runtime null
-    # hands the marker back to Kimchi, while false re-arms Auto after every
-    # activation. Devenv cannot carry it (user scope), so it must add
-    # nothing there and must not trip its own user-scope rejection.
+    # Home Manager defaults Kimchi to its Auto router and declares the
+    # `autoDefaultApplied` marker, so Kimchi 1.1.37 never installs Auto as
+    # the saved default itself. Both live in the HM harness option TYPE, so a
+    # whole-attrset definition reaches them at any priority. The model pair
+    # sits at priority 1200 and is coupled: a consumer who declares either
+    # half at mkDefault or stronger, null included, gets neither half from
+    # the module, so a model on another provider never pairs with
+    # `kimchi-dev`; a weaker declaration loses to the default. The marker is
+    # a plain mkDefault: at runtime null hands it back to Kimchi, while false
+    # re-arms Auto after every activation. Devenv cannot carry the user-scope
+    # marker and adds no model default, so it must add nothing and must not
+    # trip its own user-scope rejection.
     module-kimchi-auto-default-marker = mkTest "kimchi-auto-default-marker" (
       let
         hmHarness = harnessSettings:
@@ -282,25 +290,119 @@ in {
             };
           }))
           .value;
-        undeclared = hmHarness {};
-        declaredModel = hmHarness {
-          defaultModel = "some-model";
-          defaultProvider = "kimchi-dev";
+        pairOf = value: {
+          model = value.defaultModel or null;
+          provider = value.defaultProvider or null;
         };
+        undeclared = hmHarness {};
+        declaredPair = hmHarness {
+          defaultModel = "some-model";
+          defaultProvider = "some-provider";
+        };
+        declaredPairAtDefault = hmHarness {
+          defaultModel = lib.mkDefault "some-model";
+          defaultProvider = lib.mkDefault "some-provider";
+        };
+        modelOnly = hmHarness {defaultModel = "some-model";};
+        providerOnly = hmHarness {defaultProvider = "some-provider";};
+        modelNulled = hmHarness {defaultModel = null;};
+        # a whole-attrset definition, at mkDefault and at mkForce, still
+        # reaches the type's defaults and competes per key
+        wholeDefault = hmHarness (lib.mkDefault {
+          defaultModel = "some-model";
+          defaultProvider = "some-provider";
+        });
+        wholeForce = hmHarness (lib.mkForce {theme = "dark";});
+        # weaker than the default: Auto wins
+        weakerPair = hmHarness {
+          defaultModel = lib.mkOverride 1300 "some-model";
+          defaultProvider = lib.mkOverride 1300 "some-provider";
+        };
+        # The shared normalized surface carries no model; its only field must
+        # leave the default pair alone.
+        withEffort =
+          (hmHarnessDocument (evalHm {
+            ai = {
+              kimchi.enable = true;
+              settings.reasoningEffort = "high";
+            };
+          }))
+          .value;
         optedOut = hmHarness {autoDefaultApplied = false;};
         nulled = hmHarness {autoDefaultApplied = null;};
         devenv = evalDevenv {ai.kimchi.enable = true;};
+        devenvHarness = (projectHarnessDocument devenv).value;
       in
-        # positive: marker with and without a declared default model
-        undeclared.autoDefaultApplied or null
-        == true
-        && declaredModel.autoDefaultApplied or null == true
-        && declaredModel.defaultModel or null == "some-model"
-        # negative: an explicit user value wins over the module default
+        # default: Auto on kimchi-dev, plus the marker
+        pairOf undeclared
+        == {
+          model = "auto";
+          provider = "kimchi-dev";
+        }
+        && undeclared.autoDefaultApplied or null == true
+        && pairOf withEffort
+        == {
+          model = "auto";
+          provider = "kimchi-dev";
+        }
+        # a declared pair wins, at normal and at mkDefault priority
+        && pairOf declaredPair
+        == {
+          model = "some-model";
+          provider = "some-provider";
+        }
+        && declaredPair.autoDefaultApplied or null == true
+        && pairOf declaredPairAtDefault
+        == {
+          model = "some-model";
+          provider = "some-provider";
+        }
+        # one declared half drops both module halves: no mismatched pair
+        && pairOf modelOnly
+        == {
+          model = "some-model";
+          provider = null;
+        }
+        && pairOf providerOnly
+        == {
+          model = null;
+          provider = "some-provider";
+        }
+        && pairOf modelNulled
+        == {
+          model = null;
+          provider = null;
+        }
+        && pairOf wholeDefault
+        == {
+          model = "some-model";
+          provider = "some-provider";
+        }
+        && wholeDefault.autoDefaultApplied or null == true
+        && pairOf wholeForce
+        == {
+          model = "auto";
+          provider = "kimchi-dev";
+        }
+        && wholeForce.theme or null == "dark"
+        && pairOf weakerPair
+        == {
+          model = "auto";
+          provider = "kimchi-dev";
+        }
+        # an explicit marker value wins over the module default
         && optedOut.autoDefaultApplied or null == false
         && !(nulled ? autoDefaultApplied)
-        # devenv: no marker in the project file, and no assertion fires
-        && !((projectHarnessDocument devenv).value ? autoDefaultApplied)
+        && pairOf nulled
+        == {
+          model = "auto";
+          provider = "kimchi-dev";
+        }
+        # devenv: no marker and no model default in the project file, and no
+        # assertion fires
+        && !(devenvHarness ? autoDefaultApplied)
+        && !(devenvHarness ? defaultModel)
+        && !(devenvHarness ? defaultProvider)
         && failedAssertions devenv == []
     );
 
