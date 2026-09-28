@@ -813,6 +813,27 @@ in {
                   unpinLaunchEffort = lib.mkForce settings;
                 };
               }).config.home.activation.claudeUnpinLaunchEffort.text))
+          # Copilot's state file, whose one Nix-owned leaf is folder trust.
+          # Copilot heads the file with `//` comment lines on its own writes,
+          # which the reconciler must read past and keep. The empty generation
+          # is Copilot disabled: the module declares the leaf, `[]` included,
+          # whenever Copilot is enabled, and its writer survives a disable.
+          ((mkCase "copilot" ".copilot/config.json" {
+                trustedFolders = ["/src/a" "/src/b"];
+              } {
+                trustedFolders = ["/src/c"];
+              } {
+                firstLaunchAt = "2026-09-28T00:00:00.000Z";
+                recentModelIds = ["native-model"];
+              } (settings:
+                (evalHm {
+                  ai.copilot =
+                    {enable = settings != {};}
+                    // lib.optionalAttrs (settings ? trustedFolders) {inherit (settings) trustedFolders;};
+                }).config.home.activation.copilotTrustedFolders.text))
+            // {
+              header = "// User settings belong in settings.json.\n// This file is managed automatically.\n";
+            })
         ];
       in
         pkgs.runCommand "module-test-json-settings-reconciliation" {} ''

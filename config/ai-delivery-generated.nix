@@ -432,16 +432,28 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.copilot/lsp-config.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "materialize-copilot-config-prune"
+          ];
+        }
+      ];
       ecosystem = "copilot";
       mode = "hm";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "lspServers";
       target = "$HOME/.copilot/lsp-config.json";
       writerAttr = [
         "home"
-        "file"
-        ".copilot/lsp-config.json"
+        "activation"
+        "materialize-copilot-config"
       ];
     }
     {
@@ -544,16 +556,28 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.copilot/mcp-config.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "materialize-copilot-config-prune"
+          ];
+        }
+      ];
       ecosystem = "copilot";
       mode = "hm";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "mcpServers";
       target = "$HOME/.copilot/mcp-config.json";
       writerAttr = [
         "home"
-        "file"
-        ".copilot/mcp-config.json"
+        "activation"
+        "materialize-copilot-config"
       ];
     }
     {
@@ -926,26 +950,38 @@
     {
       ecosystem = "copilot";
       mode = "devenv";
-      primitive = "ownLeaves";
-      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$DEVENV_ROOT/.github/copilot/settings.json";
       writerAttr = [
         "tasks"
-        "ai:copilot:settings-merge"
+        "ai:copilot:materialize-config"
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.copilot/settings.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "materialize-copilot-config-prune"
+          ];
+        }
+      ];
       ecosystem = "copilot";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$HOME/.copilot/settings.json";
       writerAttr = [
         "home"
         "activation"
-        "copilotSettingsMerge"
+        "materialize-copilot-config"
       ];
     }
     {

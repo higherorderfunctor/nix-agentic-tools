@@ -361,6 +361,23 @@ Home Manager's `ai.kimchi.projectTrust`, grant it at Kimchi's prompt without
 Home Manager, set user-scope `defaultProjectTrust = "always"`, or pass
 `--approve` for CLI and TUI runs. ACP resolves trust separately.
 
+### Copilot user-global settings
+
+Copilot's user-global files live under `~/.copilot`, which devenv never writes.
+Who manages each one depends on whether you use Home Manager:
+
+| User-global setting                                                            | Home Manager                                                                                                                                                         | devenv only            |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `settings.json`, `mcp-config.json`, `lsp-config.json`                          | Nix, as read-only copies (empty when nothing is declared); in-app changes such as `/model` or `copilot mcp add` are reset at the next activation                     | Copilot                |
+| Trusted folders (`trustedFolders` in `config.json`)                            | Nix (`ai.copilot.trustedFolders`, absolute paths; a folder covers its subfolders); a folder trusted at Copilot's prompt stays trusted only until the next activation | Copilot's trust prompt |
+| Sign-in, tokens, session and acknowledgement state (the rest of `config.json`) | Copilot                                                                                                                                                              | Copilot                |
+
+devenv writes the repository `.github/copilot/settings.json` as a read-only copy
+only when `ai.copilot.native.settings` declares something, and rejects
+`ai.copilot.trustedFolders`. Copilot reads that repository file only in a
+trusted folder: with Home Manager, add the clone (or a parent folder) to
+`ai.copilot.trustedFolders`; without it, trust the project at Copilot's prompt.
+
 ## Configuration
 
 <details>

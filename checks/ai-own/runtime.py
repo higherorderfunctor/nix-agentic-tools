@@ -419,6 +419,46 @@ def drain(fixture):
     print("PASS drain: empty parents pruned, unowned sibling byte-identical")
 
 
+def commented_json(fixture):
+    """A leading `//` header is parsed past, kept, and written back verbatim.
+
+    Copilot heads its state file with two such lines; json.loads alone would
+    fail closed on every real machine.
+    """
+    document = fixture.root / "settings/config.json"
+    header = (
+        "// User settings belong in settings.json.\n"
+        "// This file is managed automatically.\n"
+    )
+    document.parent.mkdir()
+    native = {"firstLaunchAt": "2026-09-28", "url": "https://example.invalid//x"}
+    document.write_text(header + json.dumps(native, indent=2) + "\n")
+
+    def target(units):
+        return doc_target(units, path="settings/config.json", ledger="json-settings/config.json")
+
+    def body():
+        text = document.read_text()
+        assert text.startswith(header), text
+        return json.loads(text[len(header):])
+
+    fixture.own({"targets": [target({"text": json.dumps({"trustedFolders": ["/a"]})})]})
+    assert body() == {**native, "trustedFolders": ["/a"]}, document.read_text()
+    print("PASS commented_json: leaf set, header and siblings kept")
+
+    fixture.own({"targets": [target({})]})
+    assert body() == native, document.read_text()
+    print("PASS commented_json: leaf retracted, header and siblings kept")
+
+    # A header is a comment: like one in TOML, it keeps a document whose
+    # retraction leaves nothing else.
+    document.write_text(header + "{}\n")
+    fixture.own({"targets": [target({"text": json.dumps({"trustedFolders": []})})]})
+    fixture.own({"targets": [target({})]})
+    assert document.read_text() == header + "{}\n", document.read_text()
+    print("PASS commented_json: a header-only document survives retirement")
+
+
 def two_phase(fixture):
     """The HM pair: `--phase prune` deletes, `--phase all` finishes the job."""
     unit = fixture.root / "settings/unit.txt"
@@ -1063,6 +1103,7 @@ def project_root(fixture):
 
 
 CASES = {
+    "commented_json": commented_json,
     "drain": drain,
     "dry_run": dry_run,
     "lazy_toml": lazy_toml,

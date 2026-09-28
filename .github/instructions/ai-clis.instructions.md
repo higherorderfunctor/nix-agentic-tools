@@ -7,14 +7,19 @@ applyTo: "packages/copilot-cli/checks/copilot-wrapper-argv.nix,packages/chatgpt-
 
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-09-25 — devenv reconciles settings into the fixed
-> repository file `.github/copilot/settings.json` and writes LSP config to
-> `<projectDir>/lsp.json` (both measured at copilot-cli 1.0.88), so `configDir`
-> holds only the wrapper-aimed `mcp-config.json`. The repository context and
-> instruction files are read-only copies, never store symlinks. The repository
-> file is read from the git root, and its `effortLevel` by the interactive
-> session only; devenv warns on both. Keys and value kinds outside the
-> repository schema, and LSP server names Copilot rejects, throw at eval.
+> **Last verified:** 2026-09-28 — settings files are read-only copies of one
+> writer, `materialize-copilot-config`: Home Manager always owns the user
+> `settings.json`, `mcp-config.json` and `lsp-config.json`; devenv owns the
+> fixed repository file `.github/copilot/settings.json` only when something is
+> declared, and writes LSP config to `<projectDir>/lsp.json` (both measured at
+> copilot-cli 1.0.88), so `configDir` holds only the wrapper-aimed
+> `mcp-config.json`. Folder trust is `ai.copilot.trustedFolders`, one Home
+> Manager-owned leaf of Copilot's state file `config.json`; devenv rejects it.
+> The repository context and instruction files are read-only copies, never store
+> symlinks. The repository file is read from the git root, and its `effortLevel`
+> by the interactive session only; devenv warns on both. Keys and value kinds
+> outside the repository schema, and LSP server names Copilot rejects, throw at
+> eval.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -198,7 +203,17 @@ and once trusted, with an isolated `$HOME`. Trust is not a settings key: Copilot
 records it as `trustedFolders` in `~/.copilot/config.json`, whose header says
 the file is managed automatically (`folderTrustAddTrusted`, probed against the
 1.0.88 `runtime.node`). A `trustedFolders` or `trusted_folders` key in
-`settings.json` is reported as unknown and ignored.
+`settings.json` is reported as unknown and ignored. A parent folder covers its
+descendants (measured).
+
+So trust has its own option, `ai.copilot.trustedFolders`. Home Manager owns that
+one leaf of `config.json`, `[]` included, through the shared-document writer
+`copilotTrustedFolders`; every other key there is sign-in, session and
+acknowledgement state Copilot rewrites at will. Copilot heads the file with two
+`//` comment lines, which `lib/ai/own.py` reads past and writes back (a bare
+`json.loads` failed closed on every real machine). A folder trusted at the
+prompt lasts until the next activation. devenv asserts the option is empty: the
+file is user-global, and devenv never writes `$HOME`.
 
 **Git root, not devenv root.** Copilot resolves the file against the git root of
 the directory it runs in (`gitFindRootWithOptionalWorktreeResolutionAsync`,
@@ -239,13 +254,23 @@ honor. Nested records (a marketplace `source`, a hook entry) are checked only as
 far as their kind; Copilot validates them further. Home Manager's user file
 stays unrestricted.
 
-**Reconciled, not linked.** Copilot writes this file itself: `/settings --repo`
-and `/model --repo` call `repoSettingsWriteKey` on it. So devenv states
-`facts.harnessWrites` and reconciles the declared leaves at shell entry through
-the `ai:copilot:settings-merge` task, exactly as Home Manager does for the user
-file. Leaves Copilot or a teammate wrote survive, a dropped declaration
-retracts, and a committed team file keeps its own keys. A read-only store
-symlink here made the in-CLI write fail with `Permission denied`.
+**Read-only copies, not links.** Copilot writes its settings files itself:
+`/settings --repo` and `/model --repo` call `repoSettingsWriteKey` on the
+repository file, and `/settings`, `/model`, `--experimental` and
+`copilot mcp add` write the user files. Every key it writes there is
+configuration. At 1.0.88 the user-file writer puts `<file>.tmp.<uuid>` beside
+the file and renames it over the path, which silently replaces a store symlink
+or a 0444 file (measured by `strace`). A link would then block the next Home
+Manager switch, so each file is a `copy-ro` unit of the
+`materialize-copilot-config` writer (`ai:copilot:materialize-config` on devenv):
+the next activation or shell entry backs the in-app file up and restores the
+declaration. The repository writer was not re-measured; an older store symlink
+there failed with `Permission denied`, and a copy is right either way. The
+writer runs while Copilot is disabled, so a disable retracts the copies. devenv
+claims the repository file only when `ai.copilot.native.settings` is non-empty,
+so enabling Copilot for MCP or skills leaves a committed team file alone.
+`settings.local.json` beside it is not delivered, and a `/settings` local-scope
+write there still layers over the copy.
 
 ### Why not `COPILOT_HOME`
 
@@ -304,11 +329,11 @@ does, since it states that default in Git's own config instead.
 ### Where LSP and settings go
 
 Both are delivered at repository scope on devenv. LSP servers go to
-`<projectDir>/lsp.json` (default `.github/lsp.json`); settings are reconciled
-into the fixed `.github/copilot/settings.json`. Home Manager writes the
-user-scope `~/.copilot/lsp-config.json` and reconciles
-`~/.copilot/settings.json`. Nothing but `mcp-config.json` lives under the devenv
-`configDir` any more.
+`<projectDir>/lsp.json` (default `.github/lsp.json`); settings go to the fixed
+`.github/copilot/settings.json`. Home Manager writes the user-scope
+`~/.copilot/lsp-config.json`, `mcp-config.json` and `settings.json` as read-only
+copies, always, with empty maps when nothing is declared. Nothing but
+`mcp-config.json` lives under the devenv `configDir` any more.
 
 The repository-settings schema assertions are scoped to
 `ai.copilot.native.settings`, which only Copilot reads, so they cannot hard-fail
@@ -329,6 +354,11 @@ Each names a fixable entry (set `extensions` or rename the server, or
   and `userSettingsMetadata` in the new `runtime.node`.
 - Upstream reads repository settings in untrusted folders, or stops reading them
   → the trust caveat above changes.
+- Upstream stops renaming over its settings files and fails cleanly on a
+  read-only link instead → a store symlink would refuse the in-app edit at the
+  source, and the copies could become links.
+- Upstream moves folder trust out of `config.json` → `ai.copilot.trustedFolders`
+  follows it, and the shared document goes.
 - Prompt mode or ACP starts reading the repository `effortLevel` → drop the
   devenv effort warning in `lib/ai/delivery-warnings.nix`.
 - Upstream splits auth/session out of `COPILOT_HOME` → the env-var route becomes
