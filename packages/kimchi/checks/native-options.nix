@@ -12,7 +12,8 @@
   pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm ownedDocument;
+  inherit (harness) evalDevenv ownPlan;
+  evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   committed = builtins.fromJSON (builtins.readFile ../extracted.json);
   surfaceFor = extracted: import ../lib/extracted.nix {inherit extracted lib pkgs;};
   real = surfaceFor committed;
@@ -77,42 +78,50 @@
     .success;
 
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
+  # The user harness settings.json Home Manager copies, decoded.
+  hmHarnessSettings = evaluated:
+    builtins.fromJSON
+    (lib.head (lib.filter (target: target.codec == "dir" && target.path == ".config/kimchi/harness")
+        (ownPlan "kimchi" "kimchiFiles" evaluated).targets))
+    .units
+    ."settings.json"
+    .text;
   hmHarness = harnessSettings:
-    (ownedDocument "kimchi" ".config/kimchi/harness/settings.json" (evalHm {
+    hmHarnessSettings (evalHm {
       ai.kimchi = {
         enable = true;
         native = {inherit harnessSettings;};
       };
-    }))
-    .value;
+    });
   forced = value: (builtins.tryEval (builtins.deepSeq value true)).success;
 
   # The normalized effort enum, read off the option rather than restated.
   normalizedEfforts =
     ((evalHm {}).options.ai.settings.type.getSubOptions []).reasoningEffort.type.nestedTypes.elemType.functor.payload.values;
   loweredEffort = effort:
-    (ownedDocument "kimchi" ".config/kimchi/harness/settings.json" (evalHm {
+    (hmHarnessSettings (evalHm {
       ai = {
         kimchi.enable = true;
         settings.reasoningEffort = effort;
       };
     }))
-    .value
     .defaultThinkingLevel
     or null;
 
   keptKeys = surface: excluded: sorted (builtins.attrNames (builtins.removeAttrs surface.keys (builtins.attrNames excluded)));
 
+  # `telemetry.endpoint`, because devenv passes `telemetry.enabled` through
+  # the launcher environment rather than the project file.
   devenvTelemetry = evalDevenv {
     ai.kimchi = {
       enable = true;
-      native.settings.telemetry.enabled = false;
+      native.settings.telemetry.endpoint = "https://example.invalid";
     };
   };
   hmTelemetry = evalHm {
     ai.kimchi = {
       enable = true;
-      native.settings.telemetry.enabled = false;
+      native.settings.telemetry.endpoint = "https://example.invalid";
     };
   };
   fixedVariable = extra:
@@ -128,7 +137,8 @@
       && sorted (builtins.attrNames real.harnessSettingsOptions)
       == keptKeys committed.harness real.report.excluded.harnessSettings
       && real.report.excluded.settings ? apiKey
-      && real.report.excluded.settings ? api_key;
+      && real.report.excluded.settings ? api_key
+      && real.report.excluded.settings ? gitTokens;
 
     added-key-appears =
       fixture.harnessSettingsOptions ? probeAdded

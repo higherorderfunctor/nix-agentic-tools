@@ -39,6 +39,7 @@
             kimchi = {
               native.settings = {
                 llmEndpoint = "https://example.invalid";
+                region = "us";
                 skillPaths = ["probe"];
               };
               # `resources` is user-scope-only; devenv rejects it.

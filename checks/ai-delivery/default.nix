@@ -16,7 +16,7 @@
       });
     evaluators = {
       devenv = config: (harness.evalDevenv config).config;
-      hm = config: (harness.evalHm config).config;
+      hm = config: (harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config])).config;
     };
   };
   fixtures = import ./fixtures.nix {inherit harness lib pkgs;};
