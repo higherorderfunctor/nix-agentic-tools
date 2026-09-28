@@ -22,9 +22,19 @@
   #   open    a non-empty declaration, the default for every Claude user
   #           (`unpinLaunchEffort` defaults to a non-empty map): the merge
   #           rewrites the file and keeps its 0644.
-  #   closed  both declarations forced empty: the merge touches nothing.
+  #   closed  both declarations empty (Claude's `unpinLaunchEffort` forced
+  #           empty, Kimchi's always-declared config.json defaults nulled): the
+  #           merge touches nothing.
   #
   # A mode writer gated on either state fails the other one.
+  #
+  # Kimchi's config.json defaults live in a module of the `settings` option's
+  # TYPE (hmSettingsDefaults in mkKimchi.nix), not an ordinary outer
+  # definition, so a whole-attrset `native.settings = lib.mkForce {}` no
+  # longer reaches them: an empty attrset defines no leaves for the submodule
+  # to override, and the type module's own `mkDefault`s still apply. Closing
+  # the gate has to null every defaulted leaf instead, which does win over
+  # `mkDefault` per key.
   gates = {
     closed = {
       evaluated = harness.evalHm {
@@ -32,7 +42,15 @@
           enable = true;
           unpinLaunchEffort = lib.mkForce {};
         };
-        ai.kimchi.enable = true;
+        ai.kimchi = {
+          enable = true;
+          native.settings = {
+            preferences.hideTips = null;
+            region = null;
+            skillPaths = null;
+            telemetry.enabled = null;
+          };
+        };
       };
       holds = declared: declared == {};
     };

@@ -13,14 +13,16 @@ applyTo: "packages/*/modules/homeManager/**"
 > each declared by `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
 > on HM activation and devenv shell entry where the CLI writes that copy
-> (Copilot's user settings.json on HM, its repository settings on devenv; Kiro's
-> settings files are read-only copies instead), a fully retracted empty document
-> is deleted, a document may name its native writer's lock, document targets may
-> enforce modes, a document is published by compare-and-swap against unlocked
-> runtime writers, credential documents get an ungated mode-narrowing command
-> writer, and the delivery-path parity example uses `ai.codex.execpolicyRules`.
-> The shared LSP producers are `mkKiroLspFile` / `mkCopilotLspFile` (whole
-> files, envelope included) and `mkClaudeLspConfig` (one entry).
+> (Copilot's user settings.json on HM, its repository settings on devenv;
+> Kimchi's HM user config.json; Kiro's settings files and Kimchi's other ones
+> are read-only copies instead), a fully retracted empty document is deleted, a
+> document may name its native writer's lock (no runtime does), document targets
+> may enforce modes, a document is published by compare-and-swap against
+> unlocked runtime writers, credential documents get an ungated mode-narrowing
+> command writer, and the delivery-path parity example uses
+> `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile` /
+> `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
+> (one entry).
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -247,8 +249,8 @@ A document whose native writer takes a lock names it on the ledger (`lock`,
 relative to the backend root). `own.py` then holds that proper-lockfile-style
 `mkdir` lock around the pre-flight parse and the whole locked read-modify-write,
 taken after its own flock so waiting on another reconcile never ages it toward
-stale. Only Kimchi's `trust.json` declares one; `own.nix` refuses it on a `dir`
-target.
+stale. No runtime declares one: Kimchi's `trust.json`, the only user, is a
+read-only copy now. `own.nix` refuses it on a `dir` target.
 
 **Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
 user `config.toml` contains Nix-declared settings and required native state: the
@@ -320,15 +322,15 @@ materializer were removed 2026-09-19 as unreachable dead code (see the Settled
 bullet in `dev/fragments/ai-module/ai-module-fanout.md`).
 
 **Every HM settings writer is unconditional.** Copilot's `copilotSettingsMerge`,
-kiro's `kiroMcpJson`, kimchi's two entries, codex's `codexSettingsReconcile` and
-claude's `claudeUnpinLaunchEffort` are all emitted while the ecosystem is
-enabled, whatever the declaration says. An empty declaration is not "nothing to
-do", it is the RETRACTION path: empty settings plus no prior ledger is a strict
-no-op, while empty settings plus a prior ledger must run so a later generation
-retracts the leaves it used to own without erasing native state. A
-`mkIf (cfg.native.settings != {})` around one of these writers is the N-to-zero
-defect, and `checks.ai-delivery` fails at eval on it — it evaluates every
-imperative writer under a populated AND an empty declaration.
+kiro's `kiroMcpJson`, kimchi's `kimchiConfigMerge` and `kimchiFiles`, codex's
+`codexSettingsReconcile` and claude's `claudeUnpinLaunchEffort` are all emitted
+while the ecosystem is enabled, whatever the declaration says. An empty
+declaration is not "nothing to do", it is the RETRACTION path: empty settings
+plus no prior ledger is a strict no-op, while empty settings plus a prior ledger
+must run so a later generation retracts the leaves it used to own without
+erasing native state. A `mkIf (cfg.native.settings != {})` around one of these
+writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on it —
+it evaluates every imperative writer under a populated AND an empty declaration.
 
 Devenv-side writes are unconditional (always write the file when
 `enable = true`). This is intentional: devenv files are project-local symlinks,
