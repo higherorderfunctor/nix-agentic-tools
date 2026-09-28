@@ -244,20 +244,6 @@
       };
       unknown-primitive = replaceFirst {primitive = "typo";};
       untested-additional = replaceFirst {additionalWriters = [(builtins.removeAttrs writer ["probe"])];};
-      upstream-command = replaceFirst {
-        primitive = "upstream";
-        target = "probe";
-        writerAttr = ["probe"];
-        reason = "delegation";
-        reverifyCommand = "";
-      };
-      upstream-reason = replaceFirst {
-        primitive = "upstream";
-        target = "probe";
-        writerAttr = ["probe"];
-        reason = "";
-        reverifyCommand = "true";
-      };
     }
     // lib.genAttrs ["ecosystem" "mode" "primitive" "pruneTrigger" "surface" "target" "writerAttr"]
     (field: [(builtins.removeAttrs first [field])] ++ rest);
@@ -272,7 +258,6 @@
   correspondence = row: absentKeys:
     import ./correspondence.nix {inherit lib;} {
       inherit absentKeys;
-      delegations = [];
       policy = policy // {rows = [row];};
     };
   absentRow = writer // {primitive = "notApplicable";};

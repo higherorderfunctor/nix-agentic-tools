@@ -11,8 +11,6 @@
     "shared"
     # The backend's own store-symlink primitive.
     "symlink"
-    # Handed to another module's option instead of written here.
-    "upstream"
   ];
 
   # A consumer fact usually holds on both backends. When it does not — Claude

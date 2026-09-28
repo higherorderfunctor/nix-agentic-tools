@@ -8,8 +8,9 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-27 — Claude delivers every surface as its own file
-> through `ai.claude.files` on both backends, and no runtime flips an upstream
-> `programs.<cli>` or devenv integration. AGENTS.md puts the index and rules
+> through `ai.claude.files` on both backends, no runtime flips an upstream
+> `programs.<cli>` or devenv integration, and the `upstream` delivery method is
+> gone: every method writes the file itself. AGENTS.md puts the index and rules
 > before the context. The repository AGENTS.md, Copilot's devenv context and
 > instruction files, and Kiro's devenv steering land as read-only copies; Codex
 > indexes scoped rules that name `references`; a unit whose file is switched off
@@ -36,11 +37,10 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > owned writable copies and portable hooks reach its project `hooks.json` on
 > devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
 > declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Upstream
-> delegation aliases the content field's own definitions. Ledger-owned copies
-> whose files nothing else retracts opt into `runWhenDisabled`. `ai.lspServers`
-> renders whole files with each runtime's envelope, Copilot/Kiro require
-> `extensions`, and Copilot constrains server names.
+> one priority-aware text-source record with enable semantics. Ledger-owned
+> copies whose files nothing else retracts opt into `runWhenDisabled`.
+> `ai.lspServers` renders whole files with each runtime's envelope, Copilot/Kiro
+> require `extensions`, and Copilot constrains server names.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -598,10 +598,11 @@ whole-entry contract:
   measured on the real type. A document contributes its leaves at ordinary
   priority, or one `mkDefault` per LEAF.
 
-How a file lands is a METHOD — `symlink`, `copy-ro`, `shared`, `upstream` —
-resolved by `ai.<runtime>.methodFor` from the facts, or stated per file as the
-light exception. A runtime normally states facts; upstream delegation explicitly
-states its method and sink. Reasons belong in comments.
+How a file lands is a METHOD — `symlink`, `copy-ro` or `shared` — resolved by
+`ai.<runtime>.methodFor` from the facts, or stated per file as the light
+exception. A runtime normally states facts. Reasons belong in comments. Every
+method writes the file itself: there is no method that hands an entry's content
+to another module's option.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
@@ -629,31 +630,15 @@ the files its writer wrote. `own` adopts a file whose bytes already match
 without a backup, so a `git pull` of a committed copy is silent.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
-files use `content.run` in an owned writer, runtime state keeps its typed
-lifecycle owners, and a surface another module owns is DESCRIBED here —
-`method = "upstream"` plus the `sink` that owns it — rather than written here.
-The router aliases the surviving definitions of the content FIELD
-(`content.value`, `.source` or `.text`), including their priorities, instead of
-copying the merged value: copying strips `mkDefault` and breaks ordinary
-upstream overrides. It reads them from the field's own option, whose merge has
-already discharged a property wrapped around the field
-(`content.value = mkForce {…}`, `mkIf c {…}`). Taking `content.${field}` from
-the raw content definitions instead nests that property inside the alias's
-override, and the host writes it into the document as literal
-`_type`/`priority`/`content` keys. A non-default priority on the whole `content`
-wins over the field's. The suppressible entry type preserves submodule option
-metadata for that alias. Definitions combine through `mkMerge` below each
-adapter's literal hosted root, so the host retains its own deep-merge and
-list-ordering semantics. Dynamic top-level roots remain forbidden because they
-recurse during option collection. Skills go through the map now: one entry per
-tree, expanded by Home Manager natively and walked by the router for devenv.
-Kiro steering links on Home Manager (live 2.18.1 spikes confirmed startup
-discovery and same-session replacement reload) and is a read-only copy on
-devenv, claimed by the `ai:kiro:materialize-steering` directory ledger; Kiro
-hooks stay real-file reconciled (`lib/ai/own.nix`, a `dir` target) because the
-v3 scan keeps only `isFile()` entries. On Home Manager the same
-enable-independent writer declares nothing and only drains the steering copies
-an older ledger records.
+files use `content.run` in an owned writer, and runtime state keeps its typed
+lifecycle owners. Skills go through the map now: one entry per tree, expanded by
+Home Manager natively and walked by the router for devenv. Kiro steering links
+on Home Manager (live 2.18.1 spikes confirmed startup discovery and same-session
+replacement reload) and is a read-only copy on devenv, claimed by the
+`ai:kiro:materialize-steering` directory ledger; Kiro hooks stay real-file
+reconciled (`lib/ai/own.nix`, a `dir` target) because the v3 scan keeps only
+`isFile()` entries. On Home Manager the same enable-independent writer declares
+nothing and only drains the steering copies an older ledger records.
 
 ### Documentation parity is capability parity
 
@@ -1156,7 +1141,8 @@ root/runtime precedence.
 > **Last verified:** 2026-09-27 — directory-generated per-runtime entries
 > replace or null-suppress same-key root entries under the normalized keyed-pool
 > contract; see "Consumer patterns" below. The builder expands every per-runtime
-> Dir option, `agentsDir` included, outside the enable gate. Full lineage:
+> Dir option, `agentsDir` included, outside the enable gate. The path-type
+> pitfall is about strict `lib.isPath` checks. Full lineage:
 > `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
 
 ### The helpers
@@ -1243,9 +1229,8 @@ The helpers use `builtins.readDir cfg.path` and compute per-file paths as
 `cfg.path` is a literal, so downstream consumers that strict-check `lib.isPath`
 still see a path (not a store-path string). Do NOT replace the path literal in
 consumer code with `builtins.path { path = ...; }` or a `builtins.filterSource`
-result — those return strings and silently break upstream HM's `mkSkillEntry`
-and similar strict-check paths. See `hm-modules/module-conventions.md` on "Nix
-path types".
+result — those return strings and silently break every strict `lib.isPath` check
+downstream. See `hm-modules/module-conventions.md` on "Nix path types".
 
 <!-- Fragment: dev/fragments/ai-module/layered-fanout.md -->
 
@@ -1253,17 +1238,18 @@ path types".
 
 > **Last verified:** 2026-09-27 — Claude delivers every surface through
 > `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
-> L5 is the delivery router plus one adapter per backend; every runtime
-> describes delivery once through the record-level `config`, which `mkRuntime`
-> makes the only delivery callback, and the delivery matrix is generated from
-> the layer for every runtime's files. Normalized pools carry only a text-source
-> record's winning arm. Claude's devenv rules and Codex's execpolicy rules are
-> read-only copies whose writers survive a disable. Copilot reconciles its user
-> settings.json on HM and the repository `.github/copilot/settings.json` on
-> devenv. Kiro excludes the normalized `settings` pool. Native file settings
-> live under `ai.<runtime>.native`. The builder publishes each record's devenv
-> shared AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`,
-> from the record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
+> Every delivered entry is a file the layer writes. L5 is the delivery router
+> plus one adapter per backend; every runtime describes delivery once through
+> the record-level `config`, which `mkRuntime` makes the only delivery callback,
+> and the delivery matrix is generated from the layer for every runtime's files.
+> Normalized pools carry only a text-source record's winning arm. Claude's
+> devenv rules and Codex's execpolicy rules are read-only copies whose writers
+> survive a disable. Copilot reconciles its user settings.json on HM and the
+> repository `.github/copilot/settings.json` on devenv. Kiro excludes the
+> normalized `settings` pool. Native file settings live under
+> `ai.<runtime>.native`. The builder publishes each record's devenv shared
+> AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`, from the
+> record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
 > mode-narrowing command writer beside its unpin ledger. Codex's daemon
 > `settings.json` maps to no matrix cell. The builder declares the per-runtime
 > `agents`, `environmentVariables` and `lspServers` options and an opt-in
@@ -1530,9 +1516,9 @@ them or retroactively establish the order of historical matrix derivation.
 `config/ai-delivery.nix` remains a pure `{lib}` import. Its schema and consumer
 facts are hand-authored; physical writer records come from the committed
 `config/ai-delivery-generated.nix`. The partition requires every matrix cell
-exactly once across derived and hand-authored rows. Absence reasons, upstream
-contracts, package wrappers, input associations and behavioral probes remain
-independent of the observed delivery implementation.
+exactly once across derived and hand-authored rows. Absence reasons, package
+wrappers, input associations and behavioral probes remain independent of the
+observed delivery implementation.
 
 `checks/ai-delivery/generate.nix` evaluates populated specimens at default
 config directories. It reads typed files and activation ledgers, resolves
@@ -1545,10 +1531,10 @@ portable surface, so the specimen maps it to no cell. Codex's
 surface, and maps to no cell either.
 
 The production gate compares live absence against hand-authored gaps in both
-directions and verifies upstream sink correspondence. Its three body arms stay;
-derived names make the first arm's name agreement a tautology, not a stronger
-check. Empty-declaration survival and body variation still discriminate. Kiro
-MCP's two strategies keep independent probes, including both HM phases.
+directions. Its three body arms stay; derived names make the first arm's name
+agreement a tautology, not a stronger check. Empty-declaration survival and body
+variation still discriminate. Kiro MCP's two strategies keep independent probes,
+including both HM phases.
 
 Regeneration evaluates the check set, and the check set asserts the committed
 matrix, so a change that moves a cell (a runtime joining the layer, say) cannot
