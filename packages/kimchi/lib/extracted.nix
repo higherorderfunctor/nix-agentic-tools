@@ -59,6 +59,7 @@
 
   exclusions = {
     "settings.apiKey" = "a secret; set `ai.kimchi.apiKey`, which reads it from a file at launch instead of writing it into the Nix store";
+    "settings.gitTokens" = "secrets; set `ai.kimchi.gitTokens`, which Home Manager reads from files at activation instead of writing them into the Nix store";
   };
 
   refinements = {
