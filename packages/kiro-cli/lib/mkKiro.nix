@@ -3,7 +3,7 @@
 # Returns a backend-agnostic runtime record describing the Kiro AI app;
 # `lib.ai.app.hmTransform` and `lib.ai.app.devenvTransform` project it into
 # the Home Manager and devenv modules. One delivery description serves both
-# backends: the settings/cli.json leaf reconciler, settings/mcp.json,
+# backends: read-only copies of settings/cli.json and settings/mcp.json,
 # settings/lsp.json, steering, skills, agents and hooks under `<configDir>`,
 # with environment variables baked into the launcher on both backends.
 {
@@ -866,9 +866,9 @@
 
             The pinned kiro honors NO workspace override at all — its TUI has no
             workspace merge — so no key belongs in this file. Set these under
-            home-manager (`ai.kiro.native.settings`, which writes the global
-            ~/.kiro/settings/cli.json), or with
-            `kiro-cli settings <key> <value>`.
+            home-manager (`ai.kiro.native.settings`, which owns the global
+            ~/.kiro/settings/cli.json). Without home-manager the global file
+            is Kiro's own: `kiro-cli settings <key> <value>`.
           ''
           else ''
 
@@ -876,9 +876,9 @@
             ${lib.concatStringsSep ", " workspaceOverridableSettings}
 
             Anything else is global-only: set it under home-manager
-            (`ai.kiro.native.settings`, which writes the global
-            ~/.kiro/settings/cli.json), or with
-            `kiro-cli settings <key> <value>`.
+            (`ai.kiro.native.settings`, which owns the global
+            ~/.kiro/settings/cli.json). Without home-manager the global file
+            is Kiro's own: `kiro-cli settings <key> <value>`.
 
             That list describes the binary this flake PINS, read out of
             `packages/kiro-cli/extracted.json`. It is not re-derived from an
@@ -962,8 +962,8 @@
     };
 
   # Render settings/mcp.json to stdout at activation (HM) / shell entry
-  # (devenv). This only assembles content; which container persists it — the
-  # whole file or its leaves — is the plan's business.
+  # (devenv). This only assembles content; the plan persists it as a
+  # read-only copy.
   # A credential url is substituted in HERE: `urlSecretEnv` vars are
   # exported from their decrypted secret and `envsubst`'d into the
   # template with an EXPLICIT var list, so header `${env:...}`
@@ -1282,8 +1282,8 @@ in
         description = "Config directory relative to HOME / devenv root.";
       };
       # Kiro-specific freeform settings with typed subkeys for known
-      # knobs. The settings/cli.json delivery writer reconciles these leaves
-      # on both backends, retiring Nix leaves and preserving native siblings.
+      # knobs. They are the whole of settings/cli.json, a read-only copy on
+      # both backends.
       native.settings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
@@ -1359,8 +1359,14 @@ in
         };
         default = {};
         description = ''
-          JSON settings merged into ~/.kiro/settings/cli.json on activation (HM)
-          or written statically (devenv). Runtime-mutated keys are preserved in HM.
+          The whole of `settings/cli.json`, written as a read-only copy on
+          activation (HM, `~/.kiro/settings/cli.json`, always) or shell entry
+          (devenv, the project file, only when something is declared). Kiro's
+          own writers (`/model`, the settings panel, `kiro-cli settings`)
+          rename a new file over it; the next activation or shell entry backs
+          that file up and restores the declaration, so in-app changes do not
+          persist.
+
           Known keys are typed; unknown keys are accepted via freeformType —
           by the TYPE. Whether a key is then honored is a separate question the
           backend answers, and under devenv the answer is no for anything off
@@ -1387,41 +1393,6 @@ in
           allowlist is extracted from the binary
           (`packages/kiro-cli/extracted.json`, `workspaceOverridableSettings`),
           so it tracks version bumps instead of being curated here.
-        '';
-      };
-      # How settings/mcp.json is delivered on activation. Governs the
-      # dedicated mcp.json only (cli.json always reconciles leaves to
-      # preserve oauth); a credential url forces a real file either way.
-      mcpWriteMode = lib.mkOption {
-        type = lib.types.enum ["overwrite" "merge"];
-        default = "overwrite";
-        description = ''
-          How `settings/mcp.json` is written on activation (HM) / shell
-          entry (devenv). It is always a REAL file (never a store
-          symlink) so a SOPS-injected secret `url` can be substituted in.
-
-          - `overwrite` (default): the file is re-assembled from the Nix
-            definition every activation and locked read-only. Nix is
-            authoritative; hand edits do not survive. Equivalent to the
-            old symlink-into-store guarantee, as a real file.
-          - `merge`: Nix owns only its declared leaves. Removed leaves are
-            retracted, including when the pool becomes empty; hand-added
-            servers and unowned fields survive. Declared values are reasserted.
-            The file is left owner-writable (`0644`) so it can still be
-            hand-edited, or owner-only (`0600`) when a credential `url` is
-            substituted into it. Both are imposed on every activation,
-            including the one that switches away from `overwrite`.
-
-          Switching modes retires the inactive writer's ownership. On the
-          first switch from overwrite to merge, existing fields absent from
-          the new declaration are preserved as unowned: a whole-file hash
-          cannot distinguish old Nix declarations from hand edits. This also
-          applies to files written by the former deep-merge implementation.
-
-          Both modes deliver identical content for the Nix-managed
-          servers and handle secret `url`/`headers` the same way; the
-          only difference is whether the on-disk file is Nix-owned
-          (overwrite) or co-owned with the user (merge).
         '';
       };
       extraPackages = lib.mkOption {
@@ -1661,10 +1632,6 @@ in
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       isHm = backend == "hm";
       settingsDir = "${cfg.configDir}/settings";
-      configHash = builtins.hashString "sha256" cfg.configDir;
-      settingsLedger = "json-settings/kiro-settings-${configHash}.json";
-      mcpLedger = "json-settings/kiro-mcp-${configHash}.json";
-      merging = cfg.mcpWriteMode == "merge";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
       hasUrlSecret = kiroSecrets.urlSecretEnv != {};
       mcpRender = mkMcpJsonScript {
@@ -1690,7 +1657,7 @@ in
           {assertions = mkAssertions cfg ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);}
           {
             # Writer identities survive empty declarations: N→0 must retract
-            # earlier files and leaves, including when the final hook disappears.
+            # earlier files, including when the final hook disappears.
             ai.kiro.activation = {
               kiroMcpJson = {
                 # URL credentials are read at activation, unlike launcher header
@@ -1700,17 +1667,11 @@ in
                   devenv = "ai:kiro:materialize-mcp";
                   hm = "kiroMcpJson";
                 };
-                # Both historical ledgers remain in ONE bundle. The unclaimed
-                # target retracts before any target asserts, in either direction.
-                ledgers = {
-                  ${mcpLedger} = {
-                    codec = "json";
-                    path = "${settingsDir}/mcp.json";
-                  };
-                  "materialize/kiro-settings.manifest" = {
-                    codec = "dir";
-                    path = settingsDir;
-                  };
+                # cli.json and mcp.json. The directory stays writable because
+                # Kiro keeps state beside them (feed_state.json, cli.json.lock).
+                ledgers."materialize/kiro-settings.manifest" = {
+                  codec = "dir";
+                  path = settingsDir;
                 };
                 pruneEntry.hm = "materialize-kiro-settings-prune";
               };
@@ -1727,20 +1688,6 @@ in
               };
             };
           }
-          # Kiro writes model selections and toggles here. Flattening stops at
-          # each known dotted key, preserving object-valued keys.
-          (helpers.mkReconciledDocument {
-            content.value = flatSettings;
-            entry = {
-              devenv = "ai:kiro:settings-merge";
-              hm = "kiroSettingsMerge";
-            };
-            format = "json";
-            ledger = settingsLedger;
-            path = "${settingsDir}/cli.json";
-            runtime = "kiro";
-            writer = "kiroSettingsMerge";
-          })
           {
             ai.kiro.files = lib.mkMerge [
               {
@@ -1754,40 +1701,41 @@ in
                   executable = null;
                   format = "json";
                 };
-                # A producer is a claim even with zero servers in merge mode;
-                # empty overwrite instead releases the whole-file claim.
-                "${settingsDir}/mcp.json" = lib.mkIf (merging || kiroSecrets.servers != {}) {
+                # Every key Kiro writes into cli.json is configuration (model,
+                # effort, toggles, UI preferences), so the file is Nix's
+                # whole. Its writers rename a temporary over the path, which
+                # replaces a symlink or a 0444 file alike; a copy is restored
+                # at the next run, where a symlink would block Home Manager's
+                # link check or be skipped by devenv. Flattening stops at each
+                # known dotted key, preserving object-valued keys. Home Manager
+                # always owns the user-global file; devenv takes the project
+                # file only when something is declared.
+                "${settingsDir}/cli.json" = lib.mkIf (isHm || flatSettings != {}) {
+                  content.value = flatSettings;
+                  entry = "kiroMcpJson";
+                  format = "json";
+                  ledger = "materialize/kiro-settings.manifest";
+                  method = "copy-ro";
+                };
+                # Kiro's engine only reads mcp.json; `kiro-cli mcp add` and hand
+                # edits are its writers. Same ownership rule as cli.json. A URL
+                # secret keeps the file owner-only.
+                "${settingsDir}/mcp.json" = lib.mkIf (isHm || kiroSecrets.servers != {}) {
                   content = lib.mkDefault {run = mcpRender;};
                   entry = "kiroMcpJson";
                   format = "json";
-                  ledger =
-                    if merging
-                    then mcpLedger
-                    else "materialize/kiro-settings.manifest";
-                  method =
-                    if merging
-                    then "shared"
-                    else "copy-ro";
-                  # URL secrets must remain owner-only. Merge must also undo
-                  # overwrite's read-only mode so the user can edit native leaves.
+                  ledger = "materialize/kiro-settings.manifest";
+                  method = "copy-ro";
                   mode =
                     if hasUrlSecret
-                    then
-                      (
-                        if merging
-                        then "0600"
-                        else "0400"
-                      )
-                    else
-                      (
-                        if merging
-                        then "0644"
-                        else "0444"
-                      );
+                    then "0400"
+                    else "0444";
                 };
                 # Kiro reads permissions only from ~/.kiro/settings/ or
-                # ~/.kiro/workspace-roots/<hash>/, never project .kiro/. Its
-                # session-scoped Always allow action does not mutate this file.
+                # ~/.kiro/workspace-roots/<hash>/, never project .kiro/. A
+                # "trust always" answer at user or workspace scope writes
+                # permissions.yaml (failing harmlessly on this store link); the
+                # session-scoped answer does not.
                 "${settingsDir}/permissions.yaml" = lib.mkIf (isHm && permissionRules != []) {
                   content = lib.mkDefault {
                     source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
