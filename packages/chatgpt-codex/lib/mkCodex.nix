@@ -951,16 +951,17 @@ in
         type = lib.types.ints.positive;
         default = codexProjectDocMaxBytes;
         description = ''
-          Maximum byte size of the generated Codex AGENTS.md. Evaluation fails
+          Maximum byte size of the Codex AGENTS.md, generated or a replacement
+          you supply. The build of the Markdown tree holding the file fails
           before Codex can silently truncate content beyond this limit. A value
           other than Codex's own default (32768) is also written to Codex's
           `project_doc_max_bytes` at default priority, so Codex reads as much
-          as this guard admits. On devenv that key lands in the project's
+          as this limit admits. On devenv that key lands in the project's
           `.codex/config.toml`, which Codex applies only in a trusted project,
-          so when a raised limit admits a file larger than 32768 bytes,
-          evaluation warns that an untrusted session reads only the first
-          32768. Home Manager writes it to user config, which no trust gates,
-          so it does not warn.
+          so when a raised limit is in force, every devenv shell entry warns
+          while AGENTS.md is larger than 32768 bytes, since an untrusted
+          session reads only the first 32768. Home Manager writes the key to
+          user config, which no trust gates, so it does not warn.
         '';
       };
       native.settings = lib.mkOption {
@@ -1031,7 +1032,6 @@ in
       agentsMd = mkAgentsMd {inherit mergedContext mergedRules;};
       hasAgentsMdContent = hasMergedContext || mergedRules != {};
       agentsMdTarget = agentsMdPath "hm" cfg;
-      finalAgentsMdEntry = cfg.files.${agentsMdTarget} or null;
       hasNativeMcpServers = cfg.native.settings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       configuredGitRoot = lib.attrByPath ["git" "root"] null config;
@@ -1098,7 +1098,7 @@ in
             (lib.mkIf (resolvedSettings.reasoningEffort != null) {
               model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
             })
-            # The size guard alone would let a raised limit pass evaluation
+            # The byte limit alone would let a raised limit pass the build
             # while Codex still truncated at its own default. Codex honors
             # this key from a trusted project's `.codex/config.toml` as well
             # as from user config (measured with `codex debug prompt-input`
@@ -1126,17 +1126,6 @@ in
               }
             ]
             ++ lib.optionals isHm [
-              # Checked after B7 arbitration, on the final inline content.
-              (aiCommon.sizeAssertion {
-                entry = finalAgentsMdEntry;
-                maxBytes = cfg.projectDocMaxBytes;
-                message = size: ''
-                  Codex AGENTS.md renders to ${toString size} bytes, exceeding
-                  ai.codex.projectDocMaxBytes (${toString cfg.projectDocMaxBytes} bytes).
-                  Trim or replace the final inline content, or raise
-                  ai.codex.projectDocMaxBytes.
-                '';
-              })
               {
                 assertion = !(cfg.execpolicyRules ? default);
                 message = "ai.codex.execpolicyRules.default is reserved in Home Manager because Codex writes user allow-list decisions to rules/default.rules; choose another rule filename";
@@ -1253,6 +1242,16 @@ in
             # devenv projects, the first launch would decide the tool
             # environment of all of them, so auto-start is opt-in here.
             ai.codex.native.settings.features.daemon_auto_start = lib.mkDefault false;
+          }
+          {
+            # Codex silently drops whatever is past this. Keyed by path, so
+            # the file checked is whichever one wins at `.codex/AGENTS.md`,
+            # a consumer's replacement included. On devenv the shared
+            # AGENTS.md owner carries the limit (`sharedAgentsMd`).
+            ai.codex._maxBytes.${agentsMdTarget} = {
+              bytes = cfg.projectDocMaxBytes;
+              hint = "Trim or replace the final content, or raise ai.codex.projectDocMaxBytes.";
+            };
           }
           # The user config is not wholly declarative: Codex's trust prompt
           # persists project decisions here via config/batchWrite. Reconcile

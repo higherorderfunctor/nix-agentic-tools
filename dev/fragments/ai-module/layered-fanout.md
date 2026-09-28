@@ -21,11 +21,13 @@
 > AGENTS.md contribution may carry `index` entries: Codex renders a scoped rule
 > that names `references` as a path-scoped index entry instead of inlining its
 > body. The shared AGENTS.md map lowers through the router as `internal`, as a
-> read-only copy, and a contribution's `defaultMaxBytes` makes the owner warn
-> past it under a raised `maxBytes`. Generators mark their `content` with
-> `_generated`, so a consumer's replacement of a unit's file warns like a
-> switch-off. Every generated Markdown file carries `format = "markdown"` and is
-> delivered from one store tree per router invocation (`lib/markdown`).
+> read-only copy, and a contribution's `defaultMaxBytes` makes every devenv
+> shell entry warn past it under a raised `maxBytes`, whose hard limit is
+> checked on the built file through `ai.internal._maxBytes`. Generators mark
+> their `content` with `_generated`, so a consumer's replacement of a unit's
+> file warns like a switch-off. Every generated Markdown file carries
+> `format = "markdown"` and is delivered from one store tree per router
+> invocation (`lib/markdown`).
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -344,9 +346,10 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex every
   rule; Kiro only unscoped always-on rules; Kimchi none), optional `index`
-  entries, an optional `maxBytes` and an optional `defaultMaxBytes` (what the
-  runtime reads where a raised `maxBytes` does not apply; past it the owner
-  warns), and nothing else: the builder reads those by name, so
+  entries, an optional `maxBytes` (the owner's `ai.internal._maxBytes` record,
+  checked on the built file) and an optional `defaultMaxBytes` (what the runtime
+  reads where a raised `maxBytes` does not apply; past it every devenv shell
+  entry warns), and nothing else: the builder reads those by name, so
   `checkRecord.nix` rejects a missing `key` or any other field. Codex lists a
   scoped rule that names `references` as an index entry (its globs plus links to
   those documents) and inlines every other rule, a scoped one behind a prose
@@ -379,12 +382,17 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   `ai-<backend>-<runtime>-markdown` from `lib/markdown`'s `mkTree`, at its
   target path, and delivers `${tree}/<path>` by whatever method the entry
   resolves to. Selection is by `format`, never by suffix or text, so building
-  the file map forces no bytes. The factories set it at `mkDefault` beside the
-  generated content (inside the whole-entry default for AGENTS.md). Checks read
-  a Markdown file's content through the harness's `markdownInput` (the tree's
-  input) and its delivery through `fromMarkdownTree` (`deliveredMarkdown` does
-  both): the delivered path is a derivation output, and reading it back would be
-  import-from-derivation.
+  the file map forces no bytes. A path with a byte limit (`_maxBytes`, declared
+  per runtime and on `ai.internal` from `deliveryOptions.maxBytesOption`) joins
+  the tree whatever its format, so a consumer replacement that dropped the
+  generated `format` is still measured; the tree's install check fails the build
+  past the limit, and a limited `run` or `value` entry, which has no bytes in
+  the tree, makes the router warn instead. The factories set it at `mkDefault`
+  beside the generated content (inside the whole-entry default for AGENTS.md).
+  Checks read a Markdown file's content through the harness's `markdownInput`
+  (the tree's input) and its delivery through `fromMarkdownTree`
+  (`deliveredMarkdown` does both): the delivered path is a derivation output,
+  and reading it back would be import-from-derivation.
 
 ### Adding a new concern X
 

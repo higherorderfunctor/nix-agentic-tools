@@ -96,10 +96,19 @@ in
     # `format` and the content's SHAPE, never by the text, so building the
     # file map forces no bytes — and nothing here reads `rendered`, so there
     # is no cycle through `resolve`.
-    inTree = entry: entry.format == "markdown" && entry.content.run == null && entry.content.value == null;
+    #
+    # A path with a byte limit joins the tree whatever its format, and the
+    # tree's install check measures it. The limit is keyed by path because a
+    # consumer's replacement discards the generated entry's `format` with the
+    # rest of it, and the file the reader takes is the replacement.
+    limits = cfg._maxBytes;
+    inTree = path: entry:
+      entry.content.run == null && entry.content.value == null && (entry.format == "markdown" || limits ? ${path});
+    treeEntries = lib.filterAttrs inTree live;
     tree = markdown.mkTree {
       name = "ai-${backend}-${runtime}-markdown";
-      files = lib.mapAttrs (_path: entry: aiTypes.textSourceFile entry.content) (lib.filterAttrs (_path: inTree) live);
+      files = lib.mapAttrs (_path: entry: aiTypes.textSourceFile entry.content) treeEntries;
+      maxBytes = lib.filterAttrs (path: _limit: treeEntries ? ${path}) limits;
     };
 
     # Resolve through the shared rule after merging. Not at type level or in an
@@ -129,7 +138,7 @@ in
             }
           else if entry.content.run != null
           then {inherit (entry.content) run;}
-          else if inTree entry
+          else if inTree path entry
           then {source = "${tree}/${path}";}
           else entry.content;
       };
@@ -373,6 +382,17 @@ in
       plans = mergeBundles ["ai" runtime "_ownPlans"];
       tasks = mergeBundles ["tasks"];
     };
+
+    # A limited path whose bytes are not in the tree is not measured. A
+    # warning rather than an assertion: a limit cannot be unset, so refusing
+    # would lock a body that writes the file at activation out of that path.
+    warnings = lib.mapAttrsToList (path: entry: let
+      origin =
+        if entry.content.run != null
+        then "is written at activation (`content.run`)"
+        else "is rendered from `content.value`, outside the Markdown tree";
+    in "ai.${runtime}.files.\"${path}\" ${origin}, so its ${toString limits.${path}.bytes}-byte limit is not checked.")
+    (lib.filterAttrs (path: entry: limits ? ${path} && !(inTree path entry)) live);
 
     # Everything the layer can check about a delivery description, said where
     # the option path is still known. Silently dropping a file is the one

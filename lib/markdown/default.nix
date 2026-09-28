@@ -8,12 +8,77 @@
 #
 # `stdenvNoCC.mkDerivation`, not `runCommand`: the phases are the extension
 # points, and `runCommand` skips them.
-{lib}: pkgs: {
+{lib}: pkgs: let
+  shellStrict = import ../../config/shell-strict.nix;
+  # Both byte-limit programs are scripts rather than inline shell so the
+  # checks execute exactly what the tree and the devenv shell run. Their one
+  # external command, `wc`, is referenced by store path, so neither relies on
+  # the caller's PATH.
+  strictScript = args:
+    pkgs.writeShellApplication (args
+      // {
+        inherit (shellStrict) bashOptions;
+        extraShellCheckFlags = shellStrict.shellcheckFlags;
+        text = ''
+          ${shellStrict.shoptHeader}
+          ${args.text}
+        '';
+      });
+
+  # `FILE BYTES LABEL HINT`: fails when FILE is larger than BYTES. A reader
+  # that silently drops everything past its limit is the reason to fail the
+  # build instead of shipping the file.
+  byteLimitCheck = strictScript {
+    name = "ai-markdown-byte-limit";
+    text = ''
+      if [ "$#" -ne 4 ]; then
+        echo "usage: ai-markdown-byte-limit FILE BYTES LABEL HINT" >&2
+        exit 2
+      fi
+      file=$1
+      limit=$2
+      label=$3
+      hint=$4
+      size=$(${pkgs.coreutils}/bin/wc -c <"$file")
+      if [ "$size" -gt "$limit" ]; then
+        echo "$label: $file renders to $size bytes, exceeding its limit ($limit bytes). $hint" >&2
+        exit 1
+      fi
+    '';
+  };
+
+  # `FILE BYTES READER`: one warning on stderr when FILE is larger than what
+  # READER takes where a raised limit does not apply, and silence otherwise,
+  # including when FILE does not exist. It measures the file on disk, so it
+  # runs where that file is, at devenv shell entry.
+  windowNotice = strictScript {
+    name = "ai-markdown-window-notice";
+    text = ''
+      if [ "$#" -ne 3 ]; then
+        echo "usage: ai-markdown-window-notice FILE BYTES READER" >&2
+        exit 2
+      fi
+      file=$1
+      limit=$2
+      reader=$3
+      [ -f "$file" ] || exit 0
+      size=$(${pkgs.coreutils}/bin/wc -c <"$file")
+      if [ "$size" -gt "$limit" ]; then
+        echo "warning: $file is $size bytes; $reader in an untrusted project reads only the first $limit. Trust the project in $reader, or shrink the always-loaded content." >&2
+      fi
+    '';
+  };
+in {
+  inherit byteLimitCheck windowNotice;
+
   # `files` is keyed by TARGET-relative path; each value is `{text}` or
-  # `{source}`, the shape `aiTypes.textSourceFile` returns.
+  # `{source}`, the shape `aiTypes.textSourceFile` returns. `maxBytes` is
+  # keyed the same way, each value `{bytes; hint}`: the built file at that
+  # path must not be larger, checked after the tree is installed.
   mkTree = {
     name,
     files,
+    maxBytes ? {},
     passthru ? {},
   }: let
     # `writeText` rather than `builtins.toFile`: generated text can carry
@@ -51,6 +116,16 @@
           }
         '')}
         runHook postInstall
+      '';
+      doInstallCheck = maxBytes != {};
+      installCheckPhase = ''
+        runHook preInstallCheck
+        cd "$out"
+        ${lib.concatStrings (lib.mapAttrsToList (path: limit: ''
+            ${lib.getExe byteLimitCheck} ${lib.escapeShellArgs [path (toString limit.bytes) name limit.hint]}
+          '')
+          maxBytes)}
+        runHook postInstallCheck
       '';
     };
 }
