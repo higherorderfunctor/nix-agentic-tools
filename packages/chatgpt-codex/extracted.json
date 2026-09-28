@@ -346,7 +346,7 @@
             "acceptedValues": ["capability-token", "signed-bearer-token"],
             "conflicts": [],
             "default": null,
-            "help": "Websocket auth mode for non-loopback listeners",
+            "help": "Authentication mode for incoming WebSocket connections",
             "names": ["--ws-auth"],
             "valueName": "MODE"
           },
@@ -2716,6 +2716,22 @@
           {
             "acceptedValues": [],
             "conflicts": [],
+            "default": null,
+            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
+            "names": ["--disable"],
+            "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": "isolate",
+            "help": "Linux PID namespace: isolate (default) or inherit. Inherit allows signals to other same-UID processes; enable only when provisioning a dedicated environment",
+            "names": ["--linux-sandbox-pid-namespace"],
+            "valueName": "MODE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
             "default": "1",
             "help": "Maximum number of requests to process concurrently on each connection",
             "names": ["--concurrent-requests"],
@@ -2725,17 +2741,65 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
-            "names": ["--disable"],
-            "valueName": "FEATURE"
+            "help": "Transport endpoint URL. Supported values: `ws://IP:PORT` (default), `stdio`, `stdio://`",
+            "names": ["--listen"],
+            "valueName": "URL"
+          },
+          {
+            "acceptedValues": ["capability-token", "signed-bearer-token"],
+            "conflicts": [],
+            "default": null,
+            "help": "Authentication mode for incoming WebSocket connections",
+            "names": ["--ws-auth"],
+            "valueName": "MODE"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Transport endpoint URL. Supported values: `ws://IP:PORT` (default), `stdio`, `stdio://`",
-            "names": ["--listen"],
-            "valueName": "URL"
+            "help": "Absolute path to the capability-token file",
+            "names": ["--ws-token-file"],
+            "valueName": "PATH"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Hex-encoded SHA-256 digest of the capability token",
+            "names": ["--ws-token-sha256"],
+            "valueName": "HEX"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Absolute path to the shared secret file for signed JWT bearer tokens",
+            "names": ["--ws-shared-secret-file"],
+            "valueName": "PATH"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Expected issuer for signed JWT bearer tokens",
+            "names": ["--ws-issuer"],
+            "valueName": "ISSUER"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Expected audience for signed JWT bearer tokens",
+            "names": ["--ws-audience"],
+            "valueName": "AUDIENCE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Maximum clock skew when validating signed JWT bearer tokens",
+            "names": ["--ws-max-clock-skew-seconds"],
+            "valueName": "SECONDS"
           },
           {
             "acceptedValues": [],
@@ -2871,6 +2935,14 @@
             "help": "Disable a feature (repeatable). Equivalent to `-c features.<name>=false`",
             "names": ["--disable"],
             "valueName": "FEATURE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": "isolate",
+            "help": "Linux PID namespace: isolate (default) or inherit. Inherit allows signals to other same-UID processes; enable only when provisioning a dedicated environment",
+            "names": ["--linux-sandbox-pid-namespace"],
+            "valueName": "MODE"
           },
           {
             "acceptedValues": [],
@@ -3577,6 +3649,14 @@
             "help": "Optional OAuth client identifier to use for this MCP server",
             "names": ["--oauth-client-id"],
             "valueName": "CLIENT_ID"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Optional OAuth client secret for the pre-registered client",
+            "names": ["--oauth-client-secret"],
+            "valueName": "CLIENT_SECRET"
           },
           {
             "acceptedValues": ["auto", "cimd", "dcr"],
@@ -5723,6 +5803,11 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "defer_mailbox_preemption"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "deferred_executor"
     },
     {
@@ -5821,8 +5906,8 @@
       "name": "guardianv2"
     },
     {
-      "default": true,
-      "maturity": "stable",
+      "default": false,
+      "maturity": "removed",
       "name": "guardianv2.thread_context"
     },
     {
@@ -6296,8 +6381,8 @@
       "name": "worktrees"
     },
     {
-      "default": false,
-      "maturity": "under development",
+      "default": true,
+      "maturity": "stable",
       "name": "write_stdin_approval"
     }
   ],
@@ -6307,12 +6392,6 @@
       "displayName": "Codex Auto Review",
       "reasoningLevels": ["high", "low", "max", "medium", "xhigh"],
       "slug": "codex-auto-review"
-    },
-    {
-      "defaultReasoningLevel": "medium",
-      "displayName": "GPT-5.4",
-      "reasoningLevels": ["high", "low", "medium", "xhigh"],
-      "slug": "gpt-5.4"
     },
     {
       "defaultReasoningLevel": "medium",
@@ -6370,7 +6449,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.157.1",
+    "codexVersion": "0.158.0",
     "extractorSchema": 1
   }
 }

@@ -214,6 +214,19 @@
       # CODEX_EXEC_SERVER_EXIT_ON_STDIN_CLOSE environment alias: that alias is
       # how a parent process spawns and reaps one exec-server, not a durable
       # configuration surface this factory owns.
+      #
+      # The `--ws-*` listener-auth flags reached `codex exec-server` in 0.158
+      # through the same flattened `WebsocketAuthArgs` app-server uses, so the
+      # name-keyed disposition carries over with unchanged meaning.
+      #
+      # `--linux-sandbox-pid-namespace` (0.158; `codex exec-server`, `global`
+      # so `forward` inherits it) weakens bubblewrap PID isolation for one
+      # executor. Upstream makes it startup-only ON PURPOSE: at `rust-v0.158.0`
+      # `codex-rs/cli/tests/exec_server/pid_namespace_tests.rs` asserts that a
+      # `linux_sandbox_pid_namespace` config.toml key and a
+      # CODEX_LINUX_SANDBOX_PID_NAMESPACE variable both fail to opt in, and
+      # `codex-rs/linux-sandbox/README.md` reserves it for provisioning a
+      # dedicated environment. There is no config key to map onto.
       developerTooling = [
         "--analytics-default-enabled"
         "--aws-profile"
@@ -226,6 +239,7 @@
         "--environment-id"
         "--exit-on-stdin-close"
         "--experimental"
+        "--linux-sandbox-pid-namespace"
         "--listen"
         "--name"
         "--out"
@@ -250,11 +264,23 @@
       # Auth inputs and plugin/marketplace selectors accompany native mutable
       # state. Store-backed declarative files must never capture their token
       # values or pretend to own installation/authentication databases.
+      #
+      # `--oauth-client-secret` (0.158, `codex mcp add`) lands here although
+      # its sibling `--oauth-client-id` is `declarativeEquivalent`. Upstream
+      # has no indirection for it: at `rust-v0.158.0`
+      # `codex-rs/core/src/config/edit/document_helpers.rs` writes the literal
+      # into `[mcp_servers.<name>.oauth] client_secret` in config.toml. A Nix
+      # counterpart would put the secret in the store, so this ledger treats
+      # no path as a supported counterpart for it, the freeform per-server
+      # `codex` block (lib/ai/mcpServer/commonSchema.nix) included. That block
+      # can still render `oauth.client_secret`, which upstream reads as of
+      # 0.158. When an assertion rejects that key there, delete this sentence.
       runtimeOwnedState = [
         "--available"
         "--device-auth"
         "--marketplace"
         "--oauth-client-registration"
+        "--oauth-client-secret"
         "--ref"
         "--sparse"
         "--with-access-token"
