@@ -1,8 +1,9 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-27 — Claude delivers every surface as its own file
-> through `ai.claude.files` on both backends, and no runtime flips an upstream
-> `programs.<cli>` or devenv integration. AGENTS.md puts the index and rules
+> through `ai.claude.files` on both backends, no runtime flips an upstream
+> `programs.<cli>` or devenv integration, and the `upstream` delivery method is
+> gone: every method writes the file itself. AGENTS.md puts the index and rules
 > before the context. The repository AGENTS.md, Copilot's devenv context and
 > instruction files, and Kiro's devenv steering land as read-only copies; Codex
 > indexes scoped rules that name `references`; a unit whose file is switched off
@@ -29,11 +30,10 @@
 > owned writable copies and portable hooks reach its project `hooks.json` on
 > devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
 > declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Upstream
-> delegation aliases the content field's own definitions. Ledger-owned copies
-> whose files nothing else retracts opt into `runWhenDisabled`. `ai.lspServers`
-> renders whole files with each runtime's envelope, Copilot/Kiro require
-> `extensions`, and Copilot constrains server names.
+> one priority-aware text-source record with enable semantics. Ledger-owned
+> copies whose files nothing else retracts opt into `runWhenDisabled`.
+> `ai.lspServers` renders whole files with each runtime's envelope, Copilot/Kiro
+> require `extensions`, and Copilot constrains server names.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -591,10 +591,11 @@ whole-entry contract:
   measured on the real type. A document contributes its leaves at ordinary
   priority, or one `mkDefault` per LEAF.
 
-How a file lands is a METHOD — `symlink`, `copy-ro`, `shared`, `upstream` —
-resolved by `ai.<runtime>.methodFor` from the facts, or stated per file as the
-light exception. A runtime normally states facts; upstream delegation explicitly
-states its method and sink. Reasons belong in comments.
+How a file lands is a METHOD — `symlink`, `copy-ro` or `shared` — resolved by
+`ai.<runtime>.methodFor` from the facts, or stated per file as the light
+exception. A runtime normally states facts. Reasons belong in comments. Every
+method writes the file itself: there is no method that hands an entry's content
+to another module's option.
 
 The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
@@ -622,31 +623,15 @@ the files its writer wrote. `own` adopts a file whose bytes already match
 without a backup, so a `git pull` of a committed copy is silent.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
-files use `content.run` in an owned writer, runtime state keeps its typed
-lifecycle owners, and a surface another module owns is DESCRIBED here —
-`method = "upstream"` plus the `sink` that owns it — rather than written here.
-The router aliases the surviving definitions of the content FIELD
-(`content.value`, `.source` or `.text`), including their priorities, instead of
-copying the merged value: copying strips `mkDefault` and breaks ordinary
-upstream overrides. It reads them from the field's own option, whose merge has
-already discharged a property wrapped around the field
-(`content.value = mkForce {…}`, `mkIf c {…}`). Taking `content.${field}` from
-the raw content definitions instead nests that property inside the alias's
-override, and the host writes it into the document as literal
-`_type`/`priority`/`content` keys. A non-default priority on the whole `content`
-wins over the field's. The suppressible entry type preserves submodule option
-metadata for that alias. Definitions combine through `mkMerge` below each
-adapter's literal hosted root, so the host retains its own deep-merge and
-list-ordering semantics. Dynamic top-level roots remain forbidden because they
-recurse during option collection. Skills go through the map now: one entry per
-tree, expanded by Home Manager natively and walked by the router for devenv.
-Kiro steering links on Home Manager (live 2.18.1 spikes confirmed startup
-discovery and same-session replacement reload) and is a read-only copy on
-devenv, claimed by the `ai:kiro:materialize-steering` directory ledger; Kiro
-hooks stay real-file reconciled (`lib/ai/own.nix`, a `dir` target) because the
-v3 scan keeps only `isFile()` entries. On Home Manager the same
-enable-independent writer declares nothing and only drains the steering copies
-an older ledger records.
+files use `content.run` in an owned writer, and runtime state keeps its typed
+lifecycle owners. Skills go through the map now: one entry per tree, expanded by
+Home Manager natively and walked by the router for devenv. Kiro steering links
+on Home Manager (live 2.18.1 spikes confirmed startup discovery and same-session
+replacement reload) and is a read-only copy on devenv, claimed by the
+`ai:kiro:materialize-steering` directory ledger; Kiro hooks stay real-file
+reconciled (`lib/ai/own.nix`, a `dir` target) because the v3 scan keeps only
+`isFile()` entries. On Home Manager the same enable-independent writer declares
+nothing and only drains the steering copies an older ledger records.
 
 ### Documentation parity is capability parity
 

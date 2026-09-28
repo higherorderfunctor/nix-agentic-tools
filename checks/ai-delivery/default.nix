@@ -12,7 +12,7 @@
       observation.assertionErrors
       ++ (import ./correspondence.nix {inherit lib;} {
         inherit policy;
-        inherit (observation) absentKeys delegations;
+        inherit (observation) absentKeys;
       });
     evaluators = {
       devenv = config: (harness.evalDevenv config).config;

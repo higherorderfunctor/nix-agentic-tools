@@ -3,7 +3,8 @@
 > **Last verified:** 2026-09-27 — directory-generated per-runtime entries
 > replace or null-suppress same-key root entries under the normalized keyed-pool
 > contract; see "Consumer patterns" below. The builder expands every per-runtime
-> Dir option, `agentsDir` included, outside the enable gate. Full lineage:
+> Dir option, `agentsDir` included, outside the enable gate. The path-type
+> pitfall is about strict `lib.isPath` checks. Full lineage:
 > `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
 
 ### The helpers
@@ -90,6 +91,5 @@ The helpers use `builtins.readDir cfg.path` and compute per-file paths as
 `cfg.path` is a literal, so downstream consumers that strict-check `lib.isPath`
 still see a path (not a store-path string). Do NOT replace the path literal in
 consumer code with `builtins.path { path = ...; }` or a `builtins.filterSource`
-result — those return strings and silently break upstream HM's `mkSkillEntry`
-and similar strict-check paths. See `hm-modules/module-conventions.md` on "Nix
-path types".
+result — those return strings and silently break every strict `lib.isPath` check
+downstream. See `hm-modules/module-conventions.md` on "Nix path types".

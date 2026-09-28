@@ -2,17 +2,18 @@
 
 > **Last verified:** 2026-09-27 — Claude delivers every surface through
 > `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
-> L5 is the delivery router plus one adapter per backend; every runtime
-> describes delivery once through the record-level `config`, which `mkRuntime`
-> makes the only delivery callback, and the delivery matrix is generated from
-> the layer for every runtime's files. Normalized pools carry only a text-source
-> record's winning arm. Claude's devenv rules and Codex's execpolicy rules are
-> read-only copies whose writers survive a disable. Copilot reconciles its user
-> settings.json on HM and the repository `.github/copilot/settings.json` on
-> devenv. Kiro excludes the normalized `settings` pool. Native file settings
-> live under `ai.<runtime>.native`. The builder publishes each record's devenv
-> shared AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`,
-> from the record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
+> Every delivered entry is a file the layer writes. L5 is the delivery router
+> plus one adapter per backend; every runtime describes delivery once through
+> the record-level `config`, which `mkRuntime` makes the only delivery callback,
+> and the delivery matrix is generated from the layer for every runtime's files.
+> Normalized pools carry only a text-source record's winning arm. Claude's
+> devenv rules and Codex's execpolicy rules are read-only copies whose writers
+> survive a disable. Copilot reconciles its user settings.json on HM and the
+> repository `.github/copilot/settings.json` on devenv. Kiro excludes the
+> normalized `settings` pool. Native file settings live under
+> `ai.<runtime>.native`. The builder publishes each record's devenv shared
+> AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`, from the
+> record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
 > mode-narrowing command writer beside its unpin ledger. Codex's daemon
 > `settings.json` maps to no matrix cell. The builder declares the per-runtime
 > `agents`, `environmentVariables` and `lspServers` options and an opt-in
@@ -279,9 +280,9 @@ them or retroactively establish the order of historical matrix derivation.
 `config/ai-delivery.nix` remains a pure `{lib}` import. Its schema and consumer
 facts are hand-authored; physical writer records come from the committed
 `config/ai-delivery-generated.nix`. The partition requires every matrix cell
-exactly once across derived and hand-authored rows. Absence reasons, upstream
-contracts, package wrappers, input associations and behavioral probes remain
-independent of the observed delivery implementation.
+exactly once across derived and hand-authored rows. Absence reasons, package
+wrappers, input associations and behavioral probes remain independent of the
+observed delivery implementation.
 
 `checks/ai-delivery/generate.nix` evaluates populated specimens at default
 config directories. It reads typed files and activation ledgers, resolves
@@ -294,10 +295,10 @@ portable surface, so the specimen maps it to no cell. Codex's
 surface, and maps to no cell either.
 
 The production gate compares live absence against hand-authored gaps in both
-directions and verifies upstream sink correspondence. Its three body arms stay;
-derived names make the first arm's name agreement a tautology, not a stronger
-check. Empty-declaration survival and body variation still discriminate. Kiro
-MCP's two strategies keep independent probes, including both HM phases.
+directions. Its three body arms stay; derived names make the first arm's name
+agreement a tautology, not a stronger check. Empty-declaration survival and body
+variation still discriminate. Kiro MCP's two strategies keep independent probes,
+including both HM phases.
 
 Regeneration evaluates the check set, and the check set asserts the committed
 matrix, so a change that moves a cell (a runtime joining the layer, say) cannot

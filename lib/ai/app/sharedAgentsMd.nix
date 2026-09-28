@@ -168,7 +168,7 @@
     inherit ledger;
   };
   # Only what can differ for a whole shared file crosses: its bytes and how it
-  # lands. The runtime entry's other fields (its own writer, facts, sink) name
+  # lands. The runtime entry's other fields (its own writer and facts) name
   # that runtime's delivery, not the aggregate's.
   projectEntry = entry:
     ownership
