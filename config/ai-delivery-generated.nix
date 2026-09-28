@@ -533,14 +533,14 @@
     {
       ecosystem = "codex";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "mcpServers";
       target = "$HOME/.codex/config.toml";
       writerAttr = [
         "home"
-        "activation"
-        "codexSettingsReconcile"
+        "file"
+        ".codex/config.toml"
       ];
     }
     {
@@ -694,14 +694,14 @@
     {
       ecosystem = "codex";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "permissions";
       target = "$HOME/.codex/config.toml";
       writerAttr = [
         "home"
-        "activation"
-        "codexSettingsReconcile"
+        "file"
+        ".codex/config.toml"
       ];
     }
     {
@@ -937,14 +937,14 @@
     {
       ecosystem = "codex";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "settings";
       target = "$HOME/.codex/config.toml";
       writerAttr = [
         "home"
-        "activation"
-        "codexSettingsReconcile"
+        "file"
+        ".codex/config.toml"
       ];
     }
     {
