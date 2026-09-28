@@ -6,9 +6,18 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
-  daemonSettings = evaluated:
-    ownedDocument "codex" "${evaluated.config.ai.codex.configDir}/app-server-daemon/settings.json" evaluated;
+  inherit (harness) aiStubs deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownPlan tomlFormat;
+  # The daemon's settings.json is a read-only copy in the one directory target
+  # of Home Manager's daemon-settings writer. `ownPlan` throws on an absent
+  # writer, so a renamed entry fails the check.
+  daemonSettingsTarget = evaluated: lib.head (ownPlan "codex" "materialize-codex-daemon-settings" evaluated).targets;
+  # The declared JSON, or null when the writer claims no file.
+  daemonSettings = evaluated: let
+    inherit (daemonSettingsTarget evaluated) units;
+  in
+    if units ? "settings.json"
+    then builtins.fromJSON units."settings.json".text
+    else null;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
   # in the copy writer's plan, keyed by file name, not in home.file / files.
   execpolicyTarget = evaluated:
@@ -21,7 +30,7 @@
       evaluated)
     .targets;
   execpolicyUnits = evaluated: (execpolicyTarget evaluated).units;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexExtracted codexSettingsActivation hmCodexSettings withHmDaemonDefault;
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexExtracted hmCodexSettings withHmDaemonDefault;
 in {
   checks = {
     # ── Codex package/factory enable vertical ───────────────────────
@@ -419,7 +428,36 @@ in {
         && devenv.config.files.".codex/config.toml".source.value == expected
     );
 
-    module-codex-empty-settings-emits-no-toml = mkTest "codex-empty-settings-emits-no-toml" (
+    # config.toml is a plain store symlink on both backends: no writer owns
+    # it and no fact says Codex writes it, because every Codex config writer
+    # fails against the link (chatgpt-codex-readonly-config).
+    module-codex-config-toml-is-a-store-symlink = mkTest "codex-config-toml-is-a-store-symlink" (
+      let
+        config.ai.codex = {
+          enable = true;
+          native.settings.model = "declared";
+        };
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        ownedPaths = evaluated:
+          lib.concatMap (record:
+            lib.concatMap (target: [target.path] ++ map (unit: "${target.path}/${unit}") (builtins.attrNames (target.units or {})))
+            record.plan.targets)
+          (builtins.attrValues evaluated.config.ai.codex._ownPlans);
+        unowned = evaluated: !lib.any (lib.hasSuffix "config.toml") (ownedPaths evaluated);
+      in
+        hm.config.home.file ? ".codex/config.toml"
+        && devenv.config.files ? ".codex/config.toml"
+        && unowned hm
+        && unowned devenv
+        && !hm.config.ai.codex.files.".codex/config.toml".facts.harnessWrites
+        && !devenv.config.ai.codex.files.".codex/config.toml".facts.harnessWrites
+    );
+
+    # Home Manager always owns the user config.toml, as a store symlink even
+    # when empty, so Codex never creates a writable one of its own; devenv
+    # writes the project file only when something is declared.
+    module-codex-empty-settings-toml-ownership = mkTest "codex-empty-settings-toml-ownership" (
       let
         config.ai.codex = {
           enable = true;
@@ -433,7 +471,7 @@ in {
         hm = evalHm config;
         devenv = evalDevenv config;
       in
-        !(hm.config.home.file ? ".codex/config.toml")
+        hm.config.home.file ? ".codex/config.toml"
         && hmCodexSettings hm == {}
         && !(hm.config.home.file ? ".codex/hooks.json")
         && !(devenv.config.files ? ".codex/config.toml")
@@ -658,221 +696,6 @@ in {
         == withHmDaemonDefault expected
         && devenvSource.value == expected
     );
-
-    # This is a real activation lifecycle test, not merely an eval-shape check.
-    # Codex persists ad-hoc trust and native feature/MCP edits in user
-    # config.toml, so regressions here otherwise surface only when the TUI tries
-    # config/batchWrite against an immutable Nix store symlink.
-    module-codex-settings-reconciliation = let
-      activationV1 = codexSettingsActivation {
-        ai.codex = {
-          enable = true;
-          native.settings = {
-            features.memories = true;
-            future_array = [
-              {
-                enabled = true;
-                name = "one";
-              }
-            ];
-            mcp_servers.managed.command = "/bin/managed-v1";
-            model = "nix-model-v1";
-            shape = "scalar-v1";
-          };
-        };
-      };
-      activationV2 = codexSettingsActivation {
-        ai.codex = {
-          enable = true;
-          native.settings = {
-            model = "nix-model-v2";
-            sandbox_mode = "read-only";
-            shape.child = "table-v2";
-          };
-        };
-      };
-      activationEmpty = codexSettingsActivation {
-        ai.codex = {
-          enable = true;
-          native.settings = {
-            # Null beats Home Manager's mkDefault, so this retracts that leaf.
-            features.daemon_auto_start = null;
-            model = null;
-            model_reasoning_effort = null;
-          };
-        };
-      };
-      activationMalformed = codexSettingsActivation {
-        ai.codex = {
-          configDir = ".codex-malformed";
-          enable = true;
-          native.settings.model = "must-not-land";
-        };
-      };
-      activationBadManifest = codexSettingsActivation {
-        ai.codex = {
-          configDir = ".codex-bad-manifest";
-          enable = true;
-          native.settings.model = "manifest-guard";
-        };
-      };
-    in
-      pkgs.runCommand "module-test-codex-settings-reconciliation" {} ''
-        export HOME="$PWD/home"
-        export XDG_STATE_HOME="$PWD/state"
-        # The activation* fragments below are HM activation entry text, which
-        # expects home-manager's `run` helper (lib/bash/home-manager.sh) already in
-        # scope.
-        ${harness.hmRunShim}
-        ${pkgs.coreutils}/bin/mkdir -p "$HOME/.codex"
-
-        # Model the old HM delivery exactly: config.toml is a read-only symlink
-        # into immutable content. The first reconciliation must replace the link
-        # itself, never follow it and attempt to mutate its target.
-        ${pkgs.coreutils}/bin/cat > static-config.toml <<'EOF'
-        # native comment survives
-        retired_before_json_backend = true
-        model = "runtime-model"
-
-        [features]
-        native_runtime = true
-
-        [projects."/home/test/ad-hoc"]
-        trust_level = "trusted"
-        EOF
-        ${pkgs.coreutils}/bin/chmod 444 static-config.toml
-        ${pkgs.coreutils}/bin/ln -s "$PWD/static-config.toml" "$HOME/.codex/config.toml"
-
-        # A ledger from the TOML-only helper must still be read at exactly its
-        # historical path after JSON support is added to the shared helper.
-        legacy_manifest="$XDG_STATE_HOME/nix-agentic-tools/toml-settings/codex-config-${builtins.hashString "sha256" ".codex/config.toml"}.json"
-        mkdir -p "$(dirname "$legacy_manifest")"
-        printf '%s\n' '{"managed_paths":[["retired_before_json_backend"]],"version":1}' > "$legacy_manifest"
-        chmod 600 "$legacy_manifest"
-
-        ${activationV1}
-
-        test -f "$HOME/.codex/config.toml"
-        test ! -L "$HOME/.codex/config.toml"
-        test "$(${pkgs.coreutils}/bin/stat -c %a "$HOME/.codex/config.toml")" = 600
-        ${pkgs.gnugrep}/bin/grep -Fq '# native comment survives' "$HOME/.codex/config.toml"
-        ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
-        import sys
-        import tomllib
-
-        with open(sys.argv[1], "rb") as handle:
-            config = tomllib.load(handle)
-
-        assert config["future_array"] == [{"enabled": True, "name": "one"}]
-        assert config["shape"] == "scalar-v1"
-        assert "retired_before_json_backend" not in config
-        PY
-
-        # Simulate native writers after activation. These siblings share tables
-        # with Nix-owned leaves and therefore catch a too-coarse table manifest.
-        ${pkgs.coreutils}/bin/cat >> "$HOME/.codex/config.toml" <<'EOF'
-
-        [mcp_servers.native]
-        command = "/bin/native"
-        EOF
-
-        ${activationV2}
-
-        test "$(${pkgs.coreutils}/bin/stat -c %a "$HOME/.codex/config.toml")" = 600
-        ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
-        import sys
-        import tomllib
-
-        with open(sys.argv[1], "rb") as handle:
-            config = tomllib.load(handle)
-
-        assert config["model"] == "nix-model-v2"
-        assert config["sandbox_mode"] == "read-only"
-        assert config["projects"]["/home/test/ad-hoc"]["trust_level"] == "trusted"
-        assert config["features"] == {"daemon_auto_start": False, "native_runtime": True}
-        assert "future_array" not in config
-        assert config["mcp_servers"] == {"native": {"command": "/bin/native"}}
-        assert config["shape"] == {"child": "table-v2"}
-        PY
-
-        manifest="$(${pkgs.findutils}/bin/find "$XDG_STATE_HOME" -name '*.json' -type f -print)"
-        test "$manifest" = "$legacy_manifest"
-        test "$(${pkgs.coreutils}/bin/stat -c %a "$manifest")" = 600
-        test "$(${pkgs.coreutils}/bin/stat -c %a "$(${pkgs.coreutils}/bin/dirname "$manifest")")" = 700
-
-        # Identical activation is byte- and metadata-idempotent. Pinning mtimes
-        # before the second run detects an implementation that rewrites equal
-        # content through a fresh temp file on every Home Manager activation.
-        ${pkgs.coreutils}/bin/touch -d @1000000000 "$HOME/.codex/config.toml" "$manifest"
-        config_mtime="$(${pkgs.coreutils}/bin/stat -c %Y "$HOME/.codex/config.toml")"
-        manifest_mtime="$(${pkgs.coreutils}/bin/stat -c %Y "$manifest")"
-        ${activationV2}
-        test "$(${pkgs.coreutils}/bin/stat -c %Y "$HOME/.codex/config.toml")" = "$config_mtime"
-        test "$(${pkgs.coreutils}/bin/stat -c %Y "$manifest")" = "$manifest_mtime"
-
-        # Empty settings still run once to retire prior Nix leaves. Native state
-        # remains and the now-empty ownership manifest disappears.
-        ${activationEmpty}
-        ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
-        import sys
-        import tomllib
-
-        with open(sys.argv[1], "rb") as handle:
-            config = tomllib.load(handle)
-
-        assert "model" not in config
-        assert "sandbox_mode" not in config
-        assert "shape" not in config
-        assert config["projects"]["/home/test/ad-hoc"]["trust_level"] == "trusted"
-        assert config["features"] == {"native_runtime": True}
-        assert config["mcp_servers"] == {"native": {"command": "/bin/native"}}
-        PY
-        test ! -e "$manifest"
-
-        # With no prior ownership ledger, empty desired settings are a true no-op
-        # and must not create or parse an externally managed config.
-        export HOME="$PWD/empty-home"
-        export XDG_STATE_HOME="$PWD/empty-state"
-        ${activationEmpty}
-        test ! -e "$HOME/.codex/config.toml"
-        test ! -e "$XDG_STATE_HOME"
-
-        # Malformed native TOML aborts before either config or ownership state is
-        # changed. Silent replacement would destroy exactly the state this path
-        # exists to preserve.
-        export HOME="$PWD/malformed-home"
-        export XDG_STATE_HOME="$PWD/malformed-state"
-        ${pkgs.coreutils}/bin/mkdir -p "$HOME/.codex-malformed"
-        printf '%s\n' '[broken' > "$HOME/.codex-malformed/config.toml"
-        before="$(${pkgs.coreutils}/bin/sha256sum "$HOME/.codex-malformed/config.toml")"
-        if ${activationMalformed}
-        then
-          echo "malformed TOML reconciliation unexpectedly succeeded" >&2
-          false
-        fi
-        after="$(${pkgs.coreutils}/bin/sha256sum "$HOME/.codex-malformed/config.toml")"
-        test "$before" = "$after"
-        test ! -e "$XDG_STATE_HOME"
-
-        # The ownership ledger is authority for deletion, so corruption there is
-        # also fail-closed. Guessing or discarding it could preserve stale Nix
-        # policy or misclassify a native key as safe to remove.
-        export HOME="$PWD/bad-manifest-home"
-        export XDG_STATE_HOME="$PWD/bad-manifest-state"
-        ${activationBadManifest}
-        bad_manifest="$(${pkgs.findutils}/bin/find "$XDG_STATE_HOME" -name '*.json' -type f -print)"
-        printf '%s\n' '{' > "$bad_manifest"
-        before="$(${pkgs.coreutils}/bin/sha256sum "$HOME/.codex-bad-manifest/config.toml")"
-        if ${activationBadManifest}
-        then
-          echo "malformed ownership manifest unexpectedly succeeded" >&2
-          false
-        fi
-        after="$(${pkgs.coreutils}/bin/sha256sum "$HOME/.codex-bad-manifest/config.toml")"
-        test "$before" = "$after"
-
-        touch "$out"
-      '';
 
     module-codex-security-settings-parity = mkTest "codex-security-settings-parity" (
       let
@@ -1314,9 +1137,39 @@ in {
         # It rewrites a link in the user's Codex home, so DRY_RUN must echo it.
         hasLiteral "run /nix/store/" select
         && hasLiteral "/bin/codex-daemon-select \"$HOME\"/.codex ${packageRoot}" select
-        && (daemonSettings hm).value == {updater.autoUpdateEnabled = false;}
+        && daemonSettings hm == {updater.autoUpdateEnabled = false;}
+        && (daemonSettingsTarget hm).path == ".codex/app-server-daemon"
         && (hmCodexSettings hm).features.daemon_auto_start == false
         && lib.all (assertion: assertion.assertion) hm.config.assertions
+    );
+
+    # Declared daemon settings land beside the pin's updater default, and an
+    # explicit updater choice beats it.
+    module-codex-daemon-hm-settings-are-declared = mkTest "codex-daemon-hm-settings-are-declared" (
+      let
+        declared = evalHm {
+          ai.codex = {
+            enable = true;
+            native.daemonSettings = {
+              remoteControlEnabled = true;
+              shutdownGraceSeconds = 5;
+            };
+          };
+        };
+        overridden = evalHm {
+          ai.codex = {
+            enable = true;
+            native.daemonSettings.updater.autoUpdateEnabled = true;
+          };
+        };
+      in
+        daemonSettings declared
+        == {
+          remoteControlEnabled = true;
+          shutdownGraceSeconds = 5;
+          updater.autoUpdateEnabled = false;
+        }
+        && daemonSettings overridden == {updater.autoUpdateEnabled = true;}
     );
 
     module-codex-daemon-hm-opt-outs = mkTest "codex-daemon-hm-opt-outs" (
@@ -1336,20 +1189,21 @@ in {
         disabled = evalHm {ai.codex.pinDaemonToPackage = true;};
         releases = evaluated:
           hasLiteral "/bin/codex-daemon-select \"$HOME\"/.codex ''\n" evaluated.config.home.activation.codexDaemonSelect.text;
-        settingsTarget = evaluated: lib.head (ownPlan "codex" "codexDaemonSettingsReconcile" evaluated).targets;
       in
-        # Unpinned: the selection is released and the updater leaf retracted,
-        # while auto-start stays off; the two are independent.
+        # Unpinned: the selection is released and the updater default goes,
+        # while auto-start stays off; the two are independent. Home Manager
+        # still owns the (empty) settings file.
         releases unpinned
-        && (daemonSettings unpinned).value == {}
+        && daemonSettings unpinned == {}
         && (hmCodexSettings unpinned).features.daemon_auto_start == false
         && lib.all (assertion: assertion.assertion) unpinned.config.assertions
         && (hmCodexSettings autoStart).features.daemon_auto_start
         # Disabled: both writers still run, so a store selection cannot
-        # outlive the package that GC removes, and the leaf is retracted.
+        # outlive the package that GC removes, and the copy is retracted.
         && releases disabled
-        && (settingsTarget disabled).units == {}
-        && (settingsTarget disabled).ledger == (settingsTarget unpinned).ledger
+        && (daemonSettingsTarget disabled).units == {}
+        && (daemonSettingsTarget disabled).ledger == (daemonSettingsTarget unpinned).ledger
+        && lib.all (entry: disabled.config.home.activation ? ${entry}) ["materialize-codex-daemon-settings" "materialize-codex-daemon-settings-prune"]
     );
 
     module-codex-daemon-hm-needs-package-layout = mkTest "codex-daemon-hm-needs-package-layout" (
@@ -1417,12 +1271,20 @@ in {
             pinDaemonToPackage = false;
           };
         };
+        declared = failures {
+          ai.codex = {
+            enable = true;
+            native.daemonSettings.remoteControlEnabled = true;
+          };
+        };
       in
         builtins.length autoStart
         == 1
         && hasLiteral "daemon_auto_start = true has no" (lib.head autoStart)
         && builtins.length unpinned == 1
         && hasLiteral "pinDaemonToPackage is Home Manager-only" (lib.head unpinned)
+        && builtins.length declared == 1
+        && hasLiteral "native.daemonSettings is Home Manager-only" (lib.head declared)
         # Off is what --no-daemon already means, so it is accepted.
         && failures {
           ai.codex = {
@@ -1782,9 +1644,70 @@ in {
       in
         builtins.any (assertion:
           !assertion.assertion
-          && lib.hasInfix "cannot be combined with ai.codex.native.settings.hooks" assertion.message)
+          && lib.hasInfix "cannot be combined with inline hook events in ai.codex.native.settings.hooks" assertion.message)
         result.config.assertions
     );
+
+    # Nix declares the trust of every generated hook, because `/hooks` cannot
+    # write the Nix-owned user config.toml (see `hookTrustFor` in mkCodex.nix).
+    # The two hashes are the ones codex-cli 0.157.1's `hooks/list` reported for
+    # these handlers; chatgpt-codex-hook-trust compares every derived value
+    # with the pinned binary. Home Manager writes the state into user
+    # config.toml beside any declared `hooks.state`; devenv's launcher passes
+    # it as one `-c` session flag, and project config may not carry it,
+    # because Codex ignores hook trust there.
+    module-codex-hooks-trust-is-declared = let
+      config.ai = {
+        codex = {
+          enable = true;
+          hooks.Stop = [{hooks = [{command = "echo stop";}];}];
+        };
+        hooks.PreToolUse = [
+          {
+            matcher = "Bash";
+            hooks = [
+              {
+                command = "echo hi";
+                timeout = 5;
+              }
+            ];
+          }
+        ];
+      };
+      preToolUse = "sha256:b98dab5eee824a2bcfee70e81c0883e7226870b4c205cfe7fcd34b86d81322e0";
+      stop = "sha256:236335e9e512004a0f5f42af65a07ea9059bd9a23dbb68286ed57fecf2b69ddf";
+      hm = evalHm (lib.recursiveUpdate config {
+        ai.codex.native.settings.hooks.state."/plugin/hooks.json:stop:0:0".trusted_hash = "sha256:declared";
+      });
+      devenv = evalDevenv config;
+      devenvStateFailures =
+        lib.filter (assertion: !assertion.assertion)
+        (evalDevenv (lib.recursiveUpdate config {
+          ai.codex.native.settings.hooks.state."/plugin/hooks.json:stop:0:0".trusted_hash = "sha256:declared";
+        }))
+        .config
+        .assertions;
+    in
+      assert (hmCodexSettings hm).hooks
+      == {
+        state = {
+          "/home/test/.codex/hooks.json:pre_tool_use:0:0".trusted_hash = preToolUse;
+          "/home/test/.codex/hooks.json:stop:0:0".trusted_hash = stop;
+          "/plugin/hooks.json:stop:0:0".trusted_hash = "sha256:declared";
+        };
+      };
+      assert lib.all (assertion: assertion.assertion) hm.config.assertions;
+      assert !(devenv.config.ai.codex.files.".codex/config.toml".content.value ? hooks);
+      assert builtins.length devenvStateFailures == 1;
+      assert hasLiteral "hooks.state has no effect in project" (lib.head devenvStateFailures).message;
+        mkWrapperGrepTest {
+          name = "codex-hooks-trust-is-declared";
+          package = lib.head devenv.config.packages;
+          bin = "codex";
+          needles = [
+            "'hooks.state={\"/tmp/devenv-root/.codex/hooks.json:pre_tool_use:0:0\" = {trusted_hash = \"${preToolUse}\"}, \"/tmp/devenv-root/.codex/hooks.json:stop:0:0\" = {trusted_hash = \"${stop}\"}}'"
+          ];
+        };
 
     module-codex-hooks-json-syntax = let
       evaluated = evalDevenv {

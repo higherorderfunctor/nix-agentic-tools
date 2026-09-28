@@ -47,6 +47,11 @@
           type = lib.types.attrsOf lib.types.anything;
           default = {};
         };
+        # Codex keys hook trust by the absolute path of the user's hooks.json.
+        homeDirectory = lib.mkOption {
+          type = lib.types.str;
+          default = "/home/test";
+        };
         packages = lib.mkOption {
           type = lib.types.listOf lib.types.package;
           default = [];

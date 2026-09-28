@@ -759,17 +759,50 @@
     <details>
     <summary><strong>Codex config ownership</strong></summary>
 
-    Codex writes ad-hoc project trust into its user `config.toml`. Home Manager
-    therefore keeps that file writable and reconciles only the exact TOML leaves
-    declared by Nix, preserving native state and removing formerly managed
-    leaves on later activations. It does **not** use a read-only store symlink.
+    Settings are Nix's alone. Both backends deliver `config.toml` as a read-only
+    store symlink: Home Manager always owns the user file under
+    `ai.codex.configDir`, and devenv writes the trusted project's
+    `.codex/config.toml` when something is declared. Codex refuses to save an in-app
+    change into it (`/model`, `/experimental` and `codex mcp add` fail with "failed
+    to persist config"), so declare those settings under `ai.codex.native.settings`.
 
-    Devenv owns `.codex/config.toml` statically because no project-local Codex
-    writer has been observed. User-global trust remains outside the project:
-    trust the repository once when Codex prompts, or declare
-    `ai.codex.native.settings.projects."<absolute-path>".trust_level` through Home Manager.
-    Devenv rejects that bootstrap-global setting because project config cannot
-    grant the trust required to load itself.
+    Project trust lives in that file too. With Home Manager, declare each clone you
+    trust:
+
+    ```nix
+    ai.codex.native.settings.projects."/home/me/src/my-repo".trust_level = "trusted";
+    ```
+
+    Codex matches the working directory or its repository root exactly, and resolves
+    a linked worktree to its main checkout, so one entry covers a clone and its
+    worktrees. In a directory with no entry the trust prompt cannot save its answer,
+    so the interactive session can only quit there; `codex exec` is unaffected.
+    Devenv rejects `projects` because project config cannot grant the trust required
+    to load itself.
+
+    Codex runs a hook only once its current hash is trusted, and `/hooks` cannot
+    record trust into a Nix-owned file. Nix declares the trust of every hook it
+    generates: Home Manager in user `config.toml`, devenv through its launcher.
+    Declare trust for any other hook, such as a plugin's, in
+    `ai.codex.native.settings.hooks.state` with Home Manager.
+
+    Codex's user-global files live under `~/.codex`, which devenv never writes. Who
+    manages each setting there depends on whether you use Home Manager:
+
+    | User-global setting                                               | Home Manager                                                                                                  | devenv only                                                                                |
+    | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+    | `config.toml`: model, features, MCP servers, preferences          | Nix, as a read-only store symlink; in-app saves fail                                                          | Codex                                                                                      |
+    | Project trust (`projects` in `config.toml`)                       | Nix (`ai.codex.native.settings.projects`)                                                                     | Codex's trust prompt                                                                       |
+    | Hook trust (`hooks.state` in `config.toml`)                       | Nix for the hooks it generates; `ai.codex.native.settings.hooks.state` for others                             | Codex's `/hooks`, except for the project hooks devenv generates, which its launcher trusts |
+    | Daemon settings (`app-server-daemon/settings.json`)               | Nix (`ai.codex.native.daemonSettings`), as a read-only copy; an in-app change is reset at the next activation | Codex; devenv runs Codex without the daemon                                                |
+    | Daemon package selection                                          | Nix (`ai.codex.pinDaemonToPackage`)                                                                           | Codex's own updater                                                                        |
+    | Saved command approvals (`rules/default.rules`), sign-in, history | Codex                                                                                                         | Codex                                                                                      |
+
+    Upgrading from a release that reconciled `config.toml`: before the first switch,
+    move the real `~/.codex/config.toml` aside, along with any `config.toml.hm-bak`
+    beside it, and declare your trusted clones. Home Manager refuses to replace a
+    real file with its link, and with `backupFileExtension` set an existing backup
+    blocks it too.
 
     Native-only settings remain under `ai.codex.native.settings`. Normalized
     settings live under `ai.codex.settings` and narrow `ai.settings` field by
