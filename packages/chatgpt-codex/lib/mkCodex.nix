@@ -32,17 +32,25 @@
   # `codex queue` and `--remote` then refuse to run, and `codex remote-control`
   # and `codex app-server daemon …` ignore it and still reach the user daemon.
   # The flag list is `cli.launcherFlags` in extractedCoverage.nix, where
-  # chatgpt-codex-coverage fails if upstream drops one.
+  # chatgpt-codex-coverage fails if upstream drops one. devenv's launcher also
+  # carries the trust of the project hooks it generates (`hookTrustFor`), as a
+  # session flag: Codex reads hook trust only from user config and session
+  # flags, and devenv never writes the user's config.
   codexInstallPackage = {
     backend,
     cfg,
     launcherEnvironment,
     ...
-  }:
+  } @ args: let
+    hookTrust = hookTrustFor args;
+  in
     lib.ai.mkLauncher pkgs {
       environmentVariables = launcherEnvironment;
       exe = "codex";
-      flags = lib.optionals (backend == "devenv") (lib.concatMap (flag: ["--add-flags" flag]) (import ./extractedCoverage.nix).cli.launcherFlags.devenv);
+      flags = lib.optionals (backend == "devenv") (
+        lib.concatMap (flag: ["--add-flags" flag]) (import ./extractedCoverage.nix).cli.launcherFlags.devenv
+        ++ lib.optionals (hookTrust != {}) ["--add-flag" "-c" "--add-flag" (lib.escapeShellArg (hookTrustOverride hookTrust))]
+      );
       name = "chatgpt-codex-wrapped";
       inherit (cfg) package;
     };
@@ -450,7 +458,7 @@
             };
           });
           default = {};
-          description = "User-level project trust declarations. Devenv rejects this bootstrap-global setting only in project config.toml, not in named user profiles.";
+          description = "User-level project trust, keyed by absolute path; Codex matches the working directory or its repository root exactly, and a linked worktree resolves to its main checkout, so one entry covers a clone and its worktrees. With Home Manager this is the only trust Codex keeps, because its trust prompt cannot write the Nix-owned user config.toml. Devenv rejects this bootstrap-global setting in project config.toml.";
         };
         sandbox_mode = lib.mkOption {
           type = lib.types.nullOr (lib.types.enum sandboxModeNames);
@@ -596,9 +604,12 @@
     // translated
     // rendered;
 
+  # Codex's PROJECT_LOCAL_CONFIG_DENYLIST (config/src/loader/mod.rs).
+  # cspell:ignore webrtc
   projectIgnoredKeys = [
     "apps_mcp_product_sku"
     "chatgpt_base_url"
+    "experimental_realtime_webrtc_call_base_url"
     "experimental_realtime_ws_base_url"
     "model_provider"
     "model_providers"
@@ -608,6 +619,7 @@
     "profile"
     "profiles"
     "projects"
+    "responses_api_metadata"
   ];
 
   # Codex's own default for `project_doc_max_bytes`: it reads at most this
@@ -708,22 +720,29 @@
     };
   };
   # Home Manager owns the user-scope daemon state under the Codex home: which
-  # package the shared daemon runs (daemonSelect.nix) and one updater leaf in
-  # the daemon's settings.json. devenv writes neither; see its assertions.
+  # package the shared daemon runs (daemonSelect.nix) and the daemon's
+  # settings.json. devenv writes neither; see its assertions.
   #
-  # The leaf is the second guard, beside a selection the updater already
-  # rejects. Codex re-reads it on every updater tick (update_loop.rs), so it
-  # also retires an updater left running by an earlier upstream selection, and
-  # Codex's own writer rewrites only `remoteControlEnabled` and
-  # `featureOverrides` (settings.rs), so the leaf is safe to own.
+  # settings.json is all configuration (remote control, launch feature
+  # overrides, shutdown grace, the updater), rendered from
+  # `native.daemonSettings`. Codex saves it by writing a temporary and
+  # renaming it over the path (settings.rs, rust-v0.157.1), which replaces a
+  # store symlink with a real file and fails the next switch's link check. So
+  # it is a read-only copy in a directory ledger that claims only that file,
+  # beside the lock and pid files the daemon keeps there: an in-app change
+  # lasts until the next activation, which backs it up and restores the
+  # declaration. The pin's `updater.autoUpdateEnabled = false` is the second
+  # guard, beside a selection the updater already rejects; Codex re-reads it
+  # on every updater tick (update_loop.rs), so it also retires an updater left
+  # running by an earlier upstream selection.
   #
   # Both writers run while disabled, so the generation that disables Codex or
   # the pin releases a store selection before GC can leave it dangling, and
-  # retracts the leaf.
+  # the one that disables Codex retracts the copy.
   daemonSelectWriter = "codexDaemonSelect";
   daemonSettingsFile = cfg: "${cfg.configDir}/app-server-daemon/settings.json";
-  daemonSettingsLedger = cfg: "json-settings/codex-daemon-settings-${builtins.hashString "sha256" (daemonSettingsFile cfg)}.json";
-  daemonSettingsWriter = "codexDaemonSettingsReconcile";
+  daemonSettingsManifest = "materialize/codex-daemon-settings.manifest";
+  daemonSettingsWriter = "materialize-codex-daemon-settings";
   # Only the layout the selector can release: a package whose complete Codex
   # package sits anywhere else would be pinned and then never unpinned.
   hasDaemonLayout = cfg: (cfg.package.passthru.codexPackage.root or null) == packageLayout.root;
@@ -744,10 +763,11 @@
           runWhenDisabled = true;
         };
         ${daemonSettingsWriter} = {
-          ledgers.${daemonSettingsLedger cfg} = {
-            codec = "json";
-            path = daemonSettingsFile cfg;
+          ledgers.${daemonSettingsManifest} = {
+            codec = "dir";
+            path = dirOf (daemonSettingsFile cfg);
           };
+          pruneEntry = "${daemonSettingsWriter}-prune";
           runWhenDisabled = true;
         };
       };
@@ -847,6 +867,104 @@
         }))
     hooks);
 
+  # Codex runs a user or project hook only while `hooks.state."<key>"` in a
+  # USER config layer or a `-c` session flag carries its current hash
+  # (hooks/src/config_rules.rs, hooks/src/engine/discovery.rs; rust-v0.158.0).
+  # `/hooks` records that trust by writing user config.toml, which Nix owns
+  # read-only, so Nix derives the same state for every generated handler:
+  # Home Manager writes it into user config.toml, and devenv's launcher passes
+  # it as one `-c` flag. The key is `<hooks.json path>:<event label>:<group
+  # index>:<handler index>`. The hash is `sha256:` over the compact, key-sorted
+  # JSON of the handler as Codex normalizes it (`hook_hash`,
+  # `version_for_toml`): a matcher only on events that take one, the default
+  # or clamped timeout, `async`, and a non-default `additionalContextLimit`
+  # only on events that can emit context. `builtins.toJSON` emits exactly that
+  # JSON. chatgpt-codex-hook-trust compares keys and hashes with the pinned
+  # binary's own `hooks/list`.
+  hookEventLabels = {
+    Interrupt = "interrupt";
+    PermissionRequest = "permission_request";
+    PostCompact = "post_compact";
+    PostToolUse = "post_tool_use";
+    PreCompact = "pre_compact";
+    PreToolUse = "pre_tool_use";
+    SessionEnd = "session_end";
+    SessionStart = "session_start";
+    Stop = "stop";
+    SubagentStart = "subagent_start";
+    SubagentStop = "subagent_stop";
+    UserPromptSubmit = "user_prompt_submit";
+  };
+  hookHandlerIdentity = event: handler: let
+    timeout = handler.timeout or null;
+    contextLimit = handler.additionalContextLimit or null;
+  in
+    {
+      inherit (handler) command type;
+      async = handler.async or false;
+      timeout =
+        if builtins.elem event ["Interrupt" "SessionEnd"]
+        then
+          lib.min 3 (lib.max 1 (
+            if timeout == null
+            then 1
+            else timeout
+          ))
+        else if timeout == null
+        then 600
+        else timeout;
+    }
+    // lib.optionalAttrs (handler ? statusMessage) {inherit (handler) statusMessage;}
+    // lib.optionalAttrs (
+      contextLimit
+      != null
+      && contextLimit != 2500
+      && builtins.elem event ["PostToolUse" "PreToolUse" "SessionStart" "SubagentStart" "UserPromptSubmit"]
+    ) {additionalContextLimit = contextLimit;};
+  hookTrustState = hooksFile: hooks:
+    builtins.listToAttrs (lib.concatLists (lib.mapAttrsToList (event: groups:
+      lib.optionals (hookEventLabels ? ${event}) (lib.concatLists (lib.imap0 (groupIndex: group:
+        lib.imap0 (handlerIndex: handler:
+          lib.nameValuePair "${hooksFile}:${hookEventLabels.${event}}:${toString groupIndex}:${toString handlerIndex}" {
+            trusted_hash =
+              "sha256:"
+              + builtins.hashString "sha256" (builtins.toJSON (
+                {
+                  event_name = hookEventLabels.${event};
+                  hooks = [(hookHandlerIdentity event handler)];
+                }
+                // lib.optionalAttrs (group ? matcher && !builtins.elem event ["Interrupt" "Stop" "UserPromptSubmit"]) {
+                  inherit (group) matcher;
+                }
+              ));
+          })
+        group.hooks)
+      groups)))
+    (renderHooks hooks)));
+  effectiveHooksOf = cfg: topHooks: sharedHooks.merge topHooks cfg.hooks;
+  # The hooks.json Codex discovers for each backend, by the absolute path it
+  # keys hook state with: the user layer's Codex home, or the project root's
+  # `.codex`.
+  hookTrustFor = {
+    backend,
+    cfg,
+    config,
+    topHooks,
+    ...
+  }:
+    hookTrustState "${
+      if backend == "hm"
+      then config.home.homeDirectory
+      else config.devenv.root
+    }/${nativeDirFor backend cfg}/hooks.json" (effectiveHooksOf cfg topHooks);
+  # One `-c` value for the whole table: Codex splits an override's key path at
+  # every dot, so the state keys, which are paths, travel quoted inside an
+  # inline TOML table (JSON string escapes are valid TOML basic strings).
+  hookTrustOverride = state:
+    "hooks.state={"
+    + lib.concatStringsSep ", " (lib.mapAttrsToList (key: value: "${builtins.toJSON key} = {trusted_hash = ${builtins.toJSON value.trusted_hash}}") state)
+    + "}";
+
   mkAgentsMd = {
     mergedContext,
     mergedRules,
@@ -923,9 +1041,11 @@ in
           forward compatibility. Command handlers additionally type Codex's
           commandWindows, statusMessage, and additionalContextLimit fields;
           other JSON-compatible fields remain available as a native escape
-          hatch. Codex treats user/project hooks as non-managed: review and
-          trust each generated definition's current hash with `/hooks` before
-          it will run.
+          hatch. Codex runs a user or project hook only once its current hash
+          is trusted, and Nix declares that trust for every generated handler:
+          Home Manager writes it under `hooks.state` in user config.toml, and
+          devenv's launcher passes it as a `-c` session flag. `/hooks` cannot
+          record trust itself, because user config.toml is Nix-owned.
         '';
       };
       pinDaemonToPackage = lib.mkOption {
@@ -934,9 +1054,10 @@ in
         description = ''
           Run Codex's shared app-server daemon from `ai.codex.package`. Home
           Manager points `packages/app-server-daemon/current` in the Codex
-          home at the package, disables upstream's updater in
-          `app-server-daemon/settings.json`, and on a switch that changes the
-          package stops the daemon so the next launch starts the new one.
+          home at the package, defaults
+          `native.daemonSettings.updater.autoUpdateEnabled` to false, and on a
+          switch that changes the package stops the daemon so the next launch
+          starts the new one.
           `false` releases the selection and restores upstream's copy and
           hourly self-update. That copy is taken from this package, so its
           patched `codex-resources/{voice,zsh}` point into store paths nothing
@@ -971,11 +1092,32 @@ in
         default = {};
         description = ''
           Codex config.toml settings. Common stable keys are typed; unknown
-          TOML-compatible keys are accepted as a native escape hatch. Home
-          Manager reconciles declared leaves into writable user config, while
-          devenv statically writes trusted-project config and rejects keys
-          Codex ignores at project scope. Model and reasoning effort default
-          to GPT-6 Astra and xhigh; set either key to null to omit it.
+          TOML-compatible keys are accepted as a native escape hatch. Both
+          backends deliver the file as a read-only store symlink: Home Manager
+          always owns user `config.toml`, and devenv writes the trusted
+          project's `.codex/config.toml` when something is declared and
+          rejects keys Codex ignores at project scope. Codex refuses to save
+          an in-app change (`/model`, `/experimental`, `codex mcp add`, the
+          trust prompt) into a Nix-owned file, so declare those here. Model and
+          reasoning effort default to GPT-6 Astra and xhigh; set either key to
+          null to omit it.
+        '';
+      };
+      native.daemonSettings = lib.mkOption {
+        inherit (jsonFormat) type;
+        default = {};
+        example = {remoteControlEnabled = true;};
+        description = ''
+          The shared app-server daemon's `app-server-daemon/settings.json`
+          under `configDir` (remoteControlEnabled, featureOverrides,
+          shutdownGraceSeconds, updater), as a read-only copy Home Manager
+          always owns. Codex's own saves (`codex app-server daemon
+          enable-remote-control`, a daemon start with different launch
+          features) last until the next activation, which backs the file up
+          and restores the declaration. `pinDaemonToPackage` defaults
+          `updater.autoUpdateEnabled` to false. Home Manager only: the file is
+          user-global, and devenv, which runs Codex with `--no-daemon`, rejects
+          a non-empty value.
         '';
       };
     };
@@ -1020,20 +1162,23 @@ in
       resolvedSettings,
       topHooks,
       ...
-    }: let
+    } @ args: let
       isHm = backend == "hm";
       nativeDir = nativeDirFor backend cfg;
       configFile = "${nativeDir}/config.toml";
-      # The TOML ledger directory and name are a live migration contract: every
-      # ownership record written since this file stopped being a store symlink
-      # hangs off exactly this path. Never derive a different one.
-      settingsLedger = "toml-settings/codex-config-${builtins.hashString "sha256" configFile}.json";
       agentsMd = mkAgentsMd {inherit mergedContext mergedRules;};
       hasAgentsMdContent = hasMergedContext || mergedRules != {};
       agentsMdTarget = agentsMdPath "hm" cfg;
       finalAgentsMdEntry = cfg.files.${agentsMdTarget} or null;
       hasNativeMcpServers = cfg.native.settings ? mcp_servers;
-      effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
+      effectiveHooks = effectiveHooksOf cfg topHooks;
+      # Inline hook events and hooks.json are two representations of one
+      # layer; the trust table beside them is neither.
+      nativeHooks = cfg.native.settings.hooks or {};
+      nativeHookEvents =
+        if builtins.isAttrs nativeHooks
+        then builtins.attrNames (removeAttrs nativeHooks ["state"])
+        else ["hooks"];
       configuredGitRoot = lib.attrByPath ["git" "root"] null config;
       gitRoot =
         if configuredGitRoot != null
@@ -1049,10 +1194,14 @@ in
         if isHm
         then integrationSettings
         else applyNamedPermissionRoots integrationSettings (lib.optional (gitCommonDir != null) gitCommonDir);
-      settings = aiCommon.filterNulls (permissionSettings
+      # Home Manager's user config.toml also carries the trust of the hooks it
+      # generates, beside any `hooks.state` declared for other hooks (see
+      # `hookTrustFor`); devenv's launcher carries its own.
+      hookTrust = hookTrustFor args;
+      settings = lib.recursiveUpdate (aiCommon.filterNulls (permissionSettings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
-        });
+        })) (lib.optionalAttrs (isHm && hookTrust != {}) {hooks.state = hookTrust;});
       ignoredSettings = lib.intersectLists projectIgnoredKeys (builtins.attrNames settings);
       environmentCacheHome = getEnv "XDG_CACHE_HOME";
       environmentHome = getEnv "HOME";
@@ -1121,8 +1270,8 @@ in
                 inherit (mkSandboxModelAssertion "ai.codex.native.settings" cfg.native.settings) assertion message;
               }
               {
-                assertion = effectiveHooks == {} || !(cfg.native.settings ? hooks);
-                message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.native.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+                assertion = effectiveHooks == {} || nativeHookEvents == [];
+                message = "ai.hooks/ai.codex.hooks cannot be combined with inline hook events in ai.codex.native.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer (hooks.state may accompany either)";
               }
             ]
             ++ lib.optionals isHm [
@@ -1165,6 +1314,24 @@ in
                   package selection lives in the user's Codex home, which devenv
                   never writes, and devenv's Codex launcher always passes
                   --no-daemon. Move it to the Home Manager user-level configuration.
+                '';
+              }
+              {
+                assertion = cfg.native.daemonSettings == {};
+                message = ''
+                  ai.codex.native.daemonSettings is Home Manager-only: the daemon's
+                  settings.json lives in the user's Codex home, which devenv never
+                  writes, and devenv's Codex launcher always passes --no-daemon.
+                  Move it to the Home Manager user-level configuration.
+                '';
+              }
+              {
+                assertion = !(builtins.isAttrs nativeHooks && nativeHooks ? state);
+                message = ''
+                  ai.codex.native.settings.hooks.state has no effect in project
+                  config.toml: Codex reads hook trust only from user config and
+                  session flags. devenv's launcher already trusts the hooks it
+                  generates; declare trust for any other hook with Home Manager.
                 '';
               }
               {
@@ -1234,17 +1401,37 @@ in
           );
         }
 
+        {
+          # config.toml, user or project: one entry, delivered as a store
+          # symlink. Every Codex config writer resolves the link and writes a
+          # temporary beside its store target (utils/path-utils,
+          # `write_atomically`), so an in-app save fails with "failed to
+          # persist config … Permission denied" rather than diverging from the
+          # declaration; chatgpt-codex-readonly-config holds that. Ordinary
+          # leaves, not a whole-content default, so a consumer extending the
+          # document keeps the generated siblings. Home Manager always owns the
+          # user file; devenv writes the project file only when something is
+          # declared.
+          ai.codex.files.${configFile} = lib.mkIf (isHm || settings != {}) {
+            content.value = settings;
+            format = "toml";
+          };
+        }
+
         (lib.optionalAttrs isHm (lib.mkMerge [
-          (helpers.mkReconciledDocument {
-            content.value = lib.optionalAttrs cfg.pinDaemonToPackage {
-              updater.autoUpdateEnabled = false;
+          {
+            # See `daemonSettingsWriter`.
+            ai.codex.files.${daemonSettingsFile cfg} = {
+              content.value = cfg.native.daemonSettings;
+              entry = daemonSettingsWriter;
+              format = "json";
+              ledger = daemonSettingsManifest;
+              method = "copy-ro";
             };
-            format = "json";
-            ledger = daemonSettingsLedger cfg;
-            path = daemonSettingsFile cfg;
-            runtime = "codex";
-            writer = daemonSettingsWriter;
-          })
+            ai.codex.native.daemonSettings = lib.mkIf cfg.pinDaemonToPackage {
+              updater.autoUpdateEnabled = lib.mkDefault false;
+            };
+          }
           {
             # A daemon keeps the environment of whichever client started it,
             # and serves every later client with it: per-client environment
@@ -1254,22 +1441,6 @@ in
             # environment of all of them, so auto-start is opt-in here.
             ai.codex.native.settings.features.daemon_auto_start = lib.mkDefault false;
           }
-          # The user config is not wholly declarative: Codex's trust prompt
-          # persists project decisions here via config/batchWrite. Reconcile
-          # only Nix-owned leaves, retaining native trust/MCP/feature siblings.
-          # The TOML codec selects tomlkit to preserve comments and ordering.
-          # New files are writable 0600; existing files retain their mode.
-          # A first empty generation remains a no-op.
-          (helpers.mkReconciledDocument {
-            # Ordinary leaves retain generated siblings when a consumer
-            # extends this document; a whole-content default discards them.
-            content.value = settings;
-            format = "toml";
-            ledger = settingsLedger;
-            path = configFile;
-            runtime = "codex";
-            writer = "codexSettingsReconcile";
-          })
           (lib.mkIf hasAgentsMdContent {
             # The ONE generated entry whose priority stays on the whole entry
             # rather than moving onto `content`. Deciding between enabled and
@@ -1297,14 +1468,5 @@ in
             );
           })
         ]))
-        (lib.optionalAttrs (!isHm) {
-          ai.codex.files.${configFile} = lib.mkIf (settings != {}) {
-            # Project config stays wholly Nix-owned: it is already trust-gated,
-            # and no project-local Codex writer has been observed. Preserve the
-            # generator name as well as the bytes so its store path stays fixed.
-            content = lib.mkDefault {source = tomlFormat.generate "codex-project-config.toml" settings;};
-            executable = null;
-          };
-        })
       ];
   }
