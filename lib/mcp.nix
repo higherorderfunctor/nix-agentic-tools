@@ -159,8 +159,8 @@
 
   # ── Render typed entry → freeform JSON shape ────────────────────
   # Translates a typed `commonSchema` entry into the freeform shape
-  # consumed by `programs.claude-code.mcpServers`, `.kiro/settings/
-  # mcp.json`, etc. Discriminates on which fields are set, in order:
+  # consumed by Claude's `.mcp.json`, `.kiro/settings/mcp.json`, etc.
+  # Discriminates on which fields are set, in order:
   #
   #   url != null        → HTTP pass-through
   #   command != null    → raw pass-through (no wrapping)
@@ -289,8 +289,9 @@
 
   # ── Derive MCP entry from package passthru ─────────────────────────
   # Packages carry mcpBinary/mcpArgs in passthru; this function derives
-  # a stdio entry without requiring a server module. Used by devenv and
-  # consumers who wire MCP servers directly from overlay packages.
+  # a raw-command stdio entry (commonSchema shape B) without requiring a
+  # server module, for consumers wiring `ai.mcpServers` directly from
+  # overlay packages.
   #
   # passthru.mcpBinary — binary name when it differs from mainProgram
   # passthru.mcpArgs   — subcommand/flags (e.g. ["start-mcp-server"])

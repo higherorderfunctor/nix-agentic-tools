@@ -21,8 +21,6 @@
   # The stacked-workflows program is not imported (see devenv.nix), but its
   # always-on routing rule is wanted: deliver it from the program's source.
   swsRouter = import ../packages/stacked-workflows/router.nix {inherit lib pkgs;};
-  # For the runtimes whose MCP config this shell owns; Claude's comes from
-  # devenv's own `claude.code.mcpServers` in devenv.nix.
   agnixMcp = {
     type = "stdio";
     package = pkgs.ai.mcpServers.agnix-mcp;
@@ -150,6 +148,58 @@ in {
         Architecture fragments under `dev/fragments/`, `packages/*/docs/` and `devshell/*/docs/` reach you as path-scoped rules in `.claude/rules/*.md`, loaded automatically when you edit a matching path. You do not look them up.
       '';
       enable = true;
+      mcpServers = {
+        agnix = agnixMcp;
+        devenv = {
+          type = "http";
+          url = "https://mcp.devenv.sh/mcp";
+        };
+      };
+      native.settings = {
+        env.ENABLE_LSP_TOOL = "1";
+        permissions.allow = [
+          "Bash(devenv *)"
+          "Bash(git absorb*)"
+          "Bash(git add*)"
+          "Bash(git amend*)"
+          "Bash(git branch*)"
+          "Bash(git branchless*)"
+          "Bash(git checkout*)"
+          "Bash(git commit*)"
+          "Bash(git diff*)"
+          "Bash(git fetch*)"
+          "Bash(git hide*)"
+          "Bash(git log*)"
+          "Bash(git move*)"
+          "Bash(git next*)"
+          "Bash(git prev*)"
+          "Bash(git pull*)"
+          "Bash(git push*)"
+          "Bash(git rebase*)"
+          "Bash(git record*)"
+          "Bash(git reset*)"
+          "Bash(git restack*)"
+          "Bash(git revise*)"
+          "Bash(git reword*)"
+          "Bash(git show*)"
+          "Bash(git sl*)"
+          "Bash(git smartlog*)"
+          "Bash(git status*)"
+          "Bash(git stash*)"
+          "Bash(git submit*)"
+          "Bash(git sync*)"
+          "Bash(git test*)"
+          "Bash(git unhide*)"
+          "Bash(head:*)"
+          "Bash(nix *)"
+          "Bash(treefmt *)"
+          "Bash(wc *)"
+          # `**`, not `*`: the references are namespaced one directory deep
+          # (dev/references/kimchi-surface/), and a single `*` stops at the
+          # separator, so it would silently allow nothing there.
+          "Read(dev/references/**)"
+        ];
+      };
       programs.delegate-sizing = {
         extraRuntimes = ["codex"];
         manualExternalDelegates = ["kiro"];

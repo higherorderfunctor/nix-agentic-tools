@@ -177,16 +177,9 @@
       value =
         if surface == "unpinLaunchEffort"
         then {probe = true;}
-        else if surface == "outputStyles"
-        then {probe = "probe";}
         else {probe = pkgs.emptyDirectory;};
-    }) ["marketplaces" "outputStyles" "plugins" "unpinLaunchEffort"]
+    }) ["plugins" "unpinLaunchEffort"]
     ++ [
-      {
-        runtime = "claude";
-        path = ["ai" "claude" "native" "settings" "mcpServers"];
-        value.probe.command = "probe";
-      }
       {
         runtime = "kiro";
         path = ["ai" "kiro" "rules" "probe"];

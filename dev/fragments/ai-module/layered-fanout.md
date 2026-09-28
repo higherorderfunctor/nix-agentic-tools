@@ -1,30 +1,31 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-26 — L5 is the delivery router plus one adapter per
-> backend; every runtime describes delivery once through the record-level
-> `config`, which `mkRuntime` makes the only delivery callback, and the delivery
-> matrix is generated from the layer for every runtime's files. Normalized pools
-> carry only a text-source record's winning arm. Claude's devenv rules and
-> Codex's execpolicy rules are read-only copies whose writers survive a disable.
-> Copilot reconciles its user settings.json on HM and the repository
-> `.github/copilot/settings.json` on devenv. Kiro excludes the normalized
-> `settings` pool. Native file settings live under `ai.<runtime>.native`. The
-> builder publishes each record's devenv shared AGENTS.md contribution, and its
-> key in `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`.
-> Claude's `.claude.json` has an ungated mode-narrowing command writer beside
-> its unpin ledger. Codex's daemon `settings.json` maps to no matrix cell. The
-> builder declares the per-runtime `agents`, `environmentVariables` and
-> `lspServers` options and an opt-in `agentsDir`; a record's `poolOptions`
-> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
-> builder would not read and a stray field in the `sharedAgentsMd` result. Every
-> reconciled document is one `helpers.mkReconciledDocument` call. A shared
-> AGENTS.md contribution may carry `index` entries: Codex renders a scoped rule
-> that names `references` as a path-scoped index entry instead of inlining its
-> body. The shared AGENTS.md map lowers through the router as `internal`, as a
-> read-only copy, and a contribution's `defaultMaxBytes` makes the owner warn
-> past it under a raised `maxBytes`. Generators mark their `content` with
-> `_generated`, so a consumer's replacement of a unit's file warns like a
-> switch-off.
+> **Last verified:** 2026-09-27 — Claude delivers every surface through
+> `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
+> L5 is the delivery router plus one adapter per backend; every runtime
+> describes delivery once through the record-level `config`, which `mkRuntime`
+> makes the only delivery callback, and the delivery matrix is generated from
+> the layer for every runtime's files. Normalized pools carry only a text-source
+> record's winning arm. Claude's devenv rules and Codex's execpolicy rules are
+> read-only copies whose writers survive a disable. Copilot reconciles its user
+> settings.json on HM and the repository `.github/copilot/settings.json` on
+> devenv. Kiro excludes the normalized `settings` pool. Native file settings
+> live under `ai.<runtime>.native`. The builder publishes each record's devenv
+> shared AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`,
+> from the record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
+> mode-narrowing command writer beside its unpin ledger. Codex's daemon
+> `settings.json` maps to no matrix cell. The builder declares the per-runtime
+> `agents`, `environmentVariables` and `lspServers` options and an opt-in
+> `agentsDir`; a record's `poolOptions` carries only what differs.
+> `checkRecord.nix` rejects a `poolOptions` key the builder would not read and a
+> stray field in the `sharedAgentsMd` result. Every reconciled document is one
+> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
+> `index` entries: Codex renders a scoped rule that names `references` as a
+> path-scoped index entry instead of inlining its body. The shared AGENTS.md map
+> lowers through the router as `internal`, as a read-only copy, and a
+> contribution's `defaultMaxBytes` makes the owner warn past it under a raised
+> `maxBytes`. Generators mark their `content` with `_generated`, so a consumer's
+> replacement of a unit's file warns like a switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -105,22 +106,24 @@
   keeps generated siblings, including leaves already recorded by Codex's ledger;
   defaulting the whole content would silently retire those siblings. Text and
   source content retain their whole-content defaults.
-- **Delegated surfaces still have delivery entries.** Claude's Home Manager
-  agents, hook scripts, skills, LSP and MCP maps use `method = "upstream"` with
-  sinks under `programs.claude-code`. Settings, permissions and typed hooks
-  share the `.claude/settings.json` entry. On devenv that entry delegates to
-  `files.".claude/settings.json".json`, so upstream's hooks still merge into the
-  same document. The router aliases definitions so upstream overrides still beat
-  generated defaults and the host owns list merging. Declare each sink path
-  once: repeating a list-valued `sink` on every content contribution
-  concatenates the path segments. The backend's supported roots remain explicit;
-  devenv's `claude.code.mcpServers` integration is outside those roots and
-  retains its native delegation. Claude's user-global `.claude.json` instead
-  claims the existing JSON ledger under `claudeUnpinLaunchEffort`; its writer
-  survives empty declarations and remains Home Manager only. That writer keeps
-  whatever mode it finds, whether or not it rewrites the file, so an ungated
-  `claudeConfigMode` command writer is the only thing that narrows the
-  token-bearing file to owner-only, on every activation.
+- **Claude delivers its own files.** Agents, commands, output styles, hook
+  scripts, skills, plugins, `.claude/settings.json` and the MCP/LSP files are
+  ordinary `ai.claude.files` entries, like every other runtime's. All of them
+  reach both backends except consumer plugins and the MCP/LSP personal plugin
+  (its manifest, `.mcp.json` and `.lsp.json`), which are Home Manager only
+  because a plugin is user-scope; devenv writes MCP servers to the project
+  `.mcp.json` instead. Nothing is handed to an upstream Home Manager or devenv
+  Claude module. Settings and MCP servers are configuration, so
+  `.claude/settings.json` and the devenv `.mcp.json` are Nix-owned read-only
+  links rather than reconciled documents, and an in-app change such as `/tui`
+  does not persist. Every settings contribution goes through
+  `ai.claude.native.settings`, so one entry carries the whole document. Claude's
+  user-global `.claude.json` is the exception: it holds OAuth tokens and runtime
+  state, so it claims the existing JSON ledger under `claudeUnpinLaunchEffort`;
+  its writer survives empty declarations and remains Home Manager only. That
+  writer keeps whatever mode it finds, whether or not it rewrites the file, so
+  an ungated `claudeConfigMode` command writer is the only thing that narrows
+  the token-bearing file to owner-only, on every activation.
 - **Writers belong beside the file map.** Codex's user `config.toml` claims a
   TOML ledger because the trust prompt writes native state there; project config
   remains a generated source. Its skill-link migrator owns no ledger and uses
@@ -284,10 +287,9 @@ independent of the observed delivery implementation.
 config directories. It reads typed files and activation ledgers, resolves
 methods with the runtime's rule, and uses the router's backend naming. Recursive
 skills use the real leaf walk. Shared devenv AGENTS.md currently comes from the
-typed `ai.internal.files` owner; Claude's native devenv MCP integration is
-observed at its existing upstream destination. Package wrappers have no file
-entry. Kimchi's `trust.json` (`ai.kimchi.projectTrust`) is a user-scope trust
-store, not a portable surface, so the specimen maps it to no cell. Codex's
+typed `ai.internal.files` owner. Package wrappers have no file entry. Kimchi's
+`trust.json` (`ai.kimchi.projectTrust`) is a user-scope trust store, not a
+portable surface, so the specimen maps it to no cell. Codex's
 `app-server-daemon/settings.json` holds daemon updater policy, not a portable
 surface, and maps to no cell either.
 

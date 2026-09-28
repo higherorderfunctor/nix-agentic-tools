@@ -66,16 +66,6 @@
           default = {};
         };
       };
-      # programs.claude-code is collapsed to attrsOf anything —
-      # upstream options aren't in our doc scope (options-doc filters
-      # to `ai.*` prefixes), and the stub's only job is to absorb
-      # whatever our factory writes. Per-option typed stubs had to be
-      # extended every time we added a new `ai.claude.*` route; this
-      # freeform form is future-proof.
-      programs.claude-code = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
-      };
       warnings = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [];
@@ -100,9 +90,8 @@
     };
   };
 
-  # Stub devenv's files option + per-ecosystem upstream options so
-  # the config callbacks in the factory can set files.* /
-  # claude.code.* / copilot.* / kiro.* without importing devenv.
+  # Stub devenv's files option and the other options the factory config
+  # callbacks set, so they evaluate without importing devenv.
   devenvStubs = {
     options = {
       assertions = lib.mkOption {
@@ -116,9 +105,7 @@
       };
       # Real devenv exposes this at EVAL time — `devenv eval devenv.state`
       # returns an absolute path — which is what lets packages/glab derive
-      # a project-local configDir with no runtime shell expansion. Same
-      # stub shape packages/claude-code/checks/claude-devenv-hooks-real-type.nix uses for
-      # devenv.root.
+      # a project-local configDir with no runtime shell expansion.
       devenv = {
         root = lib.mkOption {
           type = lib.types.str;
@@ -164,18 +151,6 @@
       treefmt.enable = lib.mkOption {
         type = lib.types.bool;
         default = false;
-      };
-      claude.code = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
-      };
-      copilot = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
-      };
-      kiro = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
       };
     };
   };
@@ -340,6 +315,31 @@
     if lib.length hits == 1
     then lib.head hits
     else throw "module-test: expected exactly one ai.${runtime} document plan for \"${path}\", found ${toString (lib.length hits)}";
+  # A Claude JSON document as delivered on either backend: the value its
+  # `ai.claude.files` entry renders, `{}` when none is declared. Throws when an
+  # entry is declared but the backend's symlink sink does not carry it, so a
+  # value can never pass for a file nothing writes.
+  claudeDocument = path: evaluated: let
+    inherit (evaluated) config;
+    sink =
+      if config ? home
+      then config.home.file
+      else config.files;
+    entry = config.ai.claude.files.${path} or null;
+  in
+    if entry == null
+    then {}
+    else if sink ? ${path}
+    then entry.content.value
+    else throw "module-test: ai.claude.files.\"${path}\" is declared but not delivered";
+  claudeSettings = claudeDocument ".claude/settings.json";
+  # Where Claude's MCP servers land: the project .mcp.json on devenv, the
+  # personal plugin's .mcp.json on Home Manager.
+  claudeMcpPath = backend:
+    if backend == "hm"
+    then ".claude/skills/nix-agentic-tools/.mcp.json"
+    else ".mcp.json";
+  claudeMcpServers = backend: evaluated: (claudeDocument (claudeMcpPath backend) evaluated).mcpServers or {};
   # Every file devenv delivers, whichever writer lands it: the native `files`
   # sink entries for symlinks, plus each unit of an owned writer's directory
   # plan for a read-only copy, as `{text}` or `{source}` plus its `mode`. The
@@ -378,6 +378,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs deliveredFiles devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   inherit testing;
 }

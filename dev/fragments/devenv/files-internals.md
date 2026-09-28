@@ -1,8 +1,9 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-25 — the repository's instruction files are
-> `ai.*`'s own read-only copies (`own`), never `files.*` symlinks; the
-> generator's materializer and the AGENTS.md seed are gone.
+> **Last verified:** 2026-09-27 — Claude's skills are `ai.*` delivery entries.
+> The repository's instruction files are `ai.*`'s own read-only copies (`own`),
+> never `files.*` symlinks; the generator's materializer and the AGENTS.md seed
+> are gone.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -177,11 +178,10 @@ HM's `home.file.<name>` submodule has a `recursive` field
 (`home-manager/modules/files.nix`). When `source` is a directory and
 `recursive = true`, HM's activation script walks the directory and creates
 per-file symlinks inside a real subdirectory at `<name>`, with state tracking
-per file. Upstream `programs.claude-code.skills` uses this via `mkSkillEntry`.
-Our own delivery entries mirror the pattern for direct Layout B consumers: the
-adapter passes `recursive` straight through to `home.file`. Codex deliberately
-uses a non-recursive Home Manager source instead, producing the same
-whole-directory link as devenv.
+per file. Our delivery entries use it for Layout B consumers, Claude's skills
+included: the adapter passes `recursive` straight through to `home.file`. Codex
+deliberately uses a non-recursive Home Manager source instead, producing the
+same whole-directory link as devenv.
 
 devenv chose a simpler, flatter model without recursive support. Not a bug; a
 deliberate design difference. The user-space walker restores parity at the cost

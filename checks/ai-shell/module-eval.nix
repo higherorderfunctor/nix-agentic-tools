@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest mkWrapperGrepTest;
+  inherit (harness) claudeSettings evalDevenv evalHm mkTest mkWrapperGrepTest;
 in {
   checks = {
     # ── ai.shell — root default with per-runtime override ───────────
@@ -20,15 +20,11 @@ in {
     # Default null must touch nothing — the whole opt-in premise.
     module-ai-shell-default-null-is-inert = mkTest "ai-shell-default-null-is-inert" (
       let
-        hm = evalHm {
-          ai.claude.enable = true;
-          ai.codex.enable = true;
-        };
-        claudeSettings = hm.config.programs.claude-code.settings or {};
+        settings = claudeSettings (evalHm {ai.claude.enable = true;});
         # Unwrapped codex keeps the bare upstream store path.
-        codexPkg = builtins.head hm.config.home.packages;
+        codexPkg = builtins.head (evalHm {ai.codex.enable = true;}).config.home.packages;
       in
-        !((claudeSettings.env or {}) ? CLAUDE_CODE_SHELL)
+        !((settings.env or {}) ? CLAUDE_CODE_SHELL)
         && !(lib.hasSuffix "-wrapped" (builtins.baseNameOf codexPkg))
     );
 
@@ -39,7 +35,7 @@ in {
           ai.shell = pkgs.bash;
           ai.claude.enable = true;
         };
-        settings = result.config.programs.claude-code.settings or {};
+        settings = claudeSettings result;
       in
         (settings.env.CLAUDE_CODE_SHELL or null) == (lib.getExe pkgs.bash)
     );
@@ -57,7 +53,7 @@ in {
             shell = pkgs.bashNonInteractive;
           };
         };
-        settings = result.config.programs.claude-code.settings or {};
+        settings = claudeSettings result;
       in
         (settings.env.CLAUDE_CODE_SHELL or null)
         == (lib.getExe pkgs.bashNonInteractive)
@@ -104,13 +100,8 @@ in {
           ai.shell = pkgs.bash;
           ai.claude.enable = true;
         };
-        hmValue =
-          (hm.config.programs.claude-code.settings or {}).env.CLAUDE_CODE_SHELL or null;
-        devenvFile = devenv.config.files.".claude/settings.json" or null;
-        devenvValue =
-          if devenvFile == null
-          then null
-          else devenvFile.json.env.CLAUDE_CODE_SHELL or null;
+        hmValue = (claudeSettings hm).env.CLAUDE_CODE_SHELL or null;
+        devenvValue = (claudeSettings devenv).env.CLAUDE_CODE_SHELL or null;
       in
         hmValue != null && hmValue == devenvValue
     );
@@ -125,7 +116,7 @@ in {
             native.settings.env.CLAUDE_CODE_SHELL = "/usr/bin/bash";
           };
         };
-        settings = result.config.programs.claude-code.settings or {};
+        settings = claudeSettings result;
       in
         (settings.env.CLAUDE_CODE_SHELL or null) == "/usr/bin/bash"
     );

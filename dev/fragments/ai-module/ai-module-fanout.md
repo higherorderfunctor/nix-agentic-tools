@@ -1,10 +1,12 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-26 — AGENTS.md puts the index and rules before the
-> context. The repository AGENTS.md, Copilot's devenv context and instruction
-> files, and Kiro's devenv steering land as read-only copies; Codex indexes
-> scoped rules that name `references`; a unit whose file is switched off or
-> replaced warns, and so does a devenv Codex AGENTS.md past 32 KiB under a
+> **Last verified:** 2026-09-27 — Claude delivers every surface as its own file
+> through `ai.claude.files` on both backends, and no runtime flips an upstream
+> `programs.<cli>` or devenv integration. AGENTS.md puts the index and rules
+> before the context. The repository AGENTS.md, Copilot's devenv context and
+> instruction files, and Kiro's devenv steering land as read-only copies; Codex
+> indexes scoped rules that name `references`; a unit whose file is switched off
+> or replaced warns, and so does a devenv Codex AGENTS.md past 32 KiB under a
 > raised limit. Semble derives a Kiro agent-private MCP server from
 > `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
 > delivery once through `mkRuntime`'s record-level `config`, and both
@@ -14,7 +16,7 @@
 > commands resolve packages through the shared `commandType`. Launchers bake the
 > builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
 > share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
-> through `aiCommon.mkRuleFiles`. Claude devenv delivers `ai.agents` and
+> through `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and
 > `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
 > (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
 > `agent.fileContent` where it copies, so a store-path string is a file, never a
@@ -99,18 +101,17 @@ directly; do not restore parallel handwritten lists.
 The `ai` module has **no master enable option**. Each per-CLI sub-enable is the
 sole gate for that ecosystem's product output:
 
-| Consumer sets              | What fires                                                            |
-| -------------------------- | --------------------------------------------------------------------- |
-| `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
-| `ai.codex.enable = true`   | Codex package + guidance, skills, settings, agents, hooks fanout      |
-| `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
-| `ai.kimchi.enable = true`  | Kimchi package + context, MCP, settings, skills, environment fanout   |
-| `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
+| Consumer sets              | What fires                                                          |
+| -------------------------- | ------------------------------------------------------------------- |
+| `ai.claude.enable = true`  | Claude package + claude fanout block                                |
+| `ai.codex.enable = true`   | Codex package + guidance, skills, settings, agents, hooks fanout    |
+| `ai.copilot.enable = true` | Copilot package + copilot fanout block                              |
+| `ai.kimchi.enable = true`  | Kimchi package + context, MCP, settings, skills, environment fanout |
+| `ai.kiro.enable = true`    | Kiro package + kiro fanout block                                    |
 
-Where an upstream module exists, each per-CLI block implicitly flips its enable
-via `mkDefault`, so consumers don't have to set enable twice. Codex and Kimchi
-have no upstream modules. For CLIs that do have one, a consumer can still
-override the corresponding `programs.<cli>.enable` explicitly.
+No runtime hands its files to an upstream `programs.<cli>` or devenv
+integration: every one delivers through `ai.<runtime>.files`, so there is no
+second enable to flip or to override.
 
 **Package installation is NOT per-factory work.**
 `lib/ai/app/mkBackendTransform.nix` installs a package for every enabled
@@ -123,17 +124,12 @@ or on one backend spec, which wins; `installPackage = null` opts out.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and
-`claude` shipped with it missing from BOTH backends — masked on Home Manager,
-where upstream's `programs.claude-code` installs the package anyway, and visible
-on devenv only as `claude` silently resolving to whatever the developer had
-installed user-globally. Silence now means "install the plain package", so the
-same omission is inert rather than invisible.
-
-`claude` on Home Manager is the sole `installPackage = null` in the repo:
-upstream already installs it there, and a second path to the same `bin/claude`
-in one profile fails activation with a `buildEnv` conflicting-subpath error.
-`checks/ai-fanout/module-eval.nix`'s `every-runtime-installs-package` pins each
-runtime's delivery channel per backend, so that exemption cannot silently widen.
+`claude` shipped with it missing from BOTH backends, visible on devenv as
+`claude` silently resolving to whatever the developer had installed
+user-globally. Silence now means "install the plain package", so the same
+omission is inert rather than invisible. `checks/ai-fanout/module-eval.nix`'s
+`every-runtime-installs-package` asserts a non-empty package list for every
+runtime on both backends.
 
 The one bounded exception is an `activation` writer with
 `runWhenDisabled = true`, declared outside the product gate by
@@ -159,8 +155,8 @@ activation/shell entry has drained the old ledger.
 The original design had `config = mkIf cfg.enable (mkMerge [...])` wrapping
 everything, requiring BOTH `ai.enable = true` AND `ai.claude.enable = true` to
 fan out. This caused a silent no-op: a consumer who set
-`ai.claude.enable = true` without `ai.enable = true` got no fanout at all —
-`programs.claude-code` options stayed at defaults, configuration was stored in
+`ai.claude.enable = true` without `ai.enable = true` got no fanout at all — the
+upstream Claude module's options stayed at defaults, configuration was stored in
 the option but never fanned out.
 
 Surfaced 2026-04-07 during HITL integration. Root cause: the outer
@@ -212,9 +208,7 @@ The ai module fans out TWO kinds of configuration:
   injection and installs it bare otherwise — wrapping is conditional, not
   automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's own wrappers, return
   the bare package when there is nothing to bake in). The process environment
-  each one bakes in is the builder's `launcherEnvironment`. `ai.claude.package`
-  additionally feeds `programs.claude-code.package`, which is what installs it
-  on Home Manager.
+  each one bakes in is the builder's `launcherEnvironment`.
 - `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an
@@ -333,30 +327,28 @@ enabled ecosystem whose native model preserves the option's semantics):
   allowlist; `null` and `[]` both omit the header. Codex deliberately omits it
   because its standalone agent format has no equivalent field. Codex fails
   loudly on a legacy raw entry instead of pretending Markdown is a valid agent
-  config. Claude HM hands entries to `programs.claude-code.agents`; Claude
-  devenv writes `.claude/agents/<name>.md` itself through the same renderer,
-  because upstream devenv `claude.code.agents` requires typed description/prompt
-  fields and cannot carry a raw Markdown or path entry. A path-like legacy entry
-  — a Nix path, a store-path string such as a flake input's `"${src}/a.md"`, or
-  a derivation, i.e. upstream Home Manager's `isPathLike` — stays a file
-  `source` for Claude and Kimchi on both backends (`agent.fileContent`, which
-  tests `agent.isPathLike`), and is read into text by `renderCopilot` for
-  Copilot's file writer; an `agentsDir` given as a string yields string entries,
-  so every writer must test `isPathLike`, never `builtins.isPath`. Raw
-  `ai.kiro.agents` entries route the same way to `source` through the same
-  `agent.fileContent`. Kiro remains excluded from this pool, but NOT because its
-  agents are untyped JSON — `ai.kiro.agents` is a typed record modelling Kiro's
-  v3 agent schema, and its `prompt` uses the same `text`/`source` content shape.
-  The blocker is the tool VOCABULARY: this pool's `tools` carries Claude/Copilot
-  tool names (`Bash`, `Read`) while Kiro takes capability tags (`shell`, `read`,
-  `@mcp`), so lowering needs a translation table, not a pass-through. Add one
-  and the exclusion can be revisited. Kimchi takes semantic records as
-  frontmatter plus body with no `name:`, and rejects a non-empty `tools` (its
-  lowercase builtin names differ) and root Markdown (it misreads Claude's
-  `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries Kimchi-native Markdown.
-  Its files are the one Markdown surface a harness rewrites (the /agents
-  commands), so they state `method = "copy-ro"` with `mode = "0644"`: `shared`
-  needs a leaf container and a symlink or read-only copy would refuse the write.
+  config. Claude writes `.claude/agents/<name>.md` on both backends through
+  `agent.renderClaude`. A path-like legacy entry — a Nix path, a store-path
+  string such as a flake input's `"${src}/a.md"`, or a derivation, i.e. Home
+  Manager's `isPathLike` — stays a file `source` for Claude and Kimchi on both
+  backends (`agent.fileContent`, which tests `agent.isPathLike`), and is read
+  into text by `renderCopilot` for Copilot's file writer; an `agentsDir` given
+  as a string yields string entries, so every writer must test `isPathLike`,
+  never `builtins.isPath`. Raw `ai.kiro.agents` entries route the same way to
+  `source` through the same `agent.fileContent`. Kiro remains excluded from this
+  pool, but NOT because its agents are untyped JSON — `ai.kiro.agents` is a
+  typed record modelling Kiro's v3 agent schema, and its `prompt` uses the same
+  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
+  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
+  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
+  table, not a pass-through. Add one and the exclusion can be revisited. Kimchi
+  takes semantic records as frontmatter plus body with no `name:`, and rejects a
+  non-empty `tools` (its lowercase builtin names differ) and root Markdown (it
+  misreads Claude's `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries
+  Kimchi-native Markdown. Its files are the one Markdown surface a harness
+  rewrites (the /agents commands), so they state `method = "copy-ro"` with
+  `mode = "0644"`: `shared` needs a leaf container and a symlink or read-only
+  copy would refuse the write.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex
@@ -445,18 +437,19 @@ enabled ecosystem whose native model preserves the option's semantics):
   proxy-owner keys fail and direct owners must choose different keys. A
   top-level proxy inherited by no enabled capable runtime creates no unit.
 - `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
-  Kiro native config. Codex is deliberately excluded: its current public config
-  reference and pinned CLI expose no LSP-server registration surface, so
-  pretending to fan out this pool would silently discard the declaration. The
-  Copilot and Kiro producers (`mkCopilotLspFile`, `mkKiroLspFile`) emit the
-  WHOLE file, envelope included (`lspServers` / `languages`): both CLIs reject a
-  bare per-server map, which is what shipped until 2026-09-23 while substring
-  checks stayed green. Both route files to servers by extension alone, so a
-  server they receive with empty `extensions` throws at eval rather than render
-  an entry that never starts; drop it for that runtime with
-  `ai.<runtime>.lspServers.<name> = null`. Copilot also keys `lspServers` by the
-  attribute name and rejects the whole file for a name outside `[A-Za-z0-9_-]+`,
-  so such a name throws for Copilot too.
+  Kiro native config. Claude receives them on Home Manager only, in its personal
+  plugin's `.lsp.json`; devenv has no Claude LSP route and warns. Codex is
+  deliberately excluded: its current public config reference and pinned CLI
+  expose no LSP-server registration surface, so pretending to fan out this pool
+  would silently discard the declaration. The Copilot and Kiro producers
+  (`mkCopilotLspFile`, `mkKiroLspFile`) emit the WHOLE file, envelope included
+  (`lspServers` / `languages`): both CLIs reject a bare per-server map, which is
+  what shipped until 2026-09-23 while substring checks stayed green. Both route
+  files to servers by extension alone, so a server they receive with empty
+  `extensions` throws at eval rather than render an entry that never starts;
+  drop it for that runtime with `ai.<runtime>.lspServers.<name> = null`. Copilot
+  also keys `lspServers` by the attribute name and rejects the whole file for a
+  name outside `[A-Za-z0-9_-]+`, so such a name throws for Copilot too.
 - `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
   of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
@@ -541,11 +534,8 @@ inline-hook ownership check.
 
 ### Other boundaries
 
-- The package wrapping (Bun runtime) for claude-code — handled in
-  `packages/claude-code/packages/ai/claude-code/package.nix` at overlay level.
-
-See the backlog item "ai.claude.\* full passthrough" for the ongoing work to
-expose more `programs.claude-code.*` options via `ai.claude.*`.
+- Packaging the pre-built claude-code binary —
+  `packages/claude-code/packages/ai/claude-code/package.nix`.
 
 ### Config parity
 
@@ -688,12 +678,13 @@ From a consumer repo with the module imported:
 
 ```bash
 nix eval --impure --json \
-  '.#homeConfigurations."<host>".config.programs.claude-code.enable'
-# Should be true if ai.claude.enable = true
+  '.#homeConfigurations."<host>".config.home.file' \
+  --apply 'files: builtins.filter (n: builtins.match "[.]claude/.*" n != null) (builtins.attrNames files)'
+# Should list .claude/settings.json, skills, agents, … if ai.claude.enable = true
 ```
 
-If the option stays false despite `ai.claude.enable = true`, the fanout is
-broken — fix the module, not the consumer.
+If the list stays empty despite `ai.claude.enable = true`, the fanout is broken
+— fix the module, not the consumer.
 
 ### Shared-pool is per-evaluation, NOT cross-backend
 
