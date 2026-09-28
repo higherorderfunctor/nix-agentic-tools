@@ -1,4 +1,4 @@
-"""Render ai.kimchi.projectTrust as the trust.json leaves Kimchi will match.
+"""Render ai.kimchi.projectTrust as the trust.json Kimchi will match.
 
 pi 0.85.1 looks a decision up under realpath(cwd), then under each parent in
 turn (findNearestTrustEntry, dist/core/trust-manager.js:20-33), and reads the

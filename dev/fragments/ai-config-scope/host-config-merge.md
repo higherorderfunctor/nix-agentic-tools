@@ -1,6 +1,6 @@
 ## Devenv runtimes merge with host config — the reason is auth, not tidiness
 
-> **Last verified:** 2026-09-26 — devenv's Codex launcher runs without the
+> **Last verified:** 2026-09-28 — devenv's Codex launcher runs without the
 > shared app-server daemon, so Codex's tool calls keep the launch environment.
 >
 > States as one cross-runtime rule what previously had to be inferred by reading
@@ -93,9 +93,10 @@ tools in it. devenv's Codex launcher therefore always passes `--no-daemon`; see
 `CONFIG_DIR_NAME` from Kimchi's packaged
 `piConfig.configDir = ".config/kimchi/harness"`, independent of the consumer's
 Home Manager `ai.kimchi.configDir` output option. Project config, MCP, skills,
-and harness settings stay inert until explicit or persisted trust; unattended
-use can set user-scope `native.harnessSettings.defaultProjectTrust = "always"`
-through Home Manager. A project cannot grant itself trust.
+and harness settings stay inert until explicit or persisted trust. Home Manager
+defaults `defaultProjectTrust = "never"`; declare a project root or a parent in
+`ai.kimchi.projectTrust` for a devenv project to become active. A project cannot
+grant itself trust.
 
 Project-root `AGENTS.md` is the upstream exception. Kimchi's prompt-enrichment
 extension walks ancestor context files without consulting the project-scope
