@@ -22,7 +22,9 @@
   #   open    a non-empty declaration, the default for every Claude user
   #           (`unpinLaunchEffort` defaults to a non-empty map): the merge
   #           rewrites the file and keeps its 0644.
-  #   closed  both declarations forced empty: the merge touches nothing.
+  #   closed  both declarations forced empty (Claude's `unpinLaunchEffort` and
+  #           Kimchi's always-declared config.json defaults): the merge touches
+  #           nothing.
   #
   # A mode writer gated on either state fails the other one.
   gates = {
@@ -32,7 +34,10 @@
           enable = true;
           unpinLaunchEffort = lib.mkForce {};
         };
-        ai.kimchi.enable = true;
+        ai.kimchi = {
+          enable = true;
+          native.settings = lib.mkForce {};
+        };
       };
       holds = declared: declared == {};
     };
