@@ -372,6 +372,32 @@ in {
   fileMapType = lib.types.attrsOf fileEntry;
   writerMapType = lib.types.attrsOf writer;
 
+  # The byte limits a runtime's reader imposes, keyed by file path, declared
+  # for each runtime and for the shared AGENTS.md owner (`ai.internal`). Keyed
+  # by PATH rather than carried on the entry, so a consumer's replacement of
+  # the file, which discards the generated entry and every field on it, is
+  # measured all the same. The router builds a limited file into the Markdown
+  # tree whatever its format, and the tree's install check fails the build
+  # past the limit.
+  maxBytesOption = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        bytes = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "The largest size, in bytes, the reader takes whole.";
+        };
+        hint = lib.mkOption {
+          type = lib.types.str;
+          description = "What to do about a file past the limit; ends the build failure's message.";
+        };
+      };
+    });
+    default = {};
+    internal = true;
+    visible = false;
+    description = "Byte limits on delivered files, keyed by path, checked on the built file.";
+  };
+
   # The eval-visible record of every writer's reconciliation plan, declared
   # for each runtime and for the shared AGENTS.md owner (`ai.internal`).
   ownPlansOption = lib.mkOption {

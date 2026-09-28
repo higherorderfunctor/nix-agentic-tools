@@ -99,6 +99,7 @@
         }: {
           options = {
             ai.probe = {
+              _maxBytes = deliveryOptions.maxBytesOption;
               _ownPlans = lib.mkOption {type = lib.types.attrsOf lib.types.anything;};
               activation = lib.mkOption {
                 type = deliveryOptions.writerMapType;

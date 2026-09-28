@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs deliveredFiles deliveredMarkdown evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit (harness) aiBase aiStubs deliveredFiles deliveredMarkdown evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromMarkdownTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   # The AGENTS.md text each backend builds into its Markdown tree:
   # `.codex/AGENTS.md` under Home Manager, the shared project-root AGENTS.md
   # on devenv.
@@ -1970,128 +1970,162 @@ in {
         && (settingsOf explicit).project_doc_max_bytes == 65536
     );
 
-    module-codex-size-guard-byte-boundaries = mkTest "codex-size-guard-byte-boundaries" (
-      let
-        evaluate = context: projectDocMaxBytes:
-          evalHm {
-            ai.codex = {
-              context.text = context;
-              enable = true;
-              inherit projectDocMaxBytes;
-            };
-          };
-        # The rendered file ends in one newline, so N bytes of context render
-        # to N + 1.
-        sized = size: lib.concatStrings (lib.replicate (size - 1) "x");
-        below = evaluate (sized 32767) 32768;
-        exact = evaluate (sized 32768) 32768;
-        above = evaluate (sized 32769) 32768;
-        diagnostic = evalHm {
-          ai = {
-            codex = {
-              enable = true;
-              projectDocMaxBytes = 1;
-              rules.named.text = "i";
-            };
-            rules.oversize.text = "r";
+    # Codex's limit is checked on the BUILT file, in the Markdown tree that
+    # delivers it. Home Manager keys it by `.codex/AGENTS.md`, so a
+    # replacement is measured as well as the generated file: the delivered
+    # file is exactly the tree `mkTree` builds with that limit, and that tree
+    # fails its build one byte past the limit. The byte arithmetic itself is
+    # `checks/markdown/markdown-byte-limit-scripts.nix`.
+    module-codex-agents-md-byte-limit = let
+      path = ".codex/AGENTS.md";
+      hint = "Trim or replace the final content, or raise ai.codex.projectDocMaxBytes.";
+      limit.${path} = {
+        bytes = 32768;
+        inherit hint;
+      };
+      generated = evalHm {
+        ai.codex = {
+          context.text = "CONTEXT";
+          enable = true;
+        };
+      };
+      replaced = size:
+        evalHm {
+          ai.codex = {
+            enable = true;
+            files.${path}.content.text = lib.concatStrings (lib.replicate size "x");
           };
         };
-        unicodeOver = evaluate "é" 1;
-        aboveAssertion = lib.findFirst (assertion: !assertion.assertion) null above.config.assertions;
-        diagnosticAssertion = lib.findFirst (assertion: !assertion.assertion) null diagnostic.config.assertions;
-        unicodeAssertion = lib.findFirst (assertion: !assertion.assertion) null unicodeOver.config.assertions;
-      in
-        builtins.all (assertion: assertion.assertion) below.config.assertions
-        && builtins.all (assertion: assertion.assertion) exact.config.assertions
-        && aboveAssertion != null
-        && lib.hasInfix "renders to 32769 bytes" aboveAssertion.message
-        && lib.hasInfix "projectDocMaxBytes (32768 bytes)" aboveAssertion.message
-        && diagnosticAssertion != null
-        && lib.hasInfix "replace the final inline content" diagnosticAssertion.message
-        && unicodeAssertion != null
-        && lib.hasInfix "renders to 3 bytes" unicodeAssertion.message
-        && lib.hasInfix "projectDocMaxBytes (1 bytes)" unicodeAssertion.message
-        && lib.hasInfix "Trim or replace" unicodeAssertion.message
-    );
+      treeOf = evaluated:
+        (aiBase.markdown pkgs).mkTree {
+          name = "ai-hm-codex-markdown";
+          files.${path} = markdownInput evaluated path;
+          maxBytes = limit;
+        };
+      deliversFrom = tree: evaluated: evaluated.config.home.file.${path}.source == "${tree}/${path}";
+      exact = replaced 32768;
+      above = replaced 32769;
+      failure = pkgs.testers.testBuildFailure (treeOf above);
+    in
+      assert lib.assertMsg (generated.config.ai.codex._maxBytes == limit && exact.config.ai.codex._maxBytes == limit)
+      "codex-agents-md-byte-limit: ai.codex._maxBytes is not the 32768-byte limit on ${path}";
+      assert lib.assertMsg (lib.all (evaluated: deliversFrom (treeOf evaluated) evaluated) [generated exact above])
+      "codex-agents-md-byte-limit: ${path} is not delivered from a tree carrying its limit";
+        pkgs.runCommand "module-test-codex-agents-md-byte-limit" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          test -f ${treeOf exact}/${path}
+          grep -q -F ${lib.escapeShellArg "${path} renders to 32769 bytes, exceeding its limit (32768 bytes). ${hint}"} ${failure}/testBuildFailure.log
+          echo PASS > "$out"
+        '';
 
-    # The soft companion of the size guard: on devenv a RAISED limit lands in
-    # trust-gated project config, so a file past Codex's own 32 KiB is all an
-    # untrusted project reads, and it warns. Home Manager writes the limit to
-    # user config, which no trust gates, so it stays silent. Both backends
-    # keep the hard guard, matched by its own message.
-    module-codex-size-warning-past-default = mkTest "codex-size-warning-past-default" (
+    # On devenv a RAISED limit lands in trust-gated project config, so a file
+    # past Codex's own 32 KiB is all an untrusted project reads. Every shell
+    # entry runs the window notice on the project's AGENTS.md, which it
+    # measures whoever wrote it; a limit at the default runs nothing. Home
+    # Manager writes the limit to user config, which no trust gates, and has
+    # no shell entry. What the notice prints is
+    # `checks/markdown/markdown-byte-limit-scripts.nix`.
+    module-codex-window-notice = mkTest "codex-window-notice" (
       let
-        sized = size: lib.concatStrings (lib.replicate (size - 1) "x");
-        hm = size: projectDocMaxBytes:
-          evalHm {
-            ai.codex = {
-              context.text = sized size;
-              enable = true;
-              inherit projectDocMaxBytes;
-            };
-          };
-        devenv = size: projectDocMaxBytes:
+        noticeLines = evaluated: lib.filter (lib.hasInfix "/bin/ai-markdown-window-notice ") (lib.splitString "\n" evaluated.config.enterShell);
+        expected = ["${lib.getExe (aiBase.markdown pkgs).windowNotice} \"$DEVENV_ROOT\"/${lib.escapeShellArgs ["AGENTS.md" "32768" "codex"]}"];
+        devenv = projectDocMaxBytes:
           evalDevenv {
             ai = {
               codex = {
                 enable = true;
                 inherit projectDocMaxBytes;
               };
-              context.text = sized size;
+              context.text = "CONTEXT";
             };
           };
-        sizeWarnings = evaluated: lib.filter (lib.hasInfix "in an untrusted project reads only the first") evaluated.config.warnings;
-        sizeFailures = evaluated:
-          lib.filter (assertion: !assertion.assertion && lib.hasInfix "renders to 40000 bytes, exceeding" assertion.message)
-          evaluated.config.assertions;
-        failed = evaluated: lib.filter (assertion: !assertion.assertion) evaluated.config.assertions;
-        # A store-backed replacement cannot be measured at evaluation.
-        unknown = evalDevenv {
+        hm = evalHm {
+          ai.codex = {
+            context.text = "CONTEXT";
+            enable = true;
+            projectDocMaxBytes = 131072;
+          };
+        };
+        # A store-backed replacement is in the shared tree, under the limit.
+        replaced = evalDevenv {
           ai.codex = {
             enable = true;
-            files."AGENTS.md".content.source = pkgs.writeText "big" (sized 40000);
+            files."AGENTS.md".content.source = pkgs.writeText "big" (lib.concatStrings (lib.replicate 40000 "x"));
             projectDocMaxBytes = 131072;
           };
         };
       in
-        lib.all (backend:
-          sizeWarnings (backend 32768 131072)
-          == []
-          && sizeWarnings (backend 40000 32768) == []
-          && sizeFailures (backend 40000 32768) != []
-          && failed (backend 40000 131072) == [])
-        [hm devenv]
-        && sizeWarnings (hm 40000 131072) == []
-        && sizeWarnings (devenv 40000 131072)
-        == ["AGENTS.md is 40000 bytes; codex in an untrusted project reads only the first 32768. Trust the project in codex, or shrink the always-loaded content."]
-        && sizeWarnings unknown == []
+        noticeLines (devenv 32768)
+        == []
+        && noticeLines (devenv 131072) == expected
+        && noticeLines replaced == expected
+        && replaced.config.ai.internal._maxBytes."AGENTS.md".bytes == 131072
+        && fromMarkdownTree "AGENTS.md" (deliveredFiles replaced.config)."AGENTS.md"
+        && hm.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 131072
+        && hm.config.warnings == []
     );
 
-    module-codex-shared-size-guard-covers-kiro-only-content = mkTest "codex-shared-size-guard-covers-kiro-only-content" (
-      let
-        oversized = evalDevenv {
-          ai = {
-            codex = {
-              enable = true;
-              projectDocMaxBytes = 16;
-            };
-            kiro = {
-              enable = true;
-              rules.kiro-only.text = lib.concatStrings (lib.replicate 32 "x");
-            };
+    # The shared AGENTS.md carries the limit of every runtime that reads it,
+    # whoever supplies the content: here Codex's limit, and Kiro's rule alone.
+    # The internal tree is built with that limit and fails past it.
+    module-codex-shared-byte-limit-covers-kiro-only-content = let
+      hint = "Trim the contributing context or rules, replace the final file, or raise the runtime's document-size limit.";
+      limit."AGENTS.md" = {
+        bytes = 16;
+        inherit hint;
+      };
+      oversized = evalDevenv {
+        ai = {
+          codex = {
+            enable = true;
+            projectDocMaxBytes = 16;
+          };
+          kiro = {
+            enable = true;
+            rules.kiro-only.text = lib.concatStrings (lib.replicate 32 "x");
           };
         };
-        empty = evalDevenv {ai.codex.enable = true;};
-        failed =
-          lib.findFirst (assertion:
-            !assertion.assertion
-            && lib.hasInfix "AGENTS.md renders" assertion.message)
-          null
-          oversized.config.assertions;
+      };
+      empty = evalDevenv {ai.codex.enable = true;};
+      tree = (aiBase.markdown pkgs).mkTree {
+        name = "ai-devenv-internal-markdown";
+        files."AGENTS.md" = markdownInput oversized "AGENTS.md";
+        maxBytes = limit;
+      };
+      failure = pkgs.testers.testBuildFailure tree;
+    in
+      assert lib.assertMsg (oversized.config.ai.internal._maxBytes == limit)
+      "codex-shared-byte-limit-covers-kiro-only-content: ai.internal._maxBytes is not Codex's limit on AGENTS.md";
+      assert lib.assertMsg ((deliveredFiles oversized.config)."AGENTS.md".source == "${tree}/AGENTS.md")
+      "codex-shared-byte-limit-covers-kiro-only-content: AGENTS.md is not delivered from a tree carrying its limit";
+      assert lib.assertMsg (!((deliveredFiles empty.config) ? "AGENTS.md"))
+      "codex-shared-byte-limit-covers-kiro-only-content: a limit alone delivered an AGENTS.md";
+        pkgs.runCommand "module-test-codex-shared-byte-limit-covers-kiro-only-content" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          grep -q -F ${lib.escapeShellArg "AGENTS.md renders to"} ${failure}/testBuildFailure.log
+          grep -q -F ${lib.escapeShellArg hint} ${failure}/testBuildFailure.log
+          echo PASS > "$out"
+        '';
+
+    # A body that writes AGENTS.md at activation has no bytes to measure when
+    # the tree is built, so its limit is not checked, and the router says so
+    # rather than dropping the limit silently. The inline control is quiet.
+    module-codex-run-byte-limit-warns = mkTest "codex-run-byte-limit-warns" (
+      let
+        withContent = content:
+          evalDevenv {
+            ai.codex = {
+              enable = true;
+              files."AGENTS.md".content = content;
+            };
+          };
+        limitWarnings = evaluated: lib.filter (lib.hasInfix "-byte limit is not checked") evaluated.config.warnings;
       in
-        failed
-        != null
-        && !((deliveredFiles empty.config) ? "AGENTS.md")
+        limitWarnings (withContent {run = "printf probe";})
+        == [''ai.internal.files."AGENTS.md" is written at activation (`content.run`), so its 32768-byte limit is not checked.'']
+        && limitWarnings (withContent {text = "probe";}) == []
     );
 
     module-codex-rule-runtime-replaces-root = mkTest "codex-rule-runtime-replaces-root" (

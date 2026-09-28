@@ -24,10 +24,10 @@
     lib.hasAttrByPath ["devenv" "root"] options
     && lib.hasAttrByPath ["files"] options;
   agentsmd = import ../transformers/agentsmd.nix {inherit lib;};
-  aiCommon = import ../ai-common.nix {inherit lib;};
   aiTypes = import ../types.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
+  markdown = import ../../markdown {inherit lib;} pkgs;
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   adapters = import ../adapters {inherit lib pkgs;};
   writer = "materialize-agents-md";
@@ -116,27 +116,25 @@
       filename: _text: config.ai.internal.agentsMd.${filename}.hasContent
     )
     allRendered;
-  sizeAssertions = lib.mapAttrsToList (filename: value:
-    aiCommon.sizeAssertion {
-      entry = config.ai.internal.files.${filename} or null;
-      inherit (value) maxBytes;
-      message = size: ''
-        ${filename} renders to ${toString size} bytes, exceeding its configured
-        limit (${toString value.maxBytes} bytes). Trim the contributing context
-        or rules, replace the final inline file, or raise the runtime's
-        document-size limit.
-      '';
+  # Each target's hard limit, measured on the built file whoever supplies it.
+  limits =
+    lib.mapAttrs (_filename: value: {
+      bytes = value.maxBytes;
+      hint = "Trim the contributing context or rules, replace the final file, or raise the runtime's document-size limit.";
     })
-  config.ai.internal.agentsMd;
-  sizeWarnings = lib.concatLists (lib.mapAttrsToList (filename: value:
-    lib.concatLists (lib.mapAttrsToList (reader: defaultBytes:
-      aiCommon.sizeWarning {
-        entry = config.ai.internal.files.${filename} or null;
-        inherit defaultBytes filename reader;
-        inherit (value) maxBytes;
-      })
-    value.defaultMaxBytes))
-  config.ai.internal.agentsMd);
+    (lib.filterAttrs (_filename: value: value.maxBytes != null) config.ai.internal.agentsMd);
+  # A RAISED limit admits a file larger than what a runtime takes where that
+  # limit does not apply (Codex applies project config only in a trusted
+  # project, and nothing at evaluation or build time can see trust). The
+  # notice measures the file actually in the project on every shell entry, so
+  # it keeps firing for as long as the file stays past the reader's default.
+  windowNotices = lib.concatStrings (lib.concatLists (lib.mapAttrsToList (filename: value:
+    lib.mapAttrsToList (reader: defaultBytes:
+      lib.optionalString (value.maxBytes != null && value.maxBytes > defaultBytes) ''
+        ${lib.getExe markdown.windowNotice} "$DEVENV_ROOT"/${lib.escapeShellArgs [filename (toString defaultBytes) reader]}
+      '')
+    value.defaultMaxBytes)
+  config.ai.internal.agentsMd));
   # Discover public app records from their option shape, including downstream
   # runtimes absent from this repository's first-party registry.
   runtimeNames = builtins.attrNames (lib.filterAttrs (_name: runtime:
@@ -254,6 +252,7 @@ in {
         instead of inferring the key from a runtime option.
       '';
     };
+    _maxBytes = deliveryOptions.maxBytesOption;
     _ownPlans = deliveryOptions.ownPlansOption;
     activation = lib.mkOption {
       type = deliveryOptions.writerMapType;
@@ -278,8 +277,12 @@ in {
     })
     (lib.optionalAttrs isDevenv (lib.mkMerge (
       [
-        {assertions = sizeAssertions;}
-        (lib.optionalAttrs (options ? warnings) {warnings = sizeWarnings;})
+        {ai.internal._maxBytes = limits;}
+        # `mkIf` rather than an empty string: `enterShell` is a lines option,
+        # so an empty definition would still add a separator to the script.
+        (lib.optionalAttrs (options ? enterShell) {
+          enterShell = lib.mkIf (windowNotices != "") windowNotices;
+        })
         (lib.mkIf (config.ai.internal.agentsMd != {}) {
           # Do not inspect rendered bytes to discover whether a target exists.
           # The separate boolean inventory lets priority arbitration discard this
@@ -313,7 +316,7 @@ in {
         }
         (adapters.devenv {
           cfg = {
-            inherit (config.ai.internal) activation files;
+            inherit (config.ai.internal) _maxBytes activation files;
             methodFor = deliveryMethod.byRule;
           };
           inherit config options;

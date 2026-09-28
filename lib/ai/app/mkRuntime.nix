@@ -40,7 +40,8 @@
 #                                    #   defaultMaxBytes?}: the devenv repository AGENTS.md
 #                                    #   contribution; `defaultMaxBytes` is what the runtime
 #                                    #   reads where a raised `maxBytes` does not apply, and
-#                                    #   warns past it. The transform rejects any other field
+#                                    #   devenv shell entry warns past it. The transform
+#                                    #   rejects any other field
 #     contentTargets ? <absent>;     # callback (same args) → {context?; rules?}: the
 #                                    #   path each context/rule unit lands in, from the
 #                                    #   SAME bindings the delivery uses. A unit whose

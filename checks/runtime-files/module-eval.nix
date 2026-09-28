@@ -382,55 +382,67 @@ in {
         evaluations
     );
 
-    module-runtime-files-size-guard-follows-final-entry = mkTest "runtime-files-size-guard-follows-final-entry" (
-      let
-        oversized = lib.concatStrings (lib.replicate 64 "x");
-        hmReplacement = evalHm {
-          ai.codex = {
-            context.text = oversized;
+    # The byte limit measures the file that WINS at its path, in the tree that
+    # delivers it: a short replacement of an oversized generated AGENTS.md
+    # builds under an 8-byte limit on both backends, and a disabled one is not
+    # delivered at all.
+    module-runtime-files-byte-limit-follows-final-entry = let
+      oversized = lib.concatStrings (lib.replicate 64 "x");
+      hmReplacement = evalHm {
+        ai.codex = {
+          context.text = oversized;
+          enable = true;
+          files.".codex/AGENTS.md".content.text = "short";
+          projectDocMaxBytes = 8;
+        };
+      };
+      hmDisabled = evalHm {
+        ai.codex = {
+          context.text = oversized;
+          enable = true;
+          files.".codex/AGENTS.md".content.enable = false;
+          projectDocMaxBytes = 8;
+        };
+      };
+      devenvReplacement = evalDevenv {
+        ai = {
+          codex = {
             enable = true;
-            files.".codex/AGENTS.md".content.text = "short";
+            files."AGENTS.md".content.text = "short";
             projectDocMaxBytes = 8;
           };
+          context.text = oversized;
         };
-        hmDisabled = evalHm {
-          ai.codex = {
-            context.text = oversized;
+      };
+      devenvDisabled = evalDevenv {
+        ai = {
+          codex = {
             enable = true;
-            files.".codex/AGENTS.md".content.enable = false;
+            files."AGENTS.md".content.enable = false;
             projectDocMaxBytes = 8;
           };
+          context.text = oversized;
         };
-        devenvReplacement = evalDevenv {
-          ai = {
-            codex = {
-              enable = true;
-              files."AGENTS.md".content.text = "short";
-              projectDocMaxBytes = 8;
-            };
-            context.text = oversized;
-          };
-        };
-        devenvDisabled = evalDevenv {
-          ai = {
-            codex = {
-              enable = true;
-              files."AGENTS.md".content.enable = false;
-              projectDocMaxBytes = 8;
-            };
-            context.text = oversized;
-          };
-        };
-      in
-        builtins.all (assertion: assertion.assertion) hmReplacement.config.assertions
-        && builtins.all (assertion: assertion.assertion) hmDisabled.config.assertions
-        && builtins.all (assertion: assertion.assertion) devenvReplacement.config.assertions
-        && builtins.all (assertion: assertion.assertion) devenvDisabled.config.assertions
-        && hmReplacement.config.home.file.".codex/AGENTS.md".text == "short"
-        && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
-        && devenvMarkdown devenvReplacement.config "AGENTS.md" == "short"
-        && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md")
-    );
+      };
+      passes = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
+      hmFile = hmReplacement.config.home.file.".codex/AGENTS.md";
+      devenvFile = (deliveredFiles devenvReplacement.config)."AGENTS.md";
+    in
+      assert lib.assertMsg (lib.all passes [hmReplacement hmDisabled devenvReplacement devenvDisabled])
+      "runtime-files-byte-limit-follows-final-entry: a fixture fails its assertions";
+      assert lib.assertMsg (hmMarkdown hmReplacement.config ".codex/AGENTS.md" == "short" && devenvMarkdown devenvReplacement.config "AGENTS.md" == "short")
+      "runtime-files-byte-limit-follows-final-entry: the replacement is not what the tree is built from";
+      assert lib.assertMsg (hmReplacement.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 8 && devenvReplacement.config.ai.internal._maxBytes."AGENTS.md".bytes == 8)
+      "runtime-files-byte-limit-follows-final-entry: the replacement's path lost its limit";
+      assert lib.assertMsg (!(hmDisabled.config.home.file ? ".codex/AGENTS.md") && !((deliveredFiles devenvDisabled.config) ? "AGENTS.md"))
+      "runtime-files-byte-limit-follows-final-entry: a disabled AGENTS.md is still delivered";
+        pkgs.runCommand "module-test-runtime-files-byte-limit-follows-final-entry" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          [ "$(cat ${hmFile.source})" = short ]
+          [ "$(cat ${devenvFile.source})" = short ]
+          echo PASS > "$out"
+        '';
 
     module-runtime-files-discarded-codex-source-stays-lazy = mkTest "runtime-files-discarded-codex-source-stays-lazy" (
       let
@@ -498,7 +510,7 @@ in {
           };
         };
       in
-        hmReplacement.config.home.file.".codex/AGENTS.md".text
+        hmMarkdown hmReplacement.config ".codex/AGENTS.md"
         == "HM-REPLACEMENT"
         && !(hmDisabled.config.home.file ? ".codex/AGENTS.md")
         && devenvMarkdown devenvReplacement.config "AGENTS.md" == "DEVENV-REPLACEMENT"
@@ -643,9 +655,9 @@ in {
         && !runtimeFiles.isLive (runEntry {enable = false;})
     );
 
-    # A store-backed replacement of the shared AGENTS.md stays lazy: it is not
-    # read to be measured against a size limit, which would build it during
-    # evaluation. The source is a derivation that fails to build.
+    # A store-backed replacement of the shared AGENTS.md stays lazy: its size
+    # limit is measured when the Markdown tree is built, never by reading it
+    # during evaluation. The source is a derivation that fails to build.
     module-runtime-files-shared-agentsmd-source-stays-lazy = mkTest "runtime-files-shared-agentsmd-source-stays-lazy" (
       let
         source = pkgs.runCommand "shared-agents-md-source-must-not-build" {} ''
