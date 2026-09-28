@@ -21,8 +21,8 @@
 #
 #   - a tool stops catching its half  -> the gate has a hole; fix or replace it.
 #   - a tool starts catching the OTHER half -> the pair may be redundant, and
-#     the rationale in config/repo-validation.nix and the markdown-formatting
-#     fragment is now WRONG and must be rewritten.
+#     the rationale in lib/markdown/table-cells.nix and the
+#     markdown-formatting fragment is now WRONG and must be rewritten.
 #
 # The second direction is the one a plain "does it still find bugs?" test would
 # miss, and it is the one that turns three files of prose into a lie.
@@ -46,9 +46,9 @@
     # the ones the gate uses would be measuring nothing.
     inherit (pkgs.ai.devTools) markdownlint-cli2 rumdl;
 
-    markdownlintConfig = pkgs.writeText "markdownlint-tables.jsonc" ''
-      { "default": false, "MD056": true }
-    '';
+    # The hook's own config, so the suite measures markdownlint under exactly
+    # the rule set the gate enables.
+    inherit (import ../../lib/markdown/table-cells.nix {inherit pkgs;}) markdownlintConfig;
 
     fixtures = ./fixtures/markdown-table-cells;
   in
@@ -67,7 +67,7 @@
         echo "One of them changed behavior. Before touching this file, decide which:" >&2
         echo "  * a tool stopped catching its half  -> the gate has a hole." >&2
         echo "  * a tool started catching the other -> the pair may be redundant, and" >&2
-        echo "    the rationale in config/repo-validation.nix plus the" >&2
+        echo "    the rationale in lib/markdown/table-cells.nix plus the" >&2
         echo "    markdown-formatting fragment is now WRONG and must be rewritten." >&2
         echo "" >&2
         echo "Do not 'fix' this by relaxing the assertion." >&2

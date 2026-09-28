@@ -14,13 +14,13 @@ you author are discarded, and hand-wrapping is what created the defect below.
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-09-01 — the pipe-in-a-table-cell defect is now gated
-> by `markdown-table-cells` (rumdl primary, markdownlint backup; same MD056 rule
-> number, disjoint coverage — do not deduplicate them). Corrects an earlier
-> draft of this section that blamed hand-padding, required every row to agree on
-> cell count, and shipped a hand-check awk snippet; the real failure modes are
-> version-dependent formatter behavior and `prettier-ignore` hiding the defect
-> outright.
+> **Last verified:** 2026-09-27 — the pipe-in-a-table-cell defect is gated by
+> `markdown-table-cells` (rumdl primary, markdownlint backup; same MD056 rule
+> number, disjoint coverage — do not deduplicate them), defined once in
+> `lib/markdown/table-cells.nix`. Corrects an earlier draft of this section that
+> blamed hand-padding, required every row to agree on cell count, and shipped a
+> hand-check awk snippet; the real failure modes are version-dependent formatter
+> behavior and `prettier-ignore` hiding the defect outright.
 >
 > Full lineage:
 > `git show 4705317b:dev/fragments/markdown-formatting/markdown-formatting.md`.
@@ -129,7 +129,9 @@ living only in one caller does not survive a second caller being added.
 ### A pipe in a table cell — `markdown-table-cells`
 
 Gated. Two linters, one hook, because the defect has two states and no single
-tool sees both.
+tool sees both. The script, its markdownlint config and the full rationale are
+defined once in `lib/markdown/table-cells.nix`; the prek hook and the fixture
+suite (`checks/markdown/markdown-table-cells-fixtures.nix`) both read it.
 
 **The cause is always the same: an unescaped `|` in a cell.** A table row is
 split into cells at BLOCK level, before inline parsing runs, so a backtick gives
