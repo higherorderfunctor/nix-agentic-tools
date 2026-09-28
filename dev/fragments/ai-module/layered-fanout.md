@@ -11,24 +11,25 @@
 > `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
 > `mcp.json` are read-only copies in one directory ledger. Kimchi's settings
 > files are read-only copies of one `kimchiFiles` writer; only its HM user
-> `config.json` is a reconciled document. Kiro excludes the normalized
-> `settings` pool. Native file settings live under `ai.<runtime>.native`. The
-> builder publishes each record's devenv shared AGENTS.md contribution, and its
-> key in `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`.
-> Claude's `.claude.json` has an ungated mode-narrowing command writer beside
-> its unpin ledger. Codex's daemon `settings.json` maps to no matrix cell. The
-> builder declares the per-runtime `agents`, `environmentVariables` and
-> `lspServers` options and an opt-in `agentsDir`; a record's `poolOptions`
-> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
-> builder would not read and a stray field in the `sharedAgentsMd` result. Every
-> reconciled document is one `helpers.mkReconciledDocument` call. A shared
-> AGENTS.md contribution may carry `index` entries: Codex renders a scoped rule
-> that names `references` as a path-scoped index entry instead of inlining its
-> body. The shared AGENTS.md map lowers through the router as `internal`, as a
-> read-only copy, and a contribution's `defaultMaxBytes` makes the owner warn
-> past it under a raised `maxBytes`. Generators mark their `content` with
-> `_generated`, so a consumer's replacement of a unit's file warns like a
-> switch-off.
+> `config.json` is a reconciled document. Codex's `config.toml` is a store
+> symlink on both backends and its daemon `settings.json` a read-only copy of
+> `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
+> pool. Native file settings live under `ai.<runtime>.native`. The builder
+> publishes each record's devenv shared AGENTS.md contribution, and its key in
+> `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`. Claude's
+> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
+> ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
+> declares the per-runtime `agents`, `environmentVariables` and `lspServers`
+> options and an opt-in `agentsDir`; a record's `poolOptions` carries only what
+> differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
+> read and a stray field in the `sharedAgentsMd` result. Every reconciled
+> document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
+> contribution may carry `index` entries: Codex renders a scoped rule that names
+> `references` as a path-scoped index entry instead of inlining its body. The
+> shared AGENTS.md map lowers through the router as `internal`, as a read-only
+> copy, and a contribution's `defaultMaxBytes` makes the owner warn past it
+> under a raised `maxBytes`. Generators mark their `content` with `_generated`,
+> so a consumer's replacement of a unit's file warns like a switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -104,11 +105,10 @@
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
-- **Structured documents contribute ordinary leaves.** Codex HM settings and
+- **Structured documents contribute ordinary leaves.** Codex settings and
   Copilot MCP/LSP use `content.value` at ordinary priority. Adding one leaf
-  keeps generated siblings, including leaves already recorded by Codex's ledger;
-  defaulting the whole content would silently retire those siblings. Text and
-  source content retain their whole-content defaults.
+  keeps generated siblings; defaulting the whole content would silently drop
+  them. Text and source content retain their whole-content defaults.
 - **Delegated surfaces still have delivery entries.** Claude's Home Manager
   agents, hook scripts, skills, LSP and MCP maps use `method = "upstream"` with
   sinks under `programs.claude-code`. Settings, permissions and typed hooks
@@ -125,19 +125,21 @@
   whatever mode it finds, whether or not it rewrites the file, so an ungated
   `claudeConfigMode` command writer is the only thing that narrows the
   token-bearing file to owner-only, on every activation.
-- **Writers belong beside the file map.** Codex's user `config.toml` claims a
-  TOML ledger because the trust prompt writes native state there; project config
-  remains a generated source. Its skill-link migrator owns no ledger and uses
-  `activation.<name>.command`: HM needs `after = []` and
+- **The CLI's write primitive picks the method.** Codex's `config.toml` is a
+  store symlink on both backends: every Codex config writer writes a temporary
+  beside the link's target, so an in-app save fails and the link survives
+  (`chatgpt-codex-readonly-config`). Its daemon `settings.json` is the opposite
+  case: Codex renames a temporary over it, which would swap a link for a real
+  file and fail the next switch's link check, so it is a read-only copy of
+  `materialize-codex-daemon-settings`, claimed file by file in the
+  `app-server-daemon` directory. Copilot, Kiro and Kimchi rename too, so their
+  settings are copies as well.
+- **Writers belong beside the file map.** Codex's skill-link migrator owns no
+  ledger and uses `activation.<name>.command`: HM needs `after = []` and
   `before = ["linkCheck"]`, while devenv uses the default file/shell edges.
   Commands omit a final newline because the router supplies it, along with
   strict mode and a scoped subshell. Directory skill sources keep
-  `recursive = false` because Codex discovers directory symlinks. Named profiles
-  retain their lockout assertion and user-layer destination: HM describes
-  whole-file sources in the delivery map, while devenv retains its guarded
-  host-directory materializer through a command writer named
-  `ai:codex:materialize-profiles`. The materializer still owns its
-  Git-common-directory manifest and lock.
+  `recursive = false` because Codex discovers directory symlinks.
 - **Shared documents reconcile where the CLI writes state.** Kimchi's HM
   `config.json` states `facts.harnessWrites = true` and declares its writer
   unconditionally while enabled; its other files are read-only copies of one
@@ -152,8 +154,7 @@
   `trustedFolders`, written by `copilotTrustedFolders` and declared only on HM.
   Its settings files are not documents: every key Copilot writes there is
   configuration, so they are read-only copies of `materialize-copilot-config`.
-  Codex's project config remains a static source because its native writer is
-  user-scoped. Each such document is one `helpers.mkReconciledDocument` call
+  Each such document is one `helpers.mkReconciledDocument` call
   (`lib/ai/hm-helpers.nix`), which emits the writer with its ledger and the file
   entry that names both, so the pair cannot drift. Its `entry` and `ledger` stay
   literals at the call site: both are upgrade contracts.
@@ -300,8 +301,8 @@ typed `ai.internal.files` owner; Claude's native devenv MCP integration is
 observed at its existing upstream destination. Package wrappers have no file
 entry. Kimchi's `trust.json` (`ai.kimchi.projectTrust`) is a user-scope trust
 store, not a portable surface, so the specimen maps it to no cell. Codex's
-`app-server-daemon/settings.json` holds daemon updater policy, not a portable
-surface, and maps to no cell either.
+`app-server-daemon/settings.json` holds daemon configuration
+(`native.daemonSettings`), not a portable surface, and maps to no cell either.
 
 The production gate compares live absence against hand-authored gaps in both
 directions and verifies upstream sink correspondence. Its three body arms stay;

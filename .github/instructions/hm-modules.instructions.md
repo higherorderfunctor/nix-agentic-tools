@@ -14,15 +14,15 @@ applyTo: "packages/*/modules/homeManager/**"
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
 > on HM activation and devenv shell entry where the CLI writes that copy
 > (Kimchi's HM user config.json; Copilot's HM config.json `trustedFolders` leaf,
-> whose `//` header own.py keeps; Kiro's, Kimchi's other and Copilot's settings
-> files are read-only copies instead), a fully retracted empty document is
-> deleted, a document may name its native writer's lock (no runtime does),
-> document targets may enforce modes, a document is published by
-> compare-and-swap against unlocked runtime writers, credential documents get an
-> ungated mode-narrowing command writer, and the delivery-path parity example
-> uses `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile`
-> / `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
-> (one entry).
+> whose `//` header own.py keeps; Kiro's, Kimchi's other, Copilot's and Codex's
+> daemon settings files are read-only copies instead, and Codex's config.toml a
+> store symlink), a fully retracted empty document is deleted, a document may
+> name its native writer's lock (no runtime does), document targets may enforce
+> modes, a document is published by compare-and-swap against unlocked runtime
+> writers, credential documents get an ungated mode-narrowing command writer,
+> and the delivery-path parity example uses `ai.codex.execpolicyRules`. The
+> shared LSP producers are `mkKiroLspFile` / `mkCopilotLspFile` (whole files,
+> envelope included) and `mkClaudeLspConfig` (one entry).
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -258,18 +258,6 @@ taken after its own flock so waiting on another reconcile never ages it toward
 stale. No runtime declares one: Kimchi's `trust.json`, the only user, is a
 read-only copy now. `own.nix` refuses it on a `dir` target.
 
-**Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
-user `config.toml` contains Nix-declared settings and required native state: the
-TUI trust prompt writes ad-hoc `projects.<path>.trust_level` entries through
-`config/batchWrite`. Its factory declares `facts.harnessWrites` with the
-`ai.codex.activation.codexSettingsReconcile` ledger, so it lowers into the same
-`lib/ai/own.nix` bundle, and `lib/ai/own.py` records exact managed leaf paths
-under XDG state, removes only retired managed leaves, overlays current leaves,
-preserves native siblings within the same table, and publishes the whole
-document with one atomic replacement. The manifest is necessary because
-`existing * desired` cannot tell a native key from a Nix key deleted in the next
-generation.
-
 A runtime that shares a document without a lock (Claude Code's `.claude.json`,
 Kimchi's `config.json`) can rename its own write over the path between
 `own.py`'s read and its rename, which the flock cannot see. So a document is
@@ -313,10 +301,12 @@ back would be import-from-derivation, and `builtins.fromJSON` refuses a string
 that refers to a store path, so the value a document declares is recorded beside
 the plan rather than recovered from it.
 
-Do not generalize this to every TOML file or every runtime. Static ownership is
-still preferred when no required native writer shares the artifact. That is why
-Codex's devenv project `.codex/config.toml` remains a store-backed file: project
-config is trust-gated and no project-local writer has been demonstrated.
+Do not generalize documents to every file or runtime. A store symlink is
+preferred wherever the CLI's own save fails cleanly against one: Codex's
+`config.toml`, user and project, is a symlink because every Codex config writer
+writes its temporary beside the link's target and so refuses the save
+(`chatgpt-codex-readonly-config`). A CLI that renames over the path gets a
+read-only copy instead, as Codex's daemon `settings.json` does.
 
 **Parity does not require identical delivery paths.**
 `ai.codex.execpolicyRules.<name>` is one typed option schema in HM and devenv,
@@ -329,15 +319,16 @@ bullet in `dev/fragments/ai-module/ai-module-fanout.md`).
 
 **Every HM settings writer is unconditional.** Copilot's
 `materialize-copilot-config` and `copilotTrustedFolders`, kiro's `kiroMcpJson`,
-kimchi's `kimchiConfigMerge` and `kimchiFiles`, codex's `codexSettingsReconcile`
-and claude's `claudeUnpinLaunchEffort` are all emitted while the ecosystem is
-enabled, whatever the declaration says. An empty declaration is not "nothing to
-do", it is the RETRACTION path: empty settings plus no prior ledger is a strict
-no-op, while empty settings plus a prior ledger must run so a later generation
-retracts the leaves it used to own without erasing native state. A
-`mkIf (cfg.native.settings != {})` around one of these writers is the N-to-zero
-defect, and `checks.ai-delivery` fails at eval on it — it evaluates every
-imperative writer under a populated AND an empty declaration.
+kimchi's `kimchiConfigMerge` and `kimchiFiles`, codex's
+`materialize-codex-daemon-settings` and claude's `claudeUnpinLaunchEffort` are
+all emitted while the ecosystem is enabled, whatever the declaration says. An
+empty declaration is not "nothing to do", it is the RETRACTION path: empty
+settings plus no prior ledger is a strict no-op, while empty settings plus a
+prior ledger must run so a later generation retracts the leaves it used to own
+without erasing native state. A `mkIf (cfg.native.settings != {})` around one of
+these writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on
+it — it evaluates every imperative writer under a populated AND an empty
+declaration.
 
 Devenv-side writes are unconditional (always write the file when
 `enable = true`). This is intentional: devenv files are project-local symlinks,

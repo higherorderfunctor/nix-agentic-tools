@@ -38,6 +38,18 @@
         };
       };
     };
+  # Kimchi's user config.json is a shared document: Nix owns its declared
+  # leaves, Kimchi writes its own state beside them.
+  kimchiExtension = extended:
+    evalHm {
+      ai.kimchi = {
+        enable = true;
+        native.settings.llmEndpoint = "https://generated.invalid";
+        files = lib.optionalAttrs extended {
+          ".config/kimchi/config.json".content.value.probe = "extended";
+        };
+      };
+    };
   # Both files carry their pool under an envelope key of the same name. The
   # LSP file lives at a different path per backend: the CLI's user-level
   # `lsp-config.json` on Home Manager, the repository-level
@@ -456,34 +468,37 @@ in {
       in
         evaluated.config.ai.codex.files.".codex/config.toml".content.value
         == expected
-        && (harness.ownedDocument "codex" ".codex/config.toml" evaluated).value == expected
         && lib.all (assertion: assertion.assertion) evaluated.config.assertions
     );
 
-    # Evaluate the factory twice and execute its actual writer: a dropped
-    # generated leaf otherwise looks like an intentional retirement on disk.
-    module-delivery-codex-content-extension-runtime = pkgs.runCommand "module-test-delivery-codex-content-extension-runtime" {} ''
-      export HOME="$PWD/home"
-      export XDG_STATE_HOME="$PWD/state"
-      # This is HM activation entry text, which expects home-manager's `run`
-      # helper (lib/bash/home-manager.sh) to already be in scope.
-      ${harness.hmRunShim}
-      ${(codexExtension false).config.home.activation.codexSettingsReconcile.text}
-      printf '\n[native]\nkeep = true\n' >> "$HOME/.codex/config.toml"
-      ${(codexExtension true).config.home.activation.codexSettingsReconcile.text}
-      ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
-      import pathlib
-      import sys
-      import tomllib
-
-      document = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
-      assert document.get("model") == "generated-model", "generated model retired by a content extension"
-      assert document.get("model_reasoning_effort") == "xhigh", "generated effort retired by a content extension"
-      assert document["native"]["keep"] is True
-      assert document["ui"]["theme"] == "dark"
-      PY
-      touch "$out"
-    '';
+    # Evaluate the factory twice and execute its actual writer against a shared
+    # document: a dropped generated leaf otherwise looks like an intentional
+    # retirement on disk.
+    module-delivery-shared-content-extension-runtime = let
+      extended = kimchiExtension true;
+    in
+      assert (harness.ownedDocument "kimchi" ".config/kimchi/config.json" extended).value.probe == "extended";
+        pkgs.runCommand "module-test-delivery-shared-content-extension-runtime" {nativeBuildInputs = [pkgs.jq];} ''
+          export HOME="$PWD/home"
+          export XDG_STATE_HOME="$PWD/state"
+          config="$HOME/.config/kimchi/config.json"
+          # This is HM activation entry text, which expects home-manager's `run`
+          # helper (lib/bash/home-manager.sh) to already be in scope.
+          ${harness.hmRunShim}
+          ${(kimchiExtension false).config.home.activation.kimchiConfigMerge.text}
+          jq '.deviceId = "native"' "$config" > native.json
+          mv native.json "$config"
+          ${extended.config.home.activation.kimchiConfigMerge.text}
+          jq -e '.llmEndpoint == "https://generated.invalid"' "$config" > /dev/null || {
+            echo "generated llmEndpoint retired by a content extension: $(cat "$config")" >&2
+            exit 1
+          }
+          jq -e '.telemetry.enabled == true and .deviceId == "native" and .probe == "extended"' "$config" > /dev/null || {
+            echo "generated, native or extended leaf missing: $(cat "$config")" >&2
+            exit 1
+          }
+          touch "$out"
+        '';
 
     module-delivery-copilot-lsp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-lsp-content-extension-keeps-generated-leaves" (copilotExtension "lspServers" {
       devenv = ".github/lsp.json";
