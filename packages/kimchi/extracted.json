@@ -512,11 +512,6 @@
         "readBy": ["kimchi"],
         "controls": "session-review threshold"
       },
-      "KIMCHI_ROUTER_ENDPOINT": {
-        "consumerOverridable": true,
-        "readBy": ["kimchi"],
-        "controls": "model router endpoint"
-      },
       "KIMCHI_SANDBOX": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
@@ -1461,7 +1456,7 @@
   },
   "provenance": {
     "extractorSchema": 3,
-    "kimchiVersion": "1.1.36",
+    "kimchiVersion": "1.1.37",
     "piVersion": "0.85.1"
   }
 }

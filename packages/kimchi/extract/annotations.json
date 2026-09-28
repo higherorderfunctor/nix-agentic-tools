@@ -149,9 +149,6 @@
     "KIMCHI_REVIEW_THRESHOLD": {
       "controls": "session-review threshold"
     },
-    "KIMCHI_ROUTER_ENDPOINT": {
-      "controls": "model router endpoint"
-    },
     "KIMCHI_SANDBOX": {
       "controls": "sandbox detection override"
     },
