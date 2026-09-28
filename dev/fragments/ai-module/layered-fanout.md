@@ -1,13 +1,14 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-26 — L5 is the delivery router plus one adapter per
+> **Last verified:** 2026-09-28 — L5 is the delivery router plus one adapter per
 > backend; every runtime describes delivery once through the record-level
 > `config`, which `mkRuntime` makes the only delivery callback, and the delivery
 > matrix is generated from the layer for every runtime's files. Normalized pools
 > carry only a text-source record's winning arm. Claude's devenv rules and
 > Codex's execpolicy rules are read-only copies whose writers survive a disable.
 > Copilot reconciles its user settings.json on HM and the repository
-> `.github/copilot/settings.json` on devenv. Kiro excludes the normalized
+> `.github/copilot/settings.json` on devenv. Kiro's `cli.json` and `mcp.json`
+> are read-only copies in one directory ledger. Kiro excludes the normalized
 > `settings` pool. Native file settings live under `ai.<runtime>.native`. The
 > builder publishes each record's devenv shared AGENTS.md contribution, and its
 > key in `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`.
@@ -134,41 +135,48 @@
   host-directory materializer through a command writer named
   `ai:codex:materialize-profiles`. The materializer still owns its
   Git-common-directory manifest and lock.
-- **Shared documents reconcile where the CLI writes them.** Kiro's cli.json
-  states `facts.harnessWrites = true` and declares its writer unconditionally
-  while enabled. The adapter runs the same bundle on HM activation or devenv
-  shell entry. Backend-keyed `entry` preserves HM names while giving devenv its
-  required namespace, such as `ai:kiro:settings-merge`. Devenv uses
-  `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
-  `enterTest`. Empty declarations retain their writers so prior leaves can be
-  retracted. Existing file modes and unowned leaves survive; a new file is 0600.
-  The fact is per backend when the CLI writes only one copy. Copilot writes both
-  of its settings copies (`/model`, `/settings` and their `--repo` forms), so
-  one writer, `copilotSettingsMerge`, reconciles the user settings.json on HM
-  and the repository `.github/copilot/settings.json` on devenv. Codex's project
-  config remains a static source because its native writer is user-scoped. Each
-  such document is one `helpers.mkReconciledDocument` call
-  (`lib/ai/hm-helpers.nix`), which emits the writer with its ledger and the file
-  entry that names both, so the pair cannot drift. Its `entry` and `ledger` stay
-  literals at the call site: both are upgrade contracts.
+- **Shared documents reconcile where the CLI writes them.** Kimchi's
+  `config.json` states `facts.harnessWrites = true` and declares its writer
+  unconditionally while enabled. The adapter runs the same bundle on HM
+  activation or devenv shell entry. Backend-keyed `entry` preserves HM names
+  while giving devenv its required namespace, such as `ai:kimchi:config-merge`.
+  Devenv uses `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with
+  verification in `enterTest`. Empty declarations retain their writers so prior
+  leaves can be retracted. Existing file modes and unowned leaves survive; a new
+  file is 0600. The fact is per backend when the CLI writes only one copy.
+  Copilot writes both of its settings copies (`/model`, `/settings` and their
+  `--repo` forms), so one writer, `copilotSettingsMerge`, reconciles the user
+  settings.json on HM and the repository `.github/copilot/settings.json` on
+  devenv. Codex's project config remains a static source because its native
+  writer is user-scoped. Each such document is one
+  `helpers.mkReconciledDocument` call (`lib/ai/hm-helpers.nix`), which emits the
+  writer with its ledger and the file entry that names both, so the pair cannot
+  drift. Its `entry` and `ledger` stay literals at the call site: both are
+  upgrade contracts.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
   symlink destination still has a declared JSON/TOML ledger, even without a
   claimant. Empty retirement preserves the regular document and native siblings;
   it cannot safely hand that path to a link writer. Ordinary empty retirement
-  and Kiro's transitions between owned MCP modes remain supported.
+  remains supported.
 - **Owned entries must agree with their ledgers.** `copy-ro` requires a
   directory ledger. A document claimant's path and format must exactly match its
   JSON/TOML ledger: the ledger controls the actual destination and codec, so a
   mismatch would redirect output or silently change its ownership semantics.
-- **Kiro keeps one MCP writer for both modes.** Both historical ledgers are
-  declared together; the selected file claims one and the other retracts. Merge
-  keeps `content.run` even with zero servers; empty overwrite has no claimant.
-  URL-secret modes remain 0400/0600, otherwise 0444/0644. Only this writer waits
-  for secrets. The devenv renderer keeps its project-root anchor for relative
-  secret readers. Hooks state `facts.symlinkReadable = false` because the v3
-  scan keeps only `isFile()` entries, and their writer survives N→0. Permissions
-  remain HM-only because Kiro never reads them from project `.kiro/`.
+- **Kiro's settings files are read-only copies from one writer.** `kiroMcpJson`
+  owns `cli.json` and `mcp.json` through one directory ledger,
+  `materialize/kiro-settings.manifest`. Kiro's own writers rename a temporary
+  over either file, which replaces a symlink and a 0444 copy alike. A copy is
+  still the right method: the next activation or shell entry backs the in-app
+  file up and restores the declaration, while a symlink would block Home
+  Manager's link check or be skipped by devenv. Home Manager always claims both
+  user-global files (`{}` and an empty server map); devenv claims a project file
+  only when something is declared. `mcp.json` is 0400 with a URL secret,
+  otherwise 0444. Only this writer waits for secrets. The devenv renderer keeps
+  its project-root anchor for relative secret readers. Hooks state
+  `facts.symlinkReadable = false` because the v3 scan keeps only `isFile()`
+  entries, and their writer survives N→0. Permissions remain HM-only because
+  Kiro never reads them from project `.kiro/`.
 - **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
   (`paths:`) loader passes `includeExternal: false` at Project scope, with no
   setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
@@ -294,8 +302,7 @@ surface, and maps to no cell either.
 The production gate compares live absence against hand-authored gaps in both
 directions and verifies upstream sink correspondence. Its three body arms stay;
 derived names make the first arm's name agreement a tautology, not a stronger
-check. Empty-declaration survival and body variation still discriminate. Kiro
-MCP's two strategies keep independent probes, including both HM phases.
+check. Empty-declaration survival and body variation still discriminate.
 
 Regeneration evaluates the check set, and the check set asserts the committed
 matrix, so a change that moves a cell (a runtime joining the layer, say) cannot

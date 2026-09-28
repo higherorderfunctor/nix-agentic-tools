@@ -1,19 +1,19 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-27 — Semble's `pathMappings` and model routing live
+> **Last verified:** 2026-09-28 — Semble's `pathMappings` and model routing live
 > at the program root. Native file settings live under `ai.<runtime>.native`
 > (`native.settings`; Kimchi also `native.harnessSettings`). Shared documents,
 > each declared by `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
 > on HM activation and devenv shell entry where the CLI writes that copy
-> (Copilot's user settings.json on HM, its repository settings on devenv), a
-> fully retracted empty document is deleted, a document may name its native
-> writer's lock, document targets may enforce modes, a document is published by
-> compare-and-swap against unlocked runtime writers, credential documents get an
-> ungated mode-narrowing command writer, and the delivery-path parity example
-> uses `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile`
-> / `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
-> (one entry).
+> (Copilot's user settings.json on HM, its repository settings on devenv; Kiro's
+> settings files are read-only copies instead), a fully retracted empty document
+> is deleted, a document may name its native writer's lock, document targets may
+> enforce modes, a document is published by compare-and-swap against unlocked
+> runtime writers, credential documents get an ungated mode-narrowing command
+> writer, and the delivery-path parity example uses `ai.codex.execpolicyRules`.
+> The shared LSP producers are `mkKiroLspFile` / `mkCopilotLspFile` (whole
+> files, envelope included) and `mkClaudeLspConfig` (one entry).
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -215,20 +215,20 @@ fi
 Reserve `exit 1` for cases where you actually want to abort the whole activation
 on an error. Never `exit 0` for a cache-hit fast path.
 
-**Owned leaves, not a merge** (copilot-cli, kiro-cli): copilot's `settings.json`
-and kiro's `settings/cli.json` are not merged onto whatever is on disk. Each
-reconciles the leaves it owns. A factory says so by stating
-`facts.harnessWrites` on the file and naming the `ai.<runtime>.activation`
-writer whose ledger claims it; the rule resolves that to `shared` and
-`lib/ai/deliver.nix` builds the `lib/ai/own.nix` bundle that `lib/ai/own.py`
-runs. Kiro and Copilot declare their settings writers on both backends: HM emits
-activation entries, while devenv emits tasks under `$DEVENV_ROOT` with ledgers
-under `$DEVENV_STATE/nix-agentic-tools`. Copilot's devenv copy is the repository
-file `.github/copilot/settings.json`, which its `--repo` commands also write.
-Declared leaves are asserted, a leaf the previous generation declared and this
-one DROPPED is retracted, and every unowned sibling — a model or theme picked
-inside the CLI — is left alone. A blind `jq -s '.[0] * .[1]'` cannot do the
-middle one: it has no way to tell a native key from a Nix key that was deleted.
+**Owned leaves, not a merge** (copilot-cli): copilot's `settings.json` is not
+merged onto whatever is on disk. It reconciles the leaves it owns. A factory
+says so by stating `facts.harnessWrites` on the file and naming the
+`ai.<runtime>.activation` writer whose ledger claims it; the rule resolves that
+to `shared` and `lib/ai/deliver.nix` builds the `lib/ai/own.nix` bundle that
+`lib/ai/own.py` runs. Copilot declares its settings writer on both backends: HM
+emits activation entries, while devenv emits tasks under `$DEVENV_ROOT` with
+ledgers under `$DEVENV_STATE/nix-agentic-tools`. Copilot's devenv copy is the
+repository file `.github/copilot/settings.json`, which its `--repo` commands
+also write. Declared leaves are asserted, a leaf the previous generation
+declared and this one DROPPED is retracted, and every unowned sibling — a model
+or theme picked inside the CLI — is left alone. A blind `jq -s '.[0] * .[1]'`
+cannot do the middle one: it has no way to tell a native key from a Nix key that
+was deleted.
 
 A target that stops declaring anything deletes its document when the retraction
 leaves it serializing to an empty object: every byte was ours. Leaving `{}`
@@ -270,9 +270,7 @@ it. Locked by `ai-activation-settings-mode` (the race cases).
 Modes on a document are the reconciler's, not the caller's: a NEW file is
 created 0600, and an existing regular file keeps the mode it has — unless its
 target states a `mode`, which is then imposed on every write and on the run that
-moves no bytes. Exactly one target states one (kiro's merge-mode
-`settings/mcp.json`, whose file a sibling target in the same bundle also
-writes); everything else leaves the field out.
+moves no bytes. No runtime's document target states one.
 
 A document that carries credentials needs more than that. Because an existing
 file keeps its mode, a file an earlier generation widened to 0644 stays 0644
@@ -315,20 +313,23 @@ materializer were removed 2026-09-19 as unreachable dead code (see the Settled
 bullet in `dev/fragments/ai-module/ai-module-fanout.md`).
 
 **Every HM settings writer is unconditional.** Copilot's `copilotSettingsMerge`,
-kiro's `kiroSettingsMerge`, kimchi's two entries, codex's
-`codexSettingsReconcile` and claude's `claudeUnpinLaunchEffort` are all emitted
-while the ecosystem is enabled, whatever the declaration says. An empty
-declaration is not "nothing to do", it is the RETRACTION path: empty settings
-plus no prior ledger is a strict no-op, while empty settings plus a prior ledger
-must run so a later generation retracts the leaves it used to own without
-erasing native state. A `mkIf (cfg.native.settings != {})` around one of these
-writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on it —
-it evaluates every imperative writer under a populated AND an empty declaration.
+kiro's `kiroMcpJson`, kimchi's two entries, codex's `codexSettingsReconcile` and
+claude's `claudeUnpinLaunchEffort` are all emitted while the ecosystem is
+enabled, whatever the declaration says. An empty declaration is not "nothing to
+do", it is the RETRACTION path: empty settings plus no prior ledger is a strict
+no-op, while empty settings plus a prior ledger must run so a later generation
+retracts the leaves it used to own without erasing native state. A
+`mkIf (cfg.native.settings != {})` around one of these writers is the N-to-zero
+defect, and `checks.ai-delivery` fails at eval on it — it evaluates every
+imperative writer under a populated AND an empty declaration.
 
 Devenv-side writes are unconditional (always write the file when
 `enable = true`). This is intentional: devenv files are project-local symlinks,
 not home-dir writes. An empty `{}` settings file is harmless — the CLI merges it
-with global config. Upstream devenv claude does the same (unconditional).
+with global config. Upstream devenv claude does the same (unconditional). The
+exception is a devenv copy of a file a team may commit: Kiro's project
+`settings/cli.json` and `settings/mcp.json` are claimed only when something is
+declared, so enabling Kiro does not take over and back up that file.
 
 **Secrets at activation time, not eval time.** Sops-nix paths
 (`cfg.userId.file`) are read by the activation script at run time via
