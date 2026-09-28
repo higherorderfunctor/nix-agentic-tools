@@ -54,12 +54,12 @@ it says so explicitly, and those are the claims worth leaning on.
 
 Sources, all in this repository:
 
-| Source                                           | What it is                                                                                  |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `kiro-workflows.md` §N                           | the evidence ledger — live runs against **kiro-cli 2.16.0**, 2026-07-31/08-01               |
-| `fixtures/kiro-primitives/records/` R-name-N     | static reads of the **KAS 2.15.1** engine bundle, 2026-07-29 (byte offsets moved in 2.15.2) |
-| `fixtures/kiro-primitives/workflows/contract.jq` | the definition contract re-implemented from those reads, as a runnable checker              |
-| `docs/plans/kiro-v3-research-raw/`               | raw working notes, including live ACP protocol probes                                       |
+| Source                                           | What it is                                                                                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `kiro-workflows.md` §N                           | the evidence ledger — live runs against **kiro-cli 2.16.0**, 2026-07-31/08-01, unless a section states its own version and date |
+| `fixtures/kiro-primitives/records/` R-name-N     | static reads of the **KAS 2.15.1** engine bundle, 2026-07-29 (byte offsets moved in 2.15.2)                                     |
+| `fixtures/kiro-primitives/workflows/contract.jq` | the definition contract re-implemented from those reads, as a runnable checker                                                  |
+| `docs/plans/kiro-v3-research-raw/`               | raw working notes, including live ACP protocol probes                                                                           |
 
 If you are reading this outside `nix-agentic-tools`, those citations are dead
 pointers — the evidence lives in that repository, and a claim you cannot trace
@@ -1571,10 +1571,11 @@ the condition can never match and the loop silently runs to `maxIterations`
 - **Model/effort cascade is step > workflow > parent session.** Omitting both is
   the correct default. Never guess a `modelId` — discover them with
   `kiro-cli chat --list-models -f json`.
-- **Pinning a cheap model to mechanical steps is worth it** — 27 workers on
-  `claude-haiku-4.5` (0.4×) instead of `claude-opus-5` (2.2×) is a 5.5× cost
-  reduction on work that runs one shell command. Just not on a step whose output
-  something downstream reads.
+- **Pinning a cheap model to mechanical steps is worth it** — 27 workers running
+  one shell command each need no strong model. Compare the candidates' live
+  `rate_multiplier` values from `kiro-cli chat --list-models -f json` rather
+  than a copied table. Just not on a step whose output something downstream
+  reads.
 - **Step agents run in the parent workspace, not a worktree.** Pass the worktree
   path as an input, make every path in every prompt absolute, use
   `git -C <worktree>`, and do not describe the worktree as the agent's "working

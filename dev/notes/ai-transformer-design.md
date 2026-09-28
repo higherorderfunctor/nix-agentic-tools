@@ -775,11 +775,11 @@ Adding a new shared category means declaring it once in `sharedOptions` and the
 layered behavior comes for free via the adapter.
 
 **Why this is important**: it's how downstream users do fine-grained
-customization without forking anything. The user's real example (AWS MCP only
-loaded in Kiro because work) is the canonical use case — there are always going
-to be ecosystem-specific tools, secrets, instructions that shouldn't be
-broadcast to every CLI. The layered pool gives them a place to live without
-breaking the "shared" semantics for everything else.
+customization without forking anything. An MCP server loaded in one ecosystem
+only is the canonical use case — there are always going to be ecosystem-specific
+tools, secrets, instructions that shouldn't be broadcast to every CLI. The
+layered pool gives them a place to live without breaking the "shared" semantics
+for everything else.
 
 ### Downstream extension story
 
@@ -925,10 +925,10 @@ Useful for personal/quick ecosystems where building a full record is overkill.
             };
             mcpServers.git-mcp = { command = "git-mcp-server"; };
 
-            # Kiro-only addition (work AWS account)
+            # Kiro-only addition
             kiro.mcpServers.aws-mcp = {
               command = "aws-mcp-server";
-              env.AWS_PROFILE = "work";
+              env.AWS_PROFILE = "example";
             };
 
             # Claude-only env var

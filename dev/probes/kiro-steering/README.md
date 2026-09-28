@@ -10,7 +10,10 @@ no error, no log line, nothing model-visible. Only a fixture with
 distinguishable markers tells you what actually loaded, and re-deriving one
 costs far more than reading one.
 
-Measured 2026-09-03 against `kiro-cli` 2.21.0 / KAS 0.46.1.
+Measured 2026-09-03 against `kiro-cli` 2.21.0 / KAS 0.46.1. The recorded run
+pinned a fixed model at low effort; the commands below use `--model auto` (no
+effort control as of `kiro-cli` 2.24.1), so re-check the reading rules if
+results diverge.
 
 ## The fixture
 
@@ -67,28 +70,29 @@ cd "$RIG"
 steering while keeping global steering, so a rig that is not a repository
 produces a clean-looking false negative.
 
-Then run the three probes. A cheap model at low effort is correct here: these
-are enumeration questions, and a stronger model will "helpfully" work around a
-dead end and mask the finding.
+Then run the probes with `--model auto`, the probe default. `auto` has no effort
+control, so pass no `--effort`. These are enumeration questions: if a reply
+works around a dead end instead of reporting it, treat the probe as
+inconclusive.
 
 ```bash
 # P1 — what is auto-injected. Expect: ALWAYS yes; every fm-* sentinel NO.
 #      Any fm-* sentinel present == that shape degraded to always.
-kiro-cli chat --no-interactive --trust-all-tools --model gpt-5.6-luna --effort low \
+kiro-cli chat --no-interactive --trust-all-tools --model auto \
   'List every SENTINEL_ token visible in your context. Do not read any files.'
 
 # P2 — manual reachability + the pool disclose_context serves, in one shot.
-kiro-cli chat --no-interactive --trust-all-tools --model gpt-5.6-luna --effort low \
+kiro-cli chat --no-interactive --trust-all-tools --model auto \
   'Call disclose_context with name="s-manual". Do not read any files. Report the
    tool error verbatim, then list the exact set of names disclose_context offers.'
 
 # P3 — positive control for P2. Without this, P2 proves nothing.
-kiro-cli chat --no-interactive --trust-all-tools --model gpt-5.6-luna --effort low \
+kiro-cli chat --no-interactive --trust-all-tools --model auto \
   'Call disclose_context with name="s-auto", then report SENTINEL tokens you received.'
 
 # P4 — positive control for P1. Proves the fileMatch machinery RAN rather than
 #      never firing. Unverified — see the note above.
-kiro-cli chat --no-interactive --trust-all-tools --model gpt-5.6-luna --effort low \
+kiro-cli chat --no-interactive --trust-all-tools --model auto \
   'Read target-match.json, then list every SENTINEL token visible in your context.'
 ```
 

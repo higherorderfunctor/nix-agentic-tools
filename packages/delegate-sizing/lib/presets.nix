@@ -84,13 +84,16 @@
       current `cwd` and `mcpServers: []`. Query `_kiro/config/template` for
       that session and read the selected model's effort choices.
       Opus 5 and Sonnet 5 accept `low`, `medium`, `high`, `xhigh`, `max`;
-      Sol, Terra and Luna also accept `none`. Set effort every time; the default
-      here is `high`. Haiku has no effort control.
+      Sol, Terra and Luna also accept `none`. When pinning a model other than
+      the `auto` model (CLI `--model auto`), set effort every time; the
+      default here is `high`. The `auto` model and Haiku have no effort
+      control.
     '';
     launch.text = ''
-      `kiro-cli chat --no-interactive --model gpt-5.6-luna --effort <level> "<prompt>"`
+      `kiro-cli chat --no-interactive --model auto "<prompt>"`
 
-      Employer credits: fixture probes only, pin Luna.
+      Fixture probes only. `auto` has no effort control, so pass no `--effort`.
+      The slugs above apply only after this block is overridden to pin one.
     '';
   };
 }

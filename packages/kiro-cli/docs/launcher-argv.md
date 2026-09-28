@@ -355,8 +355,8 @@ declaratively — the grant is simply absent for that session.
 > parent process held `["workflows"]` and its bun child received `["tangent"]`.
 > `KIRO_ROLLOUT_FORCE_INTERNAL=1`, `KIRO_ROLLOUT_FORCE_NIGHTLY=1` and
 > `KIRO_INTERNAL=1` do not move it either — `segment: "internal"` resolves off
-> the authenticated identity (`lite` is documented "Amazon employees only"), not
-> off the environment.
+> the authenticated identity (`lite` is documented as restricted to
+> vendor-internal users), not off the environment.
 >
 > The real gate is a **JSON rollout manifest carried in the ELF's rodata**, in
 > TWO identical copies, parsed at runtime — see `vu.mkKiroRolloutPatch` and

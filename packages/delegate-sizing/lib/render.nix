@@ -63,9 +63,10 @@
       | --- | --- | --- | --- | --- |
       ${lib.concatMapStringsSep "\n" row (native ++ external)}
     '';
+  enabled = target: key: settings.${target}.${key}.enable or true;
   # Emit only configured blocks; manual-only instructions follow the main table.
   block = target: key: title:
-    lib.optionalString (settings.${target}.${key}.enable or true)
+    lib.optionalString (enabled target key)
     "#### ${target} ${title}\n\n${lib.removeSuffix "\n" settings.${target}.${key}.text}\n";
   joinBlocks = blocks: lib.concatStringsSep "\n" (builtins.filter (text: text != "") blocks);
   runtimeBlock = target:
@@ -83,16 +84,15 @@
     purpose = {
       claude = "For a Claude external delegate, follow the matching model row in the main table when present.";
       codex = "For a Codex external delegate, follow the matching model row in the main table when present.";
-      kiro = "Follow the Luna row in the main table when present.";
+      kiro = lib.optionalString (enabled "kiro" "launch") "For a Kiro external delegate, follow its launch block below.";
     };
+    purposeLine = lib.optionalString (purpose.${target} != "") "${purpose.${target}}\n\n";
   in ''
     ### ${target}
 
     Not a candidate for auto-selection; use only when the user names it.
 
-    ${purpose.${target}}
-
-    Slug spelling: ${ids}.
+    ${purposeLine}Slug spelling: ${ids}.
     Confirm availability in the live catalog before launching.
 
     ${joinBlocks [(block target "launch" "launch") (block target "introspectModels" "models and effort")]}
