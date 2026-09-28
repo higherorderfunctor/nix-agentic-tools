@@ -7,8 +7,29 @@
   ...
 }: let
   inherit (harness) deliveredFiles evalDevenv evalHm lspEntryOf mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument ownPlan;
-  settingsDocument = evaluated:
-    ownedDocument "copilot" "${evaluated.config.ai.copilot.configDir}/settings.json" evaluated;
+  # The one directory target of Copilot's config writer: `configDir` on Home
+  # Manager, `.github/copilot` on devenv. Its units are whole files, so a
+  # check reads the declared bytes and the ledger of each. `ownPlan` throws
+  # on an absent writer, so a renamed entry fails the check.
+  configTarget = entry: evaluated: let
+    inherit (ownPlan "copilot" entry evaluated) targets;
+  in
+    lib.throwIfNot (lib.length targets == 1)
+    "Copilot check requires exactly one target for ${entry}, found ${toString (lib.length targets)}"
+    (lib.head targets);
+  hmConfigTarget = configTarget "materialize-copilot-config";
+  devenvConfigTarget = configTarget "ai:copilot:materialize-config";
+  # A unit's declared JSON, or null when the writer claims no such file.
+  # `fromJSON` refuses a string carrying store-path context.
+  unitJson = name: target:
+    if target.units ? ${name}
+    then builtins.fromJSON (builtins.unsafeDiscardStringContext target.units.${name}.text)
+    else null;
+  hmSettings = evaluated: unitJson "settings.json" (hmConfigTarget evaluated);
+  repositorySettings = evaluated: unitJson "settings.json" (devenvConfigTarget evaluated);
+  failedAssertions = evaluated:
+    map (assertion: assertion.message)
+    (lib.filter (assertion: !assertion.assertion) evaluated.config.assertions);
 in {
   checks = {
     module-copilot-default-disabled = mkTest "copilot-default-disabled" (
@@ -193,19 +214,29 @@ in {
         builtins.length packages >= 1
     );
 
-    # The declared leaves and their document are read from
-    # `_reconciledDocuments`: the reconciler carries them as data in a store
-    # plan, so the activation body names only the plan. The ledger path is
-    # asserted because it is the live migration contract every previously
-    # written ownership record hangs off.
+    # Copilot renames a temporary over its settings files, so Home Manager
+    # owns each user-global one as a whole read-only copy of one directory
+    # writer, declared and populated even when nothing is: `{}` settings and
+    # empty server maps. Nothing reaches them as a store link.
     module-copilot-hm-empty-settings-emits-writer = mkTest "copilot-hm-empty-settings-emits-writer" (
       let
         evaluated = evalHm {ai.copilot.enable = true;};
-        document = settingsDocument evaluated;
+        target = hmConfigTarget evaluated;
       in
-        lib.hasInfix "--phase all" evaluated.config.home.activation.copilotSettingsMerge.text
-        && lib.hasPrefix "json-settings/copilot-settings-" document.ledger
-        && document.value == {}
+        target.path
+        == ".copilot"
+        && target.ledger == "materialize/copilot-config.manifest"
+        && unitJson "settings.json" target == {}
+        && unitJson "mcp-config.json" target == {mcpServers = {};}
+        && unitJson "lsp-config.json" target == {lspServers = {};}
+        && lib.all (name: evaluated.config.ai.copilot.files.".copilot/${name}".method == "copy-ro") (lib.attrNames target.units)
+        && evaluated.config.home.activation ? "materialize-copilot-config"
+        && evaluated.config.home.activation ? "materialize-copilot-config-prune"
+        && !lib.any (path: evaluated.config.home.file ? ${path}) [
+          ".copilot/lsp-config.json"
+          ".copilot/mcp-config.json"
+          ".copilot/settings.json"
+        ]
     );
 
     module-copilot-hm-writes-settings-json-activation = mkTest "copilot-hm-writes-settings-json-activation" (
@@ -215,36 +246,95 @@ in {
           ai.copilot.native.settings.model = "gpt-4";
         };
       in
-        lib.hasInfix "--phase all" result.config.home.activation.copilotSettingsMerge.text
-        && (settingsDocument result).value.model == "gpt-4"
+        result.config.home.activation
+        ? "materialize-copilot-config"
+        && hmSettings result == {model = "gpt-4";}
     );
 
     # Copilot 1.0.88 reads repository settings from the fixed
     # `.github/copilot/settings.json` (in a trusted folder), not from
     # `configDir` and not from a configurable `projectDir`. Its own
     # `/settings --repo` and `/model --repo` write that file, so devenv
-    # reconciles the declared leaves at shell entry instead of linking a
-    # read-only store copy. The writer stays declared with nothing declared,
-    # so a dropped leaf retracts. The old wrapper-dir path must stay empty, or
-    # a consumer reading it would believe it was delivered.
-    module-copilot-devenv-reconciles-repository-settings = mkTest "copilot-devenv-reconciles-repository-settings" (
+    # delivers a read-only copy the next shell entry restores. The writer
+    # stays declared with nothing declared and while Copilot is disabled, so
+    # both retract the copy, and a project that declares nothing keeps a
+    # committed team file. The old wrapper-dir path must stay empty, or a
+    # consumer reading it would believe it was delivered.
+    module-copilot-devenv-repository-settings-are-copies = mkTest "copilot-devenv-repository-settings-are-copies" (
       let
-        result = evalDevenv {
-          ai.copilot.enable = true;
-          ai.copilot.native.settings.model = "gpt-4";
-        };
-        empty = evalDevenv {ai.copilot.enable = true;};
+        declared = enable:
+          evalDevenv {
+            ai.copilot = {
+              inherit enable;
+              native.settings.model = "gpt-4";
+            };
+          };
+        result = declared true;
+        target = devenvConfigTarget result;
         path = ".github/copilot/settings.json";
-        document = ownedDocument "copilot" path result;
       in
-        document.value
-        == {model = "gpt-4";}
-        && document.ledger == "json-settings/copilot-repository-settings.json"
-        && (ownedDocument "copilot" path empty).value == {}
-        && lib.hasInfix "--phase all" result.config.tasks."ai:copilot:settings-merge".exec
+        target.path
+        == ".github/copilot"
+        && target.ledger == "materialize/copilot-config.manifest"
+        && repositorySettings result == {model = "gpt-4";}
+        && result.config.ai.copilot.files.${path}.method == "copy-ro"
+        && (devenvConfigTarget (evalDevenv {ai.copilot.enable = true;})).units == {}
+        && (devenvConfigTarget (declared false)).units == {}
+        && (declared false).config.tasks ? "ai:copilot:materialize-config"
+        && result.config.tasks ? "ai:copilot:materialize-config"
         && !(result.config.files ? ${path})
         && !(result.config.files ? ".config/github-copilot/settings.json")
         && !lib.any (lib.hasInfix "ai.copilot.native.settings") result.config.warnings
+    );
+
+    # Copilot keeps folder trust only in its state file. Home Manager owns the
+    # `trustedFolders` leaf of it, empty list included, and nothing else there;
+    # it is the only Copilot file delivered as a shared document. The writer
+    # survives a disable, which retracts the leaf.
+    module-copilot-hm-owns-trusted-folders = mkTest "copilot-hm-owns-trusted-folders" (
+      let
+        evaluate = copilot: evalHm {ai.copilot = {enable = true;} // copilot;};
+        path = ".copilot/config.json";
+        empty = ownedDocument "copilot" path (evaluate {});
+        shared = evaluated:
+          lib.attrNames (lib.filterAttrs (_path: file: file != null && file.facts.harnessWrites)
+            evaluated.config.ai.copilot.files);
+        disabled = evalHm {ai.copilot.trustedFolders = ["/src"];};
+      in
+        empty.value
+        == {trustedFolders = [];}
+        && lib.hasPrefix "json-settings/copilot-config-" empty.ledger
+        && (ownedDocument "copilot" path (evaluate {trustedFolders = ["/src"];})).value == {trustedFolders = ["/src"];}
+        && shared (evaluate {}) == [path]
+        && disabled.config.home.activation ? copilotTrustedFolders
+        && !(disabled.config.ai.copilot.files ? ${path})
+        && failedAssertions (evaluate {trustedFolders = ["/src"];}) == []
+    );
+
+    # A relative folder can never match the absolute working directory
+    # Copilot compares, and devenv never writes the user-global state file,
+    # so both fail evaluation naming the option.
+    module-copilot-trusted-folders-assertions = mkTest "copilot-trusted-folders-assertions" (
+      let
+        names = messages: messages != [] && lib.all (lib.hasInfix "ai.copilot.trustedFolders") messages;
+        devenv = evalDevenv {
+          ai.copilot = {
+            enable = true;
+            trustedFolders = ["/x"];
+          };
+        };
+        relative = failedAssertions (evalHm {
+          ai.copilot = {
+            enable = true;
+            trustedFolders = ["src"];
+          };
+        });
+      in
+        names relative
+        && lib.any (lib.hasInfix "src") relative
+        && names (failedAssertions devenv)
+        && !(devenv.config.ai.copilot._ownPlans ? copilotTrustedFolders)
+        && failedAssertions (evalDevenv {ai.copilot.enable = true;}) == []
     );
 
     # The normalized setting reaches Copilot's persisted `effortLevel` on both
@@ -261,17 +351,18 @@ in {
             settings.reasoningEffort = "high";
           };
         };
-        repository = evaluated: (ownedDocument "copilot" path evaluated).value;
         customProjectDir = evalDevenv (withEffort {projectDir = ".custom-github";});
       in
-        (settingsDocument (evalHm (withEffort {}))).value
+        hmSettings (evalHm (withEffort {}))
         == {effortLevel = "high";}
-        && repository (evalDevenv (withEffort {})) == {effortLevel = "high";}
-        && repository (evalDevenv (withEffort {native.settings.effortLevel = "low";})) == {effortLevel = "low";}
-        && repository customProjectDir == {effortLevel = "high";}
+        && repositorySettings (evalDevenv (withEffort {})) == {effortLevel = "high";}
+        && repositorySettings (evalDevenv (withEffort {native.settings.effortLevel = "low";})) == {effortLevel = "low";}
+        && repositorySettings customProjectDir == {effortLevel = "high";}
+        && (deliveredFiles customProjectDir.config) ? ${path}
         && !((deliveredFiles customProjectDir.config) ? ".custom-github/copilot/settings.json")
-        && (settingsDocument (evalHm (withEffort {native.settings.effortLevel = null;}))).value == {}
-        && repository (evalDevenv (withEffort {native.settings.effortLevel = null;})) == {}
+        && hmSettings (evalHm (withEffort {native.settings.effortLevel = null;})) == {}
+        # Nothing left to declare, so devenv claims no repository file.
+        && repositorySettings (evalDevenv (withEffort {native.settings.effortLevel = null;})) == null
     );
 
     # The repository schema, as copilot-cli 1.0.88's `runtime.node` reports
@@ -328,13 +419,12 @@ in {
         && rejects "enabledPlugins" {enabledPlugins.probe = "yes";}
         && rejects "hooks" {hooks.sessionStart = "echo";}
         && rejects "effortLevel" {effortLevel = 5;}
-        && (settingsDocument (evalHm {
+        && hmSettings (evalHm {
           ai.copilot = {
             enable = true;
             native.settings.theme = "github";
           };
-        }))
-        .value
+        })
         == {theme = "github";}
     );
 
@@ -374,11 +464,14 @@ in {
             command = "hello";
           };
         };
-        mcpFile = result.config.home.file.".copilot/mcp-config.json" or null;
+        mcpFile = (deliveredFiles result.config).".copilot/mcp-config.json" or null;
       in
         mcpFile
         != null
         && lib.hasInfix "test-server" (mcpFile.text or "")
+        # `copilot mcp add` renames over this file, so it is a copy.
+        && result.config.ai.copilot.files.".copilot/mcp-config.json".method == "copy-ro"
+        && !(result.config.home.file ? ".copilot/mcp-config.json")
     );
 
     module-copilot-hm-does-not-write-rule-files = mkTest "copilot-hm-does-not-write-rule-files" (
@@ -487,7 +580,7 @@ in {
           };
         };
       in
-        lspEntryOf "lspServers" (result.config.home.file.".copilot/lsp-config.json" or null) "typescript"
+        lspEntryOf "lspServers" ((deliveredFiles result.config).".copilot/lsp-config.json" or null) "typescript"
         == {
           args = ["--stdio"];
           command = "typescript-language-server";
@@ -570,9 +663,8 @@ in {
     #
     # The previous version of this test matched only `@''${HOME}/` — the PREFIX —
     # so it could not have caught a `configDir` change that moved the rendered
-    # file out from under the flag. Deriving the needle from
-    # `result.config.home.file` closes that: both ends move together, and only a
-    # divergence fails.
+    # file out from under the flag. Deriving the needle from the delivered
+    # files closes that: both ends move together, and only a divergence fails.
     module-copilot-hm-wrapper-points-at-mcp-config = let
       result = evalHm {
         ai.copilot.enable = true;
@@ -589,7 +681,7 @@ in {
         package = builtins.head result.config.home.packages;
         bin = "copilot";
         needles = [
-          ''--additional-mcp-config @''${HOME}/${mcpConfigKeyOf name result.config.home.file}''
+          ''--additional-mcp-config @''${HOME}/${mcpConfigKeyOf name (deliveredFiles result.config)}''
         ];
       };
 
@@ -732,7 +824,7 @@ in {
           };
         };
       in
-        (lspEntryOf "lspServers" (result.config.home.file.".copilot/lsp-config.json" or null) "typescript").command or null
+        (lspEntryOf "lspServers" ((deliveredFiles result.config).".copilot/lsp-config.json" or null) "typescript").command or null
         == "typescript-language-server"
     );
 
@@ -797,7 +889,7 @@ in {
           };
         };
       in
-        (lspEntryOf "lspServers" (result.config.home.file.".copilot/lsp-config.json" or null) "typescript").fileExtensions or null
+        (lspEntryOf "lspServers" ((deliveredFiles result.config).".copilot/lsp-config.json" or null) "typescript").fileExtensions or null
         == {
           ".ts" = "typescript";
           ".tsx" = "typescript";
@@ -814,7 +906,7 @@ in {
           ai.lspServers.nixd.command = "nixd";
         };
       in
-        !(builtins.tryEval result.config.home.file.".copilot/lsp-config.json".text).success
+        !(builtins.tryEval (deliveredFiles result.config).".copilot/lsp-config.json".text).success
     );
 
     # Copilot rejects the whole file when a server name holds anything but
@@ -824,14 +916,15 @@ in {
     # `_` and `-` as accepted.
     module-copilot-lsp-invalid-name-throws = mkTest "copilot-lsp-invalid-name-throws" (
       let
-        fileFor = name:
+        evaluate = name:
           (evalHm {
             ai.copilot.enable = true;
             ai.lspServers.${name} = {
               command = "nixd";
               extensions = ["nix"];
             };
-          }).config.home.file.".copilot/lsp-config.json";
+          }).config;
+        fileFor = name: (deliveredFiles (evaluate name)).".copilot/lsp-config.json";
       in
         (lspEntryOf "lspServers" (fileFor "nix_lsp-1") "nix_lsp-1").command or null
         == "nixd"
