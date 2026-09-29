@@ -789,10 +789,10 @@ Enabled integrations can append their own runtime-owned state through the hidden
 rather than a user setting, is omitted from generated option docs, and is folded
 into native `sandbox_workspace_write.writable_roots` or the selected custom
 permission profile only when Codex emits its config. The glab facets add the
-effective `glab.configDir`, so a devenv consumer may point project-local glab at
-an existing Home Manager `~/.config/glab-cli` and reuse its authentication
-without another login. The default devenv glab directory remains project-local
-state.
+literal effective `glab.configDir`, so a devenv consumer may point project-local
+glab at an existing Home Manager `~/.config/glab-cli` and reuse its
+authentication without another login. The default devenv glab directory remains
+project-local state.
 
 **Worked example — stacked-workflows skills.** Because a skills value set in one
 backend is invisible to the other, the stacked-workflows package contributes its
