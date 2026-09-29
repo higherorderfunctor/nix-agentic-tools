@@ -1,5 +1,5 @@
-# Repository validation policy. Each hook is declared once with its local,
-# Stop-hook, and CI lifecycles; consumers project only the surface they run.
+# Repository validation policy. Each hook is declared once with its local and
+# CI lifecycles; consumers project only the surface they run.
 {
   lib,
   pkgs,
@@ -128,7 +128,6 @@
     convco = {
       role = "commit-message";
       hook.enable = true;
-      stop = null;
       ci = null;
     };
     cspell = {
@@ -150,7 +149,6 @@
           ".*\\.patch$"
         ];
       };
-      stop = "judgment";
       ci.backend = "git-hooks";
     };
     deadnix = {
@@ -158,7 +156,6 @@
       hook = {
         enable = true;
       };
-      stop = "judgment";
       ci.backend = "git-hooks";
     };
     gitleaks = {
@@ -170,7 +167,6 @@
         pass_filenames = false;
         stages = ["pre-commit"];
       };
-      stop = null;
       ci = {
         backend = "external";
         check = "gitleaks";
@@ -188,7 +184,6 @@
         excludes = ["^docs/plans/kiro-v3-research-raw/"];
         stages = ["pre-commit"];
       };
-      stop = "judgment";
       ci.backend = "git-hooks";
     };
     reject-default-branch-commit = {
@@ -201,7 +196,6 @@
         always_run = true;
         stages = ["pre-commit"];
       };
-      stop = null;
       ci = null;
     };
     shellcheck = {
@@ -210,7 +204,6 @@
         enable = true;
         args = ["-x"] ++ shellStrict.shellcheckFlags;
       };
-      stop = "judgment";
       # The dedicated backend deliberately scans extensionless/shebang shell
       # files too and hard-fails an empty corpus.
       ci.backend = "shellcheck-corpus";
@@ -220,7 +213,6 @@
       hook = {
         enable = true;
       };
-      stop = "judgment";
       ci.backend = "git-hooks";
     };
     treefmt = {
@@ -230,7 +222,6 @@
         require_serial = true;
         settings.no-cache = false;
       };
-      stop = "formatter";
       ci = {
         backend = "external";
         check = "formatting";
@@ -245,7 +236,6 @@
         pass_filenames = false;
         stages = ["pre-commit"];
       };
-      stop = null;
       ci = null;
     };
   };
@@ -264,11 +254,6 @@
     "git-hooks"
     "shellcheck-corpus"
   ];
-  validStopValues = [
-    null
-    "formatter"
-    "judgment"
-  ];
   ciRequiredRoles = [
     "formatter"
     "security"
@@ -277,11 +262,9 @@
   fieldsComplete = lib.all (definition:
     definition ? role
     && definition ? hook
-    && definition ? stop
     && definition ? ci)
   (builtins.attrValues definitions);
   rolesValid = lib.all (definition: builtins.elem definition.role validRoles) (builtins.attrValues definitions);
-  stopValuesValid = lib.all (definition: builtins.elem definition.stop validStopValues) (builtins.attrValues definitions);
   ciShapesValid = lib.all (definition:
     definition.ci
     == null
@@ -294,25 +277,19 @@
     builtins.elem definition.role ciRequiredRoles
     == (definition.ci != null))
   (builtins.attrValues definitions);
-  stopCoverageComplete = lib.all (definition:
-    (definition.role != "validator" || definition.stop == "judgment")
-    && (definition.role != "formatter" || definition.stop == "formatter"))
-  (builtins.attrValues definitions);
+  selectNames = predicate:
+    builtins.attrNames (lib.filterAttrs (_: predicate) definitions);
+  diagnosticHookIds = selectNames (definition: builtins.elem definition.role ["formatter" "validator"]);
 
-  # Any Stop participant also receives a manual stage. This is the stage used
-  # by both the Stop hook and devenv's diagnostic run, so commit-only lifecycle
-  # hooks can never leak into either surface.
-  localHooks = lib.mapAttrs (_: definition:
+  # The devenv diagnostic runs formatters and validators through prek's manual
+  # stage. Commit-only lifecycle hooks must not leak into that surface.
+  localHooks = lib.mapAttrs (name: definition:
     definition.hook
-    // lib.optionalAttrs (definition.stop != null) {
+    // lib.optionalAttrs (builtins.elem name diagnosticHookIds) {
       stages = lib.unique ((definition.hook.stages or ["pre-commit"]) ++ ["manual"]);
     })
   definitions;
 
-  selectNames = predicate:
-    builtins.attrNames (lib.filterAttrs (_: predicate) definitions);
-  judgmentHookIds = selectNames (definition: definition.stop == "judgment");
-  formatterHookIds = selectNames (definition: definition.stop == "formatter");
   gitHooksCiIds = selectNames (definition: (definition.ci or null) != null && definition.ci.backend == "git-hooks");
   shellcheckCorpusIds = selectNames (definition: (definition.ci or null) != null && definition.ci.backend == "shellcheck-corpus");
 
@@ -324,18 +301,14 @@
       stages = ["manual"];
     });
 in
-  assert lib.assertMsg fieldsComplete "every repo-validation hook must declare role, hook, stop, and ci";
+  assert lib.assertMsg fieldsComplete "every repo-validation hook must declare role, hook, and ci";
   assert lib.assertMsg rolesValid "repo-validation contains an unsupported role";
-  assert lib.assertMsg stopValuesValid "repo-validation contains an unsupported Stop lifecycle";
   assert lib.assertMsg ciShapesValid "repo-validation contains an invalid CI declaration";
   assert lib.assertMsg ciCoverageComplete "every validator, formatter, and security hook must have CI coverage; commit lifecycle hooks must remain local";
-  assert lib.assertMsg stopCoverageComplete "every validator must be Stop judgment feedback and every formatter must be the Stop formatter";
-  assert lib.assertMsg (formatterHookIds == ["treefmt"]) "repo-validation must declare exactly one Stop formatter";
   assert lib.assertMsg (shellcheckCorpusIds == ["shellcheck"]) "the corpus backend currently supports exactly shellcheck";
-  assert lib.assertMsg (lib.all (name: definitions.${name}.role == "validator") (judgmentHookIds ++ gitHooksCiIds ++ shellcheckCorpusIds)) "only validators may enter derived judgment or CI lint surfaces";
-  assert lib.assertMsg (lib.all (name: builtins.elem "manual" localHooks.${name}.stages) (judgmentHookIds ++ formatterHookIds)) "every Stop hook must support the manual stage"; {
-    inherit definitionNames definitions formatterHookIds judgmentHookIds localHooks;
-    formatterHookId = builtins.head formatterHookIds;
+  assert lib.assertMsg (lib.all (name: definitions.${name}.role == "validator") (gitHooksCiIds ++ shellcheckCorpusIds)) "only validators may enter derived CI lint surfaces";
+  assert lib.assertMsg (lib.all (name: builtins.elem "manual" localHooks.${name}.stages) diagnosticHookIds) "every devenv diagnostic hook must support the manual stage"; {
+    inherit definitionNames definitions diagnosticHookIds localHooks;
 
     mkCiChecks = {
       gitHooksRun,
@@ -354,7 +327,7 @@ in
     in {
       repo-lints = repoLints;
       repo-validation-policy = import ../checks/repository/repo-validation-policy.nix {
-        inherit definitionNames formatterHookIds judgmentHookIds pkgs;
+        inherit definitionNames diagnosticHookIds pkgs;
         ciConfig = repoLints.config.configFile;
         ciHookIds = gitHooksCiIds;
         localConfig = localProjection.config.configFile;

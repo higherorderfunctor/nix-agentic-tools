@@ -4,8 +4,7 @@
   ciConfig,
   ciHookIds,
   definitionNames,
-  formatterHookIds,
-  judgmentHookIds,
+  diagnosticHookIds,
   localConfig,
   pkgs,
   rejectEntry,
@@ -27,7 +26,7 @@ pkgs.runCommandLocal "repo-validation-policy-check" {
   diff -u expected-local actual-local
 
   {
-    ${pkgs.lib.concatMapStringsSep "\n" (name: "echo ${pkgs.lib.escapeShellArg name}") (formatterHookIds ++ judgmentHookIds)}
+    ${pkgs.lib.concatMapStringsSep "\n" (name: "echo ${pkgs.lib.escapeShellArg name}") diagnosticHookIds}
   } | sort > expected-manual
   jq -r '.repos[].hooks[] | select(.stages | index("manual")) | .id' local.json \
     | sort > actual-manual

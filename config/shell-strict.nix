@@ -57,8 +57,6 @@
   #                              the systemd unit injects and shellcheck cannot
   #                              see. Do NOT "fix" by defaulting MCP_PORT —
   #                              that masks a genuinely missing Environment=.
-  #   check-extra-masked-returns (SC2312) / check-set-e-suppressed (SC2310)
-  #                              7 findings in lib/validate-at-stop.sh.
   #
   # `deprecate-which` is the one with real Nix teeth: a `which` missing from
   # runtimeInputs is a runtime failure, not a style nit.

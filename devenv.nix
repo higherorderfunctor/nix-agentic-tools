@@ -5,7 +5,7 @@
   inputs,
   ...
 }: let
-  # One declaration table owns each hook's local, Stop, and CI lifecycle.
+  # One declaration table owns each hook's local and CI lifecycle.
   repoValidation = import ./config/repo-validation.nix {inherit lib pkgs;};
   gitHooksPackages = import "${inputs.git-hooks}/nix" {
     inherit (pkgs) system;
@@ -17,18 +17,10 @@
     src = ./.;
   };
 
-  # Stop-hook validator (runs the git-hooks suite when Claude hands control
-  # back, instead of racing the Edit tool on every PostToolUse). See the
-  # ai.claude.hooks block below.
-  # Refuses the hand-back while this branch's PR is unfinished. Separate from
-  # validateAtStop because it answers a different question (is the PR done?)
-  # with different failure semantics (fails OPEN on any network ambiguity).
+  # Refuses the hand-back while this branch's PR is unfinished. It fails open
+  # on any network ambiguity.
   prWatchAtStop = import ./lib/pr-watch-at-stop.nix {inherit pkgs;};
 
-  validateAtStop = import ./lib/validate-at-stop.nix {
-    inherit pkgs config;
-    inherit (repoValidation) formatterHookId judgmentHookIds;
-  };
   isolatePrekHooks = import ./lib/isolate-prek-hooks.nix {inherit pkgs;};
   runRepoHooks = pkgs.writeShellApplication {
     name = "run-repo-hooks";
@@ -226,31 +218,24 @@ in {
 
   # ── Git Hooks ─────────────────────────────────────────────────────────
   #
-  # `config/repo-validation.nix` is the policy source of truth. It gives Stop
-  # participants a manual stage and leaves commit-message, security, restaging,
-  # and trunk guards on their real Git lifecycle only. Flake CI projects its
-  # corpus validators from the same declarations.
+  # `config/repo-validation.nix` is the policy source of truth. It gives the
+  # devenv diagnostic hooks a manual stage and leaves commit-message, security,
+  # restaging, and trunk guards on their real Git lifecycle only. Flake CI
+  # projects its corpus validators from the same declarations.
   git-hooks.hooks = repoValidation.localHooks;
   git-hooks.run = repoValidationChecks.repo-lints;
 
   # ── Claude Code ─────────────────────────────────────────────────────
-  # Only the Stop hooks live here, beside the packages bound above; dev/ai.nix
+  # Only the Stop hook lives here, beside the packages bound above; dev/ai.nix
   # holds the rest of this repository's `ai.*` configuration.
   ai.claude = {
-    # Validation happens when Claude hands control back (Stop): auto-fix
-    # formatting silently, block-with-reason on judgment lint. A PostToolUse
-    # formatter raced the Edit tool's read-snapshot ("modified since read").
-    # Root cause assessed in:
-    # docs/plans/prek-posttooluse-hook-feedback-channel.md.
-    #
-    # The second Stop gate is the PR loop. The rule it enforces lived in
+    # The Stop gate is the PR loop. The rule it enforces lived in
     # always-loaded steering and was ignored twice in one session after a
     # mid-session correction, which is the signal that it needed a mechanism
     # rather than more prose.
     hooks.Stop = [
       {
         hooks = [
-          {command = lib.getExe validateAtStop;}
           {command = lib.getExe prWatchAtStop;}
         ];
       }

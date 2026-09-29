@@ -1,1 +1,1 @@
-{imports = [./pr-watch-at-stop.nix ./validate-at-stop.nix];}
+{imports = [./pr-watch-at-stop.nix];}
