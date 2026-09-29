@@ -15,7 +15,7 @@
 # Either way the secret VALUE never enters the store — only its file path.
 #
 # Mirrors the file/helper credential union used by packaged MCP servers
-# (see `mkCredentialsOption` in lib/mcp.nix) and adds `prefix`/`suffix`
+# (legacy HTTP shape, pending runtime-values migration) and adds `prefix`/`suffix`
 # (e.g. a literal "Bearer ") plus an optional explicit env-var name.
 #
 # The file XOR helper mutex (and the "exactly one set" rule) is NOT

@@ -7,12 +7,12 @@
 # This is a newer API under `lib.ai.mcpServers.*`. It is SEPARATE from
 # the live, consumer-facing `lib.ai.mkStdioEntry` / `lib.ai.loadServer`
 # path which already has working typed settings + auth
-# (`GITHUB_PERSONAL_ACCESS_TOKEN` via `settings.credentials.file` /
-# `settings.credentials.helper` sops-nix pass-through) declared in
+# (`GITHUB_PERSONAL_ACCESS_TOKEN` via `settings.credentials = rv.file` /
+# `settings.credentials = rv.helper` sops-nix pass-through) declared in
 # `packages/github-mcp/modules/mcp-server.nix`.
 #
 # Whichever consumer path the factory factory lands on, the auth
-# pattern (`mcpLib.mkCredentialsOption "GITHUB_PERSONAL_ACCESS_TOKEN"`
+# pattern (`rv.file` / `rv.helper`
 # projected through `mkSecretsWrapper` at runtime) is the
 # authoritative surface.
 {
