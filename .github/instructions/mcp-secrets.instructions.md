@@ -7,10 +7,12 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-09-28 — Claude's settings and MCP files are Nix-owned
-> read-only links. Proxy ownership is explicit and keyed by server name, so each
-> owner gets its own daemon; every ecosystem renders servers via `renderServer`;
-> Kiro's mcp.json is always a read-only copy.
+> **Last verified:** 2026-09-29 — Caddy config persistence is disabled, and
+> every managed proxy uses private runtime XDG directories. Claude's settings
+> and MCP files are Nix-owned read-only links. Proxy ownership is explicit and
+> keyed by server name, so each owner gets its own daemon; every ecosystem
+> renders servers via `renderServer`; Kiro's mcp.json is always a read-only
+> copy.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -88,19 +90,44 @@ those ecosystems can consume it.
 
 **Where the secret is, and is not** — the measurement that decides the design:
 
-| Location                  | Mode   | Secret there?                     |
-| ------------------------- | ------ | --------------------------------- |
-| `/proc/<pid>/environ`     | `0400` | yes                               |
-| `/proc/<pid>/cmdline`     | `0444` | **never**                         |
-| the Caddyfile (Nix store) | `0444` | never — `{$VAR}` tokens only      |
-| `mcp.json`                | varies | never                             |
-| the systemd journal       | varies | never — but only since 2026-08-13 |
+| Location                               | Secret there?                          |
+| -------------------------------------- | -------------------------------------- |
+| `/proc/<pid>/environ`                  | yes; same-uid processes can read       |
+| `/proc/<pid>/cmdline`                  | **never**                              |
+| the Caddyfile (Nix store)              | never — `{$VAR}` tokens only           |
+| Caddy's adapted in-memory JSON         | yes                                    |
+| per-unit runtime XDG directories       | no persistent config; stop cleans      |
+| `$XDG_CONFIG_HOME/caddy/autosave.json` | not newly written; old file may remain |
+| `mcp.json`                             | never                                  |
+| the systemd journal                    | never — but only since 2026-08-13      |
 
-That last row is the one this table originally missed, and it was wrong for the
-whole life of the feature — see the journal section below. Treat any NEW sink (a
-log, a metric label, an error message) as guilty until measured; the four rows
-above were each reasoned about deliberately, and the journal still got through
-because nothing in the design put a credential there on purpose.
+The `0400` mode on `/proc/<pid>/environ` is not a same-user isolation boundary.
+A non-descendant process with the same uid can read it; Yama `ptrace_scope=1`
+blocks access to process memory, not this environment file. Preventing that
+exposure needs a private PID namespace or another sandbox boundary. The generic
+`mcp-services` units export credentials into their environment in the same way
+and are outside this proxy fix.
+
+Caddy expands `{$VAR}` while adapting the Caddyfile, so its active JSON contains
+the literal headers and upstream origin/path. `admin off` does not disable
+autosave. `persist_config off` does, and each unit points `XDG_CONFIG_HOME` and
+`XDG_DATA_HOME` into its own systemd `RuntimeDirectory`, which is removed when
+the unit stops. This both keeps Caddy state out of the user's persistent XDG
+directories and prevents proxy units from sharing a state path. The module does
+not remove a user's pre-existing Caddy files.
+
+Measured with Caddy 2.11.4: replacing parse-time `{$VAR}` header tokens with
+runtime `{env.VAR}` placeholders keeps the value out of adapted JSON. It does
+not keep the value out of the process environment, and changing only headers
+would leave the upstream URL on the parse-time path. Keep the current model here
+and design placeholders for HTTP MCP, Kiro, and the proxy together in a later
+change; any upstream conversion must first preserve scheme and TLS detection.
+
+The journal row was missing for the whole early life of the feature — see the
+journal section below. Autosave was another unlisted sink. Treat any NEW sink (a
+config cache, log, metric label, or error message) as guilty until measured;
+none of these leaks existed because the design intentionally put a credential
+there.
 
 **`$(cat …)` does NOT keep a secret out of argv.** The shell expands command
 substitution BEFORE `execve()`, so the kernel stores the literal value and any

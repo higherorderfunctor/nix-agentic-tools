@@ -22,7 +22,9 @@
 # Copilot, wrapped or not, it makes no difference.
 #
 # ── Where the secret is, and is NOT ───────────────────────────────────
-#   * in the daemon's environment  — /proc/<pid>/environ is 0400
+#   * in the daemon's environment  — a same-uid process can read
+#                                    /proc/<pid>/environ; Yama
+#                                    ptrace_scope=1 does not block it
 #   * NOT in argv                  — /proc/<pid>/cmdline is 0444, i.e.
 #                                    world-readable. Command substitution
 #                                    does NOT help: the shell expands it
@@ -32,11 +34,17 @@
 #                                    checks/shell/bare-commands.nix scans comments
 #                                    too and would read it as a bare call.)
 #   * NOT in the Caddyfile         — it holds `{$VAR}` placeholders only
+#   * NOT in Caddy autosave        — `persist_config off` prevents it;
+#                                    older generations may have left
+#                                    autosave.json behind
 #   * NOT in mcp.json              — no header reaches any client
 #   * NOT in the Nix store
 #
-# Caddy substitutes `{$VAR}` while PARSING the config, so a decrypted
-# value exists only in the daemon's memory and environment.
+# Caddy substitutes `{$VAR}` while PARSING the config, so the adapted JSON
+# holds literal values. `persist_config off` prevents Caddy from writing that
+# active config to autosave.json. The per-unit runtime XDG directories below
+# keep any other Caddy state out of the user's persistent XDG directories and
+# stop proxy units from sharing a Caddy state path.
 #
 # The upstream request is BYTE-IDENTICAL to the un-proxied one plus the
 # injected `proxy.headers` — see `strippedHopHeaders` for what that costs
@@ -106,7 +114,9 @@
   envVarFor = serverName: field: "MCP_PROXY_${sanitize serverName}_${sanitize field}";
 
   # Caddyfile env-substitution token: `{$VAR}`, resolved by Caddy while
-  # PARSING the config, which is what keeps the value out of the file.
+  # PARSING the config. This keeps the value out of the Caddyfile, but the
+  # adapted JSON holds the literal value; `persist_config off` below keeps
+  # that JSON out of autosave.json.
   #
   # Built by explicit concatenation rather than string interpolation, and
   # that is not stylistic: in Nix `$${` is an ESCAPE for a literal `${`
@@ -405,6 +415,7 @@
       {
       	admin off
       	auto_https off
+      ${"\t"}persist_config off
       ${logBlock}
       }
 
@@ -487,15 +498,21 @@
       After = ["network.target"];
     };
     Service = {
+      Environment = [
+        "XDG_CONFIG_HOME=%t/mcp-proxy-${name}/config"
+        "XDG_DATA_HOME=%t/mcp-proxy-${name}/data"
+      ];
       ExecStart = "${startScriptFor spec}";
+      PrivateTmp = true;
       Restart = "on-failure";
       RestartSec = 5;
+      RuntimeDirectory = "mcp-proxy-${name}";
+      RuntimeDirectoryMode = "0700";
       # Per-server attribution in the journal. The proxy drops the whole
       # request-header map, so the unit is the stable source of identity.
       SyslogIdentifier = "mcp-proxy-${name}";
-      # Decrypted values live only in the daemon environment and memory.
-      # /proc/<pid>/environ is 0400; nothing secret enters world-readable argv.
-      PrivateTmp = true;
+      # A same-uid process can read /proc/<pid>/environ even with Yama
+      # ptrace_scope=1; nothing secret enters world-readable argv.
     };
     Install.WantedBy = ["default.target"];
   };
