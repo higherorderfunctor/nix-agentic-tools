@@ -242,7 +242,7 @@ in {
         == "xhigh"
         && ((hmCodexSettings hm).model_reasoning_effort or null) == "xhigh"
         && ((claudeSettings devenv).effortLevel or null) == "xhigh"
-        && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "xhigh"
+        && (devenv.config.ai.codex.files.".codex/config.toml".content.value.model_reasoning_effort or null) == "xhigh"
     );
 
     module-runtime-reasoning-effort-overrides-root-only-for-that-runtime = mkTest "runtime-reasoning-effort-overrides-root-only-for-that-runtime" (
@@ -262,7 +262,7 @@ in {
         == "low"
         && ((hmCodexSettings hm).model_reasoning_effort or null) == "high"
         && ((claudeSettings devenv).effortLevel or null) == "low"
-        && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "high"
+        && (devenv.config.ai.codex.files.".codex/config.toml".content.value.model_reasoning_effort or null) == "high"
     );
 
     module-runtime-settings-exist-for-capable-harnesses = mkTest "runtime-settings-exist-for-capable-harnesses" (
@@ -312,7 +312,7 @@ in {
         == "medium"
         && hmCodexSettings hm == withHmDaemonDefault {model = "gpt-6-astra";}
         && ((claudeSettings devenv).effortLevel or null) == "medium"
-        && devenv.config.files.".codex/config.toml".source.value == {model = "gpt-6-astra";}
+        && devenv.config.ai.codex.files.".codex/config.toml".content.value == {model = "gpt-6-astra";}
     );
 
     module-shared-hooks-reject-non-portable-event = mkTest "shared-hooks-reject-non-portable-event" (!(builtins.tryEval (

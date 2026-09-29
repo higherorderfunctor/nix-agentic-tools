@@ -3,6 +3,7 @@
 {
   lib,
   harness,
+  pkgs,
   ...
 }: let
   inherit (harness) evalDevenv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs hmLib mkTest;
@@ -59,6 +60,14 @@
       inherit runtime;
       extraRuntimes = lib.remove runtime runtimes;
     });
+  formatterSafeSkill = pkgs.delegate-sizing-content.passthru.mkSkill {
+    runtime = "claude";
+    formatter = "sed -i 's/name: delegate-sizing/name: corrupted/' SKILL.md";
+  };
+  corruptedSkill = formatterSafeSkill.overrideAttrs (_: {
+    postBuild = "sed -i 's/name: delegate-sizing/name: corrupted/' work/markdown/SKILL.md";
+  });
+  rejectedCorruption = pkgs.testers.testBuildFailure corruptedSkill;
   sonnetRow = "Sonnet 5 (anthropic)";
   optionTree = result: path: (lib.getAttrFromPath path result.options).type.getSubOptions [];
   checkBackend = {
@@ -440,5 +449,14 @@ in {
       name = "hm";
       evaluate = evalHm;
       evaluateWarnings = evalHmWarnings;
+    }
+    // {
+      delegate-sizing-frontmatter-guard = pkgs.runCommand "delegate-sizing-frontmatter-guard" {} ''
+        grep -q -F 'parseCompare' ${rejectedCorruption}/testBuildFailure.log
+        grep -q -F 'installed Markdown frontmatter bytes differ from the generator bytes' ${rejectedCorruption}/testBuildFailure.log
+        grep -q -F 'name: delegate-sizing' ${formatterSafeSkill}/SKILL.md
+        test -f ${pkgs.delegate-sizing-content.passthru.skills.claude}/SKILL.md
+        touch "$out"
+      '';
     };
 }

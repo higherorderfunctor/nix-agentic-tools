@@ -32,12 +32,7 @@
           link = _ctx: node: "[${node.label or node.target}](${node.target})";
           include = _ctx: node: "<<include:${node.path}>>";
         };
-      frontmatter = _: "";
-      assemble = {
-        frontmatter,
-        body,
-      }:
-        frontmatter + body;
+      frontmatterData = _: {};
     };
 
     render = mkRenderer identityTransformer {};

@@ -1,10 +1,7 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-24 — Bruno 4.2.0 repairs stale workspace lock
-> entries in the builder input shared with its npm dependency fetcher; Kimchi's
-> source-derived sidecar participates in the extraction loop, Kimchi joins the
-> release-derived Go-floor update chain and declares a pnpm dependency-hash
-> fixer; Go floor overrides preserve each recipe's builder baseline.
+> **Last verified:** 2026-09-28 — recipes receive every `scopeArgs` entry in
+> `lib/facets/repository.nix`, `generatedLib` included.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -20,12 +17,14 @@ The outer directory is ownership; the inner tree is the public namespace.
 clearer role. A later namespace change should move the inner recipe path, while
 renaming the outer owner leaves the public namespace unchanged.
 
-Recipes receive this flake's pinned `pkgs`, `inputs`, shared `packageLib`, and
-`repoPath`. Keep source sidecars, patches, extraction helpers, and declarative
-registrations with the owner. `registry.nix` declares update/cache/doc entries;
-`repoPath ./relative/path` derives mutable paths from their actual location. The
-shared composer owns consumer unfree policy. See the package-ownership fragment
-for the native composition boundaries.
+Recipes receive this flake's pinned `pkgs` and `inputs`, plus every entry of
+`scopeArgs` in `lib/facets/repository.nix`: `fragmentsLib`, `generatedLib`,
+`packageLib`, `repoPath` and `traceSource`. Keep source sidecars, patches,
+extraction helpers, and declarative registrations with the owner. `registry.nix`
+declares update/cache/doc entries; `repoPath ./relative/path` derives mutable
+paths from their actual location. The shared composer owns consumer unfree
+policy. See the package-ownership fragment for the native composition
+boundaries.
 
 ### Absorption is about CADENCE. Never re-open it on a version comparison
 

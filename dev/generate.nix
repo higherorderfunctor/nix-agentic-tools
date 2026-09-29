@@ -465,6 +465,7 @@
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
+    | Generated-file formatting | N/A | `ai.generated.{formatter,check}.{json,markdown,toml,yaml}` (Nix-owned static files, including settings; consumer-supplied skills and runtime-rendered files excluded) | Same; project-native static files included |
     | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi) | Same; project-native paths |
@@ -619,6 +620,140 @@
     > generation cannot safely infer the old custom directory.
 
     </details>
+
+    <details>
+    <summary><strong>Generated-file formatting</strong></summary>
+
+    Static, Nix-owned Markdown, JSON, TOML and YAML files are built into one
+    store tree per delivery-router invocation. The builder formats each type in
+    its own working directory, installs only the declared target paths, then
+    checks the installed bytes. A failed check fails the build. Formatter-created
+    caches and state stay out of the output. File paths in snippets are relative
+    to the target root, such as `.claude/rules/example.md`.
+
+    `ai.generated.formatter.<type>` is a shell snippet that replaces the default
+    for that type in trees Nix generates from `ai.*` inputs; repository content
+    you author yourself, such as docs and wiki pages, needs your own treefmt
+    run. `null` disables formatting. The defaults use the same house style as
+    this repository: Biome for JSON, prettier with
+    `proseWrap = "always"` for Markdown and YAML, and Taplo for TOML. The
+    settings are defined once in `lib/generated-style.nix`. A formatter must
+    preserve the declared files; removing one fails the build.
+
+    `ai.generated.check.<type>` is a `types.lines` shell snippet. Its default
+    is the no-op `:` because the built-in guards run separately. Ordinary
+    definitions append to that default; `lib.mkForce` replaces it, and
+    `lib.mkForce ""` disables it. The default is contributed at normal priority
+    so a forced replacement does not evaluate unused default tools. Checks run
+    on the installed bytes. The named guards below are separate and remain on
+    when a check is replaced or disabled.
+
+    To use your own treefmt config, pass the `config` of any treefmt-nix
+    `evalModule` result to the helper:
+
+    ```nix
+    ai.generated.formatter.markdown =
+      lib.ai.treefmtFormatter (inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix).config;
+    ```
+
+    Take `treefmt-nix` as your own root input that follows this flake's pin:
+    `inputs.treefmt-nix.follows = "nix-agentic-tools/treefmt-nix";` in a
+    flake, or `follows: nix-agentic-tools/treefmt-nix` under
+    `inputs.treefmt-nix` in `devenv.yaml`. You get the same version this flake
+    uses with no extra lock node, and a root input also works with devenv's
+    treefmt integration. This is the opposite direction from the `follows`
+    warned against in "Do not make this flake follow your nixpkgs": this
+    flake's inputs stay unchanged, so nothing rehashes and the binary cache
+    still applies. Avoid `inputs.nix-agentic-tools.inputs.treefmt-nix`, which
+    depends on this flake's internal wiring.
+
+    Devenv's `config.treefmt.config` also works. The helper reads only
+    `.package` and `.build.configFile` from either config. Set another type's
+    formatter in the same way if your treefmt config covers it. The helper uses
+    the raw treefmt package with `--config-file`,
+    `--tree-root .`, `--walk filesystem` and `--no-cache` so it runs against the
+    build sandbox. Devenv's treefmt wrapper points at the project tree and does
+    not work here. There is no automatic detection of a devenv treefmt config.
+
+    Generated context, rules, AGENTS.md and agent Markdown participate on both
+    Home Manager and devenv, including Claude's direct Home Manager files.
+    Static JSON, TOML and YAML entries participate when their file entry names
+    the corresponding `format`. Switch-time overlays and private documents
+    rendered by `content.run` are excluded because their final bytes do not
+    exist at build time. Supplied skills and directory sources are delivered as
+    written.
+
+    | Runtime | Static JSON/TOML/YAML in scope | Outside the build tree |
+    | ------- | ------------------------------ | ---------------------- |
+    | Claude | `settings.json` on both backends; devenv `.mcp.json`; Home Manager plugin `.mcp.json`, `.lsp.json` and manifest | `.claude.json` shared mutable state |
+    | Codex | Agent TOML files, `hooks.json`, both `config.toml` locations, Home Manager daemon settings | Runtime-rendered files |
+    | Copilot | Home Manager `lsp-config.json`; devenv `.github/lsp.json`; `mcp-config.json`; both `settings.json` locations | Home Manager `config.json` shared trust and state |
+    | Kimchi | Static config, harness settings, MCP, permissions and devenv hooks | `trust.json` and credential-rendered `config.json` |
+    | Kiro | `cli.json`, `lsp.json`, Home Manager `permissions.yaml`, agent and hook JSON files | Runtime-rendered `mcp.json` |
+
+    A single file can opt out with
+    `ai.<runtime>.files."<path>".format = "raw"`. Byte limits still apply to
+    opted-out paths. A `content.run` replacement of a generated entry requires
+    `format = "raw"`; replacing an entire AGENTS.md entry may state
+    `format = "markdown"` to retain formatting.
+
+    `mkAgenticShell` generates no files in this delivery router, so it has no
+    corresponding option.
+
+    </details>
+
+    ### Generated-file guards
+
+    Guards check semantic and structural properties independently of the
+    selected formatter and of `ai.generated.check`. They use this flake's
+    pinned tools. Each guard defaults to enabled and can be disabled by name.
+
+    | Guard | What it catches | Disable |
+    | ----- | --------------- | ------- |
+    | `tableCells` | Markdown table cells broken by unescaped pipes; rumdl and markdownlint catch different forms | `ai.generated.guards.tableCells = false;` |
+    | `splitCodeSpans` | A newline left inside a Markdown inline code span | `ai.generated.guards.splitCodeSpans = false;` |
+    | `parseCompare` | Invalid or changed JSON, TOML or YAML data; changed frontmatter bytes on marked Markdown | `ai.generated.guards.parseCompare = false;` |
+
+    Generated rules, semantic agents, and packaged skills use the shared
+    `lib/frontmatter.nix` renderer. It returns the YAML header and its marker
+    together. The renderer emits UTF-8 without a BOM and LF line endings. The
+    builder also accepts a marked source with a leading UTF-8 BOM or CRLF: one
+    boundary scanner discovers, splits and verifies it without changing its
+    fenced header bytes. The saved prefix ends at the closing fence's line
+    ending; following blank lines belong to the body. The formatter sees only
+    the body and may normalize its line endings. Reattachment removes its
+    leading blank lines, then gives a nonempty body exactly one blank separator
+    line in the header's line-ending style. An empty body gets no separator.
+    `parseCompare` requires the installed fenced prefix to match the generated
+    bytes, including its `---` or `...` closing fence. For JSON, TOML and
+    YAML files it still compares parsed values. A separate
+    build-time check examines unmarked Markdown in the generated tree, both
+    before and after formatting. A leading `---` block with a closing fence
+    and a YAML mapping fails as a missed marker. The diagnostic names the file
+    and ways to fix it. Thematic breaks whose intervening text is not a YAML
+    mapping remain ordinary Markdown. Raw skill directories stay outside this
+    generated tree. Raw steering keeps its own bytes.
+
+    If your own formatter also runs over committed generated files, stop it
+    from touching that frontmatter; otherwise the frontmatter is reformatted
+    and differs from the generated bytes. For Prettier, set
+    `embeddedLanguageFormatting = "off"` so it leaves YAML frontmatter
+    untouched while still formatting the body; this also leaves fenced code
+    blocks unformatted. Measured with Prettier 3.8.3 and 3.9.6. For other
+    formatters, exclude the generated paths.
+
+    For example, these formatter outcomes differ:
+
+    | Formatter | Guard result | Reason |
+    | --------- | ------------ | ------ |
+    | Default Biome JSON and Taplo TOML | Good | They change presentation while preserving parsed values |
+    | Default Prettier Markdown and YAML | Good | Markdown gets body formatting; YAML keeps parsed values |
+    | A formatter that rewrites JSON `true` to `1` | Bad | `parseCompare` detects changed data |
+    | A formatter that removes a pipe escape inside a Markdown table cell | Bad | `tableCells` detects an extra cell |
+
+    A guard error names what failed and why, then gives three choices: fix the
+    input or formatter; disable that named guard if its invariant is unsuitable;
+    or set the specific file's `format = "raw"` to opt out explicitly.
 
     <details>
     <summary><strong>Semble code search</strong></summary>

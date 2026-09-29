@@ -1,11 +1,13 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-28 — Kimchi 1.1.37 delivers every managed settings
+> **Last verified:** 2026-09-29 — Kimchi 1.1.37 delivers every managed settings
 > file as a read-only copy. Home Manager also owns config.json and trust.json;
 > devenv writes project files only. The HM option types seed values that would
 > otherwise require writes at launch, and region is required. The pinned pi
-> dependency is 0.85.1. Full lineage:
-> `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
+> dependency is 0.85.1. Agents are read-only copies from the runtime's generated
+> Markdown tree; the opt-in docs skill uses the shared frontmatter renderer and
+> a guarded generated-file tree; a store-path string is an input just as a path
+> is. Full lineage: `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees, settings as read-only copies).

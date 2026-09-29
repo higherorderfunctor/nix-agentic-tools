@@ -20,7 +20,7 @@ in rec {
         link = _ctx: node: "[${node.label or node.target}](${node.target})";
         include = _ctx: node: "@${node.path}";
       };
-    frontmatter = {
+    frontmatterData = {
       description ? null,
       paths ? null,
       package ? null,
@@ -33,25 +33,11 @@ in rec {
         else if hasPaths && description == null && package != null
         then "Instructions for the ${package} package"
         else null;
-      descYaml =
-        if desc != null
-        then "description: ${desc}\n"
-        else "";
-      pathsYaml =
-        if paths == null
-        then ""
-        else if builtins.isList paths
-        then "paths:\n" + lib.concatMapStringsSep "\n" (p: "  - \"${p}\"") paths + "\n"
-        else "paths: ${paths}\n";
+      fm =
+        lib.optionalAttrs (desc != null) {description = desc;}
+        // lib.optionalAttrs hasPaths {inherit paths;};
     in
-      if descYaml == "" && pathsYaml == ""
-      then ""
-      else "---\n" + descYaml + pathsYaml + "---\n\n";
-    assemble = {
-      frontmatter,
-      body,
-    }:
-      frontmatter + body;
+      fm;
   };
 
   render = fragments.mkRenderer claudeTransformer {};

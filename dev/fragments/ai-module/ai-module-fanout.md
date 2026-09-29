@@ -1,6 +1,6 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-28 — Claude delivers every surface as its own file
+> **Last verified:** 2026-09-29 — Claude delivers every surface as its own file
 > through `ai.claude.files` on both backends and fails evaluation beside its
 > upstream module, and every delivery method writes the file itself. Every
 > enabled runtime installs a package; `installPackage` has no `null` opt-out.
@@ -342,34 +342,36 @@ enabled ecosystem whose native model preserves the option's semantics):
 - `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
   portable `{ description, instructions = { text | source; }; tools?; codex?; }`
   record. Semantic records render Claude/Copilot frontmatter plus body and Codex
-  standalone TOML. The optional `tools` list uses Claude and Copilot's shared
-  tool names and renders a non-empty value as their comma-separated frontmatter
-  allowlist; `null` and `[]` both omit the header. Codex deliberately omits it
-  because its standalone agent format has no equivalent field. Codex fails
-  loudly on a legacy raw entry instead of pretending Markdown is a valid agent
-  config. Claude writes `.claude/agents/<name>.md` on both backends through
-  `agent.renderClaude`. A path-like legacy entry — a Nix path, a store-path
-  string such as a flake input's `"${src}/a.md"`, or a derivation, i.e. Home
-  Manager's `isPathLike` — stays a file `source` for Claude and Kimchi on both
-  backends (`agent.fileContent`, which tests `agent.isPathLike`), and is read
-  into text by `renderCopilot` for Copilot's file writer; an `agentsDir` given
-  as a string yields string entries, so every writer must test `isPathLike`,
-  never `builtins.isPath`. Raw `ai.kiro.agents` entries route the same way to
-  `source` through the same `agent.fileContent`. Kiro remains excluded from this
-  pool, but NOT because its agents are untyped JSON — `ai.kiro.agents` is a
-  typed record modelling Kiro's v3 agent schema, and its `prompt` uses the same
-  `text`/`source` content shape. The blocker is the tool VOCABULARY: this pool's
-  `tools` carries Claude/Copilot tool names (`Bash`, `Read`) while Kiro takes
-  capability tags (`shell`, `read`, `@mcp`), so lowering needs a translation
-  table, not a pass-through. Add one and the exclusion can be revisited. Kimchi
-  takes semantic records as frontmatter plus body with no `name:`, and rejects a
-  non-empty `tools` (its lowercase builtin names differ) and root Markdown (it
-  misreads Claude's `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries
-  Kimchi-native Markdown. Its files are the one Markdown surface a harness
-  rewrites (the `/agents` commands), so they state `method = "copy-ro"` and take
-  the reconciler's default `0444` mode. Edit, Disable and Enable therefore fail
-  for a declared agent instead of changing Nix-owned content; Create and Eject
-  can still add an unowned sibling.
+  standalone TOML. The shared frontmatter renderer returns header bytes and
+  marker metadata together. The optional `tools` list uses Claude and Copilot's
+  shared tool names and renders a non-empty value as their comma-separated
+  frontmatter allowlist; `null` and `[]` both omit the header. Codex
+  deliberately omits it because its standalone agent format has no equivalent
+  field. Codex fails loudly on a legacy raw entry instead of pretending Markdown
+  is a valid agent config. Claude writes `.claude/agents/<name>.md` on both
+  backends through `agent.renderFile`. A path-like legacy entry — a Nix path, a
+  store-path string such as a flake input's `"${src}/a.md"`, or a derivation,
+  i.e. Home Manager's `isPathLike` — stays a file `source` for Claude and Kimchi
+  on both backends (`agent.fileContent`, which tests `agent.isPathLike`), and is
+  read into text by `renderCopilot` for Copilot's file writer; an `agentsDir`
+  given as a string yields string entries, so every writer must test
+  `isPathLike`, never `builtins.isPath`. Raw `ai.kiro.agents` entries route the
+  same way to `source` through the same `agent.fileContent`. Kiro remains
+  excluded from this pool, but NOT because its agents are untyped JSON —
+  `ai.kiro.agents` is a typed record modelling Kiro's v3 agent schema, and its
+  `prompt` uses the same `text`/`source` content shape. The blocker is the tool
+  VOCABULARY: this pool's `tools` carries Claude/Copilot tool names (`Bash`,
+  `Read`) while Kiro takes capability tags (`shell`, `read`, `@mcp`), so
+  lowering needs a translation table, not a pass-through. Add one and the
+  exclusion can be revisited. Kimchi takes semantic records as frontmatter plus
+  body with no `name:`, and rejects a non-empty `tools` (its lowercase builtin
+  names differ) and root Markdown (it misreads Claude's
+  `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries Kimchi-native Markdown.
+  Its files are the one Markdown surface a harness rewrites (the `/agents`
+  commands), so they state `method = "copy-ro"` and take the reconciler's
+  default `0444` mode. Edit, Disable and Enable therefore fail for a declared
+  agent instead of changing Nix-owned content; Create and Eject can still add an
+  unowned sibling.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex
@@ -422,23 +424,23 @@ enabled ecosystem whose native model preserves the option's semantics):
   `enable = false` suppresses an inherited root rule. Same-priority `text`
   definitions concatenate, and enabled rules require non-empty text or a source
   path. Kiro alone retains native `manual`/`auto` inclusion overrides. After B7
-  arbitration, a surviving inline Codex AGENTS.md must fit
-  `ai.codex.projectDocMaxBytes` (32 KiB by default), or evaluation fails with a
-  final-file diagnostic. A raised limit is also written to Codex's own
-  `project_doc_max_bytes`, which Codex honors at project scope, so the file the
-  guard admits is the file Codex reads. On devenv the key lands in the project's
-  `.codex/config.toml`, which Codex applies only in a trusted project, so an
-  untrusted session still reads 32 KiB, and a raised limit admitting a larger
-  file WARNS (`aiCommon.sizeWarning` in `sharedAgentsMd.nix`, from the record's
-  `defaultMaxBytes`, beside the hard `sizeAssertion` on the same final entry and
-  measurement). Home Manager writes the key to user config, which no trust
-  gates, so it does not warn. This repository raises the limit and its AGENTS.md
-  is past 32 KiB, so its devenv shell entry warns on purpose until the
-  orientation shrinks. A replacement or disable suppresses the generated bytes
-  before they are read; a surviving store-backed `source` stays lazy and is
-  therefore not size-checked at eval. Codex also rejects `matcher = []` as
-  ambiguous; use `null` for always-on content or a non-empty list for scoped
-  content.
+  arbitration, a surviving Codex AGENTS.md must fit
+  `ai.codex.projectDocMaxBytes` (32 KiB by default). The generated-file tree
+  checks its built bytes in `installCheckPhase`, so an oversized file fails the
+  build. A raised limit is also written to Codex's own `project_doc_max_bytes`,
+  which Codex honors at project scope, so the file the guard admits is the file
+  Codex reads. On devenv the key lands in the project's `.codex/config.toml`,
+  which Codex applies only in a trusted project, so an untrusted session still
+  reads 32 KiB, and a raised limit admitting a larger file warns on every shell
+  entry. That warning measures the materialized bytes. Home Manager writes the
+  key to user config, which no trust gates, so it does not warn. This repository
+  raises the limit and its AGENTS.md is past 32 KiB, so its devenv shell entry
+  warns on purpose until the orientation shrinks. A replacement or disable
+  suppresses the generated bytes before they are read; a surviving store-backed
+  `source` is measured after materialization. A `content.run` file cannot be
+  measured in the build tree; the router warns about that limit at evaluation.
+  Codex also rejects `matcher = []` as ambiguous; use `null` for always-on
+  content or a non-empty list for scoped content.
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP

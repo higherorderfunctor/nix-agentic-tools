@@ -1,7 +1,7 @@
 # Pure fragment composition library.
 #
 # Provides typed fragment constructors, composition (sort + dedup),
-# YAML frontmatter generation, and a render hook for transforms.
+# frontmatter-aware rendering, and a render hook for transforms.
 #
 # All functions are pure — no file I/O, no hardcoded paths, no data.
 # Callers supply fragments from package passthru or builtins.readFile.
@@ -10,13 +10,11 @@
 #   fragments.compose { fragments = [...]; }
 #   fragments.render { composed = ...; transform = ...; }
 {lib}: let
+  frontmatter = import ./frontmatter.nix {inherit lib;};
   # -- Builders ----------------------------------------------------------------
-  # Build YAML frontmatter block from an attrset.
-  mkFrontmatter = attrs:
-    "---\n"
-    + builtins.concatStringsSep "\n"
-    (lib.mapAttrsToList (k: v: "${k}: ${v}") attrs)
-    + "\n---\n";
+  # Frontmatter bytes and marker metadata are built together in
+  # lib/frontmatter.nix. This module supplies the fragment body to it.
+  mkFrontmatter = frontmatter.block;
 
   # Canonical fragment constructor.
   # Returns a normalized attrset with all fields defaulted:
@@ -63,10 +61,7 @@
         result = [];
       }
       sorted;
-    # Annotate each fragment with its source path (if known). The blank line
-    # after the comment is the Markdown formatter's fixed point: without it
-    # prettier inserts one, so composed text delivered verbatim (never
-    # formatted) would differ from a formatted copy of the same file.
+    # Annotate each fragment with its source path (if known).
     annotate = f: let
       label =
         if f.source or null != null
@@ -150,24 +145,24 @@
   # ── Renderer ─────────────────────────────────────────────────────
   # Build a render function from a transformer record + extra context.
   #
-  # Returns a function `fragment -> string` that:
+  # Returns a function `fragment -> { text, frontmatter, keys }` that:
   #   1. Normalizes fragment.text to a node list (bare strings get
   #      wrapped as `[ (mkRaw text) ]` for backward compatibility)
   #   2. Walks the node list, dispatching each node through
   #      transformer.handlers.${kind} with the closed-over ctx
-  #   3. Calls transformer.frontmatter with fragment metadata + ctx
-  #      extras
-  #   4. Calls transformer.assemble { frontmatter, body }
+  #   3. Passes frontmatter data and body to the shared renderer, which also
+  #      returns the file's guard marker and keys.
   #
   # The fixed-point on `self` lets handlers recurse into nested
   # nodes via ctx.render — used by `block`, `include`, and any
   # downstream handler that needs to render sub-fragments.
-  mkRenderer = transformer: ctxExtras: let
+  mkRendered = transformer: ctxExtras: let
     self =
       ctxExtras
       // {
         inherit (transformer) handlers;
-        render = fragment: let
+        render = fragment: (self.renderRecord fragment).text;
+        renderRecord = fragment: let
           fragmentText = fragment.text or "";
           rawText =
             if builtins.isPath fragmentText
@@ -194,12 +189,17 @@
               paths = fragment.paths or null;
             }
             // ctxExtras;
-          frontmatter = transformer.frontmatter frontmatterArgs;
+          rendered = frontmatter.render {
+            data = transformer.frontmatterData frontmatterArgs;
+            inherit body;
+          };
         in
-          transformer.assemble {inherit frontmatter body;};
+          rendered;
       };
   in
-    self.render;
+    self.renderRecord;
+  mkRenderer = transformer: ctxExtras: fragment:
+    (mkRendered transformer ctxExtras fragment).text;
 in {
   inherit
     compose
@@ -210,6 +210,7 @@ in {
     mkInclude
     mkLink
     mkRaw
+    mkRendered
     mkRenderer
     render
     ;

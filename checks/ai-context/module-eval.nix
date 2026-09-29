@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm mkTest;
+  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree markdownInput mkTest;
   inherit (import ../../packages/kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 
   # `aiCommon.contentFileEntry` returns the delivery record wrapped in
@@ -125,23 +125,26 @@ in {
             kiro.rules.disabled.enable = false;
           };
         };
-        hmFiles = (evalHm config).config.home.file;
+        hm = evalHm config;
         devenv = evalDevenv config;
         # Several devenv outputs are read-only copies (Claude rules, Copilot
         # instructions, Kiro steering, AGENTS.md); read what reaches the tree
         # so one predicate covers both backends.
         devenvFiles = deliveredFiles devenv.config;
-        outputsAreCorrect = agentsPath: files:
+        outputsAreCorrect = evaluated: agentsPath: files: let
+          agents = (markdownInput evaluated agentsPath).text;
+        in
           files ? ".claude/rules/active.md"
           && files ? ".kiro/steering/active.md"
-          && lib.hasInfix activeMarker (files.${agentsPath}.text or "")
+          && fromGeneratedTree agentsPath files.${agentsPath}
+          && lib.hasInfix activeMarker agents
           && !(files ? ".claude/rules/disabled.md")
           && !(files ? ".github/instructions/disabled.instructions.md")
           && !(files ? ".kiro/steering/disabled.md")
-          && !(lib.hasInfix disabledMarker (files.${agentsPath}.text or ""));
+          && !(lib.hasInfix disabledMarker agents);
       in
-        outputsAreCorrect ".codex/AGENTS.md" hmFiles
-        && outputsAreCorrect "AGENTS.md" devenvFiles
+        outputsAreCorrect hm ".codex/AGENTS.md" hm.config.home.file
+        && outputsAreCorrect devenv "AGENTS.md" devenvFiles
         && devenvFiles ? ".github/instructions/active.instructions.md"
     );
 
@@ -263,8 +266,14 @@ in {
           };
         };
         entry = (deliveredFiles result.config).".github/copilot-instructions.md";
+        input = markdownInput result ".github/copilot-instructions.md";
       in
-        toString entry.source == toString source && !(entry ? text)
+        # Delivered from the Markdown tree, which takes the source as it is:
+        # the tree's derivation names it, and nothing reads its bytes.
+        fromGeneratedTree ".github/copilot-instructions.md" entry
+        && !(entry ? text)
+        && toString input.source == toString source
+        && !(input ? text)
     );
 
     module-rule-rejects-empty-matcher = mkTest "rule-rejects-empty-matcher" (!(builtins.tryEval (let
@@ -287,10 +296,11 @@ in {
             rules.shared.text = "Shared rule.";
           };
         };
-        agents = (deliveredFiles result.config)."AGENTS.md".text;
+        agents = (markdownInput result "AGENTS.md").text;
       in
-        agents
-        == "<!-- rule: shared -->\n\nShared rule.\n\nShared context.\n"
+        fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
+        && agents
+        == "<!-- rule: shared -->\n\nShared rule.\n\nShared context."
         && !(lib.hasInfix "---" agents)
     );
 
@@ -329,9 +339,10 @@ in {
             };
           };
         };
-        agents = (deliveredFiles result.config)."AGENTS.md".text;
+        agents = (markdownInput result "AGENTS.md").text;
       in
-        lib.hasInfix "Codex-only context." agents
+        fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
+        && lib.hasInfix "Codex-only context." agents
         && lib.hasInfix "Kiro rule." agents
     );
 

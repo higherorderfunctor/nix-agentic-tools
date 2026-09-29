@@ -1,7 +1,9 @@
 ## Generation Architecture
 
-> **Last verified:** 2026-09-25 — the generator produces content only;
-> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file.
+> **Last verified:** 2026-09-28 — the generator produces content only;
+> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
+> from its generated-file tree, formatted there with this repository's treefmt;
+> the drift check compares the built files.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -24,8 +26,10 @@ Two kinds of generated content, two owners:
   `.github/instructions/`, and `.kiro/steering/`. The committed ones (AGENTS.md
   and `.github/`) are read-only copies.
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
-  `dev/repo-docs.nix` renders them from `dev/generate.nix` and formats them in
-  the sandbox; `generate:repo:*` copies them out.
+  `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
+  the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
+  `lib.ai.treefmtFormatter` helper and the generated-file guards);
+  `generate:repo:*` copies them out.
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
@@ -41,7 +45,10 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
 - `dev/generate.nix` — fragment composition into content, plus the two human
   documents.
 - `dev/ai.nix` — this repository's `ai.*` configuration, imported by
-  `devenv.nix` and evaluated by the drift check.
+  `devenv.nix` and evaluated by the drift check. It sets each
+  `ai.generated.formatter.<type>` with `lib.ai.treefmtFormatter`: treefmt with
+  `treefmt.nix`, run in each type's staging tree, so a committed file is already
+  what `nix fmt` produces.
 - `packages/coding-standards/fragments/` — published coding standards, part of
   the orientation.
 - `packages/delegate-sizing/` and `packages/stacked-workflows/router.nix` — the
@@ -56,10 +63,12 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
 module harness with `isCI = false` (Semble, and so its AGENTS.md rule, is gated
 on it, and committed bytes must not depend on who evaluates them) and compares
 the tracked AGENTS.md, `.github/copilot-instructions.md` and
-`.github/instructions/` tree with the units the `ai.*` writers' plans carry.
-README.md and CONTRIBUTING.md compare against the `repo-*` packages. The
-committed instruction files are excluded from treefmt: they have one writer, and
-the drift check is their byte gate.
+`.github/instructions/` tree with the built files the `ai.*` writers' plans
+point at: each is a file in its runtime's generated-file store tree, already
+formatted and checked. README.md and CONTRIBUTING.md compare against the
+`repo-*` packages. `treefmt.nix` excludes none of the committed instruction
+files: they come out of the tree in the house format, and `checks.formatting`
+reads them like any tracked file.
 
 ### Running Generation
 

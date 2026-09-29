@@ -1,7 +1,8 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-09-12 — all owners use native package, library,
-> module, registry, and check composition.
+> **Last verified:** 2026-09-28 — all owners use native package, library,
+> module, registry, and check composition; recipes receive the `scopeArgs` in
+> `lib/facets/repository.nix`.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -81,12 +82,14 @@ retain fields from a previous package while replacing its `drvPath`, creating a
 hybrid package. Preserve namespace neighbors and replace package leaves whole.
 
 Package recipes receive this flake's pinned `pkgs`, independently of the
-consumer pin. Shared packaging helpers arrive through `packageLib`; package
-implementation files should not encode a relative route back to the repository
-root. Consumer policy, including the existing unfree guard, belongs at overlay
-assembly rather than inside a package's source/build recipe. The composer guards
-only owned package leaves with `lib/facets/unfree-guard.nix`, preserving
-existing namespace neighbors and avoiding duplicate wrappers.
+consumer pin. Shared helpers arrive as the `scopeArgs` that
+`lib/facets/repository.nix` injects into every recipe (`fragmentsLib`,
+`generatedLib`, `packageLib`, `repoPath`, `traceSource`); package implementation
+files should not encode a relative route back to the repository root. Consumer
+policy, including the existing unfree guard, belongs at overlay assembly rather
+than inside a package's source/build recipe. The composer guards only owned
+package leaves with `lib/facets/unfree-guard.nix`, preserving existing namespace
+neighbors and avoiding duplicate wrappers.
 
 `lib/default.nix` contributes public helpers, using native module options with
 raw leaf values. Functions retain their `functionArgs`; option declarations,

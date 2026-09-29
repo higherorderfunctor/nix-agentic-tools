@@ -49,8 +49,9 @@ in {
             Lists are the canonical form; the transformers in
             lib/ai/transformers/ handle per-ecosystem emission — Claude as a
             YAML list, Copilot as a comma-joined string (native applyTo
-            syntax), Kiro as an inline YAML array (native fileMatchPattern
-            multi-pattern syntax). Order is load-bearing: the globs are emitted
+            syntax), Kiro as a YAML block sequence (native fileMatchPattern
+            multi-pattern syntax, in the one list shape a Markdown formatter
+            leaves unchanged). Order is load-bearing: the globs are emitted
             verbatim into the generated frontmatter. `null` means
             "always-loaded" (no scoping), which is what the `monorepo`
             orientation category uses.

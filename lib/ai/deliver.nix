@@ -15,6 +15,7 @@
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
   formats = import ./formats.nix {inherit lib pkgs;};
   helpers = import ./hm-helpers.nix {inherit lib;};
+  generated = import ../generated.nix {inherit lib;} pkgs;
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
 
   # The methods this layer delivers today. The assertion below is an
@@ -67,6 +68,62 @@ in
     # Disabled records are not files; everything below sees live entries only.
     live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
 
+    # Static, Nix-owned files are formatted in one store tree per invocation.
+    # Runtime-rendered `run` files and shared reconciliation overlays are
+    # excluded: their final bytes do not exist in this build sandbox.
+    limits = cfg._maxBytes;
+    builtWithTree = entry: entry.content.run == null;
+    generatedTypes = ["json" "markdown" "toml" "yaml"];
+    resolvedMethod = path: entry:
+      deliveryMethod.resolve {
+        inherit backend entry path;
+        inherit (cfg) methodFor;
+      };
+    generatedEntries = lib.filterAttrs (path: entry:
+      builtWithTree entry
+      && lib.elem entry.format generatedTypes
+      && !entry.recursive
+      && resolvedMethod path entry != "shared")
+    live;
+    limitedEntries = lib.filterAttrs (path: entry:
+      builtWithTree entry
+      && entry.content.value == null
+      && !(generatedEntries ? ${path})
+      && limits ? ${path})
+    live;
+    treeEntries = generatedEntries // limitedEntries;
+    mkTree = kind: entries: processing:
+      generated.mkTree ({
+          name = "ai-${backend}-${runtime}-${kind}";
+          files = lib.mapAttrs (path: entry:
+            (
+              aiTypes.textSourceFile (
+                if entry.content.value != null
+                then
+                  formats.render {
+                    inherit path;
+                    inherit (entry) format;
+                    inherit (entry.content) value;
+                  }
+                else entry.content
+              )
+            )
+            // {
+              type = entry.format;
+              inherit (entry) frontmatter;
+            })
+          entries;
+          maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
+        }
+        // processing);
+    tree = mkTree "generated" treeEntries {
+      inherit (config.ai.generated) check formatter guards;
+    };
+    treeOf = path:
+      if treeEntries ? ${path}
+      then tree
+      else null;
+
     # Resolve through the shared rule after merging. Not at type level or in an
     # `apply`: both would read a sibling option while the option they belong to
     # is still merging, and `ai.<runtime>.files` carries an `apply` of its own.
@@ -80,11 +137,14 @@ in
           inherit backend entry path;
           inherit (cfg) methodFor;
         };
-        # Structured content becomes bytes once, here. The ORIGINAL content
-        # stays: a reconciled document declares the VALUE it owns leaves of,
-        # and that value cannot be recovered from the bytes.
+        # Structured content becomes bytes once, here, and generated files become
+        # its file in the tree. The ORIGINAL content stays: a reconciled
+        # document declares the VALUE it owns leaves of, and that value cannot
+        # be recovered from the bytes.
         rendered =
-          if entry.content.value != null
+          if treeOf path != null
+          then {source = "${treeOf path}/${path}";}
+          else if entry.content.value != null
           then
             formats.render {
               inherit (entry) format;
@@ -277,6 +337,17 @@ in
       tasks = mergeBundles ["tasks"];
     };
 
+    # A limited path whose bytes are not in the tree is not measured. A
+    # warning rather than an assertion: a limit cannot be unset, so refusing
+    # would lock a body that writes the file at activation out of that path.
+    warnings = lib.mapAttrsToList (path: entry: let
+      origin =
+        if entry.content.run != null
+        then "is written at activation (`content.run`)"
+        else "is rendered outside the generated-file tree";
+    in "ai.${runtime}.files.\"${path}\" ${origin}, so its ${toString limits.${path}.bytes}-byte limit is not checked.")
+    (lib.filterAttrs (path: entry: limits ? ${path} && !(builtWithTree entry)) live);
+
     # Everything the layer can check about a delivery description, said where
     # the option path is still known. Silently dropping a file is the one
     # outcome that looks like success.
@@ -313,6 +384,39 @@ in
             else "not a `source` at all"
           }. A single
           file is delivered by naming its own path.
+        '';
+      })
+      resolved
+      ++ lib.mapAttrsToList (path: entry: {
+        assertion = entry.format != "markdown" || entry.content._frontmatterKeys == [] || entry.frontmatter;
+        message = ''
+          ai.${runtime}.files."${path}" has generated Markdown frontmatter
+          keys (${lib.concatStringsSep ", " entry.content._frontmatterKeys}) but
+          is not marked as frontmatter. Mark this generator's file entry so
+          parseCompare guards its YAML block.
+        '';
+      })
+      resolved
+      # A Markdown file is built into this invocation's generated tree, which
+      # holds bytes that exist at BUILD time, one file per path.
+      ++ lib.mapAttrsToList (path: entry: {
+        assertion = entry.format != "markdown" || entry.content.run == null;
+        message = ''
+          ai.${runtime}.files."${path}" has format `markdown` but its bytes
+          come from `content.run`, which writes them at activation. They do not
+          exist when the generated tree is built, so the file cannot be in it:
+          state `format = "raw"`. If you never set `format` here, `markdown`
+          is the generated entry's default, which a replacement of the
+          content alone keeps.
+        '';
+      })
+      resolved
+      ++ lib.mapAttrsToList (path: entry: {
+        assertion = entry.format != "markdown" || !entry.recursive;
+        message = ''
+          ai.${runtime}.files."${path}" has format `markdown` and sets
+          `recursive`. A Markdown entry is ONE file in the generated tree; a
+          directory of files is delivered with `format = "raw"`.
         '';
       })
       resolved

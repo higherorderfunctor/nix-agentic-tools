@@ -31,6 +31,8 @@
   pkgs,
   search,
 }: let
+  frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
+  generated = import ../../../lib/generated.nix {inherit lib;} pkgs;
   searchBlocks = {
     cli = ''
       Semble is wired into this session's shell. Prefer it over `grep` for
@@ -64,12 +66,7 @@
   };
   searchBlock = searchBlocks.${search};
 
-  text = ''
-    ---
-    name: kimchi-docs
-    description: Answer a question about Kimchi itself — the Kimchi CLI, Kimchi Coding, Ferment, Kimchi Inference, the VS Code extension, or any docs.kimchi.dev setting, provider or reporting surface — from a pinned offline snapshot of docs.kimchi.dev. Use only for Kimchi product documentation; it says nothing about any other tool.
-    ---
-
+  body = ''
     # Kimchi documentation snapshot
 
     The `snapshot` directory beside this file is a pinned, offline copy of
@@ -111,6 +108,22 @@
     - The snapshot is pinned and read-only. If it contradicts the installed
       kimchi, say so rather than picking one silently.
   '';
+  rendered = frontmatter.render {
+    data = {
+      description = "Answer a question about Kimchi itself — the Kimchi CLI, Kimchi Coding, Ferment, Kimchi Inference, the VS Code extension, or any docs.kimchi.dev setting, provider or reporting surface — from a pinned offline snapshot of docs.kimchi.dev. Use only for Kimchi product documentation; it says nothing about any other tool.";
+      name = "kimchi-docs";
+    };
+    inherit body;
+  };
+  # This is input to the generated build tree, not a native HM/devenv sink.
+  skillFiles = {"SKILL.md" = {type = "markdown";} // frontmatter.treeFile rendered;};
+  skill = generated.mkTree ({
+      name = "kimchi-docs-markdown-${search}";
+      formatter.markdown = generated.defaultFormatter.markdown;
+      guards.parseCompare = true;
+    }
+    // {files = skillFiles;});
+  inherit (rendered) text;
 in
   pkgs.runCommand "kimchi-docs-skill-${search}" {
     passthru = {inherit docs search text;};
@@ -119,6 +132,6 @@ in
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     ${pkgs.coreutils}/bin/mkdir -p "$out"
-    ${pkgs.coreutils}/bin/install -m 644 ${pkgs.writeText "SKILL.md" text} "$out/SKILL.md"
+    ${pkgs.coreutils}/bin/install -m 644 ${skill}/SKILL.md "$out/SKILL.md"
     ${pkgs.coreutils}/bin/ln -s ${docs} "$out/snapshot"
   ''

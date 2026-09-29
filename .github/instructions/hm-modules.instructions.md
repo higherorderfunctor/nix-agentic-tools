@@ -29,7 +29,9 @@ applyTo: "packages/*/modules/homeManager/**"
 > command writer, and the delivery-path parity example uses
 > `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile` /
 > `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
-> (one entry).
+> (one entry). Nix-owned static Markdown, JSON, TOML and YAML that the router
+> writes are delivered from each runtime's formatted store tree, including Home
+> Manager Claude agents, commands and output styles.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.

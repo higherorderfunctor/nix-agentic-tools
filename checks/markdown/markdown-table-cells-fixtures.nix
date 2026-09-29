@@ -21,8 +21,8 @@
 #
 #   - a tool stops catching its half  -> the gate has a hole; fix or replace it.
 #   - a tool starts catching the OTHER half -> the pair may be redundant, and
-#     the rationale in config/repo-validation.nix and the markdown-formatting
-#     fragment is now WRONG and must be rewritten.
+#     the rationale in lib/markdown/table-cells.nix and the
+#     markdown-formatting fragment is now WRONG and must be rewritten.
 #
 # The second direction is the one a plain "does it still find bugs?" test would
 # miss, and it is the one that turns three files of prose into a lie.
@@ -46,9 +46,10 @@
     # the ones the gate uses would be measuring nothing.
     inherit (pkgs.ai.devTools) markdownlint-cli2 rumdl;
 
-    markdownlintConfig = pkgs.writeText "markdownlint-tables.jsonc" ''
-      { "default": false, "MD056": true }
-    '';
+    # The hook's own config, so the suite measures markdownlint under exactly
+    # the rule set the gate enables, and the hook's own script.
+    tableCells = import ../../lib/markdown/table-cells.nix {inherit pkgs;};
+    inherit (tableCells) markdownlintConfig;
 
     fixtures = ./fixtures/markdown-table-cells;
   in
@@ -67,7 +68,7 @@
         echo "One of them changed behavior. Before touching this file, decide which:" >&2
         echo "  * a tool stopped catching its half  -> the gate has a hole." >&2
         echo "  * a tool started catching the other -> the pair may be redundant, and" >&2
-        echo "    the rationale in config/repo-validation.nix plus the" >&2
+        echo "    the rationale in lib/markdown/table-cells.nix plus the" >&2
         echo "    markdown-formatting fragment is now WRONG and must be rewritten." >&2
         echo "" >&2
         echo "Do not 'fix' this by relaxing the assertion." >&2
@@ -118,6 +119,20 @@
       check cause-excess-body-cell                silent   hit
       check clean                                 silent   silent
       check escaped-pipe-in-code-span             silent   silent
+
+      # The script itself, as the hook runs it: a finding exits 1 (not 127
+      # from a diagnostic that dies half-printed) and the diagnostic reaches
+      # its worked example. Not `fail`: this is not a disjointness failure.
+      ${pkgs.coreutils}/bin/cp --no-preserve=mode,ownership \
+        "${fixtures}/cause-excess-body-cell.md.fixture" "$TMPDIR/case.md"
+      rc=0
+      ${pkgs.lib.getExe tableCells.package} "$TMPDIR/case.md" >/dev/null 2>"$TMPDIR/err" || rc=$?
+      if [ "$rc" -ne 1 ] || ! ${pkgs.gnugrep}/bin/grep -q -F 'fixed:   | id |' "$TMPDIR/err"; then
+        echo "FAIL: markdown-table-cells exited $rc on a broken table (expected 1) or did not print its worked example:" >&2
+        cat "$TMPDIR/err" >&2
+        exit 1
+      fi
+      echo "ok — markdown-table-cells exits 1 and prints the worked example"
 
       ${pkgs.coreutils}/bin/mkdir -p "$out"
       ${pkgs.coreutils}/bin/touch "$out/ok"

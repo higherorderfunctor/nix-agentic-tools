@@ -361,7 +361,12 @@ in
               then ".md"
               else ".agent.md"
             }" {
-              content = lib.mkDefault {text = lib.ai.agent.renderCopilot name content;};
+              content = lib.mkDefault (
+                if lib.ai.agent.isSemantic content
+                then lib.ai.agent.renderFile false name content
+                else {text = lib.ai.agent.renderCopilot name content;}
+              );
+              format = lib.mkDefault "markdown";
             })
           mergedAgents;
         })

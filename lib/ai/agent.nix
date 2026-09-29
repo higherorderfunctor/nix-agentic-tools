@@ -1,5 +1,6 @@
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
+  frontmatter = import ../frontmatter.nix {inherit lib;};
 
   mkSemanticAgentType = codexType:
     lib.types.submodule {
@@ -47,6 +48,13 @@
     then {source = rendered;}
     else {text = rendered;};
 
+  frontmatterFields = includeName: name: value:
+    lib.optionalAttrs includeName {name = builtins.toJSON name;}
+    // {description = builtins.toJSON value.description;}
+    // lib.optionalAttrs ((value.tools or null) != null && value.tools != []) {
+      tools = lib.concatStringsSep ", " value.tools;
+    };
+
   renderMarkdown = {
     includeName,
     name,
@@ -54,13 +62,20 @@
   }:
     if !isSemantic value
     then value
-    else ''
-      ---
-      ${lib.optionalString includeName "name: ${builtins.toJSON name}\n"}description: ${builtins.toJSON value.description}
-      ${lib.optionalString ((value.tools or null) != null && value.tools != []) "tools: ${lib.concatStringsSep ", " value.tools}\n"}---
+    else
+      (frontmatter.render {
+        data = frontmatterFields includeName name value;
+        body = value.instructions.text + "\n";
+      }).text;
 
-      ${value.instructions.text}
-    '';
+  renderFile = includeName: name: value:
+    if isSemantic value
+    then
+      frontmatter.content (frontmatter.render {
+        data = frontmatterFields includeName name value;
+        body = value.instructions.text + "\n";
+      })
+    else fileContent value;
 
   renderCodex = name: value:
     value.codex
@@ -70,7 +85,7 @@
       inherit name;
     };
 in {
-  inherit fileContent isPathLike isSemantic mkSemanticAgentType renderCodex semanticAgentType;
+  inherit fileContent isPathLike isSemantic mkSemanticAgentType renderCodex renderFile semanticAgentType;
 
   agentType = lib.types.either (lib.types.either lib.types.lines lib.types.path) semanticAgentType;
 

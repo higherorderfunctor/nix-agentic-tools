@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm hasLiteral lspEntryOf mkTest mkWrapperGrepTest;
+  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree hasLiteral lspEntryOf markdownInput mkTest mkWrapperGrepTest;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
   # The settings writer of one backend as a runnable script: Home Manager
   # replays its prune entry and then its write entry (activation text needs
@@ -23,6 +23,12 @@
       shopt -s inherit_errexit 2>/dev/null || :
       ${body}
     '';
+  hookInput = evaluated: name: let
+    entry = evaluated.config.ai.kiro.files."${evaluated.config.ai.kiro.configDir}/hooks/${name}.json";
+  in
+    if entry.content.text != null
+    then entry.content.text
+    else builtins.readFile entry.content.source;
 in {
   checks = {
     module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
@@ -207,10 +213,11 @@ in {
           };
         };
         steering = kiroSteeringContent evaluated;
-        contextFile = ((deliveredFiles evaluated.config)."AGENTS.md" or {}).text or "";
+        contextFile = (markdownInput evaluated "AGENTS.md").text;
         namedFile = steering."named-rule.md" or null;
       in
-        lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
+        fromGeneratedTree "AGENTS.md" (deliveredFiles evaluated.config)."AGENTS.md"
+        && lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
         && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
         && !(steering ? "AGENTS.md")
         && namedFile != null
@@ -697,7 +704,7 @@ in {
           if backend == "hm"
           then hmMcpDirTarget evaluated
           else dvMcpDirTarget evaluated;
-        declared = pkgs.writeText "kiro-cli-json-declared" target.units."cli.json".text;
+        declared = target.units."cli.json".store;
         write = mkSettingsWriter backend config;
       in ''
         export HOME="$TMPDIR/${backend}-home"
@@ -1305,7 +1312,7 @@ in {
             native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
-        text = (dvMcpDirTarget result).units."cli.json".text;
+        text = builtins.toJSON (dvCliSettings result);
       in
         lib.hasInfix ''"chat.modelDefaults":{"claude-opus-5":{"effort":"high"}}'' text
         && !lib.hasInfix "chat.modelDefaults.claude-opus-5" text
@@ -1343,7 +1350,7 @@ in {
             native.settings.chat.enableTangentMode = true;
           };
         };
-        text = (dvMcpDirTarget result).units."cli.json".text;
+        text = builtins.toJSON (dvCliSettings result);
       in
         lib.hasInfix ''"chat.enableTangentMode":true'' text
         && !lib.hasInfix ''"chat":{'' text
@@ -1895,9 +1902,10 @@ in {
         && lib.hasInfix "Use strict mode always" (steeringFile.text or "")
         && lib.hasInfix "inclusion: fileMatch" (steeringFile.text or "")
         && lib.hasInfix "name: my-steering" (steeringFile.text or "")
-        # CRITICAL: fileMatchPattern MUST be a YAML array for multi-element
-        # paths, not a comma-joined string.
-        && lib.hasInfix "fileMatchPattern: [" (steeringFile.text or "")
+        # CRITICAL: fileMatchPattern MUST be a YAML list for multi-element
+        # paths, not a comma-joined string, and a block sequence rather than
+        # an inline array so a Markdown formatter cannot reflow it.
+        && lib.hasInfix "fileMatchPattern:\n  - \"src/**\"\n  - \"tests/**\"\n" (steeringFile.text or "")
     );
 
     # Explicit Kiro inclusion modes are carried by runtime-native rules, so the
@@ -1998,7 +2006,8 @@ in {
         contextFile
         != null
         && lib.hasInfix "Project conventions" (contextFile.text or "")
-        && (result.config.home.file.".kiro/steering/AGENTS.md" or {}).text == contextFile.text
+        && fromGeneratedTree ".kiro/steering/AGENTS.md" result.config.home.file.".kiro/steering/AGENTS.md"
+        && (markdownInput result ".kiro/steering/AGENTS.md").text == contextFile.text
     );
 
     # HM: top-level ai.context fans out to kiro when per-CLI unset.
@@ -2163,8 +2172,8 @@ in {
               };
             };
           });
-        hmJson = emitted (cfg: (evalHm cfg).config.home.file.".kiro/agents/reviewer.json".text);
-        devenvJson = emitted (cfg: (evalDevenv cfg).config.files.".kiro/agents/reviewer.json".text);
+        hmJson = emitted (cfg: builtins.readFile (evalHm cfg).config.home.file.".kiro/agents/reviewer.json".source);
+        devenvJson = emitted (cfg: builtins.readFile (evalDevenv cfg).config.files.".kiro/agents/reviewer.json".source);
         wellFormed = j:
           j.name
           == "reviewer"
@@ -2188,35 +2197,36 @@ in {
       let
         emitted =
           builtins.fromJSON
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              agents.scoped = {
-                description = "d";
-                permissions.rules = [
-                  {
-                    capability = "shell";
-                    effect = "deny";
-                  }
-                ];
-                prompt = {
-                  enable = false;
-                  text = "This disabled prompt must not be emitted.";
+          (builtins.readFile
+            (evalHm {
+              ai.kiro = {
+                enable = true;
+                agents.scoped = {
+                  description = "d";
+                  permissions.rules = [
+                    {
+                      capability = "shell";
+                      effect = "deny";
+                    }
+                  ];
+                  prompt = {
+                    enable = false;
+                    text = "This disabled prompt must not be emitted.";
+                  };
+                  resources = [
+                    {
+                      type = "knowledgeBase";
+                      source = "file:///docs";
+                    }
+                  ];
                 };
-                resources = [
-                  {
-                    type = "knowledgeBase";
-                    source = "file:///docs";
-                  }
-                ];
               };
-            };
-          })
+            })
         .config
         .home
         .file
         .".kiro/agents/scoped.json"
-        .text;
+        .source);
         rule = builtins.head emitted.permissions.rules;
         resource = builtins.head emitted.resources;
       in
@@ -2265,15 +2275,11 @@ in {
             };
           }).config;
       in
-        (builtins.fromJSON cfg.home.file.".kiro/agents/file-stem.json".text).name
+        (builtins.fromJSON (builtins.readFile cfg.home.file.".kiro/agents/file-stem.json".source)).name
         == "explicit-id"
     );
 
-    # Back-compat: a PATH-valued agent entry. Both backends must write the file
-    # CONTENTS. devenv previously assigned the value straight to `files.*.text`,
-    # which would have embedded the store path string as the file body (or
-    # failed its `types.str` check) — the option type has always permitted a
-    # path, and no test covered it, which is why the asymmetry survived.
+    # Path-valued agent entries enter the generated JSON tree on both backends.
     module-kiro-path-agent-both-backends = mkTest "kiro-path-agent-both-backends" (
       let
         mod = {
@@ -2284,16 +2290,16 @@ in {
         };
         hmEntry = (evalHm mod).config.home.file.".kiro/agents/from-file.json";
         devenvEntry = (evalDevenv mod).config.files.".kiro/agents/from-file.json";
-        # A path routes to `source` in BOTH backends, so neither stringifies it.
-        resolves = e: (e.source or null) == ./fixtures/kiro-agent-raw.json;
+        # The generated tree preserves the JSON document on both backends.
+        resolves = e:
+          fromGeneratedTree ".kiro/agents/from-file.json" e
+          && builtins.fromJSON (builtins.readFile e.source)
+          == builtins.fromJSON (builtins.readFile ./fixtures/kiro-agent-raw.json);
       in
         resolves hmEntry && resolves devenvEntry
     );
 
-    # A store-path STRING — a flake input's "${src}/agent.json" — is a file too.
-    # The option's `lines` arm accepts it, so the writer must route it to
-    # `source` like a path, or both backends write a file whose body is the
-    # literal /nix/store path.
+    # A store-path string is also file content, not literal JSON text.
     module-kiro-store-string-agent-both-backends = mkTest "kiro-store-string-agent-both-backends" (
       let
         storeString = "${./fixtures/kiro-agent-raw.json}";
@@ -2305,7 +2311,10 @@ in {
         };
         hmEntry = (evalHm mod).config.home.file.".kiro/agents/store-string.json";
         devenvEntry = (evalDevenv mod).config.files.".kiro/agents/store-string.json";
-        resolves = e: toString (e.source or "") == storeString && (e.text or null) == null;
+        resolves = e:
+          fromGeneratedTree ".kiro/agents/store-string.json" e
+          && builtins.fromJSON (builtins.readFile e.source)
+          == builtins.fromJSON (builtins.readFile storeString);
       in
         resolves hmEntry && resolves devenvEntry
     );
@@ -2379,7 +2388,8 @@ in {
         # that happens to mention a name proves nothing about what it wrote.
         builtins.attrNames hookUnits
         == ["pre-commit.json"]
-        && lib.hasInfix ''"event": "pre-commit"'' hookUnits."pre-commit.json".text
+        && lib.hasInfix ''"event": "pre-commit"'' (hookInput result "pre-commit")
+        && fromGeneratedTree ".kiro/hooks/pre-commit.json" {source = hookUnits."pre-commit.json".store;}
     );
 
     # HM: a TYPED hook record lowers to the correct v3 envelope JSON. name = attr
@@ -2397,7 +2407,7 @@ in {
             };
           };
         };
-        t = (hmHookTarget result).units."lint.json".text;
+        t = hookInput result "lint";
       in
         lib.hasInfix ''"version":"v1"'' t
         && lib.hasInfix ''"name":"lint"'' t
@@ -2424,7 +2434,7 @@ in {
             };
           };
         };
-        t = (hmHookTarget result).units."fmt.json".text;
+        t = hookInput result "fmt";
       in
         lib.hasInfix ''"command":"/nix/store'' t && lib.hasInfix "/bin/hello" t
     );
@@ -2449,7 +2459,7 @@ in {
             };
           };
         };
-        t = (hmHookTarget result).units."probe.json".text;
+        t = hookInput result "probe";
       in
         result.config.ai.kiro.hooks.probe.action.command
         == "${probe}/bin/kiro-hook-probe"
@@ -2473,10 +2483,11 @@ in {
         hmTarget = hmHookTarget (evalHm cfg);
         dvTarget = dvHookTarget dv;
       in
-        lib.hasInfix ''"trigger":"PostToolUse"'' hmTarget.units."lint.json".text
-        # Parity is an EQUALITY of the two plans' units now, rather than one
-        # substring appearing in two different scripts.
-        && dvTarget.units == hmTarget.units
+        lib.hasInfix ''"trigger":"PostToolUse"'' (hookInput (evalHm cfg) "lint")
+        && fromGeneratedTree ".kiro/hooks/lint.json" {source = hmTarget.units."lint.json".store;}
+        && fromGeneratedTree ".kiro/hooks/lint.json" {source = dvTarget.units."lint.json".store;}
+        # The two backends build separate trees from the same hook input.
+        && hookInput dv "lint" == hookInput (evalHm cfg) "lint"
         && dvTarget.path == ".kiro/hooks"
         # The write is anchored to the project root without a `cd`: devenv runs
         # a task in the caller's cwd (direnv activates in subdirectories), and
@@ -2526,10 +2537,10 @@ in {
           };
         };
         hookUnits = (hmHookTarget (evalHm cfg)).units;
-        # A hook command may be a package, so a unit's text can carry store
+        # A hook command may be a package, so its input text can carry store
         # context, and every substring inherits the whole string's — which
         # fromJSON rejects. Strip it; byte content is unchanged.
-        hookBody = file: builtins.unsafeDiscardStringContext hookUnits."${file}.json".text;
+        hookBody = file: builtins.unsafeDiscardStringContext (hookInput (evalHm cfg) file);
         coText = hookBody "kiro-memory";
         co = builtins.fromJSON coText;
         soloText = hookBody "solo";
@@ -2548,8 +2559,10 @@ in {
         && lib.hasInfix ''"name":"solo"'' soloText
         # the co-located records do NOT also emit their own per-record files
         && builtins.attrNames hookUnits == ["kiro-memory.json" "solo.json"]
-        # devenv installs the SAME grouped file (parity) and NOT per-record files
-        && dvUnits == hookUnits
+        # devenv installs the same grouped inputs from its own generated tree.
+        && builtins.attrNames dvUnits == builtins.attrNames hookUnits
+        && hookInput (evalDevenv cfg) "kiro-memory" == hookInput (evalHm cfg) "kiro-memory"
+        && fromGeneratedTree ".kiro/hooks/kiro-memory.json" {source = dvUnits."kiro-memory.json".store;}
     );
 
     # A PATH-valued hooksJson entry must emit the file CONTENT, not the path string
@@ -2562,7 +2575,7 @@ in {
             hooksJson.raw = ./fixtures/kiro-hook-raw.json;
           };
         };
-        t = (hmHookTarget result).units."raw.json".text;
+        t = hookInput result "raw";
       in
         lib.hasInfix "raw-envelope-loaded" t
     );
@@ -2865,7 +2878,8 @@ in {
           [ ! -L "$hooks_dir/alpha.json" ] || fail "$backend gen1: alpha.json is a symlink (v3 would skip it)"
           [ "$(${pkgs.coreutils}/bin/stat -c %a "$hooks_dir/alpha.json")" = 444 ] \
             || fail "$backend gen1: alpha.json is not the managed read-only mode"
-          ${pkgs.gnugrep}/bin/grep -q '"command":"alpha"' "$hooks_dir/alpha.json" \
+          ${pkgs.jq}/bin/jq -e '.version == "v1" and .hooks[0].action.command == "alpha"' \
+            "$hooks_dir/alpha.json" >/dev/null \
             || fail "$backend gen1: alpha.json content not materialized"
 
           # A hook this module never wrote. It must survive every later
@@ -3012,11 +3026,9 @@ in {
             context.text = "Project conventions go here.";
           };
         };
-        contextFile = (deliveredFiles result.config)."AGENTS.md" or null;
       in
-        contextFile
-        != null
-        && lib.hasInfix "Project conventions" (contextFile.text or "")
+        fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
+        && lib.hasInfix "Project conventions" (markdownInput result "AGENTS.md").text
         && !((kiroSteeringContent result) ? "AGENTS.md")
     );
 
@@ -3027,11 +3039,9 @@ in {
           ai.kiro.enable = true;
           ai.context.text = "Top-level context flows everywhere.";
         };
-        contextFile = (deliveredFiles result.config)."AGENTS.md" or null;
       in
-        contextFile
-        != null
-        && lib.hasInfix "Top-level context" (contextFile.text or "")
+        fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
+        && lib.hasInfix "Top-level context" (markdownInput result "AGENTS.md").text
     );
 
     # Devenv: agent files written.
@@ -3047,7 +3057,7 @@ in {
       in
         agentFile
         != null
-        && lib.hasInfix "reviewer" (agentFile.text or "")
+        && lib.hasInfix "reviewer" (builtins.readFile agentFile.source)
     );
 
     # Devenv: hook files written as REAL files by the materialize task (kiro v3
@@ -3065,7 +3075,8 @@ in {
       in
         builtins.attrNames target.units
         == ["pre-commit.json"]
-        && lib.hasInfix ''{"event": "pre-commit"}'' target.units."pre-commit.json".text
+        && lib.hasInfix ''{"event": "pre-commit"}'' (hookInput result "pre-commit")
+        && fromGeneratedTree ".kiro/hooks/pre-commit.json" {source = target.units."pre-commit.json".store;}
         && target.path == ".kiro/hooks"
         # anchored to the project root without a `cd`: the task runs in the
         # caller's cwd (direnv activates in subdirectories) and every path is
@@ -3102,14 +3113,19 @@ in {
         target = dvHookTarget result;
         hmTarget = hmHookTarget (evalHm cfg);
       in
-        # A directory entry travels as a STORE path, not as text read at eval,
-        # so the content assertion reads the file the unit points at.
+        # Compare the declared input without reading the formatted store tree
+        # during evaluation.
         builtins.attrNames target.units
         == ["sample.json"]
-        && lib.hasInfix "hooks-dir-sample" (builtins.readFile target.units."sample.json".store)
+        && lib.hasInfix "hooks-dir-sample" (hookInput result "sample")
         && target.path == ".kiro/hooks"
-        # HM parity — same unit, same ledger, no second mechanism
-        && hmTarget == target
+        # HM parity — the same input and ledger reach separate generated trees.
+        && hmTarget.path == target.path
+        && hmTarget.ledger == target.ledger
+        && builtins.attrNames hmTarget.units == builtins.attrNames target.units
+        && hookInput (evalHm cfg) "sample" == hookInput result "sample"
+        && fromGeneratedTree ".kiro/hooks/sample.json" {source = hmTarget.units."sample.json".store;}
+        && fromGeneratedTree ".kiro/hooks/sample.json" {source = target.units."sample.json".store;}
         # anchored to the project root without a `cd`
         && lib.hasInfix ''NAT_OWN_ROOT="$DEVENV_ROOT"'' (dvHookTaskExec result)
         # dropped: the subdirectory and the non-`.json` sibling are ignored
@@ -3297,13 +3313,14 @@ in {
         hm = evalHm config;
         dv = evalDevenv config;
       in
-        hm.config.home.file.".kiro/steering/enter-test.md".text
+        fromGeneratedTree ".kiro/steering/enter-test.md" hm.config.home.file.".kiro/steering/enter-test.md"
+        && (markdownInput hm ".kiro/steering/enter-test.md").text
         == hm.config.ai.kiro.files.".kiro/steering/enter-test.md".content.text
-        && hm.config.home.file.".kiro/steering/AGENTS.md".text
-        == hm.config.ai.kiro.files.".kiro/steering/AGENTS.md".content.text
-        && (deliveredFiles dv.config).".kiro/steering/enter-test.md".text
+        && fromGeneratedTree ".kiro/steering/AGENTS.md" hm.config.home.file.".kiro/steering/AGENTS.md"
+        && fromGeneratedTree ".kiro/steering/enter-test.md" (deliveredFiles dv.config).".kiro/steering/enter-test.md"
+        && (markdownInput dv ".kiro/steering/enter-test.md").text
         == dv.config.ai.kiro.files.".kiro/steering/enter-test.md".content.text
-        && lib.hasInfix "CONTEXT-TOKEN." (deliveredFiles dv.config)."AGENTS.md".text
+        && lib.hasInfix "CONTEXT-TOKEN." (markdownInput dv "AGENTS.md").text
         && !(dv.config.files ? ".kiro/steering/enter-test.md")
         && builtins.attrNames (steeringTargetOf "ai:kiro:materialize-steering" dv).units == ["enter-test.md"]
         # Home Manager's writer only retires older copies: it declares NO
@@ -3350,16 +3367,13 @@ in {
         };
         hm = evalHm cfg;
         dv = evalDevenv cfg;
-        hmEntry = hm.config.home.file.".kiro/steering/AGENTS.md" or null;
-        dvContext = (deliveredFiles dv.config)."AGENTS.md" or null;
-        dvRule = (deliveredFiles dv.config).".kiro/steering/symlinked.md" or null;
       in
-        hmEntry
-        != null
-        && hmEntry.text == "CONSUMER-CONTEXT."
+        fromGeneratedTree ".kiro/steering/AGENTS.md" hm.config.home.file.".kiro/steering/AGENTS.md"
+        && (markdownInput hm ".kiro/steering/AGENTS.md").text == "CONSUMER-CONTEXT."
         && !(hm.config.home.file ? ".kiro/steering/symlinked.md")
-        && dvContext.text == "SYMLINK-CTX-TOKEN.\n"
-        && dvRule == null
+        && fromGeneratedTree "AGENTS.md" (deliveredFiles dv.config)."AGENTS.md"
+        && (markdownInput dv "AGENTS.md").text == "SYMLINK-CTX-TOKEN."
+        && !((deliveredFiles dv.config) ? ".kiro/steering/symlinked.md")
     );
 
     # Kiro HM: top-level ai.rules → a `<name>.md` steering entry with
@@ -3642,9 +3656,10 @@ in {
             rulesDir = ./fixtures/kiro-steering;
           };
         };
-        agents = (deliveredFiles result.config)."AGENTS.md".text;
+        agents = (markdownInput result "AGENTS.md").text;
       in
-        lib.hasInfix "<!-- rule: alpha -->" agents
+        fromGeneratedTree "AGENTS.md" (deliveredFiles result.config)."AGENTS.md"
+        && lib.hasInfix "<!-- rule: alpha -->" agents
         && lib.hasInfix "<!-- rule: beta -->" agents
         && lib.hasInfix "<!-- rule: gamma -->" agents
         && !(lib.hasInfix "notes" agents)

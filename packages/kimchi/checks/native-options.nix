@@ -12,7 +12,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv ownPlan;
+  inherit (harness) evalDevenv;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   committed = builtins.fromJSON (builtins.readFile ../extracted.json);
   surfaceFor = extracted: import ../lib/extracted.nix {inherit extracted lib pkgs;};
@@ -80,12 +80,7 @@
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
   # The user harness settings.json Home Manager copies, decoded.
   hmHarnessSettings = evaluated:
-    builtins.fromJSON
-    (lib.head (lib.filter (target: target.codec == "dir" && target.path == ".config/kimchi/harness")
-        (ownPlan "kimchi" "kimchiFiles" evaluated).targets))
-    .units
-    ."settings.json"
-    .text;
+    evaluated.config.ai.kimchi.files."${evaluated.config.ai.kimchi.configDir}/harness/settings.json".content.value;
   hmHarness = harnessSettings:
     hmHarnessSettings (evalHm {
       ai.kimchi = {

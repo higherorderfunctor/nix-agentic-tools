@@ -1,5 +1,6 @@
 # Declares cross-app options (ai.context, ai.mcpServers,
-# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks).
+# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and ai.generated: how
+# every runtime's generated files are formatted and checked.
 #
 # Imported by every mkRuntime module so per-app layers
 # (ai.<name>.mcpServers, etc.) compose with these top-level pools. Scalar
@@ -18,6 +19,8 @@
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
+  generated = import ../generated.nix {inherit lib;} pkgs;
+  generatedTypes = ["json" "markdown" "toml" "yaml"];
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
@@ -154,6 +157,40 @@ in {
         native artifact.
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
+    };
+
+    generated = {
+      formatter = lib.genAttrs generatedTypes (type:
+        lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = generated.defaultFormatter.${type};
+          defaultText = lib.literalExpression "(lib.ai.generated pkgs).defaultFormatter.${type}";
+          description = ''
+            Shell snippet formatting generated ${type} files at target-relative
+            paths in a sandbox. Replaces the house default; null disables it.
+            Use `lib.ai.treefmtFormatter` with any treefmt-nix evalModule
+            result's config, including devenv's config.treefmt.config.
+            For marked Markdown, only the body reaches this formatter; the
+            generator's frontmatter bytes are restored afterward.
+          '';
+        });
+      check = lib.genAttrs generatedTypes (type:
+        lib.mkOption {
+          type = lib.types.lines;
+          default = "";
+          defaultText = lib.literalExpression "(lib.ai.generated pkgs).defaultCheck.${type}";
+          description = ''
+            Shell snippet checking the built ${type} files. Definitions append
+            to the ordinary-priority default; mkForce replaces it. A nonzero
+            exit fails the store-tree build. Paths are target-relative.
+          '';
+        });
+      guards = lib.genAttrs ["parseCompare" "splitCodeSpans" "tableCells"] (name:
+        lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "Enable the named generated-file guard ${name}; see README.md: Generated-file guards.";
+        });
     };
 
     mcpServers = lib.mkOption {
@@ -488,6 +525,13 @@ in {
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
     (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
+    # The default check, as a DEFINITION rather than the option default, so a
+    # consumer's definitions append to it. `mkOverride` at the ordinary
+    # priority rather than a plain value, and that is load-bearing: a plain
+    # definition is evaluated even when a consumer's `mkForce` wins, which
+    # would instantiate rumdl and markdownlint-cli2 for a check that never
+    # runs. Measured; do not "simplify" it to a plain string.
+    {ai.generated.check = lib.mapAttrs (_: value: lib.mkOverride lib.modules.defaultOverridePriority value) generated.defaultCheck;}
     # Drop the systemd path entirely in devenv. `mkIf false` would still define
     # an unknown option there; the option-tree probe is a build-time condition
     # and does not force config. Unsupported active declarations fail through
@@ -496,16 +540,20 @@ in {
       systemd.user.services = mcpProxy.systemdUnitsFor managedProxyServers;
     })
     {
-      # THE one sanctioned root-pool write in this repo. Every other module
-      # writes `ai.<runtime>.<pool>`, enforced by the provenance guard in
-      # `checks/module-provenance/helpers.nix` (`rootPoolViolations`), which allowlists this
-      # FILE — see `rootPoolAllowedFiles` there.
+      # Root-pool writes are sanctioned only from the module that declares
+      # the option: these `*Dir` expansions, and the `ai.generated.check`
+      # default above. Every other module writes `ai.<runtime>.<pool>`,
+      # enforced by `rootPoolViolations` in
+      # `checks/module-provenance/helpers.nix`, which permits a root
+      # definition only from a file that declares the option (`declaredIn`
+      # there).
       #
-      # It is legitimate because the DESTINATION is the root pool by
-      # definition: `ai.rulesDir` is itself a ROOT option, so expanding it onto
-      # any per-runtime pool would silently relocate a consumer's own
-      # declaration to a level they never wrote. This module declares those
-      # options, so it is the one place with nowhere else to expand to.
+      # The expansions are legitimate because the DESTINATION is the root
+      # pool by definition: `ai.rulesDir` is itself a ROOT option, so
+      # expanding it onto any per-runtime pool would silently relocate a
+      # consumer's own declaration to a level they never wrote. This module
+      # declares those options, so it is the one place with nowhere else to
+      # expand to.
       ai = {
         rules = lib.mkIf (config.ai.rulesDir != null) (
           lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)

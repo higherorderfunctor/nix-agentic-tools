@@ -13,9 +13,10 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv harnessNames hasLiteral mkTest ownPlan;
+  inherit (harness) deliveredFiles evalDevenv fromGeneratedTree harnessNames hasLiteral mkTest ownPlan;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
+  runtimeFiles = import ../../lib/ai/runtime-files.nix {inherit lib;};
   ownedControls = import ../ai-delivery/owned-fixtures.nix {inherit harness lib;};
 
   # A file that states no fact at all takes both defaults, which is the shape
@@ -25,6 +26,55 @@
     symlinkReadable = true;
   };
   resolve = args: deliveryMethod.byRule ({facts = plainFacts;} // args);
+  generatedFixture = {
+    ai =
+      {
+        agents.probe = {
+          description = "probe";
+          instructions.text = "agent";
+        };
+        context.text = "context";
+        rules.probe = {
+          matcher = ["*.nix"];
+          text = "rule";
+        };
+      }
+      // lib.genAttrs harnessNames (_: {enable = true;})
+      // {
+        kiro = {
+          enable = true;
+          hooks.typed = {
+            action.command = "true";
+            trigger = "PostToolUse";
+          };
+          hooksJson.probe = ''{"version":"v1","hooks":[]}'';
+        };
+      };
+  };
+  generatedEvaluations = {
+    devenv = evalDevenv generatedFixture;
+    hm = evalHm generatedFixture;
+  };
+  generatedEntries = evaluated:
+    lib.concatMap (runtime:
+      lib.mapAttrsToList (path: entry: entry // {inherit path runtime;})
+      (lib.filterAttrs (_: runtimeFiles.isLive) (evaluated.config.ai.${runtime}.files or {})))
+    (harnessNames ++ ["internal"]);
+  candidateType = path:
+    if lib.hasSuffix ".json" path
+    then "json"
+    else if lib.hasSuffix ".md" path
+    then "markdown"
+    else if lib.hasSuffix ".toml" path
+    then "toml"
+    else if lib.hasSuffix ".yaml" path || lib.hasSuffix ".yml" path
+    then "yaml"
+    else null;
+  candidateCovered = entry: entry.format == candidateType entry.path;
+  frontmatterCovered = entry: entry.frontmatter && entry.format == "markdown";
+  frontmatterEntries = evaluated:
+    lib.filter (entry: entry.format == "markdown" && entry.content._frontmatterKeys != [])
+    (generatedEntries evaluated);
 
   codexExtension = extended:
     evalHm {
@@ -76,7 +126,7 @@
       in
         cfg.ai.copilot.files.${path}.content.value
         == expected
-        && builtins.fromJSON (deliveredFiles cfg).${path}.text == expected
+        && fromGeneratedTree path (deliveredFiles cfg).${path}
         && lib.all (assertion: assertion.assertion) cfg.assertions
     ) [
       {
@@ -206,6 +256,133 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
+    # Independently inventory static file targets by extension. Starting from
+    # format tags would miss a producer that forgot to tag its own file.
+    module-delivery-generated-static-scope = mkTest "delivery-generated-static-scope" (
+      lib.all (backend: let
+        evaluated = generatedEvaluations.${backend};
+        files = deliveredFiles evaluated.config;
+        typed = ["json" "markdown" "toml" "yaml"];
+        eligible = entry: let
+          cfg = evaluated.config.ai.${entry.runtime};
+          method = deliveryMethod.resolve {
+            inherit backend entry;
+            inherit (entry) path;
+            methodFor = cfg.methodFor or deliveryMethod.byRule;
+          };
+        in
+          lib.elem entry.format typed
+          && entry.content.run == null
+          && !entry.recursive
+          && method != "shared";
+        entries = lib.filter (entry: entry.path != "AGENTS.md" || entry.runtime == "internal") (generatedEntries evaluated);
+        verifies = entry: let
+          cfg = evaluated.config.ai.${entry.runtime};
+          method = deliveryMethod.resolve {
+            inherit backend entry;
+            inherit (entry) path;
+            methodFor = cfg.methodFor or deliveryMethod.byRule;
+          };
+          candidate = candidateType entry.path;
+        in
+          if candidate != null && entry.content.run == null && !entry.recursive && method != "shared"
+          then candidateCovered entry && files ? ${entry.path} && fromGeneratedTree entry.path files.${entry.path}
+          else if eligible entry
+          then files ? ${entry.path} && fromGeneratedTree entry.path files.${entry.path}
+          else if entry.content.run != null || entry.method == "shared"
+          then !(files ? ${entry.path} && fromGeneratedTree entry.path files.${entry.path})
+          else true;
+      in
+        lib.all verifies entries) ["devenv" "hm"]
+    );
+
+    module-delivery-generated-untagged-candidate-detected = mkTest "delivery-generated-untagged-candidate-detected" (
+      let
+        hooks = lib.filter (entry: lib.hasInfix "/hooks/" entry.path) (generatedEntries generatedEvaluations.hm);
+      in
+        builtins.length hooks
+        == 2
+        && lib.all candidateCovered hooks
+        && lib.all (path:
+          !candidateCovered {
+            inherit path;
+            format = "raw";
+          }) [
+          "probe.json"
+          "probe.md"
+          "probe.toml"
+          "probe.yaml"
+          "probe.yml"
+        ]
+    );
+
+    module-delivery-generated-frontmatter-content-replacement-unmarked = mkTest "delivery-generated-frontmatter-content-replacement-unmarked" (
+      let
+        path = ".claude/rules/probe.md";
+        replacement = {
+          ai.claude.files.${path}.content.text = ''            ---
+                        # Heading
+                        Ordinary prose: with: another colon.
+                        ---
+          '';
+        };
+        unmarked = (evalDevenv (lib.mkMerge [generatedFixture replacement])).config.ai.claude.files.${path};
+        marked =
+          (evalDevenv (lib.mkMerge [
+            generatedFixture
+            replacement
+            {ai.claude.files.${path}.frontmatter = true;}
+          ])).config.ai.claude.files.${
+            path
+          };
+      in
+        unmarked.content._frontmatterKeys
+        == []
+        && !unmarked.frontmatter
+        && marked.content._frontmatterKeys == []
+        && marked.frontmatter
+    );
+
+    # The renderer carries key metadata with the generated content. This
+    # assertion catches an explicit marker override; the built-tree check in
+    # lib/generated.nix catches a wholly new producer that omits metadata.
+    module-delivery-generated-frontmatter-marker-omission-detected = mkTest "delivery-generated-frontmatter-marker-omission-detected" (
+      let
+        broken = evalDevenv (lib.mkMerge [
+          generatedFixture
+          {ai.claude.files.".claude/rules/probe.md".frontmatter = lib.mkForce false;}
+        ]);
+      in
+        lib.any (assertion:
+          !assertion.assertion && lib.hasInfix "is not marked as frontmatter" assertion.message)
+        broken.config.assertions
+    );
+
+    module-delivery-generated-frontmatter-markers = mkTest "delivery-generated-frontmatter-markers" (
+      lib.all (backend: let
+        entries = frontmatterEntries generatedEvaluations.${backend};
+      in
+        builtins.length entries
+        >= 5
+        && lib.all frontmatterCovered entries)
+      ["devenv" "hm"]
+    );
+    # Every typed file in the same runtime points into the same tree, even
+    # when its content came from different source/value renderers.
+    module-delivery-generated-one-tree = mkTest "delivery-generated-one-tree" (
+      lib.all (
+        evaluated: let
+          files = deliveredFiles evaluated.config;
+          rootsFor = runtime: let
+            paths = lib.attrNames (lib.filterAttrs (_: runtimeFiles.isLive) (evaluated.config.ai.${runtime}.files or {}));
+            routed = lib.filter (path: files ? ${path} && fromGeneratedTree path files.${path}) paths;
+          in
+            lib.unique (map (path: lib.removeSuffix "/${path}" (toString files.${path}.source)) routed);
+        in
+          lib.all (runtime: builtins.length (rootsFor runtime) <= 1) (harnessNames ++ ["internal"])
+      ) (lib.attrValues generatedEvaluations)
+    );
+
     module-delivery-owned-entry-controls = mkTest "delivery-owned-entry-controls" (
       lib.all (backend: lib.all (control: control.passed) (builtins.attrValues backend)) (builtins.attrValues ownedControls)
     );
@@ -304,7 +481,7 @@ in {
         (target devenv).path
         == ".claude/rules"
         && lib.attrNames (target devenv).units == ["probe.md"]
-        && lib.hasInfix "PROBE-RULE" (target devenv).units."probe.md".text
+        && lib.hasInfix "PROBE-RULE" (builtins.readFile (target devenv).units."probe.md".store)
         && !(devenv.config.files ? ".claude/rules/probe.md")
         && devenv.config.tasks ? "ai:claude:materialize-rules"
         # N→0 keeps the writer, whose empty target retracts the last copies.
@@ -316,7 +493,7 @@ in {
         && (target disabled).ledger == (target devenv).ledger
         && disabled.config.tasks ? "ai:claude:materialize-rules"
         && !(disabled.config.files ? ".claude/rules/probe.md")
-        && lib.hasInfix "PROBE-RULE" hm.config.home.file.".claude/rules/probe.md".text
+        && lib.hasInfix "PROBE-RULE" (builtins.readFile hm.config.home.file.".claude/rules/probe.md".source)
     );
 
     module-delivery-normalized-rule-extension-reaches-files = mkTest "delivery-normalized-rule-extension-reaches-files" (
@@ -343,8 +520,8 @@ in {
             else "AGENTS.md";
         in
           files ? ${inheritedPath}
-          && lib.hasInfix "INHERITED-RULE" files.${inheritedPath}.text
-          && lib.hasInfix "EXTRA-RULE" files.".kiro/steering/extra.md".text
+          && lib.hasInfix "INHERITED-RULE" (builtins.readFile files.${inheritedPath}.source)
+          && lib.hasInfix "EXTRA-RULE" (builtins.readFile files.".kiro/steering/extra.md".source)
           && lib.all (assertion: assertion.assertion) cfg.assertions
       ) [evalHm evalDevenv]
     );
@@ -508,7 +685,7 @@ in {
       in
         replaced.ai.internal.files."AGENTS.md".content.text
         == "THIRD-CLAIMANT"
-        && (deliveredFiles replaced)."AGENTS.md".text == "THIRD-CLAIMANT"
+        && builtins.readFile (deliveredFiles replaced)."AGENTS.md".source == "THIRD-CLAIMANT"
         && lib.all (assertion: assertion.assertion) replaced.assertions
         && !suppressed.ai.internal.files."AGENTS.md".content.enable
         && !((deliveredFiles suppressed) ? "AGENTS.md")
@@ -601,9 +778,9 @@ in {
       in
         divergentFails
         && lib.all (assertion: assertion.assertion) linked.assertions
-        && linked.files."AGENTS.md".text == "SAME"
+        && builtins.readFile linked.files."AGENTS.md".source == "SAME"
         && !(copied.files ? "AGENTS.md")
-        && (deliveredFiles copied)."AGENTS.md".text == "GENERATED\n"
+        && builtins.readFile (deliveredFiles copied)."AGENTS.md".source == "GENERATED\n"
         && (lib.head (ownPlan "internal" "ai:agents-md:materialize" {config = copied;}).targets).path == "."
     );
 
@@ -632,7 +809,7 @@ in {
         in
           builtins.attrNames cfg.ai.kiro.normalized.rules
           == ["forced"]
-          && lib.hasInfix "FORCED-RULE" files.".kiro/steering/forced.md".text
+          && lib.hasInfix "FORCED-RULE" (builtins.readFile files.".kiro/steering/forced.md".source)
           && !(files ? ".kiro/steering/inherited.md")
           && !(files ? ".kiro/steering/local.md")
           && !option.internal
@@ -1026,10 +1203,8 @@ in {
         && merged {content = lib.mkDefault {value.generated = true;};} == {consumer = true;}
     );
 
-    # Structured content is rendered once, by the router, in whichever shape
-    # the sink takes: literal bytes for json, a generated store path for toml
-    # and yaml — reading one of those back at evaluation would be
-    # import-from-derivation, which this repository does not do.
+    # Static structured content is rendered into one generated tree. Reading
+    # the formatted result at evaluation would be import-from-derivation.
     module-delivery-renders-structured-content = mkTest "delivery-renders-structured-content" (
       let
         value.probe = {
@@ -1054,9 +1229,8 @@ in {
         toml = entryFor "toml";
         withoutRenderer = builtins.tryEval (builtins.deepSeq (entryFor "markdown") true);
       in
-        json.text
-        == builtins.toJSON value
-        && !(json ? source)
+        lib.hasSuffix "-generated/.kiro/rendered" (toString json.source)
+        && !(json ? text)
         && lib.hasPrefix builtins.storeDir (toString toml.source)
         && !(toml ? text)
         # A format with no renderer says so instead of delivering nothing.

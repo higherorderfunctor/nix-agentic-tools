@@ -7,8 +7,11 @@
 # - inclusion: "always" | "auto" | "manual" → omit fileMatchPattern
 # - inclusion: "fileMatch" → require paths and emit fileMatchPattern
 # - paths: list of 1 → fileMatchPattern = "<one>"
-# - paths: list of >1 → fileMatchPattern = [...]
-#     (inline YAML array — comma-joined strings are wrong per kiro.dev/docs)
+# - paths: list of >1 → fileMatchPattern as a YAML block sequence
+#     (`- "<glob>"` per line). Kiro needs a YAML list, not a comma-joined
+#     string (kiro.dev/docs), and the block form is the one list shape a
+#     Markdown formatter leaves alone: prettier rewrites a long inline array
+#     into a multi-line flow array, which Kiro silently loads every turn.
 # - paths: string → inclusion = "fileMatch", fileMatchPattern = raw string
 # - description: non-empty → always include
 # - description: "" → always omit
@@ -27,7 +30,7 @@ in rec {
         link = _ctx: node: "[${node.label or node.target}](${node.target})";
         include = _ctx: node: "#[[file:${node.path}]]";
       };
-    frontmatter = {
+    frontmatterData = {
       description ? null,
       inclusion ? null,
       name ? null,
@@ -50,14 +53,11 @@ in rec {
         else if requestedInclusion == "fileMatch" && paths == null
         then throw ''Kiro transformer: inclusion = "fileMatch" requires paths''
         else requestedInclusion;
-      patternStr =
+      pattern =
         if effectiveInclusion != "fileMatch"
         then null
-        else if builtins.isList paths
-        then
-          if builtins.length paths == 1
-          then ''"${builtins.head paths}"''
-          else "[" + lib.concatMapStringsSep ", " (p: ''"${p}"'') paths + "]"
+        else if builtins.isList paths && builtins.length paths == 1
+        then ''"${builtins.head paths}"''
         else paths;
       descStr =
         if description != null && description != ""
@@ -69,14 +69,9 @@ in rec {
         {inclusion = effectiveInclusion;}
         // lib.optionalAttrs (name != null) {inherit name;}
         // lib.optionalAttrs (descStr != null) {description = descStr;}
-        // lib.optionalAttrs (patternStr != null) {fileMatchPattern = patternStr;};
+        // lib.optionalAttrs (pattern != null) {fileMatchPattern = pattern;};
     in
-      fragments.mkFrontmatter fm + "\n";
-    assemble = {
-      frontmatter,
-      body,
-    }:
-      frontmatter + body;
+      fm;
   };
 
   render = fragments.mkRenderer kiroTransformer {};

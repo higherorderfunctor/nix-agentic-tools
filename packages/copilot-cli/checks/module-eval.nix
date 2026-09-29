@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm lspEntryOf mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument ownPlan;
+  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree lspEntryOf markdownInput mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument ownPlan;
   # The one directory target of Copilot's config writer: `configDir` on Home
   # Manager, `.github/copilot` on devenv. Its units are whole files, so a
   # check reads the declared bytes and the ledger of each. `ownPlan` throws
@@ -19,14 +19,16 @@
     (lib.head targets);
   hmConfigTarget = configTarget "materialize-copilot-config";
   devenvConfigTarget = configTarget "ai:copilot:materialize-config";
-  # A unit's declared JSON, or null when the writer claims no such file.
-  # `fromJSON` refuses a string carrying store-path context.
-  unitJson = name: target:
-    if target.units ? ${name}
-    then builtins.fromJSON (builtins.unsafeDiscardStringContext target.units.${name}.text)
+  # A copy's declared JSON, before its generated tree renders the bytes.
+  fileValue = evaluated: path: evaluated.config.ai.copilot.files.${path}.content.value;
+  hmSettings = evaluated: fileValue evaluated "${evaluated.config.ai.copilot.configDir}/settings.json";
+  repositorySettings = evaluated: let
+    target = devenvConfigTarget evaluated;
+    path = "${target.path}/settings.json";
+  in
+    if target.units ? "settings.json"
+    then fileValue evaluated path
     else null;
-  hmSettings = evaluated: unitJson "settings.json" (hmConfigTarget evaluated);
-  repositorySettings = evaluated: unitJson "settings.json" (devenvConfigTarget evaluated);
   failedAssertions = evaluated:
     map (assertion: assertion.message)
     (lib.filter (assertion: !assertion.assertion) evaluated.config.assertions);
@@ -58,12 +60,17 @@ in {
           !assertion.assertion
           && lib.hasInfix "project-local" assertion.message)
         hm.config.assertions
-        && ((deliveredFiles devenv.config).".custom-github/copilot-instructions.md".text or "")
+        && lib.all (path: fromGeneratedTree path (deliveredFiles devenv.config).${path}) [
+          ".custom-github/copilot-instructions.md"
+          ".custom-github/instructions/security.instructions.md"
+          ".custom-github/agents/reviewer.agent.md"
+        ]
+        && (markdownInput devenv ".custom-github/copilot-instructions.md").text
         == "PROJECT-CONTEXT"
         && lib.hasInfix "SECURITY-RULE"
-        ((deliveredFiles devenv.config).".custom-github/instructions/security.instructions.md".text or "")
+        (markdownInput devenv ".custom-github/instructions/security.instructions.md").text
         && lib.hasInfix "Review the change."
-        ((deliveredFiles devenv.config).".custom-github/agents/reviewer.agent.md".text or "")
+        (markdownInput devenv ".custom-github/agents/reviewer.agent.md").text
         && (deliveredFiles devenv.config).".custom-github/skills/example/SKILL.md".source
         == ../../claude-code/checks/fixtures/claude-skills/skill-a/SKILL.md
         && !((deliveredFiles devenv.config) ? ".github/instructions/security.instructions.md")
@@ -112,12 +119,13 @@ in {
           };
         };
       in
-        (deliveredFiles result.config).".github/copilot-instructions.md".text
+        fromGeneratedTree ".github/copilot-instructions.md" (deliveredFiles result.config).".github/copilot-instructions.md"
+        && (markdownInput result ".github/copilot-instructions.md").text
         == "Project context\n\nCopilot project context"
-        && (deliveredFiles result.config).".github/instructions/security.instructions.md".text
+        && (markdownInput result ".github/instructions/security.instructions.md").text
         == "---\napplyTo: \"**/*.ts\"\n---\n\nValidate all user input."
         && lib.hasInfix "Shared project rule."
-        (deliveredFiles result.config).".github/instructions/shared.instructions.md".text
+        (markdownInput result ".github/instructions/shared.instructions.md").text
     );
 
     module-copilot-hm-context-and-rules-are-noop = mkTest "copilot-hm-context-and-rules-are-noop" (
@@ -159,16 +167,15 @@ in {
             };
           };
         };
-        contextFile = ((deliveredFiles evaluated.config).".github/copilot-instructions.md" or {}).text or "";
-        ruleFile = (deliveredFiles evaluated.config).".github/instructions/named-rule.instructions.md" or null;
+        contextFile = (markdownInput evaluated ".github/copilot-instructions.md").text;
       in
         lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
         && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
         && !((deliveredFiles evaluated.config) ? ".config/github-copilot/copilot-instructions.md")
-        && ruleFile != null
-        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
+        && fromGeneratedTree ".github/instructions/named-rule.instructions.md" (deliveredFiles evaluated.config).".github/instructions/named-rule.instructions.md"
+        && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (markdownInput evaluated ".github/instructions/named-rule.instructions.md").text
         && lib.hasInfix "UNNAMED-INSTR-TOKEN."
-        (deliveredFiles evaluated.config).".github/instructions/unnamed.instructions.md".text
+        (markdownInput evaluated ".github/instructions/unnamed.instructions.md").text
     );
 
     # github.com reads the COMMITTED tree, where a store symlink dangles, so
@@ -195,9 +202,11 @@ in {
       in
         !(enabled.config.files ? ".github/copilot-instructions.md")
         && !(enabled.config.files ? ".github/instructions/scoped.instructions.md")
-        && (byPath enabled).".github".units."copilot-instructions.md".text == "CTX"
+        && fromGeneratedTree ".github/copilot-instructions.md" {source = (byPath enabled).".github".units."copilot-instructions.md".store;}
+        && (markdownInput enabled ".github/copilot-instructions.md").text == "CTX"
         && (byPath enabled).".github".ledger == "materialize/copilot-context.manifest"
-        && lib.hasInfix "RULE" (byPath enabled).".github/instructions".units."scoped.instructions.md".text
+        && fromGeneratedTree ".github/instructions/scoped.instructions.md" {source = (byPath enabled).".github/instructions".units."scoped.instructions.md".store;}
+        && lib.hasInfix "RULE" (markdownInput enabled ".github/instructions/scoped.instructions.md").text
         && (byPath enabled).".github/instructions".ledger == "materialize/copilot-instructions.manifest"
         && lib.all (target: target.units == {}) (targets disabled)
         && lib.all (target: target.units == {}) (targets empty)
@@ -226,9 +235,9 @@ in {
         target.path
         == ".copilot"
         && target.ledger == "materialize/copilot-config.manifest"
-        && unitJson "settings.json" target == {}
-        && unitJson "mcp-config.json" target == {mcpServers = {};}
-        && unitJson "lsp-config.json" target == {lspServers = {};}
+        && fileValue evaluated ".copilot/settings.json" == {}
+        && fileValue evaluated ".copilot/mcp-config.json" == {mcpServers = {};}
+        && fileValue evaluated ".copilot/lsp-config.json" == {lspServers = {};}
         && lib.all (name: evaluated.config.ai.copilot.files.".copilot/${name}".method == "copy-ro") (lib.attrNames target.units)
         && evaluated.config.home.activation ? "materialize-copilot-config"
         && evaluated.config.home.activation ? "materialize-copilot-config-prune"
@@ -465,10 +474,12 @@ in {
           };
         };
         mcpFile = (deliveredFiles result.config).".copilot/mcp-config.json" or null;
+        mcpValue = result.config.ai.copilot.files.".copilot/mcp-config.json".content.value;
       in
         mcpFile
         != null
-        && lib.hasInfix "test-server" (mcpFile.text or "")
+        && mcpValue.mcpServers ? test-server
+        && fromGeneratedTree ".copilot/mcp-config.json" mcpFile
         # `copilot mcp add` renames over this file, so it is a copy.
         && result.config.ai.copilot.files.".copilot/mcp-config.json".method == "copy-ro"
         && !(result.config.home.file ? ".copilot/mcp-config.json")
@@ -731,11 +742,9 @@ in {
             agents.reviewer = "# Reviewer\n\nReview code carefully.";
           };
         };
-        agentFile = result.config.home.file.".copilot/agents/reviewer.md" or null;
       in
-        agentFile
-        != null
-        && lib.hasInfix "Review code carefully" (agentFile.text or "")
+        fromGeneratedTree ".copilot/agents/reviewer.md" result.config.home.file.".copilot/agents/reviewer.md"
+        && lib.hasInfix "Review code carefully" (markdownInput result ".copilot/agents/reviewer.md").text
     );
 
     module-copilot-devenv-writes-agent-files = mkTest "copilot-devenv-writes-agent-files" (
@@ -746,11 +755,9 @@ in {
             agents.reviewer = "# Reviewer\n\nReview code carefully.";
           };
         };
-        agentFile = (deliveredFiles result.config).".github/agents/reviewer.agent.md" or null;
       in
-        agentFile
-        != null
-        && lib.hasInfix "Review code carefully" (agentFile.text or "")
+        fromGeneratedTree ".github/agents/reviewer.agent.md" (deliveredFiles result.config).".github/agents/reviewer.agent.md"
+        && lib.hasInfix "Review code carefully" (markdownInput result ".github/agents/reviewer.agent.md").text
     );
 
     # Copilot HM keeps the normalized rule option but emits no project artifact.
@@ -804,12 +811,9 @@ in {
             context.text = "Copilot devenv context.";
           };
         };
-        contextFile =
-          (deliveredFiles result.config).".github/copilot-instructions.md" or null;
       in
-        contextFile
-        != null
-        && lib.hasInfix "Copilot devenv context" (contextFile.text or "")
+        fromGeneratedTree ".github/copilot-instructions.md" (deliveredFiles result.config).".github/copilot-instructions.md"
+        && lib.hasInfix "Copilot devenv context" (markdownInput result ".github/copilot-instructions.md").text
     );
 
     # HM: top-level ai.lspServers fans out to Copilot's lsp-config.json.
@@ -938,11 +942,9 @@ in {
           ai.copilot.enable = true;
           ai.agents.reviewer = "# Reviewer";
         };
-        agentFile = result.config.home.file.".copilot/agents/reviewer.md" or null;
       in
-        agentFile
-        != null
-        && lib.hasInfix "Reviewer" (agentFile.text or "")
+        fromGeneratedTree ".copilot/agents/reviewer.md" result.config.home.file.".copilot/agents/reviewer.md"
+        && lib.hasInfix "Reviewer" (markdownInput result ".copilot/agents/reviewer.md").text
     );
 
     module-copilot-hm-path-agent-resolves-to-text = mkTest "copilot-hm-path-agent-resolves-to-text" (
@@ -951,11 +953,9 @@ in {
           ai.copilot.enable = true;
           ai.agents.reviewer = ../../claude-code/checks/fixtures/claude-agents/agent-one.md;
         };
-        agentFile = result.config.home.file.".copilot/agents/reviewer.md" or null;
       in
-        agentFile
-        != null
-        && (agentFile.text or null) == builtins.readFile ../../claude-code/checks/fixtures/claude-agents/agent-one.md
+        fromGeneratedTree ".copilot/agents/reviewer.md" result.config.home.file.".copilot/agents/reviewer.md"
+        && (markdownInput result ".copilot/agents/reviewer.md").text == builtins.readFile ../../claude-code/checks/fixtures/claude-agents/agent-one.md
     );
 
     # Devenv: top-level ai.agents fans out to Copilot's .github/agents.
@@ -965,11 +965,9 @@ in {
           ai.copilot.enable = true;
           ai.agents.reviewer = "# Reviewer";
         };
-        agentFile = (deliveredFiles result.config).".github/agents/reviewer.agent.md" or null;
       in
-        agentFile
-        != null
-        && lib.hasInfix "Reviewer" (agentFile.text or "")
+        fromGeneratedTree ".github/agents/reviewer.agent.md" (deliveredFiles result.config).".github/agents/reviewer.agent.md"
+        && lib.hasInfix "Reviewer" (markdownInput result ".github/agents/reviewer.agent.md").text
     );
 
     # A store-path STRING is a file, not Markdown: a flake input's
@@ -988,14 +986,14 @@ in {
             filter = name: name == "agent-one.md";
           };
         };
-        hmFiles = (evalHm config).config.home.file;
-        devenvFiles = (evalDevenv config).config.files;
-        delivered = file: (file.text or null) == expected;
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        delivered = evaluated: files: path: fromGeneratedTree path files.${path} && (markdownInput evaluated path).text == expected;
       in
-        delivered hmFiles.".copilot/agents/store-string.md"
-        && delivered hmFiles.".copilot/agents/agent-one.md"
-        && delivered devenvFiles.".github/agents/store-string.agent.md"
-        && delivered devenvFiles.".github/agents/agent-one.agent.md"
+        delivered hm hm.config.home.file ".copilot/agents/store-string.md"
+        && delivered hm hm.config.home.file ".copilot/agents/agent-one.md"
+        && delivered devenv devenv.config.files ".github/agents/store-string.agent.md"
+        && delivered devenv devenv.config.files ".github/agents/agent-one.agent.md"
     );
 
     # Copilot parity (HM side).

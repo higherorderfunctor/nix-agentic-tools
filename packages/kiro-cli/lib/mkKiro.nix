@@ -441,7 +441,7 @@
       (e: kiroHookFileKey e.name e.record)
       (lib.mapAttrsToList (name: record: {inherit name record;}) hooks));
 
-  # Combine raw `hooksJson` (verbatim escape hatch) + typed `hooks` (lowered +
+  # Combine raw `hooksJson` (JSON escape hatch, formatted for delivery) + typed `hooks` (lowered +
   # grouped to envelope JSON) into one <file-key> → JSON-string attrset, consumed
   # by BOTH backends. Typed wins on a key collision. A raw `hooksJson` value may
   # be a PATH (read its contents) or a string; resolve to string CONTENT here so
@@ -1543,7 +1543,8 @@ in
           Prefer the typed record: `name` defaults to the attribute key, so the
           field Kiro's Rust CLI requires can never be omitted, and null/empty
           fields are dropped from the emitted JSON. Raw JSON text or a path is
-          still accepted and passes through untouched.
+          still accepted. Generated JSON is formatted before delivery; set the
+          file entry's `format` to `raw` when its exact bytes must be retained.
         '';
         example = lib.literalExpression ''
           {
@@ -1593,13 +1594,13 @@ in
           }
         '';
       };
-      # Raw hook envelope JSON (escape hatch) — written verbatim to
+      # Raw hook envelope JSON (escape hatch) — formatted before delivery to
       # `<configDir>/hooks/<name>.json`. Prefer the typed `hooks`; this exists for
       # pre-baked envelopes (autoMemory ships one here).
       hooksJson = lib.mkOption {
         type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
         default = {};
-        description = "Raw hook envelope JSON written verbatim to <configDir>/hooks/<name>.json (escape hatch; prefer typed `hooks`).";
+        description = "Raw hook envelope JSON formatted and delivered to <configDir>/hooks/<name>.json (escape hatch; prefer typed `hooks`). Set the file entry's format to raw to retain exact bytes.";
       };
       # External hooks directory. NOT symlinked — the directory's
       # top-level `*.json` files are enumerated at eval and materialized
@@ -1742,12 +1743,14 @@ in
                       rules = permissionRules;
                     };
                   };
+                  format = lib.mkDefault "yaml";
                   executable = null;
                 };
               }
               (lib.mapAttrs' (name: value:
                 lib.nameValuePair "${cfg.configDir}/agents/${name}.json" {
                   content = lib.mkDefault (mkAgentEntry name value);
+                  format = lib.mkDefault "json";
                   executable = null;
                 })
               cfg.agents)
@@ -1765,6 +1768,7 @@ in
               # diagnostic before the final file map validates its paths.
               (lib.mapAttrs' (name: unit:
                 lib.nameValuePair "${hookTargetDir cfg}/${name}" {
+                  format = lib.mkDefault "json";
                   content = lib.mkDefault (
                     if unit ? store
                     then {source = unit.store;}

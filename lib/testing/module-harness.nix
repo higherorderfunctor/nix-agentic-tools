@@ -6,6 +6,7 @@
 }: let
   mcpLib = import ../mcp.nix {inherit lib;};
   aiBase = import ../ai {inherit lib;};
+  aiTypes = import ../ai/types.nix {inherit lib;};
   # The runtime registry, shared with lib/ai/sharedOptions.nix and
   # checks/modules/options-doc.nix. Importing it rather than restating the five names
   # is what makes the tests below GROW when a sixth runtime lands: a hardcoded
@@ -375,19 +376,66 @@
       (builtins.attrValues plans))
     (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) (harnessNames ++ ["internal"]));
   in
-    builtins.listToAttrs copies // config.files or config.home.file;
+    builtins.listToAttrs copies // (config.files or config.home.file);
+  # The `{text}` or `{source}` a Markdown file goes into its runtime's
+  # generated tree as. What is delivered is a store path into that tree, and
+  # reading it back would be import-from-derivation, so a check about a
+  # Markdown file's content reads it here and a check about where the file
+  # lands reads `deliveredFiles` / `home.file`. Found by the final entry: the
+  # shared AGENTS.md owner (`ai.internal`) wins, because on devenv it is the
+  # one that delivers a shared key; otherwise exactly one enabled runtime must
+  # carry the path. A path with a byte limit is in a tree whatever its
+  # format, as the router builds one tree per invocation. Takes the evaluated module (`evalHm …`,
+  # `evalDevenv …`).
+  markdownInput = evaluated: path: let
+    inherit (evaluated) config;
+    owners =
+      lib.filter (runtime: (config.ai.${runtime}.enable or false) && (config.ai.${runtime}.files or {}) ? ${path})
+      harnessNames;
+    owner =
+      if (config.ai.internal.files or {}) ? ${path}
+      then "internal"
+      else if lib.length owners == 1
+      then lib.head owners
+      else throw "module-test: expected exactly one ai.* entry for \"${path}\", found ${toString (lib.length owners)}";
+    entry = config.ai.${owner}.files.${path};
+  in
+    if (entry.format == "markdown" || config.ai.${owner}._maxBytes ? ${path}) && entry.content.enable
+    then aiTypes.textSourceFile entry.content
+    else throw "module-test: \"${path}\" is not a live generated tree entry (format `${entry.format}`, no byte limit)";
+  # Whether a delivered file record (`home.file.<p>`, `files.<p>`, a
+  # `deliveredFiles` entry) is `path` inside its runtime's generated tree.
+  fromTree = kind: path: file: lib.hasSuffix "-${kind}/${path}" (toString (file.source or ""));
+  fromGeneratedTree = fromTree "generated";
+  # The text a delivered file's tree was built from, once the record it lands
+  # as (its `deliveredFiles` entry, on either backend) is checked to BE that
+  # tree's file. Takes the evaluated module.
+  deliveredMarkdown = evaluated: path: let
+    file = (deliveredFiles evaluated.config).${path};
+  in
+    if fromGeneratedTree path file
+    then (markdownInput evaluated path).text
+    else throw "module-test: ${path} is not delivered from its generated tree";
+  # The shell-entry lines of a devenv evaluation that run the AGENTS.md
+  # window notice, matched by the notice's store path. Takes the evaluated
+  # module.
+  windowNoticeLines = evaluated: lib.filter (lib.hasInfix "/bin/ai-markdown-window-notice ") (lib.splitString "\n" evaluated.config.enterShell);
   # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
   # Null unless `envelope` is the file's ONLY top-level key, so a bare
   # per-server map (which Copilot and Kiro both reject) never matches.
   # `fromJSON` refuses a string carrying store-path context, which a
   # `package`-resolved command adds.
   lspEntryOf = envelope: file: server: let
-    json = builtins.fromJSON (builtins.unsafeDiscardStringContext file.text);
+    content =
+      if file ? text && file.text != null
+      then file.text
+      else builtins.readFile file.source;
+    json = builtins.fromJSON (builtins.unsafeDiscardStringContext content);
   in
     if file != null && lib.attrNames json == [envelope]
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
   inherit testing;
 }
