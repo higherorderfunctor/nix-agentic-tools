@@ -73,7 +73,7 @@
         # Source and Cargo.lock move with the normal flake-input sweep,
         # which also runs `regenerateExtracted` so the bump PR carries the
         # refreshed sidecar.
-        regenerateExtracted = packageLib.mkFlakeInputRegen {
+        regenerateExtracted = packageLib.mkRegenerateExtracted {
           name = "git-branchless";
           pkgs = ourPkgs;
           targets = [

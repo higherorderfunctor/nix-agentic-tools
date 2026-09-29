@@ -108,6 +108,15 @@ description field.
   `"config"` may appear only inside the helpers, and `git var` may only name the
   three variables it reads today.
 
+## Regeneration
+
+Each package's `passthru.regenerateExtracted`
+(`packageLib.mkRegenerateExtracted`) rewrites its sidecar from
+`passthru.extracted`. git-branchless runs it on its flake-input bump; git-absorb
+and git-revise, rev-bump targets, run it from `update-pkg.sh` after the bump. A
+failing extraction holds the bump back. Locally:
+`"$(nix build --no-link --print-out-paths .#<tool>.passthru.regenerateExtracted)"`.
+
 ## Adding a tool
 
 `extract/extract.py` + `annotations.json`,

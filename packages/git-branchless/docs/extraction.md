@@ -122,9 +122,9 @@ names).
 ## Regeneration
 
 git-branchless is owned by its flake input, so `mkUpdateScript` never runs for
-it. `passthru.regenerateExtracted` (`packageLib.mkFlakeInputRegen`) is run by
-`dev/scripts/update-input.sh git-branchless` through discovery; see the update
-pipeline fragment. Locally, from the repository root:
+it. `passthru.regenerateExtracted` (`packageLib.mkRegenerateExtracted`) is run
+by `dev/scripts/update-input.sh git-branchless` through discovery; see the
+update pipeline fragment. Locally, from the repository root:
 
 ```bash
 "$(nix build --no-link --print-out-paths .#git-branchless.passthru.regenerateExtracted)"

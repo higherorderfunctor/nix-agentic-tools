@@ -608,19 +608,23 @@ rec {
     echo "${attr}: wrote ${dest}"
   '';
 
-  # `passthru.regenerateExtracted` for a package owned by a flake input
-  # (`passthru.updateFlakeInput`). `mkUpdateScript`'s `extraExtract` never
-  # runs for those: a flake-input bump goes through
-  # dev/scripts/update-input.sh, which discovers every package whose
-  # `updateFlakeInput` names the bumped input, runs this script, and stages
-  # its `sidecars`. Without it the bump PR ships the old sidecar and fails
-  # the package's drift check.
+  # `passthru.regenerateExtracted`: the sidecar regeneration for a package
+  # whose update never runs `mkUpdateScript`'s `extraExtract`. Two update
+  # paths discover and run it, then commit the `sidecars` it lists:
+  #
+  #   dev/scripts/update-input.sh   a package owned by a flake input
+  #                                 (`passthru.updateFlakeInput`)
+  #   dev/scripts/update-pkg.sh     an `update.targets` row bumped by rev or
+  #                                 by nix-update (git-absorb, git-revise)
+  #
+  # Without it the bump PR ships the old sidecar and fails the package's
+  # drift check, and a failure holds the bump back on either path.
   #
   # `targets` are `mkExtractRegen` arguments: `attr` is any flake attribute
   # path whose `passthru.extracted` produces the sidecar (a check's, when the
   # package itself must stay byte-identical to upstream), `dest` the
   # repository path it replaces.
-  mkFlakeInputRegen = {
+  mkRegenerateExtracted = {
     name,
     pkgs,
     targets,

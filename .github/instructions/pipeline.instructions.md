@@ -513,11 +513,12 @@ runs the named aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-09-29 — an input bump regenerates the sidecars of
-> every package that input owns, discovered through
-> `passthru.regenerateExtracted`; the hardcoded Semble block is gone.
-> `--use-update-script` rows must resolve `updateScript` to an executable file,
-> gated by `checks.update-script-executable`.
+> **Last verified:** 2026-09-29 — both update paths regenerate committed
+> sidecars through `passthru.regenerateExtracted`: an input bump for every
+> package that input owns, a package target (rev bump or nix-update) for the
+> package itself; the hardcoded Semble block is gone. `--use-update-script` rows
+> must resolve `updateScript` to an executable file, gated by
+> `checks.update-script-executable`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -573,8 +574,8 @@ Targets fall into three categories:
 
 - **Inputs** (`update-input.sh <name>`) — `nix flake update <name>` in a
   worktree, then `devenv update` to sync `devenv.lock`, then
-  `regenerate_input_sidecars` (`update-common.sh`). It runs the
-  `passthru.regenerateExtracted` script (`packageLib.mkFlakeInputRegen`) of
+  `regenerate_sidecars input <name>` (`update-common.sh`). It runs the
+  `passthru.regenerateExtracted` script (`packageLib.mkRegenerateExtracted`) of
   every package whose `passthru.updateFlakeInput` names the input, and stages
   the `sidecars` each one lists. Today that is Semble's two snapshots on
   `llm-agents` and git-branchless's config census on `git-branchless`. A failed
@@ -582,16 +583,21 @@ Targets fall into three categories:
   not rewritten, so a changed template reaches the update PR but fails its
   coverage check until the local derivative is reviewed.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
-  a worktree, optionally preceded by a rev bump for main-tracking packages. The
-  Beads binary target is the one grouped package: its `passthru.updateScript`
-  runs independent Beads and Dolt release updaters in sequence, so either
-  upstream can move while the target still produces one branch, one build of
-  `.#beads`, and one PR. The paired Dolt remains a nested package dependency,
-  not a second registry row or Ninja edge. The `treefmt-nix` input target waits
-  for the other isolated targets, then the final `update-report` target runs
-  `update-report.sh` to print a summary grouped by status. There is no
-  base-checkout format/build finalizer because it cannot observe changes
-  committed only on target branches.
+  a worktree, optionally preceded by a rev bump for main-tracking packages, then
+  `regenerate_sidecars package <name>`: a package exposing
+  `passthru.regenerateExtracted` (git-absorb and git-revise, whose
+  `--version skip` bumps never run an `extraExtract`) gets its sidecar refreshed
+  in the same commit, and a failure holds the bump back. `update-targets-parity`
+  fails when a target with `passthru.extracted` has neither that nor
+  `--use-update-script`. The Beads binary target is the one grouped package: its
+  `passthru.updateScript` runs independent Beads and Dolt release updaters in
+  sequence, so either upstream can move while the target still produces one
+  branch, one build of `.#beads`, and one PR. The paired Dolt remains a nested
+  package dependency, not a second registry row or Ninja edge. The `treefmt-nix`
+  input target waits for the other isolated targets, then the final
+  `update-report` target runs `update-report.sh` to print a summary grouped by
+  status. There is no base-checkout format/build finalizer because it cannot
+  observe changes committed only on target branches.
 
 ### Worktree isolation
 

@@ -71,7 +71,7 @@
         };
         # A rev bump runs this through dev/scripts/update-pkg.sh, so the bump
         # PR carries the refreshed sidecar.
-        regenerateExtracted = packageLib.mkFlakeInputRegen {
+        regenerateExtracted = packageLib.mkRegenerateExtracted {
           name = "git-revise";
           pkgs = ourPkgs;
           targets = [

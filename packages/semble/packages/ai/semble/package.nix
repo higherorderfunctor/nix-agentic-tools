@@ -28,7 +28,7 @@ in
         # The separate human-reviewed template hashes deliberately stay
         # untouched: CI must fail until a reviewer accepts or adapts each
         # local derivative after upstream content changes.
-        regenerateExtracted = packageLib.mkFlakeInputRegen {
+        regenerateExtracted = packageLib.mkRegenerateExtracted {
           name = "semble";
           inherit pkgs;
           targets = [
