@@ -15,6 +15,11 @@ pinned a fixed model at low effort; the commands below use `--model auto` (no
 effort control as of `kiro-cli` 2.24.1), so re-check the reading rules if
 results diverge.
 
+The command lines were re-checked 2026-09-28 against `kiro-cli` 2.24.1 / KAS
+0.66.8, on the v3 engine. P3 and P4 ran through a v3-enabled wrapper as
+`kiro-cli chat ...`, whose argv is identical to the `kiro-cli --v3 chat` lines
+below, and completed with their tool calls approved; P1 and P2 were not re-run.
+
 ## The fixture
 
 Every document carries a unique `SENTINEL_*` marker, so "did this load" is a
@@ -47,9 +52,10 @@ already measured as correct and a pattern that DOES match, so it can prove the
 second readable file that matches nothing. Their contents do not matter; being
 readable does.
 
-**`s-fm-match.md` was added after the measured run and has NOT itself been
-exercised.** It is the instrument for P4 below, not a recorded result. Every
-other row in the table above was measured.
+`s-fm-match.md` was added after the measured run. It was first exercised in the
+2026-09-28 re-check, where P4 surfaced `SENTINEL_MATCH`: one run, not a
+re-measurement of the table. Every other row in the table above comes from the
+2026-09-03 run.
 
 ## Reproducing
 
@@ -75,24 +81,34 @@ control, so pass no `--effort`. These are enumeration questions: if a reply
 works around a dead end instead of reporting it, treat the probe as
 inconclusive.
 
+The probes pin the **v3 engine** with `--v3`, because the findings describe the
+v3 agent's steering loader and another engine may load steering differently. The
+flag is safe with a wrapper that injects `--v3` too: the wrapper skips its own
+copy when the token is already present. Whether `--trust-all-tools` conflicts
+under v3 is release-specific; the table under "The v3 + `acp` conflict" in
+`packages/kiro-cli/docs/launcher-argv.md` is authoritative. If it conflicts,
+keep `--v3` and pre-approve the probes' tools with `--trust-tools=<list>`
+instead (the table records whether that is accepted on `chat`); a run on another
+engine answers a different question.
+
 ```bash
 # P1 — what is auto-injected. Expect: ALWAYS yes; every fm-* sentinel NO.
 #      Any fm-* sentinel present == that shape degraded to always.
-kiro-cli chat --no-interactive --trust-all-tools --model auto \
+kiro-cli --v3 chat --no-interactive --trust-all-tools --model auto \
   'List every SENTINEL_ token visible in your context. Do not read any files.'
 
 # P2 — manual reachability + the pool disclose_context serves, in one shot.
-kiro-cli chat --no-interactive --trust-all-tools --model auto \
+kiro-cli --v3 chat --no-interactive --trust-all-tools --model auto \
   'Call disclose_context with name="s-manual". Do not read any files. Report the
    tool error verbatim, then list the exact set of names disclose_context offers.'
 
 # P3 — positive control for P2. Without this, P2 proves nothing.
-kiro-cli chat --no-interactive --trust-all-tools --model auto \
+kiro-cli --v3 chat --no-interactive --trust-all-tools --model auto \
   'Call disclose_context with name="s-auto", then report SENTINEL tokens you received.'
 
 # P4 — positive control for P1. Proves the fileMatch machinery RAN rather than
-#      never firing. Unverified — see the note above.
-kiro-cli chat --no-interactive --trust-all-tools --model auto \
+#      never firing.
+kiro-cli --v3 chat --no-interactive --trust-all-tools --model auto \
   'Read target-match.json, then list every SENTINEL token visible in your context.'
 ```
 
@@ -104,7 +120,8 @@ kiro-cli chat --no-interactive --trust-all-tools --model auto \
   alone CANNOT tell you: a correctly-scoped document that stays absent looks
   identical to one whose scan never ran, since this probe reads nothing. That
   ambiguity is what P4 exists to close.
-- **P4** should surface `SENTINEL_MATCH`, and still no other `fm-` sentinel.
+- **P4** should surface `SENTINEL_MATCH`, and no `fm-` sentinel that P1 did not
+  already show (P1's degraded shapes stay present, since they load every turn).
   That separates "scoping works" from "scoping never executed".
 - **P2** should fail with
   `No skill or auto inclusion steering file found with name "s-manual"`, and the

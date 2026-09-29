@@ -1,18 +1,21 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-09-21 — identity uses the optional text-source shape
-> and materializes only while enabled.
+> **Last verified:** 2026-09-28 — v3 trust-flag conflicts re-measured on
+> kiro-cli 2.24.1: `chat` now accepts `--trust-all-tools`; `acp` still rejects
+> the five options it had on 2.15.2 and adds `--auth-method`, which works only
+> under v3.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
 >
 > - A blanket "every claim below is a MEASURED parse result" framing once
 >   shipped four wrong claims unqualified: an audit refuted the `--tui`
->   inertness mechanism, the "on `chat`, v3 accepts all five" claim, the
->   `tui.js` `--trust-tools` auto-answer, and a probe-script reference to files
->   that do not exist. Source each claim individually — measured vs.
->   sourced-to-file — and re-measure rather than reason; do not trust a blanket
->   claim of "measured" again.
+>   inertness mechanism, the "on `chat`, v3 accepts all five" claim (false on
+>   2.15.2, where `-a` conflicted; 2.24.1 accepts `-a` on `chat`, see the
+>   conflict table), the `tui.js` `--trust-tools` auto-answer, and a
+>   probe-script reference to files that do not exist. Source each claim
+>   individually — measured vs. sourced-to-file — and re-measure rather than
+>   reason; do not trust a blanket claim of "measured" again.
 
 ## The one thing to know
 
@@ -419,29 +422,34 @@ cannot see it, which is exactly how this reached a release.
 
 ## The v3 + `acp` conflict
 
-`--agent-engine=v3` on `acp` is declared mutually exclusive with **every
-functional option `acp` has** — `--agent`, `--model`, `--effort`,
-`--trust-tools`, `-a/--trust-all-tools`. Only `-v` survives.
+`--agent-engine=v3` on `acp` is declared mutually exclusive with **every option
+`acp` had on 2.15.2** — `--agent`, `--model`, `--effort`, `--trust-tools`,
+`-a/--trust-all-tools`. On 2.15.2 only `-v` survived. 2.24.1 adds the inverse
+case: `acp --auth-method <METHOD>` is accepted ONLY under v3, and under `v2` it
+fails with "--auth-method is only supported with --agent-engine=v3" (measured on
+2.24.1; `packages/delegate-sizing/lib/presets.nix` ships
+`kiro-cli acp --agent-engine v3 --auth-method cli`).
 
-It is value-specific — `=v1`/`=v2` accept all five — but only PARTLY
-`acp`-specific. Measured per option on 2.15.2, with input supplied so the
-conflict check is actually reached:
+The conflict is value-specific — `=v1`/`=v2` accept all five (measured on
+2.15.2) — and, on 2.24.1, `acp`-specific. Both columns were measured on 2.24.1
+against the unwrapped chat binary, with `chat` given input under each of `--v3`,
+`--agent-engine v3` and `--agent-engine=v3`:
 
-| Option under `--agent-engine=v3` | on `acp` | on `chat`    |
-| -------------------------------- | -------- | ------------ |
-| `--agent`, `--model`, `--effort` | conflict | accepted     |
-| `--trust-tools`                  | conflict | accepted     |
-| `-a` / `--trust-all-tools`       | conflict | **conflict** |
+| Option under v3                  | on `acp` | on `chat` |
+| -------------------------------- | -------- | --------- |
+| `--agent`, `--model`, `--effort` | conflict | accepted  |
+| `--trust-tools`                  | conflict | accepted  |
+| `-a` / `--trust-all-tools`       | conflict | accepted  |
 
-So four of the five are a property of the v3 ACP arm, but `--trust-all-tools`
-conflicts under v3 on **either** subcommand. This wrapper is unaffected — it
-injects `--trust-tools`, never `--trust-all-tools` — but do not generalize the
-`acp`-only shape to the whole conflict set.
+The `-a` row on `chat` was a conflict on 2.15.2, so the set has moved between
+releases: re-measure it on a bump (step 4 of the recipe below) rather than carry
+this table forward. This wrapper is unaffected either way — it injects
+`--trust-tools`, never `--trust-all-tools`.
 
-Probe it with input supplied. `chat --agent-engine=v3 -a` on its own reports
-"Input must be supplied when running in non-interactive"; that error fires
-BEFORE the conflict check and hides it, which is an easy way to measure this
-wrong.
+A `chat` probe needs input supplied. Without it, `--no-interactive` reports
+"Input must be supplied when running in non-interactive mode" before any
+engine-conflict check, so it cannot tell an accepted flag from a rejected one.
+`acp` rejects a conflicting option before it reads any input.
 
 **Consequence for a consumer:** with `ai.kiro.v3 = true`, an invocation like
 `kiro-cli acp --model auto` fails with upstream's conflict error. That is
@@ -518,6 +526,34 @@ K=$(nix build --no-link --print-out-paths .#kiro-cli); KB="$K/bin/kiro-cli"
 # 3. a caller's engine still wins over the injected --v3
 "$KB" --v3 acp --agent-engine=v2 --model auto </dev/null 2>&1 | grep -q "not supported" \
   && echo "REGRESSION: escape hatch gone" || echo "escape hatch intact"
+
+# 4. the v3 conflict table. Each line prints the exit status, then the
+#    verdict. "not supported with --agent-engine=v3: <opt>" (exit 2) means
+#    conflict. The empty first entry is the baseline: if it conflicts, the
+#    engine or a fixed option is the cause, not the row. acp rejects a conflict
+#    before it reads any input, so it needs none; a baseline that is accepted
+#    starts the server and exits 0 when stdin closes:
+for opt in "" "--auth-method cli" "--agent x" "--model auto" "--effort low" \
+  "--trust-tools=x" "-a" "--trust-all-tools"; do
+  out=$("$K/bin/kiro-cli-chat" acp --agent-engine v3 $opt </dev/null 2>&1)
+  echo "[$opt] $? ${out%%$'\n'*}"
+done
+#    the inverse case: expect "--auth-method is only supported with
+#    --agent-engine=v3" (exit 2)
+"$K/bin/kiro-cli-chat" acp --agent-engine v2 --auth-method cli </dev/null 2>&1 | head -1
+#    chat needs input, and an invalid model id, so the call parses but never
+#    generates. Accepted means it reaches the server and reports the model as
+#    "not available"; a conflict is the same "not supported with
+#    --agent-engine=v3" text naming the option. Read any other error before
+#    scoring it. `--agent x` names no existing agent: on 2.24.1 v3 does not
+#    reject an unknown agent before the model call, so "not available" still
+#    means accepted. Repeat under --v3 and --agent-engine=v3.
+for opt in "" "--agent x" "--effort low" "--trust-tools=x" "-a" \
+  "--trust-all-tools"; do
+  out=$("$K/bin/kiro-cli-chat" chat --agent-engine v3 --no-interactive $opt \
+    --model zz-not-a-model 'Reply OK' </dev/null 2>&1)
+  echo "[$opt] $? $(grep -m1 -oE 'is not available|not supported with --agent-engine=v3.*' <<<"$out")"
+done
 ```
 
 Read `--help-all` for the launcher's own options (that Options block is what
