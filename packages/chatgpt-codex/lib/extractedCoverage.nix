@@ -215,6 +215,14 @@
       # how a parent process spawns and reaps one exec-server, not a durable
       # configuration surface this factory owns.
       #
+      # `--proxy-private-ips-via-upstream` (0.159; `codex exec-server`,
+      # accepted by `forward` through the flattened global arguments, although
+      # that path ignores exec-server runtime options) selects routing when the
+      # executor starts. Both backends can declare the equivalent environment
+      # alias with `ai.codex.environmentVariables.CODEX_EXEC_SERVER_PROXY_PRIVATE_IPS_VIA_UPSTREAM = "true"`;
+      # it stays with the other exec-server process controls rather than
+      # gaining a dedicated semantic option.
+      #
       # The `--ws-*` listener-auth flags reached `codex exec-server` in 0.158
       # through the same flattened `WebsocketAuthArgs` app-server uses, so the
       # name-keyed disposition carries over with unchanged meaning.
@@ -244,6 +252,7 @@
         "--name"
         "--out"
         "--prettier"
+        "--proxy-private-ips-via-upstream"
         "--remote-control"
         "--remote-transport"
         "--sandbox-state-disable-network"
