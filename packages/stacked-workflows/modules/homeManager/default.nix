@@ -12,14 +12,13 @@
 # factory's header. Those pools are per-`evalModules`, so this HM-scope
 # contribution is independent of the devenv module's.
 #
-# On TOP of the factory, this module keeps the HM-only
+# On TOP of the factory, this module keeps the user-global
 # `stacked-workflows.gitPreset` companion option outside `ai.*`: Git presets
-# configure the machine-wide Home Manager `programs.git.settings` surface and
-# have no runtime-specific or devenv analogue. Keeping that boundary explicit
-# avoids generating meaningless `ai.<runtime>.programs.stacked-workflows`
-# `gitPreset` overrides. Skill sources are the deref'd, self-contained skill
-# dirs from `pkgs.stacked-workflows-content.passthru.skills` (real reference
-# files bundled inside each, so they resolve in every scope).
+# configure Home Manager's `programs.git.settings` surface. The devenv module
+# exposes the same option at repository scope; neither belongs under a runtime.
+# Skill sources are the deref'd, self-contained skill dirs from
+# `pkgs.stacked-workflows-content.passthru.skills` (real reference files
+# bundled inside each, so they resolve in every scope).
 #
 # Picked up by `native Home Manager module discovery` in flake.nix.
 {
@@ -34,14 +33,7 @@
   # override individual keys at normal priority.
   mkDefaultRecursive = lib.mapAttrsRecursive (_path: lib.mkDefault);
 
-  gitConfigMinimal = import ./git-config.nix;
-  gitConfigFull = import ./git-config-full.nix;
-
-  gitSettings = {
-    "full" = gitConfigFull;
-    "minimal" = gitConfigMinimal;
-    "none" = {};
-  };
+  gitSettings = import ../../lib/git-presets.nix;
 in {
   imports = [
     (import ../../../../lib/ai/mkSkillPackageModule.nix {
@@ -59,7 +51,7 @@ in {
 
   options.stacked-workflows = {
     gitPreset = lib.mkOption {
-      type = lib.types.enum ["full" "minimal" "none"];
+      type = lib.types.enum (builtins.attrNames gitSettings);
       default = "none";
       description = ''
         Git configuration preset for stacked workflows.

@@ -350,8 +350,9 @@ in {
     # portable option tree is exact, and shared declarations produce identical
     # HM/devenv root and runtime option trees within its capability set,
     # including nested runtime-only settings.
-    # `gitPreset` deliberately stays out of this tree as an HM-only top-level
-    # companion because it configures machine-wide Git, not a runtime.
+    # `gitPreset` deliberately stays out of this tree as a top-level companion
+    # because it configures Git, not a runtime. Both backends expose the same
+    # enum: Home Manager projects it user-global, devenv repository-local.
     module-skill-packages-program-option-parity = mkTest "skill-packages-program-option-parity" (
       let
         shape = declarations:
@@ -364,6 +365,8 @@ in {
           shape ((lib.getAttrFromPath path evaluated.options).type.getSubOptions []);
         hm = evalHm {};
         devenv = evalDevenv {};
+        gitPresetValues = evaluated:
+          evaluated.options.stacked-workflows.gitPreset.type.functor.payload.values;
         programParity = package: expectedRootShape: runtimes:
           optionShape hm ["ai" "programs" package]
           == expectedRootShape
@@ -381,7 +384,9 @@ in {
         } ["claude" "codex" "kiro"]
         && programParity "stacked-workflows" {enable = "boolean";} harnessNames
         && hm.options.stacked-workflows ? gitPreset
-        && !(devenv.options ? stacked-workflows)
+        && devenv.options.stacked-workflows ? gitPreset
+        && gitPresetValues hm == ["full" "minimal" "none"]
+        && gitPresetValues hm == gitPresetValues devenv
     );
 
     # ── Normalized keyed-pool suppression types ────────────────────

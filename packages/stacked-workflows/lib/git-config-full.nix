@@ -1,15 +1,7 @@
 # Full recommended git configuration for stacked commit workflows.
 #
-# Includes Required + Strongly Recommended + Recommended settings.
-#
-# Usage in home-manager:
-#   programs.git.settings = inputs.stacked-workflow-skills.lib.gitConfigFull;
-#
-# Or via the home-manager module (applies mkDefault to each leaf):
-#   ai.programs.stacked-workflows.enable = true;
-#   stacked-workflows.gitPreset = "full";
-#
-# See packages/stacked-workflows/references/recommended-config.md for explanations of each setting.
+# Includes Required + Strongly Recommended + Recommended settings. Both module
+# backends consume this file; backend-specific delivery belongs in the modules.
 let
   base = import ./git-config.nix;
 in
@@ -18,7 +10,7 @@ in
   # If adding a new key that also exists in base, merge it the same way.
   base
   // {
-    # ── Recommended: git-branchless ────────────────────────────────────
+    # ── Recommended: git-branchless ──────────────────────────────────
 
     branchless =
       base.branchless
@@ -36,20 +28,20 @@ in
         # 30 GB workstation. This preset used to say 0. `1` restores the
         # upstream default and is stated explicitly so the pairing with
         # `strategy` is legible. `--jobs N` overrides it in both directions
-        # when a cheaper test command can afford more, and mkDefault is
-        # applied per leaf, so raise it in `programs.git.settings` per
-        # machine.
+        # when a cheaper test command can afford more. Home Manager applies
+        # mkDefault per leaf, while repository-local Git configuration wins
+        # over an identical global value without changing the result.
         test = {
           jobs = 1;
           strategy = "worktree";
         };
       };
 
-    # ── Recommended: git-revise ────────────────────────────────────────
+    # ── Recommended: git-revise ─────────────────────────────────────
 
     revise.autoSquash = true;
 
-    # ── Recommended: general git ───────────────────────────────────────
+    # ── Recommended: general git ─────────────────────────────────────
 
     commit.verbose = true;
 

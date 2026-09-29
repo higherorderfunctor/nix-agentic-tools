@@ -19,10 +19,16 @@ defaults to HEAD if not specified.
    `references/philosophy.md` (relative to this skill's directory) before
    proceeding.
 
-2. **Check branchless init**:
+2. **Confirm repository initialization.** A devenv project with
+   `stacked-workflows.gitPreset` enabled initializes automatically before Git
+   hooks are installed. Outside that setup, initialize from the primary worktree
+   when the common branchless state is absent:
 
    ```bash
-   if [ ! -d ".git/branchless" ]; then git branchless init; fi
+   git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
+   if [ ! -d "$git_common_dir/branchless" ]; then
+     git -C "$(dirname "$git_common_dir")" branchless init
+   fi
    ```
 
 3. **Check for stale rebase state**:

@@ -19,10 +19,16 @@ Run a test command or formatter across commits in the current stack.
    revset** and **Sizing `--jobs` — by memory, not by cores** are the rules this
    skill applies; the rest of this file is how to apply them.
 
-2. **Check branchless init**:
+2. **Confirm repository initialization.** A devenv project with
+   `stacked-workflows.gitPreset` enabled initializes automatically before Git
+   hooks are installed. Outside that setup, initialize from the primary worktree
+   when the common branchless state is absent:
 
    ```bash
-   if [ ! -d ".git/branchless" ]; then git branchless init; fi
+   git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
+   if [ ! -d "$git_common_dir/branchless" ]; then
+     git -C "$(dirname "$git_common_dir")" branchless init
+   fi
    ```
 
 ## Arguments

@@ -7,17 +7,18 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-28 — JSON document targets retire independently; no
-> runtime flips an upstream `programs.<cli>.enable`; skills reach Claude through
-> `mkSkillFiles`, and Claude has no wrapper. Claude's devenv
-> `.claude/settings.json` and `.mcp.json`, Copilot's settings files, and Kiro's
-> and Kimchi's settings copies are written only when something is declared;
-> other devenv writes are unconditional. Settings are read-only copies or
-> symlinks where the CLI's write primitive permits; only Claude and Copilot
-> retain writable state documents with Nix-owned leaves. The JSON document
-> reconciler has no TOML codec, document mode or native-writer lock. Semble's
-> `pathMappings` and model routing live at the program root. Native file
-> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-29 — stacked-workflows exposes one shared Git
+> preset option and mapping through both module backends. JSON document targets
+> retire independently; no runtime flips an upstream `programs.<cli>.enable`;
+> skills reach Claude through `mkSkillFiles`, and Claude has no wrapper.
+> Claude's devenv `.claude/settings.json` and `.mcp.json`, Copilot's settings
+> files, and Kiro's and Kimchi's settings copies are written only when something
+> is declared; other devenv writes are unconditional. Settings are read-only
+> copies or symlinks where the CLI's write primitive permits; only Claude and
+> Copilot retain writable state documents with Nix-owned leaves. The JSON
+> document reconciler has no TOML codec, document mode or native-writer lock.
+> Semble's `pathMappings` and model routing live at the program root. Native
+> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Shared documents, each declared by
 > `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
@@ -390,12 +391,12 @@ pools. A runtime false therefore removes only that runtime's skill/rule
 contribution.
 
 `stacked-workflows.gitPreset` is the deliberate companion exception. It stays
-outside `ai.*` and exists only in Home Manager because it configures
-machine-wide `programs.git.settings`; putting it in the program specification
-would generate per-runtime Git-preset overrides that have no coherent lowering.
-The normalized program tree itself remains exactly parity-checked. Keep this
-boundary explicit in consumer docs rather than presenting the companion as a
-devenv option.
+outside `ai.*` and exists in both backends: Home Manager lowers it to
+machine-wide `programs.git.settings`, while devenv lowers it to one
+repository-local include. One shared preset map supplies both the enum and the
+settings. Putting it in the program specification would generate per-runtime
+Git-preset overrides that have no coherent lowering. The normalized program tree
+itself remains exactly parity-checked.
 
 Both sinks wrap every Semble entry point with its selected cache location. Home
 Manager deliberately fixes the user-global root at

@@ -1,13 +1,7 @@
 # Recommended git configuration for stacked commit workflows.
 #
-# Usage in home-manager:
-#   programs.git.settings = inputs.stacked-workflow-skills.lib.gitConfig;
-#
-# Or via the home-manager module (applies mkDefault to each leaf):
-#   ai.programs.stacked-workflows.enable = true;
-#   stacked-workflows.gitPreset = "minimal";
-#
-# See packages/stacked-workflows/references/recommended-config.md for explanations of each setting.
+# Both the Home Manager and devenv modules consume this attrset. Keep preset
+# values here so the user-global and repository-local projections cannot drift.
 {
   # ── Required ──────────────────────────────────────────────────────
 

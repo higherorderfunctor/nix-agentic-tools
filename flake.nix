@@ -171,7 +171,7 @@
               };
             };
             # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
-            # packages/stacked-workflows/modules/homeManager/git-config*.nix).
+            # packages/stacked-workflows/lib/git-config*.nix).
           };
         # Consumer-facing packaging helpers. Only this one is public; the rest
         # of lib/packaging.nix is the repo's own update/build tooling. It takes

@@ -18,9 +18,9 @@ Each skill's own description states which operations it covers.
 
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-09-13 — package structure re-stated for the owner
-> layout: the content derivation is `packages/stacked-workflows-content/`, and
-> the three git tools are separate owner facets rather than one shared dir.
+> **Last verified:** 2026-09-29 — Home Manager and devenv share the Git preset
+> map; devenv reconciles one common-directory include and initializes branchless
+> before hook installation.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.
@@ -37,10 +37,11 @@ content package with per-backend modules:
   `packages/stacked-workflows/packages/stacked-workflows-content/package.nix`)
 - `packages/stacked-workflows/router.nix` — the keyed skill-routing rule, shared
   by both backend modules
+- `packages/stacked-workflows/lib/git-config*.nix` — shared Git preset data
 - `packages/stacked-workflows/modules/homeManager/` — user-global module
-  (skills + skill-routing rule + git-config presets)
+  (skills + skill-routing rule + Git preset projection)
 - `packages/stacked-workflows/modules/devenv/` — project-local module (skills +
-  skill-routing rule)
+  skill-routing rule + repository Git preset projection + branchless init)
 - `packages/stacked-workflows/docs/development.md` — this package-owned
   development guide
 - `packages/git-absorb/`, `packages/git-branchless/`, `packages/git-revise/` —
@@ -49,12 +50,38 @@ content package with per-backend modules:
 
 ### Git Config Presets
 
-Two preset levels are exported via `lib.gitConfig` (essential aliases) and
-`lib.gitConfigFull` (extended configuration). The HM module wires these into
-`programs.git.settings` via the `gitPreset` option (`"minimal"` / `"full"` /
-`"none"`). That option remains `stacked-workflows.gitPreset`, outside `ai.*`,
-because it is machine-wide Home Manager configuration with no runtime-specific
-or devenv lowering.
+One preset map under `packages/stacked-workflows/lib/` owns both the enum values
+and the `"minimal"` / `"full"` / `"none"` settings. Both backends expose
+`stacked-workflows.gitPreset` from that map. It stays outside `ai.*` because Git
+configuration is not runtime-specific.
+
+Home Manager applies every selected leaf to `programs.git.settings` at
+`mkDefault` priority. The pinned devenv revision has no declarative Git-settings
+surface: its option index exposes only `git.root`, and
+`src/modules/integrations/git.nix` defines that as automatically populated root
+metadata. The devenv module therefore renders the same attrset as a read-only
+`files.*` Git config fragment. Its reconciliation task copies that fragment to
+`stacked-workflows.gitconfig` under the common Git directory and idempotently
+adds that stable absolute path to `include.path` in the common repository
+config. The common directory is shared by every linked worktree, unlike
+`DEVENV_ROOT`, so the include resolves from all of them. Repository-local values
+take priority over identical Home Manager values, so combining both is a no-op.
+Reconciliation and branchless initialization use one lock in that common
+directory, so tasks launched from different worktrees cannot race on the shared
+config or branchless state. Reconciliation publishes the fragment with a
+same-directory temporary file and atomic rename. Initialization checks for an
+existing branchless directory only after taking the lock, making concurrent and
+repeated initialization idempotent.
+
+The reconciliation task always runs after `devenv:files`. When the preset is
+active, the branchless-init task follows it and precedes
+`devenv:git-hooks:install`, so git-branchless owns its hooks before prek
+installs or chains its own. For `"none"` or a disabled portable program,
+reconciliation removes only its exact `include.path` value and its owned
+common-directory fragment; the generated fragment and branchless-init task are
+absent. Because devenv has no declarative Git-settings attrset, there is no
+repository-side `pull.ff` option on which to mirror Home Manager's
+evaluation-time conflict assertion.
 
 ### Skills + Skill-Routing Rule
 

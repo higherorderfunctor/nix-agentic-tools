@@ -269,8 +269,8 @@
       settings.reasoningEffort = "high";
     };
 
-    # Home Manager-only companion; the program enable above is shared with
-    # devenv and supports per-runtime overrides.
+    # Git companion; Home Manager applies it user-global, while devenv applies
+    # the same preset at repository scope.
     stacked-workflows.gitPreset = "full";
 
     services.mcp-servers.servers.github-mcp = {
@@ -938,7 +938,7 @@
     ```nix
     ai.programs.stacked-workflows.enable = true;
 
-    # Home Manager-only companion; omit in devenv configurations.
+    # Home Manager applies this user-global; devenv applies it repository-local.
     stacked-workflows.gitPreset = "full"; # or "minimal" or "none"
 
     # Optional runtime override: null inherits, false disables one runtime.
