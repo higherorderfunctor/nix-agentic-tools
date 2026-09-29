@@ -1,1 +1,1 @@
-{imports = [./module-eval.nix ./reader.nix];}
+{imports = [./declarations.nix ./module-eval.nix ./reader.nix];}

@@ -20,7 +20,7 @@
   # ordinary Nix module for config defaults and config.assertions over settings.
   # Assertion values merge with caller values; the internal option is reserved.
   loadServer = name: import ../packages/${name}/modules/mcp-server.nix {inherit lib mcpLib;};
-  mcpLib = {inherit mkCredentialsOption;};
+  mcpLib = {inherit runtimeValues;};
 
   isExternal = serverDef: serverDef.meta ? external && serverDef.meta.external;
 
@@ -80,15 +80,22 @@
   in
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
-  # ── Credentials option generator ──────────────────────────────────
-  # MOVED to lib/credentials.nix and re-exported here unchanged, so every
-  # MCP server module keeps the exact option type it had. The move
-  # happened when packages/glab — not an MCP server — needed the same
-  # runtime-secret primitives. Do not fork a second copy back into this
-  # file; add to credentials.nix instead.
-  inherit (credentialsLib) mkCredentialsOption mkCredentialsSnippet;
-
-  credentialsLib = import ./credentials.nix {inherit lib;};
+  runtimeValues = import ./runtime-values {inherit lib;};
+  # apiUrl retains its legacy locator shape until the service-delivery PR.
+  runtimeReference = value:
+    if value != null && !runtimeValues.isReference value
+    then
+      (
+        if value ? file
+        then runtimeValues.file {path = value.file;}
+        else runtimeValues.helper {path = value.helper;}
+      )
+    else value;
+  credentialsEnvironment = pkgs: credentialVars: settings:
+    runtimeValues.environment {
+      inherit pkgs;
+      values = lib.mapAttrs' (name: spec: lib.nameValuePair spec.envVar (runtimeReference settings.${name})) credentialVars;
+    };
 
   # ── Credentials helpers ──────────────────────────────────────────
   # credentialVars: { settingsOptionName = { envVar = "ENV_VAR"; required = bool; }; }
@@ -98,7 +105,7 @@
     any (optName: let
       cred = settings.${optName};
     in
-      (cred.file or null) != null || (cred.helper or null) != null)
+      cred != null)
     (builtins.attrNames credentialVars);
 
   # File paths backing file-based credentials, in declaration order.
@@ -112,16 +119,10 @@
     (mapAttrsToList (optName: _: let
       cred = settings.${optName} or null;
     in
-      if cred != null && cred ? file
-      then cred.file
+      if cred != null && (runtimeReference cred)._runtime.source ? file
+      then (runtimeReference cred)._runtime.source.file
       else null)
     credentialVars);
-
-  # `mkCredentialsSnippet` also lives in lib/credentials.nix now (it is
-  # inherited above). It still uses absolute store paths for every
-  # command — Claude Code's MCP `env` field REPLACES the process
-  # environment, so a bare `cat` there fails with "command not found"
-  # and the server starts silently unauthenticated.
 
   # ── Secrets wrapper for stdio servers with credentials ─────────────
   # Returns a string (store path) for use directly as a command.
@@ -135,7 +136,7 @@
     drv = pkgs.writeShellScript (name + "-env") ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      ${mkCredentialsSnippet pkgs credentialVars settings}
+      ${credentialsEnvironment pkgs credentialVars settings}
       exec "${getExe package}" "$@"
     '';
   in "${drv}";
@@ -328,8 +329,8 @@ in {
     isExternal
     loadServer
     mkCfgShim
-    mkCredentialsOption
-    mkCredentialsSnippet
+    runtimeValues
+    credentialsEnvironment
     mkHttpEntry
     mkPackageEntry
     mkSecretsWrapper

@@ -1,32 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-28 — the package builds from the release source
-> that the extractor also reads, one pin for both, with pinned pnpm and Go
-> dependencies, and patches bundled-skill discovery to read store directories in
-> place; `ai.kimchi.native.settings` and `native.harnessSettings` are closed
-> option trees generated from `extracted.json` by `lib/extracted.nix`; devenv
-> rejects user-scope `config.json` keys and both backends reject environment
-> variables Kimchi overwrites, both read from the sidecar, and the overwrite and
-> inert flags are derived from the sources, as is each harness key's project
-> scope, declarations resolve by reference or fail on ambiguity, and the
-> extractor's own hand-written parts are listed with their guards, and pi's
-> declaration packages follow Kimchi's lockfile; the builder entry point is
-> `lib.ai.app.mkRuntime`. Home Manager keeps Kimchi's user paths and devenv its
-> project paths; the mutable JSON documents (`config.json`, harness
-> `settings.json`, `mcp.json`, `permissions.json`, and HM-only `trust.json`)
-> reconcile by leaf through the shared delivery router; agents are owned
-> writable copies, copied from a store-path string as from a path; portable
-> hooks reach `.kimchi/hooks.json` on devenv only; the trust writer takes pi's
-> `trust.json.lock`; an ungated HM `kimchiConfigMode` writer narrows the
-> credential-bearing user `config.json` to owner-only; `mkPrep` builds only the
-> launcher, from the builder's `launcherEnvironment`, and one record-level
-> `config` and `installPackage` serve both backends; the builder publishes
-> devenv context to the shared root `AGENTS.md` from `sharedAgentsMd`; HM's
-> `native.harnessSettings` type (declared per backend) defaults the model to
-> `kimchi-dev/auto` as a coupled pair below `mkDefault` and declares
-> `autoDefaultApplied = true`, so Kimchi 1.1.37 never installs Auto itself, but
-> a `--model` launch over that default still persists until the next activation.
-> Full lineage: `git show 54efc1e8:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-28 — runtime API keys use shared runtime
+> references; launcher delivery remains through `wrapProgram --run`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
@@ -447,15 +422,11 @@ key Kimchi cannot read. Locked by `module-kimchi-config-json-nested`.
 
 ## Gotcha: apiKey is a runtime SOPS credential, never a store literal
 
-`apiKey` is `lib.mcp.mkCredentialsOption "KIMCHI_API_KEY"` — the same
-`{ file | helper }` discriminated union the MCP servers use. The key is exported
-at launch via `lib.mcp.mkCredentialsSnippet`
-(`KIMCHI_API_KEY="$(<coreutils>/bin/cat <file>)"`) injected through
-`wrapProgram --run`, so the decrypted secret is read at runtime and the store
-holds only the **path**, never the key. Never reintroduce a plaintext `str`
-apiKey funneled into `--set`: that bakes the secret into a world-readable
-`/nix/store` wrapper. Mimic the existing credential pattern; do not invent a new
-secret surface.
+`apiKey` accepts only runtime references, for example
+`apiKey = rv.file { path = "/run/secrets/kimchi-key"; };`. The shared
+`lib/runtime-values` reader exports `KIMCHI_API_KEY` at launch through the
+existing `wrapProgram --run` delivery. Failed or empty reads abort launch;
+newline handling follows the reference policy. No literal branch is available.
 
 ## Gotcha: wrapProgram separator
 
