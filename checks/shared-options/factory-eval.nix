@@ -62,5 +62,49 @@ in {
       in
         evaluated.config.ai.mcpServers.test.type == "stdio"
     );
+
+    factory-generated-options-append-force-and-null = mkTest "generated-options-append-force-and-null" (
+      let
+        evaluate = module:
+          (lib.evalModules {
+            specialArgs = {inherit pkgs;};
+            modules = [ai.sharedOptions module];
+          }).config.ai.generated;
+        appended = evaluate {ai.generated.check.json = "echo consumer";};
+        forced = evaluate {ai.generated.check.json = lib.mkForce "echo only-consumer";};
+        replaced = evaluate {ai.generated.formatter.json = "echo custom-formatter";};
+        disabled = evaluate {
+          ai.generated.formatter.markdown = null;
+          ai.generated.guards.tableCells = false;
+        };
+        lazy =
+          (lib.evalModules {
+            specialArgs = {inherit pkgs;};
+            modules = [
+              ai.sharedOptions
+              {ai.generated.check.yaml = lib.mkOverride lib.modules.defaultOverridePriority (throw "forced losing check");}
+              {ai.generated.check.yaml = lib.mkForce "";}
+            ];
+          }).config.ai.generated;
+      in
+        lib.hasInfix "echo consumer" appended.check.json
+        && lib.hasInfix ":" appended.check.json
+        && forced.check.json == "echo only-consumer"
+        && replaced.formatter.json == "echo custom-formatter"
+        && disabled.formatter.markdown == null
+        && !disabled.guards.tableCells
+        && lazy.check.yaml == ""
+    );
+
+    factory-generated-treefmt-formatter-is-sandbox-correct = mkTest "generated-treefmt-formatter-is-sandbox-correct" (
+      let
+        config = {
+          package = pkgs.writeShellScriptBin "treefmt-fixture" "exit 0";
+          build.configFile = pkgs.writeText "treefmt-fixture.toml" "";
+        };
+      in
+        ai.treefmtFormatter config
+        == "${lib.getExe config.package} --config-file ${config.build.configFile} --tree-root . --walk filesystem --no-cache"
+    );
   };
 }

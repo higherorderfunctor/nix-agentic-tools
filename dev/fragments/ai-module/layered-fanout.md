@@ -1,19 +1,20 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-27 — Claude delivers every surface through
-> `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
-> Every delivered entry is a file the layer writes. L5 is the delivery router
-> plus one adapter per backend; every runtime describes delivery once through
-> the record-level `config`, which `mkRuntime` makes the only delivery callback,
-> and the delivery matrix is generated from the layer for every runtime's files.
-> Normalized pools carry only a text-source record's winning arm. Claude's
-> devenv rules and Codex's execpolicy rules are read-only copies whose writers
-> survive a disable. Copilot reconciles its user settings.json on HM and the
-> repository `.github/copilot/settings.json` on devenv. Kiro excludes the
-> normalized `settings` pool. Native file settings live under
-> `ai.<runtime>.native`. The builder publishes each record's devenv shared
-> AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`, from the
-> record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
+> **Last verified:** 2026-09-28 — structural frontmatter metadata follows
+> generated Markdown through the delivery tree. Claude delivers every surface
+> through `ai.claude.files`; its settings.json and devenv .mcp.json are
+> read-only links. Every delivered entry is a file the layer writes. L5 is the
+> delivery router plus one adapter per backend; every runtime describes delivery
+> once through the record-level `config`, which `mkRuntime` makes the only
+> delivery callback, and the delivery matrix is generated from the layer for
+> every runtime's files. Normalized pools carry only a text-source record's
+> winning arm. Claude's devenv rules and Codex's execpolicy rules are read-only
+> copies whose writers survive a disable. Copilot reconciles its user
+> settings.json on HM and the repository `.github/copilot/settings.json` on
+> devenv. Kiro excludes the normalized `settings` pool. Native file settings
+> live under `ai.<runtime>.native`. The builder publishes each record's devenv
+> shared AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`,
+> from the record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
 > mode-narrowing command writer beside its unpin ledger. Codex's daemon
 > `settings.json` maps to no matrix cell. The builder declares the per-runtime
 > `agents`, `environmentVariables` and `lspServers` options and an opt-in
@@ -25,8 +26,15 @@
 > path-scoped index entry instead of inlining its body. The shared AGENTS.md map
 > lowers through the router as `internal`, as a read-only copy, and a
 > contribution's `defaultMaxBytes` makes the owner warn past it under a raised
-> `maxBytes`. Generators mark their `content` with `_generated`, so a consumer's
-> replacement of a unit's file warns like a switch-off.
+> `maxBytes`; its built bytes are measured in the generated-file tree. The
+> router builds one tree per invocation for static Markdown, JSON, TOML and
+> YAML, while switch-time overlays and `content.run` stay outside it. Generators
+> mark their `content` with `_generated`, so a consumer's replacement of a
+> unit's file warns like a switch-off. Rule and semantic-agent generators also
+> record frontmatter keys on their content and mark the file entry as
+> `frontmatter`; the router passes that marker to `parseCompare`, which requires
+> the YAML block only for marked Markdown. A delivery assertion and an inventory
+> check catch a generator that records keys without marking the file.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -357,9 +365,8 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   KiB default because the raised limit is absent or untrusted) loses only its
   own tail. The builder adds the merged context and publishes it on devenv. A
   limit is published even without content, because the runtime reads the file
-  whoever wrote it. The layout is the Markdown formatter's fixed point (one
-  blank line between units and after each rule comment, one glob or link per
-  index line), so a committed copy survives a formatter pass.
+  whoever wrote it. The formatter owns final spacing and line wrapping in the
+  built file; the index still keeps one glob or link per line for readability.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit

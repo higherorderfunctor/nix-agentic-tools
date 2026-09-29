@@ -249,7 +249,7 @@ in {
         (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots
         && builtins.elem
         "/home/test/.config/glab-cli"
-        devenv.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots
+        devenv.ai.codex.files.".codex/config.toml".content.source.value.sandbox_workspace_write.writable_roots
     );
 
     # Runtime test of the preflight, with a STUB standing in for glab so the

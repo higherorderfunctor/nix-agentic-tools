@@ -328,15 +328,17 @@ metadata.
 
 ## Codex size guard
 
-- After final-file arbitration, compare the surviving inline Codex AGENTS.md
-  against `ai.codex.projectDocMaxBytes` (32 KiB by default).
-- If over cap: **hard eval error** identifying the final file and suggesting a
+- The Codex AGENTS.md that survives final-file arbitration, generated or a
+  consumer replacement (inline or store-backed), is measured on its BUILT file
+  against `ai.codex.projectDocMaxBytes` (32 KiB by default). The limit is keyed
+  by path, and the file is built into its runtime's Markdown tree, or into the
+  measure-only limited tree when it is `raw`.
+- If over cap: the **tree's build fails**, identifying the file and suggesting a
   replacement, trimming, or raising the cap.
 - Replacement and tombstones discard the lazy generated default before its
-  source bytes are read. A surviving store-backed final source remains lazy and
-  is not size-checked at eval.
-- Rationale: Codex silently truncates overflow. An eval error is the only way to
-  surface the problem before a surprise in production.
+  source bytes are read; nothing is measured at eval.
+- Rationale: Codex silently truncates overflow. A failed build surfaces the
+  problem before a surprise in production.
 
 The generated base filename remains `AGENTS.md`. Codex's native
 `AGENTS.override.md` precedence can suppress that file, while configured
@@ -368,11 +370,12 @@ override file.
    - **Codex:** shared/per-app context and rules lower into `~/.codex/AGENTS.md`
      for Home Manager and project-root `AGENTS.md` for devenv. Scoped content
      degrades to explicit prose.
-4. **Codex size guard** — shipped as an eval-time byte assertion against the
-   surviving inline AGENTS.md entry after final-file arbitration, using
-   `ai.codex.projectDocMaxBytes` (32 KiB by default). Tombstones and
-   replacements suppress discarded generated content before it is read;
-   store-backed final sources remain lazy and are not size-checked at eval.
+4. **Codex size guard** — shipped as a build-time byte check on the surviving
+   AGENTS.md after final-file arbitration, run in the install check of the tree
+   that delivers it (its Markdown tree, or the limited tree when it is `raw`),
+   using `ai.codex.projectDocMaxBytes` (32 KiB by default). Tombstones and
+   replacements suppress discarded generated content before it is read; a
+   store-backed final source is measured too.
 5. **Consumer migration (`nixos-config`)** — out of scope for this repo.
    Consumer can now use
    `ai.kiro.rules = builtins.mapAttrs (…) (builtins.readDir …)` on their own

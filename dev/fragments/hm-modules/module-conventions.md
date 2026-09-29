@@ -1,6 +1,6 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-27 — no runtime flips an upstream
+> **Last verified:** 2026-09-28 — no runtime flips an upstream
 > `programs.<cli>.enable`; skills reach Claude through `mkSkillFiles`, and
 > Claude has no wrapper. Claude's devenv `.claude/settings.json` and `.mcp.json`
 > are written only when non-empty; other devenv writes are unconditional.
@@ -17,7 +17,9 @@
 > ungated mode-narrowing command writer, and the delivery-path parity example
 > uses `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile`
 > / `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
-> (one entry).
+> (one entry). Nix-owned static Markdown, JSON, TOML and YAML that the router
+> writes are delivered from each runtime's formatted store tree, including Home
+> Manager Claude agents, commands and output styles.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -333,9 +335,11 @@ skills directory symlinks and static config files. If the content is already in
 the store (a derivation output, a file inside the flake), this is the right
 tool.
 
-**`home.file` with `text =`** — content built at eval time from Nix data. Used
-for transformed rules (e.g., the `fragments-ai` transforms emit strings that
-become `home.file.".claude/rules/<name>.md".text`).
+**`home.file` with `text =`** — content built at eval time from Nix data for a
+file outside the generated-format scope. Static Markdown, JSON, TOML and YAML
+that the delivery router owns are built into one formatted tree per runtime;
+`home.file.".claude/rules/<name>.md".source` points into that tree. Claude
+agents, commands and output styles use the same direct delivery path.
 
 **`home.activation`** — stateful operations that need runtime info: reading sops
 files, computing fingerprints, merging runtime-mutable config files, resetting

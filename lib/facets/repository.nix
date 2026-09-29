@@ -23,6 +23,8 @@
         inherit repoPath;
         packageLib = import ../packaging.nix;
         fragmentsLib = import ../fragments.nix {inherit lib;};
+        # `generatedLib pkgs`: the builder generated files are formatted in.
+        generatedLib = import ../generated.nix {inherit lib;};
         traceSource = import ../traceSource.nix {inherit lib;};
       };
     });

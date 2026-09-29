@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs claudeSettings deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
+  inherit (harness) aiBase aiStubs claudeSettings deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
   daemonSettings = evaluated:
     ownedDocument "codex" "${evaluated.config.ai.codex.configDir}/app-server-daemon/settings.json" evaluated;
   # Execpolicy rules are read-only copies on both backends, so their bytes are
@@ -70,7 +70,7 @@ in {
         };
         hmRoots = (hmCodexSettings (evalHm settings)).sandbox_workspace_write.writable_roots;
         rootsWithEnvironment = environment:
-          (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots;
+          (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.files.".codex/config.toml".content.source.value.sandbox_workspace_write.writable_roots;
         devenvNoEnvironmentRoots = rootsWithEnvironment {};
         devenvHomeRoots = rootsWithEnvironment {HOME = "/home/test";};
         devenvXdgRoots = rootsWithEnvironment {
@@ -100,7 +100,7 @@ in {
           XDG_CACHE_HOME = "/tmp/xdg-cache";
         };
         evaluate = settings:
-          (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.files.".codex/config.toml".source.value;
+          (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.files.".codex/config.toml".content.source.value;
         legacy = evaluate {
           ai.codex = {
             enable = true;
@@ -252,7 +252,7 @@ in {
               };
               devenv.root = root;
               git.root = root;
-            }).config.files.".codex/config.toml".source.value;
+            }).config.ai.codex.files.".codex/config.toml".content.source.value;
         namedSettings = {
           default_permissions = "project-edit";
           permissions.project-edit.extends = ":workspace";
@@ -295,7 +295,7 @@ in {
               enable = true;
               native.settings.sandbox_mode = "workspace-write";
             };
-          }).config.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots;
+          }).config.ai.codex.files.".codex/config.toml".content.source.value.sandbox_workspace_write.writable_roots;
       in
         builtins.deepSeq roots (builtins.elem "/tmp/devenv-root/.git" roots)
     );
@@ -416,7 +416,7 @@ in {
       in
         hmCodexSettings hm
         == withHmDaemonDefault expected
-        && devenv.config.files.".codex/config.toml".source.value == expected
+        && devenv.config.ai.codex.files.".codex/config.toml".content.source.value == expected
     );
 
     module-codex-empty-settings-emits-no-toml = mkTest "codex-empty-settings-emits-no-toml" (
@@ -521,7 +521,7 @@ in {
       in
         (hmCodexSettings hm).mcp_servers
         == expected
-        && devenv.config.files.".codex/config.toml".source.value.mcp_servers == expected
+        && devenv.config.ai.codex.files.".codex/config.toml".content.source.value.mcp_servers == expected
     );
 
     module-codex-mcp-freeform-rejects-non-toml = mkTest "codex-mcp-freeform-rejects-non-toml" (
@@ -550,7 +550,7 @@ in {
           };
         };
         hmServer = (hmCodexSettings (evalHm config)).mcp_servers.context7-mcp;
-        devenvServer = (evalDevenv config).config.files.".codex/config.toml".source.value.mcp_servers.context7-mcp;
+        devenvServer = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.source.value.mcp_servers.context7-mcp;
         rendered = builtins.toJSON hmServer;
       in
         hmServer
@@ -589,7 +589,7 @@ in {
           };
         };
         hmServers = (hmCodexSettings (evalHm config)).mcp_servers;
-        devenvServers = (evalDevenv config).config.files.".codex/config.toml".source.value.mcp_servers;
+        devenvServers = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.source.value.mcp_servers;
       in
         hmServers
         == devenvServers
@@ -652,7 +652,7 @@ in {
           personality = "pragmatic";
           web_search = "indexed";
         };
-        devenvSource = devenv.config.files.".codex/config.toml".source;
+        devenvSource = devenv.config.ai.codex.files.".codex/config.toml".content.source;
       in
         hmCodexSettings hm
         == withHmDaemonDefault expected
@@ -900,7 +900,7 @@ in {
         hm = evalHm config;
         devenv = evalDevenv config;
         hmSettings = hmCodexSettings hm;
-        devenvSettings = devenv.config.files.".codex/config.toml".source.value;
+        devenvSettings = devenv.config.ai.codex.files.".codex/config.toml".content.source.value;
         withoutBackendRoots = settings:
           settings
           // {
@@ -1013,7 +1013,7 @@ in {
         hm = evalHm config;
         devenv = evalDevenvWithGetEnv (name: {HOME = "/home/test";}.${name} or "") config;
         hmSettings = hmCodexSettings hm;
-        devenvSettings = devenv.config.files.".codex/config.toml".source.value;
+        devenvSettings = devenv.config.ai.codex.files.".codex/config.toml".content.source.value;
         withoutBackendRoots = settings:
           settings
           // {
@@ -1067,7 +1067,7 @@ in {
           };
         };
         userSettings = hmCodexSettings user;
-        projectSettings = project.config.files.".codex/config.toml".source.value;
+        projectSettings = project.config.ai.codex.files.".codex/config.toml".content.source.value;
         # Codex merges same-named permission tables by key and gives the project
         # file higher precedence. Model that documented artifact composition
         # explicitly instead of comparing two independent full configurations.
@@ -1200,7 +1200,7 @@ in {
             rules.command-guidance.text = "Explain every command before running it.";
           };
         };
-        agentsMd = evaluated.config.home.file.".codex/AGENTS.md".text;
+        agentsMd = (markdownInput evaluated ".codex/AGENTS.md").text;
         execpolicy = (execpolicyUnits evaluated)."command-policy.rules".text;
       in
         lib.hasInfix "Explain every command" agentsMd
@@ -1596,15 +1596,18 @@ in {
           name = "reviewer";
           sandbox_mode = "read-only";
         };
-        hmAgent = hm.config.home.file.".codex/agents/reviewer.toml".source.value;
-        devenvAgent = devenv.config.files.".codex/agents/reviewer.toml".source.value;
-        claudeAgent = hm.config.home.file.".claude/agents/reviewer.md".text;
-        emptyClaudeAgent = hm.config.home.file.".claude/agents/emptyTools.md".text;
-        emptyCopilotAgent = devenv.config.files.".github/agents/emptyTools.agent.md".text;
-        unrestrictedClaudeAgent = hm.config.home.file.".claude/agents/unrestricted.md".text;
-        copilotAgent = devenv.config.files.".github/agents/reviewer.agent.md".text;
+        hmAgent = hm.config.ai.codex.files.".codex/agents/reviewer.toml".content.source.value;
+        devenvAgent = devenv.config.ai.codex.files.".codex/agents/reviewer.toml".content.source.value;
+        claudeAgent = (markdownInput hm ".claude/agents/reviewer.md").text;
+        emptyClaudeAgent = (markdownInput hm ".claude/agents/emptyTools.md").text;
+        emptyCopilotAgent = (markdownInput devenv ".github/agents/emptyTools.agent.md").text;
+        unrestrictedClaudeAgent = (markdownInput hm ".claude/agents/unrestricted.md").text;
+        copilotAgent = (markdownInput devenv ".github/agents/reviewer.agent.md").text;
       in
-        hmAgent
+        fromGeneratedTree ".codex/agents/reviewer.toml" hm.config.home.file.".codex/agents/reviewer.toml"
+        && fromGeneratedTree ".codex/agents/reviewer.toml" devenv.config.files.".codex/agents/reviewer.toml"
+        && fromGeneratedTree ".claude/agents/reviewer.md" hm.config.home.file.".claude/agents/reviewer.md"
+        && hmAgent
         == expected
         && devenvAgent == expected
         && lib.hasPrefix "---\n" claudeAgent
@@ -1661,10 +1664,11 @@ in {
             };
           };
         };
-        source = result.config.home.file.".codex/agents/reviewer.toml".source;
+        agent = result.config.ai.codex.files.".codex/agents/reviewer.toml".content.source.value;
       in
-        lib.hasInfix ''description = "Codex review."'' (builtins.readFile source)
-        && !(lib.hasInfix "Root review." (builtins.readFile source))
+        fromGeneratedTree ".codex/agents/reviewer.toml" result.config.home.file.".codex/agents/reviewer.toml"
+        && agent.description == "Codex review."
+        && agent.developer_instructions == "Use Codex instructions."
     );
 
     module-codex-legacy-markdown-agent-fails-loudly = mkTest "codex-legacy-markdown-agent-fails-loudly" (
@@ -1809,7 +1813,7 @@ in {
         == []
         && failed devenv == []
         && (hmCodexSettings hm).mcp_servers.remote == expected
-        && devenv.config.files.".codex/config.toml".source.value.mcp_servers.remote == expected
+        && devenv.config.ai.codex.files.".codex/config.toml".content.source.value.mcp_servers.remote == expected
     );
 
     module-codex-agent-defaults-parity = mkTest "codex-agent-defaults-parity" (
@@ -1825,7 +1829,7 @@ in {
           };
         };
         hmAgents = (hmCodexSettings (evalHm config)).agents;
-        devenvAgents = (evalDevenv config).config.files.".codex/config.toml".source.value.agents;
+        devenvAgents = (evalDevenv config).config.ai.codex.files.".codex/config.toml".content.source.value.agents;
       in
         hmAgents
         == devenvAgents
@@ -1865,8 +1869,8 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        hmHooks = hm.config.home.file.".codex/hooks.json".source.value;
-        devenvHooks = devenv.config.files.".codex/hooks.json".source.value;
+        hmHooks = hm.config.ai.codex.files.".codex/hooks.json".content.source.value;
+        devenvHooks = devenv.config.ai.codex.files.".codex/hooks.json".content.source.value;
         blocks = hmHooks.hooks.PreToolUse;
         sharedHandler = builtins.head (builtins.head blocks).hooks;
         nativeHandler = builtins.head (builtins.elemAt blocks 1).hooks;
@@ -1929,18 +1933,16 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected =
-          builtins.concatStringsSep "\n\n" [
-            "<!-- rule: alpha -->\n\nAlpha rule"
-            "<!-- rule: zeta -->\n\nZeta rule"
-            "Shared context"
-            "Codex context"
-          ]
-          + "\n";
+        expected = builtins.concatStringsSep "\n\n" [
+          "<!-- rule: alpha -->\n\nAlpha rule"
+          "<!-- rule: zeta -->\n\nZeta rule"
+          "Shared context"
+          "Codex context"
+        ];
       in
-        hm.config.home.file.".codex/AGENTS.md".text
+        (markdownInput hm ".codex/AGENTS.md").text
         == expected
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+        && (markdownInput devenv "AGENTS.md").text == expected
         && !(lib.hasInfix "---" expected)
     );
 
@@ -1954,8 +1956,8 @@ in {
         };
         empty = evalHm {ai.codex.enable = true;};
       in
-        hm.config.home.file.".codex/AGENTS.md".text
-        == "Shared context\n"
+        (markdownInput hm ".codex/AGENTS.md").text
+        == "Shared context"
         && !(empty.config.home.file ? ".codex/AGENTS.md")
     );
 
@@ -1993,11 +1995,11 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected = "<!-- rule: scoped -->\n\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule\n";
+        expected = "<!-- rule: scoped -->\n\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule";
       in
-        hm.config.home.file.".codex/AGENTS.md".text
+        (markdownInput hm ".codex/AGENTS.md").text
         == expected
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+        && (markdownInput devenv "AGENTS.md").text == expected
     );
 
     # A scoped rule that names the documents holding its text is listed, not
@@ -2030,24 +2032,22 @@ in {
         };
         hm = evalHm config;
         devenv = evalDevenv config;
-        expected =
-          builtins.concatStringsSep "\n\n" [
-            (
-              "## Path-scoped rules\n\n"
-              + "Before editing a path that matches an entry below, read every document listed\n"
-              + "for it. When several entries match, their guidance composes.\n\n"
-              + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
-              + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
-              + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)"
-            )
-            "<!-- rule: always -->\n\nAlways body"
-            "Shared context"
-          ]
-          + "\n";
+        expected = builtins.concatStringsSep "\n\n" [
+          (
+            "## Path-scoped rules\n\n"
+            + "Before editing a path that matches an entry below, read every document listed\n"
+            + "for it. When several entries match, their guidance composes.\n\n"
+            + "- **`alpha`**\n  - Match:\n    - `a/**`\n    - `lib/a.nix`\n"
+            + "  - Read:\n    - [`docs/a.md`](docs/a.md)\n    - [`docs/a-more.md`](docs/a-more.md)\n"
+            + "- **`beta`**\n  - Match:\n    - `b/**`\n  - Read:\n    - [`docs/b.md`](docs/b.md)\n"
+          )
+          "<!-- rule: always -->\n\nAlways body"
+          "Shared context"
+        ];
       in
-        hm.config.home.file.".codex/AGENTS.md".text
+        (markdownInput hm ".codex/AGENTS.md").text
         == expected
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected
+        && (markdownInput devenv "AGENTS.md").text == expected
         && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? alpha
         && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)
     );
@@ -2078,128 +2078,244 @@ in {
         && (settingsOf explicit).project_doc_max_bytes == 65536
     );
 
-    module-codex-size-guard-byte-boundaries = mkTest "codex-size-guard-byte-boundaries" (
-      let
-        evaluate = context: projectDocMaxBytes:
-          evalHm {
-            ai.codex = {
-              context.text = context;
-              enable = true;
-              inherit projectDocMaxBytes;
-            };
-          };
-        # The rendered file ends in one newline, so N bytes of context render
-        # to N + 1.
-        sized = size: lib.concatStrings (lib.replicate (size - 1) "x");
-        below = evaluate (sized 32767) 32768;
-        exact = evaluate (sized 32768) 32768;
-        above = evaluate (sized 32769) 32768;
-        diagnostic = evalHm {
-          ai = {
-            codex = {
-              enable = true;
-              projectDocMaxBytes = 1;
-              rules.named.text = "i";
-            };
-            rules.oversize.text = "r";
+    # Codex's limit is checked on the BUILT file, in the tree that delivers
+    # it. Home Manager keys it by `.codex/AGENTS.md`, so a replacement is
+    # measured as well as the generated file: the generated file is exactly
+    # the generated tree `mkTree` builds with that limit (and the evaluation's
+    # formatter, checks and guards). A replacement with no `format` is `raw`
+    # in the same tree. The build fails one byte past the limit. The arithmetic is
+    # `checks/markdown/markdown-byte-limit-scripts.nix`.
+    module-codex-agents-md-byte-limit = let
+      path = ".codex/AGENTS.md";
+      hint = "Trim or replace the final content, or raise ai.codex.projectDocMaxBytes.";
+      limit.${path} = {
+        bytes = 32768;
+        inherit hint;
+      };
+      generated = evalHm {
+        ai.codex = {
+          context.text = "CONTEXT";
+          enable = true;
+        };
+      };
+      replaced = size:
+        evalHm {
+          ai.codex = {
+            enable = true;
+            files.${path}.content.text = lib.concatStrings (lib.replicate (size - 1) "x") + "\n";
           };
         };
-        unicodeOver = evaluate "é" 1;
-        aboveAssertion = lib.findFirst (assertion: !assertion.assertion) null above.config.assertions;
-        diagnosticAssertion = lib.findFirst (assertion: !assertion.assertion) null diagnostic.config.assertions;
-        unicodeAssertion = lib.findFirst (assertion: !assertion.assertion) null unicodeOver.config.assertions;
-      in
-        builtins.all (assertion: assertion.assertion) below.config.assertions
-        && builtins.all (assertion: assertion.assertion) exact.config.assertions
-        && aboveAssertion != null
-        && lib.hasInfix "renders to 32769 bytes" aboveAssertion.message
-        && lib.hasInfix "projectDocMaxBytes (32768 bytes)" aboveAssertion.message
-        && diagnosticAssertion != null
-        && lib.hasInfix "replace the final inline content" diagnosticAssertion.message
-        && unicodeAssertion != null
-        && lib.hasInfix "renders to 3 bytes" unicodeAssertion.message
-        && lib.hasInfix "projectDocMaxBytes (1 bytes)" unicodeAssertion.message
-        && lib.hasInfix "Trim or replace" unicodeAssertion.message
-    );
+      treeFor = evaluated:
+        (aiBase.generated pkgs).mkTree {
+          name = "ai-hm-codex-generated";
+          files.${path} = markdownInput evaluated path // {type = evaluated.config.ai.codex.files.${path}.format;};
+          inherit (evaluated.config.ai.generated) check formatter guards;
+          maxBytes = limit;
+        };
+      deliversFrom = tree: evaluated: evaluated.config.home.file.${path}.source == "${tree}/${path}";
+      exact = replaced 32768;
+      above = replaced 32769;
+      failure = pkgs.testers.testBuildFailure (treeFor above);
+    in
+      assert lib.assertMsg (generated.config.ai.codex._maxBytes == limit && exact.config.ai.codex._maxBytes == limit)
+      "codex-agents-md-byte-limit: ai.codex._maxBytes is not the 32768-byte limit on ${path}";
+      assert lib.assertMsg (lib.all (evaluated: deliversFrom (treeFor evaluated) evaluated) [generated exact above])
+      "codex-agents-md-byte-limit: ${path} is not delivered from a tree carrying its limit";
+        pkgs.runCommand "module-test-codex-agents-md-byte-limit" {} ''
+          test -f ${treeFor exact}/${path}
+          grep -q -F ${lib.escapeShellArg "${path} renders to 32769 bytes, exceeding its limit (32768 bytes). ${hint}"} ${failure}/testBuildFailure.log
+          echo PASS > "$out"
+        '';
 
-    # The soft companion of the size guard: on devenv a RAISED limit lands in
-    # trust-gated project config, so a file past Codex's own 32 KiB is all an
-    # untrusted project reads, and it warns. Home Manager writes the limit to
-    # user config, which no trust gates, so it stays silent. Both backends
-    # keep the hard guard, matched by its own message.
-    module-codex-size-warning-past-default = mkTest "codex-size-warning-past-default" (
+    # On devenv a RAISED limit lands in trust-gated project config, so a file
+    # past Codex's own 32 KiB is all an untrusted project reads. Every shell
+    # entry runs the window notice on the project's AGENTS.md, which it
+    # measures whoever wrote it; a limit at the default runs nothing. Home
+    # Manager writes the limit to user config, which no trust gates, and has
+    # no shell entry. What the notice prints is
+    # `checks/markdown/markdown-byte-limit-scripts.nix`.
+    module-codex-window-notice = mkTest "codex-window-notice" (
       let
-        sized = size: lib.concatStrings (lib.replicate (size - 1) "x");
-        hm = size: projectDocMaxBytes:
-          evalHm {
-            ai.codex = {
-              context.text = sized size;
-              enable = true;
-              inherit projectDocMaxBytes;
-            };
-          };
-        devenv = size: projectDocMaxBytes:
+        expected = ["${lib.getExe (import ../../../lib/markdown/byte-limit.nix pkgs).windowNotice} \"$DEVENV_ROOT\"/${lib.escapeShellArgs ["AGENTS.md" "32768" "codex"]}"];
+        devenv = projectDocMaxBytes:
           evalDevenv {
             ai = {
               codex = {
                 enable = true;
                 inherit projectDocMaxBytes;
               };
-              context.text = sized size;
+              context.text = "CONTEXT";
             };
           };
-        sizeWarnings = evaluated: lib.filter (lib.hasInfix "in an untrusted project reads only the first") evaluated.config.warnings;
-        sizeFailures = evaluated:
-          lib.filter (assertion: !assertion.assertion && lib.hasInfix "renders to 40000 bytes, exceeding" assertion.message)
-          evaluated.config.assertions;
-        failed = evaluated: lib.filter (assertion: !assertion.assertion) evaluated.config.assertions;
-        # A store-backed replacement cannot be measured at evaluation.
-        unknown = evalDevenv {
+        hm = evalHm {
+          ai.codex = {
+            context.text = "CONTEXT";
+            enable = true;
+            projectDocMaxBytes = 131072;
+          };
+        };
+        # A store-backed replacement with no `format` is `raw`, as on Home
+        # Manager: it is in the shared generated tree, under the limit.
+        replaced = evalDevenv {
           ai.codex = {
             enable = true;
-            files."AGENTS.md".content.source = pkgs.writeText "big" (sized 40000);
+            files."AGENTS.md".content.source = pkgs.writeText "big" (lib.concatStrings (lib.replicate 40000 "x"));
             projectDocMaxBytes = 131072;
           };
         };
       in
-        lib.all (backend:
-          sizeWarnings (backend 32768 131072)
-          == []
-          && sizeWarnings (backend 40000 32768) == []
-          && sizeFailures (backend 40000 32768) != []
-          && failed (backend 40000 131072) == [])
-        [hm devenv]
-        && sizeWarnings (hm 40000 131072) == []
-        && sizeWarnings (devenv 40000 131072)
-        == ["AGENTS.md is 40000 bytes; codex in an untrusted project reads only the first 32768. Trust the project in codex, or shrink the always-loaded content."]
-        && sizeWarnings unknown == []
+        windowNoticeLines (devenv 32768)
+        == []
+        && windowNoticeLines (devenv 131072) == expected
+        && windowNoticeLines replaced == expected
+        && replaced.config.ai.internal._maxBytes."AGENTS.md".bytes == 131072
+        && fromGeneratedTree "AGENTS.md" (deliveredFiles replaced.config)."AGENTS.md"
+        && hm.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 131072
+        && hm.config.warnings == []
     );
 
-    module-codex-shared-size-guard-covers-kiro-only-content = mkTest "codex-shared-size-guard-covers-kiro-only-content" (
-      let
-        oversized = evalDevenv {
-          ai = {
-            codex = {
-              enable = true;
-              projectDocMaxBytes = 16;
-            };
-            kiro = {
-              enable = true;
-              rules.kiro-only.text = lib.concatStrings (lib.replicate 32 "x");
-            };
+    # `format = "raw"` delivers AGENTS.md as written on both backends. It is
+    # built into the generated tree, which measures it and neither formats nor
+    # checks it: the three spaces in the text survive, where the default
+    # formatter would collapse them to one. Past the limit the same entry
+    # still fails the build. The devenv entry reaches the shared AGENTS.md
+    # owner with its own format.
+    module-codex-raw-agents-md-is-measured-not-formatted = let
+      text = "RAW   REPLACEMENT\n";
+      raw.content.text = text;
+      raw.format = "raw";
+      hm = projectDocMaxBytes:
+        evalHm {
+          ai.codex = {
+            enable = true;
+            files.".codex/AGENTS.md" = raw;
+            inherit projectDocMaxBytes;
           };
         };
-        empty = evalDevenv {ai.codex.enable = true;};
-        failed =
-          lib.findFirst (assertion:
-            !assertion.assertion
-            && lib.hasInfix "AGENTS.md renders" assertion.message)
-          null
-          oversized.config.assertions;
+      devenv = projectDocMaxBytes:
+        evalDevenv {
+          ai.codex = {
+            enable = true;
+            files."AGENTS.md" = raw;
+            inherit projectDocMaxBytes;
+          };
+        };
+      # The tree the router must deliver each from: the text and processing
+      # options, under the evaluation's own limit.
+      cases = {
+        hm = evaluated: {
+          delivered = evaluated.config.home.file.".codex/AGENTS.md".source;
+          inherit (evaluated.config.ai.generated) check formatter guards;
+          maxBytes = evaluated.config.ai.codex._maxBytes;
+          name = "ai-hm-codex-generated";
+          path = ".codex/AGENTS.md";
+        };
+        devenv = evaluated: {
+          delivered = (deliveredFiles evaluated.config)."AGENTS.md".source;
+          inherit (evaluated.config.ai.generated) check formatter guards;
+          maxBytes = evaluated.config.ai.internal._maxBytes;
+          name = "ai-devenv-internal-generated";
+          path = "AGENTS.md";
+        };
+      };
+      expectedTree = case:
+        (aiBase.generated pkgs).mkTree {
+          inherit (case) maxBytes name;
+          inherit (case) check formatter guards;
+          files.${case.path} = {
+            inherit text;
+            type = "raw";
+          };
+        };
+      checked = backend: evaluated: let
+        case = cases.${backend} evaluated;
+        tree = expectedTree case;
       in
-        failed
-        != null
-        && !((deliveredFiles empty.config) ? "AGENTS.md")
+        assert lib.assertMsg (case.delivered == "${tree}/${case.path}")
+        "codex-raw-agents-md-is-measured-not-formatted: ${backend} ${case.path} is not delivered from the generated tree built from its text"; tree;
+      fits = {
+        devenv = checked "devenv" (devenv 32768);
+        hm = checked "hm" (hm 32768);
+      };
+      # 16 bytes: the 18-byte text is past it.
+      past = lib.mapAttrs (_backend: pkgs.testers.testBuildFailure) {
+        devenv = checked "devenv" (devenv 16);
+        hm = checked "hm" (hm 16);
+      };
+      expected = pkgs.writeText "raw-agents-md" text;
+    in
+      assert lib.assertMsg ((devenv 32768).config.ai.internal.files."AGENTS.md".format == "raw")
+      "codex-raw-agents-md-is-measured-not-formatted: the shared AGENTS.md owner did not take the entry's `raw` format";
+        pkgs.runCommand "module-test-codex-raw-agents-md-is-measured-not-formatted" {} ''
+          cmp -- ${fits.hm}/.codex/AGENTS.md ${expected}
+          cmp -- ${fits.devenv}/AGENTS.md ${expected}
+          grep -q -F ${lib.escapeShellArg ".codex/AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes)."} ${past.hm}/testBuildFailure.log
+          grep -q -F ${lib.escapeShellArg "AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes)."} ${past.devenv}/testBuildFailure.log
+          echo PASS > "$out"
+        '';
+
+    # The shared AGENTS.md carries the limit of every runtime that reads it,
+    # whoever supplies the content: here Codex's limit, and Kiro's rule alone.
+    # The internal tree is built with that limit and fails past it.
+    module-codex-shared-byte-limit-covers-kiro-only-content = let
+      hint = "Trim the contributing context or rules, replace the final file, or raise the runtime's document-size limit.";
+      limit."AGENTS.md" = {
+        bytes = 16;
+        inherit hint;
+      };
+      oversized = evalDevenv {
+        ai = {
+          codex = {
+            enable = true;
+            projectDocMaxBytes = 16;
+          };
+          kiro = {
+            enable = true;
+            rules.kiro-only.text = lib.concatStrings (lib.replicate 32 "x");
+          };
+        };
+      };
+      empty = evalDevenv {ai.codex.enable = true;};
+      tree = (aiBase.generated pkgs).mkTree {
+        name = "ai-devenv-internal-generated";
+        files."AGENTS.md" = markdownInput oversized "AGENTS.md" // {type = oversized.config.ai.internal.files."AGENTS.md".format;};
+        inherit (oversized.config.ai.generated) check formatter guards;
+        maxBytes = limit;
+      };
+      failure = pkgs.testers.testBuildFailure tree;
+    in
+      assert lib.assertMsg (oversized.config.ai.internal._maxBytes == limit)
+      "codex-shared-byte-limit-covers-kiro-only-content: ai.internal._maxBytes is not Codex's limit on AGENTS.md";
+      assert lib.assertMsg ((deliveredFiles oversized.config)."AGENTS.md".source == "${tree}/AGENTS.md")
+      "codex-shared-byte-limit-covers-kiro-only-content: AGENTS.md is not delivered from a tree carrying its limit";
+      assert lib.assertMsg (!((deliveredFiles empty.config) ? "AGENTS.md"))
+      "codex-shared-byte-limit-covers-kiro-only-content: a limit alone delivered an AGENTS.md";
+        pkgs.runCommand "module-test-codex-shared-byte-limit-covers-kiro-only-content" {} ''
+          grep -q -F ${lib.escapeShellArg "AGENTS.md renders to"} ${failure}/testBuildFailure.log
+          grep -q -F ${lib.escapeShellArg hint} ${failure}/testBuildFailure.log
+          echo PASS > "$out"
+        '';
+
+    # A body that writes AGENTS.md at activation has no bytes to measure when
+    # the tree is built, so its limit is not checked, and the router says so
+    # rather than dropping the limit silently. The inline control is quiet.
+    module-codex-run-byte-limit-warns = mkTest "codex-run-byte-limit-warns" (
+      let
+        withContent = content:
+          evalDevenv {
+            ai.codex = {
+              enable = true;
+              files."AGENTS.md" = {
+                inherit content;
+                format = "raw";
+              };
+            };
+          };
+        limitWarnings = evaluated: lib.filter (lib.hasInfix "-byte limit is not checked") evaluated.config.warnings;
+      in
+        limitWarnings (withContent {run = "printf probe";})
+        == [''ai.internal.files."AGENTS.md" is written at activation (`content.run`), so its 32768-byte limit is not checked.'']
+        && limitWarnings (withContent {text = "probe";}) == []
     );
 
     module-codex-rule-runtime-replaces-root = mkTest "codex-rule-runtime-replaces-root" (
@@ -2214,8 +2330,8 @@ in {
           };
         };
       in
-        lib.hasInfix "Codex" evaluated.config.home.file.".codex/AGENTS.md".text
-        && !(lib.hasInfix "Shared" evaluated.config.home.file.".codex/AGENTS.md".text)
+        lib.hasInfix "Codex" (markdownInput evaluated ".codex/AGENTS.md").text
+        && !(lib.hasInfix "Shared" (markdownInput evaluated ".codex/AGENTS.md").text)
     );
   };
 }

@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm mkTest ownPlan ownedDocument;
+  inherit (harness) deliveredFiles evalDevenv evalHm fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
   kimchiDocument = path: ownedDocument "kimchi" path;
   hmConfigDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/config.json" evaluated;
   hmHarnessDocument = evaluated: kimchiDocument "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated;
@@ -79,8 +79,10 @@
     (lib.head (lib.filter (target: target.codec == "dir" && target.path == dir)
         (ownPlan "kimchi" entry evaluated).targets))
     .units;
-  hmAgentUnits = agentUnits "kimchiAgents" ".config/kimchi/harness/agents";
-  devenvAgentUnits = agentUnits "ai:kimchi:agents" ".kimchi/agents";
+  hmAgentsDir = ".config/kimchi/harness/agents";
+  devenvAgentsDir = ".kimchi/agents";
+  hmAgentUnits = agentUnits "kimchiAgents" hmAgentsDir;
+  devenvAgentUnits = agentUnits "ai:kimchi:agents" devenvAgentsDir;
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
 
   checkModuleAssertions = evaluated: let
@@ -159,10 +161,10 @@ in {
         devenv = evalDevenv config;
         expected = "Shared context.\n\nKimchi context.";
       in
-        hm.config.home.file.".config/kimchi/harness/AGENTS.md".text
-        == expected
-        # The shared repository AGENTS.md ends in one newline.
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected + "\n"
+        fromGeneratedTree ".config/kimchi/harness/AGENTS.md" hm.config.home.file.".config/kimchi/harness/AGENTS.md"
+        && (markdownInput hm ".config/kimchi/harness/AGENTS.md").text == expected
+        && fromGeneratedTree "AGENTS.md" (deliveredFiles devenv.config)."AGENTS.md"
+        && (markdownInput devenv "AGENTS.md").text == expected
     );
     # ── Kimchi (mkRuntime factory participant) ──────────────────────────
     module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);
@@ -605,7 +607,7 @@ in {
         mentions = needle: lib.any (lib.hasInfix needle);
         hmHookPaths = lib.filter (lib.hasInfix "hooks") (builtins.attrNames hm.config.home.file);
       in
-        builtins.fromJSON devenv.config.files.".kimchi/hooks.json".text
+        builtins.fromJSON (builtins.readFile devenv.config.files.".kimchi/hooks.json".source)
         == {
           hooks = {
             PreToolUse = [
@@ -861,22 +863,28 @@ in {
     # WRITABLE real file in a real directory, never a store symlink: no
     # home.file or devenv files entry, a dir ledger, mode 0644. A portable
     # record renders without `name:` (the filename is the name); native
-    # Markdown lands verbatim. An empty declaration still emits the writer, so
-    # removing the last agent retracts it.
+    # Markdown is not translated, so it is the Markdown tree's input as
+    # written, and the tree's formatter and check then process it. An empty
+    # declaration still emits the writer, so removing the last agent
+    # retracts it.
     module-kimchi-agents = mkTest "kimchi-agents" (
       let
         hm = evalHm agentConfig;
         devenv = evalDevenv agentConfig;
         expected = {
-          "native.md" = {
-            mode = "0644";
-            text = nativeAgent;
-          };
-          "reviewer.md" = {
-            mode = "0644";
-            text = "---\ndescription: \"Reviews code\"\n---\n\nBODY\n";
-          };
+          "native.md" = nativeAgent;
+          "reviewer.md" = "---\ndescription: \"Reviews code\"\n---\n\nBODY\n";
         };
+        # Each agent is a writable copy of its file in the Markdown tree.
+        delivers = evaluated: dir: units:
+          lib.attrNames units
+          == lib.attrNames expected
+          && lib.all (name:
+            units.${name}.mode
+            == "0644"
+            && fromGeneratedTree "${dir}/${name}" {source = units.${name}.store;}
+            && (markdownInput evaluated "${dir}/${name}").text == expected.${name})
+          (lib.attrNames expected);
         emptyHm = evalHm {ai.kimchi.enable = true;};
         emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
         fromDir = evalDevenv {
@@ -897,14 +905,16 @@ in {
             filter = name: name == "agent-one.md";
           };
         };
-        deliveredAsSource = units:
-          lib.all (unit: toString (unit.store or "") == fixtureAgent && !(unit ? text))
-          [units."agent-one.md" units."store-string.md"];
+        deliveredAsSource = evaluated: dir:
+          lib.all (name: let
+            input = markdownInput evaluated "${dir}/${name}";
+          in
+            toString (input.source or "") == fixtureAgent && !(input ? text))
+          ["agent-one.md" "store-string.md"];
         underAgents = prefix: lib.filter (lib.hasPrefix prefix);
       in
-        hmAgentUnits hm
-        == expected
-        && devenvAgentUnits devenv == expected
+        delivers hm hmAgentsDir (hmAgentUnits hm)
+        && delivers devenv devenvAgentsDir (devenvAgentUnits devenv)
         && failedAssertions hm == []
         && failedAssertions devenv == []
         && hm.config.home.activation ? kimchiAgents
@@ -914,9 +924,9 @@ in {
         && underAgents ".kimchi/agents" (builtins.attrNames devenv.config.files) == []
         && hmAgentUnits emptyHm == {}
         && devenvAgentUnits emptyDevenv == {}
-        && (devenvAgentUnits fromDir)."agent-one.md".store == ../../claude-code/checks/fixtures/claude-agents/agent-one.md
-        && deliveredAsSource (hmAgentUnits (evalHm stringConfig))
-        && deliveredAsSource (devenvAgentUnits (evalDevenv stringConfig))
+        && (markdownInput fromDir "${devenvAgentsDir}/agent-one.md").source == ../../claude-code/checks/fixtures/claude-agents/agent-one.md
+        && deliveredAsSource (evalHm stringConfig) hmAgentsDir
+        && deliveredAsSource (evalDevenv stringConfig) devenvAgentsDir
     );
 
     # What has no Kimchi reading fails evaluation instead of landing: a
@@ -1002,7 +1012,7 @@ in {
           else ".kimchi/agents";
         declared = script backend (evaluate agentConfig);
         empty = script backend (evaluate {ai.kimchi.enable = true;});
-        expected = pkgs.writeText "kimchi-reviewer.md" (hmAgentUnits (evalHm agentConfig))."reviewer.md".text;
+        expected = pkgs.writeText "kimchi-reviewer.md" (markdownInput (evalHm agentConfig) "${hmAgentsDir}/reviewer.md").text;
       in ''
         export HOME="$TMPDIR/${backend}-home"
         export XDG_STATE_HOME="$TMPDIR/${backend}-state"

@@ -17,15 +17,15 @@ in rec {
         link = _ctx: node: "[${node.label or node.target}](${node.target})";
         include = _ctx: node: throw "Copilot transformer: include nodes not supported (path=${node.path}); inline the fragment instead";
       };
-    frontmatter = {paths ? null, ...}: let
+    frontmatterData = {paths ? null, ...}: let
       applyTo =
         if paths == null
         then ''"**"''
         else if builtins.isList paths
         then ''"${lib.concatStringsSep "," paths}"''
         else paths;
-    in
-      fragments.mkFrontmatter {inherit applyTo;} + "\n";
+    in {inherit applyTo;};
+    frontmatter = args: fragments.mkFrontmatter (copilotTransformer.frontmatterData args) + "\n";
     assemble = {
       frontmatter,
       body,

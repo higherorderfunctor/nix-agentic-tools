@@ -1794,12 +1794,14 @@ in
                       rules = permissionRules;
                     };
                   };
+                  format = lib.mkDefault "yaml";
                   executable = null;
                 };
               }
               (lib.mapAttrs' (name: value:
                 lib.nameValuePair "${cfg.configDir}/agents/${name}.json" {
                   content = lib.mkDefault (mkAgentEntry name value);
+                  format = lib.mkDefault "json";
                   executable = null;
                 })
               cfg.agents)
@@ -1817,6 +1819,7 @@ in
               # diagnostic before the final file map validates its paths.
               (lib.mapAttrs' (name: unit:
                 lib.nameValuePair "${hookTargetDir cfg}/${name}" {
+                  format = lib.mkDefault "json";
                   content = lib.mkDefault (
                     if unit ? store
                     then {source = unit.store;}

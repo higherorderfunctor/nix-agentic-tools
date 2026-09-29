@@ -47,6 +47,13 @@
     then {source = rendered;}
     else {text = rendered;};
 
+  frontmatterFields = includeName: name: value:
+    lib.optionalAttrs includeName {name = builtins.toJSON name;}
+    // {description = builtins.toJSON value.description;}
+    // lib.optionalAttrs ((value.tools or null) != null && value.tools != []) {
+      tools = lib.concatStringsSep ", " value.tools;
+    };
+
   renderMarkdown = {
     includeName,
     name,
@@ -54,10 +61,12 @@
   }:
     if !isSemantic value
     then value
-    else ''
+    else let
+      fields = frontmatterFields includeName name value;
+    in ''
       ---
-      ${lib.optionalString includeName "name: ${builtins.toJSON name}\n"}description: ${builtins.toJSON value.description}
-      ${lib.optionalString ((value.tools or null) != null && value.tools != []) "tools: ${lib.concatStringsSep ", " value.tools}\n"}---
+      ${lib.optionalString includeName "name: ${fields.name}\n"}description: ${fields.description}
+      ${lib.optionalString (fields ? tools) "tools: ${fields.tools}\n"}---
 
       ${value.instructions.text}
     '';
@@ -71,6 +80,11 @@
     };
 in {
   inherit fileContent isPathLike isSemantic mkSemanticAgentType renderCodex semanticAgentType;
+
+  frontmatterKeys = includeName: value:
+    if !isSemantic value
+    then []
+    else lib.attrNames (frontmatterFields includeName "" value);
 
   agentType = lib.types.either (lib.types.either lib.types.lines lib.types.path) semanticAgentType;
 

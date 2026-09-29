@@ -286,13 +286,19 @@ in
         # native `.agent.md` suffix. Other derivations may still contribute
         # files to the same directory — it is never taken over wholesale.
         (lib.mkIf (mergedAgents != {}) {
-          ai.copilot.files = lib.mapAttrs' (name: content:
+          ai.copilot.files = lib.mapAttrs' (name: content: let
+            keys = lib.ai.agent.frontmatterKeys false content;
+          in
             lib.nameValuePair "${nativeDir}/agents/${name}${
               if isHm
               then ".md"
               else ".agent.md"
             }" {
-              content = lib.mkDefault {text = lib.ai.agent.renderCopilot name content;};
+              content = lib.mkDefault {
+                text = lib.ai.agent.renderCopilot name content;
+                _frontmatterKeys = keys;
+              };
+              format = lib.mkDefault "markdown";
             })
           mergedAgents;
         })

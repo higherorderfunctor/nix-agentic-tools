@@ -243,11 +243,26 @@
   # Claude Markdown surfaces, one `.claude/<dir>/<name>.md` each. A path-like
   # value (path, store string, derivation) is linked as a `source`, anything
   # else is the file's text.
-  markdownFiles = dir:
-    lib.mapAttrs' (name: rendered:
+  markdownFiles = dir: values:
+    lib.mapAttrs' (name: value: let
+      keys =
+        if dir == "agents"
+        then agent.frontmatterKeys true value
+        else [];
+      rendered =
+        if dir == "agents"
+        then agent.renderClaude name value
+        else value;
+    in
       lib.nameValuePair ".claude/${dir}/${name}.md" {
-        content = lib.mkDefault ({enable = true;} // agent.fileContent rendered);
-      });
+        content = lib.mkDefault ({
+            enable = true;
+            _frontmatterKeys = keys;
+          }
+          // agent.fileContent rendered);
+        format = lib.mkDefault "markdown";
+      })
+    values;
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -839,7 +854,7 @@ in
           };
         }
         # Agents, commands and output styles: one Markdown link each.
-        {ai.claude.files = markdownFiles "agents" (lib.mapAttrs agent.renderClaude mergedAgents);}
+        {ai.claude.files = markdownFiles "agents" mergedAgents;}
         {ai.claude.files = markdownFiles "commands" cfg.commands;}
         {ai.claude.files = markdownFiles "output-styles" cfg.outputStyles;}
         {
