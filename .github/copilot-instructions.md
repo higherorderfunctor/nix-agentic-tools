@@ -33,7 +33,8 @@ into someone else's:
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | `home.activation` bodies                   | SCOPE IT — wrap the body in a subshell; entries concatenate, so a bare header persists into home-manager's own code |
 | `shellHook` / devenv `enterShell`          | DO NOT ADD — `eval`'d into the calling shell; `set -e` arms the user's interactive session                          |
-| stdenv phases, `runCommand` bodies         | DO NOT ADD — `setup.sh` already sets all four, and phases share one shell                                           |
+| stdenv phase bodies                        | REQUIRED in the first custom phase body — add the full header; later phases inherit it because phases share a shell |
+| `runCommand` bodies                        | REQUIRED inside the body — add the full header; `setup.sh` leaves `-u`, `-E`, and `-T` disabled                     |
 | devenv `tasks.<name>.exec`                 | REQUIRED — rendered as a standalone script                                                                          |
 | shell EMITTED by a heredoc                 | REQUIRED inside the emitted script                                                                                  |
 | standalone `*.sh`, CI `run:` blocks        | REQUIRED                                                                                                            |
@@ -41,6 +42,13 @@ into someone else's:
 | `writeShellScript` / `writeShellScriptBin` | REQUIRED — nixpkgs never lints these                                                                                |
 | heredocs carrying JSON, config or prose    | does not apply — not shell                                                                                          |
 | pre-commit / git-hook `entry` strings      | cannot be expressed — an argv, not a script; move the logic into a `writeShellApplication`                          |
+
+Probes of `runCommand`, `buildPhase`, and `installPhase` all start with
+`errexit`, `pipefail`, and `inherit_errexit` enabled, but with `errtrace`,
+`functrace`, and `nounset` disabled. Add the complete header shown above rather
+than only the three missing options. stdenv phases run in one shell, so a header
+in the first custom phase also governs later phases; that persistence is
+intentional, and later phases do not need another copy.
 
 `writeShellApplication` needs the header **split across two places**, because
 `bashOptions` renders `set -o <name>` lines only and `inherit_errexit` is a

@@ -2803,8 +2803,8 @@ in {
     # all of it (the ownership decision: this claims only what it wrote).
     #
     # `mkTest`'s eval-time assertion cannot express this, so it is a plain
-    # runCommand. No strict-mode header: stdenv's setup.sh already sets all
-    # four and phases share one shell (see the Bash standard's per-site table).
+    # runCommand. setup.sh leaves nounset, errtrace, and functrace disabled, so
+    # the body enables the full header required by the Bash standard.
     module-kiro-hooks-materialize-runtime = let
       mkHook = command:
         builtins.toJSON {
@@ -2849,7 +2849,8 @@ in {
         hmGens = map hmGen gens;
         dvGens = map dvGen gens;
       } ''
-        set -u
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         fail() { echo "FAIL: kiro-hooks-materialize-runtime: $1" >&2; exit 1; }
 
         run_backend() {
