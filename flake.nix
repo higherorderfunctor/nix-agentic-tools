@@ -114,12 +114,14 @@
     cacheHitParityTargets = repository.cacheHitParity;
 
     homeManagerModules.default = {
+      _module.args.rv = import ./lib/runtime-values {inherit lib;};
       imports =
         [./lib/ai/sharedOptions.nix]
         ++ repository.moduleImports "homeManager";
     };
 
     devenvModules.nix-agentic-tools = {
+      _module.args.rv = import ./lib/runtime-values {inherit lib;};
       imports =
         [./lib/ai/sharedOptions.nix]
         ++ repository.moduleImports "devenv";
@@ -155,6 +157,7 @@
       };
       # Shared AI primitives compose with the namespaces exported by owners.
       baseLib = {
+        runtimeValues = import ./lib/runtime-values {inherit lib;};
         ai =
           aiBase
           // {
