@@ -280,6 +280,7 @@ in {
         # address host is a Host-HEADER matcher, not a bind — so such a
         # test goes green on the insecure config. Measured.
         lib.hasInfix "bind 127.0.0.1" cf
+        && lib.hasInfix "persist_config off" cf
         && lib.hasInfix "{$MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN}" cf
         && lib.hasInfix "Bearer {$MCP_PROXY_EXAMPLE_X_API_KEY}" cf
         && lib.hasInfix "{$MCP_PROXY_EXAMPLE_ORIGIN}" cf
@@ -314,6 +315,56 @@ in {
         # The escape regression: an unexpanded Nix interpolation token.
         && !(lib.hasInfix "{\${" cf)
     );
+
+    # `admin off` does not disable Caddy's config autosave. Exercise the
+    # packaged binary against isolated dummy XDG homes: the historical variant
+    # must write the adapted config (including the dummy credential), while the
+    # generated Caddyfile must not create autosave.json at all. The vulnerable
+    # control proves this check fails for the pre-fix rendering.
+    module-mcp-proxy-caddy-autosave-disabled = let
+      fixedCaddyfile = mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer);
+      vulnerableCaddyfile = pkgs.writeText "mcp-proxy-example-vulnerable-Caddyfile" (
+        lib.replaceStrings ["persist_config off"] [""] (builtins.readFile fixedCaddyfile)
+      );
+    in
+      pkgs.runCommand "module-test-mcp-proxy-caddy-autosave-disabled" {
+        nativeBuildInputs = [pkgs.caddy pkgs.coreutils pkgs.jq];
+      } ''
+        caddy fmt --diff ${fixedCaddyfile}
+
+        run_caddy() {
+          local config="$1"
+          local xdg_root="$2"
+          mkdir -p "$xdg_root/config" "$xdg_root/data"
+          set +e
+          env \
+            MCP_PROXY_EXAMPLE_ORIGIN=https://example.invalid \
+            MCP_PROXY_EXAMPLE_PATH=/mcp \
+            MCP_PROXY_EXAMPLE_X_API_KEY=DUMMY-CREDENTIAL-autosave-check \
+            MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN=DUMMY-CREDENTIAL-service-check \
+            XDG_CONFIG_HOME="$xdg_root/config" \
+            XDG_DATA_HOME="$xdg_root/data" \
+            timeout 2 caddy run --config "$config" --adapter caddyfile \
+              >"$xdg_root/caddy.log" 2>&1
+          local status=$?
+          set -e
+          test "$status" -eq 124
+        }
+
+        run_caddy ${vulnerableCaddyfile} "$TMPDIR/vulnerable"
+        vulnerable_autosave="$TMPDIR/vulnerable/config/caddy/autosave.json"
+        test -f "$vulnerable_autosave"
+        jq -e \
+          '.. | strings | select(contains("DUMMY-CREDENTIAL-autosave-check"))' \
+          "$vulnerable_autosave" >/dev/null
+        echo "vulnerable variant: autosave PRESENT with dummy credential"
+
+        run_caddy ${fixedCaddyfile} "$TMPDIR/fixed"
+        test ! -e "$TMPDIR/fixed/config/caddy/autosave.json"
+        echo "fixed rendering: autosave ABSENT"
+
+        touch "$out"
+      '';
 
     # Caddy's reverse_proxy ERROR logs embed the whole request header map,
     # and its built-in `log_credentials` covers only Authorization/Cookie —
@@ -448,9 +499,30 @@ in {
         svc.SyslogIdentifier == "mcp-proxy-jira"
     );
 
+    module-mcp-proxy-unit-isolates-caddy-state = mkTest "mcp-proxy-unit-isolates-caddy-state" (
+      let
+        result = evalHm {
+          ai.kiro = {
+            enable = true;
+            mcpServers.jira = proxySampleServer;
+          };
+        };
+        svc = result.config.systemd.user.services.mcp-proxy-jira.Service;
+      in
+        svc.RuntimeDirectory
+        == "mcp-proxy-jira"
+        && svc.RuntimeDirectoryMode == "0700"
+        && svc.Environment
+        == [
+          "XDG_CONFIG_HOME=%t/mcp-proxy-jira/config"
+          "XDG_DATA_HOME=%t/mcp-proxy-jira/data"
+        ]
+    );
+
     # Secrets must be read at RUNTIME from their files and never appear in
-    # argv — /proc/<pid>/cmdline is world-readable, /proc/<pid>/environ is
-    # not. Also pins the absolute-coreutils-path rule and fail-closed.
+    # argv — /proc/<pid>/cmdline is world-readable. The environment is still
+    # readable by same-uid processes, so this is not a process-isolation
+    # boundary. Also pins the absolute-coreutils-path rule and fail-closed.
     module-mcp-proxy-start-script-reads-secrets-at-runtime = mkTest "mcp-proxy-start-script-reads-secrets-at-runtime" (
       let
         s = builtins.readFile (mcpProxyLib.startScriptFor (mcpProxyLib.specFor "example" proxySampleServer));

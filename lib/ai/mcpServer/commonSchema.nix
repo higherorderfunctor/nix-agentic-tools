@@ -282,10 +282,11 @@ in {
                 upstream credential to that whole network. Anyone who can
                 reach the port can make authenticated requests.
               - Even on loopback it is reachable by ANY LOCAL USER, not
-                just by you. On a multi-user machine that is a real
-                boundary: local users cannot read the secret (it is only
-                in the daemon's 0400 environ) but they CAN use it through
-                this port.
+                just by you. The value is in the daemon's environment,
+                which same-uid processes can read, and any local user who
+                can reach the port can use the credential indirectly.
+                Caddy's autosave is disabled, so it no longer persists the
+                value in autosave.json.
             '';
           };
           port = lib.mkOption {
