@@ -33,74 +33,53 @@
   pkgs,
   cfg,
 }: let
-  credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
-
-  # Key partitioning + env-var mapping live in ONE place, shared with
-  # ../modules/options.nix, which declares the options these exports
-  # render. `secretKeys` is already deduplicated and deterministically
-  # ordered there, so the generated script is stable.
+  evaluated = lib.evalModules {modules = [(import ../modules/options.nix {inherit lib;}) {config.glab = cfg;}];};
+  validated = builtins.deepSeq (builtins.removeAttrs evaluated.config.glab ["package"]) evaluated.config.glab;
+  rv = import ../../../lib/runtime-values {inherit lib;};
   glabSchema = import ./schema.nix {inherit lib;};
-  inherit (glabSchema) envVarOf secretKeys;
-
-  # A synchronized token must be read back through glab's keyring-aware config
-  # path. Exporting GITLAB_TOKEN here would take precedence over that stored
-  # credential and keep exposing it to every glab process, defeating the mode.
-  invocationSecretKeys =
-    if cfg.keyringSync.enable or false
-    then builtins.filter (name: name != "token") secretKeys
-    else secretKeys;
-
-  secretExports =
-    lib.concatStringsSep "\n"
-    (builtins.filter (s: s != "")
-      (map (n: credentialsLib.mkSecretExport pkgs (envVarOf n) (cfg.${n} or null)) invocationSecretKeys));
-
-  # Non-secret settings: plain exports, no store-visibility concern.
-  # Booleans become "true"/"false", which is what glab's own bool parser
-  # accepts alongside 1/0.
-  renderValue = v:
-    if builtins.isBool v
+  inherit (glabSchema) envVarOf tokenEnvVars topLevelKeys;
+  resolvedVariable = name: let
+    canonical = lib.toLower name;
+  in
+    if builtins.hasAttr canonical glabSchema.byName
+    then envVarOf canonical
+    else lib.toUpper name;
+  emit = source: name: value: let
+    variable = resolvedVariable name;
+  in
+    if validated.keyringSync.enable && value != null && builtins.elem variable tokenEnvVars
     then
-      (
-        if v
-        then "true"
-        else "false"
-      )
-    else toString v;
-
-  settingExports =
-    lib.concatStringsSep "\n"
-    (lib.mapAttrsToList (name: value: ''
-      ${envVarOf name}=${lib.escapeShellArg (renderValue value)}
-      export ${envVarOf name}'')
-    (lib.filterAttrs (_: v: v != null) cfg.settings));
-
-  # extraSettings uses the uppercase fallback, matching what glab does
-  # for any key with no explicit EnvVars override.
-  extraExports =
-    lib.concatStringsSep "\n"
-    (lib.mapAttrsToList (name: value: ''
-      ${lib.toUpper name}=${lib.escapeShellArg value}
-      export ${lib.toUpper name}'')
-    cfg.extraSettings);
-
-  exports =
-    lib.concatStringsSep "\n"
-    (builtins.filter (s: s != "") [secretExports settingExports extraExports]);
-
-  # Shell-QUOTED, so nothing in the value expands. An earlier revision
-  # interpolated it bare so the devenv facet could pass
-  # `$DEVENV_STATE/glab-cli`; that turned out to be unnecessary —
-  # `devenv.state` is available at eval time, so the facet passes a real
-  # path — and it meant a `$(…)` in the value would run on every glab
-  # invocation. Both facets now build the path in Nix, where the values
-  # are known anyway, which is also why `~` no longer needs a caveat.
-  configDirExport =
-    if cfg.configDir == null
-    then ""
-    else ''
-      GLAB_CONFIG_DIR=${lib.escapeShellArg cfg.configDir}
-      export GLAB_CONFIG_DIR'';
+      if source == "topLevel" && name == "token" && variable == "GITLAB_TOKEN"
+      then ""
+      else throw "glab: ${source}.${name} resolves to ${variable}; keyringSync requires token credentials through glab.token only"
+    else
+      rv.export {
+        inherit pkgs value;
+        output =
+          if builtins.elem variable ["GITLAB_HOST" "GLAB_CONFIG_DIR"]
+          then "argv"
+          else "env";
+        inherit variable;
+        path = ["glab" name];
+        secret =
+          rv.classify {
+            path = [name];
+            hints = glabSchema.byName.${name} or {};
+          }
+          == "secret";
+      };
+  exports = lib.concatStringsSep "\n" (
+    map (name: emit "topLevel" name validated.${name}) topLevelKeys
+    ++ lib.mapAttrsToList (emit "settings") validated.settings
+    ++ lib.mapAttrsToList (emit "extraSettings") validated.extraSettings
+  );
+  configDirExport = rv.export {
+    inherit pkgs;
+    variable = "GLAB_CONFIG_DIR";
+    output = "argv";
+    value = validated.configDir;
+    path = ["glab" "configDir"];
+  };
 
   # ── Preflight + hosts: seeding ───────────────────────────────────
   # `glab auth status` is the one command that does NOT read the resolved
@@ -151,7 +130,7 @@
 
       if [ ! -d "$dir" ]; then
         ${pkgs.coreutils}/bin/mkdir -p -m 0700 "$dir" || {
-          echo "glab: cannot create config directory $dir" >&2
+          echo "glab: cannot create configured directory" >&2
           return 1
         }
       fi
@@ -160,7 +139,7 @@
       # only `-w` that case slips through and fails later on the file
       # operation, with a message further from the cause.
       if [ ! -w "$dir" ] || [ ! -x "$dir" ]; then
-        echo "glab: config directory $dir is not writable and searchable (need w+x)" >&2
+        echo "glab: configured directory is not writable and searchable (need w+x)" >&2
         return 1
       fi
 
@@ -180,7 +159,7 @@
           # non-fatal: the caller may have meant to run a command that does
           # not touch the config at all.
           ${pkgs.coreutils}/bin/chmod 600 "$configFile" \
-            || echo "glab: could not repair permissions on $configFile (mode $mode); glab requires 600 and will refuse to read it" >&2
+            || echo "glab: could not repair permissions on configured file; glab requires 600 and will refuse to read it" >&2
         fi
       fi
 
@@ -238,9 +217,9 @@
       # gitlab.com and no token — with nothing to connect the two. It
       # repeats on every invocation because the entry stays absent, which
       # is the point: the condition is live, not historical.
-      "${lib.getExe cfg.package}" config set --host "$host" api_protocol "$proto" \
+      "${lib.getExe validated.package}" config set --host "$host" api_protocol "$proto" \
         >/dev/null 2>&1 \
-        || echo "glab: could not seed the hosts: entry for $host in $configFile; \`glab auth status\` will report gitlab.com and no token until this succeeds (other commands are unaffected)" >&2
+        || echo "glab: could not seed the hosts: entry for the configured host; \`glab auth status\` will report gitlab.com and no token until this succeeds (other commands are unaffected)" >&2
     }
 
     glab_preflight'';
@@ -251,14 +230,14 @@
 
     ${lib.concatStringsSep "\n\n" (builtins.filter (s: s != "") [configDirExport exports preflight])}
 
-    exec "${lib.getExe cfg.package}" "$@"
+    exec "${lib.getExe validated.package}" "$@"
   '';
 
   wrapper = pkgs.writeShellScript "glab-wrapper" wrapperText;
 in
   pkgs.symlinkJoin {
-    name = "glab-wrapped-${cfg.package.version}";
-    paths = [cfg.package];
+    name = "glab-wrapped-${validated.package.version}";
+    paths = [validated.package];
 
     # Replace only bin/glab. Everything else in the join — man pages,
     # bash/fish/zsh completions — is upstream's, untouched.
@@ -273,9 +252,9 @@ in
     passthru = {inherit wrapperText;};
 
     meta =
-      cfg.package.meta
+      validated.package.meta
       // {
-        description = "${cfg.package.meta.description or "GitLab CLI"} (wrapped with declarative configuration)";
+        description = "${validated.package.meta.description or "GitLab CLI"} (wrapped with declarative configuration)";
         mainProgram = "glab";
       };
   }

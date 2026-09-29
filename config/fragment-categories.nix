@@ -434,6 +434,10 @@ _: {
     # actually deciding something about activation: the direnv entry point,
     # the devenv input set it resolves, and the module whose only remaining
     # consumer is direnv's watch list.
+    runtime-values = {
+      scopes = ["lib/runtime-values/**"];
+      sources = ["architecture"];
+    };
     shell-activation = {
       scopes = [
         ".envrc"
