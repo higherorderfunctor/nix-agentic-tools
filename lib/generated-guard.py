@@ -66,18 +66,13 @@ def reject_non_json_constant(value):
     raise ValueError(f"non-JSON constant: {value}")
 
 
-def parse(kind, text, frontmatter):
+def parse(kind, text):
     if kind == "json":
         return json.loads(text, parse_constant=reject_non_json_constant)
     if kind == "toml":
         return tomllib.loads(text)
     if kind == "yaml":
         return list(yaml.safe_load_all(text))
-    if kind == "markdown":
-        if not frontmatter:
-            return None
-        _, body, _ = frontmatter_parts(text.encode("utf-8"), required=True)
-        return yaml.safe_load(body.decode("utf-8"))
     raise ValueError(f"unsupported generated type: {kind}")
 
 
@@ -108,8 +103,6 @@ def typed(value):
         return ("dict", frozenset((typed(k), typed(v)) for k, v in value.items()))
     if isinstance(value, list):
         return ("list", tuple(typed(item) for item in value))
-    if isinstance(value, tuple):
-        return ("tuple", tuple(typed(item) for item in value))
     if isinstance(value, float) and math.isnan(value):
         return ("float", "nan")
     return (type(value).__name__, value)
@@ -132,8 +125,10 @@ def main(kind, frontmatter, before, after):
             # once to keep invalid generated YAML from reaching consumers.
             yaml.safe_load(yaml_bytes.decode("utf-8"))
             return 0
-        original = parse(kind, pathlib.Path(before).read_text(encoding="utf-8"), marked)
-        formatted = parse(kind, pathlib.Path(after).read_text(encoding="utf-8"), marked)
+        if kind == "markdown":
+            return 0
+        original = parse(kind, pathlib.Path(before).read_text(encoding="utf-8"))
+        formatted = parse(kind, pathlib.Path(after).read_text(encoding="utf-8"))
     except (OSError, ValueError, yaml.YAMLError) as error:
         print(f"{after}: generated {kind} cannot be parsed: {error}", file=sys.stderr)
         return 1

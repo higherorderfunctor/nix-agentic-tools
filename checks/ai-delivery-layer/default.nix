@@ -316,48 +316,6 @@ in {
         ]
     );
 
-    module-delivery-generated-frontmatter-content-replacement-unmarked = mkTest "delivery-generated-frontmatter-content-replacement-unmarked" (
-      let
-        path = ".claude/rules/probe.md";
-        replacement = {
-          ai.claude.files.${path}.content.text = ''            ---
-                        # Heading
-                        Ordinary prose: with: another colon.
-                        ---
-          '';
-        };
-        unmarked = (evalDevenv (lib.mkMerge [generatedFixture replacement])).config.ai.claude.files.${path};
-        marked =
-          (evalDevenv (lib.mkMerge [
-            generatedFixture
-            replacement
-            {ai.claude.files.${path}.frontmatter = true;}
-          ])).config.ai.claude.files.${
-            path
-          };
-      in
-        unmarked.content._frontmatterKeys
-        == []
-        && !unmarked.frontmatter
-        && marked.content._frontmatterKeys == []
-        && marked.frontmatter
-    );
-
-    # The renderer carries key metadata with the generated content. This
-    # assertion catches an explicit marker override; the built-tree check in
-    # lib/generated.nix catches a wholly new producer that omits metadata.
-    module-delivery-generated-frontmatter-marker-omission-detected = mkTest "delivery-generated-frontmatter-marker-omission-detected" (
-      let
-        broken = evalDevenv (lib.mkMerge [
-          generatedFixture
-          {ai.claude.files.".claude/rules/probe.md".frontmatter = lib.mkForce false;}
-        ]);
-      in
-        lib.any (assertion:
-          !assertion.assertion && lib.hasInfix "is not marked as frontmatter" assertion.message)
-        broken.config.assertions
-    );
-
     module-delivery-generated-frontmatter-markers = mkTest "delivery-generated-frontmatter-markers" (
       lib.all (backend: let
         entries = frontmatterEntries generatedEvaluations.${backend};

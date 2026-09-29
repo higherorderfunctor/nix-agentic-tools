@@ -13,43 +13,19 @@ reflows every paragraph to 80 columns on format. **Do not hand-wrap prose** —
 the line breaks you author are discarded, and hand-wrapping is what created the
 defect below.
 
-Generated `ai.*` Markdown is formatted where it is built: one store tree per
-delivery-router invocation holds static Markdown alongside eligible JSON, TOML
-and YAML. `ai.generated.formatter.markdown` defaults to prettier in the same
-prose style; this repository uses `lib.ai.treefmtFormatter` with `treefmt.nix`
-for all four types. A committed projection such as AGENTS.md is therefore
-already what `nix fmt` produces, and `treefmt.nix` excludes none of them.
-`lib.ai.treefmtFormatter` accepts any treefmt-nix `evalModule` config, including
-devenv's `config.treefmt.config`; it reads only `.package` and
-`.build.configFile`. The formatter option covers only trees generated from
-`ai.*` inputs. Repository docs and wiki pages need their own treefmt run.
-`ai.generated.guards.tableCells` runs the table-cell check below independently
-of any user-defined `ai.generated.check.markdown`. Generated rules, semantic
-agents, and packaged skills get frontmatter and its marker from
-`lib/frontmatter.nix`. The builder removes marked frontmatter before running a
-formatter, restores the exact generator bytes afterward, and `parseCompare`
-checks those installed bytes, including the opening and closing fences (`---` or
-`...`). For JSON, TOML and YAML files it compares parsed values. The builder
-separately checks unmarked Markdown in its input and output trees: an opening
-fence, closing fence, and YAML mapping indicate a missed marker. Thematic breaks
-with non-mapping content remain ordinary Markdown. Raw skill directories are
-outside the generated tree; raw steering keeps its own bytes.
+Generated `ai.*` Markdown is formatted in its store tree alongside static JSON,
+TOML and YAML. The default formatter shares this repository's prose style;
+`lib.ai.treefmtFormatter` accepts a treefmt-nix `evalModule` config, including
+devenv's `config.treefmt.config`. Authored docs and wiki pages need their own
+treefmt run. `tableCells` runs independently of user checks. The builder formats
+only marked Markdown bodies, restores generator-owned frontmatter bytes, and
+compares the installed prefix under `parseCompare`. It also rejects unmarked
+YAML mapping frontmatter. Raw skill sources and steering retain their own bytes.
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-09-29 — generated `ai.*` Markdown is formatted and
-> guarded in its store tree (`ai.generated`), with generator-owned frontmatter
-> bytes and a built-tree marker cross-check. The prose style is defined once in
-> `lib/generated-style.nix`. The pipe-in-a-table-cell defect is gated by
-> `markdown-table-cells` (rumdl primary, markdownlint backup; same MD056 rule
-> number, disjoint coverage — do not deduplicate them), defined once in
-> `lib/markdown/table-cells.nix`. Corrects an earlier draft of this section that
-> blamed hand-padding, required every row to agree on cell count, and shipped a
-> hand-check awk snippet; the real failure modes are version-dependent formatter
-> behavior and `prettier-ignore` hiding the defect outright.
->
-> Full lineage:
-> `git show 4705317b:dev/fragments/markdown-formatting/markdown-formatting.md`.
+> **Last verified:** 2026-09-29 — generated Markdown formatting and guards
+> preserve generator-owned frontmatter; the table check pairs two MD056 tools.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the

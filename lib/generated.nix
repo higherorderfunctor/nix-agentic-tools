@@ -118,7 +118,7 @@ in rec {
         ${markedFrontmatter "attach"}
         runHook postBuild
       '';
-      # R8-01: copy only declared paths; formatter-created caches stay in work/.
+      # Copy only declared paths; formatter-created state stays in work/.
       installPhase = ''
         runHook preInstall
         ${pkgs.coreutils}/bin/mkdir -p "$out"
