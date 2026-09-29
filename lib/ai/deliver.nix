@@ -130,7 +130,6 @@ in
             inherit ledger;
             inherit (declaration) codec path;
           }
-          // lib.optionalAttrs (declaration.lock != null) {inherit (declaration) lock;}
           // {
             units =
               if declaration.codec == "dir"
@@ -148,9 +147,7 @@ in
               in
                 if (entry.rendered.run or null) != null
                 then unitContent entry
-                else
-                  {text = builtins.toJSON entry.content.value;}
-                  // lib.optionalAttrs (entry.mode != null) {inherit (entry) mode;};
+                else {text = builtins.toJSON entry.content.value;};
           }
       )
       writer.ledgers;
@@ -208,7 +205,7 @@ in
                 (lib.filter (entry: entry.method == "shared" && entry.content.value != null) (claimsOf name)));
             entryNames = entryNamesFor name writer;
             hasFiles = (config.files or {}) != {};
-            python = formats.pythonFor writer.ledgers;
+            python = pkgs.python3;
             targets = targetsFor name writer;
           }
       )
@@ -389,6 +386,11 @@ in
           Format `${entry.format}` names no container leaves can be owned in,
           so this file is whole-file or nothing.
         '';
+      })
+      owningEntries
+      ++ map (entry: {
+        assertion = entry.method != "shared" || entry.mode == null;
+        message = ''ai.${runtime}.files."${entry.path}" is a shared document and cannot state a mode.'';
       })
       owningEntries
       # A `dir` ledger addresses its units by BASENAME, so the container has to

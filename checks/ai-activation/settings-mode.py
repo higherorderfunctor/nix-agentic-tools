@@ -111,15 +111,6 @@ def existing(parent):
         fail("existing", f"merge lost the runtime value or the declared value: {home.read()}")
 
 
-def discrimination(parent):
-    """3. If the mode knob were inert, cases 1 and 2 would pass no matter what
-    the writer did, so this proves it is live and that the assertion can tell
-    600 from 644."""
-    home = Home(parent, "explicit")
-    home.own({"mode": "0644", "text": json.dumps(DECLARED)})
-    assert_mode(home.document, 0o644, "explicit mode must be honoured")
-
-
 def load_own():
     """own.py as a module, so a case can interpose on the calls it makes."""
     spec = importlib.util.spec_from_file_location("own", TOOLS["own"])
@@ -137,8 +128,7 @@ def runtime_write(document, value):
     """A runtime's own write: a sibling temporary renamed over the document.
 
     It keeps the timestamps it replaces, so an mtime-based identity cannot see
-    it, and it takes none of own.py's locks, as neither Claude Code nor Kimchi
-    does.
+    it, and it takes none of own.py's locks, as Claude Code does not.
     """
     handle, sibling = tempfile.mkstemp(dir=document.parent, prefix=f"{document.name}.writer.")
     with os.fdopen(handle, "w") as stream:
@@ -371,7 +361,7 @@ def guarded(parent):
 
 def main():
     with tempfile.TemporaryDirectory() as parent:
-        for case in (created, existing, discrimination):
+        for case in (created, existing):
             case(parent)
         for repeated in (False, True):
             race(parent, repeated)
