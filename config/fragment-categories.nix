@@ -121,6 +121,11 @@ _: {
         # The runtime registry that file and sharedOptions.nix share.
         "lib/ai/runtimes.nix"
         "lib/ai/sharedOptions.nix"
+        # The store tree the router delivers generated static files from.
+        "lib/generated.nix"
+        "lib/generated-guard.py"
+        "lib/generated-style.nix"
+        "lib/markdown/**"
         "lib/testing/module-harness.nix"
         "packages/*/checks/module-eval.nix"
         # The five AI CLI factories, listed explicitly. `packages/*/lib/mk*.nix`
@@ -268,10 +273,15 @@ _: {
         "checks/markdown/doubled-words.nix"
         "checks/markdown/doubled-words.py"
         "checks/markdown/fixtures/doubled-words/**"
+        "checks/markdown/generated-files.nix"
         "checks/markdown/markdown-scan.nix"
         "checks/markdown/markdown-scanners.nix"
         "checks/markdown/split-code-spans.nix"
         "checks/markdown/split-code-spans.py"
+        "lib/generated.nix"
+        "lib/generated-guard.py"
+        "lib/generated-style.nix"
+        "lib/markdown/**"
         "treefmt.nix"
       ];
       sources = ["markdown-formatting"];
@@ -411,6 +421,7 @@ _: {
         "lib/ai/transformers/**"
         "lib/fragments-registry.nix"
         "lib/fragments.nix"
+        "lib/generated.nix"
         "lib/update.nix"
         "packages/*/registry.nix"
       ];

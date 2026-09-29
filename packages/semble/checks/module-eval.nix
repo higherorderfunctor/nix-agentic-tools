@@ -6,7 +6,10 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs deliveredFiles evalDevenv evalHm hmLib mkTest mkWrapperGrepTest;
+  inherit (harness) aiStubs deliveredFiles evalDevenv evalHm fromGeneratedTree hmLib markdownInput mkTest mkWrapperGrepTest;
+  # The text a Markdown file goes into its runtime's Markdown tree as, for a
+  # check that holds the evaluated `config` rather than the module.
+  markdownText = config: path: (markdownInput {inherit config;} path).text;
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
   inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 in {
@@ -207,7 +210,7 @@ in {
           }).config;
         emitted =
           builtins.fromJSON
-          cfg.home.file.".kiro/agents/semble-search.json".text;
+          (builtins.readFile cfg.home.file.".kiro/agents/semble-search.json".source);
       in
         emitted.name
         == "semble-search"
@@ -719,9 +722,10 @@ in {
         && !(hmOff.home.activation ? sembleCacheGuard)
         && !(lib.hasInfix "semble-cache-guard" devenvOff.enterShell)
         && lib.hasInfix "semble-cache-guard" devenvOn.enterShell
-        && hmOff.home.file.".codex/AGENTS.md".text == hmOn.home.file.".codex/AGENTS.md".text
-        && (deliveredFiles devenvOff)."AGENTS.md".text == (deliveredFiles devenvOn)."AGENTS.md".text
-        && lib.hasInfix "Use `semble search`" (deliveredFiles devenvOff)."AGENTS.md".text
+        && markdownText hmOff ".codex/AGENTS.md" == markdownText hmOn ".codex/AGENTS.md"
+        && markdownText devenvOff "AGENTS.md" == markdownText devenvOn "AGENTS.md"
+        && fromGeneratedTree "AGENTS.md" (deliveredFiles devenvOff)."AGENTS.md"
+        && lib.hasInfix "Use `semble search`" (markdownText devenvOff "AGENTS.md")
     );
 
     module-semble-hm-cache-wrapper = let
@@ -929,7 +933,7 @@ in {
         isolatedAgent = isolated.ai.kiro.agents.semble-search;
         emitted =
           builtins.fromJSON
-          (builtins.unsafeDiscardStringContext isolated.home.file.".kiro/agents/semble-search.json".text);
+          (builtins.unsafeDiscardStringContext (builtins.readFile isolated.home.file.".kiro/agents/semble-search.json".source));
       in
         builtins.attrNames rootVisible.ai.kiro.mcpServers
         == ["semble"]
@@ -969,7 +973,7 @@ in {
           };
         };
       };
-      agentFile = pkgs.writeText "semble-search.json" evaluated.config.home.file.".kiro/agents/semble-search.json".text;
+      agentFile = evaluated.config.home.file.".kiro/agents/semble-search.json".source;
       controlFile = pkgs.writeText "control-search.json" (builtins.toJSON {
         name = "control-search";
         description = "Negative control without an MCP server.";
@@ -1127,16 +1131,19 @@ in {
         hmKiroSteering = kiroSteeringContent (evalHm nativeConfig);
         devenvKiroSteering = kiroSteeringContent (evalDevenv nativeConfig);
         hmKiroInstruction = (hmKiroSteering."semble.md" or {}).text or "";
-        hmClaudeRule = (hm.home.file.".claude/rules/semble.md" or {}).text or "";
+        hmClaudeRule = markdownText hm ".claude/rules/semble.md";
       in
-        lib.hasInfix "Use `semble search`" hmClaudeRule
-        && lib.hasInfix "Use `semble search`" (hm.home.file.".codex/AGENTS.md".text or "")
+        fromGeneratedTree ".claude/rules/semble.md" hm.home.file.".claude/rules/semble.md"
+        && lib.hasInfix "Use `semble search`" hmClaudeRule
+        && fromGeneratedTree ".codex/AGENTS.md" hm.home.file.".codex/AGENTS.md"
+        && lib.hasInfix "Use `semble search`" (markdownText hm ".codex/AGENTS.md")
         && hmKiroSteering ? "semble.md"
         && !(hmKiroSteering ? "instructions.md")
         && lib.hasInfix "name: semble" hmKiroInstruction
         && lib.hasInfix "inclusion: always" hmKiroInstruction
         && !(devenvKiroSteering ? "semble.md")
-        && lib.hasInfix "Use `semble search`" (deliveredFiles devenv)."AGENTS.md".text
+        && fromGeneratedTree "AGENTS.md" (deliveredFiles devenv)."AGENTS.md"
+        && lib.hasInfix "Use `semble search`" (markdownText devenv "AGENTS.md")
     );
 
     module-semble-hm-devenv-option-parity = mkTest "semble-hm-devenv-option-parity" (

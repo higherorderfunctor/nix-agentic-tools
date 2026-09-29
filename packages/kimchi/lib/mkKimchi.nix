@@ -595,6 +595,7 @@
             # `builtins.isPath` alone would write the path as the agent's text.
             content = lib.mkDefault (lib.ai.agent.fileContent (lib.ai.agent.renderKimchi name value));
             entry = "kimchiAgents";
+            format = lib.mkDefault "markdown";
             ledger = agentsLedger;
             method = lib.mkDefault "copy-ro";
             mode = lib.mkDefault "0644";
@@ -655,8 +656,12 @@ in
         Kimchi agents, one `<name>.md` each: Home Manager writes
         `<configDir>/harness/agents/`, devenv a trusted project's
         `.kimchi/agents/`. A portable `{ description, instructions }` record
-        renders to Kimchi frontmatter plus body; Markdown here is Kimchi's
-        own and lands verbatim. Entries replace root `ai.agents` at the same
+        renders to Kimchi frontmatter plus body. Markdown here is Kimchi's
+        own and is not translated, but it is built into the runtime's
+        generated-file tree, where `ai.generated.formatter.markdown` and
+        `ai.generated.check.markdown` process it; set
+        `ai.kimchi.files."<path>".format = "raw"` to deliver
+        one agent file as written. Entries replace root `ai.agents` at the same
         key and null suppresses one. Root Markdown and a record's
         Claude/Copilot `tools` list have no Kimchi reading and fail
         evaluation, naming this option as the remedy. Each file is a real,

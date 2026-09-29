@@ -305,6 +305,7 @@ instruction building.
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
 | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
+| Generated-file formatting | N/A | `ai.generated.{formatter,check}.{json,markdown,toml,yaml}` (Nix-owned static files; skills and switch-time overlays excluded) | Same; runtime-rendered files excluded |
 | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
 | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi) | Same; project-native paths |
@@ -424,6 +425,93 @@ remains an explicit consumer root.
 > the old custom directory.
 
 </details>
+
+<details>
+<summary><strong>Generated-file formatting</strong></summary>
+
+Static, Nix-owned Markdown, JSON, TOML and YAML files are built into one store
+tree per delivery-router invocation. The builder formats each type in its own
+working directory, installs only the declared target paths, then checks the
+installed bytes. A failed check fails the build. Formatter-created caches and
+state stay out of the output. File paths in snippets are relative to the target
+root, such as `.claude/rules/example.md`.
+
+`ai.generated.formatter.<type>` is a shell snippet that replaces the default for
+that type; `null` disables formatting. The defaults use the same house style as
+this repository: Biome for JSON, prettier with `proseWrap = "always"` for
+Markdown and YAML, and Taplo for TOML. The settings are defined once in
+`lib/generated-style.nix`. A formatter must preserve the declared files;
+removing one fails the build.
+
+`ai.generated.check.<type>` is a `types.lines` shell snippet. Its default is the
+no-op `:` because the built-in guards run separately. Ordinary definitions
+append to that default; `lib.mkForce` replaces it, and `lib.mkForce ""` disables
+it. The default is contributed at normal priority so a forced replacement does
+not evaluate unused default tools. Checks run on the installed bytes. The named
+guards below are separate and remain on when a check is replaced or disabled.
+
+To use your own treefmt config, pass its evaluated config to the helper:
+
+```nix
+ai.generated.formatter.markdown =
+  lib.ai.treefmtFormatter (inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix).config;
+```
+
+Set another type's formatter in the same way if your treefmt config covers it.
+The helper uses the raw treefmt package with `--config-file`, `--tree-root .`,
+`--walk filesystem` and `--no-cache` so it runs against the build sandbox.
+Devenv's treefmt wrapper points at the project tree and does not work here.
+There is no automatic detection of a devenv treefmt config.
+
+Generated context, rules, AGENTS.md and agent Markdown participate on both Home
+Manager and devenv, including Claude's direct Home Manager files. Static JSON,
+TOML and YAML entries participate when their file entry names the corresponding
+`format`. Switch-time overlays and private documents rendered by `content.run`
+are excluded because their final bytes do not exist at build time. Skills and
+directory sources are delivered as written.
+
+| Runtime | Static JSON/TOML/YAML in scope                                                                                  | Outside the build tree                                                                      |
+| ------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Claude  | `settings.json` on both backends; devenv `.mcp.json`; Home Manager plugin `.mcp.json`, `.lsp.json` and manifest | `.claude.json` switch-time overlay                                                          |
+| Codex   | Agent TOML files, `hooks.json`, devenv project `config.toml`                                                    | Home Manager daemon settings and user `config.toml` overlays                                |
+| Copilot | Home Manager `lsp-config.json`; devenv `lsp-config/lsp.json`; `mcp-config.json`                                 | `settings.json` switch-time overlay                                                         |
+| Kimchi  | devenv `hooks.json`                                                                                             | Config, harness, MCP, permissions and trust documents rendered or reconciled at switch time |
+| Kiro    | `lsp.json`, Home Manager `permissions.yaml`, agent JSON files                                                   | `cli.json` overlay and runtime-rendered `mcp.json`                                          |
+
+A single file can opt out with `ai.<runtime>.files."<path>".format = "raw"`.
+Byte limits still apply to opted-out paths. A `content.run` replacement of a
+generated entry requires `format = "raw"`; replacing an entire AGENTS.md entry
+may state `format = "markdown"` to retain formatting.
+
+`mkAgenticShell` generates no files in this delivery router, so it has no
+corresponding option.
+
+</details>
+
+### Generated-file guards
+
+Guards check semantic and structural properties independently of the selected
+formatter and of `ai.generated.check`. They use this flake's pinned tools. Each
+guard defaults to enabled and can be disabled by name.
+
+| Guard            | What it catches                                                                              | Disable                                       |
+| ---------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `tableCells`     | Markdown table cells broken by unescaped pipes; rumdl and markdownlint catch different forms | `ai.generated.guards.tableCells = false;`     |
+| `splitCodeSpans` | A newline left inside a Markdown inline code span                                            | `ai.generated.guards.splitCodeSpans = false;` |
+| `parseCompare`   | Invalid or changed JSON, TOML or YAML data, including Markdown YAML frontmatter              | `ai.generated.guards.parseCompare = false;`   |
+
+For example, these formatter outcomes differ:
+
+| Formatter                                                           | Guard result | Reason                                                  |
+| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------- |
+| Default Biome JSON and Taplo TOML                                   | Good         | They change presentation while preserving parsed values |
+| Default Prettier Markdown and YAML                                  | Good         | They preserve frontmatter data and Markdown structure   |
+| A formatter that rewrites JSON `true` to `1`                        | Bad          | `parseCompare` detects changed data                     |
+| A formatter that removes a pipe escape inside a Markdown table cell | Bad          | `tableCells` detects an extra cell                      |
+
+A guard error names what failed and why, then gives three choices: fix the input
+or formatter; disable that named guard if its invariant is unsuitable; or set
+the specific file's `format = "raw"` to opt out explicitly.
 
 <details>
 <summary><strong>Semble code search</strong></summary>

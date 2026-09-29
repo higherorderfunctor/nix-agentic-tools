@@ -81,6 +81,21 @@ in {
         lib.hasInfix "inclusion: fileMatch" out && lib.hasInfix "fileMatchPattern:" out
     );
 
+    # Several paths are a block sequence, one quoted glob per line. Prettier
+    # reflows a long inline array into a multi-line flow array, which Kiro
+    # loads on every turn instead of on a matching file.
+    factory-transformer-kiro-fileMatch-several-paths = mkTest "transformer-kiro-fileMatch-several-paths" (
+      ai.transformers.kiro.render {
+        description = "Kiro rule";
+        paths = [
+          "**/*.nix"
+          "lib/**"
+        ];
+        text = "body";
+      }
+      == "---\ndescription: Kiro rule\nfileMatchPattern:\n  - \"**/*.nix\"\n  - \"lib/**\"\ninclusion: fileMatch\n---\n\nbody"
+    );
+
     factory-transformer-kiro-manual = mkTest "transformer-kiro-manual" (
       let
         out = ai.transformers.kiro.render {

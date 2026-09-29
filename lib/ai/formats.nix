@@ -20,8 +20,8 @@
       render = _name: value: {text = builtins.toJSON value;};
       sharedOk = true;
     };
-    # Markdown bodies are composed by lib/ai/transformers/ and arrive as
-    # `content.text`; there is no value shape to render here.
+    # Markdown files are built into the runtime's Markdown tree
+    # (lib/markdown) by the router; there is no value renderer.
     markdown = {
       render = null;
       sharedOk = false;

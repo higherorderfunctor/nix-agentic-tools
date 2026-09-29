@@ -1794,12 +1794,14 @@ in
                       rules = permissionRules;
                     };
                   };
+                  format = lib.mkDefault "yaml";
                   executable = null;
                 };
               }
               (lib.mapAttrs' (name: value:
                 lib.nameValuePair "${cfg.configDir}/agents/${name}.json" {
                   content = lib.mkDefault (mkAgentEntry name value);
+                  format = lib.mkDefault "json";
                   executable = null;
                 })
               cfg.agents)

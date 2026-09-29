@@ -1,5 +1,8 @@
-# Shared treefmt config — consumed by devenv.nix treefmt module.
-# Each formatter handles specific file types (see inline comments).
+# Shared treefmt config. Consumers: devenv.nix's treefmt module, the flake
+# `formatter`, checks/repository/formatting.nix, and `lib.ai.treefmtFormatter`
+# as configured in dev/ai.nix, which formats the static files `ai.*` generates
+# for this repository inside its delivery tree. Each formatter handles specific
+# file types (see inline comments).
 {
   # Use flake.nix as the tree-root marker so `nix fmt` works in git
   # worktrees (where .git is a gitfile pointer, not a directory).
@@ -17,57 +20,15 @@
     # settings.formatter below so the two never format the same file.
     biome = {
       enable = true;
-      settings.formatter.indentStyle = "space";
-      settings.formatter.indentWidth = 2;
+      settings.formatter = (import ./lib/generated-style.nix).biome;
     };
     # Only the types biome can't format (markdown/yaml/scss/html/vue/json5) —
     # scoped via settings.formatter.prettier.excludes.
     prettier = {
       enable = true;
-      # `always` (reflow prose to printWidth), NOT `preserve`, and the
-      # difference is load-bearing rather than cosmetic. Prettier treats an
-      # inline code span as an UNBREAKABLE token: reflowing moves an
-      # over-long span onto its own line and lets it overflow rather than
-      # splitting it, and it JOINS any span that already straddles a
-      # newline. So this setting makes `a `split\nspan`` structurally
-      # impossible, and checks/repository/formatting.nix turns that into a CI gate for
-      # free. Under `preserve` the same defect merely persists — measured
-      # at 369 spans across 66 files when this was flipped.
-      #
-      # That matters because these files are read as RAW markdown by agents
-      # out of `.claude/rules/`, `.github/instructions/`, and
-      # `.kiro/steering/`, never as rendered HTML. CommonMark does render a
-      # split span correctly in the general case (the newline becomes a
-      # space) — except where the break lands mid-token, which silently
-      # corrupts the span. See checks/markdown/split-code-spans.py, the backstop for
-      # the pathological cases a reflow cannot reach.
-      #
-      # KNOWN LIMIT — this setting LAUNDERS a mid-token break. Prettier
-      # joins a split span by printing the span's CommonMark VALUE, and
-      # that value already holds the space CommonMark put where the
-      # newline was. So `programs.claude-code.\nmarketplaces` comes out as
-      # `programs.claude-code. marketplaces`: one line, space intact,
-      # defect preserved — and now with no newline for
-      # checks/markdown/split-code-spans.nix to find. That class is NOT lintable
-      # (measured: a glue-char-plus-space heuristic gives 96 hits, ~90%
-      # legitimate), so it is prevented at authoring time by the
-      # markdown-formatting fragment instead. 10 code-span and 22 prose
-      # instances were cleaned up by hand in #590 and #591.
-      #
-      # FORMATTER CHOICE IS SETTLED — do not re-survey. Measured
-      # 2026-07-29: no Rust-family markdown formatter joins a split span
-      # at all. dprint-markdown `textWrap: always` reflows the paragraph
-      # and keeps the newline INSIDE the span; deno fmt uses the same
-      # engine; rumdl is a markdownlint clone with no reflow. Only
-      # prettier and mdformat manage it, and mdformat joins WITHOUT
-      # rewrapping (110-160 char lines) besides escaping `\<150` and
-      # renumbering ordered lists. The fragment carries the table.
-      #
-      # printWidth is deliberately left at prettier's default of 80.
-      # NOTE proseWrap also governs YAML folded/plain scalars, so
-      # changing it reflows .github/** too — verify semantics by parsing
-      # both revisions and diffing the loaded structures, not by eye.
-      settings.proseWrap = "always";
+      # The house prose style (`proseWrap = "always"`) and why: one definition,
+      # shared with the default `ai.generated.formatter.markdown` and `.yaml`.
+      settings = (import ./lib/generated-style.nix).prettier;
     };
     # Shell: *.sh, *.bash
     shfmt.enable = true;
@@ -108,15 +69,6 @@
     ".direnv/**"
     ".pre-commit-config.yaml"
     "node_modules/**"
-    # Committed instruction files `ai.*` writes as read-only copies
-    # (dev/ai.nix). One file, one writer: a formatter pass would either fail
-    # on the 0444 mode or rewrite bytes the instructions-drift check then
-    # rejects, and module-generated rule text is not guaranteed to be a
-    # prettier fixed point. The drift check is their byte gate; the markdown
-    # scans in checks/markdown/ still read them.
-    "AGENTS.md"
-    ".github/copilot-instructions.md"
-    ".github/instructions/**"
     "result/**"
     "result-*/**"
     # Verbatim research snapshot preserved for semantic retrieval (see

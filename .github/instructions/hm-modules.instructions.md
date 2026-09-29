@@ -24,7 +24,10 @@ applyTo: "packages/*/modules/homeManager/**"
 > ungated mode-narrowing command writer, and the delivery-path parity example
 > uses `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile`
 > / `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
-> (one entry).
+> (one entry). Generated Markdown the delivery router writes is delivered from
+> the runtime's Markdown store tree, never as `home.file.<path>.text`; Home
+> Manager Claude agents, commands and output styles go to upstream
+> `programs.claude-code.*` instead and never enter a tree.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/hm-modules/module-conventions.md`.
@@ -340,9 +343,13 @@ skills directory symlinks and static config files. If the content is already in
 the store (a derivation output, a file inside the flake), this is the right
 tool.
 
-**`home.file` with `text =`** — content built at eval time from Nix data. Used
-for transformed rules (e.g., the `fragments-ai` transforms emit strings that
-become `home.file.".claude/rules/<name>.md".text`).
+**`home.file` with `text =`** — content built at eval time from Nix data, for a
+non-Markdown file with no renderer. Generated Markdown the delivery router
+writes (transformed rules, context, agents) is not delivered this way: the
+router builds it into the runtime's Markdown store tree, so
+`home.file.".claude/rules/<name>.md".source` points into that tree. Home Manager
+Claude agents, commands and output styles are the exception: they are handed to
+upstream `programs.claude-code.*` as values and never enter a tree.
 
 **`home.activation`** — stateful operations that need runtime info: reading sops
 files, computing fingerprints, merging runtime-mutable config files, resetting

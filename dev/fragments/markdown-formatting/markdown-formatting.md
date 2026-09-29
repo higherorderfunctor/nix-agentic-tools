@@ -1,19 +1,31 @@
 ### Markdown Formatting
 
-`treefmt` owns markdown wrapping. Prettier runs with
-`settings.proseWrap = "always"` (see `treefmt.nix`), so it reflows every
-paragraph to 80 columns on format. **Do not hand-wrap prose** — the line breaks
-you author are discarded, and hand-wrapping is what created the defect below.
+`treefmt` owns markdown wrapping. Prettier runs with `proseWrap = "always"`,
+defined once in `lib/markdown/prose-style.nix` and read by `treefmt.nix`, so it
+reflows every paragraph to 80 columns on format. **Do not hand-wrap prose** —
+the line breaks you author are discarded, and hand-wrapping is what created the
+defect below.
+
+Generated `ai.*` Markdown is formatted where it is built: one store tree per
+delivery-router invocation holds static Markdown alongside eligible JSON, TOML
+and YAML. `ai.generated.formatter.markdown` defaults to prettier in the same
+prose style; this repository uses `lib.ai.treefmtFormatter` with `treefmt.nix`
+for all four types. A committed projection such as AGENTS.md is therefore
+already what `nix fmt` produces, and `treefmt.nix` excludes none of them.
+`ai.generated.guards.tableCells` runs the table-cell check below independently
+of any user-defined `ai.generated.check.markdown`.
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-09-01 — the pipe-in-a-table-cell defect is now gated
-> by `markdown-table-cells` (rumdl primary, markdownlint backup; same MD056 rule
-> number, disjoint coverage — do not deduplicate them). Corrects an earlier
-> draft of this section that blamed hand-padding, required every row to agree on
-> cell count, and shipped a hand-check awk snippet; the real failure modes are
-> version-dependent formatter behavior and `prettier-ignore` hiding the defect
-> outright.
+> **Last verified:** 2026-09-28 — generated `ai.*` Markdown is formatted and
+> guarded in its store tree (`ai.generated`), and the prose style is defined
+> once in `lib/generated-style.nix`. The pipe-in-a-table-cell defect is gated by
+> `markdown-table-cells` (rumdl primary, markdownlint backup; same MD056 rule
+> number, disjoint coverage — do not deduplicate them), defined once in
+> `lib/markdown/table-cells.nix`. Corrects an earlier draft of this section that
+> blamed hand-padding, required every row to agree on cell count, and shipped a
+> hand-check awk snippet; the real failure modes are version-dependent formatter
+> behavior and `prettier-ignore` hiding the defect outright.
 >
 > Full lineage:
 > `git show 4705317b:dev/fragments/markdown-formatting/markdown-formatting.md`.
@@ -122,7 +134,9 @@ living only in one caller does not survive a second caller being added.
 ### A pipe in a table cell — `markdown-table-cells`
 
 Gated. Two linters, one hook, because the defect has two states and no single
-tool sees both.
+tool sees both. The script, its markdownlint config and the full rationale are
+defined once in `lib/markdown/table-cells.nix`; the prek hook and the fixture
+suite (`checks/markdown/markdown-table-cells-fixtures.nix`) both read it.
 
 **The cause is always the same: an unescaped `|` in a cell.** A table row is
 split into cells at BLOCK level, before inline parsing runs, so a backtick gives

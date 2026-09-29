@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-27 — Claude delivers every surface through
+> **Last verified:** 2026-09-28 — Claude delivers every surface through
 > `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
 > Every delivered entry is a file the layer writes. L5 is the delivery router
 > plus one adapter per backend; every runtime describes delivery once through
@@ -25,8 +25,11 @@
 > path-scoped index entry instead of inlining its body. The shared AGENTS.md map
 > lowers through the router as `internal`, as a read-only copy, and a
 > contribution's `defaultMaxBytes` makes the owner warn past it under a raised
-> `maxBytes`. Generators mark their `content` with `_generated`, so a consumer's
-> replacement of a unit's file warns like a switch-off.
+> `maxBytes`; its built bytes are measured in the generated-file tree. The
+> router builds one tree per invocation for static Markdown, JSON, TOML and
+> YAML, while switch-time overlays and `content.run` stay outside it. Generators
+> mark their `content` with `_generated`, so a consumer's replacement of a
+> unit's file warns like a switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 

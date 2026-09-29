@@ -55,6 +55,7 @@ in
       # mkBackendTransform.nix. Anything that WOULD have been dropped is said
       # out loud rather than quietly not written.
       (lib.optionalAttrs (options ? tasks) {inherit tasks;})
+      (lib.optionalAttrs (options ? warnings) {inherit (delivery) warnings;})
       (lib.optionalAttrs (options ? enterTest) {
         enterTest = lib.mkIf (delivery.owned.enterTest != "") delivery.owned.enterTest;
       })

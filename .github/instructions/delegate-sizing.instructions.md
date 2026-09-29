@@ -7,8 +7,10 @@ applyTo: "packages/delegate-sizing/**"
 
 # Delegate sizing package
 
-> **Last verified:** 2026-09-27 — Kiro's default launch uses `--model auto`; its
-> manual-only purpose line renders only with the launch block.
+> **Last verified:** 2026-09-28 — generated skills use the shared generated-file
+> builder and house Markdown formatter; Kiro's default launch uses
+> `--model auto`, and its manual-only purpose line renders only with the launch
+> block.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -64,8 +66,9 @@ Claude helper carries `curl` and `jq`; the Codex helper carries GNU `timeout`,
 `jq` and Python 3. It deliberately does not carry the `codex` CLI, which comes
 from the consumer's own runtime configuration. Both helpers read account limits
 without launching a model turn. Their absolute store paths are embedded in the
-skills without creating a dependency cycle. Skill derivations format their
-Markdown with Prettier; the preview functions read those built files.
+skills without creating a dependency cycle. Skill derivations use
+`lib.ai.generated` to format their Markdown with the shared Prettier defaults;
+the preview functions read those built files.
 
 `fragments/skill-routing.md` contains a one-sentence always-on stub under its
 own heading. `router.nix` appends enabled `whenToDelegate` entries to that stub

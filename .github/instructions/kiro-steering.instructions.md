@@ -7,12 +7,14 @@ applyTo: "lib/ai/ai-common.nix,lib/ai/transformers/kiro.nix,packages/kiro-cli/**
 
 # Steering inclusion modes: what actually loads in the CLI
 
-> **Last verified:** 2026-09-03 (commit pending — first revision. Measured
-> against KAS **0.46.1** by reading the extracted `acp-server.js`, cross-checked
-> against a live `kiro-cli` 2.21.0 run that reproduced each verdict. Byte
-> offsets below are into that 0.46.1 bundle and WILL move on the next bump; the
-> mechanisms are what to carry forward, and the re-measure recipe at the end is
-> how to re-derive the offsets. They are grep LANDMARKS falling inside the named
+> **Last verified:** 2026-09-27 — `lib/ai/transformers/kiro.nix` now emits a
+> multi-path `fileMatchPattern` as a block sequence. The engine findings are
+> unchanged from the first revision (2026-09-03): measured against KAS
+> **0.46.1** by reading the extracted `acp-server.js`, cross-checked against a
+> live `kiro-cli` 2.21.0 run that reproduced each verdict. Byte offsets below
+> are into that 0.46.1 bundle and WILL move on the next bump; the mechanisms are
+> what to carry forward, and the re-measure recipe at the end is how to
+> re-derive the offsets. They are grep LANDMARKS falling inside the named
 > function, not the address of its declaration, so slice BACKWARDS from them as
 > the recipe shows. If you change `lib/ai/transformers/kiro.nix`,
 > `kiroInclusionOption` in `lib/ai/ai-common.nix`, or bump kiro-cli and this
@@ -150,10 +152,12 @@ fault has not been traced** — only that the consequence is the documented
 degrade. Prefer the block sequence: it is the one shape that both parses and
 survives formatting unchanged.
 
-**This trap does not reach Nix-managed steering.**
-`lib/ai/transformers/kiro.nix` emits a scalar for a single path and an INLINE
-array for several, and both of those shapes measured correct. The hazard is
-confined to hand-authored steering files.
+**Nix-managed steering emits the block sequence for exactly this reason.**
+`lib/ai/transformers/kiro.nix` writes a scalar for a single path and a block
+sequence for several. An inline array also parses correctly, but prettier
+rewrites one that runs past the line width into the multi-line flow array with a
+trailing comma, so formatting the generated Markdown would have produced the
+broken shape. The hazard remains for hand-authored steering files.
 
 ## What the transformer already guarantees
 

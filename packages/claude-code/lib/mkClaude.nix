@@ -247,6 +247,7 @@
     lib.mapAttrs' (name: rendered:
       lib.nameValuePair ".claude/${dir}/${name}.md" {
         content = lib.mkDefault ({enable = true;} // agent.fileContent rendered);
+        format = lib.mkDefault "markdown";
       });
 in
   lib.ai.app.mkRuntime {
