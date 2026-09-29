@@ -1,6 +1,6 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-09-27 — Claude's settings and MCP files are Nix-owned
+> **Last verified:** 2026-09-28 — Claude's settings and MCP files are Nix-owned
 > read-only links. Proxy ownership is explicit and keyed by server name, so each
 > owner gets its own daemon; every ecosystem renders servers via `renderServer`.
 >
@@ -38,6 +38,14 @@ world-readable store or in committed config. Files:
 - `packages/kiro-cli/lib/mkKiro.nix` — `mkMcpJsonScript` + wiring.
 - `packages/kiro-cli/lib/wrapPackage.nix` — `secretEnv` → the runtime `export`
   that puts the decrypted value in the launcher's env.
+
+Typed packaged MCP credentials and Kimchi's API key now use `rv.file` /
+`rv.helper` envelopes from `lib/runtime-values`. `lib/mcp.nix` renders their
+environment through that library's shared reader. HTTP `secretValue` remains a
+legacy shape in this pilot; the proxy adapts it to the shared reader locally.
+The reader strips exactly one terminal LF by default, supports `preserve`, and
+aborts on missing, unreadable, empty sources or failed helpers without printing
+helper output. Kiro's separate HTTP secret flow below is deferred.
 
 ### The proxy path — `proxy.enable`, and why it is the preferred one
 

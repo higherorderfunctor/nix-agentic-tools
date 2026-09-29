@@ -89,7 +89,7 @@
 }: let
   inherit (lib) concatStringsSep filterAttrs foldl' mapAttrs mapAttrs' mapAttrsToList;
 
-  credentialsLib = import ../credentials.nix {inherit lib;};
+  rv = import ../runtime-values {inherit lib;};
 
   # Upper-case; every non-alphanumeric becomes '_'. Same shape as the
   # Kiro preprocessor's `deriveEnvVar`, deliberately NOT shared with it:
@@ -419,7 +419,7 @@
 
   # ── ExecStart wrapper ───────────────────────────────────────────────
   # Reads every secret from its file (absolute coreutils paths, empty and
-  # missing-file guards — see lib/credentials.nix), splits the upstream
+  # missing-file guards — see lib/runtime-values), splits the upstream
   # url into origin and path, then execs Caddy. Nothing lands in argv.
   #
   # Failing CLOSED here is deliberate and differs from the kiro launcher,
@@ -430,7 +430,15 @@
     secretExports =
       concatStringsSep "\n"
       (mapAttrsToList
-        (var: cred: credentialsLib.mkSecretExport pkgs var cred)
+        (var: cred:
+          rv.export {
+            inherit pkgs;
+            variable = var;
+            value =
+              if cred ? file
+              then rv.file {path = cred.file;}
+              else rv.helper {path = cred.helper;};
+          })
         (spec.headerSecrets
           // lib.optionalAttrs (spec.urlSecret != null) {
             ${spec.urlVar} = spec.urlSecret;

@@ -1089,7 +1089,7 @@ in {
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            apiKey.file = "/run/secrets/kimchi-key";
+            apiKey = {_runtime.source.file = "/run/secrets/kimchi-key";};
           };
         };
       in
@@ -1110,7 +1110,7 @@ in {
       result = evalHm {
         ai.kimchi = {
           enable = true;
-          apiKey.file = "/run/secrets/kimchi-test";
+          apiKey = {_runtime.source.file = "/run/secrets/kimchi-test";};
           environmentVariables.KIMCHI_EXTRA = "yes";
         };
       };
@@ -1123,12 +1123,13 @@ in {
         bin=${wrapped}/bin/kimchi
         grep -q "KIMCHI_NO_UPDATE_CHECK" "$bin"
         grep -q "KIMCHI_EXTRA" "$bin"
-        grep -q 'cat "/run/secrets/kimchi-test"' "$bin"
+        grep -q 'runtime-value-read' "$bin"
+        grep -q '/run/secrets/kimchi-test' "$bin"
         # An empty credential file must abort the wrapper rather than let the
         # program start with the variable unset. Asserted on a REAL MCP
         # wrapper, not only glab's, because the guard lives in the shared
-        # lib/credentials.nix and every server inherits it.
-        grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
+        # lib/runtime-values and every server inherits it.
+        grep -q 'exit 1' "$bin"
         echo PASS > "$out"
       '';
   };
