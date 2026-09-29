@@ -7,7 +7,7 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-27 — Semble's `pathMappings` and model routing live
+> **Last verified:** 2026-09-28 — Semble's `pathMappings` and model routing live
 > at the program root. Native file settings live under `ai.<runtime>.native`
 > (`native.settings`; Kimchi also `native.harnessSettings`). Shared documents,
 > each declared by `facts.harnessWrites` (the router, never a factory, calls
@@ -171,10 +171,10 @@ test the destination container with `lib.hasAttrByPath ... options`, then gate
 on the relevant runtime enable. Such plumbing belongs under an internal, hidden
 option rather than either public settings surface; Codex uses
 `ai.codex.internal._integration_writable_roots`. glab uses this pattern to
-contribute its effective `configDir`: Home Manager resolves its `null` default
-to `${config.xdg.configHome}/glab-cli`, while devenv uses its evaluated project
-state default or the consumer's explicit override. The contribution configures
-an already-enabled Codex; it never enables Codex itself.
+contribute its literal effective `configDir`: Home Manager resolves its `null`
+default to `${config.xdg.configHome}/glab-cli`, while devenv uses its evaluated
+project state default or the consumer's explicit override. The contribution
+configures an already-enabled Codex; it never enables Codex itself.
 
 ### Activation script patterns
 
