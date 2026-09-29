@@ -98,6 +98,15 @@ description field.
   only config files reach it; an invalid value in a higher scope resets to the
   default instead of falling through; the four CLI flags are ORed with their
   keys (`cli`), so a global `true` can only be undone per repository.
+- **git-revise** — Python, so the AST rung is Python's `ast`: every read goes
+  through a `Repository` helper (`config`, `bool_config`, `int_config`)
+  discovered from its own body, its default may be another read (the `fallback`
+  chain) or computed (`defaultExpr`), and `overriddenBy` comes from
+  `build_parser()` imported from the pinned source (eval). Descriptions are the
+  man page's `.. gitconfig::` directives, parsed with docutils; `revise.rerere`
+  is undocumented upstream and its description is a hand annotation. The literal
+  `"config"` may appear only inside the helpers, and `git var` may only name the
+  three variables it reads today.
 
 ## Adding a tool
 

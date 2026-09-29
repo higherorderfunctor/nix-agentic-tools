@@ -75,6 +75,7 @@ codesign
 codewhisperer
 COLORFGBG
 COLORTERM
+commentchar
 commondir
 completionist
 configdir
