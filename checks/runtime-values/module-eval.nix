@@ -15,6 +15,7 @@
   };
   sensitive = rv.withReferences {type = lib.types.str;};
   file = rv.file {path = "/run/example";};
+  mcp = import ../../lib/mcp.nix {inherit lib;};
 in {
   checks = {
     # Round-4 regressions: declaration type merging and substituted submodules.
@@ -832,6 +833,17 @@ in {
         value = file;
         output = "argv";
       })
+    );
+    runtime-values-mcp-envelope = mkTest "runtime-values-mcp-envelope" (
+      let
+        old = {file = "/run/example";};
+        spec = {credentials.envVar = "TOKEN";};
+        gitlabSpec = {apiUrl = (mcp.loadServer "gitlab-mcp").meta.credentialVars.apiUrl;};
+      in
+        !succeeds (mcp.credentialsEnvironment pkgs spec {credentials = old;})
+        && !succeeds (mcp.credentialFilePaths spec {credentials = old;})
+        && succeeds (mcp.credentialsEnvironment pkgs gitlabSpec {apiUrl = old;})
+        && mcp.credentialFilePaths gitlabSpec {apiUrl = old;} == ["/run/example"]
     );
     runtime-values-lift = mkTest "runtime-values-lift" (let
       options = rv.liftOptions {

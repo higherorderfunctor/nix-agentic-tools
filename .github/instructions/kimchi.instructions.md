@@ -7,11 +7,9 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-28 — Kimchi 1.1.37 delivers every managed settings
-> file as a read-only copy. Home Manager also owns config.json and trust.json;
-> devenv writes project files only. The HM option types seed values that would
-> otherwise require writes at launch, and region is required. The pinned pi
-> dependency is 0.85.1. Full lineage:
+> **Last verified:** 2026-09-29 — Kimchi `apiKey` and `gitTokens` are
+> runtime-value references; each `gitTokens` entry is nullable, and `gitTokens`
+> is included in the declaration audit. Full lineage:
 > `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -274,9 +272,12 @@ pins `lastChangelogVersion` from the packaged pi dependency, and marks the
 shell-profile API-key migration dismissed. The latter prevents a prompt that can
 rename over a Home Manager shell profile.
 
-`ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
-`lib/credentials.nix` shape. Kimchi reads git tokens only from the user
-`config.json` and has no environment input for them
+`ai.kimchi.gitTokens.<host>` takes a secret runtime reference whose `_runtime`
+source is a file or helper. `null` on an individual host removes an inherited
+token, including one set at lower module priority. The secret-aware map type
+preserves this merge behavior and lets the declaration audit cover every host
+key. Kimchi reads git tokens only from the user `config.json` and has no
+environment input for them
 (`src/extensions/teleport/provisioning/git-token.ts`), so the copy's content
 becomes a `run` renderer that exports each token from its file and merges it
 into the declaration with `jq` when the writer runs; the store holds the path.
@@ -485,15 +486,11 @@ key Kimchi cannot read. Locked by `module-kimchi-config-json-nested`.
 
 ## Gotcha: apiKey is a runtime SOPS credential, never a store literal
 
-`apiKey` is `lib.mcp.mkCredentialsOption "KIMCHI_API_KEY"` — the same
-`{ file | helper }` discriminated union the MCP servers use. The key is exported
-at launch via `lib.mcp.mkCredentialsSnippet`
-(`KIMCHI_API_KEY="$(<coreutils>/bin/cat <file>)"`) injected through
-`wrapProgram --run`, so the decrypted secret is read at runtime and the store
-holds only the **path**, never the key. Never reintroduce a plaintext `str`
-apiKey funneled into `--set`: that bakes the secret into a world-readable
-`/nix/store` wrapper. Mimic the existing credential pattern; do not invent a new
-secret surface.
+`apiKey` accepts only runtime references, for example
+`apiKey = rv.file { path = "/run/secrets/kimchi-key"; };`. The shared
+`lib/runtime-values` reader exports `KIMCHI_API_KEY` at launch through the
+existing `wrapProgram --run` delivery. Failed or empty reads abort launch;
+newline handling follows the reference policy. No literal branch is available.
 
 ## Gotcha: wrapProgram separator
 

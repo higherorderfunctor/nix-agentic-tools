@@ -8,6 +8,7 @@
 }: let
   inherit (harness) deliveredFiles evalDevenv mkTest ownPlan;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
+  rv = import ../../../lib/runtime-values {inherit lib;};
   # The Home Manager user config.json copy.
   hmConfigDocument = evaluated: let
     unit = (hmFiles evaluated.config.ai.kimchi.configDir evaluated)."config.json";
@@ -953,23 +954,45 @@ in {
     # option under native.settings, which would put them in the store.
     module-kimchi-git-tokens = mkTest "kimchi-git-tokens" (
       let
+        inherited = evalHm (lib.mkMerge [
+          {
+            ai.kimchi.enable = true;
+            ai.kimchi.gitTokens."github.com" = lib.mkDefault (rv.file {path = "/run/secrets/inherited";});
+          }
+          {
+            ai.kimchi.gitTokens."github.com" = lib.mkForce null;
+            ai.kimchi.gitTokens."gitlab.com" = rv.file {path = "/run/secrets/kimchi-gitlab";};
+          }
+        ]);
+        devenvOverride = evalDevenv (lib.mkMerge [
+          {ai.kimchi.gitTokens."github.com" = lib.mkDefault (rv.file {path = "/run/secrets/inherited";});}
+          {ai.kimchi.gitTokens."github.com" = lib.mkForce null;}
+        ]);
+        inheritedRun = (dirTarget "kimchiFiles" inherited.config.ai.kimchi.configDir inherited).units."config.json".run;
         hm = evalHm {
           ai.kimchi = {
             enable = true;
-            gitTokens."github.com".file = "/run/secrets/kimchi-github";
+            gitTokens."github.com"._runtime.source.file = "/run/secrets/kimchi-github";
           };
         };
         target = dirTarget "kimchiFiles" hm.config.ai.kimchi.configDir hm;
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
-            gitTokens."github.com".file = "/run/secrets/kimchi-github";
+            gitTokens."github.com"._runtime.source.file = "/run/secrets/kimchi-github";
           };
         };
       in
-        target.path
+        inherited.config.ai.kimchi.gitTokens."github.com"
+        == null
+        && devenvOverride.config.ai.kimchi.gitTokens."github.com" == null
+        && builtins.attrNames (lib.filterAttrs (_: token: token != null) inherited.config.ai.kimchi.gitTokens) == ["gitlab.com"]
+        && lib.hasInfix "/run/secrets/kimchi-gitlab" inheritedRun
+        && !(lib.hasInfix "/run/secrets/inherited" inheritedRun)
+        && target.path
         == ".config/kimchi"
-        && lib.hasInfix ''cat "/run/secrets/kimchi-github"'' target.units."config.json".run
+        && lib.hasInfix "runtime-value-read" target.units."config.json".run
+        && lib.hasInfix "/run/secrets/kimchi-github" target.units."config.json".run
         && lib.hasInfix ''"github.com": env.kimchi_git_token_0'' target.units."config.json".run
         && lib.elem "sops-nix" hm.config.home.activation.kimchiFiles.after
         && builtins.any (lib.hasInfix "ai.kimchi.gitTokens is user scope") (failedAssertions rejected)
@@ -1055,7 +1078,7 @@ in {
           mcpServers.declared = server;
           kimchi = {
             enable = true;
-            gitTokens."github.com".helper = "${pkgs.writeShellScript "kimchi-git-token" ''
+            gitTokens."github.com"._runtime.source.helper = "${pkgs.writeShellScript "kimchi-git-token" ''
               set -euETo pipefail
               shopt -s inherit_errexit 2>/dev/null || :
               echo token-from-helper
@@ -1376,14 +1399,14 @@ in {
         echo PASS > "$out"
       '';
 
-    # The Cast AI key is a runtime credential ({file|helper}); setting
-    # apiKey.file must evaluate and must never become a static env var.
+    # The Cast AI key uses an rv.file runtime reference. It must evaluate
+    # without ever becoming a static environment variable.
     module-kimchi-credential = mkTest "kimchi-credential" (
       let
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            apiKey.file = "/run/secrets/kimchi-key";
+            apiKey = {_runtime.source.file = "/run/secrets/kimchi-key";};
           };
         };
       in
@@ -1407,7 +1430,7 @@ in {
       result = evalHm {
         ai.kimchi = {
           enable = true;
-          apiKey.file = "/run/secrets/kimchi-test";
+          apiKey = {_runtime.source.file = "/run/secrets/kimchi-test";};
           environmentVariables.KIMCHI_EXTRA = "yes";
         };
       };
@@ -1422,12 +1445,13 @@ in {
         bin=${wrapped}/bin/kimchi
         grep -q "KIMCHI_NO_UPDATE_CHECK" "$bin"
         grep -q "KIMCHI_EXTRA" "$bin"
-        grep -q 'cat "/run/secrets/kimchi-test"' "$bin"
+        grep -q 'runtime-value-read' "$bin"
+        grep -q '/run/secrets/kimchi-test' "$bin"
         # An empty credential file must abort the wrapper rather than let the
         # program start with the variable unset. Asserted on a REAL MCP
         # wrapper, not only glab's, because the guard lives in the shared
-        # lib/credentials.nix and every server inherits it.
-        grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
+        # lib/runtime-values and every server inherits it.
+        grep -q 'exit 1' "$bin"
         grep -q "KIMCHI_REGION.*us" "$bin"
         grep -q "KIMCHI_TELEMETRY_ENABLED.*0" "$bin"
         grep -q "KIMCHI_REGION.*eu" ${devenvRegion}/bin/kimchi

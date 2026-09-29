@@ -135,7 +135,7 @@
 
     credSnippet =
       if hasCreds
-      then mcpLib.mkCredentialsSnippet pkgs credVars evaluatedSettings
+      then mcpLib.credentialsEnvironment pkgs credVars evaluatedSettings
       else "";
 
     # `--host` is passed explicitly rather than left to mcp-proxy's own

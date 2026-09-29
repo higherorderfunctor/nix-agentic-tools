@@ -45,6 +45,7 @@ inputs.nix-agentic-tools = {
 # Apply overlay
 nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 
+# Home-manager module arguments include { rv, ... }.
 # Home-manager config
 imports = [inputs.nix-agentic-tools.homeManagerModules.default];
 
@@ -67,7 +68,7 @@ stacked-workflows.gitPreset = "full";
 
 services.mcp-servers.servers.github-mcp = {
   enable = true;
-  settings.credentials.file = "/run/secrets/github-token";
+  settings.credentials = rv.file { path = "/run/secrets/github-token"; };
 };
 ```
 
@@ -299,11 +300,11 @@ instruction building.
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
 | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
-| MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
+| MCP credentials | Manual env vars | `rv.file` or `rv.helper` | `rv.file` or `rv.helper` |
 | Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
 | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
-| GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
+| GitLab CLI credentials | Manual env vars | `rv.file` or `rv.helper` | `rv.file` or `rv.helper` |
 | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
 | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
@@ -725,11 +726,13 @@ trade-off does not mean re-deriving it.
 <details>
 <summary><strong>MCP Servers (Home-Manager)</strong></summary>
 
+The imported module supplies the `rv` argument for runtime references.
+
 ```nix
 services.mcp-servers.servers = {
   github-mcp = {
     enable = true;
-    settings.credentials.file = config.sops.secrets.github-token.path;
+    settings.credentials = rv.file { path = config.sops.secrets.github-token.path; };
   };
   nixos-mcp.enable = true;
   context7-mcp.enable = true;

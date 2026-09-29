@@ -47,6 +47,14 @@ world-readable store or in committed config. Files:
 - `packages/kiro-cli/lib/wrapPackage.nix` — `secretEnv` → the runtime `export`
   that puts the decrypted value in the launcher's env.
 
+Typed packaged MCP credentials and Kimchi's API key now use `rv.file` /
+`rv.helper` envelopes from `lib/runtime-values`. `lib/mcp.nix` renders their
+environment through that library's shared reader. HTTP `secretValue` remains a
+legacy shape in this pilot; the proxy adapts it to the shared reader locally.
+The reader strips exactly one terminal LF by default, supports `preserve`, and
+aborts on missing, unreadable, empty sources or failed helpers without printing
+helper output. Kiro's separate HTTP secret flow below is deferred.
+
 ### The proxy path — `proxy.enable`, and why it is the preferred one
 
 `proxy.enable` on a `type = "http"` server moves the credential OFF the client

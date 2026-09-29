@@ -25,7 +25,14 @@ in {
   };
 
   settingsOptions = {
-    credentials = mcpLib.mkCredentialsOption "CONTEXT7_API_KEY";
+    credentials = mkOption {
+      type = types.nullOr (mcpLib.runtimeValues.withReferences {
+        type = types.str;
+        secret = true;
+      });
+      default = null;
+      description = "Runtime Context7 API key reference.";
+    };
 
     path = mkOption {
       type = types.str;
