@@ -300,6 +300,11 @@ for it. When several entries match, their guidance composes.
     - [`dev/fragments/pipeline/fragment-pipeline.md`](dev/fragments/pipeline/fragment-pipeline.md)
     - [`dev/fragments/pipeline/generation-architecture.md`](dev/fragments/pipeline/generation-architecture.md)
     - [`dev/fragments/pipeline/update-pipeline.md`](dev/fragments/pipeline/update-pipeline.md)
+- **`runtime-values`**
+  - Match:
+    - `lib/runtime-values/**`
+  - Read:
+    - [`dev/fragments/runtime-values/architecture.md`](dev/fragments/runtime-values/architecture.md)
 - **`semble-integration`**
   - Match:
     - `packages/semble/**`
