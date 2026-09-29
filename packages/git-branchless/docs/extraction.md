@@ -1,15 +1,23 @@
 # git-branchless config extraction
 
-> **Last verified:** 2026-09-29 — ast-grep census of the patched 0.11.1 source:
+> **Last verified:** 2026-09-29 — tree-sitter walk of the patched 0.11.1 source:
 > 24 `branchless.*` keys (23 typed options, `branchless.mainBranch` excluded),
-> 17 foreign keys, 36 builtin revset functions; 35 mutants fail closed or move
+> 17 foreign keys, 36 builtin revset functions; 44 mutants fail closed or move
 > the output as declared.
 >
 > **Settled — do not relitigate.**
 >
 > - **No self-report exists.** git-branchless has no `config` subcommand, and
 >   its `--help` and man pages name two keys. Structured extraction is the top
->   usable rung; regex is not needed.
+>   usable rung.
+> - **Walk the tree; never regex the code.** The first version located sites
+>   with ast-grep rules and then parsed the matched text with ~30 regexes
+>   (literals, `format!` arguments, `Option<T>`, closures, the `FUNCTIONS`
+>   table). That text parsing broke on a `>` inside a `format!` argument (mutant
+>   N4) and was replaced on 2026-09-29 by typed-node walks. Regex survives only
+>   over decoded prose: the key-token net over string VALUES and the
+>   `(deprecated)` marker in doc text. Old version:
+>   `git show b56c7fca:packages/git-branchless/extract/extract.py`.
 > - **Extract from the PATCHED source.** The unpatched tree misses
 >   `branchless.core.protectCheckedOutBranches`, which only this repository's
 >   patch reads.
@@ -22,14 +30,15 @@
 
 `passthru.extracted` on the package (`packages/ai/gitTools/git-branchless/`)
 runs over `passthru.patchedSource`, a `srcOnly` of the package's own `src`,
-`patches` and `postPatch` under `stdenvNoCC`. It never builds Rust, and passthru
-leaves the package's store path alone.
+`patches` and `postPatch` under `stdenvNoCC`. Both come from
+`lib/git-tool-settings/extraction.nix`, shared with git-absorb and git-revise.
+It never builds Rust, and passthru leaves the package's store path alone.
 
-1. `extract/rules/config.yml` — ast-grep (tree-sitter-rust) rules. Rule ids are
-   the contract with the resolver.
-2. `extract/extract.py` — the resolver. It writes `extracted.json` and exits
-   non-zero on any guard.
-3. `extract/annotations.json` — the only hand input: prose the source cannot
+1. `extract/extract.py` — the resolver. It parses every production `.rs` file
+   with tree-sitter-rust (`lib/git-tool-settings/rust_tree.py`), reads call
+   shapes, keys, defaults and types from typed nodes, writes `extracted.json`
+   and exits non-zero on any guard.
+2. `extract/annotations.json` — the only hand input: prose the source cannot
    state (computed defaults, alias-family descriptions, the patch note), types
    for two untyped reads, and `deadKeys`.
 
@@ -72,16 +81,18 @@ Every config access goes through `ConfigRead`/`ConfigWrite` in
 | F15  | fewer than 20 current settings or 20 revset functions (the scan went blind)                                     |
 
 Test code is whatever `#[cfg(test)]` or `#[test]` marks, plus `tests/`,
-`benches/` and `testing.rs`, filtered once in the resolver for every rule.
+`benches/` and `testing.rs`, filtered once in `rust_tree.py` for every step.
 
-F9 is the broad net: literals inside macros, closures and helper fns are tokens
-to ast-grep too, so a read the resolver cannot follow still leaves its key in a
-literal. It does not catch a key built entirely at run time without a
-`branchless.` literal.
+F9 is the broad net: literals inside macros, closures and helper fns are still
+string nodes in the tree (a macro's token tree keeps them typed), so a read the
+resolver cannot follow still leaves its key in a literal. It does not catch a
+key built entirely at run time without a `branchless.` literal.
 
 `checks/extractor-mutants.nix` holds one upstream-shaped change per guard and
 per known blind spot; `git-branchless-extractor-guards` runs them through
-`extract/mutate.py`. Add a mutant with every new guard.
+`lib/git-tool-settings/mutate.py`. Add a mutant with every new guard, and one
+that a naive text pattern would get wrong for every remaining regex (the N
+series).
 
 ## Checks
 

@@ -176,8 +176,8 @@ minutes later inside `nix-update`.
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
 `mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract`; glab, Kimchi and
-git-branchless instead measure pinned source inputs (git-branchless with an
-ast-grep census of its patched source, `packages/git-branchless/extract/`).
+git-branchless instead measure pinned source inputs (git-branchless with a
+tree-sitter walk of its patched source, `packages/git-branchless/extract/`).
 Consumers read the committed file, never the derivation, so option surfaces
 derived from it cost no IFD. Kimchi's `ai.kimchi.native.*` types are generated
 from its sidecar (`packages/kimchi/lib/extracted.nix`), and git-branchless's

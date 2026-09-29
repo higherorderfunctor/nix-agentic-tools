@@ -1,4 +1,4 @@
-# Mutants for ../extract/mutate.py. Each makes one upstream-shaped change to
+# Mutants for lib/git-tool-settings/mutate.py. Each makes one upstream-shaped change to
 # the patched source (or to the annotations) and names the outcome the
 # extractor must produce: `fails` lists guard codes that must all fire;
 # `adds` / `changes` describe an output that must move with the source; a
@@ -6,7 +6,11 @@
 #
 # M* came with the prototype. C* are the shapes an independent review found
 # the prototype silently mishandled; each one now fails closed or is
-# extracted. G* exercise the guards added with them.
+# extracted. G* exercise the guards added with them. N* are syntax the tree
+# walk reads correctly where a text pattern over the source would not: a
+# fake call in a comment, a raw multi-line string, nested generics, an
+# argument holding `>`, `)` or `,`, a key built across lines, and prose
+# that only looks like a key to a naive pattern.
 let
   config = "git-branchless-lib/src/core/config.rs";
   api = "git-branchless-lib/src/git/config.rs";
@@ -413,5 +417,131 @@ in [
     name = "G9-builtins-no-longer-first";
     edits = [(replace eval "if let Some(function) = FUNCTIONS.get(name) {" "if let Some(function) = lookup_builtin(name) {")];
     fails = ["F14"];
+  }
+
+  # ── Syntax a text pattern would misread ───────────────────────────────
+  {
+    # A multi-line raw string still feeds the literal net.
+    name = "N1-key-in-multiline-raw-string";
+    edits = [
+      (append config ''
+
+        pub fn describe_hidden() -> &'static str {
+            r#"Set this in your configuration:
+            branchless.hidden.raw = true"#
+        }
+      '')
+    ];
+    fails = ["F9"];
+  }
+  {
+    # `git-branchless.x` is prose, not the key `branchless.x`.
+    name = "N2-prose-that-contains-a-key-prefix";
+    edits = [
+      (append config ''
+
+        pub fn about() -> &'static str { "see the git-branchless.hidden.prose page" }
+      '')
+    ];
+  }
+  {
+    # A call written inside a comment is not a call.
+    name = "N3-fake-call-in-a-comment";
+    edits = [
+      (append config ''
+
+        // repo.get_readonly_config()?.get_or("branchless.hidden.comment", true)
+      '')
+    ];
+  }
+  {
+    # A format! argument holding `>` and `,` is one argument.
+    name = "N4-format-argument-with-operators";
+    edits = [
+      (append config ''
+
+        pub fn get_n4(repo: &Repo, level: Option<u8>) -> eyre::Result<Option<bool>> {
+            let v: Option<bool> = repo
+                .get_readonly_config()?
+                .get(format!("branchless.hidden.{}", level.map(|v| v > 1).unwrap_or(max(1, 2) > 0)))?;
+            Ok(v)
+        }
+      '')
+    ];
+    adds = ["branchless.hidden.<name>"];
+    changes."branchless.hidden.<name>".type = "bool";
+  }
+  {
+    # Nested generics: the whole `Option<..>` argument is the type.
+    name = "N5-nested-generic-type";
+    edits = [
+      (append config ''
+
+        pub fn get_n5(repo: &Repo) -> eyre::Result<Option<Vec<Option<String>>>> {
+            let v: Option<Vec<Option<String>>> = repo.get_readonly_config()?.get("branchless.hidden.nested")?;
+            Ok(v)
+        }
+      '')
+    ];
+    adds = ["branchless.hidden.nested"];
+    changes."branchless.hidden.nested".type = "Vec<Option<String>>";
+  }
+  {
+    # A key assembled across lines resolves to nothing: fail, never guess.
+    name = "N6-key-built-across-lines";
+    edits = [
+      (append config ''
+
+        pub fn get_n6(repo: &Repo) -> eyre::Result<bool> {
+            repo.get_readonly_config()?.get_or(concat!(
+                "branchless.",
+                "hidden.split"
+            ), true)
+        }
+      '')
+    ];
+    fails = ["F2"];
+  }
+  {
+    # A default string holding `)` and `,` is one literal.
+    name = "N7-default-string-with-delimiters";
+    edits = [
+      (append config ''
+
+        pub fn get_n7(repo: &Repo) -> eyre::Result<String> {
+            repo.get_readonly_config()?.get_or_else("branchless.hidden.odd", || { "a), b(".to_string() })
+        }
+      '')
+    ];
+    adds = ["branchless.hidden.odd"];
+    changes."branchless.hidden.odd" = {
+      default = "a), b(";
+      type = "string";
+    };
+  }
+  {
+    # "(deprecated) branchless.smartlog.reverseOrder" does not deprecate
+    # branchless.smartlog.reverse.
+    name = "N8-deprecated-marker-on-a-longer-key";
+    edits = [
+      (replace config "/// Whether to reverse the smartlog direction by default\n" ''
+        /// Whether to reverse the smartlog direction by default
+        /// (deprecated) branchless.smartlog.reverseOrder is no longer read.
+      '')
+    ];
+    changes."branchless.smartlog.reverse" = {
+      description = "Whether to reverse the smartlog direction by default (deprecated) branchless.smartlog.reverseOrder is no longer read.";
+      status = "current";
+    };
+  }
+  {
+    # A const holding a sentence that names a key is not a key const.
+    name = "N9-const-sentence-naming-a-key";
+    edits = [
+      (append config ''
+
+        pub const MAIN_BRANCH_HINT: &str = "branchless.core.mainBranch is required";
+      '')
+    ];
   }
 ]

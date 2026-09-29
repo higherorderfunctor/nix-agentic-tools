@@ -35,35 +35,24 @@
 }: let
   ourPkgs = pkgs;
   gbSrc = inputs.git-branchless;
-  extractFile = name: ../../../../extract + "/${name}";
+  extraction = import ../../../../../../lib/git-tool-settings/extraction.nix {pkgs = ourPkgs;};
 
   # Unpack + patch of the package's own `src` and `patches`: the patch adds
   # a key (`branchless.core.protectCheckedOutBranches`) the upstream tree
-  # does not read. stdenvNoCC keeps the Rust toolchain and the vendored
-  # crates out of the extraction's inputs.
-  patchedSource = ourPkgs.srcOnly {
-    inherit (package) patches postPatch src;
-    name = "git-branchless-patched";
-    stdenv = ourPkgs.stdenvNoCC;
+  # does not read.
+  patchedSource = extraction.patchedSource {
+    name = "git-branchless";
+    inherit package;
   };
 
   # Fails on any guard (extract.py's header lists them), so an upstream
-  # change the resolver does not understand stops the build instead of
+  # change the tree walk does not understand stops the build instead of
   # dropping a key.
-  extracted =
-    ourPkgs.runCommand "git-branchless-extracted.json" {
-      nativeBuildInputs = [ourPkgs.ast-grep ourPkgs.python3];
-    } ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      cd ${patchedSource}
-      ast-grep scan --rule ${extractFile "rules/config.yml"} --json=stream . >"$TMPDIR/matches.jsonl"
-      python3 ${extractFile "extract.py"} \
-        --annotations ${extractFile "annotations.json"} \
-        --matches "$TMPDIR/matches.jsonl" \
-        --out "$out" \
-        --src ${patchedSource}
-    '';
+  extracted = extraction.extracted {
+    name = "git-branchless";
+    source = patchedSource;
+    extractDir = ../../../../extract;
+  };
 
   package = ourPkgs.git-branchless.overrideAttrs (prev: {
     name = "git-branchless";

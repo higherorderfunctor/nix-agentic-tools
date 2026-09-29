@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Prove the extractor fails closed: run it over mutated copies of the source.
+"""Prove an extractor fails closed: run it over mutated copies of the source.
 
-Each mutant makes one upstream-shaped change to a copy of the patched source
-(or to the annotations) and states what the extractor must do with it:
+Shared by every git-tool census (packages/git-*/extract/extract.py). Each
+mutant makes one upstream-shaped change to a copy of the source tree (or to
+the annotations) and states what the extractor must do with it:
 
   fails    guard codes that must all appear, with a non-zero exit
   adds     settings keys that must appear, with exit 0 and nothing lost
-  changes  {key: {field: value}} the output must carry, with exit 0
+  changes  {key: {field: value}} a setting or foreign key must carry, exit 0
   revsetFunctionsAdd  builtin revset names that must appear, with exit 0
   (none)   exit 0 and an output identical to the baseline
 
 A mutant whose edit does not apply is itself a failure, so a source change
 that retires a mutant's anchor surfaces here instead of passing vacuously.
+The extractor is run as `python3 <extractor> --src --annotations --out`,
+with this process's environment (PYTHONPATH included).
 """
 
 import argparse
@@ -23,7 +26,7 @@ import tempfile
 from pathlib import Path
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-for flag in ("annotations", "ast-grep", "baseline", "extractor", "mutants", "rules", "src"):
+for flag in ("annotations", "baseline", "extractor", "mutants", "src"):
     parser.add_argument(f"--{flag}", type=Path, required=True)
 args = parser.parse_args()
 
@@ -42,8 +45,7 @@ def deep_merge(base, patch):
 def run(mutant, work):
     src = work / "src"
     shutil.copytree(args.src, src)
-    src.chmod(0o755)
-    for path in src.rglob("*"):
+    for path in [src, *src.rglob("*")]:
         path.chmod(0o755 if path.is_dir() else 0o644)
     for edit in mutant.get("edits", []):
         target = src / edit["file"]
@@ -57,15 +59,14 @@ def run(mutant, work):
         target.write_text(new)
     ann = work / "annotations.json"
     ann.write_text(json.dumps(deep_merge(annotations, mutant.get("annotations", {}))))
-    matches = work / "matches.jsonl"
-    with matches.open("w") as out:
-        subprocess.run([str(args.ast_grep), "scan", "--rule", str(args.rules), "--json=stream", "."],
-                       cwd=src, stdout=out, check=True)
-    result = subprocess.run([sys.executable, str(args.extractor), "--src", str(src), "--matches", str(matches),
-                             "--annotations", str(ann), "--out", str(work / "out.json")],
-                            capture_output=True, text=True)
-    out_json = json.loads((work / "out.json").read_text()) if (work / "out.json").exists() else None
-    return (result.returncode, result.stderr, out_json), None
+    out = work / "out.json"
+    result = subprocess.run([sys.executable, str(args.extractor), "--src", str(src), "--annotations", str(ann),
+                             "--out", str(out)], capture_output=True, text=True)
+    return (result.returncode, result.stderr, json.loads(out.read_text()) if out.exists() else None), None
+
+
+def field(out, key, name):
+    return {**out["foreign"], **out["settings"]}.get(key, {}).get(name)
 
 
 for mutant in json.loads(args.mutants.read_text()):
@@ -81,7 +82,7 @@ for mutant in json.loads(args.mutants.read_text()):
     if "fails" in mutant:
         missing = sorted(set(mutant["fails"]) - set(guards))
         if rc == 0 or missing:
-            problems.append(f"{summary}; expected failure with {mutant['fails']}, missing {missing}")
+            problems.append(f"{summary}; expected failure with {mutant['fails']}, missing {missing}\n{stderr}")
             continue
     else:
         if rc != 0 or out is None:
@@ -92,12 +93,13 @@ for mutant in json.loads(args.mutants.read_text()):
         if added != sorted(mutant.get("adds", [])) or lost:
             problems.append(f"{summary}; added {added} (expected {mutant.get('adds', [])}), lost {lost}")
             continue
-        functions = sorted(set(out["revsetFunctions"]) ^ set(baseline["revsetFunctions"]))
+        functions = sorted(set(out.get("revsetFunctions", [])) ^ set(baseline.get("revsetFunctions", [])))
         if functions != sorted(mutant.get("revsetFunctionsAdd", [])):
-            problems.append(f"{summary}; revset functions moved by {functions} (expected {mutant.get('revsetFunctionsAdd', [])})")
+            problems.append(f"{summary}; revset functions moved by {functions} "
+                            f"(expected {mutant.get('revsetFunctionsAdd', [])})")
             continue
-        wrong = {f"{k}.{f}": out["settings"].get(k, {}).get(f) for k, fields in mutant.get("changes", {}).items()
-                 for f, v in fields.items() if out["settings"].get(k, {}).get(f) != v}
+        wrong = {f"{k}.{f}": field(out, k, f) for k, fields in mutant.get("changes", {}).items()
+                 for f, v in fields.items() if field(out, k, f) != v}
         if wrong:
             problems.append(f"{summary}; expected changes {mutant['changes']}, got {wrong}")
             continue
