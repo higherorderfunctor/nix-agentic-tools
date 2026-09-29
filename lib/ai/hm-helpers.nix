@@ -25,8 +25,7 @@ in {
   #
   # `builtins.readFileType` rather than `lib.isPath`, because a skill that
   # comes from a package is an interpolated STRING, and treating that as a
-  # single file writes the path itself as the file's content — the bug the
-  # upstream skill helper has.
+  # single file writes the path itself as the file's content.
   mkSkillFiles = {
     configDir,
     recursive ? true,
@@ -48,7 +47,7 @@ in {
               # ALWAYS `source`, never a path-vs-string test. A skill that
               # comes from a package is an interpolated STRING holding a store
               # path, and routing that to `text` writes the PATH as the file's
-              # body — the same upstream bug the directory branch above avoids,
+              # body — the same bug the directory branch above avoids,
               # reached through the single-file branch instead.
               content.source = source;
               executable = null;

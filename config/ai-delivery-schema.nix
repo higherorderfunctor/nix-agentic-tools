@@ -7,7 +7,7 @@
   # (`ai.<runtime>.<pool>.<name> = null`). The others compose root and
   # per-runtime values, so a root request for them has no per-runtime remedy.
   keyedSurfaces = ["agents" "environmentVariables" "lspServers" "mcpServers" "rules" "skills"];
-  primitives = ["notApplicable" "ownLeaves" "ownPathDeclarative" "ownPathManaged" "ownWrapper" "upstream"];
+  primitives = ["notApplicable" "ownLeaves" "ownPathDeclarative" "ownPathManaged" "ownWrapper"];
   imperativePrimitives = ["ownLeaves" "ownPathManaged"];
   key = row: "${row.surface}/${row.ecosystem}/${row.mode}";
   writersOf = row: [row] ++ lib.concatMap (writer: writersOf (writer // {inherit (row) ecosystem mode surface;})) (row.additionalWriters or []);
@@ -23,8 +23,7 @@
       then writer.target == null && writer.writerAttr == []
       else nonBlank writer.target && writer.writerAttr != []
     )
-    && (!(builtins.elem writer.primitive ["notApplicable" "upstream"]) || nonBlank (writer.reason or ""))
-    && (writer.primitive != "upstream" || nonBlank (writer.reverifyCommand or ""))
+    && (writer.primitive != "notApplicable" || nonBlank (writer.reason or ""))
     && (!(builtins.elem writer.primitive imperativePrimitives)
       || (
         writer ? probe
@@ -44,7 +43,7 @@
     handKeys,
   }: rows:
     assert lib.assertMsg (lib.all (row: lib.all (field: builtins.hasAttr field row) ["ecosystem" "mode" "surface"]) rows) "ai-delivery: every row must declare surface, ecosystem, and mode";
-    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, reverifyCommand, probe, inputOptions as key lists, absentWriter, constantGate, declarationIndependent, or exemption)";
+    assert lib.assertMsg (lib.all (row: lib.all validWriter (writersOf row)) rows) "ai-delivery: incomplete or invalid writer (required fields, primitive, reason, probe, inputOptions as key lists, absentWriter, constantGate, declarationIndependent, or exemption)";
     assert lib.assertMsg (
       lib.sort builtins.lessThan (map key rows)
       == lib.sort builtins.lessThan expectedKeys

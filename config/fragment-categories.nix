@@ -150,9 +150,9 @@ _: {
         "shell-option"
       ];
     };
-    # ai-skills: uniform skill layout through native program options or shared
-    # recursive helpers. Scoped to the runtime implementations, package factory
-    # modules, and skill helper.
+    # ai-skills: uniform skill layout through the shared `mkSkillFiles` helper.
+    # Scoped to the runtime implementations, package factory modules, and skill
+    # helper.
     ai-skills = {
       scopes = [
         "lib/ai/hm-helpers.nix"

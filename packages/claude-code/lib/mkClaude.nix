@@ -42,9 +42,9 @@
   # settings key SILENTLY, so without this a misspelling looks applied and does
   # nothing.
   #
-  # Built once and consumed by BOTH projections' mkMerge lists — the check is a
-  # property of the option, not of a backend, and the two backends write the
-  # same settings tree. Same shape as mkKiro's `mkAssertions cfg`.
+  # Consumed once by the shared config callback, which serves both backends —
+  # the check is a property of the option, not of a backend, and the two
+  # backends write the same settings tree. Same shape as mkKiro's `mkAssertions cfg`.
   #
   # `extracted.settings or null` degrades a sidecar that predates settings
   # extraction to "check off" rather than "eval throws" — but only while the
@@ -55,8 +55,8 @@
   nativeFileAssertions = cfg:
     unrecognizedSettings.mkAssertions {
       declared = extracted.settings or null;
-      # The tree actually written — identical to the HM
-      # `settings = aiCommon.filterNulls cfg.native.settings` write below.
+      # The tree actually written — identical to the
+      # `aiCommon.filterNulls cfg.native.settings` settings document below.
       # Filtering FIRST is load-bearing: a typed sub-option sitting at its
       # `null` default would otherwise report itself the day upstream renames
       # that key, for every consumer, including ones who never set it.
@@ -76,13 +76,12 @@
         enableWorkflows = ownWrite "ai.claude.ultracodeOnLaunch";
         env = ownWrite "ai.shell / ai.environmentVariables";
         ultracode = ownWrite "ai.claude.ultracodeOnLaunch";
-        mcpServers = "MCP servers do not belong in settings.json — declare them\n      under `ai.mcpServers` or `ai.claude.mcpServers`, which render into\n      .mcp.json. The devenv projection already drops this key from its gap\n      write; the HM projection hands it to upstream verbatim.";
+        mcpServers = "MCP servers do not belong in settings.json — declare them\n      under `ai.mcpServers` or `ai.claude.mcpServers`, which render into\n      the project .mcp.json (devenv) or the Home Manager personal plugin.";
       };
     };
 
   # A single handler. `command` is modelled fully; the exotic handler types
-  # (http/prompt/agent/mcp_tool) round-trip via the freeform JSON tail (and, on
-  # devenv, force the gap-write path — see plan §9b).
+  # (http/prompt/agent/mcp_tool) round-trip via the freeform JSON tail.
   hookHandler = lib.types.submodule {
     freeformType = (pkgs.formats.json {}).type;
     options = {
@@ -105,11 +104,7 @@
       timeout = lib.mkOption {
         type = lib.types.nullOr lib.types.int;
         default = null;
-        description = ''
-          Per-handler timeout in seconds. Lowered into settings.json; on the
-          devenv backend a non-null timeout forces the event onto the gap-write
-          path (devenv's `claude.code.hooks` has no timeout field).
-        '';
+        description = "Per-handler timeout in seconds. Lowered into settings.json.";
       };
     };
   };
@@ -192,9 +187,8 @@
   # Identical on both backends because both write the same settings tree,
   # so it is defined once here rather than duplicated per callback.
   # Claude is the only harness here with no launcher wrapper, so its process
-  # environment is expressed through `settings.env` — which upstream writes
-  # into settings.json. Both the typed shell and the module-contributed
-  # sandbox-safe SSH command ride it.
+  # environment is expressed through `settings.env` in settings.json. Both the
+  # typed shell and the module-contributed sandbox-safe SSH command ride it.
   #
   # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
@@ -236,6 +230,24 @@
       runWhenDisabled = true;
     };
   };
+  helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+  pluginLib = import ./plugin.nix {inherit lib pkgs;};
+
+  # The Home Manager personal plugin that carries MCP and LSP servers — the
+  # only route Claude has for user-scope LSP. Its directory name is ours; the
+  # manifest name `hm` is the MCP tool namespace (`mcp__plugin_hm_<server>`),
+  # kept short for token cost and stable for consumers that pin tool names.
+  personalPlugin = "home-manager";
+  personalPluginManifest = "hm";
+
+  # Claude Markdown surfaces, one `.claude/<dir>/<name>.md` each. A path-like
+  # value (path, store string, derivation) is linked as a `source`, anything
+  # else is the file's text.
+  markdownFiles = dir:
+    lib.mapAttrs' (name: rendered:
+      lib.nameValuePair ".claude/${dir}/${name}.md" {
+        content = lib.mkDefault ({enable = true;} // agent.fileContent rendered);
+      });
 in
   lib.ai.app.mkRuntime {
     # Carried as DATA, not a module argument — see mkRuntime.nix.
@@ -261,10 +273,8 @@ in
       agents.description = ''
         Claude-specific agent Markdown or portable semantic records. Entries
         replace top-level `ai.agents` at the same key; null suppresses an
-        inherited agent. Home Manager routes them to
-        `programs.claude-code.agents`, which writes
-        `~/.claude/agents/<name>.md`; devenv writes project
-        `.claude/agents/<name>.md` itself.
+        inherited agent. Each lands at `.claude/agents/<name>.md` under the
+        backend root (`~` for Home Manager, the project for devenv).
       '';
       agentsDir.description = ''
         Claude-specific directory of `.md` agent files. Each file
@@ -276,11 +286,12 @@ in
       lspServers.description = ''
         Typed Claude-specific LSP server declarations. Entries replace
         top-level `ai.lspServers` at the same key; null suppresses an
-        inherited server. Translated via `mkClaudeLspConfig` to
-        `programs.claude-code.lspServers`, which upstream writes into
-        `~/.claude/settings.json`. Extensions list becomes
-        `extensionToLanguage` mapping. Upstream devenv `claude.code`
-        has no LSP surface — devenv warns when this option is non-empty.
+        inherited server. Translated via `mkClaudeLspConfig` into the Home
+        Manager personal plugin's
+        `~/.claude/skills/home-manager/.lsp.json`, since a plugin is
+        Claude's only LSP route. Extensions list becomes
+        `extensionToLanguage` mapping. devenv has no LSP delivery and warns
+        when this option is non-empty.
       '';
     };
     # Shared options (present in both backends)
@@ -291,25 +302,19 @@ in
         description = ''
           Claude plugins, keyed by plugin directory name. The value is
           either a path to a plugin directory or a package derivation.
-          Routed to `programs.claude-code.plugins`.
+          Each lands as ONE directory link at
+          `~/.claude/skills/<name>`, which Claude Code 2.1.157+ loads as a
+          personal plugin; a source without `.claude-plugin/plugin.json`
+          gets one synthesized with `name = "<name>"`.
 
-          The ATTRIBUTE NAME is load-bearing: upstream uses it
-          verbatim as the plugin's on-disk directory name
-          (`<configDir>/skills/<name>` on Claude Code 2.1.157+; the
-          derivation name and the synthesized
-          `.claude-plugin/plugin.json` `name` field on every version),
-          and its uniqueness — against other plugins and against
-          `ai.skills` names — is asserted upstream.
+          The ATTRIBUTE NAME is load-bearing: it is the on-disk directory
+          name and the synthesized manifest `name`, so it must not collide
+          with an `ai.skills` name or the `home-manager` personal
+          plugin (asserted). Attrset-only, so a bare flake-input store path
+          never yields an unstable `<hash>-source` name.
 
-          Attrset-only by design. Upstream still tolerates a plain list,
-          but then derives each name from the entry's base name, so a
-          bare flake-input store path yields an unstable
-          `<hash>-source` that is renamed by every unrelated input bump.
-          An explicit key pins the directory name across bumps. A list
-          fails the type check here — convert it to an attrset.
-
-          HM only — upstream devenv `claude.code` has no plugins surface,
-          so devenv ignores this option.
+          Home Manager only — personal plugins are user-scope, so devenv
+          warns when this option is non-empty.
         '';
         example = lib.literalExpression ''
           {
@@ -335,7 +340,8 @@ in
           type where the schema is not the surface we want (`attribution.*`
           accepts a bool, `model` is a soft enum, `tui` carries a
           read-only-store caveat). Null typed keys are filtered out before
-          reaching upstream, so an option left at its default writes nothing.
+          the document is written, so an option left at its default writes
+          nothing.
 
           The freeform catch-all still accepts a key newer than this
           package's schema — see `allowUnrecognizedSettings`, which is what
@@ -425,9 +431,11 @@ in
         default = {};
         description = ''
           Claude plugin marketplaces. Each entry is either a path to a
-          marketplace directory or a package derivation. Routed to
-          programs.claude-code.marketplaces; upstream writes them into
-          ~/.claude/settings.json under extraKnownMarketplaces.
+          marketplace directory or a package derivation. Written into
+          `.claude/settings.json` as an `extraKnownMarketplaces` directory
+          source on both backends, which Claude registers itself — at once
+          from user settings, after the workspace trust dialog from a
+          project's.
         '';
         example = lib.literalExpression ''
           {
@@ -441,8 +449,8 @@ in
         description = ''
           Claude custom output styles. Attribute name becomes the style
           filename stem; value is inline markdown or a path to a .md
-          file. Routed to programs.claude-code.outputStyles; upstream
-          writes them under ~/.claude/output-styles/<name>.md.
+          file. Each lands at `.claude/output-styles/<name>.md` under the
+          backend root.
         '';
         example = lib.literalExpression ''
           {
@@ -457,8 +465,8 @@ in
         description = ''
           Claude custom slash-commands. Attribute name becomes the
           command filename stem; value is inline markdown or a path
-          to a .md file. Routed to `programs.claude-code.commands`;
-          upstream writes them under `~/.claude/commands/<name>.md`.
+          to a .md file. Each lands at `.claude/commands/<name>.md` under
+          the backend root.
           Claude-only — Kiro and Copilot have no analogous command
           concept, so no top-level `ai.commands` fanout.
         '';
@@ -529,9 +537,8 @@ in
           Typed Claude hook event wiring, keyed by event name — mirrors
           settings.json `hooks.<Event>` 1:1. Each event maps to a list of
           matcher blocks; each block has an optional `matcher` and a list of
-          typed handlers. Lowered to settings.json on both backends
-          (programs.claude-code.settings on HM; claude.code.hooks records plus
-          a gap-write tail on devenv).
+          typed handlers. Lowered into `.claude/settings.json` on both
+          backends.
 
           The event key is a soft enum: the ${toString (builtins.length extracted.hookEvents)}
           recognized events (extracted from the packaged binary into the
@@ -562,10 +569,9 @@ in
         type = lib.types.attrsOf lib.types.lines;
         default = {};
         description = ''
-          Inline Claude hook script bodies, materialized as standalone files at
-          `~/.claude/hooks/<name>` (HM: `programs.claude-code.hooks`; devenv:
-          greenfield `files` write). Attribute name = filename, value = script
-          body. For trivial single-file hooks only — hooks that need supporting
+          Inline Claude hook script bodies, materialized as executable files
+          at `.claude/hooks/<name>` under the backend root. Attribute name =
+          filename, value = script body. For trivial single-file hooks only — hooks that need supporting
           files should use a package `command` in `ai.claude.hooks` instead.
           Claude-only — Kiro's `ai.kiro.hooks` takes JSON-shaped definitions.
         '';
@@ -666,11 +672,12 @@ in
         '';
       };
     };
-    # Describe each delivered surface once; only delegation to a backend's
-    # native module remains backend-specific.
+    # Describe each delivered surface once; a per-backend difference reads
+    # `backend`.
     config = {
       backend,
       cfg,
+      config,
       hasMergedContext,
       mergedAgents,
       mergedContext,
@@ -684,35 +691,62 @@ in
       topHooks,
       ...
     }: let
-      helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       isHm = backend == "hm";
       # Claude's own state file, holding account tokens beside the unpin flags.
       claudeJson = ".claude.json";
       unpinLedger = "json-settings/claude-unpin-launch-effort.json";
-      upstream = path: sink: value: {
-        ai.claude.files.${path} = {
-          content.value = value;
-          method = "upstream";
-          inherit sink;
+      nativeSettings = aiCommon.filterNulls cfg.native.settings;
+      # The typed event map (the one renderer Kimchi's hooks.json also uses)
+      # and the legacy `native.settings.hooks` escape hatch, joined per event
+      # HERE: a document's `content.value` merges leaf-wise, so two
+      # contributions of one event's list would conflict rather than append.
+      hooks =
+        lib.zipAttrsWith (_: lib.concatLists)
+        [(sharedHooks.render effectiveHooks) (nativeSettings.hooks or {})];
+      # Every settings contribution reaches this one document through
+      # `native.settings`, so a consumer's own key beats a generated default
+      # by the ordinary option priorities.
+      settingsDocument = removeAttrs nativeSettings ["hooks"] // lib.optionalAttrs (hooks != {}) {inherit hooks;};
+      renderedServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+      personalPluginFiles = lib.filterAttrs (_: value: value != {}) {
+        ".mcp.json" = lib.optionalAttrs (mergedServers != {}) {mcpServers = renderedServers;};
+        ".lsp.json" = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
+      };
+      # Its manifest only when it carries something to load.
+      personalPluginEntries = lib.optionalAttrs (personalPluginFiles != {}) (
+        lib.mapAttrs' (file: value:
+          lib.nameValuePair ".claude/skills/${personalPlugin}/${file}" {
+            content.value = value;
+            format = "json";
+          }) (personalPluginFiles // {".claude-plugin/plugin.json" = {name = personalPluginManifest;};})
+      );
+      marketplaceEntry = source: {
+        source = {
+          source = "directory";
+          path = "${source}";
         };
       };
-      hmSurface = path: attribute:
-        upstream path ["programs" "claude-code" attribute];
-      # One entry composes all settings contributions before delegation. In
-      # devenv the upstream integration also adds hooks to this same JSON sink;
-      # handing it structured content preserves its list/deep-merge semantics.
-      settings = value: {
-        ai.claude.files.".claude/settings.json".content.value = value;
-      };
-      # MCP belongs in .mcp.json, never the project settings document. Hooks
-      # keep their separate contribution so the legacy and typed maps append.
-      gapSettings = aiCommon.filterNulls (removeAttrs cfg.native.settings ["hooks" "mcpServers"]);
+      pluginCollisions = lib.intersectLists (lib.attrNames cfg.plugins) ([personalPlugin] ++ lib.attrNames mergedSkills);
+      # The backend's own Claude module writes the same files. Read through
+      # `attrByPath`, so a configuration that never imported it evaluates.
+      upstreamEnable =
+        if isHm
+        then ["programs" "claude-code" "enable"]
+        else ["claude" "code" "enable"];
     in
       lib.mkMerge [
         # Unrecognized-key guard for the freeform native.settings tail. One
         # builder, both backends — see nativeFileAssertions.
         {assertions = nativeFileAssertions cfg;}
+        {
+          assertions = [
+            {
+              assertion = !(lib.attrByPath upstreamEnable false config);
+              message = "ai.claude.enable and ${lib.concatStringsSep "." upstreamEnable} cannot both be on: each writes Claude's files, and they cannot share them. Disable one of the two.";
+            }
+          ];
+        }
         (lib.mkIf (resolvedSettings.reasoningEffort != null) {
           ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
@@ -750,25 +784,26 @@ in
             enableWorkflows = lib.mkDefault true;
           };
         })
-        # Declare the sink once: list-valued sink paths concatenate if each
-        # content contribution repeats them, producing a nested option path.
-        (lib.mkIf (isHm || effectiveHooks != {} || gapSettings != {} || (cfg.native.settings.hooks != null && cfg.native.settings.hooks != {})) {
+        # Settings are configuration, so Nix owns the whole file and links it
+        # read-only on both backends: an in-app change such as `/tui` does not
+        # persist, by design. `$schema` gives editors validation and completion
+        # of that file; it rides outside `native.settings` so the
+        # unrecognized-key guard never sees it, and it is added only to a
+        # non-empty document so it never makes an empty declaration write one.
+        (lib.mkIf (settingsDocument != {}) {
           ai.claude.files.".claude/settings.json" = {
+            content.value = {"$schema" = "https://json.schemastore.org/claude-code-settings.json";} // settingsDocument;
             format = "json";
-            method = "upstream";
-            sink =
-              if isHm
-              then ["programs" "claude-code" "settings"]
-              else ["files" ".claude/settings.json" "json"];
           };
         })
-        # The one renderer Kimchi's hooks.json also uses. Same-event lists
-        # concat across module writers (formats.json merge), so this composes
-        # with the legacy `settings.hooks` escape hatch and, on devenv, with
-        # the git-hooks-run entry — never clobbers.
-        (lib.mkIf (effectiveHooks != {}) (settings {
-          hooks = sharedHooks.render effectiveHooks;
-        }))
+        # Claude registers a marketplace it does not know from
+        # `extraKnownMarketplaces`: immediately from user settings, after the
+        # workspace trust dialog from a project's. Its own registry,
+        # known_marketplaces.json, is runtime state it writes itself.
+        {
+          ai.claude.native.settings.extraKnownMarketplaces =
+            lib.mapAttrs (_: source: lib.mkDefault (marketplaceEntry source)) cfg.marketplaces;
+        }
         (lib.mkIf hasMergedContext {
           ai.claude.files.${contextPath cfg} =
             aiCommon.contentFileEntry mergedContext;
@@ -803,32 +838,54 @@ in
             transformer = lib.ai.transformers.claude.claudeTransformer;
           };
         }
+        # Agents, commands and output styles: one Markdown link each.
+        {ai.claude.files = markdownFiles "agents" (lib.mapAttrs agent.renderClaude mergedAgents);}
+        {ai.claude.files = markdownFiles "commands" cfg.commands;}
+        {ai.claude.files = markdownFiles "output-styles" cfg.outputStyles;}
+        {
+          ai.claude.files = lib.mapAttrs' (name: body:
+            lib.nameValuePair ".claude/hooks/${name}" {
+              content = lib.mkDefault {text = body;};
+              executable = true;
+            })
+          cfg.hookScripts;
+        }
+        {
+          ai.claude.files = helpers.mkSkillFiles {
+            configDir = ".claude";
+            skills = mergedSkills;
+          };
+        }
 
         (lib.optionalAttrs isHm (lib.mkMerge [
-          # The upstream Home Manager module owns these surfaces, including
-          # their plugin layout. Delivery records pass values to its options;
-          # rendering them here would introduce a second writer.
-          (hmSurface ".claude/agents" "agents" (lib.mapAttrs agent.renderClaude mergedAgents))
-          (hmSurface ".claude/hooks" "hooks" cfg.hookScripts)
-          (hmSurface ".claude/skills" "skills" (lib.mapAttrs (_: lib.mkDefault) mergedSkills))
-          (hmSurface ".claude/skills/claude-code-home-manager/.lsp.json" "lspServers"
-            (lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers))
-          (hmSurface ".claude/skills/claude-code-home-manager/.mcp.json" "mcpServers"
-            (lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers))
-          (settings (aiCommon.filterNulls cfg.native.settings))
-          (lib.mkIf (mergedServers != {}) (settings {
-            env.ENABLE_LSP_TOOL = lib.mkDefault "1";
-          }))
           {
-            programs.claude-code = {
-              enable = lib.mkDefault true;
-              package = lib.mkDefault cfg.package;
-              # Keep per-plugin defaults so overriding one upstream plugin
-              # never discards the other generated entries.
-              plugins = lib.mapAttrs (_: lib.mkDefault) cfg.plugins;
-              inherit (cfg) commands marketplaces outputStyles;
-            };
+            assertions = [
+              {
+                assertion = pluginCollisions == [];
+                message = "ai.claude.plugins ${lib.concatStringsSep ", " pluginCollisions} would land at ~/.claude/skills/<name>, which ${lib.concatStringsSep " or " (lib.optional (lib.elem personalPlugin pluginCollisions) "the ${personalPlugin} personal plugin" ++ lib.optional (lib.intersectLists pluginCollisions (lib.attrNames mergedSkills) != []) "an ai.skills entry")} already owns. Rename the plugin key.";
+              }
+              # A skill of that name would share the plugin's directory, and
+              # Claude would load the directory as the plugin, not the skill.
+              {
+                assertion = personalPluginEntries == {} || !(mergedSkills ? ${personalPlugin});
+                message = "ai.skills.${personalPlugin} (or ai.claude.skills.${personalPlugin}) would land at ~/.claude/skills/${personalPlugin}, which the ${personalPlugin} personal plugin already owns. Rename the skill.";
+              }
+            ];
           }
+          {ai.claude.files = personalPluginEntries;}
+          {
+            ai.claude.files = lib.mapAttrs' (name: plugin:
+              lib.nameValuePair ".claude/skills/${name}" {
+                content.source = pluginLib.mkPluginEntry name plugin;
+                executable = null;
+              })
+            cfg.plugins;
+          }
+          # The flag gates Claude's LSP tool, which reads the personal
+          # plugin's `.lsp.json`, so it follows the LSP servers, not MCP ones.
+          (lib.mkIf (mergedLspServers != {}) {
+            ai.claude.native.settings.env.ENABLE_LSP_TOOL = lib.mkDefault "1";
+          })
           # Claude writes native state (including OAuth tokens) here. Own
           # only the unpin leaves. This user-global operation never runs from
           # a project shell.
@@ -850,55 +907,14 @@ in
             };
           }
         ]))
-        (lib.optionalAttrs (!isHm) (lib.mkMerge [
-          {
-            claude.code = {
-              enable = lib.mkDefault true;
-              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-              # Upstream defaults to an absolute key. Pin the relative key
-              # so its hooks and our settings deep-merge into ONE file.
-              settingsPath = lib.mkDefault ".claude/settings.json";
-            };
-          }
-          # Test the value: hooks is a declared nullable option, so an
-          # attribute fallback would still pass null to the JSON merge.
-          (lib.mkIf (cfg.native.settings.hooks != null && cfg.native.settings.hooks != {})
-            (settings {hooks = cfg.native.settings.hooks;}))
-          (lib.mkIf (gapSettings != {}) (settings gapSettings))
-          # Preserve the established project layout for script bodies and
-          # skill leaves. These remain native symlink entries, with no shared
-          # document for a writer to reconcile.
-          {
-            ai.claude.files = lib.mapAttrs' (name: body:
-              lib.nameValuePair ".claude/hooks/${name}" {
-                content = lib.mkDefault {text = body;};
-                executable = null;
-              })
-            cfg.hookScripts;
-          }
-          # ai.agents / ai.claude.agents → .claude/agents/<name>.md, rendered by
-          # the same renderer as HM's `programs.claude-code.agents`. Written
-          # here rather than handed to upstream `claude.code.agents`: that
-          # option requires typed description/prompt fields, so it cannot
-          # carry a raw Markdown or path entry without parsing it.
-          {
-            ai.claude.files = lib.mapAttrs' (name: value:
-              lib.nameValuePair ".claude/agents/${name}.md" {
-                content = lib.mkDefault ({enable = true;} // agent.fileContent (agent.renderClaude name value));
-              })
-            mergedAgents;
-          }
-          {
-            ai.claude.files = helpers.mkSkillFiles {
-              configDir = ".claude";
-              skills = mergedSkills;
-            };
-          }
-        ]))
+        # The project's .mcp.json, as read-only as its settings.json.
+        (lib.optionalAttrs (!isHm) (lib.mkIf (mergedServers != {}) {
+          ai.claude.files.".mcp.json" = {
+            content.value.mcpServers = renderedServers;
+            format = "json";
+          };
+        }))
       ];
-    # Home Manager installs finalPackage through programs.claude-code. A
-    # second profile entry would collide at bin/claude. Devenv's integration
-    # has no package option, so it keeps the shared transform's installation.
     devenv.migrationConfig = claudeRulesWriterConfig;
     contentTargets = {
       cfg,
@@ -908,5 +924,4 @@ in
       context = contextPath cfg;
       rules = lib.mapAttrs (name: _: rulePath name) mergedRules;
     };
-    hm.installPackage = null;
   }

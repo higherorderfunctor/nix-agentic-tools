@@ -7,9 +7,9 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-09-24 — proxy ownership is explicit and keyed by
-> server name, so each owner gets its own daemon; every ecosystem renders
-> servers via `renderServer`.
+> **Last verified:** 2026-09-27 — Claude's settings and MCP files are Nix-owned
+> read-only links. Proxy ownership is explicit and keyed by server name, so each
+> owner gets its own daemon; every ecosystem renders servers via `renderServer`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -406,6 +406,8 @@ silent-skip on a flipped name.
 ### Deferred (not yet built)
 
 `mcpWriteMode`/merge generalization to Copilot `mcp-config.json`, the settings
-files, devenv-merge broadly, and Claude `.mcp.json` (upstream
-`programs.claude-code` owns that write into the oauth-bearing `.claude.json`).
-Only the Kiro slice ships today.
+files, and devenv-merge broadly. Only the Kiro slice ships today.
+
+Claude's files are not merge candidates: its `.claude/settings.json` and its
+`.mcp.json` files (the Home Manager personal plugin's and the devenv project's)
+are Nix-owned read-only links by policy.

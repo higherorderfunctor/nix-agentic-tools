@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs evalDevenv evalHm harnessNames hmLib mkTest;
+  inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDaemonDefault;
   # Runtimes whose app record supports the normalized settings pool. Kiro is
   # excluded: it persists effort only per model, so it declares no
@@ -18,90 +18,73 @@ in {
     #
     # This is the test that would have caught `claude`. Installation used to be
     # a per-factory `home.packages` / `packages` write with no shared
-    # requirement, and claude's was missing from BOTH backends — invisible on
-    # Home Manager because upstream's `programs.claude-code` installs the
-    # package anyway, and visible on devenv only as `claude` silently resolving
-    # to whatever the developer happened to have installed user-globally.
+    # requirement, and claude's was missing from BOTH backends, visible on
+    # devenv as `claude` silently resolving to whatever the developer happened
+    # to have installed user-globally.
     #
     # `lib/ai/app/mkBackendTransform.nix` now owns installation and defaults to
     # installing `cfg.package`, so saying nothing installs the plain package
     # rather than nothing. This table pins the delivery CHANNEL per runtime per
-    # backend, which is the half a default cannot enforce: it catches a factory
-    # that opts out with `installPackage = null` for a reason that stops being
-    # true.
-    #
-    # `claude` on Home Manager is the ONE deliberate empty `home.packages`. It
-    # must not install there, or two paths to the same `bin/claude` land in one
-    # profile and buildEnv fails activation with a conflicting-subpath error.
-    # Its channel is `programs.claude-code.package`, asserted explicitly so the
-    # exemption cannot silently widen into "claude installs nothing anywhere".
+    # backend, which is the half a default cannot enforce: whether each one
+    # installs a wrapper or the bare package.
     module-every-runtime-installs-package = mkTest "every-runtime-installs-package" (
       let
-        # The devenv-side SHAPE of each runtime's installed derivation, not merely
+        # The SHAPE of each runtime's installed derivation per backend, not merely
         # that something was installed. `packages != []` alone is not enough: a
         # misspelled or dropped `installPackage` key falls through to the
         # transform's `cfg.package` default and installs the runtime's BARE
         # binary — no flag injection, no baked environment, no `secretEnv` — while
         # a count-only assertion still passes. Before the seam existed a wrong key
         # name was a Nix eval error inside `config`; now it is a silent
-        # substitution, so the shape is what has to be pinned.
+        # substitution, so the shape is what has to be pinned. The count pins the
+        # other direction: a second install path to one `bin/<exe>` makes
+        # buildEnv fail activation with a conflicting-subpath error.
         #
         # Every harness wraps on devenv because `gitSshConfigWorkaround` defaults
-        # on and contributes `GIT_SSH_COMMAND`. `claude` is the exception at the
-        # other end: it has no wrapper anywhere (its env rides
+        # on and contributes `GIT_SSH_COMMAND`. Home Manager wraps only when a
+        # launcher has something to inject, which a bare `enable = true` gives
+        # kimchi alone. `claude` has no wrapper anywhere (its env rides
         # `.claude/settings.json`, never process env), so it installs `cfg.package`
-        # and MUST NOT gain a `-wrapped` suffix.
-        devenvShape = {
-          claude = "bare";
-          codex = "wrapped";
-          copilot = "wrapped";
-          kimchi = "wrapped";
-          kiro = "wrapped";
+        # on both backends and MUST NOT gain a `-wrapped` suffix.
+        shapes = {
+          devenv = {
+            claude = "bare";
+            codex = "wrapped";
+            copilot = "wrapped";
+            kimchi = "wrapped";
+            kiro = "wrapped";
+          };
+          hm = {
+            claude = "bare";
+            codex = "bare";
+            copilot = "bare";
+            kimchi = "wrapped";
+            kiro = "bare";
+          };
         };
-        runtimes = builtins.attrNames devenvShape;
+        installedBy = {
+          devenv = name: (evalDevenv {ai.${name}.enable = true;}).config.packages;
+          hm = name: (evalHm {ai.${name}.enable = true;}).config.home.packages;
+        };
         # `.name`, NOT `baseNameOf (toString drv)`: coercing a derivation to a string
         # forces its `drvPath` and instantiates every runtime's package, which
         # turns this eval-only check into a multi-minute realization. The name
         # attribute carries the same `-wrapped` signal for free.
         drvName = drv: drv.name or "";
-        devenvFailures =
-          builtins.concatMap (
+        backendFailures = backend:
+          lib.concatMap (
             name: let
-              installed = (evalDevenv {ai.${name}.enable = true;}).config.packages;
-              wrapped = lib.hasSuffix "-wrapped" (drvName (builtins.head installed));
+              installed = installedBy.${backend} name;
               ok =
                 builtins.length installed
                 == 1
-                && (
-                  if devenvShape.${name} == "wrapped"
-                  then wrapped
-                  else !wrapped
-                );
+                && lib.hasSuffix "-wrapped" (drvName (builtins.head installed))
+                == (shapes.${backend}.${name} == "wrapped");
             in
-              lib.optional (!ok) "${name}/devenv"
+              lib.optional (!ok) "${name}/${backend}"
           )
-          runtimes;
-        hmFailures =
-          builtins.concatMap (
-            name: let
-              hm = evalHm {ai.${name}.enable = true;};
-              claudeChannel = hm.config.programs.claude-code or {};
-              ok =
-                if name == "claude"
-                # `programs.claude-code` is collapsed to `attrsOf anything` in this
-                # harness, so read it defensively: without the `?` guard, a factory
-                # that stopped setting `package` would throw an attribute error
-                # rather than fail this assertion.
-                then
-                  (claudeChannel ? package)
-                  && claudeChannel.package != null
-                  && hm.config.home.packages == []
-                else hm.config.home.packages != [];
-            in
-              lib.optional (!ok) "${name}/hm"
-          )
-          runtimes;
-        failures = devenvFailures ++ hmFailures;
+          (builtins.attrNames shapes.${backend});
+        failures = backendFailures "devenv" ++ backendFailures "hm";
       in
         # `mkTest` throws a bare `FAIL: <name>`, which would name neither the
         # runtime nor the backend across ten assertions. Trace the offenders first.
@@ -255,10 +238,10 @@ in {
         hm = evalHm config;
         devenv = evalDevenv config;
       in
-        (hm.config.programs.claude-code.settings.effortLevel or null)
+        ((claudeSettings hm).effortLevel or null)
         == "xhigh"
         && ((hmCodexSettings hm).model_reasoning_effort or null) == "xhigh"
-        && (devenv.config.files.".claude/settings.json".json.effortLevel or null) == "xhigh"
+        && ((claudeSettings devenv).effortLevel or null) == "xhigh"
         && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "xhigh"
     );
 
@@ -275,10 +258,10 @@ in {
         hm = evalHm config;
         devenv = evalDevenv config;
       in
-        (hm.config.programs.claude-code.settings.effortLevel or null)
+        ((claudeSettings hm).effortLevel or null)
         == "low"
         && ((hmCodexSettings hm).model_reasoning_effort or null) == "high"
-        && (devenv.config.files.".claude/settings.json".json.effortLevel or null) == "low"
+        && ((claudeSettings devenv).effortLevel or null) == "low"
         && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "high"
     );
 
@@ -325,10 +308,10 @@ in {
         hm = evalHm config;
         devenv = evalDevenv config;
       in
-        (hm.config.programs.claude-code.settings.effortLevel or null)
+        ((claudeSettings hm).effortLevel or null)
         == "medium"
         && hmCodexSettings hm == withHmDaemonDefault {model = "gpt-6-astra";}
-        && (devenv.config.files.".claude/settings.json".json.effortLevel or null) == "medium"
+        && ((claudeSettings devenv).effortLevel or null) == "medium"
         && devenv.config.files.".codex/config.toml".source.value == {model = "gpt-6-astra";}
     );
 

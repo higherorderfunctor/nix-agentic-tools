@@ -358,22 +358,26 @@ in {
             skillsDir = ../../packages/claude-code/checks/fixtures/claude-skills;
           };
         };
-        upstream = result.config.programs.claude-code.skills or {};
+        files = result.config.home.file;
       in
-        upstream ? skill-a && upstream ? skill-b
+        files ? ".claude/skills/skill-a" && files ? ".claude/skills/skill-b"
     );
 
+    # The accepted arms force the delivered file map, never `home.packages`:
+    # nothing about installing the package reads the rules, so a probe on it
+    # passes on laziness alone.
     module-ai-rules-accepted-for-claude = mkTest "ai-rules-accepted-for-claude" (
       let
-        probe =
-          builtins.tryEval
+        probe = builtins.tryEval (lib.attrNames
           (evalHm {
             ai.claude = {
               enable = true;
               rules.test.text = "test";
             };
           })
-      .config.home.packages;
+          .config
+          .home
+          .file);
       in
         probe.success
     );
@@ -405,23 +409,21 @@ in {
         && !(result.config.ai.kimchi ? rules)
     );
 
-    # A REAL directory, not `../fixtures`, which never existed. Both probes
-    # used to pass on laziness alone: nothing forced the fanout, so the
-    # accepted arm proved only that `home.packages` did not read it. Hosting a
-    # delivery `upstream` sink under `programs` made that read eager — see the
-    # `upstreamRoots` table in lib/ai/deliver.nix — and the arm started
-    # failing on the missing path rather than on its own claim.
+    # A REAL directory, not `../fixtures`, which never existed: with a probe on
+    # `home.packages` it passed on laziness alone, because nothing forced the
+    # fanout. Forcing the file map makes it fail on a missing path.
     module-ai-rules-dir-accepted-for-claude = mkTest "ai-rules-dir-accepted-for-claude" (
       let
-        probe =
-          builtins.tryEval
+        probe = builtins.tryEval (lib.attrNames
           (evalHm {
             ai.claude = {
               enable = true;
               rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
             };
           })
-      .config.home.packages;
+          .config
+          .home
+          .file);
       in
         probe.success
     );
@@ -451,9 +453,9 @@ in {
             agentsDir = ../../packages/claude-code/checks/fixtures/claude-agents;
           };
         };
-        upstream = result.config.programs.claude-code.agents or {};
+        files = result.config.home.file;
       in
-        upstream ? agent-one && upstream ? agent-two
+        files ? ".claude/agents/agent-one.md" && files ? ".claude/agents/agent-two.md"
     );
   };
 }

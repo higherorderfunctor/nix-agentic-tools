@@ -31,11 +31,10 @@
 
   isSemantic = value: builtins.isAttrs value && value ? description && value ? instructions;
 
-  # Home Manager's `lib.hm.strings.isPathLike`, which upstream
-  # `programs.claude-code` uses to choose `source` over `text`: a path, a
-  # string under the store, or a derivation. A backend that writes an agent
-  # itself must decide the same way, or a store-path string such as a flake
-  # input's `"${src}/agent.md"` lands as a file containing that path.
+  # Home Manager's `lib.hm.strings.isPathLike`, used to choose `source` over
+  # `text`: a path, a string under the store, or a derivation. Deciding any
+  # other way lands a store-path string such as a flake input's
+  # `"${src}/agent.md"` as a file containing that path.
   isPathLike = value:
     builtins.isPath value
     || (builtins.isString value && lib.hasPrefix "${builtins.storeDir}/" value)

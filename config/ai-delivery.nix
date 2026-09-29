@@ -17,7 +17,7 @@
   };
   assemble = row: let
     cell = key row;
-    children = (row.additionalWriters or []) ++ (generated.supplements.${cell} or []) ++ (facts.supplements.${cell} or []);
+    children = (row.additionalWriters or []) ++ (facts.supplements.${cell} or []);
     annotateChild = child:
       builtins.removeAttrs
       (facts.annotate (child // {inherit (row) ecosystem mode surface;}))

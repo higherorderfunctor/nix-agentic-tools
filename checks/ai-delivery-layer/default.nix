@@ -81,60 +81,6 @@
       }
     ];
 
-  # A runtime whose every entry is delegated to a host `files.<name>.json`
-  # option with the host's real JSON type: the general harness's `anything`
-  # stub cannot concatenate lists. `entries` are `ai.probe.files` records,
-  # each sunk into `settings.json`; `host` is the host's own definition.
-  upstreamHost = entries: host: let
-    deliveryOptions = import ../../lib/ai/delivery-options.nix {inherit lib;};
-    adapter = import ../../lib/ai/adapters/devenv.nix {inherit lib pkgs;};
-  in
-    (lib.evalModules {
-      modules = [
-        ({
-          config,
-          options,
-          ...
-        }: {
-          options = {
-            ai.probe = {
-              _ownPlans = lib.mkOption {type = lib.types.attrsOf lib.types.anything;};
-              activation = lib.mkOption {
-                type = deliveryOptions.writerMapType;
-                default = {};
-              };
-              files = lib.mkOption {type = deliveryOptions.fileMapType;};
-              methodFor = lib.mkOption {
-                type = lib.types.functionTo lib.types.str;
-                default = deliveryMethod.byRule;
-              };
-            };
-            assertions = lib.mkOption {type = lib.types.listOf lib.types.anything;};
-            files = lib.mkOption {
-              type = lib.types.attrsOf (lib.types.submodule {
-                options.json = lib.mkOption {inherit (pkgs.formats.json {}) type;};
-              });
-            };
-          };
-          config = adapter {
-            inherit config options;
-            cfg = config.ai.probe;
-            runtime = "probe";
-          };
-        })
-        {
-          ai.probe.files = lib.mapAttrs (_: entry:
-            entry
-            // {
-              method = "upstream";
-              sink = ["files" "settings.json" "json"];
-            })
-          entries;
-        }
-        (lib.optionalAttrs (host != {}) {files."settings.json".json = host;})
-      ];
-    }).config;
-
   # ── The delivered-surface snapshot ──────────────────────────────────
   # Everything the delivery layer puts on disk, rendered as sorted text. It is
   # not an assertion: it is the EVIDENCE that a refactor of the layer changed
@@ -201,9 +147,6 @@
     then
       lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "home.file ${builtins.toJSON path}" entry) config.home.file)
       + lib.concatStrings (lib.mapAttrsToList (name: entry: renderEntry "home.activation ${builtins.toJSON name}" entry) config.home.activation)
-      # Claude's HM settings.json is written by upstream's programs.claude-code
-      # module, so the factory's delivery ends at this option, not home.file.
-      + lib.optionalString (config.programs.claude-code ? settings) (renderEntry "programs.claude-code.settings" config.programs.claude-code.settings)
     else
       lib.concatStrings (lib.mapAttrsToList (path: entry: renderEntry "files ${builtins.toJSON path}" entry) config.files)
       + lib.concatStrings (lib.mapAttrsToList (name: task: renderEntry "tasks ${builtins.toJSON name}" task) config.tasks)
@@ -1455,110 +1398,6 @@ in {
         && !(builtins.tryEval (builtins.deepSeq (evalDevenv writer).config.tasks true)).success
     );
 
-    # `upstream` hands the bytes to the option `sink` names and delivers no
-    # file for them. The path stays in the delivery description — with its
-    # facts, its enable gate and its override boundary — while another module
-    # does the writing.
-    module-delivery-upstream-lowers-to-its-sink = mkTest "delivery-upstream-lowers-to-its-sink" (
-      let
-        delegated = sink: {
-          ai.kiro = {
-            enable = true;
-            files.".kiro/delegated.json" = {
-              content.value.probe = true;
-              format = "json";
-              method = "upstream";
-              inherit sink;
-            };
-          };
-        };
-        hm = (evalHm (delegated ["programs" "claude-code" "probeDelegated"])).config;
-        devenv = (evalDevenv (delegated ["files" ".kiro/delegated.json" "json"])).config;
-        # A sink is read by `upstream` and by nothing else, and an upstream
-        # entry with no sink has nowhere to put its bytes.
-        failures = overlay:
-          map (assertion: assertion.message)
-          (lib.filter (assertion: !assertion.assertion) (evalHm overlay).config.assertions);
-        says = needle: messages: lib.any (message: lib.hasInfix needle message) messages;
-      in
-        # The VALUE reaches the option, not the rendered bytes: the sink owns
-        # the rendering from here.
-        hm.programs.claude-code.probeDelegated
-        == {probe = true;}
-        && !(hm.home.file ? ".kiro/delegated.json")
-        # devenv's deep-merge sink: the same path, handed to devenv's own
-        # JSON merge instead of written as a store symlink.
-        && devenv.files.".kiro/delegated.json" == {json = {probe = true;};}
-        && failures (delegated ["programs" "claude-code" "probeDelegated"]) == []
-        && says "it needs the `sink`" (failures {
-          ai.kiro = {
-            enable = true;
-            files.".kiro/delegated.json" = {
-              content.text = "{}";
-              method = "upstream";
-            };
-          };
-        })
-        && says "which only `method = \"upstream\"` reads" (failures {
-          ai.kiro = {
-            enable = true;
-            files.".kiro/delegated.json" = {
-              content.text = "{}";
-              sink = ["programs" "claude-code" "probeDelegated"];
-            };
-          };
-        })
-    );
-
-    # Definitions must reach the host's type with their priorities and
-    # ordering intact, even when two entries share a sink.
-    module-delivery-upstream-preserves-host-merge = mkTest "delivery-upstream-preserves-host-merge" (
-      let
-        evaluated =
-          upstreamHost {
-            "first.json".content.value = {
-              defaultLeaf = lib.mkDefault "generated";
-              list = lib.mkBefore ["first"];
-            };
-            "second.json".content.value.list = lib.mkAfter ["last"];
-          } {
-            defaultLeaf = "consumer";
-            list = ["middle"];
-          };
-      in
-        evaluated.files."settings.json".json
-        == {
-          defaultLeaf = "consumer";
-          list = ["first" "middle" "last"];
-        }
-        && lib.all (a: a.assertion) evaluated.assertions
-    );
-
-    # A property wrapped around the FIELD — not a leaf inside it, and not the
-    # whole `content` — is the entry's own, and must reach the host as that
-    # entry's priority or condition. Forwarded raw, the host strips one
-    # override and merges the inner property as an ordinary attrset: the
-    # document gains `_type`/`priority`/`content` keys, the settings nest
-    # under `content`, and `mkIf false` still delivers.
-    module-delivery-upstream-discharges-field-properties = mkTest "delivery-upstream-discharges-field-properties" (
-      let
-        sole = value: host: (upstreamHost {"probe.json".content.value = value;} host).files."settings.json".json;
-        consumer.leaf = "consumer";
-      in
-        sole (lib.mkForce {leaf = "forced";}) {}
-        == {leaf = "forced";}
-        && sole (lib.mkDefault {leaf = "generated";}) {} == {leaf = "generated";}
-        && sole (lib.mkIf true {leaf = "kept";}) {} == {leaf = "kept";}
-        && sole (lib.mkMerge [(lib.mkIf false {dropped = true;}) {leaf = "kept";}]) {} == {leaf = "kept";}
-        # The priority survives as the entry's, against the host's own
-        # ordinary definition, in both directions.
-        && sole (lib.mkForce {leaf = "forced";}) consumer == {leaf = "forced";}
-        && sole (lib.mkDefault {leaf = "generated";}) consumer == consumer
-        # A property on the whole content still reaches the host.
-        && (upstreamHost {"probe.json".content = lib.mkDefault {value.leaf = "generated";};} consumer).files."settings.json".json
-        == consumer
-    );
-
     # What the adapter puts in `tasks` is exactly the runtime's writers, and
     # nothing when it declares none. The other half of the claim — that the
     # DEFINITION is only made where the backend declares the option — is
@@ -1643,8 +1482,8 @@ in {
 
     # A single-file skill whose source is a package-interpolated STRING. Both
     # backends must deliver the file's CONTENTS; routing it to `content.text`
-    # writes the store PATH as the body of SKILL.md instead — the upstream
-    # helper's bug, reached through the single-file branch. Modelled on
+    # writes the store PATH as the body of SKILL.md instead, reached through
+    # the single-file branch. Modelled on
     # `module-kiro-path-agent-both-backends`, which pins the same property for
     # a path-valued agent.
     module-delivery-single-file-skill-is-a-source = mkTest "delivery-single-file-skill-is-a-source" (

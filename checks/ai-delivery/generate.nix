@@ -29,7 +29,7 @@
       then harness.evalHm
       else harness.evalDevenv
     ) (specimen.config mode runtime strategy);
-    inherit (evaluated) config options;
+    inherit (evaluated) config;
     cfg = config.ai.${runtime};
     # The shared AGENTS.md owner holds these typed entries on devenv. It is
     # still the delivery layer, not a guessed backend file sink. Membership is
@@ -46,7 +46,7 @@
       then config.ai.internal.activation
       else cfg.activation;
     router = deliver {
-      inherit cfg config options runtime;
+      inherit cfg config runtime;
       backend = mode;
     };
     names = writerName: writer:
@@ -66,19 +66,14 @@
         inherit (cfg) methodFor;
         backend = mode;
       };
-      upstream = method == "upstream" && builtins.head entry.sink != "files";
       primitive =
-        if upstream
-        then "upstream"
-        else
-          {
-            copy-ro = "ownPathManaged";
-            shared = "ownLeaves";
-            symlink = "ownPathDeclarative";
-            upstream = "ownPathDeclarative";
-          }.${
-            method
-          };
+        {
+          copy-ro = "ownPathManaged";
+          shared = "ownLeaves";
+          symlink = "ownPathDeclarative";
+        }.${
+          method
+        };
       leaf =
         if mode == "devenv" && entry.recursive
         then
@@ -92,20 +87,12 @@
           {
             phase = "write";
             writerAttr =
-              if method == "upstream"
-              then
-                (
-                  if upstream
-                  then entry.sink
-                  else lib.take 2 entry.sink
-                )
-              else
-                (
-                  if mode == "hm"
-                  then ["home" "file"]
-                  else ["files"]
-                )
-                ++ [leaf];
+              (
+                if mode == "hm"
+                then ["home" "file"]
+                else ["files"]
+              )
+              ++ [leaf];
           }
         ];
     in
@@ -117,16 +104,17 @@
             inherit mode;
             target = prefix mode + template leaf;
             inherit (destination) writerAttr;
-            pruneTrigger =
-              if upstream
-              then "upstream"
-              else facts.pruneTrigger mode primitive;
+            pruneTrigger = facts.pruneTrigger mode primitive;
             # Ordering chooses a representative, not a writer name. The body gate
             # still observes every distinct imperative strategy and HM phase.
             order =
               (
                 if path == ".claude.json"
                 then 20
+                # The personal plugin's manifest only loads its .mcp.json and
+                # .lsp.json, which carry the servers and so represent the row.
+                else if lib.hasSuffix "/.claude-plugin/plugin.json" path
+                then 1
                 else if lib.hasSuffix "/harness/settings.json" path
                 then 2
                 else if surface == "hooks" && path != ".claude/settings.json"
@@ -215,9 +203,7 @@
     then acc
     else acc ++ [row]) []
   sorted;
-  physical = lib.filter (row: row.primitive != "upstream") unique;
-  groups = lib.groupBy facts.key physical;
-  isDelegated = cell: facts.hand ? ${cell} && facts.hand.${cell}.primitive == "upstream";
+  groups = lib.groupBy facts.key unique;
   clean = row: builtins.removeAttrs row ["order"];
   child = row: builtins.removeAttrs (clean row) ["ecosystem" "mode" "surface"];
   data = {
@@ -225,23 +211,12 @@
       clean (builtins.head group)
       // lib.optionalAttrs (builtins.length group > 1) {
         additionalWriters = map child (builtins.tail group);
-      }) (lib.filterAttrs (cell: _: !(isDelegated cell)) groups);
-    supplements = lib.mapAttrs (_: map child) (lib.filterAttrs (cell: _: isDelegated cell) groups);
+      })
+    groups;
   };
-  # Claude's existing native devenv integration is outside the router's hosted
-  # roots. Observe the hand-authored upstream destination, never fabricate an
-  # entry for it. Package wrappers have no file surface and stay hand-authored.
-  external = views.devenv.claude.overwrite.config.claude.code.mcpServers;
-  liveKeys = lib.unique (map facts.key liveRecords ++ lib.optional (external != {}) "mcpServers/claude/devenv");
+  # Package wrappers have no file surface and stay hand-authored.
+  liveKeys = lib.unique (map facts.key liveRecords);
   absentKeys = lib.subtractLists liveKeys schema.expectedKeys;
-  delegations =
-    lib.filter (row: row.primitive == "upstream") unique
-    ++ lib.optional (external != {}) {
-      ecosystem = "claude";
-      mode = "devenv";
-      surface = "mcpServers";
-      writerAttr = ["claude" "code" "mcpServers"];
-    };
   assertionErrors = lib.concatMap (view: map (a: a.message) (lib.filter (a: !a.assertion) view.config.assertions)) recordViews;
   raw = pkgs.writeText "ai-delivery-generated-raw.nix" (
     "# Generated by checks/ai-delivery/generate.nix; do not edit.\n"
@@ -249,9 +224,10 @@
     + "\n"
   );
   generated = pkgs.runCommandLocal "ai-delivery-generated.nix" {nativeBuildInputs = [pkgs.alejandra];} ''
-    cp ${raw} "$out"
+    # Writable: alejandra rewrites in place whenever it changes anything.
+    install -m 644 ${raw} "$out"
     alejandra --quiet "$out"
   '';
 in {
-  inherit absentKeys assertionErrors data delegations generated;
+  inherit absentKeys assertionErrors data generated;
 }

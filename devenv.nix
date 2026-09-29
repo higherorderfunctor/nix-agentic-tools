@@ -5,9 +5,6 @@
   inputs,
   ...
 }: let
-  mcpLib = import ./lib/mcp.nix {inherit lib;};
-  inherit (mcpLib) mkPackageEntry;
-
   # One declaration table owns each hook's local, Stop, and CI lifecycle.
   repoValidation = import ./config/repo-validation.nix {inherit lib pkgs;};
   gitHooksPackages = import "${inputs.git-hooks}/nix" {
@@ -22,7 +19,7 @@
 
   # Stop-hook validator (runs the git-hooks suite when Claude hands control
   # back, instead of racing the Edit tool on every PostToolUse). See the
-  # claude.code.hooks block below.
+  # ai.claude.hooks block below.
   # Refuses the hand-back while this branch's PR is unfinished. Separate from
   # validateAtStop because it answers a different question (is the PR done?)
   # with different failure semantics (fails OPEN on any network ambiguity).
@@ -236,96 +233,28 @@ in {
   git-hooks.hooks = repoValidation.localHooks;
   git-hooks.run = repoValidationChecks.repo-lints;
 
-  # ── Claude Code (upstream devenv options) ───────────────────────────
-  claude.code = {
-    # Disable devenv's default PostToolUse git-hooks-run hook. It fired the
-    # formatter after Edits, and treefmt's rewrite broke sync with the Edit
-    # tool's read-snapshot ("modified since read"). Validation now happens
-    # at the Stop boundary via validate-at-stop, where a rewrite has no
-    # following Edit to race. Root cause assessed in:
+  # ── Claude Code ─────────────────────────────────────────────────────
+  # Only the Stop hooks live here, beside the packages bound above; dev/ai.nix
+  # holds the rest of this repository's `ai.*` configuration.
+  ai.claude = {
+    # Validation happens when Claude hands control back (Stop): auto-fix
+    # formatting silently, block-with-reason on judgment lint. A PostToolUse
+    # formatter raced the Edit tool's read-snapshot ("modified since read").
+    # Root cause assessed in:
     # docs/plans/prek-posttooluse-hook-feedback-channel.md.
-    hooks = {
-      git-hooks-run.enable = false;
-
-      # Run the git-hooks suite when Claude hands control back (Stop): auto-fix
-      # formatting silently, block-with-reason on judgment lint. See the
-      # assessment cited above.
-      validate-at-stop = {
-        enable = true;
-        name = "validate-at-stop";
-        hookType = "Stop";
-        command = lib.getExe validateAtStop;
-      };
-
-      # Second Stop gate: the PR loop. The rule this enforces lived in
-      # always-loaded steering and was ignored twice in one session after a
-      # mid-session correction, which is the signal that it needed a mechanism
-      # rather than more prose.
-      pr-watch-at-stop = {
-        enable = true;
-        name = "pr-watch-at-stop";
-        hookType = "Stop";
-        command = lib.getExe prWatchAtStop;
-      };
-    };
-
-    permissions.rules = {
-      Bash = {
-        allow = [
-          "devenv *"
-          "git absorb*"
-          "git add*"
-          "git amend*"
-          "git branch*"
-          "git branchless*"
-          "git checkout*"
-          "git commit*"
-          "git diff*"
-          "git fetch*"
-          "git hide*"
-          "git log*"
-          "git move*"
-          "git next*"
-          "git prev*"
-          "git pull*"
-          "git push*"
-          "git rebase*"
-          "git record*"
-          "git reset*"
-          "git restack*"
-          "git revise*"
-          "git reword*"
-          "git show*"
-          "git sl*"
-          "git smartlog*"
-          "git status*"
-          "git stash*"
-          "git submit*"
-          "git sync*"
-          "git test*"
-          "git unhide*"
-          "head:*"
-          "nix *"
-          "treefmt *"
-          "wc *"
+    #
+    # The second Stop gate is the PR loop. The rule it enforces lived in
+    # always-loaded steering and was ignored twice in one session after a
+    # mid-session correction, which is the signal that it needed a mechanism
+    # rather than more prose.
+    hooks.Stop = [
+      {
+        hooks = [
+          {command = lib.getExe validateAtStop;}
+          {command = lib.getExe prWatchAtStop;}
         ];
-      };
-      # `**`, not `*`: the references are namespaced one directory deep
-      # (dev/references/kimchi-surface/), and a single `*` stops at the
-      # separator, so it would silently allow nothing there.
-      Read.allow = ["dev/references/**"];
-    };
-
-    env.ENABLE_LSP_TOOL = "1";
-
-    mcpServers = {
-      agnix = mkPackageEntry pkgs.ai.mcpServers.agnix-mcp;
-
-      devenv = {
-        type = "http";
-        url = "https://mcp.devenv.sh/mcp";
-      };
-    };
+      }
+    ];
   };
 
   # ── Shell Init ──────────────────────────────────────────────────────────
