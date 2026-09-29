@@ -236,9 +236,30 @@ in {
 
   settingsOptions = {
     # ── Credentials ────────────────────────────────────────────
-    pat = mcpLib.mkCredentialsOption "GITLAB_PERSONAL_ACCESS_TOKEN";
-    apiUrl = mcpLib.mkCredentialsOption "GITLAB_API_URL";
-    jobToken = mcpLib.mkCredentialsOption "GITLAB_JOB_TOKEN";
+    pat = mkOption {
+      type = types.nullOr (mcpLib.runtimeValues.withReferences {
+        type = types.str;
+        secret = true;
+      });
+      default = null;
+      description = "Runtime credential mapped to GITLAB_PERSONAL_ACCESS_TOKEN.";
+    };
+    apiUrl = mkOption {
+      type = types.nullOr (types.attrTag {
+        file = mkOption {type = types.str;};
+        helper = mkOption {type = types.str;};
+      });
+      default = null;
+      description = "Runtime GitLab API URL locator.";
+    };
+    jobToken = mkOption {
+      type = types.nullOr (mcpLib.runtimeValues.withReferences {
+        type = types.str;
+        secret = true;
+      });
+      default = null;
+      description = "Runtime credential mapped to GITLAB_JOB_TOKEN.";
+    };
 
     # ── Typed options ──────────────────────────────────────────
     instanceUrl = mkOption {

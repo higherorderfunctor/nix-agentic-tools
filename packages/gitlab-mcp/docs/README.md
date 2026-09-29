@@ -9,19 +9,19 @@ self-hosted instances are configured per the "Instance URL" section below.
 ## Quick start (HM)
 
 ```nix
-{ config, ... }: {
+{ config, rv, ... }: {
   services.mcp-servers.servers.gitlab-mcp = {
     enable = true;
-    settings.pat.file = config.sops.secrets."gitlab-personal-access-token".path;
+    settings.pat = rv.file { path = config.sops.secrets."gitlab-personal-access-token".path; };
   };
 }
 ```
 
 The PAT (`GITLAB_PERSONAL_ACCESS_TOKEN`) is the only required credential. The
-`settings.pat` option is the standard sops-nix / agenix surface — `.file` reads
-a decrypted file at service start, `.helper` reads from a credential-helper
-script. Exactly one must be set; raw inline tokens are intentionally not
-supported (they would land in the Nix store).
+`settings.pat` option is the runtime-reference surface:
+`rv.file { path = ...; }` reads a decrypted file at service start, and
+`rv.helper { path = ...; }` runs a helper. Exactly one must be set; raw inline
+tokens are intentionally not supported (they would land in the Nix store).
 
 ## Instance URL
 
@@ -71,8 +71,8 @@ Three sets of settings narrow that surface:
   default to keep the default tool list small.
 - `caCertPath = "/etc/ssl/certs/ca.pem"` — path to a CA bundle for self-signed
   GitLab instances (`GITLAB_CA_CERT_PATH`).
-- `jobToken.file` — set `GITLAB_JOB_TOKEN` for CI-scoped operations that prefer
-  the job token over the PAT.
+- `jobToken = rv.file { path = ...; }` — set `GITLAB_JOB_TOKEN` for CI-scoped
+  operations that prefer the job token over the PAT.
 
 ## OAuth and other deferred env vars
 
