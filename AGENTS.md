@@ -147,6 +147,15 @@ for it. When several entries match, their guidance composes.
     - `packages/git-branchless/**`
   - Read:
     - [`packages/git-branchless/docs/extraction.md`](packages/git-branchless/docs/extraction.md)
+- **`git-tool-settings`**
+  - Match:
+    - `checks/git-tool-settings/**`
+    - `lib/git-tool-settings/**`
+    - `packages/git-absorb/**`
+    - `packages/git-branchless/**`
+    - `packages/git-revise/**`
+  - Read:
+    - [`dev/fragments/git-tool-settings/git-tool-settings.md`](dev/fragments/git-tool-settings/git-tool-settings.md)
 - **`hm-modules`**
   - Match:
     - `packages/*/modules/homeManager/**`

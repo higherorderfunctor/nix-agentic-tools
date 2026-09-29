@@ -181,9 +181,9 @@ tree-sitter walk of its patched source, `packages/git-branchless/extract/`).
 Consumers read the committed file, never the derivation, so option surfaces
 derived from it cost no IFD. Kimchi's `ai.kimchi.native.*` types are generated
 from its sidecar (`packages/kimchi/lib/extracted.nix`), and git-branchless's
-typed settings likewise (`packages/git-branchless/lib/settings.nix`).
-`checks/<pkg>-extracted.nix` then compares committed against freshly built
-output to catch a stale sidecar.
+typed settings likewise (`lib/git-tool-settings`, called from each owner's
+`lib/default.nix`). `checks/<pkg>-extracted.nix` then compares committed against
+freshly built output to catch a stale sidecar.
 
 Kiro's `models` field is the exception to the binary source: it is derived from
 the committed public documentation snapshot, refreshed by the update job even

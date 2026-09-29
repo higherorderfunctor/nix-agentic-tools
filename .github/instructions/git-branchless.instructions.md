@@ -109,29 +109,22 @@ series).
 - `git-branchless-extractor-guards` — the mutants.
 - `git-branchless-extracted-binary` — every extracted key (a family by its
   literal prefix) is a string in the built binary.
-- `git-branchless-settings-options` — the generator over the real sidecar and
-  over fixtures.
+- `git-branchless-settings-options` — the tool's hand tables over the real
+  sidecar and over fixtures.
 
 ## Generator
 
-`lib/settings.nix` (exported as `lib.git-branchless.settings`) reads the
-committed sidecar with `builtins.readFile` — never `passthru.extracted`, which
-would be IFD — and returns `options` rooted at `branchless`, mirroring the git
-key path, plus `leaves` for lowering and a `report`. Scalars are `nullOr T`,
-default `null`; families are `attrsOf str`, default `{}`, with names matching
-`^[A-Za-z][A-Za-z0-9-]*$`. Dotted names are valid to git-branchless but render
-differently per backend, so raw git configuration is the escape hatch.
-Upstream's default goes into the description, never into `default`.
-
-Its hand tables report stale rows (`report.staleExclusions`,
-`report.staleRefinements`), and `report.untyped` lists any sidecar type the
-walker cannot map:
+`lib/default.nix` exports `lib.git-branchless.settings`: the shared generator
+(`lib/git-tool-settings`, see its fragment) over the committed sidecar, plus
+this tool's two hand tables. Both report stale rows:
 
 - `exclusions` — `branchless.mainBranch`, the legacy key `init` makes inert.
-  Keys git-branchless only writes are excluded without a row.
 - `refinements` — `test.jobs` to `0..2^31-1`, and revset alias names that are
-  not builtins (compared case-insensitively against `revsetFunctions`). A row
-  also goes stale when the key's sidecar type changes.
+  not builtins (compared case-insensitively against `revsetFunctions`).
+
+`checks/settings-options.nix` runs the generator over fixture sidecars for the
+branchless-specific cases (enum widening, a new builtin, the jobs range, alias
+names).
 
 ## Regeneration
 

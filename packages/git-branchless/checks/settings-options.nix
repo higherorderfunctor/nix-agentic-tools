@@ -1,7 +1,7 @@
 # The typed git-branchless options follow packages/git-branchless/extracted.json.
 #
-# ../lib/settings.nix generates them from the committed sidecar. Agreement with
-# the real sidecar alone would also hold for a hand-copied option list, so the
+# ../lib/default.nix generates them, through lib/git-tool-settings, from the
+# committed sidecar. Agreement with the real sidecar alone would also hold for a hand-copied option list, so the
 # cases that matter run the same generator over FIXTURE sidecars — a key added,
 # a key removed, an enum widened, a builtin revset added, a type nothing maps —
 # and require the option surface to move with it. Each case is named in the
@@ -12,7 +12,7 @@
   ...
 }: let
   committed = builtins.fromJSON (builtins.readFile ../extracted.json);
-  surfaceFor = extracted: import ../lib/settings.nix {inherit extracted lib;};
+  surfaceFor = extracted: (import ../lib/default.nix).git-branchless.settings {inherit extracted lib;};
   real = surfaceFor committed;
   sorted = lib.sort (a: b: a < b);
   setting = key: node: {settings.${key} = node;};
