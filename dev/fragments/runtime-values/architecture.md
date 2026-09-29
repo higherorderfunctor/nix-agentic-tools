@@ -1,0 +1,72 @@
+# Runtime values
+
+> **Last verified:** 2026-09-28 — review round 1; glab and migrated MCP
+> credentials use one shell reader and canonical reference envelopes.
+
+`lib.runtimeValues` is the public library. Both module sets supply `rv` through
+`_module.args`. Constructors return a reserved `_runtime` envelope; ordinary
+objects with `file` properties are not references. The source inside it is an
+`attrTag`, so two modules cannot silently combine file and helper arms.
+
+The classifier splits normalized name segments, including camel-case breaks, and
+matches credential tokens at segment boundaries. Locator and environment name
+suffixes, token-count terms, and helpers are exceptions; explicit secret hints
+and inherited secret-container context still win. Secret leaves have no literal
+branch. Other data leaves keep their normal type plus references. Open maps
+classify user keys during checking and merging. Effective secrecy can increase
+through a declaration or `secret = true`; it cannot be downgraded by a
+reference.
+
+## Normalized schemas
+
+`fromSchema { schema; prefix ? []; overrides ? {}; }` returns `{ options; }`. A
+record has `fields`, an attribute set of child records or leaves. A leaf has
+`type`, a Nix option type. Exactly one of `fields` or `type` is required.
+`description`, `default`, classifier `hints`, and explicit `schema` descriptors
+are optional. Leaves default to null and receive `nullOr`; records default to
+`{}`. Example:
+
+```nix
+schema.fields = {
+  host = { type = lib.types.str; };
+  token = { type = lib.types.str; hints.keyring = true; };
+};
+```
+
+`liftOptions` applies the same classification to existing option trees,
+including nullable leaves, lists, maps and submodules. The pilot does not render
+structured documents or decode JSON. Collection references and private rendering
+arrive in later PRs; ordinary collection elements can already be references. The
+schema translator rejects refined types it cannot represent and names the option
+path; callers can supply an explicit runtime schema descriptor.
+
+`checkOptions` inspects evaluated declarations, never configured values. Its
+production roots deliberately cover only glab and migrated credential leaves.
+Every rollout adds its own roots. Open maps need the guarded map type because
+future user keys cannot be enumerated by a declaration scan. Positive and
+negative controls live in `checks/runtime-values`. The audit also checks that a
+guarded map's own classification context covers the enclosing declaration.
+
+## Runtime delivery
+
+The walker identifies only reserved envelopes. The materializer generates
+assignments and environment exports and rejects secret-tainted argv delivery.
+The same reader binary serves ordinary wrappers and glab's stdin keyring flow.
+It has full Bash strict mode, captures helpers privately, rejects failed
+helpers, NUL and invalid UTF-8, and emits only a successful value on stdout.
+Diagnostics contain the option label and a fixed failure, never the value or
+helper output.
+
+The default removes exactly one terminal LF. `newline = "preserve"` retains all
+newlines; decoration follows reading and the nonempty check. The assignment
+protocol appends a sentinel before command substitution, removes that sentinel
+in the parent, and retains the reader exit status. Removing the sentinel
+protocol would silently trim every terminal newline. Only `decode = "string"` is
+accepted. Prefix and suffix require a string schema; both the option type and
+the reader reject decoration for bool, number, and enum references.
+
+Legacy HTTP MCP `secretValue` and GitLab MCP `apiUrl` remain deferred surfaces.
+The GitLab `apiUrl` credential metadata adapts its locator at that boundary;
+shared MCP credential readers reject old shapes without that metadata. The
+shared runtime library accepts only the canonical envelope. Kiro's separate HTTP
+secret pipeline is deferred too.
