@@ -1,7 +1,7 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-20 — follow-ups amend the PR whose scope they
-> belong to.
+> **Last verified:** 2026-09-28 — follow-ups amend the PR whose scope they
+> belong to; the removed validation Stop hook no longer mirrors prek state.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -381,11 +381,6 @@ installed hooks so that at hook-run time they resolve:
   under the agent sandbox the primary checkout is a read-only bind while the
   worktree is the writable one, so primary-anchored state would fail there. No
   `mkdir` is needed — prek creates `PREK_HOME` itself.
-
-`lib/validate-at-stop.sh` mirrors both, for the same reasons: its session cwd is
-normally a linked worktree, and a bare `prek run` there walks up from cwd, finds
-no config, and exits 2 — output the judgment loop would report as a lint finding
-and block the hand-back on.
 
 The rewrite task takes a lock in the shared hooks directory and publishes each
 complete hook with a same-filesystem rename after preserving its mode. Two shell

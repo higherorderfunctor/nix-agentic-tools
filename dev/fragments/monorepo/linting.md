@@ -1,32 +1,30 @@
 ## Linting
 
-> **Last verified:** 2026-08-31 — full-corpus treefmt and hook diagnostics run
-> only as explicit devenv tasks, detached from shell activation. Full lineage:
-> `git show f7189d05:dev/fragments/monorepo/linting.md`.
+> **Last verified:** 2026-09-28 — removed Stop-time validation; verified the
+> formatter and linter CI gates plus the explicit devenv diagnostics. Full
+> lineage: `git show f7189d05:dev/fragments/monorepo/linting.md`.
 
 `nix flake check` is the authoritative CI gate. Local hooks provide earlier
 feedback, but neither a successful changeset scan nor a `--no-verify` commit is
 evidence that the tracked corpus is clean.
 
 The source of truth is `config/repo-validation.nix`. Every hook declaration must
-name its role, Stop participation, and CI backend (including an explicit `null`
-for local-only commit-lifecycle hooks). Evaluation rejects a validator,
-formatter, or security hook without CI coverage, and rejects a validator that
-does not participate in Stop feedback. From that table the repo derives:
+name its role and CI backend (including an explicit `null` for local-only
+commit-lifecycle hooks). Evaluation rejects a validator, formatter, or security
+hook without CI coverage. From that table the repo derives:
 
-| Surface                    | Selection                                           | Scope                                                       | Authority                        |
-| -------------------------- | --------------------------------------------------- | ----------------------------------------------------------- | -------------------------------- |
-| Git hooks                  | each declaration's real Git stages                  | staged files / commit message                               | fast local feedback; bypassable  |
-| Claude Stop                | `stop = "formatter"` or `"judgment"` → manual stage | unstaged ∪ staged ∪ untracked changes                       | agent feedback; not a merge gate |
-| `checks.repo-lints`        | validators with `ci.backend = "git-hooks"`          | every matching tracked file                                 | required `test` context          |
-| `checks.shellcheck-corpus` | validator with the specialized corpus backend       | every tracked extension- or shebang-identified shell script | required `test` context          |
+| Surface                    | Selection                                                      | Scope                                                       | Authority                       |
+| -------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------- |
+| Git hooks                  | each declaration's real Git stages; treefmt runs at pre-commit | staged files / commit message                               | fast local feedback; bypassable |
+| `checks.formatting`        | treefmt's formatter check                                      | every tracked file selected by treefmt                      | required `test` context         |
+| `checks.repo-lints`        | validators with `ci.backend = "git-hooks"`                     | every matching tracked file                                 | required `test` context         |
+| `checks.shellcheck-corpus` | validator with the specialized corpus backend                  | every tracked extension- or shebang-identified shell script | required `test` context         |
 
-The manual stage is a lifecycle boundary, not a synonym for pre-commit. It
-contains treefmt plus the four code validators and therefore excludes convco,
-gitleaks, treefmt-restage, and `reject-default-branch-commit`. Devenv
-diagnostics and the Stop hook always request that stage explicitly; an unscoped
-`prek run` must not be used for either. Stop may rewrite working-tree files but
-never stages them. Index mutation belongs only to the pre-commit restager.
+The manual stage belongs to the devenv diagnostic. It contains treefmt plus the
+code validators and therefore excludes convco, gitleaks, treefmt-restage, and
+`reject-default-branch-commit`. The diagnostic always requests that stage
+explicitly; an unscoped `prek run` must not be used for it. Index mutation
+belongs only to the pre-commit restager.
 
 Full-corpus work is not a shell-entry concern. `devenv:treefmt:run` and
 `devenv:git-hooks:run` remain explicit named diagnostics with no activation DAG
@@ -40,9 +38,7 @@ targeted `devenv:enterTest`.
 The treefmt hook enables treefmt's SQLite evaluation cache and sets
 `require_serial = true`. prek otherwise partitions the files across concurrent
 treefmt processes; those processes contend on one cache database, time out, and
-lose the intended warm-cache benefit. The Stop hook is the exception: it sets
-`TREEFMT_NO_CACHE=true` for both formatter passes so the second pass proves the
-first rewrite converged instead of accepting a cache hit as that proof.
+lose the intended warm-cache benefit.
 
 Formatters and linters remain separate — treefmt formats and lints nothing.
 
