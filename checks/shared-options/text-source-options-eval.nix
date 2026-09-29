@@ -169,33 +169,6 @@
       enableOnMkDefault = true;
     })).success;
 
-  # devshell `files`: the same record, materialized by a shell hook.
-  evaluateDevshellFiles = files:
-    (lib.evalModules {
-      modules = [
-        ../../devshell/files.nix
-        {
-          options.shellHook = lib.mkOption {
-            type = lib.types.lines;
-            default = "";
-          };
-          config = {inherit files;};
-        }
-      ];
-      specialArgs = {inherit pkgs;};
-    }).config;
-  devshellMkDefault = evaluateDevshellFiles {"probe.txt".text = lib.mkDefault "DEFAULT";};
-  devshellEmptyFailed =
-    !(builtins.tryEval (builtins.deepSeq
-      (evaluateDevshellFiles {"probe.txt".text = "";}).shellHook
-      true)).success;
-  devshellEmptyDisabled = evaluateDevshellFiles {
-    "probe.txt" = {
-      enable = false;
-      text = "";
-    };
-  };
-
   invalidTextSourceDefaults = path: declarations:
     lib.concatLists (lib.mapAttrsToList (name: declaration: let
       optionPath = path ++ [name];
@@ -269,9 +242,6 @@
     default-content-unset-preserves-prose = defaultContentUnset.config.value.text == "package prose";
     default-content-unset-remains-disabled = !defaultContentUnset.config.value.enable;
     default-text-yields-to-source = defaultText.config.entries.example.text == "packaged prose\n";
-    devshell-files-default-priority-text-materialized = lib.hasInfix "_target=\"probe.txt\"" devshellMkDefault.shellHook;
-    devshell-files-empty-text-disabled-accepted = !(lib.hasInfix "probe.txt" devshellEmptyDisabled.shellHook);
-    devshell-files-empty-text-rejected = devshellEmptyFailed;
     disabled-empty-default-source-keeps-text-empty = disabledEmptyOverridesDefaultSource.config.entries.example.text == "";
     disabled-empty-default-source-remains-disabled = !disabledEmptyOverridesDefaultSource.config.entries.example.enable;
     disabled-text-source-preserves-content = consumerTextDisabled.config.entries.example.text == "consumer prose";

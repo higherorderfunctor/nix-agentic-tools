@@ -253,11 +253,12 @@ inside the required `test` job without evaluating or building Nix themselves.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-09-25 — category declaration is SPLIT: shared
-> categories in `config/fragment-categories.nix`, owner-specific ones in the
-> owning package's `registry.nix`, merged by `lib/facets/registry.nix`. The
-> orchestration layer produces content; `ai.*` renders and writes it, with
-> AGENTS.md's index and rules ahead of the context.
+> **Last verified:** 2026-09-28 — fragment locations are limited to the dev and
+> package trees; category declaration is SPLIT: shared categories in
+> `config/fragment-categories.nix`, owner-specific ones in the owning package's
+> `registry.nix`, merged by `lib/facets/registry.nix`. The orchestration layer
+> produces content; `ai.*` renders and writes it, with AGENTS.md's index and
+> rules ahead of the context.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -304,9 +305,8 @@ Concrete example: the `claude-code` category reaching every runtime:
 
 1. `mkDevComposed "claude-code"` in `dev/generate.nix` reads the fragment
    sources from `config.fragments.categories.claude-code.sources` and calls
-   `mkDevFragment` on each. The location discriminator
-   (`"dev" | "devshell" | "package"`) controls where on disk the markdown is
-   read from.
+   `mkDevFragment` on each. The location discriminator (`"dev" | "package"`)
+   controls where on disk the markdown is read from.
 2. `compose { fragments = devFrags; }` sorts by priority, dedupes by SHA256, and
    concatenates. Scoped categories do NOT include commonFragments — only the
    root `monorepo` profile does, to avoid duplicating shared content across the
@@ -375,8 +375,7 @@ them.
   (legacy, reads `dev/fragments/<category>/<name>.md`) or an attrset
   `{ location, name, dir }`:
   - `location = "dev"` (default) → `dev/fragments/<dir>/<name>.md`
-  - `location = "package"` → `packages/<dir>/docs/<name>.md`
-  - `location = "devshell"` → `devshell/<dir>/docs/<name>.md` The `dir` field
+  - `location = "package"` → `packages/<dir>/docs/<name>.md` The `dir` field
     defaults to null, falling back to the category key, and is explicit when
     they differ (e.g., a category name that does not match its directory).
     Package-specific architecture such as Semble and Stacked Workflows uses the

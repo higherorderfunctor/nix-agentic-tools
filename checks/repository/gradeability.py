@@ -71,7 +71,7 @@ ESCAPE = "<!-- gradeable: operator-judgement -->"
 # Cross-references that break silently on every edit and that nothing lints.
 DEAD_REF = re.compile(r"\brule\s+\d+\b|\bthe (first|second|third|fourth) bullet\b", re.I)
 
-ROOTS = ("dev/fragments", "packages", "devshell", "dev/skills")
+ROOTS = ("dev/fragments", "dev/skills", "packages")
 
 
 def paragraphs(text: str):

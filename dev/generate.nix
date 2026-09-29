@@ -38,7 +38,6 @@
   #   - An attrset { location, name, dir } for co-located fragments:
   #     - location = "dev" (default): ./fragments/<dir>/<name>.md
   #     - location = "package": ../packages/<dir>/docs/<name>.md
-  #     - location = "devshell": ../devshell/<dir>/docs/<name>.md
   #     The `dir` field defaults to null, which falls back to `pkg` (the
   #     config.fragments.categories key), and is set explicitly when the
   #     category name differs from the directory name.
@@ -68,7 +67,6 @@
     locationBases = {
       dev = ./fragments;
       package = ../packages;
-      devshell = ../devshell;
     };
     base =
       locationBases.${location}
@@ -81,11 +79,7 @@
     repoRelative =
       if location == "dev"
       then "dev/fragments/${dir}/${name}.md"
-      else if location == "package"
-      then "packages/${dir}/docs/${name}.md"
-      else if location == "devshell"
-      then "devshell/${dir}/docs/${name}.md"
-      else "${location}/${dir}/${name}.md";
+      else "packages/${dir}/docs/${name}.md";
   in
     normalized
     // {
@@ -216,7 +210,7 @@
 
     Stacked commit workflows, MCP servers, and declarative configuration for
     AI coding CLIs (Claude Code, Codex, Copilot, Kiro). Works without Nix; Nix
-    unlocks overlays, home-manager modules, and devshell integration.
+    unlocks overlays, home-manager modules, and devenv modules.
 
     ## Quick Start
 

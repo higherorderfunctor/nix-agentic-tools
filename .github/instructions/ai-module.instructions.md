@@ -592,7 +592,7 @@ elsewhere stay dormant at `mkDefault`; a file has no dormant prose, and a leaf
 default is how a downstream module offers an overridable file. Empty inline
 `text` is not content: an entry with no content and no `enable` definition fails
 evaluation naming the path, rather than silently writing nothing. Spell an empty
-file as a `source`. The devshell `files.<name>` map follows the same rules.
+file as a `source`.
 
 That is the part most likely to be remembered wrongly, because it replaced a
 whole-entry contract:
@@ -1686,7 +1686,7 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-26 — devenv's Codex launcher always passes
+> **Last verified:** 2026-09-28 — devenv's Codex launcher always passes
 > `--no-daemon`, so it always wraps. The builder entry point is
 > `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
 > callback. Native file settings live under `ai.<runtime>.native`
@@ -1812,11 +1812,11 @@ There is no exception, and the rule is the operator's: devenv/Nix is the only
 config path, so a shell-level escape hatch buys nothing and costs scope.
 
 Enforcement is by eye. `rg '^\s*env\s*=|^\s*env\.[A-Z_]+\s*=|sessionVariables'`
-over `packages/ lib/ devshell/` should return only `mkOption` declarations. Two
-other `env` shapes are legitimate and will show up in a careless grep: an MCP
-server's `env` field (`lib/mcp.nix`, `mcpSecrets.nix`) is the MCP protocol's
-per-server environment and reaches the server process, not your shell; and
-option declarations are not writes.
+over `packages/ lib/` should return only `mkOption` declarations. Two other
+`env` shapes are legitimate and will show up in a careless grep: an MCP server's
+`env` field (`lib/mcp.nix`, `mcpSecrets.nix`) is the MCP protocol's per-server
+environment and reaches the server process, not your shell; and option
+declarations are not writes.
 
 This was not always true — four sites wrote the devenv shell until 2026-08-10,
 each with a comment reasoning that devenv "has a native `env` attrset so no

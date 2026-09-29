@@ -20,7 +20,7 @@
 #
 # A `sources` entry is either a bare string (shorthand for a fragment in
 # dev/fragments/<category>/) or an attrset selecting a co-located fragment
-# under packages/<dir>/docs/ or devshell/<dir>/docs/.
+# under packages/<dir>/docs/.
 #
 # Put package-specific rows beside their owner; keep cross-owner policy here.
 _: {
