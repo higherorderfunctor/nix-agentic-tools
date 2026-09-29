@@ -23,21 +23,14 @@
     })
     schema);
 
-  # Keys the schema itself marks as credentials (`Keyring: true`), plus
-  # `host`. The keyring flag is upstream's own answer to "is this
-  # sensitive", so the secret-capable set is DERIVED rather than listed.
-  #
-  # `host` is added on top because a self-hosted instance URL can itself
-  # be something an operator would rather not publish in a world-readable
-  # store path, even though upstream does not class it as a credential.
-  # Its `plain` branch covers the ordinary public case.
-  #
-  # `unique` is load-bearing: `host` is also a member of `byName`, and
-  # without it a future upstream that flips `host` to keyring-eligible
-  # would silently emit its export twice.
-  secretKeys =
-    lib.unique
-    (["host"] ++ builtins.filter (n: byName.${n}.keyring) (builtins.attrNames byName));
+  rv = import ../../../lib/runtime-values {inherit lib;};
+  secretKeys = builtins.filter (name:
+    rv.classify {
+      path = [name];
+      hints = byName.${name};
+    }
+    == "secret") (builtins.attrNames byName);
+  topLevelKeys = lib.unique (["host"] ++ secretKeys);
 
   # Everything else the user may set.
   #
@@ -51,7 +44,7 @@
     in
       k.userSettable
       && k.type != "list"
-      && !(builtins.elem n secretKeys))
+      && !(builtins.elem n topLevelKeys))
     (builtins.attrNames byName);
 
   # First env var wins. `EnvKeyEquivalence` returns them in resolution
@@ -59,11 +52,17 @@
   # the only spelling that cannot be shadowed by a later alias that
   # happens to already be in the environment.
   envVarOf = key: builtins.head byName.${key}.envVars;
+  # Include every schema-classified credential alias, even a token such as
+  # refresh_token that upstream does not mark as keyring-backed. glab also
+  # accepts CI_JOB_TOKEN outside its config-key schema.
+  tokenEnvVars = ["CI_JOB_TOKEN"] ++ lib.concatMap (name: byName.${name}.envVars) secretKeys;
 in {
   inherit
     byName
     envVarOf
     secretKeys
     settingKeys
+    tokenEnvVars
+    topLevelKeys
     ;
 }
