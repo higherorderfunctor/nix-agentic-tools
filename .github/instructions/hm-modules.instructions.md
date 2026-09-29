@@ -7,7 +7,7 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-27 — no runtime flips an upstream
+> **Last verified:** 2026-09-28 — no runtime flips an upstream
 > `programs.<cli>.enable`; skills reach Claude through `mkSkillFiles`, and
 > Claude has no wrapper. Claude's devenv `.claude/settings.json` and `.mcp.json`
 > are written only when non-empty; other devenv writes are unconditional.
@@ -144,10 +144,10 @@ test the destination container with `lib.hasAttrByPath ... options`, then gate
 on the relevant runtime enable. Such plumbing belongs under an internal, hidden
 option rather than either public settings surface; Codex uses
 `ai.codex.internal._integration_writable_roots`. glab uses this pattern to
-contribute its effective `configDir`: Home Manager resolves its `null` default
-to `${config.xdg.configHome}/glab-cli`, while devenv uses its evaluated project
-state default or the consumer's explicit override. The contribution configures
-an already-enabled Codex; it never enables Codex itself.
+contribute its literal effective `configDir`: Home Manager resolves its `null`
+default to `${config.xdg.configHome}/glab-cli`, while devenv uses its evaluated
+project state default or the consumer's explicit override. The contribution
+configures an already-enabled Codex; it never enables Codex itself.
 
 ### Activation script patterns
 

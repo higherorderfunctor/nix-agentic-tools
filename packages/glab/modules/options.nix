@@ -21,41 +21,21 @@
 {lib}: let
   inherit (lib) mkOption types;
 
-  credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
-
-  # Key partitioning + env-var mapping live in ONE place, shared with
-  # ../lib/mkGlab.nix, which renders the exports these options describe.
+  rv = import ../../../lib/runtime-values {inherit lib;};
   glabSchema = import ../lib/schema.nix {inherit lib;};
-  inherit (glabSchema) byName envVarOf secretKeys settingKeys;
-
-  typeFor = k:
-    if k.type == "bool"
-    then types.nullOr types.bool
-    else types.nullOr types.str;
-
-  mkSettingOption = name: let
-    k = byName.${name};
-  in
-    mkOption {
-      type = typeFor k;
-      default = null;
-      description = ''
-        ${k.description}
-
-        Mapped to ${envVarOf name}. `null` leaves it unset, so glab falls
-        back to its own default${
-          if k.default == ""
-          then ""
-          else " (${k.default})"
-        }.
-      '';
-    };
-
-  mkSecretFor = name:
-    credentialsLib.mkSecretOption {
-      envVar = envVarOf name;
-      inherit (byName.${name}) description;
-    };
+  inherit (glabSchema) byName envVarOf settingKeys topLevelKeys;
+  generated = names: prefix:
+    (rv.fromSchema {
+      inherit prefix;
+      schema.fields = lib.genAttrs names (name: {
+        type =
+          if byName.${name}.type == "bool"
+          then types.bool
+          else types.str;
+        description = "${byName.${name}.description} Mapped to ${envVarOf name}.";
+        hints = {inherit (byName.${name}) keyring;};
+      });
+    }).options;
 in {
   options.glab =
     {
@@ -77,7 +57,7 @@ in {
       };
 
       configDir = mkOption {
-        type = types.nullOr types.str;
+        type = types.nullOr (rv.withReferences {type = types.str;});
         default = null;
         example = "/home/alice/.local/state/glab-cli";
         description = ''
@@ -85,18 +65,8 @@ in {
           aliases, update bookkeeping. Exported as `GLAB_CONFIG_DIR`.
           `null` leaves glab on its own default, `~/.config/glab-cli`.
 
-          A LITERAL path. It is shell-quoted into the wrapper, so nothing
-          in it expands: no `$VAR`, no `$(…)`, no `~`. Build the path in
-          Nix instead, where the values are available anyway —
-          `"''${config.home.homeDirectory}/…"` under home-manager, or
-          `"''${config.devenv.state}/…"` under devenv.
-
-          An earlier revision made this shell-expandable so the devenv
-          facet could say `$DEVENV_STATE/glab-cli`. That was unnecessary:
-          `devenv.state` is available at EVAL time, so the default is a
-          real path. It also meant a `$(…)` in this value would execute on
-          every glab invocation, which is a poor property for an option
-          that exists only to name a directory.
+          A literal path or runtime reference. Literal paths are shell-quoted;
+          shell variables and command substitutions do not expand.
 
           This directory is WRITTEN to. glab owns `config.yml`, and the
           wrapper seeds a `hosts:` entry into it on first run so that
@@ -135,11 +105,7 @@ in {
 
       settings = mkOption {
         type = types.submodule {
-          options = builtins.listToAttrs (map (n: {
-              name = n;
-              value = mkSettingOption n;
-            })
-            settingKeys);
+          options = generated settingKeys ["glab" "settings"];
         };
         default = {};
         description = ''
@@ -156,24 +122,18 @@ in {
       };
 
       extraSettings = mkOption {
-        type = types.attrsOf types.str;
+        type = rv.keyAwareMap {
+          type = types.str;
+          path = ["glab" "extraSettings"];
+        };
         default = {};
         example = lib.literalExpression ''{ some_new_upstream_key = "value"; }'';
         description = ''
           Escape hatch for config keys newer than the packaged glab's
-          schema. Each key is uppercased to form its environment variable,
-          which is what glab's own `EnvKeyEquivalence` does for any key
-          without an explicit override — so this is exact for new keys and
-          WRONG for a key that has an alias. If a key here starts working
-          differently after a version bump, it has gained an override and
-          belongs in `settings` instead (bump the package: the option is
-          generated, so it will appear on its own).
+          schema. Known keys use the environment alias recorded in the
+          packaged schema. Unknown keys use glab's uppercase fallback.
         '';
       };
     }
-    // builtins.listToAttrs (map (n: {
-        name = n;
-        value = mkSecretFor n;
-      })
-      secretKeys);
+    // generated topLevelKeys ["glab"];
 }
