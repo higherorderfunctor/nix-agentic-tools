@@ -130,6 +130,14 @@
       gitEntries
     );
     tableFile = pkgs.writeText "update-targets-parity.tsv" table;
+
+    # Every sidecar a flake-input package's `regenerateExtracted` writes must
+    # be a committed file: update-input.sh stages exactly these paths, and a
+    # wrong one aborts the whole input's `git add`.
+    regeneratedSidecars =
+      lib.unique (lib.concatMap (package: package.passthru.regenerateExtracted.sidecars)
+        (builtins.filter (package: (package.passthru or {}) ? regenerateExtracted) (builtins.attrValues packages)));
+    sidecarsFile = pkgs.writeText "update-targets-regenerated-sidecars.txt" (lib.concatStringsSep "\n" regeneratedSidecars);
   in
     pkgs.runCommandLocal "update-targets-parity-check" {
       nativeBuildInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep];
@@ -146,6 +154,17 @@
         echo "ERROR: removing the context7-mcp row did not make its package uncovered" >&2
         exit 1
       fi
+
+      if [ ! -s ${sidecarsFile} ]; then
+        echo "ERROR: no package exposes passthru.regenerateExtracted, though Semble's snapshots alone need one" >&2
+        exit 1
+      fi
+      while IFS= read -r sidecar || [ -n "$sidecar" ]; do
+        if [ ! -f "$sidecar" ]; then
+          echo "ERROR: passthru.regenerateExtracted names $sidecar, which is not a committed file" >&2
+          exit 1
+        fi
+      done < ${sidecarsFile}
 
       echo "Versioned flake package update coverage:"
       cat ${coverageFile}

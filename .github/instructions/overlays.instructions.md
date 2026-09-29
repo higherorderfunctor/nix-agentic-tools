@@ -348,11 +348,13 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-24 — Bruno 4.2.0 repairs stale workspace lock
-> entries in the builder input shared with its npm dependency fetcher; Kimchi's
-> source-derived sidecar participates in the extraction loop, Kimchi joins the
-> release-derived Go-floor update chain and declares a pnpm dependency-hash
-> fixer; Go floor overrides preserve each recipe's builder baseline.
+> **Last verified:** 2026-09-29 — flake-input packages regenerate their sidecars
+> through `passthru.regenerateExtracted`. Bruno 4.2.0 repairs stale workspace
+> lock entries in the builder input shared with its npm dependency fetcher;
+> Kimchi's source-derived sidecar participates in the extraction loop, Kimchi
+> joins the release-derived Go-floor update chain and declares a pnpm
+> dependency-hash fixer; Go floor overrides preserve each recipe's builder
+> baseline.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -911,6 +913,12 @@ Wiring that regeneration is not optional for an extracted package, and glab
 demonstrates the cost of missing it: it was the one such package that never had
 it, which nothing caught until its first-ever version bump (PR #621) turned
 `checks.<system>.glab-extracted` red on a sidecar that still described 1.110.0.
+
+A package owned by a flake input has no `mkUpdateScript`, so it carries
+`passthru.regenerateExtracted = packageLib.mkFlakeInputRegen { … }` instead.
+`update-input.sh` discovers it through `passthru.updateFlakeInput` and stages
+its `sidecars`. Semble's targets are its drift checks' `passthru.extracted`,
+which keeps the package byte-identical to upstream.
 
 The hash fixers (`mkGoVendorFix`, `mkNpmDepsFix`, and the src-only fixer
 `mkGoUpdateExtract` builds internally) are one body — `vu.mkHashFix` —

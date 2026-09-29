@@ -94,44 +94,20 @@ set +e
     exit 1
   fi
 
-  # Semble comes from the llm-agents flake input rather than a package update
-  # target, so mkUpdateScript's extraExtract hook can never run for it.
-  # Refresh its generated snapshots here instead, each from the
-  # `passthru.extracted` of its drift check:
-  #
-  #   extracted.json           language knowledge (bundled grammars,
-  #                            extension map, content-type sets)
-  #   upstream-templates.json  agent templates, installer text, MCP surface
-  #
-  # The separate human-reviewed template hashes deliberately stay untouched:
-  # CI must fail until a reviewer accepts or adapts each local derivative
-  # after upstream content changes.
-  semble_snapshots=(
-    "semble-languages-extracted:packages/semble/extracted.json"
-    "semble-templates-extracted:packages/semble/upstream-templates.json"
-  )
-  if [ "$name" = "llm-agents" ]; then
-    log_info "Regenerating pinned Semble snapshots..."
-    # Each step produces content the PR carries, so each failure is a
-    # hold-back. Without the guards a failed `nix build` left the store
-    # path empty, `cp ""` failed, and the PR shipped with an unrefreshed
-    # snapshot — all silently, per the errexit note above.
-    update_system=$(nix eval --raw --impure --expr builtins.currentSystem)
-    for snapshot in "${semble_snapshots[@]}"; do
-      check="${snapshot%%:*}"
-      target="${snapshot#*:}"
-      if ! snapshot_path=$(nix build --no-link --print-out-paths \
-        ".#checks.$update_system.$check.passthru.extracted"); then
-        log_failure "$check extraction failed"
-        exit 1
-      fi
-      if ! cp "$snapshot_path" "$target" ||
-        ! chmod 644 "$target" ||
-        ! nix fmt -- "$target"; then
-        log_failure "could not refresh $target"
-        exit 1
-      fi
-    done
+  # Regenerate the committed sidecars of every package this input owns —
+  # discovered from `passthru.updateFlakeInput` and
+  # `passthru.regenerateExtracted`, see regenerate_input_sidecars in
+  # update-common.sh — so the PR carries them instead of failing their
+  # drift checks. Each one is content the PR carries, so a failure is a
+  # hold-back.
+  log_info "Regenerating sidecars of packages owned by $name..."
+  if ! sidecars=$(regenerate_input_sidecars "$name"); then
+    log_failure "sidecar regeneration failed"
+    exit 1
+  fi
+  sidecar_paths=()
+  if [ -n "$sidecars" ]; then
+    mapfile -t sidecar_paths <<<"$sidecars"
   fi
 
   # Check if anything changed. `git diff --staged --quiet` signals through its
@@ -147,7 +123,7 @@ set +e
   # exited the subshell 0 — so the sweep printed `NO UPDATES` and the real
   # lock change was discarded with the worktree. Neither hold back nor
   # ship; the update simply vanished.
-  if ! git add flake.lock devenv.yaml devenv.lock "${semble_snapshots[@]#*:}"; then
+  if ! git add flake.lock devenv.yaml devenv.lock "${sidecar_paths[@]}"; then
     log_failure "git add failed"
     exit 1
   fi

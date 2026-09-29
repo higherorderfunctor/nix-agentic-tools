@@ -1,11 +1,10 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-09-26 — `--use-update-script` rows must resolve
-> `updateScript` to an executable file, gated by
-> `checks.update-script-executable`. Its positive control rigs one real, present
-> target's `updateScript` and runs it through the same
-> scriptTargets/presentTargets/table pipeline as the real rows, rather than
-> testing a hand-made directory off to the side.
+> **Last verified:** 2026-09-29 — an input bump regenerates the sidecars of
+> every package that input owns, discovered through
+> `passthru.regenerateExtracted`; the hardcoded Semble block is gone.
+> `--use-update-script` rows must resolve `updateScript` to an executable file,
+> gated by `checks.update-script-executable`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -60,11 +59,15 @@ serialize independent work.
 Targets fall into three categories:
 
 - **Inputs** (`update-input.sh <name>`) — `nix flake update <name>` in a
-  worktree, then `devenv update` to sync `devenv.lock`. The `llm-agents` input
-  additionally regenerates Semble's committed upstream-template snapshot from a
-  separate derivation. It does not rewrite the human-reviewed content hashes, so
-  a changed template reaches the update PR but fails its coverage check until
-  the local derivative is reviewed.
+  worktree, then `devenv update` to sync `devenv.lock`, then
+  `regenerate_input_sidecars` (`update-common.sh`). It runs the
+  `passthru.regenerateExtracted` script (`packageLib.mkFlakeInputRegen`) of
+  every package whose `passthru.updateFlakeInput` names the input, and stages
+  the `sidecars` each one lists. Today that is Semble's two snapshots on
+  `llm-agents`. A failed regeneration holds the input back. Semble's
+  human-reviewed template hashes are not rewritten, so a changed template
+  reaches the update PR but fails its coverage check until the local derivative
+  is reviewed.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages. The
   Beads binary target is the one grouped package: its `passthru.updateScript`
@@ -189,17 +192,19 @@ registry every package contributes a row to. It replaced the flat, top-level
   or update script with a targeted package, declare an existing flake input
   through `passthru.updateFlakeInput`, carry a non-empty
   `passthru.updateTargetExempt` reason, or match an explicit `excludePatterns`
-  exemption. The first CI run proved the reverse direction by finding two
-  previously unrecorded cases: `git-branchless` is owned by its flake input.
-  (The other historical exemption, the repository-local `kiro-memory-distiller`,
-  was removed on 2026-09-01 — the shape it illustrated, an in-repo package with
-  no upstream release to sweep, has no current instance.) Targets → overlays:
-  every main-tracking target (with a `git` URL) must declare a non-null `file`
-  equal to `resolve_recipe_file(<git>, overlays, packages)`, and the resolved
-  overlay must carry an inline 40-hex `rev`. A positive control removes the
-  real, uniquely sourced `context7-mcp` row in memory and requires that its
-  package become uncovered; this proves the reverse direction can fail without
-  mutating the registry on disk.
+  exemption. It also fails when a `regenerateExtracted` names a sidecar that is
+  not a committed file, since `update-input.sh` stages exactly those paths. The
+  first CI run proved the reverse direction by finding two previously unrecorded
+  cases: `git-branchless` is owned by its flake input. (The other historical
+  exemption, the repository-local `kiro-memory-distiller`, was removed on
+  2026-09-01 — the shape it illustrated, an in-repo package with no upstream
+  release to sweep, has no current instance.) Targets → overlays: every
+  main-tracking target (with a `git` URL) must declare a non-null `file` equal
+  to `resolve_recipe_file(<git>, overlays, packages)`, and the resolved overlay
+  must carry an inline 40-hex `rev`. A positive control removes the real,
+  uniquely sourced `context7-mcp` row in memory and requires that its package
+  become uncovered; this proves the reverse direction can fail without mutating
+  the registry on disk.
 
 ### Report format
 

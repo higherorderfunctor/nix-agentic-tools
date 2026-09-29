@@ -1,6 +1,7 @@
 # Semble integrations
 
-> **Last verified:** 2026-09-25 — `install` gates only the package, never the
+> **Last verified:** 2026-09-29 — the snapshots regenerate through
+> `passthru.regenerateExtracted`. `install` gates only the package, never the
 > rules. `models` is a root list routed by exact content set, with
 > `defaultContent` and `defaultModel`; the CLI and the MCP server route alike
 > through `patches/models.patch`, and there is no `--model`. `pathMappings` is
@@ -442,9 +443,10 @@ pipeline extracts on x86_64-linux only. On 0.1.2 the linux-x86_64 and
 macos-arm64 manifests both list the same 77 grammars as `sources.json`.
 
 Semble has no update target of its own; it arrives with the `llm-agents` input.
-`dev/scripts/update-input.sh` therefore rebuilds both Semble snapshots
+Its `passthru.regenerateExtracted` rebuilds both Semble snapshots
 (`extracted.json` and `upstream-templates.json`) from their checks'
-`passthru.extracted` on every `llm-agents` bump, so the bot PR carries them.
+`passthru.extracted`, and `dev/scripts/update-input.sh` runs it on every
+`llm-agents` bump, so the bot PR carries them.
 
 ## Direct configuration
 
