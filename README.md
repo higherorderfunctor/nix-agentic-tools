@@ -2,7 +2,7 @@
 
 Stacked commit workflows, MCP servers, and declarative configuration for AI
 coding CLIs (Claude Code, Codex, Copilot, Kiro). Works without Nix; Nix unlocks
-overlays, home-manager modules, and devshell integration.
+overlays, home-manager modules, and devenv modules.
 
 ## Quick Start
 

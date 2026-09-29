@@ -25,7 +25,7 @@ git add packages/new-tool/packages/ai/new-tool/package.nix
 nix build  # works
 ```
 
-## DevShell
+## Devenv Shell
 
 Enter the development environment:
 

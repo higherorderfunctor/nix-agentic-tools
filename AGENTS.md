@@ -561,7 +561,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 **Scopes** (optional but encouraged): package or module name (e.g.,
 `context7-mcp`, `copilot-cli`, `fragments`), directory name (`overlay`,
-`module`, `lib`, `devshell`), or `flake` for root changes.
+`module`, `lib`), or `flake` for root changes.
 
 Keep descriptions lowercase, imperative mood, no trailing period.
 
@@ -613,14 +613,14 @@ alejandra) and markdown (via prettier).
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-09-27 — package categories live in owner registries;
-> `dev/generate.nix` turns them into `ai.rules` and `ai.*` writes every
-> runtime's files, AGENTS.md index first; devenv warns while AGENTS.md is past
-> 32 KiB.
+> **Last verified:** 2026-09-28 — fragment sources live in the dev or package
+> tree; package categories live in owner registries; `dev/generate.nix` turns
+> them into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
+> first; devenv warns while AGENTS.md is past 32 KiB.
 
 This repo ships path-scoped architecture fragments as dev-only context for
 agents working on it. They are SEPARATE from the published consumer-facing
-content. Three location flavors are supported by `dev/generate.nix`:
+content. Two location flavors are supported by `dev/generate.nix`:
 
 - `dev/fragments/<category>/<name>.md` (default `location = "dev"`) —
   orientation and topic-scoped categories not tied to a single package.
@@ -628,8 +628,6 @@ content. Three location flavors are supported by `dev/generate.nix`:
   delivered to every runtime as `ai.context`.
 - `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
   package whose abstractions it documents.
-- `devshell/<group>/docs/<name>.md` (`location = "devshell"`) — co-located with
-  a devshell module.
 
 Scope globs (which files the fragment loads for) live separately in
 `config.fragments.categories.<category>.scopes` (composed from owner
@@ -804,7 +802,7 @@ nix flake check               # The CI gate: formatting, structural/module eval,
                               # runtime contracts, and validator corpus scans
                               # (does NOT build the package output set)
 nix build .#<package>         # Build a specific package
-devenv shell                  # Enter devShell with all tools
+devenv shell                  # Enter the devenv shell with all tools
 treefmt                       # Format all files (formats only — lints nothing)
 devenv tasks run devenv:git-hooks:run # Manual-stage local all-files diagnostic
 
@@ -1361,8 +1359,8 @@ Formatters and linters remain separate — treefmt formats and lints nothing.
 - reject-default-branch-commit
 - treefmt-restage (re-adds formatter changes only during pre-commit)
 
-**Available in the devShell, wired to no gate:** agnix (agent config linting) —
-run it by hand or via the agnix MCP server.
+**Available in the devenv shell, wired to no gate:** agnix (agent config
+linting) — run it by hand or via the agnix MCP server.
 
 There is no shellharden in this repo, and no linter reads shell embedded in
 `.nix` strings beyond `writeShellApplication`'s own checkPhase. See the Bash
@@ -1808,6 +1806,9 @@ If so, rewrite before sending.
 
 ## Project Overview
 
+> **Last verified:** 2026-09-28 — project-local configuration uses the devenv
+> modules; the standalone shell constructor is gone.
+
 nix-agentic-tools is a Nix flake monorepo providing:
 
 - **Stacked workflow skills** — SKILL.md files for stacked commit workflows
@@ -1816,12 +1817,11 @@ nix-agentic-tools is a Nix flake monorepo providing:
   derivations with typed settings and credential handling
 - **Home-manager modules** — declarative configuration for Claude Code, Copilot
   CLI, Kiro CLI, stacked workflows, and MCP services
-- **DevShell modules** — per-project AI tool configuration without home-manager
-  (`mkAgenticShell`)
+- **Devenv modules** — per-project AI tool configuration without home-manager
 - **Git tool overlays** — git-absorb, git-branchless, git-revise
 
-Skills work without Nix. Nix unlocks overlays, home-manager modules, and
-devshell integration.
+Skills work without Nix. Nix unlocks overlays, home-manager modules, and devenv
+modules.
 
 ### Key Directories
 
@@ -1841,7 +1841,6 @@ lib/testing/            Shared test harnesses with discovered backend imports
 checks/<concern>/       Native workspace checks and cross-owner integration
 config/                 Workspace policy and shared option declarations/data
 dev/                    Repo-only generation, tasks, scripts, skills, and guidance
-devshell/               Standalone shell integration (mkAgenticShell)
 flake.nix               Public assembly and repo outputs
 devenv.nix              This repository's workspace shell
 ```

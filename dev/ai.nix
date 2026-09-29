@@ -145,7 +145,7 @@ in {
       context.text = ''
         ## Path-scoped rules
 
-        Architecture fragments under `dev/fragments/`, `packages/*/docs/` and `devshell/*/docs/` reach you as path-scoped rules in `.claude/rules/*.md`, loaded automatically when you edit a matching path. You do not look them up.
+        Architecture fragments under `dev/fragments/` and `packages/*/docs/` reach you as path-scoped rules in `.claude/rules/*.md`, loaded automatically when you edit a matching path. You do not look them up.
       '';
       enable = true;
       mcpServers = {

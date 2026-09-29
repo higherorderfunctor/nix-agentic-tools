@@ -1,5 +1,8 @@
 ## Project Overview
 
+> **Last verified:** 2026-09-28 — project-local configuration uses the devenv
+> modules; the standalone shell constructor is gone.
+
 nix-agentic-tools is a Nix flake monorepo providing:
 
 - **Stacked workflow skills** — SKILL.md files for stacked commit workflows
@@ -8,12 +11,11 @@ nix-agentic-tools is a Nix flake monorepo providing:
   derivations with typed settings and credential handling
 - **Home-manager modules** — declarative configuration for Claude Code, Copilot
   CLI, Kiro CLI, stacked workflows, and MCP services
-- **DevShell modules** — per-project AI tool configuration without home-manager
-  (`mkAgenticShell`)
+- **Devenv modules** — per-project AI tool configuration without home-manager
 - **Git tool overlays** — git-absorb, git-branchless, git-revise
 
-Skills work without Nix. Nix unlocks overlays, home-manager modules, and
-devshell integration.
+Skills work without Nix. Nix unlocks overlays, home-manager modules, and devenv
+modules.
 
 ### Key Directories
 
@@ -33,7 +35,6 @@ lib/testing/            Shared test harnesses with discovered backend imports
 checks/<concern>/       Native workspace checks and cross-owner integration
 config/                 Workspace policy and shared option declarations/data
 dev/                    Repo-only generation, tasks, scripts, skills, and guidance
-devshell/               Standalone shell integration (mkAgenticShell)
 flake.nix               Public assembly and repo outputs
 devenv.nix              This repository's workspace shell
 ```

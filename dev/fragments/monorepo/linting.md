@@ -70,8 +70,8 @@ Formatters and linters remain separate — treefmt formats and lints nothing.
 - reject-default-branch-commit
 - treefmt-restage (re-adds formatter changes only during pre-commit)
 
-**Available in the devShell, wired to no gate:** agnix (agent config linting) —
-run it by hand or via the agnix MCP server.
+**Available in the devenv shell, wired to no gate:** agnix (agent config
+linting) — run it by hand or via the agnix MCP server.
 
 There is no shellharden in this repo, and no linter reads shell embedded in
 `.nix` strings beyond `writeShellApplication`'s own checkPhase. See the Bash

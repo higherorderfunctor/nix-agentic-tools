@@ -1,13 +1,13 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-09-27 — package categories live in owner registries;
-> `dev/generate.nix` turns them into `ai.rules` and `ai.*` writes every
-> runtime's files, AGENTS.md index first; devenv warns while AGENTS.md is past
-> 32 KiB.
+> **Last verified:** 2026-09-28 — fragment sources live in the dev or package
+> tree; package categories live in owner registries; `dev/generate.nix` turns
+> them into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
+> first; devenv warns while AGENTS.md is past 32 KiB.
 
 This repo ships path-scoped architecture fragments as dev-only context for
 agents working on it. They are SEPARATE from the published consumer-facing
-content. Three location flavors are supported by `dev/generate.nix`:
+content. Two location flavors are supported by `dev/generate.nix`:
 
 - `dev/fragments/<category>/<name>.md` (default `location = "dev"`) —
   orientation and topic-scoped categories not tied to a single package.
@@ -15,8 +15,6 @@ content. Three location flavors are supported by `dev/generate.nix`:
   delivered to every runtime as `ai.context`.
 - `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
   package whose abstractions it documents.
-- `devshell/<group>/docs/<name>.md` (`location = "devshell"`) — co-located with
-  a devshell module.
 
 Scope globs (which files the fragment loads for) live separately in
 `config.fragments.categories.<category>.scopes` (composed from owner
