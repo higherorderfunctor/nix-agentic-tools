@@ -18,12 +18,14 @@ in {
       git -C primary add README
       git -C primary commit -qm base
       git -C primary worktree add -q -b feature/isolation "$PWD/worktree"
+      git -C primary worktree add -q -b base "$PWD/base"
+      git init -q -b main other
 
       hooks_dir="$(git -C primary rev-parse --path-format=absolute --git-path hooks)"
+      # prek's shim is `#!/bin/sh`; dash keeps the injected guard honest POSIX.
       cat > "$hooks_dir/pre-commit" <<'HOOK'
-      #!${pkgs.bash}/bin/bash
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
+      #!${pkgs.dash}/bin/dash
+      set -eu
       exec prek run --config="/stale/checkout/.pre-commit-config.yaml" "$@"
       HOOK
       chmod 0755 "$hooks_dir/pre-commit"
@@ -32,30 +34,12 @@ in {
       cp "$hooks_dir/post-commit" post-commit.before
 
       ( cd worktree; ${pkgs.lib.getExe isolator} )
-      # These patterns assert literal shell syntax in the generated hook, so
-      # expansion in this check is intentionally disabled.
-      # shellcheck disable=SC2016
-      grep -Fq 'PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"' "$hooks_dir/pre-commit"
-      # shellcheck disable=SC2016
-      grep -Fq '_devenv_primary="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"' "$hooks_dir/pre-commit"
-      # shellcheck disable=SC2016
-      grep -Fq -- '--config="$_devenv_config"' "$hooks_dir/pre-commit"
       cmp post-commit.before "$hooks_dir/post-commit"
       test "$(stat --format=%a "$hooks_dir/pre-commit")" = 755
 
       cp "$hooks_dir/pre-commit" first-generation
       ( cd primary; ${pkgs.lib.getExe isolator} )
       cmp first-generation "$hooks_dir/pre-commit"
-      test "$(grep -Fc 'devenv worktree bootstrap guard' "$hooks_dir/pre-commit")" = 2
-
-      # A linked worktree needs no config of its own. Missing primary bootstrap is
-      # a hard failure with the actionable diagnostic, not prek's skip advice.
-      if ( cd worktree; "$hooks_dir/pre-commit" ) >missing.out 2>&1; then
-        echo "rewritten hook allowed a missing primary config" >&2
-        exit 1
-      fi
-      grep -Fq 'primary checkout has not been bootstrapped' missing.out
-      grep -Fq 'devenv shell true' missing.out
 
       cat > stub/prek <<'STUB'
       #!${pkgs.bash}/bin/bash
@@ -68,11 +52,45 @@ in {
       STUB
       chmod 0755 stub/prek
       echo 'repos: []' > primary/.pre-commit-config.yaml
+      echo 'repos: []' > base/.pre-commit-config.yaml
+      echo 'repos: []' > other/.pre-commit-config.yaml
       export PATH="$PWD/stub:$PATH"
       export PREK_CAPTURE="$PWD/capture"
-      ( cd worktree; "$hooks_dir/pre-commit" )
+      root="$PWD"
+      expect_config() {
+        grep -Fq -- "--config=$1/.pre-commit-config.yaml" capture \
+          || { cat capture >&2; return 1; }
+      }
+
+      # No devenv shell (an editor or plain-terminal commit): the primary.
+      ( cd worktree; env -u DEVENV_ROOT "$hooks_dir/pre-commit" )
+      expect_config "$PWD/primary"
       grep -Fq "PREK_HOME=$PWD/worktree/.devenv/state/prek" capture
-      grep -Fq -- "--config=$PWD/primary/.pre-commit-config.yaml" capture
+
+      ( cd worktree; DEVENV_ROOT="$root/primary" "$hooks_dir/pre-commit" )
+      expect_config "$root/primary"
+
+      # Launched from a long-lived worktree of this repository: its config.
+      ( cd worktree; DEVENV_ROOT="$root/base" "$hooks_dir/pre-commit" )
+      expect_config "$root/base"
+
+      # Launched from another repository: never its config, and git exports
+      # GIT_DIR to hooks, which, left in place, makes that repository look like this one.
+      ( cd worktree; DEVENV_ROOT="$root/other" "$hooks_dir/pre-commit" )
+      expect_config "$PWD/primary"
+
+      ( cd worktree
+        GIT_DIR="$(git rev-parse --path-format=absolute --git-dir)" \
+          DEVENV_ROOT="$root/other" "$hooks_dir/pre-commit" )
+      expect_config "$PWD/primary"
+
+      rm base/.pre-commit-config.yaml
+      if ( cd worktree; DEVENV_ROOT="$root/base" "$hooks_dir/pre-commit" ) >base.out 2>&1; then
+        echo "rewritten hook allowed a missing launch-checkout config" >&2
+        exit 1
+      fi
+      grep -Fq "missing: $root/base/.pre-commit-config.yaml" base.out
+      grep -Fq "devenv shell true\" in $root/base" base.out
 
       mkdir -p "$out"
       touch "$out/ok"

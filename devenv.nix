@@ -320,10 +320,8 @@ in {
         nat_hook_path="$nat_hooks_dir/$nat_hook"
         ${pkgs.gnugrep}/bin/grep -Fq 'PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"' "$nat_hook_path" \
           || { echo "FAIL: $nat_hook does not isolate PREK_HOME per worktree"; exit 1; }
-        ${pkgs.gnugrep}/bin/grep -Fq '_devenv_primary="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"' "$nat_hook_path" \
-          || { echo "FAIL: $nat_hook does not derive the primary checkout from the common git dir"; exit 1; }
         ${pkgs.gnugrep}/bin/grep -Fq -- '--config="$_devenv_config"' "$nat_hook_path" \
-          || { echo "FAIL: $nat_hook does not resolve the prek config from the primary checkout"; exit 1; }
+          || { echo "FAIL: $nat_hook does not resolve the prek config from the launch checkout"; exit 1; }
         ! ${pkgs.gnugrep}/bin/grep -Fq -- '--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"' "$nat_hook_path" \
           || { echo "FAIL: $nat_hook still resolves the prek config from the committing worktree"; exit 1; }
       done
@@ -512,13 +510,8 @@ in {
       # validates against B's config. This is the cross-worktree
       # no-cascade gap.
       #
-      # Fix: after install, rewrite that baked --config to resolve the
-      # config from the PRIMARY CHECKOUT at hook-run time, derived from
-      # the shared common git dir. The primary checkout is the one that
-      # is entered (sessions launch there and the agent process then
-      # runs with cwd in a linked worktree), so its config always exists
-      # and always tracks regeneration — while the answer no longer
-      # depends on which checkout entered a shell last.
+      # Rewrite that --config at hook-run time to use DEVENV_ROOT when it
+      # belongs to this repository, or the primary checkout otherwise.
       #
       # This retires the per-worktree bootstrap: a linked worktree that
       # has never seen `devenv shell` commits fine, which is what makes
@@ -548,7 +541,7 @@ in {
         '';
       };
       "hooks:isolate-config" = {
-        description = "Make prek hooks resolve their config from the primary checkout (no-cascade)";
+        description = "Make prek hooks resolve their config from the launch checkout (no-cascade)";
         after = ["devenv:git-hooks:install"];
         before = ["devenv:enterShell"];
         exec = ''
