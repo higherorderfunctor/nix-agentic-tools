@@ -15,10 +15,16 @@ formatting. The builder formats only marked Markdown bodies, restores
 generator-owned frontmatter bytes, and compares the installed prefix under
 `parseCompare`. Raw skill sources and steering retain their own bytes.
 
+The three guards (`tableCells`, `splitCodeSpans`, `parseCompare`) are defined in
+`lib/markdown/guards.nix`. Generated trees run them with `ai.generated.guards`
+wording; `lib.ai.guards pkgs` exports the programs and a `check` builder for
+consumer files. A finding exits 1; exit 2 means nothing was checked (for
+`parseCompare`, an unreadable file or a BEFORE that does not parse).
+
 ### Never break a line mid-token
 
-> **Last verified:** 2026-09-29 — generated Markdown formatting and guards
-> preserve generator-owned frontmatter; the table check pairs two MD056 tools.
+> **Last verified:** 2026-09-29 — generated and consumer Markdown share guards;
+> tableCells pairs rumdl and markdownlint for distinct MD056 cases.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the
@@ -53,8 +59,9 @@ space" heuristic was measured across the tree: 96 hits, roughly 90% of them
 legitimate. Shipping it would have been a check that cries wolf.
 
 `checks/markdown/split-code-spans.nix` covers the adjacent case that IS
-decidable — a span whose content still contains a newline. Its `.py` carries the
-CommonMark backtick rule and why the obvious one-line regex is wrong.
+decidable — a span whose content still contains a newline. Its scanner,
+`lib/markdown/split-code-spans.py`, carries the CommonMark backtick rule and why
+the obvious one-line regex is wrong.
 
 #### The formatter launders new instances
 
@@ -124,9 +131,14 @@ living only in one caller does not survive a second caller being added.
 ### A pipe in a table cell — `markdown-table-cells`
 
 Gated. Two linters, one hook, because the defect has two states and no single
-tool sees both. The rationale lives here; the script and its markdownlint config
-live in `lib/markdown/table-cells.nix`, which the prek hook and fixture suite
-(`checks/markdown/markdown-table-cells-fixtures.nix`) both read.
+tool sees both. The script, its markdownlint half and the full rationale are
+defined once in `lib/markdown/table-cells.nix`; the prek hook and the fixture
+suite (`checks/markdown/markdown-table-cells-fixtures.nix`) both read it.
+
+Both linters ignore configuration files in the checked tree. rumdl runs with
+`--no-config`; markdownlint runs through its library with MD056 selected. Inline
+directives still suppress MD056, and unrelated rules are never reported. The
+library is loaded through markdownlint-cli2's public export.
 
 **The cause is always the same: an unescaped `|` in a cell.** A table row is
 split into cells at BLOCK level, before inline parsing runs, so a backtick gives

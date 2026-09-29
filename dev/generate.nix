@@ -737,6 +737,61 @@
     input or formatter; disable that named guard if its invariant is unsuitable;
     or set the specific file's `format = "raw"` to opt out explicitly.
 
+    #### Using the guards on your own files
+
+    The same guards are exported as `lib.ai.guards pkgs` for files you author.
+    `pkgs` must include this flake's overlay for rumdl and markdownlint-cli2.
+    `tableCells` reports MD056 only. Configuration files in the checked tree
+    cannot change it; inline lint suppression comments still apply.
+
+    | Attribute | Program | Arguments |
+    | --------- | ------- | --------- |
+    | `tableCells` | `ai-guard-table-cells` | Markdown file paths |
+    | `splitCodeSpans` | `ai-guard-split-code-spans` | Markdown file paths |
+    | `parseCompare` | `ai-guard-parse-compare` | `TYPE BEFORE AFTER`, where `TYPE` is `json`, `markdown`, `toml` or `yaml` |
+    | `check` | Both Markdown guards in one derivation | `{ src; guards ? {}; }` |
+
+    `check` is a build-time gate for `nix flake check` or CI. It returns a
+    derivation that runs both Markdown guards over every `*.md` under `src` and
+    fails the build on a finding. It checks the store copy of `src`, not the
+    files you staged, so it is not a pre-commit hook:
+
+    ```nix
+    checks.''${system}.markdown-guards =
+      (inputs.nix-agentic-tools.lib.ai.guards pkgs).check {
+        src = ./docs;
+        # guards.tableCells = false; # disable a guard by name
+      };
+    ```
+
+    For a pre-commit hook, add the programs to your shell's packages and call
+    them on the staged paths:
+
+    ```bash
+    git diff --cached --name-only -z --diff-filter=d -- '*.md' \
+      | xargs -0 -r sh -c 'ai-guard-table-cells "$@" && ai-guard-split-code-spans "$@"' _
+    ```
+
+    `check` does not run `parseCompare`, because it needs two versions of the
+    same file and a source tree holds one. Call it in a hook after your
+    formatter rewrites a file: pass the staged version and the formatted
+    result. JSON, TOML and YAML compare parsed values. Markdown compares the
+    frontmatter bytes, so BEFORE must open with a `---` frontmatter fence,
+    close it, and hold valid YAML between the fences. If BEFORE does not parse,
+    nothing is compared and the program exits 2. If AFTER does not parse, that
+    is a finding. In a bash hook, a process substitution passes the staged
+    version:
+
+    ```bash
+    ai-guard-parse-compare yaml <(git show :config.yaml) config.yaml
+    ```
+
+    A finding exits 1 and prints the same what, why and three options as a
+    generated-file guard, worded for your files: fix the file or the formatter;
+    disable that guard by name in `check`, or stop running its program; or
+    leave the file out of the guarded file set. Exit 2 means nothing was
+    checked, for example an unreadable file.
+
     <details>
     <summary><strong>Semble code search</strong></summary>
 

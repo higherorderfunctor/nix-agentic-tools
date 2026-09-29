@@ -27,7 +27,7 @@
   consumerFiles = {"page.md" = {type = "markdown";} // frontmatter.treeFile consumerRendered;};
   # Inject one broken attach step to prove the byte guard catches it.
   guardScript = ../../lib/generated-guard.py;
-  bytesChanged = "installed Markdown frontmatter bytes differ from the generator bytes";
+  bytesChanged = "Markdown frontmatter bytes differ from";
   attachCommand = script: "${script} attach";
   patchedGuard = name: replacement: let
     source = builtins.readFile guardScript;
@@ -278,6 +278,8 @@ in {
     touch "$out"
   '';
   checks.generated-files = pkgs.runCommandLocal "generated-files-check" {} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
     export HOME="$TMPDIR"
 
     ${lib.concatMapStringsSep "\n" (case: let

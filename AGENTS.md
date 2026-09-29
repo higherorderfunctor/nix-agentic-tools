@@ -209,11 +209,12 @@ for it. When several entries match, their guidance composes.
     - `checks/markdown/doubled-words.nix`
     - `checks/markdown/doubled-words.py`
     - `checks/markdown/fixtures/doubled-words/**`
+    - `checks/markdown/fixtures/guards-consumer/**`
     - `checks/markdown/generated-files.nix`
+    - `checks/markdown/guards-consumer.nix`
     - `checks/markdown/markdown-scan.nix`
     - `checks/markdown/markdown-scanners.nix`
     - `checks/markdown/split-code-spans.nix`
-    - `checks/markdown/split-code-spans.py`
     - `lib/generated.nix`
     - `lib/generated-guard.py`
     - `lib/generated-style.nix`

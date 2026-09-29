@@ -9,7 +9,7 @@
 # One directory rather than three lone files so doubled_words can `import`
 # the CommonMark backtick rule and the list-aware code-block stripper from
 # split_code_spans instead of carrying a second copy of either.
-# `${./split-code-spans.py}` on its own lands as a lone file in /nix/store,
+# `${../../lib/markdown/split-code-spans.py}` on its own lands as a lone file in /nix/store,
 # whose dirname is /nix/store itself, so there is no importable package
 # without this step. The `-` → `_` rename is forced: `split-code-spans` is
 # not a legal Python module name, and it is why a traceback names
@@ -19,8 +19,10 @@
 # checkout — see the `_load` in either.
 {pkgs, ...}:
 pkgs.runCommandLocal "markdown-scanners" {} ''
+  set -euETo pipefail
+  shopt -s inherit_errexit 2>/dev/null || :
   ${pkgs.coreutils}/bin/mkdir -p "$out"
-  ${pkgs.coreutils}/bin/cp ${./split-code-spans.py} "$out/split_code_spans.py"
+  ${pkgs.coreutils}/bin/cp ${../../lib/markdown/split-code-spans.py} "$out/split_code_spans.py"
   ${pkgs.coreutils}/bin/cp ${./doubled-words.py} "$out/doubled_words.py"
   ${pkgs.coreutils}/bin/cp ${./doubled-words-fixtures.py} "$out/doubled_words_fixtures.py"
 ''

@@ -3,7 +3,7 @@
 
 Nothing else in the toolchain can see this class. prettier reflows the
 paragraph and reproduces the duplicate verbatim; cspell checks words in
-isolation and both spellings are real words; checks/markdown/split-code-spans.py
+isolation and both spellings are real words; lib/markdown/split-code-spans.py
 looks at backtick pairing, not at word sequences. `is the the rootfs top
 level` shipped in #878 and reached main through review untouched by all
 three, which is what this scanner exists to close.
@@ -269,14 +269,14 @@ def _load(module, filename):
     try:
         return importlib.import_module(module)
     except ModuleNotFoundError:
-        spec = importlib.util.spec_from_file_location(module, Path(__file__).with_name(filename))
+        spec = importlib.util.spec_from_file_location(module, Path(__file__).parent / filename)
         loaded = importlib.util.module_from_spec(spec)
         sys.modules[module] = loaded
         spec.loader.exec_module(loaded)
         return loaded
 
 
-_load("split_code_spans", "split-code-spans.py")
+_load("split_code_spans", "../../lib/markdown/split-code-spans.py")
 
 from split_code_spans import code_spans, no_files, strip_code_blocks  # noqa: E402
 

@@ -1,0 +1,7 @@
+<!-- markdownlint-configure-file {"MD013":{"line_length":120},"MD033":false} -->
+
+# Inline configuration that would widen the rule set
+
+This line is far longer than one hundred and twenty characters, so markdownlint would report it under MD013 if the comment above were read.
+
+Inline <b>HTML</b> and no table at all.
