@@ -5,10 +5,15 @@
 # — see dev/fragments/overlays/overlay-pattern.md
 #
 # Argument shape adapted from legacy 3-layer curried pattern during Milestone 6 port.
+#
+# `passthru.extracted` is the config-key census of the source this recipe
+# builds (packages/git-absorb/extract/, lib/git-tool-settings). passthru is
+# not a derivation input, so it does not move this package's store path.
 {
   inputs,
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
@@ -32,8 +37,9 @@
     inherit rev;
     hash = "sha256-jAR+Vq6SZZXkseOxZVJSjsQOStIip8ThiaLroaJcIfc=";
   };
-in
-  ourPkgs.git-absorb.override (_: {
+  extraction = import ../../../../../../lib/git-tool-settings/extraction.nix {inherit pkgs;};
+
+  package = ourPkgs.git-absorb.override (_: {
     rustPlatform.buildRustPackage = args:
       rustPlatform.buildRustPackage (finalAttrs: let
         a = (ourPkgs.lib.toFunction args) finalAttrs;
@@ -54,4 +60,38 @@ in
             runHook postInstallCheck
           '';
         });
+  });
+
+  patchedSource = extraction.patchedSource {
+    name = "git-absorb";
+    inherit package;
+  };
+in
+  package.overrideAttrs (prev: {
+    passthru =
+      (prev.passthru or {})
+      // {
+        inherit patchedSource;
+        # asciidoc parses Documentation/git-absorb.adoc, the source of the
+        # option descriptions, the same way the build turns it into the man
+        # page.
+        extracted = extraction.extracted {
+          name = "git-absorb";
+          source = patchedSource;
+          extractDir = ../../../../extract;
+          tools = [pkgs.asciidoc];
+        };
+        # A rev bump runs this through dev/scripts/update-pkg.sh, so the bump
+        # PR carries the refreshed sidecar.
+        regenerateExtracted = packageLib.mkFlakeInputRegen {
+          name = "git-absorb";
+          inherit pkgs;
+          targets = [
+            {
+              attr = "git-absorb";
+              dest = repoPath ../../../../extracted.json;
+            }
+          ];
+        };
+      };
   })

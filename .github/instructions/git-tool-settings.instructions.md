@@ -8,8 +8,8 @@ applyTo: "checks/git-tool-settings/**,lib/git-tool-settings/**,packages/git-abso
 # Git tool settings: census, sidecar, generator
 
 > **Last verified:** 2026-09-29 — one generator
-> (`lib/git-tool-settings/default.nix`) serves every git tool with a census;
-> git-branchless is the first caller.
+> (`lib/git-tool-settings/default.nix`) serves git-branchless and git-absorb (7
+> keys, 36 mutants).
 >
 > **Settled — do not relitigate.**
 >
@@ -85,6 +85,19 @@ description field.
   moves the output exactly as declared.
 - `<tool>-extracted-binary` — every extracted key is a string in the installed
   package.
+
+## Per tool
+
+- **git-branchless** — see `packages/git-branchless/docs/extraction.md`.
+- **git-absorb** — every read is one shape,
+  `match repo.config().and_then(|c| c.get_T(K)) { Ok(v) [if v > N] => v, _ => D }`;
+  keys and defaults reach it through parameters and are paired per call path.
+  Descriptions come from `Documentation/git-absorb.adoc` converted to DocBook by
+  `asciidoc`, config examples parsed as INI. Measured runtime facts the sidecar
+  cannot carry: git-absorb's libgit2 ignores `git -c` and `GIT_CONFIG_*`, so
+  only config files reach it; an invalid value in a higher scope resets to the
+  default instead of falling through; the four CLI flags are ORed with their
+  keys (`cli`), so a global `true` can only be undone per repository.
 
 ## Adding a tool
 

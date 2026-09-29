@@ -109,6 +109,7 @@ direnv
 direnvrc
 disableable
 disjointness
+docbook
 docnix
 docsite
 dogfood
@@ -249,6 +250,7 @@ lifecycles
 lintable
 linuxbrew
 listdir
+literallayout
 livelink
 livelock
 llms
@@ -382,6 +384,7 @@ rebuildable
 recharacterize
 recognised
 reflog
+refsect
 reftable
 regen
 rehosted
@@ -421,6 +424,7 @@ sadjow
 sandboxed
 sarif
 scriptable
+scrutinee
 sdiehl
 segs
 semble
@@ -435,6 +439,7 @@ shortrev
 sigmask
 sigpipe
 sigtool
+simpara
 sixel
 skillname
 skillsdir

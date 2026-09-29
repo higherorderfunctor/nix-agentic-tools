@@ -1,0 +1,123 @@
+{
+  "deadKeys": {},
+  "foreign": {
+    "user.email": {
+      "reads": {
+        "src/lib.rs#run_with_repo": ["repository"],
+        "src/stack.rs#working_stack": ["repository"]
+      },
+      "writes": {}
+    },
+    "user.name": {
+      "reads": {
+        "src/lib.rs#run_with_repo": ["repository"],
+        "src/stack.rs#working_stack": ["repository"]
+      },
+      "writes": {}
+    }
+  },
+  "settings": {
+    "absorb.autoStageIfNothingStaged": {
+      "default": false,
+      "description": "By default, git-absorb will only consider files that you've staged to the index via `git add`. However, sometimes one wants to try and absorb from all changes, which would require to stage them first via `git add .`. To avoid this extra step, set `absorb.autoStageIfNothingStaged = true` which tells git-absorb, when no changes are staged, to auto-stage them all, create fixup commits where possible, and unstage remaining changes from the index.",
+      "invalid": "default",
+      "reads": {
+        "src/config.rs#auto_stage_if_nothing_staged": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    },
+    "absorb.createSquashCommits": {
+      "cli": {
+        "alsoSetBy": [],
+        "doc": "Create squash commits instead of fixup",
+        "flag": "--squash"
+      },
+      "default": false,
+      "description": "By default, git-absorb will generate fixup commits. To instead generate squash commits, set `absorb.createSquashCommits = true`. When this option is set, \"fixup commit\" may be read as \"squash commit\" throughout the documentation. All configuration relating to fixup commits will apply to the squash commits instead.",
+      "invalid": "default",
+      "reads": {
+        "src/config.rs#unify": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    },
+    "absorb.fixupTargetAlwaysSHA": {
+      "default": false,
+      "description": "By default, git-absorb will create fixup commits with their messages pointing to the target commit's summary, and if there are duplicate summaries, will fall back to pointing to the target's SHA. Instead, can always point to the target's SHA via `absorb.fixupTargetAlwaysSHA = true`.",
+      "invalid": "default",
+      "reads": {
+        "src/config.rs#fixup_target_always_sha": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    },
+    "absorb.forceAuthor": {
+      "cli": {
+        "alsoSetBy": ["--force"],
+        "doc": "Generate fixups to commits not made by you",
+        "flag": "--force-author"
+      },
+      "default": false,
+      "description": "By default, git-absorb will only generate fixup commits for commits that were authored by you. To always generate fixups for any author's commits, set `absorb.forceAuthor = true`.",
+      "invalid": "default",
+      "reads": {
+        "src/config.rs#unify": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    },
+    "absorb.forceDetach": {
+      "cli": {
+        "alsoSetBy": ["--force"],
+        "doc": "Generate fixups even when on a non-branch (detached) HEAD",
+        "flag": "--force-detach"
+      },
+      "default": false,
+      "description": "By default, git-absorb will not generate fixup commits when HEAD is not a branch (\"is detached\"). To always generate fixups on detached HEADs, set `absorb.forceDetach = true`.",
+      "invalid": "default",
+      "reads": {
+        "src/config.rs#unify": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    },
+    "absorb.maxStack": {
+      "default": 10,
+      "defaultDescription": "10. A value of 0 or below, or one that does not parse as an integer, also gives 10, silently.",
+      "description": "Number of commits, counted back from HEAD, that git-absorb searches for fixup targets. Ignored when `--base` is given; `--no-limit` removes the limit for one run.",
+      "invalid": "default",
+      "minimum": 1,
+      "reads": {
+        "src/config.rs#max_stack": ["repository"]
+      },
+      "status": "current",
+      "type": "int",
+      "writes": {}
+    },
+    "absorb.oneFixupPerCommit": {
+      "cli": {
+        "alsoSetBy": [],
+        "doc": "Only generate one fixup per commit",
+        "flag": "--one-fixup-per-commit"
+      },
+      "default": false,
+      "description": "By default, git-absorb will generate separate fixup commits for every absorbable hunk. To always generate only 1 fixup commit for all hunks that absorb into the same commit, set `absorb.oneFixupPerCommit = true`.",
+      "invalid": "default",
+      "reads": {
+        "src/config.rs#unify": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    }
+  },
+  "source": {
+    "version": "0.9.0"
+  }
+}

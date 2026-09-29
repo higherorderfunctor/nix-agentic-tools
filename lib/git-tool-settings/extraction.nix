@@ -6,9 +6,10 @@
 #                                   postPatch, unpacked under stdenvNoCC, so
 #                                   the census reads exactly the tree that is
 #                                   built and never pulls a toolchain in
-#   extracted {name; source; extractDir}
+#   extracted {name; source; extractDir; tools ? []}
 #                                   runs `<extractDir>/extract.py` over the
-#                                   source; any guard fails the build
+#                                   source, with `tools` on PATH; any guard
+#                                   fails the build
 #   checks {name; package; sidecar; committed; extractDir; mutants; installed}
 #                                   the three checks below, keyed by name
 #
@@ -47,9 +48,10 @@ in {
     name,
     source,
     extractDir,
+    tools ? [],
   }:
     pkgs.runCommand "${name}-extracted.json" {
-      nativeBuildInputs = [python];
+      nativeBuildInputs = [python] ++ tools;
       PYTHONPATH = shared;
     } ''
       ${strict}
@@ -72,6 +74,9 @@ in {
     installed,
   }: let
     inherit (package.passthru) extracted patchedSource;
+    # The extraction's own tools (asciidoc for git-absorb's man page) are
+    # what the mutants need too.
+    inherit (extracted) nativeBuildInputs;
   in {
     # Drift: the committed sidecar equals a fresh extraction. Staleness
     # only; the update pipeline commits whatever the extractor says, so
@@ -94,7 +99,7 @@ in {
     # moves the output exactly as it says.
     "${name}-extractor-guards" =
       pkgs.runCommand "${name}-extractor-guards" {
-        nativeBuildInputs = [python];
+        inherit nativeBuildInputs;
         PYTHONPATH = shared;
       } ''
         ${strict}
