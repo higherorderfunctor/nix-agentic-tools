@@ -582,7 +582,7 @@ elsewhere stay dormant at `mkDefault`; a file has no dormant prose, and a leaf
 default is how a downstream module offers an overridable file. Empty inline
 `text` is not content: an entry with no content and no `enable` definition fails
 evaluation naming the path, rather than silently writing nothing. Spell an empty
-file as a `source`. The devshell `files.<name>` map follows the same rules.
+file as a `source`.
 
 That is the part most likely to be remembered wrongly, because it replaced a
 whole-entry contract:

@@ -1,6 +1,6 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-09-27 — Claude's settings and MCP files are Nix-owned
+> **Last verified:** 2026-09-28 — Claude's settings and MCP files are Nix-owned
 > read-only links. Proxy ownership is explicit and keyed by server name, so each
 > owner gets its own daemon; every ecosystem renders servers via `renderServer`.
 >
@@ -311,23 +311,23 @@ Nothing ties them together. Any kiro binary that is not the wrapper holding the
 secrets reads the same global mcp.json, sees the same servers, and sends the
 same headers — with the variables unset.
 
-**The devshell case is the one that bites.** `ai.kiro.enable` in a devenv
-project puts a SECOND wrapped kiro on `packages`, which SHADOWS the Home Manager
-one on `PATH` inside that shell. That wrapper carries `secretEnv` only for
-servers declared in THAT project, so a project that enables kiro without
-re-declaring the gateway servers gets a kiro that reads the user-global mcp.json
-and authenticates with nothing.
+**A devenv project is where this bites.** `ai.kiro.enable` in a devenv project
+puts a SECOND wrapped kiro on `packages`, which SHADOWS the Home Manager one on
+`PATH` inside that shell. That wrapper carries `secretEnv` only for servers
+declared in THAT project, so a project that enables kiro without re-declaring
+the gateway servers gets a kiro that reads the user-global mcp.json and
+authenticates with nothing.
 
 **So: any devenv project setting `ai.kiro.enable = true` must declare, in that
 project, every MCP server it expects kiro to reach, with its credentials.**
-Treat `~/.kiro/settings/mcp.json` as unreachable from a devshell. Checkable:
-every server name in the project's `ai.mcpServers` / `ai.kiro.mcpServers` has a
-credential source declared in the same project. Enabling kiro with an empty
-server set is correct only when the project needs no MCP servers. This replaces
-a guard phrased as "do not enable kiro on a machine whose gateway servers come
-from Home Manager" — an agent working from the repo cannot evaluate that. Same
-hazard by other routes: `nix run`, a nixpkgs `kiro-cli`, or any launch bypassing
-the wrapper.
+Treat `~/.kiro/settings/mcp.json` as unreachable from a devenv project.
+Checkable: every server name in the project's `ai.mcpServers` /
+`ai.kiro.mcpServers` has a credential source declared in the same project.
+Enabling kiro with an empty server set is correct only when the project needs no
+MCP servers. This replaces a guard phrased as "do not enable kiro on a machine
+whose gateway servers come from Home Manager" — an agent working from the repo
+cannot evaluate that. Same hazard by other routes: `nix run`, a nixpkgs
+`kiro-cli`, or any launch bypassing the wrapper.
 
 The failure is SILENT from the client side — the server list looks right and the
 servers are present; only the remote end sees an unauthenticated request.
@@ -363,9 +363,9 @@ a local proxy daemon is the design change under consideration, and it is a
 nixos-config change plus (for a remote upstream) a proxy that injects headers
 rather than the usual "run the server locally" daemon.
 
-Until that lands, do not enable kiro in a devshell on a machine whose gateway
-MCP servers come from Home Manager — or declare the same servers and secrets in
-the project so its own wrapper carries them.
+Until that lands, do not enable kiro in a devenv project on a machine whose
+gateway MCP servers come from Home Manager — or declare the same servers and
+secrets in the project so its own wrapper carries them.
 
 ### Delivery is Kiro-only; other ecosystems throw
 

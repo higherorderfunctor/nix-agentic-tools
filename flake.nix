@@ -127,7 +127,6 @@
 
     lib = let
       fragments = import ./lib/fragments.nix {inherit lib;};
-      devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
       aiBase = import ./lib/ai {inherit lib;};
       aiTypes = import ./lib/ai/types.nix {inherit lib;};
@@ -161,7 +160,6 @@
           // {
             inherit fragments presets;
             types = aiTypes;
-            inherit (devshellLib) mkAgenticShell;
             inherit (fragments) compose mkFragment mkFrontmatter render;
             inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
             mkMcpConfig = entries: {mcpServers = entries;};

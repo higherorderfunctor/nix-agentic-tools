@@ -60,13 +60,12 @@ in {
           type = types.listOf (types.either types.str (types.submodule {
             options = {
               location = mkOption {
-                type = types.enum ["dev" "devshell" "package"];
+                type = types.enum ["dev" "package"];
                 default = "dev";
                 description = ''
                   Which tree the fragment markdown lives in:
                   "dev" reads dev/fragments/<dir>/<name>.md,
-                  "package" reads packages/<dir>/docs/<name>.md, and
-                  "devshell" reads devshell/<dir>/docs/<name>.md.
+                  and "package" reads packages/<dir>/docs/<name>.md.
                 '';
               };
               name = mkOption {

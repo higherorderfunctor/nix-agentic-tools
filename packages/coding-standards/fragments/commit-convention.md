@@ -15,6 +15,6 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 **Scopes** (optional but encouraged): package or module name (e.g.,
 `context7-mcp`, `copilot-cli`, `fragments`), directory name (`overlay`,
-`module`, `lib`, `devshell`), or `flake` for root changes.
+`module`, `lib`), or `flake` for root changes.
 
 Keep descriptions lowercase, imperative mood, no trailing period.
