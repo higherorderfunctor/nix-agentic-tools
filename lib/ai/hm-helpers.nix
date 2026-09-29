@@ -105,34 +105,22 @@ in {
       record
       // {inherit (owned.config) enterTest tasks;};
 
-  # One reconciled document: the writer owning its ledger plus the file entry
-  # claiming it. Both are emitted for empty content too, because the ledger on
-  # the writer is what retracts the previous generation's leaves. `entry` and
-  # `ledger` are upgrade contracts: callers pass literals, nothing is derived.
-  # `content` (`value` or `run`) never states `enable`, whose `false` would
-  # suppress the whole entry. `format` is also the ledger codec; a null
-  # `entry` takes the writer's key.
+  # One harness-written state document: the writer owning its ledger plus the
+  # file entry claiming it. Both are emitted for empty content so the ledger
+  # can retract retired leaves. `content` never states `enable`.
   mkReconciledDocument = {
     content,
-    entry ? null,
     format,
     ledger,
-    lock ? null,
     path,
     runtime,
     writer,
   }: {
     ai.${runtime} = {
-      activation.${writer} =
-        lib.optionalAttrs (entry != null) {inherit entry;}
-        // {
-          ledgers.${ledger} =
-            {
-              codec = format;
-              inherit path;
-            }
-            // lib.optionalAttrs (lock != null) {inherit lock;};
-        };
+      activation.${writer}.ledgers.${ledger} = {
+        codec = format;
+        inherit path;
+      };
       files.${path} = {
         inherit content format ledger;
         entry = writer;

@@ -170,7 +170,7 @@
         description = ''
           Which renderer turns structured content into bytes. For a file whose
           leaves are reconciled it also names the on-disk container, which is
-          why only `json` and `toml` can carry one.
+          why only `json` can carry one.
         '';
       };
       ledger = lib.mkOption {
@@ -182,7 +182,7 @@
           claims still produces a valid empty target — which is how a path is
           released rather than abandoned.
 
-          `copy-ro` requires a directory ledger. A JSON/TOML document claimant
+          `copy-ro` requires a directory ledger. A JSON document claimant
           must use the ledger's exact path and matching format, since the ledger
           determines where and how the reconciler writes.
         '';
@@ -198,7 +198,7 @@
           so `lib.mkForce` on this field and on `methodFor` both work.
 
           A resolved `symlink` destination must not remain the path of a
-          declared JSON/TOML ledger. Empty document retirement preserves a
+          declared JSON ledger. Empty document retirement preserves a
           regular file and native leaves, so it cannot hand the path to the
           backend's symlink writer. Both override forms reject this combination
           before activation; ordinary empty-document retirement remains valid.
@@ -208,9 +208,8 @@
         type = lib.types.nullOr (lib.types.strMatching "0?[0-7]{3}");
         default = null;
         description = ''
-          Octal permissions imposed on every write. Owned copies and
-          reconciled documents only; absent, an existing file keeps the mode it
-          has and a new one is created private to the user.
+          Octal permissions imposed on an owned copy. A shared document
+          cannot state a mode; it keeps an existing file's permissions.
         '';
       };
       recursive = lib.mkOption {
@@ -292,21 +291,8 @@
         type = lib.types.attrsOf (lib.types.submodule {
           options = {
             codec = lib.mkOption {
-              type = lib.types.enum ["dir" "json" "toml"];
-              description = "Which container `lib/ai/own.py` owns units inside: whole files in a directory, or leaves of a JSON or TOML document.";
-            };
-            lock = lib.mkOption {
-              type = lib.types.nullOr lib.types.str;
-              default = null;
-              example = ".config/kimchi/harness/trust.json.lock";
-              description = ''
-                A document's NATIVE writer lock, relative to the backend root:
-                the directory a proper-lockfile writer creates with `mkdir`
-                around its own read-modify-write. The reconciler takes the same
-                lock around every read and write of this document, so neither
-                side loses the other's update or parses a half-written file.
-                Documents only; null when the native writer takes no lock.
-              '';
+              type = lib.types.enum ["dir" "json"];
+              description = "Which container `lib/ai/own.py` owns units inside: whole files in a directory, or leaves of a JSON document.";
             };
             path = lib.mkOption {
               type = lib.types.str;

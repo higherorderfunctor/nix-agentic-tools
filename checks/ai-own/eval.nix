@@ -43,12 +43,6 @@
             run = "printf '{}'";
           };
         }
-        {
-          codec = "json";
-          ledger = "json-settings/kiro-mcp-fixture.json";
-          path = ".kiro/settings/mcp.json";
-          units = {};
-        }
       ];
     });
   claudeUnpin = own (base
@@ -84,42 +78,6 @@
           ledger = "materialize/kiro-steering.manifest";
           path = ".kiro/steering";
           units = {};
-        }
-      ];
-    });
-  # The fourth call shape: a document target that STATES the mode its file must
-  # carry. kiro's merge target is the only one, because it is the only document
-  # whose file a sibling target in the same bundle also writes — see
-  # `mkMcpTargets`. The mode is optional everywhere else and absent everywhere
-  # else, which `claudeUnpin` above is the control for.
-  # A document may name its native writer's lock (Kimchi's trust.json).
-  lockedDocument = own (base
-    // {
-      backend = "hm";
-      entryNames.write = "kimchiProjectTrustMerge";
-      targets = [
-        {
-          codec = "json";
-          ledger = "json-settings/kimchi-trust-fixture.json";
-          lock = ".config/kimchi/harness/trust.json.lock";
-          path = ".config/kimchi/harness/trust.json";
-          units.run = "printf '{}'";
-        }
-      ];
-    });
-  mergeMode = own (base
-    // {
-      backend = "hm";
-      entryNames.write = "kiroMcpJsonMerge";
-      targets = [
-        {
-          codec = "json";
-          ledger = "json-settings/kiro-mcp-fixture.json";
-          path = ".kiro/settings/mcp.json";
-          units = {
-            mode = "0600";
-            run = "printf '{}'";
-          };
         }
       ];
     });
@@ -181,22 +139,17 @@
         units.text = "{}";
       }
     ];
-    # A document MAY state a mode (see `mergeMode` above); it may not state a
-    # malformed one. The dir codec's unit modes are policed by the same regex,
-    # so keep both refusals or a typo reaches `int(mode, 8)` at activation.
     documentModeMalformed.targets = [
       {
         codec = "json";
         ledger = "json-settings/x.json";
         path = "settings.json";
         units = {
-          mode = "rw-";
+          mode = "0600";
           text = "{}";
         };
       }
     ];
-    # A native writer's lock guards one document's read-modify-write; a
-    # directory publishes each unit atomically and has none to share.
     directoryLock.targets = [
       {
         codec = "dir";
@@ -231,8 +184,7 @@
     # Two LIVE targets on one path, which the ledger rule above does NOT catch:
     # distinct ledgers, one file. Each publishes over the other and the second
     # backs the first one's bytes up as an unmanaged hand edit, once per
-    # generation. Two targets on one path where at most one is live is the
-    # legal shape — that is the handover `kiroMcp` above is built from.
+    # generation.
     duplicatePath.targets = [
       {
         codec = "json";
@@ -258,11 +210,11 @@
         }
       ];
     };
-    traversingLock.targets = [
+    documentLock.targets = [
       {
         codec = "json";
         ledger = "json-settings/x.json";
-        lock = "../outside.lock";
+        lock = "settings.lock";
         path = "settings.json";
         units.text = "{}";
       }
@@ -334,7 +286,7 @@
       }
       // overrides);
 
-  passed = assert lib.assertMsg (accepted kiroMcp && accepted claudeUnpin && accepted steeringRetirement && accepted mergeMode && accepted lockedDocument)
+  passed = assert lib.assertMsg (accepted kiroMcp && accepted claudeUnpin && accepted steeringRetirement)
   "ai.own: a design §8 call shape was rejected";
   assert lib.assertMsg (accepted (devenvHooks false) && accepted (devenvHooks true))
   "ai.own: the devenv call shape was rejected";
@@ -390,25 +342,20 @@
   assert lib.assertMsg (
     lib.hasPrefix "/nix/store/" kiroMcp.plan.bash
     && map (target: target.ledger) kiroMcp.plan.targets
-    == ["materialize/kiro-settings.manifest" "json-settings/kiro-mcp-fixture.json"]
+    == ["materialize/kiro-settings.manifest"]
     && (builtins.head kiroMcp.plan.targets).units."mcp.json"
     == {
       mode = "0400";
       run = "printf '{}'";
     }
     && (builtins.head steeringRetirement.plan.targets).units == {}
-    # A document's declared mode is plan data too, and it is the only mode
-    # own.py ever imposes on a file it did not create.
-    && (builtins.head mergeMode.plan.targets).units.mode == "0600"
     && !((builtins.head claudeUnpin.plan.targets).units ? mode)
-    # The native lock is plan data on the TARGET, where own.py reads it.
-    && (builtins.head lockedDocument.plan.targets).lock == ".config/kimchi/harness/trust.json.lock"
   ) "ai.own: the plan is no longer eval-visible data";
   assert lib.assertMsg (lib.all (name: rejected (refuse refusals.${name})) (builtins.attrNames refusals))
   "ai.own: a malformed bundle was accepted: ${lib.concatStringsSep ", " (lib.filter (name: accepted (refuse refusals.${name})) (builtins.attrNames refusals))}"; true;
 in {
   checks.ai-own-eval = assert passed;
     pkgs.runCommandLocal "ai-own-eval-check" {} ''
-      echo 'PASS: ai.own accepted 7 call shapes and refused ${toString (builtins.length (builtins.attrNames refusals))} malformed bundles' > "$out"
+      echo 'PASS: ai.own accepted 5 call shapes and refused ${toString (builtins.length (builtins.attrNames refusals))} malformed bundles' > "$out"
     '';
 }
