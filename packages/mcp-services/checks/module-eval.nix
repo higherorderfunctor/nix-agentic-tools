@@ -37,7 +37,7 @@ in {
       source = lib.fileset.toSource {
         root = ../../..;
         fileset = lib.fileset.unions [
-          ../../../lib/credentials.nix
+          ../../../lib/runtime-values
           ../../../lib/mcp.nix
           ../../../packages/gitlab-mcp/modules/mcp-server.nix
         ];
@@ -99,7 +99,7 @@ in {
       source = lib.fileset.toSource {
         root = ../../..;
         fileset = lib.fileset.unions [
-          ../../../lib/credentials.nix
+          ../../../lib/runtime-values
           ../../../lib/mcp.nix
           ../../../packages/fetch-mcp/modules/mcp-server.nix
         ];
@@ -210,7 +210,7 @@ in {
         result = evalHm {
           services.mcp-servers.servers.github-mcp = {
             enable = true;
-            settings.credentials.file = "/run/secrets/gh-token";
+            settings.credentials = {_runtime.source.file = "/run/secrets/gh-token";};
           };
         };
         activation = result.config.home.activation.mcpRestartOnSecretRotation or null;
@@ -244,7 +244,7 @@ in {
         result = evalHm {
           services.mcp-servers.servers.github-mcp = {
             enable = true;
-            settings.credentials.file = "/run/secrets/gh-token";
+            settings.credentials = {_runtime.source.file = "/run/secrets/gh-token";};
           };
         };
         text = result.config.home.activation.mcpRestartOnSecretRotation.text or "";
@@ -318,7 +318,7 @@ in {
         result = evalHm {
           services.mcp-servers.servers.github-mcp = {
             enable = true;
-            settings.credentials.helper = "/run/wrappers/gh-token-helper";
+            settings.credentials = {_runtime.source.helper = "/run/wrappers/gh-token-helper";};
           };
         };
       in

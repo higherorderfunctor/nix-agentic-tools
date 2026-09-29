@@ -225,6 +225,13 @@ in {
       apiUrl = {
         envVar = "GITLAB_API_URL";
         required = false;
+        # Deferred legacy locator belongs only to this option.
+        adapt = value:
+          if mcpLib.runtimeValues.isReference value
+          then value
+          else if value ? file
+          then mcpLib.runtimeValues.file {path = value.file;}
+          else mcpLib.runtimeValues.helper {path = value.helper;};
       };
       jobToken = {
         envVar = "GITLAB_JOB_TOKEN";
@@ -236,9 +243,30 @@ in {
 
   settingsOptions = {
     # ── Credentials ────────────────────────────────────────────
-    pat = mcpLib.mkCredentialsOption "GITLAB_PERSONAL_ACCESS_TOKEN";
-    apiUrl = mcpLib.mkCredentialsOption "GITLAB_API_URL";
-    jobToken = mcpLib.mkCredentialsOption "GITLAB_JOB_TOKEN";
+    pat = mkOption {
+      type = types.nullOr (mcpLib.runtimeValues.withReferences {
+        type = types.str;
+        secret = true;
+      });
+      default = null;
+      description = "Runtime credential mapped to GITLAB_PERSONAL_ACCESS_TOKEN.";
+    };
+    apiUrl = mkOption {
+      type = types.nullOr (types.attrTag {
+        file = mkOption {type = types.str;};
+        helper = mkOption {type = types.str;};
+      });
+      default = null;
+      description = "Runtime GitLab API URL locator.";
+    };
+    jobToken = mkOption {
+      type = types.nullOr (mcpLib.runtimeValues.withReferences {
+        type = types.str;
+        secret = true;
+      });
+      default = null;
+      description = "Runtime credential mapped to GITLAB_JOB_TOKEN.";
+    };
 
     # ── Typed options ──────────────────────────────────────────
     instanceUrl = mkOption {

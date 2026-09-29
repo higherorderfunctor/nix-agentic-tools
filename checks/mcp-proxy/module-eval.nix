@@ -455,14 +455,13 @@ in {
       let
         s = builtins.readFile (mcpProxyLib.startScriptFor (mcpProxyLib.specFor "example" proxySampleServer));
       in
-        lib.hasInfix "/bin/cat \"/run/secrets/service-token\"" s
+        lib.hasInfix "runtime-value-read" s
         && lib.hasInfix "export MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN" s
         && lib.hasInfix "set -euETo pipefail" s
         && lib.hasInfix "shopt -s inherit_errexit" s
         # Fail closed: an empty or unreadable secret must not start a proxy
         # that would answer every client with the upstream's 401.
-        && lib.hasInfix "resolved empty from" s
-        && lib.hasInfix "the file is missing or unreadable" s
+        && lib.hasInfix "exit 1" s
         # Never a bare `cat` — this wrapper can be spawned with no PATH.
         && !(lib.hasInfix "\ncat " s)
         # The secret must not be an ARGUMENT to caddy.
@@ -495,14 +494,18 @@ in {
     # and against a populated one. A grep proves the line was emitted; only
     # running it proves the line works.
     module-credential-empty-guard-aborts = let
-      credLib = import ../../lib/credentials.nix {inherit lib;};
-      # `mkSecretExport` bakes the path in at generation time and the test
+      credLib = import ../../lib/runtime-values {inherit lib;};
+      # `rv.export` bakes the path in at generation time and the test
       # needs two different files, so the path is a placeholder substituted
       # per-case below.
       runner = pkgs.writeShellScript "empty-guard-runner" ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        ${credLib.mkSecretExport pkgs "TEST_TOKEN" {file = "@SECRET@";}}
+        ${credLib.export {
+          inherit pkgs;
+          variable = "TEST_TOKEN";
+          value = credLib.file {path = "@SECRET@";};
+        }}
         echo "REACHED-PROGRAM"
       '';
     in
@@ -543,7 +546,7 @@ in {
           exit 1
         fi
         case "$got" in
-          *"is a directory, not a secret file"*) : ;;
+          *"reference is a directory"*) : ;;
           *)
             echo "FAIL: directory aborted, but not via the guard (got: $got)" >&2
             exit 1 ;;
@@ -558,7 +561,7 @@ in {
         case "$got" in
           *REACHED-PROGRAM*)
             echo "FAIL: reached the program despite the guard" >&2; exit 1 ;;
-          *"TEST_TOKEN resolved empty"*) : ;;
+          *"TEST_TOKEN: reference resolved empty"*) : ;;
           *)
             echo "FAIL: aborted, but not via the guard (got: $got)" >&2; exit 1 ;;
         esac

@@ -319,7 +319,7 @@
     # the MCP servers use (lib/mcp.nix); sops-nix / agenix agnostic.
     credSnippet =
       if cfg.apiKey != null
-      then mcpLib.mkCredentialsSnippet pkgs {apiKey.envVar = sidecar.environmentName "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
+      then mcpLib.credentialsEnvironment pkgs {apiKey.envVar = sidecar.environmentName "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
       else "";
 
     # Kimchi resolves project config, MCP servers, and harness settings from
@@ -493,7 +493,10 @@
         run = ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          ${mcpLib.mkCredentialsSnippet pkgs tokenVars gitTokens}
+          ${mcpLib.runtimeValues.environment {
+            inherit pkgs;
+            values = lib.mapAttrs' (host: token: lib.nameValuePair tokenVars.${host}.envVar token) gitTokens;
+          }}
           exec ${pkgs.jq}/bin/jq -n --slurpfile declared ${pkgs.writeText "kimchi-config.json" (builtins.toJSON filteredSettings)} ${lib.escapeShellArg "$declared[0] * {gitTokens: {${lib.concatStringsSep ", " (lib.mapAttrsToList (host: var: "${builtins.toJSON host}: env.${var.envVar}") tokenVars)}}}"}
         '';
       };
@@ -860,13 +863,23 @@ in
       # KIMCHI_API_KEY at launch. Reuses the repo's shared MCP credential
       # pattern (lib/mcp.nix) so the secret is read from its decrypted file
       # at runtime and never lands in the /nix/store. Set exactly one of
-      # apiKey.file (sops-nix/agenix path) or apiKey.helper.
-      apiKey = mcpLib.mkCredentialsOption (sidecar.environmentName "KIMCHI_API_KEY");
+      # apiKey = rv.file {path = ...;} or rv.helper {path = ...;}.
+      apiKey = lib.mkOption {
+        type = lib.types.nullOr (mcpLib.runtimeValues.withReferences {
+          type = lib.types.str;
+          secret = true;
+        });
+        default = null;
+        description = "Runtime reference for the Kimchi API key.";
+      };
 
       gitTokens = lib.mkOption {
-        type = lib.types.attrsOf (mcpLib.mkCredentialsOption "the config.json `gitTokens.<host>` leaf").type;
+        type = lib.types.attrsOf (mcpLib.runtimeValues.withReferences {
+          type = lib.types.str;
+          secret = true;
+        });
         default = {};
-        example = {"github.com".file = "/run/secrets/kimchi-github-token";};
+        example = {"github.com"._runtime.source.file = "/run/secrets/kimchi-github-token";};
         description = ''
           Git tokens Kimchi's teleport and remote runs use, keyed by host.
           Kimchi reads them only from the user config.json and has no
