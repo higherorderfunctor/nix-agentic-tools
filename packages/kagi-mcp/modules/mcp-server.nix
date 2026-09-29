@@ -22,7 +22,14 @@ in {
   };
 
   settingsOptions = {
-    credentials = mcpLib.mkCredentialsOption "KAGI_API_KEY";
+    credentials = mkOption {
+      type = types.nullOr (mcpLib.runtimeValues.withReferences {
+        type = types.str;
+        secret = true;
+      });
+      default = null;
+      description = "Runtime credential mapped to KAGI_API_KEY.";
+    };
 
     path = mkOption {
       type = types.str;

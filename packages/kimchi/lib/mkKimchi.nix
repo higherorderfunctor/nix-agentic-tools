@@ -226,7 +226,7 @@
     # the MCP servers use (lib/mcp.nix); sops-nix / agenix agnostic.
     credSnippet =
       if cfg.apiKey != null
-      then mcpLib.mkCredentialsSnippet pkgs {apiKey.envVar = sidecar.environmentName "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
+      then mcpLib.credentialsEnvironment pkgs {apiKey.envVar = sidecar.environmentName "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
       else "";
 
     # Kimchi resolves project config, MCP servers, and harness settings from
@@ -782,8 +782,15 @@ in
       # KIMCHI_API_KEY at launch. Reuses the repo's shared MCP credential
       # pattern (lib/mcp.nix) so the secret is read from its decrypted file
       # at runtime and never lands in the /nix/store. Set exactly one of
-      # apiKey.file (sops-nix/agenix path) or apiKey.helper.
-      apiKey = mcpLib.mkCredentialsOption (sidecar.environmentName "KIMCHI_API_KEY");
+      # apiKey = rv.file {path = ...;} or rv.helper {path = ...;}.
+      apiKey = lib.mkOption {
+        type = lib.types.nullOr (mcpLib.runtimeValues.withReferences {
+          type = lib.types.str;
+          secret = true;
+        });
+        default = null;
+        description = "Runtime reference for the Kimchi API key.";
+      };
 
       noUpdateCheck = lib.mkOption {
         type = lib.types.bool;
