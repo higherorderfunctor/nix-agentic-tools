@@ -2732,6 +2732,14 @@
           {
             "acceptedValues": [],
             "conflicts": [],
+            "default": null,
+            "help": "Allow permitted private IP destinations to use the configured upstream proxy. If no valid upstream proxy applies to the request protocol, connect directly. Loopback stays local. This flag does not require upstream routing [env: CODEX_EXEC_SERVER_PROXY_PRIVATE_IPS_VIA_UPSTREAM=]",
+            "names": ["--proxy-private-ips-via-upstream"],
+            "valueName": null
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
             "default": "1",
             "help": "Maximum number of requests to process concurrently on each connection",
             "names": ["--concurrent-requests"],
@@ -2943,6 +2951,14 @@
             "help": "Linux PID namespace: isolate (default) or inherit. Inherit allows signals to other same-UID processes; enable only when provisioning a dedicated environment",
             "names": ["--linux-sandbox-pid-namespace"],
             "valueName": "MODE"
+          },
+          {
+            "acceptedValues": [],
+            "conflicts": [],
+            "default": null,
+            "help": "Allow permitted private IP destinations to use the configured upstream proxy. If no valid upstream proxy applies to the request protocol, connect directly. Loopback stays local. This flag does not require upstream routing [env: CODEX_EXEC_SERVER_PROXY_PRIVATE_IPS_VIA_UPSTREAM=]",
+            "names": ["--proxy-private-ips-via-upstream"],
+            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -5956,6 +5972,11 @@
       "name": "in_app_updates"
     },
     {
+      "default": false,
+      "maturity": "under development",
+      "name": "instant_interrupt"
+    },
+    {
       "default": true,
       "maturity": "removed",
       "name": "item_ids"
@@ -6449,7 +6470,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.158.0",
+    "codexVersion": "0.159.0",
     "extractorSchema": 1
   }
 }
