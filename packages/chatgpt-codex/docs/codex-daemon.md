@@ -1,8 +1,9 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-09-26 — the selector's worst case is bounded to fit
+> **Last verified:** 2026-09-28 — the selector's worst case is bounded to fit
 > Home Manager's activation unit, its owned shape comes from
-> `lib/packageLayout.nix`, and its warn-and-continue paths are gated.
+> `lib/packageLayout.nix`, and its warn-and-continue paths are gated. The
+> daemon's `settings.json` is a read-only copy of `native.daemonSettings`.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -15,8 +16,8 @@ never reaches the process that runs every tool call.
 - **The pin.** Activation (`lib/daemonSelect.nix`) points `current` straight at
   `<package>/libexec/codex` and removes any `auto-update-version` marker. A
   selection outside `releases/` with no marker never qualifies for the updater.
-  A reconciled `updater.autoUpdateEnabled = false` leaf in
-  `app-server-daemon/settings.json` is the second guard.
+  `updater.autoUpdateEnabled = false`, the pin's default in
+  `ai.codex.native.daemonSettings`, is the second guard.
 - **Upstream's lock.** The selection runs under upstream's daemon operation lock
   (`app-server-daemon/daemon.lock`), which every lifecycle command and the
   first-start copy take. It is released before the stop, because `stop` takes it
@@ -36,11 +37,11 @@ never reaches the process that runs every tool call.
   daemon may still be running.
 - **Release only what it wrote.** Disabling Codex or the pin removes a `current`
   of the exact shape the selector writes, `<store>/<name>/<root>`, so GC cannot
-  leave it dangling, and retracts the leaf. Any other `current`, such as a
-  `home.file`-managed link, is left alone. `<root>` has one source,
-  `lib/packageLayout.nix`: `package.nix` installs there, the selector builds its
-  owned shape from it, and `mkCodex.nix` refuses to pin a package whose
-  `passthru.codexPackage.root` differs, since it could never release it.
+  leave it dangling. Any other `current`, such as a `home.file`-managed link, is
+  left alone. `<root>` has one source, `lib/packageLayout.nix`: `package.nix`
+  installs there, the selector builds its owned shape from it, and `mkCodex.nix`
+  refuses to pin a package whose `passthru.codexPackage.root` differs, since it
+  could never release it.
 - **The opt-out.** `false` restores upstream's copy and updater. That copy has
   the same voice/zsh resources as `--from-cli` below, pointing into store paths
   nothing roots, so they break after GC until the updater replaces the copy.
@@ -49,27 +50,43 @@ never reaches the process that runs every tool call.
   every later client with it. With sessions open across direnv or devenv
   projects, the first launch would define every session's tool environment.
 
+## Home Manager owns its settings (`ai.codex.native.daemonSettings`)
+
+`app-server-daemon/settings.json` is all configuration: `remoteControlEnabled`,
+`featureOverrides`, `shutdownGraceSeconds` and `updater`. Home Manager always
+writes it from `native.daemonSettings`, `{}` when nothing is declared, through
+the `materialize-codex-daemon-settings` writer. That writer claims only this
+file in the directory, beside the lock and pid files the daemon keeps there, and
+runs while Codex is disabled so a disable retracts it.
+
+It is a read-only copy, not a symlink, because Codex saves the file by writing a
+temporary and renaming it over the path (`settings.rs`), which replaces a link
+with a real file and fails the next switch's link check. A save
+(`codex app-server daemon enable-remote-control`, or a start with launch feature
+overrides that differ from the stored ones) therefore succeeds, and lasts until
+the next activation backs it up and restores the declaration.
+
 ## devenv never touches daemon state
 
 Its launcher always passes `--no-daemon`, the only flag that skips auto-start
 AND refuses to attach to a running daemon. Tools see the project shell, and the
 devenv-pinned version is what runs. `pinDaemonToPackage = false` or
-`daemon_auto_start = true` in devenv is an assertion, not a silent no-op. With
-the flag, `codex agents`, `codex queue` and `--remote` refuse to run;
-`codex remote-control` and `codex app-server daemon …` ignore it and still reach
-the user daemon. A VM or sandbox home is out of scope: the sandbox will own that
-home.
+`daemon_auto_start = true` or any `native.daemonSettings` in devenv is an
+assertion, not a silent no-op. With the flag, `codex agents`, `codex queue` and
+`--remote` refuse to run; `codex remote-control` and `codex app-server daemon …`
+ignore it and still reach the user daemon. A VM or sandbox home is out of scope:
+the sandbox will own that home.
 
 ## Gates
 
 - `checks/chatgpt-codex-daemon-selection.nix` runs the rendered activation
   against the real daemon: pin, unchanged re-pin under a held lock, simulated
-  bump, unpin, and a foreign `current` that survives. A store-path `current` is
-  outside upstream's documented layout, so a release that stops honoring it
-  fails there, in its update PR. It then drives the warn paths with stub roots
-  and a selector whose waits are shortened through `.override`: a stop that
-  fails, one that hangs, and a lock held past the wait each exit 0 with a
-  `warning:`.
+  bump, unpin, and a foreign `current` that survives, with the settings copy
+  read-only at each step. A store-path `current` is outside upstream's
+  documented layout, so a release that stops honoring it fails there, in its
+  update PR. It then drives the warn paths with stub roots and a selector whose
+  waits are shortened through `.override`: a stop that fails, one that hangs,
+  and a lock held past the wait each exit 0 with a `warning:`.
 - `--no-daemon` is listed in `extractedCoverage.nix` `cli.launcherFlags`, and
   chatgpt-codex-coverage fails, as launcher policy rather than a stale
   disposition, if upstream drops it.

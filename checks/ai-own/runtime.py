@@ -20,8 +20,6 @@ import time
 from pathlib import Path
 
 TOOLS = {}
-WHOLE = json.dumps({"mcpServers": {"alpha": {"url": "https://alpha.invalid"}}}, indent=2) + "\n"
-SERVERS = {"alpha": {"url": "https://alpha.invalid"}}
 
 
 # ── Harness ─────────────────────────────────────────────────────────
@@ -115,74 +113,7 @@ def doc_target(units, codec="json", path="settings/mcp.json", ledger="json-setti
     return {"codec": codec, "ledger": ledger, "path": path, "units": units}
 
 
-def mcp_plan(mode, servers):
-    """The kiro bundle of design §2: both targets, always, in a fixed order."""
-    return {
-        "targets": [
-            dir_target(
-                {"mcp.json": {"mode": "0444", "text": WHOLE}}
-                if mode == "overwrite" and servers
-                else {}
-            ),
-            doc_target(
-                {"text": json.dumps({"mcpServers": servers})} if mode == "merge" else {}
-            ),
-        ]
-    }
-
-
 # ── Cases ───────────────────────────────────────────────────────────
-
-
-def transitions(fixture):
-    """The four mcp transition cells of design §2, each from a fresh write."""
-    config = fixture.root / "settings/mcp.json"
-    whole = fixture.ledger("materialize/settings.manifest")
-    leaves = fixture.ledger("json-settings/mcp.json")
-
-    def overwritten():
-        for ledger in (whole, leaves):
-            ledger.unlink(missing_ok=True)
-        config.unlink(missing_ok=True)
-        fixture.own(mcp_plan("overwrite", SERVERS))
-        assert config.read_text() == WHOLE and whole.is_file() and not leaves.exists()
-
-    # overwrite -> merge: the whole-file claim is RELEASED. No backup, no
-    # delete, the mode survives, and a hand edit survives with it.
-    overwritten()
-    native = json.loads(config.read_text())
-    native["mcpServers"]["hand"] = {"url": "https://hand.invalid"}
-    config.chmod(0o644)
-    config.write_text(json.dumps(native))
-    config.chmod(0o444)
-    fixture.own(mcp_plan("merge", SERVERS))
-    assert json.loads(config.read_text()) == {"mcpServers": dict(SERVERS, **{"hand": native["mcpServers"]["hand"]})}
-    assert not whole.exists() and leaves.is_file()
-    assert stat.S_IMODE(config.stat().st_mode) == 0o444
-    assert not fixture.backups()
-    print("PASS transitions: overwrite -> merge released the file claim")
-
-    # merge -> overwrite: the leaves are retracted FIRST, then the directory
-    # write adopts the file it did not record, backing it up.
-    fixture.own(mcp_plan("overwrite", SERVERS))
-    assert config.read_text() == WHOLE and whole.is_file() and not leaves.exists()
-    assert len(fixture.backups()) == 1
-    print("PASS transitions: merge -> overwrite retracted then adopted")
-
-    # overwrite -> empty merge: RELEASED, because the producer is the claim
-    # even when it resolves to zero leaves.
-    overwritten()
-    before = snapshot(config)
-    fixture.own(mcp_plan("merge", {}))
-    assert snapshot(config) == before, "an empty merge rewrote the co-owned file"
-    assert not whole.exists() and not leaves.exists()
-    print("PASS transitions: overwrite -> empty merge released, bytes untouched")
-
-    # overwrite -> empty overwrite: DELETED, because nothing claims the path.
-    overwritten()
-    fixture.own(mcp_plan("overwrite", {}))
-    assert not config.exists() and not whole.exists() and not leaves.exists()
-    print("PASS transitions: overwrite -> empty overwrite deleted the file")
 
 
 def write_arms(fixture):
@@ -419,6 +350,45 @@ def drain(fixture):
     print("PASS drain: empty parents pruned, unowned sibling byte-identical")
 
 
+def commented_json(fixture):
+    """A leading `//` header is parsed past, kept, and written back verbatim.
+
+    Copilot heads its state file with two such lines; json.loads alone would
+    fail closed on every real machine.
+    """
+    document = fixture.root / "settings/config.json"
+    header = (
+        "// User settings belong in settings.json.\n"
+        "// This file is managed automatically.\n"
+    )
+    document.parent.mkdir()
+    native = {"firstLaunchAt": "2026-09-28", "url": "https://example.invalid//x"}
+    document.write_text(header + json.dumps(native, indent=2) + "\n")
+
+    def target(units):
+        return doc_target(units, path="settings/config.json", ledger="json-settings/config.json")
+
+    def body():
+        text = document.read_text()
+        assert text.startswith(header), text
+        return json.loads(text[len(header):])
+
+    fixture.own({"targets": [target({"text": json.dumps({"trustedFolders": ["/a"]})})]})
+    assert body() == {**native, "trustedFolders": ["/a"]}, document.read_text()
+    print("PASS commented_json: leaf set, header and siblings kept")
+
+    fixture.own({"targets": [target({})]})
+    assert body() == native, document.read_text()
+    print("PASS commented_json: leaf retracted, header and siblings kept")
+
+    # A header keeps a document whose retraction leaves nothing else.
+    document.write_text(header + "{}\n")
+    fixture.own({"targets": [target({"text": json.dumps({"trustedFolders": []})})]})
+    fixture.own({"targets": [target({})]})
+    assert document.read_text() == header + "{}\n", document.read_text()
+    print("PASS commented_json: a header-only document survives retirement")
+
+
 def two_phase(fixture):
     """The HM pair: `--phase prune` deletes, `--phase all` finishes the job."""
     unit = fixture.root / "settings/unit.txt"
@@ -459,8 +429,7 @@ def two_phase(fixture):
     fixture.own(drained, "--phase", "all")
     assert not whole.exists() and not leaves.exists()
     # Every byte of it was ours, so the drain removes the file instead of
-    # leaving `{}`: some readers (Kimchi's permissions) treat an existing empty
-    # object as a declaration of their defaults.
+    # leaving an unowned `{}` behind.
     assert not document.exists(), "a drained document left an empty object behind"
     print("PASS two_phase: prune deleted without rewriting, write finished the drain")
 
@@ -498,7 +467,7 @@ def virgin(fixture):
 
 
 def modes(fixture):
-    """Documents keep their mode unless they state one; directories impose it."""
+    """Documents preserve mode; directory copies impose their declared mode."""
     document = fixture.root / "settings/cli.json"
     target = doc_target(
         {"text": json.dumps({"ours": 1})},
@@ -521,29 +490,6 @@ def modes(fixture):
         assert json.loads(document.read_text())["ours"] == mode
         assert stat.S_IMODE(document.stat().st_mode) == mode, f"changed write lost {oct(mode)}"
     print("PASS modes: doc codec preserved 0400/0600/0640 and used 0600 for a new file")
-
-    # A document target MAY state the mode its file must carry. Stated, it is
-    # imposed on every write AND on the run where the bytes did not move --
-    # that second arm is the one kiro's merge target needs, because the run
-    # that has to re-narrow a file an overwrite generation left 0444 usually
-    # has no other work to do.
-    stated = doc_target(
-        {"mode": "0640", "text": json.dumps({"ours": 1})},
-        path="settings/cli.json",
-        ledger="json-settings/cli.json",
-    )
-    document.chmod(0o444)
-    fixture.own({"targets": [stated]})
-    assert stat.S_IMODE(document.stat().st_mode) == 0o640, "a stated mode was not imposed"
-    before = snapshot(document)
-    document.chmod(0o444)
-    fixture.own({"targets": [stated]})
-    # A chmod, not a republication: bytes and mtime both frozen.
-    assert snapshot(document) == before, "imposing a stated mode rewrote the document"
-    document.unlink()
-    fixture.own({"targets": [stated]})
-    assert stat.S_IMODE(document.stat().st_mode) == 0o640, "a new document ignored its stated mode"
-    print("PASS modes: doc codec imposed a stated mode on create, rewrite and no-op")
 
     unit = fixture.root / "settings/unit.txt"
     for mode in ("0400", "0444", "0640"):
@@ -891,63 +837,6 @@ def lock(fixture):
             process.communicate()
 
 
-def lazy_toml(fixture):
-    """The TOML codec works, and only it needs tomlkit."""
-    document = fixture.root / "config.toml"
-    document.write_text('[projects."/repo"]\ntrust_level = "trusted"\n')
-    target = doc_target(
-        {"text": json.dumps({"features": {"memories": True}})},
-        codec="toml",
-        path="config.toml",
-        ledger="toml-settings/codex.toml.json",
-    )
-    fixture.own({"targets": [target]}, python=TOOLS["tomlPython"])
-    body = document.read_text()
-    assert '[projects."/repo"]' in body and "trust_level" in body, body
-    assert "memories = true" in body, body
-    fixture.own({"targets": [doc_target({}, codec="toml", path="config.toml", ledger="toml-settings/codex.toml.json")]},
-                python=TOOLS["tomlPython"])
-    # Not a byte comparison: a tomlkit set-then-delete round trip leaves the
-    # blank line its table occupied, exactly as the program this one replaced
-    # did -- the body is inherited from it, not reimplemented.
-    drained = document.read_text()
-    assert "memories" not in drained and "[features]" not in drained, drained
-    assert '[projects."/repo"]' in drained and 'trust_level = "trusted"' in drained, drained
-    assert not fixture.ledger("toml-settings/codex.toml.json").exists()
-    print("PASS lazy_toml: TOML leaves set and retracted, native table untouched")
-
-    # A drain that empties the document removes it, but only when nothing but
-    # an empty document would be written back: a comment the user added to an
-    # otherwise empty TOML file survives serialization and keeps the file.
-    for name, seed in (("ours.toml", None), ("commented.toml", "# mine\n")):
-        path = fixture.root / name
-        if seed is not None:
-            path.write_text(seed)
-        ledger = f"toml-settings/{name}.json"
-        fixture.own({"targets": [doc_target({"text": json.dumps({"ours": 1})}, codec="toml", path=name, ledger=ledger)]},
-                    python=TOOLS["tomlPython"])
-        assert "ours = 1" in path.read_text(), path.read_text()
-        fixture.own({"targets": [doc_target({}, codec="toml", path=name, ledger=ledger)]},
-                    python=TOOLS["tomlPython"])
-        if seed is None:
-            assert not path.exists(), "a drained TOML document that was all ours stayed behind"
-        else:
-            body = path.read_text()
-            assert "# mine" in body and "ours" not in body, body
-    print("PASS lazy_toml: an emptied drain removes the file unless a user comment remains")
-
-    # The import is lazy: the same interpreter that just ran every JSON and
-    # dir case cannot even import tomlkit, so a JSON caller's closure has no
-    # reason to carry it.
-    probe = subprocess.run([TOOLS["python"], "-c", "import tomlkit"], capture_output=True, text=True)
-    assert probe.returncode != 0 and "tomlkit" in probe.stderr, probe.stderr
-    before = document.read_bytes()
-    result = fixture.own({"targets": [target]}, succeeds=False)
-    assert "tomlkit" in result.stderr, result.stderr
-    assert document.read_bytes() == before, "a failed TOML import moved bytes"
-    print("PASS lazy_toml: the JSON interpreter has no tomlkit, and only TOML needs it")
-
-
 def rejections(fixture):
     """A malformed plan fails closed, before anything is opened."""
     for arguments, plan in (
@@ -966,14 +855,12 @@ def rejections(fixture):
         ]}),
         ("two content tags", {"targets": [dir_target({"unit": {"store": "/dev/null", "text": "x"}})]}),
         ("missing field", {"targets": [{"codec": "dir", "path": "settings", "units": {}}]}),
-        ("directory lock", {"targets": [{**dir_target({"unit": {"text": "x"}}), "lock": "settings.lock"}]}),
-        ("traversing lock", {"targets": [{**doc_target({"text": "{}"}), "lock": "../outside.lock"}]}),
     ):
         result = fixture.own(plan, succeeds=False)
         assert result.stderr.startswith("own: "), (arguments, result.stderr)
         assert list(fixture.root.iterdir()) == [], (arguments, "a rejected plan touched the root")
         assert not fixture.state.exists(), (arguments, "a rejected plan created state")
-    print("PASS rejections: eleven malformed plans refused before any container opened")
+    print("PASS rejections: nine malformed plans refused before any container opened")
 
 
 def dry_run(fixture):
@@ -1063,9 +950,9 @@ def project_root(fixture):
 
 
 CASES = {
+    "commented_json": commented_json,
     "drain": drain,
     "dry_run": dry_run,
-    "lazy_toml": lazy_toml,
     "legacy": legacy,
     "lock": lock,
     "modes": modes,
@@ -1074,7 +961,6 @@ CASES = {
     "remove_arms": remove_arms,
     "renderer": renderer,
     "sweeps": sweeps,
-    "transitions": transitions,
     "two_phase": two_phase,
     "virgin": virgin,
     "write_arms": write_arms,

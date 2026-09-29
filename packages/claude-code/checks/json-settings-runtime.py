@@ -1,4 +1,4 @@
-"""Exercise the shared JSON helper and real HM/devenv callers across generations."""
+"""Exercise the shared JSON helper and real HM callers across generations."""
 
 import copy
 import json
@@ -27,33 +27,21 @@ def snapshot(path):
 def exercise(case, bash, mode, use_xdg):
     root = Path.cwd() / f"{case['name']}-{mode:o}-{use_xdg}"
     home = root / "home"
-    project = root / "project with spaces"
-    devenv = case.get("backend", "hm") == "devenv"
-    xdg_state = root / "state" if use_xdg else home / ".local/state"
-    state = project / ".devenv/state" if devenv else xdg_state
-    config_root = project if devenv else home
-    config = config_root / case["configFile"]
+    state = root / "state" if use_xdg else home / ".local/state"
+    config = home / case["configFile"]
+    # Leading `//` comment lines the application writes above its JSON, which
+    # the reconciler must keep. Only the application's own writes carry them.
+    header = case.get("header", "")
+
+    def load():
+        text = config.read_text()
+        assert text.startswith(header), text
+        return json.loads(text[len(header):])
+
     environment = dict(os.environ, HOME=str(home))
     environment.pop("XDG_STATE_HOME", None)
     if use_xdg:
-        environment["XDG_STATE_HOME"] = str(xdg_state)
-    if devenv:
-        environment.update(DEVENV_ROOT=str(project), DEVENV_STATE=str(state))
-    # A case whose writer STATES the mode its file must carry (kiro's merge
-    # mcp.json, the one document a sibling target also writes) asserts
-    # imposition instead of preservation: the stated mode on a new file, on a
-    # rewrite, and on an activation that moves no bytes. Every other case
-    # states none and keeps preserving whatever the file already had.
-    imposed = int(case["mode"], 8) if "mode" in case else None
-
-    def settled(fallback):
-        """The mode the file must carry after a successful activation."""
-        return fallback if imposed is None else imposed
-
-    def frozen(before):
-        """`before`, allowing for the mode a stated-mode writer re-imposes."""
-        return before if imposed is None else (before[0], imposed, before[2])
-
+        environment["XDG_STATE_HOME"] = str(state)
     def activate(generation, succeeds=True):
         # A later activation entry must run, with parent-shell flags unchanged.
         script = (
@@ -72,14 +60,11 @@ def exercise(case, bash, mode, use_xdg):
         assert (result.returncode == 0) == succeeds, result.stderr
         if succeeds:
             assert "later-entry-ran" in result.stdout
-        if devenv:
-            assert not home.exists(), f"{case['name']}: task wrote to HOME"
-            assert not xdg_state.exists(), f"{case['name']}: task wrote to XDG state"
 
     # First empty generation creates neither config nor ownership state. It
     # must also leave an externally managed, even malformed, file byte-identical.
     activate(2)
-    assert not config_root.exists()
+    assert not home.exists()
     assert not state.exists()
     config.parent.mkdir(parents=True)
     config.write_text("externally managed, not JSON\n")
@@ -91,15 +76,14 @@ def exercise(case, bash, mode, use_xdg):
     config.unlink()
 
     # New files are private, regardless of umask. Existing files retain their
-    # permissions through both changed-content and unchanged-content writes,
-    # unless the writer states a mode -- `settled` and `frozen` above.
+    # permissions through both changed-content and unchanged-content writes.
     activate(0)
-    assert stat.S_IMODE(config.stat().st_mode) == settled(0o600)
+    assert stat.S_IMODE(config.stat().st_mode) == 0o600
     assert json.loads(config.read_text()) == case["first"]
     config.chmod(mode)
     before = snapshot(config)
     activate(0)
-    assert snapshot(config) == frozen(before)
+    assert snapshot(config) == before
     manifests = list((state / "nix-agentic-tools/json-settings").glob("*.json"))
     assert len(manifests) == 1
     manifest = manifests[0]
@@ -110,12 +94,12 @@ def exercise(case, bash, mode, use_xdg):
     # The application adds unowned siblings after Nix has claimed its leaves.
     # Model a native atomic replacement so even a read-only file mode works.
     native_file = config.with_suffix(".native")
-    native_file.write_text(json.dumps(merge(case["first"], case["native"])))
+    native_file.write_text(header + json.dumps(merge(case["first"], case["native"])))
     native_file.chmod(mode)
     native_file.replace(config)
     activate(1)
-    assert json.loads(config.read_text()) == merge(case["second"], case["native"])
-    assert stat.S_IMODE(config.stat().st_mode) == settled(mode)
+    assert load() == merge(case["second"], case["native"])
+    assert stat.S_IMODE(config.stat().st_mode) == mode
 
     os.utime(config, ns=(1000000000, 1000000000))
     os.utime(manifest, ns=(1000000000, 1000000000))
@@ -144,8 +128,8 @@ def exercise(case, bash, mode, use_xdg):
     manifest.write_bytes(before_manifest[0])
 
     activate(2)
-    assert json.loads(config.read_text()) == case["native"]
-    assert stat.S_IMODE(config.stat().st_mode) == settled(mode)
+    assert load() == case["native"]
+    assert stat.S_IMODE(config.stat().st_mode) == mode
     assert not manifest.exists()
     before = snapshot(config)
     activate(2)

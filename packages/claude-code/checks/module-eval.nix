@@ -744,39 +744,19 @@ in {
           (unpinDocument result).value.unpinOpus48LaunchEffort == false
       );
 
-      # One runtime corpus covers the document codec plus actual HM activations
-      # and devenv tasks. Every empty generation is evaluated and executed,
-      # so a missing writer cannot satisfy the N-to-0 check.
+      # One runtime corpus covers the document codec plus actual HM activations.
+      # Every empty generation is evaluated and executed, so a missing writer
+      # cannot satisfy the N-to-0 check.
       #
       # `harness.hmLib` rather than `lib`: `own` places its entry with
       # `lib.hm.dag`, which only the harness stubs.
       module-json-settings-reconciliation = let
         helpers = import ../../../lib/ai/hm-helpers.nix {lib = harness.hmLib;};
         # Every `render` here reads an HM activation entry's `.text`, which
-        # expects home-manager's `run` helper already in scope, unlike
-        # `mkDevenvCase` below, which reads a devenv task's `.exec` and defines
-        # no such helper.
+        # expects home-manager's `run` helper already in scope.
         mkCase = name: configFile: first: second: native: render: {
           inherit configFile first name native second;
           scripts = map (settings: harness.hmRunShim + render settings) [first second {}];
-        };
-        mkDevenvCase = {
-          configFile,
-          entry,
-          first,
-          native,
-          option,
-          runtime,
-          second,
-        }: let
-          render = extra:
-            (evalDevenv (lib.recursiveUpdate {ai.${runtime}.enable = true;} extra)).config.tasks.${entry}.exec;
-        in {
-          inherit configFile first native second;
-          backend = "devenv";
-          name = "${runtime}-${lib.concatStringsSep "-" option}-devenv";
-          scripts =
-            map (settings: render {ai.${runtime} = lib.setAttrByPath option settings;}) [first second {}];
         };
         cases = [
           (mkCase "document" ".settings with spaces/config.json" {
@@ -833,39 +813,27 @@ in {
                   unpinLaunchEffort = lib.mkForce settings;
                 };
               }).config.home.activation.claudeUnpinLaunchEffort.text))
-          (mkCase "kiro" ".kiro/settings/cli.json" {
-              "chat.defaultModel" = "claude-sonnet-4";
-              "chat.modelDefaults"."claude-opus-4.8".effort = "high";
-            } {
-              "chat.defaultModel" = "claude-opus-4.8";
-            } {
-              "chat.modelDefaults".native.effort = "low";
-              "native.setting" = "survives";
-            } (settings:
-              (evalHm {
-                ai.kiro = {
-                  enable = true;
-                  native.settings = {
-                    chat.defaultModel = settings."chat.defaultModel" or null;
-                    chat.modelDefaults = settings."chat.modelDefaults" or {};
-                  };
-                };
-              }).config.home.activation.kiroSettingsMerge.text))
-          (mkDevenvCase {
-            configFile = ".kiro/settings/cli.json";
-            entry = "ai:kiro:settings-merge";
-            first = {
-              "chat.enableTangentMode" = true;
-              "chat.modelDefaults"."claude-opus-4.8".effort = "high";
-            };
-            native = {
-              "chat.modelDefaults".native.effort = "low";
-              "native.setting" = "survives";
-            };
-            option = ["native" "settings"];
-            runtime = "kiro";
-            second."chat.enableTangentMode" = false;
-          })
+          # Copilot's state file, whose one Nix-owned leaf is folder trust.
+          # Copilot heads the file with `//` comment lines on its own writes,
+          # which the reconciler must read past and keep. The empty generation
+          # is Copilot disabled: the module declares the leaf, `[]` included,
+          # whenever Copilot is enabled, and its writer survives a disable.
+          ((mkCase "copilot" ".copilot/config.json" {
+                trustedFolders = ["/src/a" "/src/b"];
+              } {
+                trustedFolders = ["/src/c"];
+              } {
+                firstLaunchAt = "2026-09-28T00:00:00.000Z";
+                recentModelIds = ["native-model"];
+              } (settings:
+                (evalHm {
+                  ai.copilot =
+                    {enable = settings != {};}
+                    // lib.optionalAttrs (settings ? trustedFolders) {inherit (settings) trustedFolders;};
+                }).config.home.activation.copilotTrustedFolders.text))
+            // {
+              header = "// User settings belong in settings.json.\n// This file is managed automatically.\n";
+            })
         ];
       in
         pkgs.runCommand "module-test-json-settings-reconciliation" {} ''

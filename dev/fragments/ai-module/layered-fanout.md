@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-27 — Claude delivers every surface through
+> **Last verified:** 2026-09-28 — Claude delivers every surface through
 > `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
 > Every delivered entry is a file the layer writes. L5 is the delivery router
 > plus one adapter per backend; every runtime describes delivery once through
@@ -8,27 +8,47 @@
 > and the delivery matrix is generated from the layer for every runtime's files.
 > Normalized pools carry only a text-source record's winning arm. Claude's
 > devenv rules and Codex's execpolicy rules are read-only copies whose writers
-> survive a disable. Copilot reconciles its user settings.json on HM and the
-> repository `.github/copilot/settings.json` on devenv. Kiro excludes the
-> normalized `settings` pool. Native file settings live under
-> `ai.<runtime>.native`. The builder publishes each record's devenv shared
-> AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`, from the
-> record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
-> mode-narrowing command writer beside its unpin ledger. Codex's daemon
-> `settings.json` maps to no matrix cell. The builder declares the per-runtime
-> `agents`, `environmentVariables` and `lspServers` options and an opt-in
-> `agentsDir`; a record's `poolOptions` carries only what differs.
-> `checkRecord.nix` rejects a `poolOptions` key the builder would not read and a
-> stray field in the `sharedAgentsMd` result. Every reconciled document is one
-> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
-> `index` entries: Codex renders a scoped rule that names `references` as a
-> path-scoped index entry instead of inlining its body. The shared AGENTS.md map
-> lowers through the router as `internal`, as a read-only copy, and a
-> contribution's `defaultMaxBytes` makes the owner warn past it under a raised
-> `maxBytes`. Generators mark their `content` with `_generated`, so a consumer's
-> replacement of a unit's file warns like a switch-off.
+> survive a disable. Copilot's settings files are read-only copies of one
+> `materialize-copilot-config` writer; its only reconciled document is the HM
+> `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
+> `mcp.json` are read-only copies in one directory ledger. Kimchi's settings
+> files, including HM user `config.json`, are read-only copies of one
+> `kimchiFiles` writer. Codex's `config.toml` is a store symlink on both
+> backends and its daemon `settings.json` a read-only copy of
+> `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
+> pool. Native file settings live under `ai.<runtime>.native`. The builder
+> publishes each record's devenv shared AGENTS.md contribution, and its key in
+> `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`. Claude's
+> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
+> ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
+> declares the per-runtime `agents`, `environmentVariables` and `lspServers`
+> options and an opt-in `agentsDir`; a record's `poolOptions` carries only what
+> differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
+> read and a stray field in the `sharedAgentsMd` result. Every reconciled
+> document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
+> contribution may carry `index` entries: Codex renders a scoped rule that names
+> `references` as a path-scoped index entry instead of inlining its body. The
+> shared AGENTS.md map lowers through the router as `internal`, as a read-only
+> copy, and a contribution's `defaultMaxBytes` makes the owner warn past it
+> under a raised `maxBytes`. Generators mark their `content` with `_generated`,
+> so a consumer's replacement of a unit's file warns like a switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
+
+**Settled — do not relitigate.** User-local settings are asserted at switch.
+Choose a store symlink when an in-app write fails cleanly (Codex `config.toml`),
+a read-only copy when the CLI renames over its file (Copilot, Kiro, Kimchi and
+Codex daemon settings), and a switch-time overlay only for a mixed state file
+(Claude `~/.claude.json`, Copilot `~/.copilot/config.json`). The overlay repairs
+Nix-owned leaves while preserving harness state.
+
+| Mechanism                     | Portability and effect                                                                              | Decision               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
+| Switch-time overlay           | Linux and macOS; repairs on switch                                                                  | Chosen for mixed state |
+| File watcher                  | systemd path or launchd WatchPaths; races on macOS                                                  | Declined               |
+| FUSE overlay                  | setuid helper or macFUSE/FUSE-T, unavailable in nixpkgs; whole-file renames defeat per-key blocking | Rejected               |
+| Root managed-settings layers  | Require system ownership outside user scope                                                         | Rejected               |
+| Environment or flag shadowing | Wrapper-launched sessions only, where the CLI exposes an input                                      | Used where available   |
 
 ### Canonical layered shape
 
@@ -102,11 +122,10 @@
 - **AGENTS.md keeps a whole-entry default.** Codex and the shared repository
   writer decide whether a file exists by reading composed content. Deferring
   that read until priority arbitration keeps replaced store sources lazy.
-- **Structured documents contribute ordinary leaves.** Codex HM settings and
+- **Structured documents contribute ordinary leaves.** Codex settings and
   Copilot MCP/LSP use `content.value` at ordinary priority. Adding one leaf
-  keeps generated siblings, including leaves already recorded by Codex's ledger;
-  defaulting the whole content would silently retire those siblings. Text and
-  source content retain their whole-content defaults.
+  keeps generated siblings; defaulting the whole content would silently drop
+  them. Text and source content retain their whole-content defaults.
 - **Claude delivers its own files.** Agents, commands, output styles, hook
   scripts, skills, plugins, `.claude/settings.json` and the MCP/LSP files are
   ordinary `ai.claude.files` entries, like every other runtime's. All of them
@@ -125,54 +144,52 @@
   writer keeps whatever mode it finds, whether or not it rewrites the file, so
   an ungated `claudeConfigMode` command writer is the only thing that narrows
   the token-bearing file to owner-only, on every activation.
-- **Writers belong beside the file map.** Codex's user `config.toml` claims a
-  TOML ledger because the trust prompt writes native state there; project config
-  remains a generated source. Its skill-link migrator owns no ledger and uses
-  `activation.<name>.command`: HM needs `after = []` and
+- **The CLI's write primitive picks the method.** Codex's `config.toml` is a
+  store symlink on both backends: every Codex config writer writes a temporary
+  beside the link's target, so an in-app save fails and the link survives
+  (`chatgpt-codex-readonly-config`). Its daemon `settings.json` is the opposite
+  case: Codex renames a temporary over it, which would swap a link for a real
+  file and fail the next switch's link check, so it is a read-only copy of
+  `materialize-codex-daemon-settings`, claimed file by file in the
+  `app-server-daemon` directory. Copilot, Kiro and Kimchi rename too, so their
+  settings are copies as well.
+- **Writers belong beside the file map.** Codex's skill-link migrator owns no
+  ledger and uses `activation.<name>.command`: HM needs `after = []` and
   `before = ["linkCheck"]`, while devenv uses the default file/shell edges.
   Commands omit a final newline because the router supplies it, along with
   strict mode and a scoped subshell. Directory skill sources keep
-  `recursive = false` because Codex discovers directory symlinks. Named profiles
-  retain their lockout assertion and user-layer destination: HM describes
-  whole-file sources in the delivery map, while devenv retains its guarded
-  host-directory materializer through a command writer named
-  `ai:codex:materialize-profiles`. The materializer still owns its
-  Git-common-directory manifest and lock.
-- **Shared documents reconcile where the CLI writes them.** Kiro's cli.json
-  states `facts.harnessWrites = true` and declares its writer unconditionally
-  while enabled. The adapter runs the same bundle on HM activation or devenv
-  shell entry. Backend-keyed `entry` preserves HM names while giving devenv its
-  required namespace, such as `ai:kiro:settings-merge`. Devenv uses
-  `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
-  `enterTest`. Empty declarations retain their writers so prior leaves can be
-  retracted. Existing file modes and unowned leaves survive; a new file is 0600.
-  The fact is per backend when the CLI writes only one copy. Copilot writes both
-  of its settings copies (`/model`, `/settings` and their `--repo` forms), so
-  one writer, `copilotSettingsMerge`, reconciles the user settings.json on HM
-  and the repository `.github/copilot/settings.json` on devenv. Codex's project
-  config remains a static source because its native writer is user-scoped. Each
-  such document is one `helpers.mkReconciledDocument` call
-  (`lib/ai/hm-helpers.nix`), which emits the writer with its ledger and the file
-  entry that names both, so the pair cannot drift. Its `entry` and `ledger` stay
-  literals at the call site: both are upgrade contracts.
+  `recursive = false` because Codex discovers directory symlinks.
+- **Shared documents reconcile harness state.** Claude's `.claude.json` and
+  Copilot's HM `config.json` are writable state files with Nix-owned leaves. The
+  adapter runs their JSON bundles on activation and retains unowned state.
+  `helpers.mkReconciledDocument` emits each writer and file entry together; its
+  ledger name remains a literal upgrade contract. Kimchi's `config.json` is
+  fully Nix-owned and lands in the same directory copy writer as its other
+  settings. A replaced copy is restored at switch.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
-  symlink destination still has a declared JSON/TOML ledger, even without a
-  claimant. Empty retirement preserves the regular document and native siblings;
-  it cannot safely hand that path to a link writer. Ordinary empty retirement
-  and Kiro's transitions between owned MCP modes remain supported.
+  symlink destination still has a declared JSON ledger, even without a claimant.
+  Empty retirement preserves the regular document and native siblings; it cannot
+  safely hand that path to a link writer. Ordinary empty retirement remains
+  supported.
 - **Owned entries must agree with their ledgers.** `copy-ro` requires a
   directory ledger. A document claimant's path and format must exactly match its
-  JSON/TOML ledger: the ledger controls the actual destination and codec, so a
+  JSON ledger: the ledger controls the actual destination and codec, so a
   mismatch would redirect output or silently change its ownership semantics.
-- **Kiro keeps one MCP writer for both modes.** Both historical ledgers are
-  declared together; the selected file claims one and the other retracts. Merge
-  keeps `content.run` even with zero servers; empty overwrite has no claimant.
-  URL-secret modes remain 0400/0600, otherwise 0444/0644. Only this writer waits
-  for secrets. The devenv renderer keeps its project-root anchor for relative
-  secret readers. Hooks state `facts.symlinkReadable = false` because the v3
-  scan keeps only `isFile()` entries, and their writer survives N→0. Permissions
-  remain HM-only because Kiro never reads them from project `.kiro/`.
+- **Kiro's settings files are read-only copies from one writer.** `kiroMcpJson`
+  owns `cli.json` and `mcp.json` through one directory ledger,
+  `materialize/kiro-settings.manifest`. Kiro's own writers rename a temporary
+  over either file, which replaces a symlink and a 0444 copy alike. A copy is
+  still the right method: the next activation or shell entry backs the in-app
+  file up and restores the declaration, while a symlink would block Home
+  Manager's link check or be skipped by devenv. Home Manager always claims both
+  user-global files (`{}` and an empty server map); devenv claims a project file
+  only when something is declared. `mcp.json` is 0400 with a URL secret,
+  otherwise 0444. Only this writer waits for secrets. The devenv renderer keeps
+  its project-root anchor for relative secret readers. Hooks state
+  `facts.symlinkReadable = false` because the v3 scan keeps only `isFile()`
+  entries, and their writer survives N→0. Permissions remain HM-only because
+  Kiro never reads them from project `.kiro/`.
 - **Claude project rules are read-only copies on devenv.** Claude's scoped-rule
   (`paths:`) loader passes `includeExternal: false` at Project scope, with no
   setting to change it (claude-code 2.1.280), so a `.claude/rules` symlink into
@@ -291,14 +308,13 @@ skills use the real leaf walk. Shared devenv AGENTS.md currently comes from the
 typed `ai.internal.files` owner. Package wrappers have no file entry. Kimchi's
 `trust.json` (`ai.kimchi.projectTrust`) is a user-scope trust store, not a
 portable surface, so the specimen maps it to no cell. Codex's
-`app-server-daemon/settings.json` holds daemon updater policy, not a portable
-surface, and maps to no cell either.
+`app-server-daemon/settings.json` holds daemon configuration
+(`native.daemonSettings`), not a portable surface, and maps to no cell either.
 
 The production gate compares live absence against hand-authored gaps in both
 directions. Its three body arms stay; derived names make the first arm's name
 agreement a tautology, not a stronger check. Empty-declaration survival and body
-variation still discriminate. Kiro MCP's two strategies keep independent probes,
-including both HM phases.
+variation still discriminate.
 
 Regeneration evaluates the check set, and the check set asserts the committed
 matrix, so a change that moves a cell (a runtime joining the layer, say) cannot

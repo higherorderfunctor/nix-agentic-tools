@@ -7,23 +7,28 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-27 — no runtime flips an upstream
-> `programs.<cli>.enable`; skills reach Claude through `mkSkillFiles`, and
-> Claude has no wrapper. Claude's devenv `.claude/settings.json` and `.mcp.json`
-> are written only when non-empty; other devenv writes are unconditional.
-> Semble's `pathMappings` and model routing live at the program root. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-28 — JSON document targets retire independently; no
+> runtime flips an upstream `programs.<cli>.enable`; skills reach Claude through
+> `mkSkillFiles`, and Claude has no wrapper. Claude's devenv
+> `.claude/settings.json` and `.mcp.json`, Copilot's settings files, and Kiro's
+> and Kimchi's settings copies are written only when something is declared;
+> other devenv writes are unconditional. Settings are read-only copies or
+> symlinks where the CLI's write primitive permits; only Claude and Copilot
+> retain writable state documents with Nix-owned leaves. The JSON document
+> reconciler has no TOML codec, document mode or native-writer lock. Semble's
+> `pathMappings` and model routing live at the program root. Native file
+> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Shared documents, each declared by
 > `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
-> on HM activation and devenv shell entry where the CLI writes that copy
-> (Copilot's user settings.json on HM, its repository settings on devenv), a
-> fully retracted empty document is deleted, a document may name its native
-> writer's lock, document targets may enforce modes, a document is published by
-> compare-and-swap against unlocked runtime writers, credential documents get an
-> ungated mode-narrowing command writer, and the delivery-path parity example
-> uses `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile`
-> / `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
+> on HM activation (Claude's `.claude.json` and Copilot's `config.json`
+> `trustedFolders` leaf, whose `//` header own.py keeps). Kiro's, Kimchi's and
+> Copilot's settings files are read-only copies. A fully retracted empty
+> document is deleted, a document is published by compare-and-swap against
+> unlocked runtime writers, credential documents get an ungated mode-narrowing
+> command writer, and the delivery-path parity example uses
+> `ai.codex.execpolicyRules`. The shared LSP producers are `mkKiroLspFile` /
+> `mkCopilotLspFile` (whole files, envelope included) and `mkClaudeLspConfig`
 > (one entry).
 >
 > Full lineage:
@@ -195,64 +200,42 @@ fi
 Reserve `exit 1` for cases where you actually want to abort the whole activation
 on an error. Never `exit 0` for a cache-hit fast path.
 
-**Owned leaves, not a merge** (copilot-cli, kiro-cli): copilot's `settings.json`
-and kiro's `settings/cli.json` are not merged onto whatever is on disk. Each
-reconciles the leaves it owns. A factory says so by stating
-`facts.harnessWrites` on the file and naming the `ai.<runtime>.activation`
-writer whose ledger claims it; the rule resolves that to `shared` and
-`lib/ai/deliver.nix` builds the `lib/ai/own.nix` bundle that `lib/ai/own.py`
-runs. Kiro and Copilot declare their settings writers on both backends: HM emits
-activation entries, while devenv emits tasks under `$DEVENV_ROOT` with ledgers
-under `$DEVENV_STATE/nix-agentic-tools`. Copilot's devenv copy is the repository
-file `.github/copilot/settings.json`, which its `--repo` commands also write.
-Declared leaves are asserted, a leaf the previous generation declared and this
-one DROPPED is retracted, and every unowned sibling — a model or theme picked
-inside the CLI — is left alone. A blind `jq -s '.[0] * .[1]'` cannot do the
-middle one: it has no way to tell a native key from a Nix key that was deleted.
+**Owned leaves for state documents:** Claude's `~/.claude.json` and Copilot's HM
+`config.json` keep harness-written state beside Nix-owned leaves. A factory
+states `facts.harnessWrites` on the file and names the writer whose JSON ledger
+claims it. The delivery router builds one `lib/ai/own.nix` bundle: declared
+leaves are asserted, retired leaves are retracted, and unowned state survives.
+Kimchi's `config.json` is entirely configuration and is a 0400 read-only copy. A
+blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no way to tell a
+native key from a Nix key that was deleted. Only a STATE file the harness must
+keep writing is a document; a file whose every key is configuration is a
+read-only copy.
+
+The JSON codec reads past leading full-line `//` comments and writes them back
+verbatim: Copilot heads its state file `config.json`, whose `trustedFolders`
+leaf HM owns, with two. A `//` further down is inside the object and left to
+`json.loads`. Locked by `ai-own-runtime` (`commented_json`) and the Copilot case
+of `module-json-settings-reconciliation`.
 
 A target that stops declaring anything deletes its document when the retraction
-leaves it serializing to an empty object: every byte was ours. Leaving `{}`
-behind is not inert, because some readers (Kimchi's permissions) fill defaults
-for any file that exists. A TOML comment the user added keeps the file, and a
-symlink is never touched. Locked by `ai-own-runtime` (`two_phase`, `lazy_toml`).
+leaves an empty object: every byte was ours. A symlink is never touched. Locked
+by `ai-own-runtime` (`two_phase`).
 
-A document whose native writer takes a lock names it on the ledger (`lock`,
-relative to the backend root). `own.py` then holds that proper-lockfile-style
-`mkdir` lock around the pre-flight parse and the whole locked read-modify-write,
-taken after its own flock so waiting on another reconcile never ages it toward
-stale. Only Kimchi's `trust.json` declares one; `own.nix` refuses it on a `dir`
-target.
-
-**Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
-user `config.toml` contains Nix-declared settings and required native state: the
-TUI trust prompt writes ad-hoc `projects.<path>.trust_level` entries through
-`config/batchWrite`. Its factory declares `facts.harnessWrites` with the
-`ai.codex.activation.codexSettingsReconcile` ledger, so it lowers into the same
-`lib/ai/own.nix` bundle, and `lib/ai/own.py` records exact managed leaf paths
-under XDG state, removes only retired managed leaves, overlays current leaves,
-preserves native siblings within the same table, and publishes the whole
-document with one atomic replacement. The manifest is necessary because
-`existing * desired` cannot tell a native key from a Nix key deleted in the next
-generation.
-
-A runtime that shares a document without a lock (Claude Code's `.claude.json`,
-Kimchi's `config.json`) can rename its own write over the path between
-`own.py`'s read and its rename, which the flock cannot see. So a document is
-published by compare-and-swap: `own.py` records the SHA-256 of the bytes it
-parsed, and immediately before the rename re-reads the path. If it moved, the
-run re-parses the runtime's bytes, replays its own sets and deletes onto them,
-and tries again, up to three attempts. Content rather than mtime, because a
-sibling rename can leave the same size and mtime behind. Exhaustion fails the
-run loudly with the runtime's write intact and the ledger unwritten; it never
-overwrites. This narrows the window to the check-to-rename gap and cannot close
-it. Locked by `ai-activation-settings-mode` (the race cases).
+A runtime that shares a state document (Claude Code's `.claude.json`, Copilot's
+`config.json`) can rename its own write over the path between `own.py`'s read
+and its rename, which the flock cannot see. So a document is published by
+compare-and-swap: `own.py` records the SHA-256 of the bytes it parsed, and
+immediately before the rename re-reads the path. If it moved, the run re-parses
+the runtime's bytes, replays its own sets and deletes onto them, and tries
+again, up to three attempts. Content rather than mtime, because a sibling rename
+can leave the same size and mtime behind. Exhaustion fails the run loudly with
+the runtime's write intact and the ledger unwritten; it never overwrites. This
+narrows the window to the check-to-rename gap and cannot close it. Locked by
+`ai-activation-settings-mode` (the race cases).
 
 Modes on a document are the reconciler's, not the caller's: a NEW file is
-created 0600, and an existing regular file keeps the mode it has — unless its
-target states a `mode`, which is then imposed on every write and on the run that
-moves no bytes. Exactly one target states one (kiro's merge-mode
-`settings/mcp.json`, whose file a sibling target in the same bundle also
-writes); everything else leaves the field out.
+created 0600, and an existing regular file keeps the mode it has. Document
+targets cannot state a mode.
 
 A document that carries credentials needs more than that. Because an existing
 file keeps its mode, a file an earlier generation widened to 0644 stays 0644
@@ -261,11 +244,10 @@ empty one), and the runtimes keep the mode on their own rewrites. So each such
 document also gets an ungated `command` writer from
 `helpers.mkCredentialModeWriter`, the only thing that narrows it: it strips
 group and other access from a regular file on every activation and skips a
-symlink or a missing file. `claudeConfigMode` covers `~/.claude.json`, and
-`kimchiConfigMode` covers Kimchi's user `config.json`. Home Manager only. Locked
-by `ai-activation-settings-mode`, which renders the real modules in both gate
-states, a non-empty declaration and an empty one, so a writer gated on either
-fails.
+symlink or a missing file. `claudeConfigMode` covers `~/.claude.json`. Home
+Manager only. Locked by `ai-activation-settings-mode`, which renders the real
+modules in both gate states, a non-empty declaration and an empty one, so a
+writer gated on either fails.
 
 Every target, unit, mode, ledger name and byte of content travels as DATA in a
 store-resident plan, so none of it is interpolated into generated shell — and
@@ -280,10 +262,12 @@ back would be import-from-derivation, and `builtins.fromJSON` refuses a string
 that refers to a store path, so the value a document declares is recorded beside
 the plan rather than recovered from it.
 
-Do not generalize this to every TOML file or every runtime. Static ownership is
-still preferred when no required native writer shares the artifact. That is why
-Codex's devenv project `.codex/config.toml` remains a store-backed file: project
-config is trust-gated and no project-local writer has been demonstrated.
+Do not generalize documents to every file or runtime. A store symlink is
+preferred wherever the CLI's own save fails cleanly against one: Codex's
+`config.toml`, user and project, is a symlink because every Codex config writer
+writes its temporary beside the link's target and so refuses the save
+(`chatgpt-codex-readonly-config`). A CLI that renames over the path gets a
+read-only copy instead, as Codex's daemon `settings.json` does.
 
 **Parity does not require identical delivery paths.**
 `ai.codex.execpolicyRules.<name>` is one typed option schema in HM and devenv,
@@ -294,22 +278,27 @@ layer as the worked example: that option and its devenv `CODEX_HOME`
 materializer were removed 2026-09-19 as unreachable dead code (see the Settled
 bullet in `dev/fragments/ai-module/ai-module-fanout.md`).
 
-**Every HM settings writer is unconditional.** Copilot's `copilotSettingsMerge`,
-kiro's `kiroSettingsMerge`, kimchi's two entries, codex's
-`codexSettingsReconcile` and claude's `claudeUnpinLaunchEffort` are all emitted
-while the ecosystem is enabled, whatever the declaration says. An empty
-declaration is not "nothing to do", it is the RETRACTION path: empty settings
-plus no prior ledger is a strict no-op, while empty settings plus a prior ledger
-must run so a later generation retracts the leaves it used to own without
-erasing native state. A `mkIf (cfg.native.settings != {})` around one of these
-writers is the N-to-zero defect, and `checks.ai-delivery` fails at eval on it —
-it evaluates every imperative writer under a populated AND an empty declaration.
+**Every HM settings writer is unconditional.** Copilot's
+`materialize-copilot-config` and `copilotTrustedFolders`, kiro's `kiroMcpJson`,
+kimchi's `kimchiFiles`, codex's `materialize-codex-daemon-settings` and claude's
+`claudeUnpinLaunchEffort` are all emitted while the ecosystem is enabled,
+whatever the declaration says. An empty declaration is not "nothing to do", it
+is the RETRACTION path: empty settings plus no prior ledger is a strict no-op,
+while empty settings plus a prior ledger must run so a later generation retracts
+the leaves it used to own without erasing native state. A
+`mkIf (cfg.native.settings != {})` around one of these writers is the N-to-zero
+defect, and `checks.ai-delivery` fails at eval on it — it evaluates every
+imperative writer under a populated AND an empty declaration.
 
 Devenv-side writes are otherwise unconditional (always write the file when
 `enable = true`): devenv files are project-local symlinks, not home-dir writes.
 Claude is the exception. Its devenv `.claude/settings.json` and `.mcp.json` are
 emitted only when non-empty, because either one would shadow a project's own
-committed file, so an empty declaration writes nothing there.
+committed file, so an empty declaration writes nothing there. Kiro, Kimchi and
+Copilot are the other exceptions: Kiro's project `settings/cli.json` and
+`settings/mcp.json`, Kimchi's project settings copies, and Copilot's
+`.github/copilot/settings.json` are claimed only when something is declared, so
+enabling the runtime does not take over and back up those files.
 
 **Secrets at activation time, not eval time.** Sops-nix paths
 (`cfg.userId.file`) are read by the activation script at run time via

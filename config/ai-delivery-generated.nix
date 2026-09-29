@@ -432,16 +432,28 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.copilot/lsp-config.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "materialize-copilot-config-prune"
+          ];
+        }
+      ];
       ecosystem = "copilot";
       mode = "hm";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "lspServers";
       target = "$HOME/.copilot/lsp-config.json";
       writerAttr = [
         "home"
-        "file"
-        ".copilot/lsp-config.json"
+        "activation"
+        "materialize-copilot-config"
       ];
     }
     {
@@ -521,14 +533,14 @@
     {
       ecosystem = "codex";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "mcpServers";
       target = "$HOME/.codex/config.toml";
       writerAttr = [
         "home"
-        "activation"
-        "codexSettingsReconcile"
+        "file"
+        ".codex/config.toml"
       ];
     }
     {
@@ -544,57 +556,68 @@
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.copilot/mcp-config.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "materialize-copilot-config-prune"
+          ];
+        }
+      ];
       ecosystem = "copilot";
       mode = "hm";
-      primitive = "ownPathDeclarative";
-      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "mcpServers";
       target = "$HOME/.copilot/mcp-config.json";
       writerAttr = [
         "home"
-        "file"
-        ".copilot/mcp-config.json"
+        "activation"
+        "materialize-copilot-config"
       ];
     }
     {
       ecosystem = "kimchi";
       mode = "devenv";
-      primitive = "ownLeaves";
-      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "mcpServers";
       target = "$DEVENV_ROOT/.kimchi/mcp.json";
       writerAttr = [
         "tasks"
-        "ai:kimchi:mcp-merge"
-      ];
-    }
-    {
-      ecosystem = "kimchi";
-      mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
-      surface = "mcpServers";
-      target = "$HOME/.config/kimchi/harness/mcp.json";
-      writerAttr = [
-        "home"
-        "activation"
-        "kimchiMcpMerge"
+        "ai:kimchi:files"
       ];
     }
     {
       additionalWriters = [
         {
-          condition = "ai.kiro.mcpWriteMode = \"merge\"";
-          primitive = "ownLeaves";
-          pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
-          target = "$DEVENV_ROOT/.kiro/settings/mcp.json";
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.config/kimchi/harness/mcp.json";
           writerAttr = [
-            "tasks"
-            "ai:kiro:materialize-mcp"
+            "home"
+            "activation"
+            "kimchiFilesPrune"
           ];
         }
       ];
-      condition = "ai.kiro.mcpWriteMode = \"overwrite\" (default)";
+      ecosystem = "kimchi";
+      mode = "hm";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      surface = "mcpServers";
+      target = "$HOME/.config/kimchi/harness/mcp.json";
+      writerAttr = [
+        "home"
+        "activation"
+        "kimchiFiles"
+      ];
+    }
+    {
       ecosystem = "kiro";
       mode = "devenv";
       primitive = "ownPathManaged";
@@ -609,18 +632,6 @@
     {
       additionalWriters = [
         {
-          condition = "ai.kiro.mcpWriteMode = \"merge\"";
-          primitive = "ownLeaves";
-          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
-          target = "$HOME/.kiro/settings/mcp.json";
-          writerAttr = [
-            "home"
-            "activation"
-            "kiroMcpJson"
-          ];
-        }
-        {
-          condition = "ai.kiro.mcpWriteMode = \"overwrite\" (default)";
           primitive = "ownPathManaged";
           pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.kiro/settings/mcp.json";
@@ -630,19 +641,7 @@
             "materialize-kiro-settings-prune"
           ];
         }
-        {
-          condition = "ai.kiro.mcpWriteMode = \"merge\"";
-          primitive = "ownLeaves";
-          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
-          target = "$HOME/.kiro/settings/mcp.json";
-          writerAttr = [
-            "home"
-            "activation"
-            "materialize-kiro-settings-prune"
-          ];
-        }
       ];
-      condition = "ai.kiro.mcpWriteMode = \"overwrite\" (default)";
       ecosystem = "kiro";
       mode = "hm";
       primitive = "ownPathManaged";
@@ -695,39 +694,51 @@
     {
       ecosystem = "codex";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "permissions";
       target = "$HOME/.codex/config.toml";
       writerAttr = [
         "home"
-        "activation"
-        "codexSettingsReconcile"
+        "file"
+        ".codex/config.toml"
       ];
     }
     {
       ecosystem = "kimchi";
       mode = "devenv";
-      primitive = "ownLeaves";
-      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "permissions";
       target = "$DEVENV_ROOT/.kimchi/permissions.json";
       writerAttr = [
         "tasks"
-        "ai:kimchi:permissions-merge"
+        "ai:kimchi:files"
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.config/kimchi/harness/permissions.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "kimchiFilesPrune"
+          ];
+        }
+      ];
       ecosystem = "kimchi";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "permissions";
       target = "$HOME/.config/kimchi/harness/permissions.json";
       writerAttr = [
         "home"
         "activation"
-        "kimchiPermissionsMerge"
+        "kimchiFiles"
       ];
     }
     {
@@ -926,112 +937,156 @@
     {
       ecosystem = "codex";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
       surface = "settings";
       target = "$HOME/.codex/config.toml";
       writerAttr = [
         "home"
-        "activation"
-        "codexSettingsReconcile"
+        "file"
+        ".codex/config.toml"
       ];
     }
     {
       ecosystem = "copilot";
       mode = "devenv";
-      primitive = "ownLeaves";
-      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$DEVENV_ROOT/.github/copilot/settings.json";
       writerAttr = [
         "tasks"
-        "ai:copilot:settings-merge"
+        "ai:copilot:materialize-config"
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.copilot/settings.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "materialize-copilot-config-prune"
+          ];
+        }
+      ];
       ecosystem = "copilot";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$HOME/.copilot/settings.json";
       writerAttr = [
         "home"
         "activation"
-        "copilotSettingsMerge"
+        "materialize-copilot-config"
       ];
     }
     {
       additionalWriters = [
         {
-          primitive = "ownLeaves";
-          pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          primitive = "ownPathManaged";
+          pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$DEVENV_ROOT/.config/kimchi/harness/settings.json";
           writerAttr = [
             "tasks"
-            "ai:kimchi:harness-settings-merge"
+            "ai:kimchi:files"
           ];
         }
       ];
       ecosystem = "kimchi";
       mode = "devenv";
-      primitive = "ownLeaves";
-      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$DEVENV_ROOT/.kimchi/config.json";
       writerAttr = [
         "tasks"
-        "ai:kimchi:config-merge"
+        "ai:kimchi:files"
       ];
     }
     {
       additionalWriters = [
         {
-          primitive = "ownLeaves";
-          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
           target = "$HOME/.config/kimchi/harness/settings.json";
           writerAttr = [
             "home"
             "activation"
-            "kimchiHarnessSettingsMerge"
+            "kimchiFiles"
+          ];
+        }
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.config/kimchi/config.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "kimchiFilesPrune"
+          ];
+        }
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.config/kimchi/harness/settings.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "kimchiFilesPrune"
           ];
         }
       ];
       ecosystem = "kimchi";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$HOME/.config/kimchi/config.json";
       writerAttr = [
         "home"
         "activation"
-        "kimchiConfigMerge"
+        "kimchiFiles"
       ];
     }
     {
       ecosystem = "kiro";
       mode = "devenv";
-      primitive = "ownLeaves";
-      pruneTrigger = "On shell entry, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$DEVENV_ROOT/.kiro/settings/cli.json";
       writerAttr = [
         "tasks"
-        "ai:kiro:settings-merge"
+        "ai:kiro:materialize-mcp"
       ];
     }
     {
+      additionalWriters = [
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.kiro/settings/cli.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "materialize-kiro-settings-prune"
+          ];
+        }
+      ];
       ecosystem = "kiro";
       mode = "hm";
-      primitive = "ownLeaves";
-      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
       surface = "settings";
       target = "$HOME/.kiro/settings/cli.json";
       writerAttr = [
         "home"
         "activation"
-        "kiroSettingsMerge"
+        "kiroMcpJson"
       ];
     }
     {

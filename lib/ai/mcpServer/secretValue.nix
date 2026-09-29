@@ -10,7 +10,7 @@
 #   * url    → Kiro would emit the placeholder literally, so WE substitute
 #     it at activation instead: `envsubst` assembles a real, private
 #     mcp.json with an explicit var list, leaving header placeholders
-#     intact. See `mkMcpJsonScript` / `ai.kiro.mcpWriteMode` in mkKiro.nix.
+#     intact. See `mkMcpJsonScript` in mkKiro.nix.
 #
 # Either way the secret VALUE never enters the store — only its file path.
 #

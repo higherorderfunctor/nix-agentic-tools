@@ -1,8 +1,6 @@
 # Independent populated declarations at the runtime options' DEFAULT directories.
-# The two Kiro strategies share a specimen; only mcpWriteMode varies.
 {lib}: {
-  modes = ["merge" "overwrite"];
-  config = mode: runtime: strategy: {
+  config = mode: runtime: {
     ai =
       {
         agents.probe = {
@@ -41,6 +39,7 @@
             kimchi = {
               native.settings = {
                 llmEndpoint = "https://example.invalid";
+                region = "us";
                 skillPaths = ["probe"];
               };
               # `resources` is user-scope-only; devenv rejects it.
@@ -53,7 +52,6 @@
             kiro = {
               agents.probe.prompt = {text = "probe";};
               hooksJson.probe = ''{"event":"pre-commit"}'';
-              mcpWriteMode = strategy;
               native.settings =
                 if mode == "hm"
                 then {chat.defaultModel = "probe";}
@@ -77,6 +75,10 @@
   # ai.kimchi.projectTrust is a Kimchi-only, user-scope trust store, not one
   # of the portable surfaces; the matrix has no cell for it by design.
     if runtime == "kimchi" && lib.hasSuffix "/harness/trust.json" path
+    then []
+    # So is ai.copilot.trustedFolders, the one leaf Nix owns in Copilot's
+    # state file config.json.
+    else if runtime == "copilot" && lib.hasSuffix "/config.json" path
     then []
     # The Codex daemon's settings.json carries daemon policy (its updater),
     # not one of the portable surfaces; the matrix has no cell for it either.

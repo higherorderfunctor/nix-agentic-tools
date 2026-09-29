@@ -306,8 +306,7 @@ in {
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
                     .codex/agents/<name>.toml (devenv)
         - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
-                    .kimchi/agents/<name>.md (devenv), as a writable owned
-                    copy because Kimchi's /agents commands edit it
+                    .kimchi/agents/<name>.md (devenv), as a read-only copy
         Kiro intentionally excluded, but no longer because its agents are
         untyped JSON — `ai.kiro.agents` is a typed record now. The blocker is
         the tool vocabulary: this pool's `tools` list uses Claude/Copilot tool

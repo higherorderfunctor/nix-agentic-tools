@@ -109,7 +109,7 @@
       deliveryConstraint = "Keys outside Copilot's repository settings schema, and values of the wrong kind, fail module assertions. Copilot reads the file from the git root of a trusted folder, and reads its effortLevel in interactive sessions only.";
     }
     // lib.optionalAttrs (key row == "settings/kimchi/devenv") {
-      deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys reconcile into the fixed project harness path.";
+      deliveryConstraint = "User-scope-only harness setting keys fail module assertions; project-capable keys land as a read-only copy at the fixed project harness path.";
     }
     // lib.optionalAttrs (key row == "settings/kiro/devenv") {
       deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
@@ -117,10 +117,6 @@
     // lib.optionalAttrs (key row == "rules/kiro/devenv") {
       condition = "Always-on unscoped rules join sharedAgentsMd; scoped/manual rules stay in steering.";
     };
-  mcpConditions = {
-    merge = ''ai.kiro.mcpWriteMode = "merge"'';
-    overwrite = ''ai.kiro.mcpWriteMode = "overwrite" (default)'';
-  };
   probeFor = row:
     if row.surface == "agents" && row.ecosystem == "kimchi"
     then
@@ -138,13 +134,7 @@
     else if row.surface == "hooks"
     then hookProbe
     else if row.surface == "mcpServers"
-    then
-      (mcpProbe row.ecosystem)
-      // lib.optionalAttrs (row.ecosystem == "kiro") {
-        base.ai.kiro.mcpWriteMode =
-          lib.findFirst (mode: mcpConditions.${mode} == row.condition)
-          (throw "ai-delivery: Kiro MCP needs an independent strategy probe") (builtins.attrNames mcpConditions);
-      }
+    then mcpProbe row.ecosystem
     else if row.surface == "permissions"
     then
       if row.ecosystem == "kimchi"
@@ -218,7 +208,7 @@
     ];
   };
 in {
-  inherit annotate hand key mcpConditions metadata supplements;
+  inherit annotate hand key metadata supplements;
   pruneTrigger = mode: primitive:
     if primitive == "ownLeaves"
     then ownRetraction mode

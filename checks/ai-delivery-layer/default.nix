@@ -13,7 +13,8 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv evalHm harnessNames hasLiteral mkTest ownPlan;
+  inherit (harness) deliveredFiles evalDevenv harnessNames hasLiteral mkTest ownPlan;
+  evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
   ownedControls = import ../ai-delivery/owned-fixtures.nix {inherit harness lib;};
 
@@ -35,6 +36,17 @@
         };
         files = lib.optionalAttrs extended {
           ".codex/config.toml".content.value.ui.theme = "dark";
+        };
+      };
+    };
+  # Kimchi's user config.json is a whole-file read-only copy.
+  kimchiExtension = extended:
+    evalHm {
+      ai.kimchi = {
+        enable = true;
+        native.settings.llmEndpoint = "https://generated.invalid";
+        files = lib.optionalAttrs extended {
+          ".config/kimchi/config.json".content.value.probe = "extended";
         };
       };
     };
@@ -60,15 +72,11 @@
           (evaluate (lib.recursiveUpdate base {
             ai.copilot.files.${path}.content.value = added;
           })).config;
-        files =
-          if cfg ? home
-          then cfg.home.file
-          else cfg.files;
         expected = lib.recursiveUpdate original added;
       in
         cfg.ai.copilot.files.${path}.content.value
         == expected
-        && builtins.fromJSON files.${path}.text == expected
+        && builtins.fromJSON (deliveredFiles cfg).${path}.text == expected
         && lib.all (assertion: assertion.assertion) cfg.assertions
     ) [
       {
@@ -387,7 +395,7 @@ in {
               && failures retired == []
               && failures unrelated == []
               && (lib.head retired.ai.kiro._ownPlans.probeDocument.plan.targets).units == {}
-          ) ["json" "toml"]
+          ) ["json"]
       ) [evalHm evalDevenv]
     );
 
@@ -403,34 +411,33 @@ in {
       in
         evaluated.config.ai.codex.files.".codex/config.toml".content.value
         == expected
-        && (harness.ownedDocument "codex" ".codex/config.toml" evaluated).value == expected
         && lib.all (assertion: assertion.assertion) evaluated.config.assertions
     );
 
-    # Evaluate the factory twice and execute its actual writer: a dropped
-    # generated leaf otherwise looks like an intentional retirement on disk.
-    module-delivery-codex-content-extension-runtime = pkgs.runCommand "module-test-delivery-codex-content-extension-runtime" {} ''
-      export HOME="$PWD/home"
-      export XDG_STATE_HOME="$PWD/state"
-      # This is HM activation entry text, which expects home-manager's `run`
-      # helper (lib/bash/home-manager.sh) to already be in scope.
-      ${harness.hmRunShim}
-      ${(codexExtension false).config.home.activation.codexSettingsReconcile.text}
-      printf '\n[native]\nkeep = true\n' >> "$HOME/.codex/config.toml"
-      ${(codexExtension true).config.home.activation.codexSettingsReconcile.text}
-      ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
-      import pathlib
-      import sys
-      import tomllib
-
-      document = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
-      assert document.get("model") == "generated-model", "generated model retired by a content extension"
-      assert document.get("model_reasoning_effort") == "xhigh", "generated effort retired by a content extension"
-      assert document["native"]["keep"] is True
-      assert document["ui"]["theme"] == "dark"
-      PY
-      touch "$out"
-    '';
+    # A content extension joins the generated Kimchi config copy.
+    module-delivery-shared-content-extension-runtime = let
+      extended = kimchiExtension true;
+    in
+      assert extended.config.ai.kimchi.files.".config/kimchi/config.json".content.value.probe == "extended";
+        pkgs.runCommand "module-test-delivery-shared-content-extension-runtime" {nativeBuildInputs = [pkgs.jq];} ''
+          export HOME="$PWD/home"
+          export XDG_STATE_HOME="$PWD/state"
+          config="$HOME/.config/kimchi/config.json"
+          # This is HM activation entry text, which expects home-manager's `run`
+          # helper (lib/bash/home-manager.sh) to already be in scope.
+          ${harness.hmRunShim}
+          ${(kimchiExtension false).config.home.activation.kimchiFiles.text}
+          ${extended.config.home.activation.kimchiFiles.text}
+          jq -e '.llmEndpoint == "https://generated.invalid"' "$config" > /dev/null || {
+            echo "generated llmEndpoint retired by a content extension: $(cat "$config")" >&2
+            exit 1
+          }
+          jq -e '.telemetry.enabled == false and .probe == "extended" and (has("deviceId") | not)' "$config" > /dev/null || {
+            echo "generated or extended leaf missing: $(cat "$config")" >&2
+            exit 1
+          }
+          touch "$out"
+        '';
 
     module-delivery-copilot-lsp-content-extension-keeps-generated-leaves = mkTest "delivery-copilot-lsp-content-extension-keeps-generated-leaves" (copilotExtension "lspServers" {
       devenv = ".github/lsp.json";

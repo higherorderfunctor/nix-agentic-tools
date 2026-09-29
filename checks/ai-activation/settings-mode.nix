@@ -2,8 +2,7 @@
 #
 # The shared-document writer (`lib/ai/own.py`, reached through the delivery
 # router) reconciles Nix-declared leaves into files the runtime itself writes
-# secrets into — `.claude.json` carries account tokens, kimchi's `config.json`
-# carries `apiKey` and `gitTokens`. Its predecessor ended with a hardcoded
+# secrets into — `.claude.json` carries account tokens. Its predecessor ended with a hardcoded
 # `chmod 644`, which was the ONLY thing making those files group- and
 # world-readable, on every activation, with nothing failing. The cases live in
 # settings-mode.py; this file hands it the store paths it drives.
@@ -13,18 +12,8 @@
   pkgs,
   ...
 }: let
-  # `own.py` creates a document 0600 and then keeps whatever mode it finds,
-  # whether or not it rewrites the file. So nothing in the merge ever narrows
-  # a file an earlier generation widened to 0644; the credential mode writers
-  # are the only thing that does, in both gate states. Each state renders the
-  # REAL modules and runs what activation would run:
-  #
-  #   open    a non-empty declaration, the default for every Claude user
-  #           (`unpinLaunchEffort` defaults to a non-empty map): the merge
-  #           rewrites the file and keeps its 0644.
-  #   closed  both declarations forced empty: the merge touches nothing.
-  #
-  # A mode writer gated on either state fails the other one.
+  # Claude's state document keeps its mode, so its separate mode writer must
+  # run both when declared leaves change and when they do not.
   gates = {
     closed = {
       evaluated = harness.evalHm {
@@ -32,22 +21,17 @@
           enable = true;
           unpinLaunchEffort = lib.mkForce {};
         };
-        ai.kimchi.enable = true;
       };
       holds = declared: declared == {};
     };
     open = {
       evaluated = harness.evalHm {
         ai.claude.enable = true;
-        ai.kimchi = {
-          enable = true;
-          native.settings.telemetry.enabled = false;
-        };
       };
       holds = declared: declared != {};
     };
   };
-  entries = ["claudeUnpinLaunchEffort" "claudeConfigMode" "kimchiConfigMerge" "kimchiConfigMode"];
+  entries = ["claudeUnpinLaunchEffort" "claudeConfigMode"];
 
   # `{documents, script}`: what each writer declares into its credential
   # document, keyed by path, and the activation entries in `entries`.
@@ -59,10 +43,6 @@
       {
         path = ".claude.json";
         runtime = "claude";
-      }
-      {
-        path = "${evaluated.config.ai.kimchi.configDir}/config.json";
-        runtime = "kimchi";
       }
     ];
     # Assert the declaration really is in the state the case names, or a later

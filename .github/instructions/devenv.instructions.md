@@ -170,10 +170,12 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-27 — Claude's skills are `ai.*` delivery entries.
+> **Last verified:** 2026-09-28 — Claude's skills are `ai.*` delivery entries.
 > The repository's instruction files are `ai.*`'s own read-only copies (`own`),
 > never `files.*` symlinks; the generator's materializer and the AGENTS.md seed
-> are gone.
+> are gone. Copilot, Kiro and Kimchi settings and Codex daemon settings are
+> owned copies; link-delivered settings remain limited to Claude's configuration
+> files and Codex's `config.toml`.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -394,9 +396,12 @@ churn), it cannot prune, and it has no ownership record, so it cannot retract a
 file whose rule is removed. The `seed` mode the generator's AGENTS.md used is
 gone with the generator's materializer.
 
-Skills, `settings.json` and MCP JSON still use `files.*` symlinks — they are not
-tracked. Most skill backends enumerate leaves; Codex intentionally contributes
-one directory entry per skill.
+Skills still use `files.*` symlinks — they are not tracked. Claude's
+`.claude/settings.json` and `.mcp.json` and Codex's `config.toml` are also store
+links because those consumers tolerate them. Copilot, Kiro and Kimchi settings,
+and Codex daemon settings, instead use owned read-only copies because their
+writers rename over the configured path. Most skill backends enumerate leaves;
+Codex intentionally contributes one directory entry per skill.
 
 ### Related
 
