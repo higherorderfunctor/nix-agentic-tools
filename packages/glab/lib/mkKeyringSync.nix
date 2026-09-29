@@ -8,10 +8,23 @@
   pendingFile,
   pkgs,
 }: let
-  credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
+  rv = import ../../../lib/runtime-values {inherit lib;};
 
-  hostAssignment = credentialsLib.mkSecretAssignment pkgs "glab_sync_host" cfg.host;
-  tokenAssignment = credentialsLib.mkSecretAssignment pkgs "glab_sync_token" cfg.token;
+  hostAssignment = rv.assignment {
+    inherit pkgs;
+    variable = "glab_sync_host";
+    value = cfg.host;
+    output = "argv";
+    path = ["glab" "host"];
+  };
+  tokenAssignment = rv.assignment {
+    inherit pkgs;
+    variable = "glab_sync_token";
+    value = cfg.token;
+    output = "stdin";
+    secret = true;
+    path = ["glab" "token"];
+  };
 
   apiHost = cfg.settings.api_host or null;
   apiProtocol = cfg.settings.api_protocol or null;
@@ -20,7 +33,13 @@
 
   optionalLoginArg = flag: value:
     lib.optionalString (value != null) ''
-      glab_sync_args+=(${lib.escapeShellArg flag} ${lib.escapeShellArg value})'';
+      ${rv.assignment {
+        inherit pkgs value;
+        variable = "glab_sync_arg";
+        output = "argv";
+        path = ["glab" "settings" flag];
+      }}
+      glab_sync_args+=(${lib.escapeShellArg flag} "$glab_sync_arg")'';
 
   scriptText = ''
     set -euETo pipefail
@@ -55,11 +74,14 @@
     ${hostAssignment}
     ${tokenAssignment}
 
-    glab_sync_api_protocol=${lib.escapeShellArg (
-      if apiProtocol == null
-      then ""
-      else apiProtocol
-    )}
+    glab_sync_api_protocol=
+    ${rv.assignment {
+      inherit pkgs;
+      variable = "glab_sync_api_protocol";
+      value = apiProtocol;
+      output = "argv";
+      path = ["glab" "settings" "api_protocol"];
+    }}
     if [ -z "$glab_sync_api_protocol" ]; then
       case "$glab_sync_host" in
         http://*) glab_sync_api_protocol=http ;;
@@ -74,10 +96,16 @@
       exit 1
     fi
 
-    glab_sync_config_dir=${lib.escapeShellArg configDir}
+    ${rv.assignment {
+      inherit pkgs;
+      variable = "glab_sync_config_dir";
+      value = configDir;
+      output = "argv";
+      path = ["glab" "configDir"];
+    }}
     ${pkgs.coreutils}/bin/mkdir -p -m 0700 "$glab_sync_config_dir"
     if [ ! -w "$glab_sync_config_dir" ] || [ ! -x "$glab_sync_config_dir" ]; then
-      echo "glab keyring sync: config directory $glab_sync_config_dir is not writable and searchable (need w+x)" >&2
+      echo "glab keyring sync: configured directory is not writable and searchable (need w+x)" >&2
       exit 1
     fi
     if [ -f "$glab_sync_config_dir/config.yml" ]; then
