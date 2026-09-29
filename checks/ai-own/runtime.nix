@@ -53,10 +53,7 @@
     # whose ledgers are on consumers' disks.
     legacyDocLedger = "${./fixtures/legacy-json-v1-ledger.frozen}";
     own = "${../../lib/ai/own.py}";
-    # Deliberately WITHOUT tomlkit: every dir and JSON case runs on this
-    # interpreter, which is what proves the TOML import stays lazy.
     python = "${pkgs.python3}/bin/python3";
-    tomlPython = "${pkgs.python3.withPackages (pythonPackages: [pythonPackages.tomlkit])}/bin/python3";
   };
 in {
   checks.ai-own-runtime = pkgs.runCommand "ai-own-runtime" {} ''

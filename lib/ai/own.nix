@@ -29,7 +29,7 @@
   inherit (import ./ai-common.nix {inherit lib;}) scopedActivation;
 
   program = ./own.py;
-  codecs = ["dir" "json" "toml"];
+  codecs = ["dir" "json"];
   contentFields = ["run" "store" "text"];
 
   # `launch` prefixes the one mutating command. Home-manager's `run` helper
@@ -71,7 +71,7 @@
   targetErrors = target: let
     label = "target '${target.path or "<unnamed>"}'";
     missing = builtins.filter (field: !(target ? ${field})) ["codec" "ledger" "path" "units"];
-    extra = builtins.filter (field: !builtins.elem field ["codec" "ledger" "lock" "path" "units"]) (builtins.attrNames target);
+    extra = builtins.filter (field: !builtins.elem field ["codec" "ledger" "path" "units"]) (builtins.attrNames target);
   in
     if missing != [] || extra != []
     then
@@ -85,10 +85,6 @@
       # visible path segment each, so nothing below the root is reachable.
       ++ lib.optional (traverses target.path && !(target.codec == "dir" && target.path == ".")) "${label} path must be relative and must not traverse"
       ++ lib.optional (traverses target.ledger) "${label} ledger '${target.ledger}' must be relative and must not traverse"
-      # A native writer's lock guards one document's read-modify-write; a
-      # directory's units are published one atomic file at a time.
-      ++ lib.optional (target ? lock && target.codec == "dir") "${label} lock is for document targets only"
-      ++ lib.optional (target ? lock && (!builtins.isString target.lock || traverses target.lock)) "${label} lock must be relative and must not traverse"
       ++ (
         if target.codec == "dir"
         then
@@ -107,16 +103,8 @@
         else if target.units == {}
         then []
         else
-          # A leaf has no mode of its own — every leaf of a document lives in
-          # the same file — so the mode a document target may state is the
-          # FILE's, and it is optional. Absent, an existing regular file keeps
-          # the mode it has and a new one gets 0600. Stated, it is imposed on
-          # every write and on the run where the bytes did not move; kiro's
-          # merge target states it so a file an overwrite generation published
-          # 0444 goes back to being hand-editable, and so a substituted
-          # credential url never sits in a group-readable file.
-          lib.optional (target.units ? mode && builtins.match "0?[0-7]{3}" target.units.mode == null)
-          "${label} declaration mode must be octal permissions, not '${toString target.units.mode}'"
+          # A document owns leaves in a writable state file, not its mode.
+          lib.optional (target.units ? mode) "${label} document target cannot state a mode"
           ++ contentErrors "${label} declaration" (builtins.removeAttrs target.units ["mode"])
       );
 

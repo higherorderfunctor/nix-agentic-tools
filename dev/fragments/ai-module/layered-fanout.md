@@ -10,9 +10,9 @@
 > `materialize-copilot-config` writer; its only reconciled document is the HM
 > `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
 > `mcp.json` are read-only copies in one directory ledger. Kimchi's settings
-> files are read-only copies of one `kimchiFiles` writer; only its HM user
-> `config.json` is a reconciled document. Codex's `config.toml` is a store
-> symlink on both backends and its daemon `settings.json` a read-only copy of
+> files, including HM user `config.json`, are read-only copies of one
+> `kimchiFiles` writer. Codex's `config.toml` is a store symlink on both
+> backends and its daemon `settings.json` a read-only copy of
 > `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
 > pool. Native file settings live under `ai.<runtime>.native`. The builder
 > publishes each record's devenv shared AGENTS.md contribution, and its key in
@@ -32,6 +32,21 @@
 > so a consumer's replacement of a unit's file warns like a switch-off.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
+
+**Settled — do not relitigate.** User-local settings are asserted at switch.
+Choose a store symlink when an in-app write fails cleanly (Codex `config.toml`),
+a read-only copy when the CLI renames over its file (Copilot, Kiro, Kimchi and
+Codex daemon settings), and a switch-time overlay only for a mixed state file
+(Claude `~/.claude.json`, Copilot `~/.copilot/config.json`). The overlay repairs
+Nix-owned leaves while preserving harness state.
+
+| Mechanism                     | Portability and effect                                                                              | Decision               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
+| Switch-time overlay           | Linux and macOS; repairs on switch                                                                  | Chosen for mixed state |
+| File watcher                  | systemd path or launchd WatchPaths; races on macOS                                                  | Declined               |
+| FUSE overlay                  | setuid helper or macFUSE/FUSE-T, unavailable in nixpkgs; whole-file renames defeat per-key blocking | Rejected               |
+| Root managed-settings layers  | Require system ownership outside user scope                                                         | Rejected               |
+| Environment or flag shadowing | Wrapper-launched sessions only, where the CLI exposes an input                                      | Used where available   |
 
 ### Canonical layered shape
 
@@ -140,33 +155,22 @@
   Commands omit a final newline because the router supplies it, along with
   strict mode and a scoped subshell. Directory skill sources keep
   `recursive = false` because Codex discovers directory symlinks.
-- **Shared documents reconcile where the CLI writes state.** Kimchi's HM
-  `config.json` states `facts.harnessWrites = true` and declares its writer
-  unconditionally while enabled; its other files are read-only copies of one
-  `kimchiFiles` writer. The adapter runs the same bundle on HM activation or
-  devenv shell entry. Backend-keyed `entry` preserves HM names while giving
-  devenv its required namespace, such as `ai:kimchi:files`. Devenv uses
-  `$DEVENV_ROOT` and `$DEVENV_STATE/nix-agentic-tools`, with verification in
-  `enterTest`. Empty declarations retain their writers so prior leaves can be
-  retracted. Existing file modes and unowned leaves survive; a new file is 0600.
-  The fact is per backend when the CLI writes only one copy. Copilot's HM
-  `config.json` is the same shape: a state file whose one Nix-owned leaf is
-  `trustedFolders`, written by `copilotTrustedFolders` and declared only on HM.
-  Its settings files are not documents: every key Copilot writes there is
-  configuration, so they are read-only copies of `materialize-copilot-config`.
-  Each such document is one `helpers.mkReconciledDocument` call
-  (`lib/ai/hm-helpers.nix`), which emits the writer with its ledger and the file
-  entry that names both, so the pair cannot drift. Its `entry` and `ledger` stay
-  literals at the call site: both are upgrade contracts.
+- **Shared documents reconcile harness state.** Claude's `.claude.json` and
+  Copilot's HM `config.json` are writable state files with Nix-owned leaves. The
+  adapter runs their JSON bundles on activation and retains unowned state.
+  `helpers.mkReconciledDocument` emits each writer and file entry together; its
+  ledger name remains a literal upgrade contract. Kimchi's `config.json` is
+  fully Nix-owned and lands in the same directory copy writer as its other
+  settings. A replaced copy is restored at switch.
 - **A document ledger reserves its path against symlink delivery.** Both
   `method` and `methodFor` overrides are rejected on HM/devenv when the resolved
-  symlink destination still has a declared JSON/TOML ledger, even without a
-  claimant. Empty retirement preserves the regular document and native siblings;
-  it cannot safely hand that path to a link writer. Ordinary empty retirement
-  remains supported.
+  symlink destination still has a declared JSON ledger, even without a claimant.
+  Empty retirement preserves the regular document and native siblings; it cannot
+  safely hand that path to a link writer. Ordinary empty retirement remains
+  supported.
 - **Owned entries must agree with their ledgers.** `copy-ro` requires a
   directory ledger. A document claimant's path and format must exactly match its
-  JSON/TOML ledger: the ledger controls the actual destination and codec, so a
+  JSON ledger: the ledger controls the actual destination and codec, so a
   mismatch would redirect output or silently change its ownership semantics.
 - **Kiro's settings files are read-only copies from one writer.** `kiroMcpJson`
   owns `cli.json` and `mcp.json` through one directory ledger,

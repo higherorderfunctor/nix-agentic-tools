@@ -61,11 +61,6 @@
       };
       expected = [''ai.kiro.files."${path}" uses `copy-ro`, which requires a directory ledger; `${ledger}` has codec `json`. A document ledger reconciles leaves and cannot own a read-only copy.''];
     };
-    document-format-mismatch = {
-      broken.ai.kiro.files.${path}.format = lib.mkForce "toml";
-      healthy = {};
-      expected = [''ai.kiro.files."${path}" has format `toml`, but document ledger `${ledger}` uses codec `json`. The document format must match its ledger codec.''];
-    };
     document-path-mismatch = {
       broken.ai.kiro.activation.probeDocument.ledgers.${ledger}.path = lib.mkForce ".kiro/elsewhere.json";
       healthy = {};

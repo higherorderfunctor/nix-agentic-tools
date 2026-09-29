@@ -10,8 +10,7 @@ into a shell word.
 Two containers, because a directory leaf can be a symlink, a FIFO or a file
 someone edited while a document leaf cannot, and because a container whose
 units are whole files can back one up and must state each unit's mode, while
-one whose units are leaves of a shared byte stream can back up nothing and
-states at most one mode, for the single file every leaf shares:
+one whose units are leaves of a shared byte stream can back up nothing:
 
     DirContainer   a directory     units are filenames    witness: sha256
     DocContainer   one document    units are key tuples    witness: the address
@@ -34,7 +33,6 @@ import fcntl
 import hashlib
 import io
 import json
-import contextlib
 import os
 import shutil
 import stat
@@ -46,7 +44,7 @@ from collections.abc import Callable, Mapping, MutableMapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-CODECS = ("dir", "json", "toml")
+CODECS = ("dir", "json")
 CONTENT_FIELDS = ("run", "store", "text")
 DEFAULT_DIR_MODE = "0444"
 LEDGER_VERSION = 1
@@ -59,14 +57,7 @@ NEW_FILE_MODE = 0o600
 # sharing a backend. Two lock paths would let two sweeps run at once and delete
 # each other's live temporary files.
 LOCK = ("materialize", "lock")
-# A target's NATIVE writer lock is the proper-lockfile protocol pi uses around
-# trust.json (dist/core/trust-manager.js acquireTrustLockSync): a directory at
-# `<document>.lock`, created with mkdir, removed on release, and judged dead
-# once its mtime is older than the library's default `stale` of 10 s. A holder
-# that stops refreshing it for that long is gone, so this run breaks it too.
-FOREIGN_LOCK_STALE = 10.0
-FOREIGN_LOCK_WAIT = 10.0
-# A document's runtime writer takes neither lock above: Claude Code and Kimchi
+# A document's runtime writer takes neither lock above: Claude Code and Copilot
 # rename a sibling temporary over their config whenever they like. So a
 # document is published by compare-and-swap -- re-read, re-apply, retry -- and
 # a writer that keeps winning exhausts this bound and fails the run rather
@@ -263,18 +254,11 @@ def write_if_changed(
     path: Path,
     content: bytes,
     mode: int,
-    declared: int | None = None,
     guard: Callable[[], bool] | None = None,
 ) -> bool:
     """Preserve an existing regular file's mode; use `mode` for a new one.
 
-    A `declared` mode overrides both halves, and a document target is the only
-    thing that may state one. It is imposed on every write -- create, adopt,
-    rewrite -- and on the run where the bytes did not move, which is the arm
-    that carries the real caller: kiro's merge target must re-narrow a file an
-    earlier overwrite generation published read-only, and the run that has to
-    do it usually has no other work. Absent a declared mode this never changes
-    a mode at all, which is what the ledger writers below rely on.
+    Existing regular files keep their mode; new ones use `mode`.
 
     `guard` reaches `atomic_write` unchanged, and the result is its answer:
     False only when the guard refused the rename. Skipping identical bytes is
@@ -282,19 +266,12 @@ def write_if_changed(
     what this write would have published.
     """
     is_symlink = path.is_symlink()
-    if declared is not None:
-        mode = declared
     if path.exists() and not is_symlink:
         if not path.is_file():
             raise ValueError(f"refusing to replace non-regular file {path}")
         current = path.read_bytes()
-        if declared is None:
-            mode = stat.S_IMODE(path.stat().st_mode)
+        mode = stat.S_IMODE(path.stat().st_mode)
         if current == content:
-            if declared is not None:
-                # Impose the mode, publish nothing, keep the mtime -- the
-                # directory codec's skip arm, for the one file a document is.
-                path.chmod(mode)
             return True
     elif not path.exists() and is_symlink:
         raise ValueError(f"refusing to replace dangling symlink {path}")
@@ -433,7 +410,7 @@ class DirContainer:
 
 
 class DocContainer:
-    """One JSON or TOML document whose units are its owned leaves."""
+    """One JSON document whose units are its owned leaves."""
 
     def __init__(
         self,
@@ -441,37 +418,24 @@ class DocContainer:
         relative: PurePosixPath,
         codec: str,
         ledger: Path,
-        mode: int | None = None,
     ) -> None:
         self.path = path
         self.relative = relative
         # Kept only to sweep its directory at commit; a document's ledger is
         # read and written by the driver, never by the container.
         self.ledger = ledger
-        # The mode the document must carry, when its target states one. A
-        # leaf cannot have a mode of its own -- every one of them lives in the
-        # same file -- but the file can, and one caller needs it.
-        self.mode = mode
         # Leading `//` comment lines a runtime writes above the JSON object
         # (Copilot heads its state file `config.json` with two). Kept verbatim
         # and written back, so neither side strips the other's bytes.
         self.header = ""
-        if codec == "json":
-            self.parse: Callable[[str], Any] = self.parse_commented_json
-            self.serialize: Callable[[Any], str] = (
-                lambda document: self.header + json.dumps(document, indent=2) + "\n"
-            )
-            self.empty: Callable[[], MutableMapping[str, Any]] = dict
-            self.new_table: Callable[[], MutableMapping[str, Any]] = dict
-        else:
-            # JSON callers need only the standard library. Keep the TOML
-            # dependency lazy so their activation closure never carries it.
-            import tomlkit
-
-            self.parse = tomlkit.parse
-            self.serialize = tomlkit.dumps
-            self.empty = tomlkit.document
-            self.new_table = tomlkit.table
+        if codec != "json":
+            raise ValueError(f"unsupported document codec {codec}")
+        self.parse: Callable[[str], Any] = self.parse_commented_json
+        self.serialize: Callable[[Any], str] = (
+            lambda document: self.header + json.dumps(document, indent=2) + "\n"
+        )
+        self.empty: Callable[[], MutableMapping[str, Any]] = dict
+        self.new_table: Callable[[], MutableMapping[str, Any]] = dict
 
         # Every leaf this run sets or deletes, in order, so a document a
         # runtime rewrote under us can be re-read and the same edit replayed
@@ -634,7 +598,6 @@ class DocContainer:
             self.path,
             self.serialize(self.document).encode(),
             NEW_FILE_MODE,
-            self.mode,
             self.unchanged,
         )
 
@@ -643,13 +606,11 @@ def open_container(root: Path, target: Mapping[str, Any], ledger: Path):
     relative = PurePosixPath(target["path"])
     if target["codec"] == "dir":
         return DirContainer(root / relative, relative, ledger)
-    declared = target["units"].get("mode")
     return DocContainer(
         root / relative,
         relative,
         target["codec"],
         ledger,
-        None if declared is None else int(declared, 8),
     )
 
 
@@ -746,47 +707,6 @@ def write_ledger(codec: str, path: Path, written: Mapping[Any, Any]) -> None:
     ledger_format(codec)[1](path, written)
 
 
-def acquire_foreign(path: Path) -> None:
-    """Take one native writer's mkdir lock, breaking it only once stale."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    deadline = time.monotonic() + FOREIGN_LOCK_WAIT
-    while True:
-        try:
-            path.mkdir()
-            return
-        except FileExistsError:
-            pass
-        try:
-            age = time.time() - path.lstat().st_mtime
-        except FileNotFoundError:
-            continue
-        if age > FOREIGN_LOCK_STALE:
-            with contextlib.suppress(FileNotFoundError):
-                path.rmdir()
-            continue
-        if time.monotonic() >= deadline:
-            raise ValueError(
-                f"{path} is still held by its native writer after "
-                f"{FOREIGN_LOCK_WAIT:.0f}s"
-            )
-        time.sleep(0.02)
-
-
-@contextlib.contextmanager
-def foreign_locks(paths: list[Path]):
-    """Hold every native writer lock in `paths`, released in reverse order."""
-    held: list[Path] = []
-    try:
-        for path in paths:
-            acquire_foreign(path)
-            held.append(path)
-        yield
-    finally:
-        for path in reversed(held):
-            with contextlib.suppress(FileNotFoundError):
-                path.rmdir()
-
-
 # ── Plan ────────────────────────────────────────────────────────────
 
 
@@ -828,10 +748,6 @@ def load_plan(path: Path) -> Mapping[str, Any]:
                 raise ValueError(f"two live targets claim the path '{path}'")
             claimed.add(path)
         check_relative("ledger", target["ledger"])
-        if "lock" in target:
-            check_relative("lock", target["lock"])
-            if target["codec"] == "dir":
-                raise ValueError(f"lock is for document targets only: {target['path']}")
         if target["ledger"] in ledgers:
             raise ValueError(f"two targets share the ledger '{target['ledger']}'")
         ledgers.add(target["ledger"])
@@ -842,6 +758,8 @@ def load_plan(path: Path) -> Mapping[str, Any]:
                         f"unit address must be one visible path segment: "
                         f"'{address}' in {target['path']}"
                     )
+        elif "mode" in target["units"]:
+            raise ValueError(f"document target cannot state a mode: {target['path']}")
     return plan
 
 
@@ -901,29 +819,20 @@ def run(plan: Mapping[str, Any], root: Path, state: Path, phase: str) -> None:
     # phase exactly, so a target the locked phase would not open is not opened
     # here either.
     #
-    # A document whose native writer takes a lock is read under that lock,
-    # here and below: pi rewrites trust.json in place with writeFileSync, so an
-    # unlocked read can parse half a file and an unlocked write can lose the
-    # decision a prompt was saving. The native lock is taken AFTER this run's
-    # own flock below, so a wait on a concurrent reconcile never ages it
-    # toward stale while this run holds it.
-    native = [root / target["lock"] for target in considered if "lock" in target]
-    with foreign_locks(native):
-        for target, units in zip(considered, resolved):
-            ledger = ledger_path(state, target)
-            if target["codec"] == "dir" or (
-                not units and not ledger_format(target["codec"])[0](ledger)
-            ):
-                continue
-            open_container(root, target, ledger)
+    for target, units in zip(considered, resolved):
+        ledger = ledger_path(state, target)
+        if target["codec"] == "dir" or (
+            not units and not ledger_format(target["codec"])[0](ledger)
+        ):
+            continue
+        open_container(root, target, ledger)
 
     lock = state.joinpath(*LOCK)
     lock.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with lock.open("a") as handle, contextlib.ExitStack() as native_held:
+    with lock.open("a") as handle:
         # flock releases on process death, so a killed activation cannot
         # strand a lock that turns every later run into manual recovery.
         fcntl.flock(handle, fcntl.LOCK_EX)
-        native_held.enter_context(foreign_locks(native))
 
         opened = []
         for target, units in zip(considered, resolved):

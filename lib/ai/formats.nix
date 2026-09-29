@@ -32,7 +32,7 @@
     };
     toml = {
       render = name: value: {source = (pkgs.formats.toml {}).generate name value;};
-      sharedOk = true;
+      sharedOk = false;
     };
     yaml = {
       render = name: value: {source = (pkgs.formats.yaml {}).generate name value;};
@@ -76,15 +76,6 @@
   # prefix is not decoration: a store name may not begin with a period, and
   # plenty of these paths do.
   storeName = path: "ai-delivery-" + lib.replaceStrings ["/"] ["-"] path;
-
-  # The interpreter a writer's plan pins. `tomlkit` is what keeps comments and
-  # key order in a TOML document the harness also edits; nothing else needs it,
-  # and carrying it everywhere would put a package in every closure that owns a
-  # JSON file.
-  pythonFor = ledgers:
-    if lib.any (ledger: ledger.codec == "toml") (lib.attrValues ledgers)
-    then pkgs.python3.withPackages (python: [python.tomlkit])
-    else pkgs.python3;
 
   render = {
     format,

@@ -538,7 +538,7 @@ def virgin(fixture):
 
 
 def modes(fixture):
-    """Documents keep their mode unless they state one; directories impose it."""
+    """Documents preserve mode; directory copies impose their declared mode."""
     document = fixture.root / "settings/cli.json"
     target = doc_target(
         {"text": json.dumps({"ours": 1})},
@@ -561,29 +561,6 @@ def modes(fixture):
         assert json.loads(document.read_text())["ours"] == mode
         assert stat.S_IMODE(document.stat().st_mode) == mode, f"changed write lost {oct(mode)}"
     print("PASS modes: doc codec preserved 0400/0600/0640 and used 0600 for a new file")
-
-    # A document target MAY state the mode its file must carry. Stated, it is
-    # imposed on every write AND on the run where the bytes did not move --
-    # that second arm is the one kiro's merge target needs, because the run
-    # that has to re-narrow a file an overwrite generation left 0444 usually
-    # has no other work to do.
-    stated = doc_target(
-        {"mode": "0640", "text": json.dumps({"ours": 1})},
-        path="settings/cli.json",
-        ledger="json-settings/cli.json",
-    )
-    document.chmod(0o444)
-    fixture.own({"targets": [stated]})
-    assert stat.S_IMODE(document.stat().st_mode) == 0o640, "a stated mode was not imposed"
-    before = snapshot(document)
-    document.chmod(0o444)
-    fixture.own({"targets": [stated]})
-    # A chmod, not a republication: bytes and mtime both frozen.
-    assert snapshot(document) == before, "imposing a stated mode rewrote the document"
-    document.unlink()
-    fixture.own({"targets": [stated]})
-    assert stat.S_IMODE(document.stat().st_mode) == 0o640, "a new document ignored its stated mode"
-    print("PASS modes: doc codec imposed a stated mode on create, rewrite and no-op")
 
     unit = fixture.root / "settings/unit.txt"
     for mode in ("0400", "0444", "0640"):
@@ -931,63 +908,6 @@ def lock(fixture):
             process.communicate()
 
 
-def lazy_toml(fixture):
-    """The TOML codec works, and only it needs tomlkit."""
-    document = fixture.root / "config.toml"
-    document.write_text('[projects."/repo"]\ntrust_level = "trusted"\n')
-    target = doc_target(
-        {"text": json.dumps({"features": {"memories": True}})},
-        codec="toml",
-        path="config.toml",
-        ledger="toml-settings/codex.toml.json",
-    )
-    fixture.own({"targets": [target]}, python=TOOLS["tomlPython"])
-    body = document.read_text()
-    assert '[projects."/repo"]' in body and "trust_level" in body, body
-    assert "memories = true" in body, body
-    fixture.own({"targets": [doc_target({}, codec="toml", path="config.toml", ledger="toml-settings/codex.toml.json")]},
-                python=TOOLS["tomlPython"])
-    # Not a byte comparison: a tomlkit set-then-delete round trip leaves the
-    # blank line its table occupied, exactly as the program this one replaced
-    # did -- the body is inherited from it, not reimplemented.
-    drained = document.read_text()
-    assert "memories" not in drained and "[features]" not in drained, drained
-    assert '[projects."/repo"]' in drained and 'trust_level = "trusted"' in drained, drained
-    assert not fixture.ledger("toml-settings/codex.toml.json").exists()
-    print("PASS lazy_toml: TOML leaves set and retracted, native table untouched")
-
-    # A drain that empties the document removes it, but only when nothing but
-    # an empty document would be written back: a comment the user added to an
-    # otherwise empty TOML file survives serialization and keeps the file.
-    for name, seed in (("ours.toml", None), ("commented.toml", "# mine\n")):
-        path = fixture.root / name
-        if seed is not None:
-            path.write_text(seed)
-        ledger = f"toml-settings/{name}.json"
-        fixture.own({"targets": [doc_target({"text": json.dumps({"ours": 1})}, codec="toml", path=name, ledger=ledger)]},
-                    python=TOOLS["tomlPython"])
-        assert "ours = 1" in path.read_text(), path.read_text()
-        fixture.own({"targets": [doc_target({}, codec="toml", path=name, ledger=ledger)]},
-                    python=TOOLS["tomlPython"])
-        if seed is None:
-            assert not path.exists(), "a drained TOML document that was all ours stayed behind"
-        else:
-            body = path.read_text()
-            assert "# mine" in body and "ours" not in body, body
-    print("PASS lazy_toml: an emptied drain removes the file unless a user comment remains")
-
-    # The import is lazy: the same interpreter that just ran every JSON and
-    # dir case cannot even import tomlkit, so a JSON caller's closure has no
-    # reason to carry it.
-    probe = subprocess.run([TOOLS["python"], "-c", "import tomlkit"], capture_output=True, text=True)
-    assert probe.returncode != 0 and "tomlkit" in probe.stderr, probe.stderr
-    before = document.read_bytes()
-    result = fixture.own({"targets": [target]}, succeeds=False)
-    assert "tomlkit" in result.stderr, result.stderr
-    assert document.read_bytes() == before, "a failed TOML import moved bytes"
-    print("PASS lazy_toml: the JSON interpreter has no tomlkit, and only TOML needs it")
-
-
 def rejections(fixture):
     """A malformed plan fails closed, before anything is opened."""
     for arguments, plan in (
@@ -1006,14 +926,12 @@ def rejections(fixture):
         ]}),
         ("two content tags", {"targets": [dir_target({"unit": {"store": "/dev/null", "text": "x"}})]}),
         ("missing field", {"targets": [{"codec": "dir", "path": "settings", "units": {}}]}),
-        ("directory lock", {"targets": [{**dir_target({"unit": {"text": "x"}}), "lock": "settings.lock"}]}),
-        ("traversing lock", {"targets": [{**doc_target({"text": "{}"}), "lock": "../outside.lock"}]}),
     ):
         result = fixture.own(plan, succeeds=False)
         assert result.stderr.startswith("own: "), (arguments, result.stderr)
         assert list(fixture.root.iterdir()) == [], (arguments, "a rejected plan touched the root")
         assert not fixture.state.exists(), (arguments, "a rejected plan created state")
-    print("PASS rejections: eleven malformed plans refused before any container opened")
+    print("PASS rejections: nine malformed plans refused before any container opened")
 
 
 def dry_run(fixture):
@@ -1106,7 +1024,6 @@ CASES = {
     "commented_json": commented_json,
     "drain": drain,
     "dry_run": dry_run,
-    "lazy_toml": lazy_toml,
     "legacy": legacy,
     "lock": lock,
     "modes": modes,
