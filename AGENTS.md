@@ -142,6 +142,11 @@ for it. When several entries match, their guidance composes.
     - `devenv.nix`
   - Read:
     - [`dev/fragments/flake/binary-cache.md`](dev/fragments/flake/binary-cache.md)
+- **`git-branchless`**
+  - Match:
+    - `packages/git-branchless/**`
+  - Read:
+    - [`packages/git-branchless/docs/extraction.md`](packages/git-branchless/docs/extraction.md)
 - **`hm-modules`**
   - Match:
     - `packages/*/modules/homeManager/**`

@@ -918,7 +918,8 @@ A package owned by a flake input has no `mkUpdateScript`, so it carries
 `passthru.regenerateExtracted = packageLib.mkFlakeInputRegen { … }` instead.
 `update-input.sh` discovers it through `passthru.updateFlakeInput` and stages
 its `sidecars`. Semble's targets are its drift checks' `passthru.extracted`,
-which keeps the package byte-identical to upstream.
+which keeps the package byte-identical to upstream; git-branchless's is its own
+`passthru.extracted`.
 
 The hash fixers (`mkGoVendorFix`, `mkNpmDepsFix`, and the src-only fixer
 `mkGoUpdateExtract` builds internally) are one body — `vu.mkHashFix` —

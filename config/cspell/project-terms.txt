@@ -270,6 +270,7 @@ memsize
 Menlo
 mergetool
 metacharacter
+metavariable
 minishlab
 misattributes
 miscited
@@ -284,6 +285,7 @@ moff
 mojibake
 mountpoint
 mtimes
+multivar
 mystor
 napi
 narinfo
@@ -486,6 +488,8 @@ tryeval
 tsgo
 tsgolint
 tummychow
+turbofish
+ufcs
 ugrep
 ultracode
 unapprove
@@ -532,6 +536,7 @@ wikilink
 WINDIR
 worktree
 worktrees
+writeln
 WSLENV
 wyhash
 xhigh

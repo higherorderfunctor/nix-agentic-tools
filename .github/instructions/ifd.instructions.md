@@ -7,12 +7,13 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-24 — `fix_sidecar_hashes` also re-derives
-> `pnpmDepsHash`, but only when the stale output is not substitutable; kimchi
-> versions its pnpm-deps and src FOD names; Kiro settings extraction validates
-> its materialized TUI registry and workspace merge with AST checks; Kimchi
-> attributes every config.ts JSON read to the file it reads, censuses every
-> resolved environment read, and no longer extracts a CLI surface nothing read.
+> **Last verified:** 2026-09-29 — git-branchless joins the source-measured
+> sidecars. `fix_sidecar_hashes` also re-derives `pnpmDepsHash`, but only when
+> the stale output is not substitutable; kimchi versions its pnpm-deps and src
+> FOD names; Kiro settings extraction validates its materialized TUI registry
+> and workspace merge with AST checks; Kimchi attributes every config.ts JSON
+> read to the file it reads, censuses every resolved environment read, and no
+> longer extracts a CLI surface nothing read.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -174,12 +175,15 @@ minutes later inside `nix-update`.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
-`mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract`; glab and Kimchi
-instead measure pinned source inputs. Consumers read the committed file, never
-the derivation, so option surfaces derived from it cost no IFD. Kimchi's
-`ai.kimchi.native.*` types are generated from its sidecar
-(`packages/kimchi/lib/extracted.nix`). `checks/<pkg>-extracted.nix` then
-compares committed against freshly built output to catch a stale sidecar.
+`mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract`; glab, Kimchi and
+git-branchless instead measure pinned source inputs (git-branchless with an
+ast-grep census of its patched source, `packages/git-branchless/extract/`).
+Consumers read the committed file, never the derivation, so option surfaces
+derived from it cost no IFD. Kimchi's `ai.kimchi.native.*` types are generated
+from its sidecar (`packages/kimchi/lib/extracted.nix`), and git-branchless's
+typed settings likewise (`packages/git-branchless/lib/settings.nix`).
+`checks/<pkg>-extracted.nix` then compares committed against freshly built
+output to catch a stale sidecar.
 
 Kiro's `models` field is the exception to the binary source: it is derived from
 the committed public documentation snapshot, refreshed by the update job even

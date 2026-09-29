@@ -577,10 +577,10 @@ Targets fall into three categories:
   `passthru.regenerateExtracted` script (`packageLib.mkFlakeInputRegen`) of
   every package whose `passthru.updateFlakeInput` names the input, and stages
   the `sidecars` each one lists. Today that is Semble's two snapshots on
-  `llm-agents`. A failed regeneration holds the input back. Semble's
-  human-reviewed template hashes are not rewritten, so a changed template
-  reaches the update PR but fails its coverage check until the local derivative
-  is reviewed.
+  `llm-agents` and git-branchless's config census on `git-branchless`. A failed
+  regeneration holds the input back. Semble's human-reviewed template hashes are
+  not rewritten, so a changed template reaches the update PR but fails its
+  coverage check until the local derivative is reviewed.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages. The
   Beads binary target is the one grouped package: its `passthru.updateScript`
