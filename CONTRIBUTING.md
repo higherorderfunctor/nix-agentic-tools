@@ -88,9 +88,9 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
   what `nix fmt` produces.
 - `packages/coding-standards/fragments/` — published coding standards, part of
   the orientation.
-- `packages/delegate-sizing/` and `packages/stacked-workflows/router.nix` — the
+- `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the
   always-on routing rules, delivered as `ai.*` rules of their own (the
-  delegate-sizing program and a root rule) rather than inlined into the
+  delegate-routing program and a root rule) rather than inlined into the
   orientation.
 - `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 
@@ -216,7 +216,7 @@ Claude, Copilot, Kiro), and into CONTRIBUTING.md.
 | -------------------------------- | ------------------------------------------------ | --------- |
 | Dev-only (monorepo/tooling)      | `dev/fragments/<pkg>/<name>.md`                  | No        |
 | Published coding standards       | `packages/coding-standards/fragments/<name>.md`  | Yes       |
-| Published delegate-sizing rule   | `packages/delegate-sizing/fragments/<name>.md`   | Yes       |
+| Published delegate-routing rule  | `packages/delegate-routing/fragments/<name>.md`  | Yes       |
 | Published SWS skill-routing rule | `packages/stacked-workflows/fragments/<name>.md` | Yes       |
 
 To add a dev-only fragment:

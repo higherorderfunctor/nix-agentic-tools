@@ -6,29 +6,29 @@ args @ {
   pkgs,
   ...
 }: let
-  delegateSizingRenames = args.delegateSizingRenames or (import ../lib/when-to-delegate-renames.nix);
+  delegateRoutingRenames = args.delegateRoutingRenames or (import ../lib/when-to-delegate-renames.nix);
   # Resolve the supported runtimes and their instruction presets. Kimchi has
   # no delegate primitive; Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kiro"];
-  inherit (pkgs.delegate-sizing-content) presets;
+  inherit (pkgs.delegate-routing-content) presets;
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   enabled = runtime:
-    config.ai.${runtime}.programs.delegate-sizing.enable
+    config.ai.${runtime}.programs.delegate-routing.enable
     or null;
   # Mirror program.nix's B4 resolveOverride: null inherits the portable value; keep in sync.
   programEnabled = runtime:
     if enabled runtime == null
-    then config.ai.programs.delegate-sizing.enable
+    then config.ai.programs.delegate-routing.enable
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   present = builtins.filter (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options) supportedRuntimes;
-  settings = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-sizing.settings);
+  settings = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-routing.settings);
   whenToDelegateOptions = import ../lib/when-to-delegate.nix {
     inherit lib;
-    renames = delegateSizingRenames;
+    renames = delegateRoutingRenames;
   };
   inherit (whenToDelegateOptions) mkPreset;
-  whenToDelegate = config.ai.programs.delegate-sizing.whenToDelegate;
+  whenToDelegate = config.ai.programs.delegate-routing.whenToDelegate;
   warningMessages = whenToDelegateOptions.warnings whenToDelegate;
   emitWarnings = value:
     lib.foldr (warning: result: lib.warn warning result) value warningMessages;
@@ -62,12 +62,12 @@ in {
     lib.genAttrs supportedRuntimes (runtime: {
       # This merges with lib/ai/program.nix's override submodule only because it
       # declares no default, description or example; adding any throws "already declared".
-      programs.delegate-sizing = lib.mkOption {
+      programs.delegate-routing = lib.mkOption {
         type = lib.types.submodule {options = runtimeOptions runtime;};
       };
     })
     // {
-      programs.delegate-sizing.whenToDelegate = lib.mkOption {
+      programs.delegate-routing.whenToDelegate = lib.mkOption {
         inherit (whenToDelegateOptions) type;
         default = {};
         apply = whenToDelegateOptions.rename;
@@ -78,7 +78,7 @@ in {
   # Emit one portable enable option and skills/rules for each supported runtime.
   imports = [
     (import ../../../lib/ai/mkSkillPackageModule.nix {
-      name = "delegate-sizing";
+      name = "delegate-routing";
       enableDescription = "delegate model and effort sizing skills and rule";
       inherit supportedRuntimes;
       skills = {
@@ -86,22 +86,22 @@ in {
         runtime,
         ...
       }: {
-        delegate-sizing = "${pkgs.delegate-sizing-content.passthru.mkSkill {
+        delegate-routing = "${pkgs.delegate-routing-content.passthru.mkSkill {
           inherit runtime settings;
-          inherit (config.ai.${runtime}.programs.delegate-sizing) extraRuntimes manualExternalDelegates;
+          inherit (config.ai.${runtime}.programs.delegate-routing) extraRuntimes manualExternalDelegates;
         }}";
       };
       rules = _:
         import ../router.nix {
           inherit lib;
-          entries = config.ai.programs.delegate-sizing.whenToDelegate;
+          entries = config.ai.programs.delegate-routing.whenToDelegate;
         };
     })
   ];
 
   config =
     {
-      ai.programs.delegate-sizing.whenToDelegate = {
+      ai.programs.delegate-routing.whenToDelegate = {
         "Launch independent work together" = mkPreset {source = ../fragments/launch-independent-work-together.md;};
         "Orchestrator session" = mkPreset {source = ../fragments/orchestrator-session.md;};
         "Prefer the flat-rate pool" = mkPreset {source = ../fragments/prefer-the-flat-rate-pool.md;};
@@ -118,11 +118,11 @@ in {
           lib.concatMap (runtime:
             map (target: {
               assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
-              message = "ai.${runtime}.programs.delegate-sizing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
+              message = "ai.${runtime}.programs.delegate-routing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
             })
             (lib.subtractLists
-              config.ai.${runtime}.programs.delegate-sizing.manualExternalDelegates
-              config.ai.${runtime}.programs.delegate-sizing.extraRuntimes))
+              config.ai.${runtime}.programs.delegate-routing.manualExternalDelegates
+              config.ai.${runtime}.programs.delegate-routing.extraRuntimes))
           present
         );
     }

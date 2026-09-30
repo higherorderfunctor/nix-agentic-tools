@@ -15,7 +15,7 @@ let
       '')
       enabledEntries);
   in {
-    delegate-sizing-router =
+    delegate-routing-router =
       baseRule
       // {
         text = baseRule.text + lib.optionalString (renderedEntries != "") "\n${renderedEntries}";
@@ -23,5 +23,5 @@ let
   };
 in {
   __functor = _: render;
-  delegate-sizing-router = baseRule;
+  delegate-routing-router = baseRule;
 }

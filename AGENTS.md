@@ -67,7 +67,7 @@ for it. When several entries match, their guidance composes.
     - `packages/claude-code/modules/**`
     - `packages/copilot-cli/lib/mkCopilot.nix`
     - `packages/copilot-cli/modules/**`
-    - `packages/delegate-sizing/modules/**`
+    - `packages/delegate-routing/modules/**`
     - `packages/kimchi/lib/mkKimchi.nix`
     - `packages/kiro-cli/lib/mkKiro.nix`
     - `packages/kiro-cli/modules/**`
@@ -88,7 +88,7 @@ for it. When several entries match, their guidance composes.
     - `packages/claude-code/modules/**`
     - `packages/copilot-cli/lib/mkCopilot.nix`
     - `packages/copilot-cli/modules/**`
-    - `packages/delegate-sizing/modules/**`
+    - `packages/delegate-routing/modules/**`
     - `packages/kimchi/lib/mkKimchi.nix`
     - `packages/kimchi/modules/**`
     - `packages/kiro-cli/lib/mkKiro.nix`
@@ -113,11 +113,11 @@ for it. When several entries match, their guidance composes.
     - `packages/chatgpt-codex/**`
   - Read:
     - [`packages/chatgpt-codex/docs/codex-daemon.md`](packages/chatgpt-codex/docs/codex-daemon.md)
-- **`delegate-sizing`**
+- **`delegate-routing`**
   - Match:
-    - `packages/delegate-sizing/**`
+    - `packages/delegate-routing/**`
   - Read:
-    - [`packages/delegate-sizing/docs/development.md`](packages/delegate-sizing/docs/development.md)
+    - [`packages/delegate-routing/docs/development.md`](packages/delegate-routing/docs/development.md)
 - **`devenv`**
   - Match:
     - `.github/workflows/devenv-test.yml`
@@ -357,12 +357,12 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`packages/stacked-workflows/docs/development.md`](packages/stacked-workflows/docs/development.md)
 
-<!-- rule: delegate-sizing-router -->
+<!-- rule: delegate-routing-router -->
 
-## Delegate Sizing
+## Delegate Routing
 
 Before calling a subagent, spawning a delegate, or building a workflow, load the
-`delegate-sizing` skill when your harness provides it and size the model and
+`delegate-routing` skill when your harness provides it and size the model and
 effort explicitly; a delegate never inherits the session's model and effort.
 
 ### Launch independent work together
@@ -887,7 +887,7 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-30 — prek hooks take their config from the
+> **Last verified:** 2026-09-29 — prek hooks take their config from the
 > session's launch checkout; worktrees are materialized only by choice;
 > repository-level branchless initialization precedes prek hook installation.
 >
@@ -1061,7 +1061,7 @@ rather than adjudicating it yourself.
   cannot be given a model or an effort level, and the cost belongs where those
   controls exist.
 - Size the roles separately, and never let a delegate inherit an interactive
-  session's model and effort by default — see the delegate-sizing orientation.
+  session's model and effort by default — see the delegate-routing orientation.
 
 The recipe is in the `pr-review-loop` skill. It lives there rather than here
 because a skill is the only manual-load carrier that works across runtimes —

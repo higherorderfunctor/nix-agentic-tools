@@ -3,7 +3,7 @@
 # Shared by both backends (`modules/devenv`, `modules/homeManager`); the `ai.*`
 # pools are per-`evalModules`, so each backend imports its own instance.
 #
-# Option surface, following `packages/delegate-sizing/modules/common.nix`:
+# Option surface, following `packages/delegate-routing/modules/common.nix`:
 #
 #   ai.programs.kimchi-docs.enable            portable, default false
 #   ai.<runtime>.programs.kimchi-docs.enable  per-runtime override, null inherits
@@ -12,7 +12,7 @@
 # `lib/ai/mkSkillPackageModule.nix` for every runtime whose skills pool exists in
 # this evaluation. `ai.skills` keeps its `attrsOf (nullOr path)` type.
 #
-# EVERY runtime is supported, unlike delegate-sizing, which excludes kimchi
+# EVERY runtime is supported, unlike delegate-routing, which excludes kimchi
 # because kimchi has no delegate primitive. Kimchi's documentation is useful to
 # any agent working on a kimchi integration, whichever harness it runs in, so the
 # `presentSkillRuntimes` filter inside the factory gives the right set on its own

@@ -1,6 +1,6 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-30 — prek hooks take their config from the
+> **Last verified:** 2026-09-29 — prek hooks take their config from the
 > session's launch checkout; worktrees are materialized only by choice;
 > repository-level branchless initialization precedes prek hook installation.
 >
@@ -174,7 +174,7 @@ rather than adjudicating it yourself.
   cannot be given a model or an effort level, and the cost belongs where those
   controls exist.
 - Size the roles separately, and never let a delegate inherit an interactive
-  session's model and effort by default — see the delegate-sizing orientation.
+  session's model and effort by default — see the delegate-routing orientation.
 
 The recipe is in the `pr-review-loop` skill. It lives there rather than here
 because a skill is the only manual-load carrier that works across runtimes —

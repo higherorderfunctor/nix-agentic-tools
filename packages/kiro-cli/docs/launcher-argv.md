@@ -1,6 +1,6 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-09-28 — v3 trust-flag conflicts re-measured on
+> **Last verified:** 2026-09-29 — v3 trust-flag conflicts re-measured on
 > kiro-cli 2.24.1: `chat` now accepts `--trust-all-tools`; `acp` still rejects
 > the five options it had on 2.15.2 and adds `--auth-method`, which works only
 > under v3.
@@ -427,7 +427,7 @@ cannot see it, which is exactly how this reached a release.
 `-a/--trust-all-tools`. On 2.15.2 only `-v` survived. 2.24.1 adds the inverse
 case: `acp --auth-method <METHOD>` is accepted ONLY under v3, and under `v2` it
 fails with "--auth-method is only supported with --agent-engine=v3" (measured on
-2.24.1; `packages/delegate-sizing/lib/presets.nix` ships
+2.24.1; `packages/delegate-routing/lib/presets.nix` ships
 `kiro-cli acp --agent-engine v3 --auth-method cli`).
 
 The conflict is value-specific — `=v1`/`=v2` accept all five (measured on

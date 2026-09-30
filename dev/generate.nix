@@ -97,7 +97,7 @@
     };
 
   # ── Extra published fragments per package (beyond commonFragments) ───
-  # The always-loaded routing rules (delegate sizing, stacked-workflow skill
+  # The always-loaded routing rules (delegate routing, stacked-workflow skill
   # routing) are not orientation text: `ai.*` delivers each as a rule of its
   # own, from the same source the programs use.
   extraPublishedFragments = {
@@ -264,7 +264,7 @@
       };
       copilot.enable = true;
       kiro.enable = true;
-      programs.delegate-sizing.enable = true;
+      programs.delegate-routing.enable = true;
       programs.stacked-workflows.enable = true;
       settings.reasoningEffort = "high";
     };
@@ -358,7 +358,7 @@
 
     ## Skills
 
-    Delegate sizing for models and effort, plus stacked commit workflows using
+    Delegate routing for models and effort, plus stacked commit workflows using
     git-branchless, git-absorb, and git-revise.
 
     <!-- prettier-ignore -->
@@ -470,7 +470,7 @@
     | Package | Description |
     |---------|-------------|
     | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-    | `delegate-sizing-content` | Per-runtime model/effort sizing skills and a short routing rule |
+    | `delegate-routing-content` | Per-runtime model/effort sizing skills and a short routing rule |
     | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
     Content packages are derivations with `passthru.fragments` for
@@ -483,7 +483,7 @@
     <!-- prettier-ignore -->
     | Feature | Without Nix | Home-Manager | DevEnv |
     |---------|-------------|--------------|--------|
-    | Delegate sizing | Copy a generated runtime skill | `ai.programs.delegate-sizing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
+    | Delegate routing | Copy a generated runtime skill | `ai.programs.delegate-routing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
     | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
     | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
     | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
@@ -1109,11 +1109,11 @@
     </details>
 
     <details>
-    <summary><strong>Delegate Sizing</strong></summary>
+    <summary><strong>Delegate Routing</strong></summary>
 
     ```nix
-    ai.programs.delegate-sizing.enable = true;
-    ai.claude.programs.delegate-sizing = {
+    ai.programs.delegate-routing.enable = true;
+    ai.claude.programs.delegate-routing = {
       extraRuntimes = ["codex"];
       manualExternalDelegates = ["kiro"];
     };
@@ -1263,7 +1263,7 @@
     |---------------|----------|-----------|
     | Dev-only (monorepo/tooling) | `dev/fragments/<pkg>/<name>.md` | No |
     | Published coding standards | `packages/coding-standards/fragments/<name>.md` | Yes |
-    | Published delegate-sizing rule | `packages/delegate-sizing/fragments/<name>.md` | Yes |
+    | Published delegate-routing rule | `packages/delegate-routing/fragments/<name>.md` | Yes |
     | Published SWS skill-routing rule | `packages/stacked-workflows/fragments/<name>.md` | Yes |
 
     To add a dev-only fragment:
