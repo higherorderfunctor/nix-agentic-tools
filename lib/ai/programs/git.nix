@@ -245,7 +245,11 @@ in {
   imports = [git.module gh.module];
 
   config = lib.mkMerge [
-    {assertions = lib.concatMap assertionsFor (lib.attrValues states);}
+    # Standalone evaluators (checks/module-provenance, checks/ai-factory) load
+    # this module without a host that declares `assertions`.
+    (lib.optionalAttrs (options ? assertions) {
+      assertions = lib.concatMap assertionsFor (lib.attrValues states);
+    })
     (moduleEnvironment.publish options envFor)
   ];
 }
