@@ -7,31 +7,33 @@ applyTo: "lib/runtime-values/**"
 
 # Runtime values
 
-> **Last verified:** 2026-09-30 — reduced the pilot to caller-backed scalar and
-> map shapes.
+> **Last verified:** 2026-09-30 — documented validation and map merging.
 
 `lib.runtimeValues` is the public library, and both module sets supply `rv`
 through `_module.args`. `file { path; }` and `helper { path; }` return a
 reserved `_runtime` envelope with one source and `secret = false`. Declarations
-stamp secrecy onto that envelope during module evaluation.
+stamp secrecy onto that envelope during module evaluation. One validator checks
+references at type check, `recognize`, and materialization. `_runtime` needs a
+bool `secret` and one string `file` or `helper`; malformed envelopes fail with a
+fixed message.
 
-`withReferences` supports exactly `lib.types.str` and `lib.types.bool`. It
-creates a literal/reference union. Secret declarations reject every non-null
-literal, and all declarations preserve a reference's existing secret flag.
-Callers put `nullOr` outside the union.
+`withReferences` supports only `lib.types.str` and `lib.types.bool`. Non-secret
+declarations use a literal/reference union. Secret declarations accept anything
+at type-check time, but their merge admits only valid references; otherwise, an
+error names the option path, never the value. Identical references merge;
+different ones conflict, and their paths may be printed because paths are not
+secrets. Declarations preserve secret flags. Callers put `nullOr` outside.
 
-`keyAwareMap` supports string values and nullable string values. It runs the
-ordinary `attrsOf` merge first, then classifies each effective key. This keeps
-`mkDefault`, `mkForce`, and a stronger null that removes an inherited entry
-working. Glab uses the string form for `extraSettings`; Kimchi uses nullable
-strings for `gitTokens`.
+`keyAwareMap` supports strings and nullable strings. Entries classify keys in
+their merge before the ordinary string merge and type-check non-secret keys
+there. This preserves `mkDefault`, `mkForce`, and stronger null removal. Glab
+uses strings for `extraSettings`; Kimchi uses nullable strings for `gitTokens`.
 
-The classifier normalizes camel case, hyphens, and dots into lowercase segments.
-A key is secret when hints mark it keyring-backed or secret, its container is
-secret, or its final segment contains a credential word. The real credential
-keys covered today are glab's `job_token`, `oauth2_refresh_token`,
-`refresh_token`, and `token`, plus `apiKey`, `gitTokens`, and `CI_JOB_TOKEN`. No
-exception or locator rule is carried without a current key.
+The classifier normalizes camel case and underscores. A key is secret when its
+`keyring` hint is set, its container is secret, or a segment carries a
+credential word. Current keys are glab's `job_token`, `oauth2_refresh_token`,
+`refresh_token`, and `token`, plus `apiKey`, `gitTokens`, and `CI_JOB_TOKEN`.
+Rules require current keys.
 
 `fromSchema` converts one flat field set into nullable options. `checkOptions`
 audits evaluated declarations. It understands runtime unions, guarded maps,
@@ -42,8 +44,8 @@ is classified secret. The pilot roots are glab and Kimchi's `apiKey` and
 The reader accepts `<label> <file|helper> <path>`. It rejects missing,
 directory, unreadable, empty, failed-helper, and NUL-bearing inputs. Helper
 output is captured in a private temporary file, and diagnostics contain only the
-label and a fixed message. Shell command substitution drops all trailing
-newlines. Secret values are refused when a caller requests argv delivery.
+label and a fixed message. The reader drops trailing newlines before its empty
+check. Secret values are refused when a caller requests argv delivery.
 
 > **Settled — do not relitigate.** Wrapping arbitrary nixpkgs option types
 > (recursive lifting, declaration `typeMerge`, explicit runtime descriptors,

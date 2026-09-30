@@ -55,16 +55,19 @@
       name = "string or runtime reference";
       description = "string or runtime reference";
       check = _: true;
-      merge = loc: defs:
-        (withReferences {
+      merge = loc: defs: let
+        secret = classify {
+          path = path ++ [(lib.last loc)];
+          secretContainer = containerSecret;
+        };
+        union = withReferences {
           type = types.str;
-          secret = classify {
-            path = path ++ [(lib.last loc)];
-            secretContainer = containerSecret;
-          };
-        }).merge
-        loc
-        defs;
+          inherit secret;
+        };
+      in
+        if !secret && !lib.all (def: union.check def.value) defs
+        then throw "runtimeValues: ${lib.showOption loc}: expected a string or a runtime reference"
+        else union.merge loc defs;
     };
     entryType =
       if nullable

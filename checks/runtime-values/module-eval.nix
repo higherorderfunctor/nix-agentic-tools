@@ -115,6 +115,7 @@ in {
     in
       !succeeds (evaluate classified [{gitlab_token = "literal";}])
       && !succeeds (evaluate classified [{gitlab_token = "first";} {gitlab_token = "second";}])
+      && !succeeds (evaluate plain [{host = 42;}])
       && (evaluate classified [{gitlab_token = file;}]).gitlab_token._runtime.secret
       && defaultThenStrong.host._runtime.source.file == "/run/example"
       && forced.host._runtime.source.file == "/run/other"
