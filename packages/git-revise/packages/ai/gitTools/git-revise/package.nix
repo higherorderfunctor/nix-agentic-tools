@@ -7,9 +7,15 @@
 #
 # The facet composer supplies `pkgs` from this flake's pin for cache-hit parity
 # (see dev/fragments/overlays/overlay-pattern.md).
+#
+# `passthru.extracted` is the config-key census of the source this recipe
+# builds (packages/git-revise/extract/, lib/git-tool-settings). passthru is
+# not a derivation input, so it does not move this package's store path.
 {
+  gitToolExtraction,
   packageLib,
   pkgs,
+  repoPath,
   ...
 }: let
   ourPkgs = pkgs;
@@ -23,8 +29,14 @@
     inherit rev;
     hash = "sha256-D3MicmtruCNiW/WI37y18XDXAl7J9oJdJnDY4Ohj+rE=";
   };
-in
-  ourPkgs.git-revise.overridePythonAttrs (old: {
+
+  extraction = gitToolExtraction {pkgs = ourPkgs;};
+  patchedSource = extraction.patchedSource {
+    name = "git-revise";
+    inherit package;
+  };
+
+  package = ourPkgs.git-revise.overridePythonAttrs (old: {
     version = vu.mkVersion {
       # pyproject.toml uses dynamic version (hatch); read from __init__.py
       # upstream: readPythonDunderVersion @ gitrevise/__init__.py
@@ -49,4 +61,28 @@ in
       // {
         changelog = "https://github.com/mystor/git-revise/blob/${rev}/CHANGELOG.md";
       };
-  })
+    passthru =
+      (old.passthru or {})
+      // {
+        inherit patchedSource;
+        extracted = extraction.extracted {
+          name = "git-revise";
+          source = patchedSource;
+          extractDir = ../../../../extract;
+        };
+        # A rev bump runs this through dev/scripts/update-pkg.sh, so the bump
+        # PR carries the refreshed sidecar.
+        regenerateExtracted = packageLib.mkRegenerateExtracted {
+          name = "git-revise";
+          pkgs = ourPkgs;
+          targets = [
+            {
+              attr = "git-revise";
+              dest = repoPath ../../../../extracted.json;
+            }
+          ];
+        };
+      };
+  });
+in
+  package

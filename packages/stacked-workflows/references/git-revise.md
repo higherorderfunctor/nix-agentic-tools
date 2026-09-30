@@ -78,15 +78,22 @@ pip install --user git-revise
 ### Configuration
 
 ```bash
-# Auto-apply autosquash with -i (like rebase.autoSquash)
+# Imply --autosquash whenever -i is given. Unset: uses rebase.autoSquash,
+# then false. Plain `git revise <commit>` never reads it.
 git config revise.autoSquash true
 
-# GPG/SSH sign revised commits
+# Sign rewritten commits. Unset: uses commit.gpgSign, then false.
+# false does not just skip signing: it STRIPS existing signatures from every
+# commit git-revise rewrites, including commits it only replays.
 git config revise.gpgSign true
 
-# Enable rerere for cached conflict resolution
-git config revise.rerere true        # or rerere.enabled
-git config rerere.autoUpdate true    # auto-apply cached resolutions
+# Rerere for cached conflict resolution (undocumented upstream). Unset: uses
+# rerere.enabled, then whether the repository's rr-cache directory exists.
+git config revise.rerere true
+# In git-revise this means "apply a recorded resolution without prompting"
+# (default: ask "Apply recorded resolution? (y/N)"). In git itself it means
+# "stage the rerere result". One key, two meanings.
+git config rerere.autoUpdate true
 
 # Opt-in commit-msg hook support (mystor/git-revise#82, not yet merged)
 # git config revise.run-hooks.commit-msg true
@@ -124,11 +131,17 @@ twice (mystor/git-revise#132).
 ### Rerere Support
 
 git-revise supports `git rerere`-style conflict caching (mystor/git-revise#75).
-When enabled, resolved conflicts are recorded and replayed automatically on
-future encounters. Resolutions are stored in `.git/rr-cache/` and shared with
-git's own rerere. Enable via `revise.rerere` (or `rerere.enabled`) plus
-`rerere.autoUpdate`. Variant support (multiple resolutions per conflict) is not
-yet implemented.
+When enabled, resolved conflicts are recorded and replayed on future encounters.
+Resolutions live in the repository's `rr-cache`
+(`git rev-parse --git-path rr-cache`), which is shared with git's own rerere and
+with every linked worktree of the clone.
+
+Rerere is on when `revise.rerere` is true. If that key is unset, git-revise
+falls back to `rerere.enabled`, and if that is unset too, rerere is on whenever
+the `rr-cache` directory already exists — so a repository where `git rerere` has
+ever run gets it without any config. `rerere.autoUpdate` only decides whether a
+recorded resolution is applied without a prompt. Variant support (multiple
+resolutions per conflict) is not yet implemented.
 
 ## Command Reference
 
@@ -350,7 +363,11 @@ messages use the exact full subject of the target commit.
 
 **Known issue:** git-revise does not call `post-rewrite` hooks, so
 git-branchless cannot track the rewrite. After using git-revise, both old and
-new commits appear in `git sl`. Run `git restack` to clean up.
+new commits appear in `git sl`. `git restack` cannot clean that up: with no
+recorded rewrite it finds nothing to do, and a bare `git restack` spans every
+worktree's stacks anyway. git-revise moves only the checked-out branch. Move any
+other branch in the rewritten range yourself, then hide the old commits with
+`git hide --no-delete-branches` (the stack-fix skill's Path C does both).
 
 For operations where git-branchless has native equivalents, prefer those:
 
@@ -359,7 +376,7 @@ For operations where git-branchless has native equivalents, prefer those:
 - `git revise -i` → `git move` (branchless tracks the rewrite)
 
 git-revise is most valuable for `--autosquash` (faster than rebase) and bulk
-operations where speed matters and you can `git restack` afterward.
+operations where speed matters and no other branch sits in the rewritten range.
 
 ### With git-absorb
 
@@ -368,8 +385,9 @@ Complementary workflow:
 ```bash
 git add -p                         # stage fixes
 git absorb                         # create fixup! commits (no rebase)
+old_head="$(git rev-parse HEAD)"
 git revise --autosquash            # in-memory autosquash (fast)
-git restack                        # fix branchless tracking
+git hide --no-delete-branches "only($old_head, HEAD)"   # the pre-revise commits
 ```
 
 > **Caveat:** This workflow requires `absorb.fixupTargetAlwaysSHA = false`. With
@@ -380,11 +398,20 @@ git restack                        # fix branchless tracking
 
 ### Signing Support
 
-git-revise supports GPG, SSH, and X.509 signing (`-S` flag or `revise.gpgSign`
-config). SSH signing was added in mystor/git-revise#136 (fixing
+git-revise signs with GPG or SSH (`-S` flag, or `revise.gpgSign`, falling back
+to `commit.gpgSign`). SSH signing was added in mystor/git-revise#136 (fixing
 mystor/git-revise#123). Unlike git-absorb, signing works correctly since
-git-revise implements its own `sign_buffer()`. Reads `gpg.format`,
-`user.signingKey`, and related git config.
+git-revise implements its own `sign_buffer()`. It reads `gpg.format`,
+`user.signingKey`, `gpg.program` and `gpg.ssh.program`.
+
+Every format other than `ssh` goes through `gpg.program` with GPG's arguments.
+The per-format `gpg.<format>.program` keys are never read (apart from the SSH
+one), so X.509 signing works only if `gpg.program` itself points at GnuPG's
+X.509 signing tool.
+
+With signing off, git-revise **removes** the signature from every commit it
+rewrites, including descendants it only replays. Set `revise.gpgSign` (or
+`commit.gpgSign`) before revising a signed stack.
 
 ### Git 2.48 Compatibility
 

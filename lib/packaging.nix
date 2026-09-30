@@ -608,6 +608,36 @@ rec {
     echo "${attr}: wrote ${dest}"
   '';
 
+  # `passthru.regenerateExtracted`: the sidecar regeneration for a package
+  # whose update never runs `mkUpdateScript`'s `extraExtract`. Two update
+  # paths discover and run it, then commit the `sidecars` it lists:
+  #
+  #   dev/scripts/update-input.sh   a package owned by a flake input
+  #                                 (`passthru.updateFlakeInput`)
+  #   dev/scripts/update-pkg.sh     an `update.targets` row bumped by rev or
+  #                                 by nix-update (git-absorb, git-revise)
+  #
+  # Without it the bump PR ships the old sidecar and fails the package's
+  # drift check, and a failure holds the bump back on either path.
+  #
+  # `targets` are `mkExtractRegen` arguments: `attr` is any flake attribute
+  # path whose `passthru.extracted` produces the sidecar (a check's, when the
+  # package itself must stay byte-identical to upstream), `dest` the
+  # repository path it replaces.
+  mkRegenerateExtracted = {
+    name,
+    pkgs,
+    targets,
+  }:
+    (pkgs.writeShellScript "${name}-regenerate-extracted" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${builtins.concatStringsSep "\n" (map (target: mkExtractRegen (target // {inherit pkgs;})) targets)}
+    '')
+    .overrideAttrs (prev: {
+      passthru = (prev.passthru or {}) // {sidecars = map (target: target.dest) targets;};
+    });
+
   # THE `extraExtract` CHAIN for a sidecar-pinned Go package. One call
   # emits every fixer that package needs, IN THE ONE LEGAL ORDER, so no
   # overlay ever restates a sequence again.

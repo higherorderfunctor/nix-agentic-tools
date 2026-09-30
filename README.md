@@ -61,8 +61,8 @@ ai = {
   settings.reasoningEffort = "high";
 };
 
-# Home Manager-only companion; the program enable above is shared with
-# devenv and supports per-runtime overrides.
+# Git companion: mkDefault values on the git.* options, which Home Manager
+# applies user-global and devenv at repository scope.
 stacked-workflows.gitPreset = "full";
 
 services.mcp-servers.servers.github-mcp = {
@@ -204,6 +204,30 @@ nix build .#github-mcp
 nix build .#git-absorb
 ```
 
+The same `git.*` options exist on Home Manager and devenv. Each tool's settings
+are typed from a census of its source and mirror the git key; `enable` installs
+the tool:
+
+```nix
+git = {
+  absorb = {
+    enable = true;
+    settings.maxStack = 50; # absorb.maxStack
+  };
+  branchless = {
+    enable = true; # devenv also runs `git branchless init` on entry
+    scopedSync = true; # bare `git sync` moves the current stack only
+    settings.test.strategy = "worktree"; # branchless.test.strategy
+  };
+  settings.merge.conflictStyle = "zdiff3"; # any other git key
+};
+```
+
+Home Manager delivers them through `programs.git.settings` (`git.settings` is an
+alias of it). devenv writes a repository-local include kept after every other
+repository setting, so its values win key by key over user-global ones and hand
+edits, while keys it does not set fall through.
+
 </details>
 
 <details>
@@ -302,6 +326,7 @@ instruction building.
 | MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
 | Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
 | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
+| Git configuration | `git config` | `git.settings` + typed `git.{branchless,absorb,revise}.settings` → `programs.git.settings` | Same options; a repository-local include that wins key by key |
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
 | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
@@ -939,7 +964,8 @@ same options.
 ```nix
 ai.programs.stacked-workflows.enable = true;
 
-# Home Manager-only companion; omit in devenv configurations.
+# mkDefault values on the git.* options (see Git Tools): Home Manager
+# applies them user-global, devenv repository-local.
 stacked-workflows.gitPreset = "full"; # or "minimal" or "none"
 
 # Optional runtime override: null inherits, false disables one runtime.

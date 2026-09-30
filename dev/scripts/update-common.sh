@@ -625,6 +625,83 @@ fix_sidecar_hashes() {
   return "$rc"
 }
 
+# ── Sidecar regeneration ─────────────────────────────────────────────────────
+#
+# A package whose update never runs mkUpdateScript's `extraExtract` would
+# ship a sidecar describing the OLD source, and its drift check would fail
+# the bump PR. Such a package exposes `passthru.regenerateExtracted`
+# (`mkRegenerateExtracted` in lib/packaging.nix), and both update paths run
+# it through this function:
+#
+#   regenerate_sidecars input <name>     every package whose
+#                                        `passthru.updateFlakeInput` is <name>
+#                                        (update-input.sh)
+#   regenerate_sidecars package <name>   the flat package <name> itself, when
+#                                        it has one (update-pkg.sh, after the
+#                                        rev bump and nix-update)
+#
+# It prints the sidecar paths the scripts wrote, one per line, for the
+# caller to stage.
+#
+# Discovered, never listed, for the same reason as the fixer roster above.
+# `tryEval` keeps one package that throws at evaluation from hiding every
+# other package's regeneration; a package that throws is broken on this
+# bump anyway, and the verification build reports it.
+#
+# Returns non-zero when discovery or any script fails. Each script writes
+# content the PR carries, so the caller holds the bump back on failure.
+regenerate_sidecars() {
+  local by="$1" name="$2" roster scripts sidecars script
+  case "$by" in
+  input | package) ;;
+  *)
+    log_failure "regenerate_sidecars: unknown selector '$by' (input or package)"
+    return 1
+    ;;
+  esac
+  roster='let
+      flake = builtins.getFlake (toString ./.);
+      by = builtins.getEnv "NAT_REGEN_BY";
+      name = builtins.getEnv "NAT_REGEN_NAME";
+      ps = builtins.getAttr builtins.currentSystem flake.packages;
+      selected = n:
+        let
+          p = builtins.getAttr n ps;
+          r = builtins.tryEval (p.passthru ? regenerateExtracted
+            && (if by == "input" then (p.passthru.updateFlakeInput or null) == name else n == name));
+        in r.success && r.value;
+      # Aliases of one package (semble and semble-mcp) share one script.
+      scripts = map (n: (builtins.getAttr n ps).passthru.regenerateExtracted)
+        (builtins.filter selected (builtins.attrNames ps));
+    in builtins.attrValues (builtins.listToAttrs
+      (map (s: { name = builtins.unsafeDiscardStringContext s.drvPath; value = s; }) scripts))'
+
+  # stderr stays out of both captures; see fix_sidecar_hashes.
+  if ! scripts=$(NAT_REGEN_BY="$by" NAT_REGEN_NAME="$name" nix build --impure --no-link --print-out-paths --expr "$roster"); then
+    log_failure "could not resolve the sidecar regenerators for $by $name (nix error above)"
+    return 1
+  fi
+  if ! sidecars=$(NAT_REGEN_BY="$by" NAT_REGEN_NAME="$name" nix eval --impure --raw --expr \
+    "builtins.concatStringsSep \"\\n\" (builtins.concatMap (s: s.sidecars) ($roster))"); then
+    log_failure "could not resolve the sidecars regenerated for $by $name (nix error above)"
+    return 1
+  fi
+
+  while IFS= read -r script; do
+    case "$script" in
+    /nix/store/*) ;;
+    *) continue ;;
+    esac
+    if ! "$script" >&2; then
+      log_failure "sidecar regeneration failed: $script"
+      return 1
+    fi
+  done <<<"$scripts"
+  if [ -n "$sidecars" ]; then
+    printf '%s\n' "$sidecars"
+  fi
+}
+
 # ── Version parsing ───────────────────────────────────────────────────────────
 
 # Parse nix-update output for "Update X -> Y" lines

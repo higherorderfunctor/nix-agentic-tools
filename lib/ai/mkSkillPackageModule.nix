@@ -16,10 +16,10 @@
 # The returned value IS a module (a function of the standard module args), so a
 # backend's `modules/<backend>/default.nix` can be:
 #
-#   - exactly this module — `import .../mkSkillPackageModule.nix spec`
-#     (stacked-workflows devenv); or
+#   - exactly this module — `import .../mkSkillPackageModule.nix spec`; or
 #   - `imports = [ (import .../mkSkillPackageModule.nix spec) ]` alongside extra
-#     options — stacked-workflows HM, which adds its `gitPreset` on top.
+#     modules — stacked-workflows, whose backends add the shared `gitPreset`
+#     module on top.
 #
 # spec:
 #   name              : program key; declares `ai.programs.<name>.enable`

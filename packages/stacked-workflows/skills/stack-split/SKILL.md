@@ -19,17 +19,46 @@ defaults to HEAD if not specified.
    `references/philosophy.md` (relative to this skill's directory) before
    proceeding.
 
-2. **Check branchless init**:
+2. **Confirm repository initialization.** A devenv project with
+   `git.branchless.enable` runs `git branchless init` on every shell entry.
+   Anywhere else, check and stop if it is missing:
 
    ```bash
-   if [ ! -d ".git/branchless" ]; then git branchless init; fi
+   git config --get branchless.core.mainBranch >/dev/null ||
+     echo "not initialized: ask the user to run git branchless init"
    ```
+
+   Do not run `git branchless init` yourself: it rewrites the repository's
+   shared configuration and hooks for every worktree.
 
 3. **Check for stale rebase state**:
+
    ```bash
-   ls .git/rebase-merge .git/rebase-apply 2>/dev/null
+   ls -d "$(git rev-parse --git-path rebase-merge)" \
+     "$(git rev-parse --git-path rebase-apply)" 2>/dev/null
    ```
-   If present, run `git rebase --abort` before proceeding.
+
+   If either exists, run `git rebase --abort` before proceeding. In a linked
+   worktree `.git` is a file, so ask Git for the paths.
+
+4. **Select this worktree's own stack** as `$STACK`, and use it wherever this
+   skill tests the stack:
+
+   ```bash
+   main_branch="$(git config branchless.core.mainBranch || echo main)"
+   remote="$(git config "branch.${main_branch}.remote" || echo origin)"
+   base="$(git rev-parse --abbrev-ref "${main_branch}@{upstream}" 2>/dev/null \
+     || echo "${remote}/${main_branch}")"
+   git rev-parse --verify -q "${base}^{commit}" >/dev/null || base="$main_branch"
+   STACK="descendants(roots((stack() & ::HEAD) - ::$base)) - ::$base"
+   ```
+
+   `$base` is main's upstream ref (the last fetched one), or local `main` when
+   there is none. Plain `stack()` is not your stack while local `main` is behind
+   its upstream, the normal state when worktrees branch from `origin/main`: it
+   also holds the upstream commits and every stack another worktree branched
+   from them. See **Selecting your own stack** in
+   `references/git-branchless.md`.
 
 ## Steps
 
@@ -64,8 +93,11 @@ defaults to HEAD if not specified.
 4. **Perform the split** using interactive rebase:
 
    ```bash
-   git rebase -i <commit>^
+   git rebase -i --update-refs <commit>^
    ```
+
+   `--update-refs` makes Git move every branch inside the rebased range onto the
+   rewritten commits, including the ones between the split commit and HEAD.
 
    Mark the target commit as `edit`, then:
 
@@ -93,11 +125,12 @@ defaults to HEAD if not specified.
    git rebase --continue
    ```
 
-7. **Restack** if there are downstream commits:
-
-   ```bash
-   git restack
-   ```
+7. **No restack is needed.** `--update-refs` already moved the downstream
+   branches. branchless may still warn that the rebase abandoned them: it prints
+   that just before Git moves them. Step 8's `git sl` shows whether any branch
+   is left on a `rewritten as` commit. If one is, stop and ask the user. Do not
+   repair it with a restack or subtree move; the abandoned line may belong to a
+   stacked or detached worktree.
 
 8. **Verify** the result:
    ```bash
@@ -109,10 +142,10 @@ defaults to HEAD if not specified.
    git test run -x '<test-command>' --jobs <N> '<revset>'
    ```
    Pick `<revset>` per **Choosing the test revset** in
-   `references/git-branchless.md`. Splitting is one of the cases that argues for
-   `stack()` even inside a single PR — you have just created commits that never
-   existed before — but say so rather than widening silently, and size `<N>` by
-   memory, not cores.
+   `references/git-branchless.md`, reading `stack()` there as `$STACK`.
+   Splitting is one of the cases that argues for `$STACK` even inside a single
+   PR — you have just created commits that never existed before — but say so
+   rather than widening silently, and size `<N>` by memory, not cores.
 
 ## Alternative: Full Stack Restructure
 
@@ -121,11 +154,8 @@ If the user wants to restructure multiple commits (not just split one), use
 
 ## Tips
 
-- **`git revise -c <hash>` for two-way splits:** Splits a commit into exactly
-  two pieces in-memory (no checkout). Select hunks for the first commit;
-  remainder becomes the second. Faster for simple splits, but limited: no 3+ way
-  splits, no binary files, no empty file additions. Requires `git restack`
-  afterward.
+- Do not substitute git-revise for the guarded rebase above. Its branch repair
+  would require moving repository-global refs after the rewrite.
 - Format changes should ALWAYS be a separate commit (they dominate diffs and
   hide functional changes)
 - If a file has both refactoring and new logic, use `git add -p` to split hunks

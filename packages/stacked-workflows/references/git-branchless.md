@@ -52,6 +52,29 @@ issue-stats:
 
 Distilled from https://github.com/arxanas/git-branchless, updated 2026-03-21.
 
+## Worktree safety
+
+These skills assume the primary checkout can hold a stale local `main`, while
+each task uses a linked worktree whose branch was created from `origin/main`.
+Another linked worktree may be a sibling, stacked on this worktree, or detached
+on either line. Under that topology:
+
+- Select only this worktree's stack with the sibling-safe revset documented in
+  **Selecting your own stack**. A selection or guard that errors or resolves to
+  no commits must stop the operation.
+- Never use a bare `git sync` or `git sync --pull`. Fetch the configured remote,
+  then move the guarded selection onto the remote-tracking ref. Do not move
+  local `main`.
+- Never repair with a bare `git restack`, recursive `git hide -r`, or an
+  unchecked `children()` subtree. Those operations can reach commits or branches
+  owned by another worktree. Stop and ask the user when the guarded operation
+  cannot finish without such a repair.
+- Run `git test fix` with `--strategy working-copy --jobs 1 --no-cache`. Cached
+  results from a worktree-strategy run can otherwise turn the fix into a
+  successful no-op.
+- Resolve a restructure base with `git merge-base "$base" HEAD`; the upstream
+  tip itself is not the stack's fork point after upstream advances.
+
 ## Overview
 
 git-branchless is a suite of Git extensions that adds anonymous branching,
@@ -96,6 +119,7 @@ git config branchless.restack.preserveTimestamps true
 
 # Test isolation. The default is working-copy, which needs a clean tree and
 # reuses build artifacts in place; worktree isolates each commit instead.
+# git test fix needs --strategy working-copy regardless (see git test fix).
 git config branchless.test.strategy worktree
 # Parallelism. Setting worktree above makes fan-out POSSIBLE, so pin the job
 # count deliberately. 0 would mean "one job per physical CPU", which is what
@@ -140,6 +164,73 @@ just linear sequences.
 - **Public**: on the main branch (diamond `◆`/`◇` in smartlog). Immutable.
 - **Draft**: your local work, not yet on main (circle `◯`/`●`). Freely
   rewritable.
+
+"Main" here is the **local** main branch (`branchless.core.mainBranch`), never
+its remote-tracking ref. A remote ref such as `origin/main` is rejected as a
+main branch.
+
+### Stale local main
+
+When you rebase a stack onto `origin/main` without updating local `main` (the
+worktree-safe update under `git sync` below), the upstream commits between
+`main` and `origin/main` count as **draft** until local `main` catches up. The
+same holds for every worktree created from `origin/main` while local `main` is
+behind it (`git worktree add -b <x> <path> origin/main`). `stack()` is the whole
+draft component around HEAD, so it then holds those upstream commits **and every
+stack another worktree branched from them**:
+
+- `git test run 'stack()'` also tests upstream commits and other worktrees'
+  stacks.
+- `git test fix 'stack()'` **rewrites** them: the stack's base becomes a forged
+  copy of an upstream commit, and other worktrees' branches move under them. A
+  build that carries the checked-out-branch guard panics instead and leaves HEAD
+  detached.
+- Any other `stack()`-scoped rewrite (reword, split, move) can reach them too.
+- `git submit` (default revset `stack()`) force-pushes other worktrees' branches
+  once they are on the remote.
+
+`only(stack(), origin/main)` does not fix this. It drops the upstream commits
+but keeps the other worktrees' stacks. Select your own stack instead.
+
+### Selecting your own stack
+
+```bash
+base=origin/main   # your upstream ref; local main while the remote has no main yet
+own="descendants(roots((stack() & ::HEAD) - ::$base)) - ::$base"
+```
+
+Read it from the inside out:
+
+1. `stack() & ::HEAD` is the draft commits HEAD is built on: your own line, not
+   the stacks beside it.
+2. `- ::$base` drops the ones already upstream.
+3. `roots(...)` is your first commit past `$base`.
+4. `descendants(...) - ::$base` is that commit and everything built on it. That
+   includes forks inside your stack, and the commits above HEAD after
+   `git prev`.
+
+`$own` is empty when HEAD has no commits of its own: on `main`, in a fresh
+worktree, or once everything has merged. Stop there instead of widening to
+`stack()` or `draft()`. It is the same whether local `main` is stale or current,
+and it never contains public commits.
+
+Three things it does not guard against:
+
+- **Local `main` commits that are not on the remote.** If your stack sits on
+  them, `git move -b` onto `origin/main` carries them along.
+  `git query "only($own, $base) - ($own)"` lists them.
+- **A worktree stacked on yours.** Its commits descend from yours, so they are
+  in `$own`, and moving them moves its checked-out branch. Compare
+  `git query --branches "$own"` with the branches in `git worktree list`.
+- **A merge commit in the stack**, for example from merging `origin/main` into
+  it. `git move -b "$own" -d origin/main` then moves only the commits below the
+  merge. It leaves the merge and everything above it, HEAD included, on the old
+  base, and still exits 0. `git query "merges() & ($own)"` lists them.
+
+To narrow an explicit revset, subtract: `(<revset>) - ::$base` keeps a single
+commit single, while `only(<revset>, $base)` widens it to all its ancestors.
+Before any rewrite, check that `(<revset>) - ($own)` is empty. The skills define
+this selection as `$STACK`.
 
 ### Anonymous Branching
 
@@ -238,7 +329,8 @@ git amend --reparent      # amend without rebasing children (for formatters)
 ```
 
 **Gotcha:** `git amend` skips pre-commit hooks (arxanas/git-branchless#1275).
-Use `git commit --amend` + `git restack` if hooks are needed.
+Use `git commit --amend` + `git restack <pre-amend-hash>` if hooks are needed
+(see `git restack` below for when to use `git move` instead).
 
 ### Rewriting
 
@@ -292,48 +384,111 @@ git split --discard       # remove extracted changes entirely
 **`git restack`** — Fix abandoned commits after rewrites.
 
 ```bash
-git restack               # restack all abandoned commits
-git restack <hash>        # restack only children of specific abandoned commit
+git restack               # every abandoned commit in draft(): every worktree's stacks
+git restack <hash>        # rebase only the abandoned descendants of <hash>
 ```
+
+Pass the abandoned (pre-rewrite) hash. `git restack 'stack()'` is not a safe
+scope: after amending a stack's first commit, its abandoned descendants are no
+longer in `stack()`, so the restack silently does nothing.
+
+The hash limits the commits restack rebases, not the branches it moves. After
+rebasing, it moves **every** branch in the repository that still points at a
+rewritten commit, including one that another worktree has checked out. A build
+with the checked-out-branch guard panics at that point; upstream moves the
+branch under that worktree. When `git sl` shows another worktree's branch or
+detached HEAD on a `rewritten as` commit, stop and ask the user to repair that
+line from its own worktree.
+
+After a `git rebase` (a split, an autosquash), pass `--update-refs` to the
+rebase instead. Git then moves every branch inside the rebased range itself, and
+nothing is left to restack.
 
 ### Stack Management
 
 **`git sync`** — Rebase selected stacks onto updated main.
 
 ```bash
-git sync 'stack()'                # rebase only current stack
-git sync --pull 'stack()'         # fetch remote first, then rebase current stack
+git sync 'stack()'                # rebase only current stack onto LOCAL main
+git sync --pull 'stack()'         # update LOCAL main first, then rebase (see below)
 git sync --merge 'stack()'        # resolve conflicts for current stack
 ```
 
-A bare `git sync` rebases every local draft stack, including branches checked
-out in other worktrees. git-branchless bypasses Git's checked-out-branch guard,
-so those worktrees keep a stale index and can show phantom staged changes that a
-broad `git add` turns into unrelated reverts. Always pass an explicit revset;
-use `stack()` for the current stack.
+`git sync` rebases onto **local** main. That has three consequences when several
+worktrees share one repository:
+
+- **A bare `git sync` spans every worktree's stacks.** It rebases every local
+  draft stack, including branches checked out in other worktrees. Upstream
+  git-branchless bypasses Git's checked-out-branch guard, so those worktrees
+  keep a stale index and can show phantom staged changes that a broad `git add`
+  turns into unrelated reverts. A build that carries the guard refuses instead,
+  possibly after it has already moved some stacks. Always pass an explicit
+  revset.
+- **`--pull` always updates local main first**, whatever revset you pass. If
+  another worktree (usually the primary checkout) has `main` checked out, this
+  either fails with `cannot force update the branch 'main' used by worktree`
+  (guard present), or moves `main` under that checkout (guard absent), which
+  then shows the upstream changes as staged reverts.
+- **Without `--pull`, a fetch alone changes nothing.** `git fetch` followed by
+  `git sync 'stack()'` reports the stack as up to date, because local main did
+  not move.
+
+The worktree-safe way to put the current stack on the latest upstream is to skip
+`sync` and move onto the remote-tracking ref directly:
+
+```bash
+git fetch origin                     # updates origin/main; no local branch moves
+git move -b HEAD -d origin/main      # rebase ONLY the current stack
+# on conflict: exit 1 and nothing changed. When ready to resolve:
+git move -b HEAD -d origin/main --merge
+```
+
+This never writes local `main`. It moves another worktree's branch only when
+that worktree is stacked on yours (see **Selecting your own stack**). Local
+`main` stays behind until whoever holds it updates it; see **Stale local main**
+above for what that does to `stack()`.
+
+In nix-agentic-tools, the `git.branchless.scopedSync` option (bool, default
+`false`; the stacked-workflows `"full"` `gitPreset` turns it on) installs
+`alias.sync = "branchless sync 'stack()'"`. That fixes the scoping problem for a
+bare `git sync`; extra revset arguments are added to `stack()` rather than
+replacing it. The alias still rebases onto local main, so `git sync --pull`
+keeps the `--pull` failure above.
 
 Conflict handling: skips conflicting stacks by default, prints summary. Fix
-individually: `git move -b <hash> -d main --merge`.
+individually: `git move -b <hash> -d origin/main --merge`.
 
 **Gotcha:** `git sync --pull` with a dirty working tree can strand you on an old
-commit (arxanas/git-branchless#1137). Commit or stash first. **Gotcha:**
-`git sync` in worktrees may corrupt the index in other worktrees
-(arxanas/git-branchless#1524). Check `git status` afterward. **Gotcha:**
-Squash-merged PRs are not detected by `git sync` — manually `git hide -r <hash>`
-(arxanas/git-branchless#965).
+commit (arxanas/git-branchless#1137). Commit or stash first; the same holds for
+`git move`, which carries uncommitted edits across and could strand a
+conflicting one. **Gotcha:** `git sync` in worktrees may corrupt the index in
+other worktrees (arxanas/git-branchless#1524). Check `git status` afterward.
+**Gotcha:** `git sync` and `git move` detect a squash merge of several commits
+only when their edits do not overlap: each one then applies as an empty commit
+and is skipped. When the edits overlap, the rebase conflicts. Stop and ask the
+user rather than recursively hiding descendants (arxanas/git-branchless#965).
 
 **`git submit`** — Push branches to remote.
 
 ```bash
-git submit                # force-push existing remote branches in stack
+git submit                # force-push existing remote branches in stack() (see Stale local main)
 git submit -c             # create + push new remote branches
 git submit --dry-run      # preview what would be pushed (no side effects)
 git submit @              # push only branches at HEAD
-git submit 'draft()'      # push all draft branches
+git submit 'draft()'      # push all draft branches (every worktree's stacks)
 ```
 
 Note: force-pushes by design (updating review branches). Set
 `git config remote.pushDefault origin` for `--create`.
+
+**Gotcha:** a branch created from the upstream ref
+(`git worktree add -b <x> <path> origin/main`, or `git branch <x> origin/main`)
+tracks `main`. `git submit` treats every branch that has an upstream as already
+pushed and fetches `refs/heads/<x>`, which fails with
+`fatal: couldn't find remote ref refs/heads/<x>`, with or without `-c`. Run
+`git branch --unset-upstream <x>` before the first submit, or create the branch
+with `--no-track`. `git submit -c` pushes with `--set-upstream`, so later
+updates work.
 
 **Gotcha:** `git submit` skips commits with 2+ branches attached
 (arxanas/git-branchless#1131). One branch per commit.
@@ -374,9 +529,9 @@ child branches before hiding a commit.
 `../../dev/foo`) cause branchless to panic during `git amend`, `git prev`,
 `git next`, and other commands that create working copy snapshots. The error is
 `could not create blob from <path>: Is a directory (os error 21)`. Workaround:
-remove the symlink before the operation, use `git commit --amend --no-edit` +
-`git restack` instead of `git amend`, then recreate the symlink afterward. File
-symlinks (pointing to a file, not a directory) work fine.
+remove the symlink before the operation, amend, and recreate the symlink. If
+that leaves abandoned descendants, stop and ask rather than running a broad
+restack. File symlinks (pointing to a file, not a directory) work fine.
 
 ### Testing
 
@@ -385,7 +540,7 @@ symlinks (pointing to a file, not a directory) work fine.
 ```bash
 git test run -x 'cmd' 'heads(stack())'         # the tip -- usual choice
 git test run -x 'cmd' 'stack()'                # every commit in the stack
-git test run -x 'make test' 'draft()'          # test all drafts
+git test run -x 'make test' 'draft()'          # all drafts, every worktree's
 git test run -x 'cmd' --jobs 4                 # bounded parallelism
 git test run -x 'cmd' --strategy worktree      # isolated worktrees
 git test run -x 'cmd' --search binary          # bisect for first failure
@@ -399,12 +554,27 @@ Environment: `BRANCHLESS_TEST_COMMIT`, `BRANCHLESS_TEST_COMMAND` available.
 **`git test fix`** — Apply formatter/linter fixes to each commit.
 
 ```bash
-git test fix -x 'cargo fmt --all'              # format each commit
-git test fix -x 'cmd' --jobs 4                 # bounded parallel fixing
+git test fix --strategy working-copy --jobs 1 --no-cache -x 'cargo fmt --all'   # format each commit
 ```
 
 `git test fix` never produces merge conflicts — it replaces each commit's tree
 directly, leaving descendants unchanged.
+
+**Gotcha: always pass `--strategy working-copy --jobs 1 --no-cache`.** With the
+`worktree` strategy, `git test fix` silently fixes nothing. It runs the command
+in a test worktree, but it reads the result with `git status` in the checkout
+you ran it from. A clean checkout therefore reports `No commits to fix` and
+exits 0. A dirty one gets a partial fix: only the files that are dirty there are
+taken from the test worktree. A cached result from an earlier worktree-strategy
+run has the same successful-no-op result because the cache is shared in the
+common Git directory; `--no-cache` prevents that. `--jobs` above 1 selects
+`worktree` whatever the config says, and `working-copy` refuses any other job
+count. `working-copy` checks each commit out in the current worktree, so it
+needs a clean tree; with uncommitted changes it exits 1 and changes nothing.
+Measured on this repo's build (0.11.1), and the cause is upstream code:
+`GitRunInfo::working_directory` in `git-branchless-lib/src/git/run.rs` prefers
+the invoking directory over the test worktree, and `git test fix` builds the
+fixed tree from that status.
 
 **`git test show`** — Show previous test results.
 
@@ -456,6 +626,11 @@ all seven commits of a seven-commit PR runs six evaluations that buy nothing.
 
 Both widening and narrowing are coverage decisions. Never switch silently — say
 which revset you used and why.
+
+Read `stack()` in this section as your own stack (`$own`, see **Selecting your
+own stack**). While local `main` is behind its upstream, plain `stack()` also
+holds upstream commits and other worktrees' stacks. That matters most for
+`git test fix`, which would rewrite them.
 
 ### Sizing `--jobs` — by memory, not by cores
 
@@ -641,8 +816,7 @@ git sl 'onlyChild(HEAD)'
 ### 1. Start a new commit stack from main
 
 ```bash
-git checkout main
-git checkout --detach          # or: git record -d -m "first commit"
+git checkout --detach origin/main   # detached: latest fetched upstream
 # make changes...
 git record -m "feat(scope): first change"
 # make more changes...
@@ -666,8 +840,8 @@ git absorb --and-rebase        # auto-routes to correct commit
 
 # Option C: make fix commit, then combine
 git record -m "fixup! original message"
-GIT_SEQUENCE_EDITOR=: git rebase --interactive --autosquash main
-git restack                    # if branches were abandoned
+GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash --update-refs <target>~1
+# --update-refs moves the branches in the range; no restack needed
 ```
 
 ### 3. Edit an old commit's message
@@ -723,10 +897,14 @@ git rebase -i main             # mark commits as fixup/squash
 ### 8. Sync the current stack with remote main
 
 ```bash
-git sync --pull 'stack()'      # fetch + rebase the current stack
-# If the stack conflicts:
-git move -b <conflicting-root> -d main --merge   # resolve individually
+git fetch origin                   # updates origin/main only
+git move -b HEAD -d origin/main    # rebase only the current stack
+# If the stack conflicts (exit 1, nothing changed), resolve when ready:
+git move -b HEAD -d origin/main --merge
 ```
+
+Worktree-safe: it never writes local `main`. Until local `main` catches up, use
+`$own` for later test and rewrite operations (see **Selecting your own stack**).
 
 ### 9. Push a stack for review
 
@@ -734,11 +912,17 @@ git move -b <conflicting-root> -d main --merge   # resolve individually
 # First time: create branches for each commit
 git branch feat-part-1 <hash1>
 git branch feat-part-2 <hash2>
-git submit -c                  # push all new branches
+git submit -c "$own"           # push all new branches
 
 # Subsequent updates after amending/restacking:
-git submit                     # force-push all existing remote branches
+git submit "$own"              # force-push existing remote branches
 ```
+
+Pass `$own` (see **Selecting your own stack**) rather than relying on the
+`stack()` default. On a first push, before the remote has `main`, set `base` to
+local `main`. If the first `git submit -c` fails with
+`couldn't find remote ref`, the branch still tracks `main`; see the `git submit`
+gotcha.
 
 ### 10. Undo a bad rebase
 
@@ -759,8 +943,9 @@ git test run -x 'make test' --search binary    # find first failing commit
 ### 12. Format all commits in a stack
 
 ```bash
-git test fix -x 'nix fmt' --jobs 4
-# No merge conflicts — each commit's tree is replaced directly
+git test fix --strategy working-copy --jobs 1 --no-cache -x 'nix fmt' "$own"
+# No merge conflicts — each commit's tree is replaced directly.
+# worktree strategy or --jobs > 1 silently fixes nothing (see git test fix).
 ```
 
 ### 13. Speculative / divergent development
@@ -801,10 +986,10 @@ If main was force-pushed and commits are incorrectly marked as public:
 git restack -f                 # force past the public commit safety check
 ```
 
-If you only want to restack draft commits and skip public ones:
+To restack only one abandoned commit's descendants and skip everything else:
 
 ```bash
-git restack 'draft()'          # target only draft commits (this is the default revset)
+git restack <abandoned-hash>   # only that commit's descendants; the default draft() spans every worktree
 ```
 
 See arxanas/git-branchless#988 for background on unexpected public status.
@@ -812,14 +997,23 @@ See arxanas/git-branchless#988 for background on unexpected public status.
 ### 17. Clean up stale commits after squash-merge
 
 ```bash
-git sync --pull 'stack()'      # auto-cleans linearly merged commits
-git hide -r <hash>             # manually hide squash-merged stacks
-git hide "draft() & message('substr:WIP')"  # bulk hide by pattern
+git fetch origin
+git move -b HEAD -d origin/main    # drops commits already applied upstream
+git hide "($own) & message('substr:WIP')"  # bulk hide by pattern
 ```
 
-`git sync` only detects linear merges, not squash merges
+The move skips a commit whose patch is already upstream
+(`Skipped commit (was already applied upstream)`) and deletes the branch on it.
+That covers linear merges and single-commit squash merges. A squash merge of
+**several** commits produces one patch that matches none of them. When their
+edits do not overlap, each commit still applies as an empty one and is skipped
+(`Skipped now-empty commit`). When they overlap, the move conflicts (exit 1,
+nothing changed). Stop and ask rather than hiding the still-live descendants
 (arxanas/git-branchless#965, arxanas/git-branchless#977,
 arxanas/git-branchless#1218).
+
+If the whole stack merged, the worktree ends detached at the upstream tip with
+its branch deleted. That is the cue to tear the worktree down.
 
 ## Anti-Patterns
 
@@ -842,13 +1036,15 @@ lineage.
 ### Don't forget `git restack` after stock git amend
 
 If you use `git commit --amend` instead of `git amend`, descendants are
-abandoned. Run `git restack` to fix. Better: always use `git amend` which
-auto-restacks.
+abandoned. Run `git restack <pre-amend-hash>` to fix, or the scoped `git move`
+under `git restack` when another worktree has a stale branch. Better: always use
+`git amend` which auto-restacks.
 
 ### Don't ignore abandoned commit warnings
 
-When branchless says "This operation abandoned N commits!", run `git restack`
-(or `git undo` if it was a mistake). Don't leave the graph in a broken state.
+When branchless says "This operation abandoned N commits!", run
+`git restack <abandoned-hash>` (or `git undo` if it was a mistake). Don't leave
+the graph in a broken state.
 
 ### Don't resolve conflicts unless needed
 
@@ -940,17 +1136,22 @@ git revise -c <hash>           # split a commit interactively
 git revise --autosquash        # process fixup! commits
 ```
 
-**Caveat:** git-revise does not call `post-rewrite` hooks, so branchless can't
-track the rewrite. Run `git restack` afterward. For operations where branchless
-has equivalents (`reword`, `split`, `move`), prefer those.
+**Caveat:** git-revise does not call `post-rewrite` hooks and updates only the
+checked-out branch, so branchless records no rewrite. `git restack` afterwards
+finds nothing to do, and any other branch on a rewritten commit stays on the old
+one. Use git-revise only when no other branch sits in the rewritten range, or
+move those branches yourself. For operations where branchless has equivalents
+(`reword`, `split`, `move`), prefer those.
 
 ### With GitHub (git submit workflow)
 
 1. Create branches: `git branch feat-1 <hash>` for each commit
-2. Push: `git submit -c` (creates remote branches)
+2. Push: `git submit -c "$own"` (creates remote branches; see **Selecting your
+   own stack**)
 3. Create PRs via `gh pr create --base <prev-branch> --head <branch>`
-4. After amend/restack: `git submit` to force-push updates
-5. After merge: `git sync --pull 'stack()'` auto-cleans merged commits
+4. After amend/restack: `git submit "$own"` to force-push updates
+5. After merge: `git fetch origin && git move -b HEAD -d origin/main` drops
+   merged commits (recipe 17), then submit again as in step 4
 
 Set PR base to the previous branch in the stack; GitHub auto-updates dependent
 PRs on merge (arxanas/git-branchless#716).

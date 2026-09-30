@@ -1,0 +1,169 @@
+{
+  "deadKeys": {},
+  "foreign": {
+    "commit.cleanup": {
+      "default": "default",
+      "reads": {
+        "gitrevise/utils.py#EditorCleanupMode.from_repository": ["repository"]
+      },
+      "type": "enum",
+      "values": [
+        {
+          "value": "default"
+        },
+        {
+          "value": "scissors"
+        },
+        {
+          "value": "strip"
+        },
+        {
+          "value": "verbatim"
+        },
+        {
+          "value": "whitespace"
+        }
+      ],
+      "writes": {}
+    },
+    "commit.gpgSign": {
+      "default": false,
+      "overriddenBy": ["--gpg-sign", "--no-gpg-sign", "-S"],
+      "reads": {
+        "gitrevise/odb.py#Repository.__init__": ["repository"]
+      },
+      "type": "bool",
+      "writes": {}
+    },
+    "commit.verbose": {
+      "default": false,
+      "reads": {
+        "gitrevise/utils.py#edit_commit_message": ["repository"]
+      },
+      "type": "bool",
+      "writes": {}
+    },
+    "core.commentChar": {
+      "default": "#",
+      "reads": {
+        "gitrevise/utils.py#get_commentchar": ["repository"]
+      },
+      "specialValues": ["", "auto"],
+      "type": "string",
+      "writes": {}
+    },
+    "gpg.format": {
+      "default": "gpg",
+      "reads": {
+        "gitrevise/odb.py#Repository.sign_buffer": ["repository"]
+      },
+      "specialValues": ["ssh"],
+      "type": "string",
+      "writes": {}
+    },
+    "gpg.program": {
+      "default": "gpg",
+      "reads": {
+        "gitrevise/odb.py#Repository.__init__": ["repository"]
+      },
+      "type": "string",
+      "writes": {}
+    },
+    "gpg.ssh.program": {
+      "default": "ssh-keygen",
+      "reads": {
+        "gitrevise/odb.py#Repository.sign_buffer": ["repository"]
+      },
+      "type": "string",
+      "writes": {}
+    },
+    "rebase.autoSquash": {
+      "default": false,
+      "overriddenBy": ["--autosquash", "--no-autosquash"],
+      "reads": {
+        "gitrevise/tui.py#enable_autosquash": ["repository"]
+      },
+      "type": "bool",
+      "writes": {}
+    },
+    "rerere.autoUpdate": {
+      "default": false,
+      "reads": {
+        "gitrevise/merge.py#replay_recorded_resolution": ["repository"]
+      },
+      "type": "bool",
+      "writes": {}
+    },
+    "rerere.enabled": {
+      "defaultExpr": "rr_cache.is_dir()",
+      "reads": {
+        "gitrevise/merge.py#replay_recorded_resolution": ["repository"]
+      },
+      "type": "bool",
+      "writes": {}
+    },
+    "sequence.editor": {
+      "reads": {
+        "gitrevise/utils.py#git_sequence_editor": ["repository"]
+      },
+      "type": "string",
+      "writes": {}
+    },
+    "user.signingKey": {
+      "defaultExpr": "self.default_committer.signing_key",
+      "reads": {
+        "gitrevise/odb.py#Repository.sign_buffer": ["repository"]
+      },
+      "type": "string",
+      "writes": {}
+    }
+  },
+  "settings": {
+    "revise.autoSquash": {
+      "default": false,
+      "description": "If set to true, imply `--autosquash` whenever `--interactive` is specified. Overridden by `--no-autosquash`. Defaults to false. If not set, the value of `rebase.autoSquash` is used instead.",
+      "documented": true,
+      "fallback": ["rebase.autoSquash"],
+      "invalid": "fallback",
+      "overriddenBy": ["--autosquash", "--no-autosquash"],
+      "reads": {
+        "gitrevise/tui.py#enable_autosquash": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    },
+    "revise.gpgSign": {
+      "default": false,
+      "description": "If set to true, GPG-sign new commits; defaults to false. This setting overrides the original git configuration `commit.gpgSign` and may be overridden by the command line options `--gpg-sign` and `--no-gpg-sign`.",
+      "documented": true,
+      "fallback": ["commit.gpgSign"],
+      "invalid": "fallback",
+      "note": "It decides signing in both directions: git-revise re-creates every commit it rewrites, target and descendants alike, whose signed state differs from this setting, so with it false (the default when `commit.gpgSign` is unset too) a run strips existing signatures even from commits it does not otherwise change. With `gpg.format = ssh` it signs with `gpg.ssh.program`; any other format goes through `gpg.program`.",
+      "overriddenBy": ["--gpg-sign", "--no-gpg-sign", "-S"],
+      "reads": {
+        "gitrevise/odb.py#Repository.__init__": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    },
+    "revise.rerere": {
+      "defaultDescription": "the value of `rerere.enabled`; when that is unset too, true exactly when the repository's `rr-cache` directory exists (`git rev-parse --git-path rr-cache`, which linked worktrees share with the main one).",
+      "defaultExpr": "rr_cache.is_dir()",
+      "description": "Whether git-revise replays and records conflict resolutions through git's rerere cache. Read once per conflicted file; when false no resolution is replayed or recorded. When a recorded resolution exists, `rerere.autoUpdate` decides whether it is applied without asking (false prompts `Apply recorded resolution? (y/N)`), which differs from what that key means to git itself.",
+      "documented": false,
+      "fallback": ["rerere.enabled"],
+      "invalid": "fallback",
+      "reads": {
+        "gitrevise/merge.py#replay_recorded_resolution": ["repository"]
+      },
+      "status": "current",
+      "type": "bool",
+      "writes": {}
+    }
+  },
+  "source": {
+    "version": "0.8.0"
+  }
+}
