@@ -325,8 +325,11 @@
         default = null;
         description = ''
           Which dispatch adapter runs this agent. A real closed enum in Kiro's
-          schema. Note agents carrying sub-agent-shaped fields are filtered out
-          of `kiro-cli agent list` while still loading and running normally.
+          schema. This field does not affect `kiro-cli agent list`; what hides
+          an agent from that listing is a `permissions` block, and the agent
+          still loads and dispatches (measured on 2.26.0 with profiles that
+          differed only in `permissions`, `dispatchKind` and the `subagent`
+          tool).
         '';
       };
       resources = lib.mkOption {
@@ -1495,7 +1498,8 @@ in
       # ~/.kiro or project .kiro): { name, description, model, prompt,
       # tools:[tag|"*"], mcpServers:{<name>:{command,args,env,timeout}},
       # resources:["file://..."|"skill://..."],
-      # permissions:[{capability,effect,match,exclude}], welcomeMessage }.
+      # permissions:{rules:[{capability,effect,match,exclude}],policies:[…]},
+      # welcomeMessage }.
       # Tool tags: read write shell web subagent knowledge todo_list @mcp
       # @builtin *. `.md` = YAML frontmatter + system-prompt body.
       # Default agent: `kiro-cli agent set-default <name>`.
