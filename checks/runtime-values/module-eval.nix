@@ -5,7 +5,7 @@
   ...
 }: let
   rv = import ../../lib/runtime-values {inherit lib;};
-  inherit (harness) mkTest;
+  inherit (harness) evalDevenv evalHm mkTest;
   evaluate = type: definitions:
     (lib.evalModules {
       modules =
@@ -18,6 +18,36 @@
   mcp = import ../../lib/mcp.nix {inherit lib;};
 in {
   checks = {
+    runtime-values-environment-modules = mkTest "runtime-values-environment-modules" (let
+      backends = [evalHm evalDevenv];
+      evaluateEnvironment = backend: config:
+        (backend config).config.ai.codex.normalized.environmentVariables;
+      fails = backend: config: !(builtins.tryEval (builtins.deepSeq (evaluateEnvironment backend config) true)).success;
+      reference = rv.file {path = "/run/secrets/gitlab-token";};
+    in
+      lib.all (backend:
+        fails backend {ai.environmentVariables.GITLAB_TOKEN = "literal";}
+        && fails backend {ai.environmentVariables.EDITOR = 42;}
+        && (evaluateEnvironment backend {
+          ai.environmentVariables.GITLAB_TOKEN = reference;
+        }).GITLAB_TOKEN._runtime.source.file
+        == "/run/secrets/gitlab-token"
+        && evaluateEnvironment backend {
+          ai.environmentVariables.GITLAB_TOKEN = reference;
+          ai.codex.environmentVariables.GITLAB_TOKEN = null;
+        }
+        == {}
+        && !(builtins.tryEval (builtins.deepSeq
+          (backend {
+            ai.mcpServers.x = {
+              command = "/bin/x";
+              env.API_TOKEN = "literal";
+              type = "stdio";
+            };
+          }).config.ai.mcpServers
+          true)).success)
+      backends);
+
     runtime-values-argv = mkTest "runtime-values-argv" (let
       secretReference = evaluate (rv.withReferences {
         type = lib.types.str;

@@ -35,6 +35,8 @@
       then lib.optional (secret && !type.runtimeValue.secret) (lib.showOption path)
       else if type ? runtimeValueMap
       then lib.optional (secret && !type.runtimeValueMap.secretContainer) (lib.showOption path)
+      else if type.name == "attrsOf"
+      then auditType path secret type.nestedTypes.elemType
       else if type.name == "submodule"
       then
         if secret

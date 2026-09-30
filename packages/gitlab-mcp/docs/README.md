@@ -25,24 +25,18 @@ tokens are intentionally not supported (they would land in the Nix store).
 
 ## Instance URL
 
-Two ways to point at a non-default instance, mutually exclusive:
+The instance URL accepts either a literal or a runtime reference:
 
 ```nix
-# Plain URL — lands in the Nix store. Use when the URL is public
-# knowledge (e.g. a self-hosted instance everyone in the org knows).
 services.mcp-servers.servers.gitlab-mcp.settings.instanceUrl =
   "https://gitlab.example.com";
+
+# Reference form — reads the URL at start and keeps it out of the store.
+services.mcp-servers.servers.gitlab-mcp.settings.instanceUrl =
+  rv.file { path = config.sops.secrets."gitlab-instance-url".path; };
 ```
 
-```nix
-# Credential form — keeps the URL out of the store. Use when the
-# instance URL itself is sensitive.
-services.mcp-servers.servers.gitlab-mcp.settings.apiUrl.file =
-  config.sops.secrets."gitlab-instance-url".path;
-```
-
-Setting both raises an eval-time error. Both forms end up as `GITLAB_API_URL`
-for the server.
+Both forms end up as `GITLAB_API_URL` for the server.
 
 ## Trust posture knobs
 

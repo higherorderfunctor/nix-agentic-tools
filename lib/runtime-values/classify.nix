@@ -33,10 +33,12 @@ in {
       then []
       else segments (lib.last path);
   in
-    hints.keyring or false
-    || secretContainer
-    || contains ["apikey" "authorization" "clientsecret" "credential" "credentials" "passwd" "password" "pat" "privatekey" "secret" "token" "tokens"] parts
-    || parts == ["access" "key"]
-    || parts == ["api" "key"]
-    || parts == ["private" "key"];
+    hints.secret or (
+      hints.keyring or false
+      || secretContainer
+      || contains ["apikey" "authorization" "clientsecret" "credential" "credentials" "passwd" "password" "pat" "privatekey" "secret" "token" "tokens"] parts
+      || parts == ["access" "key"]
+      || parts == ["api" "key"]
+      || parts == ["private" "key"]
+    );
 }

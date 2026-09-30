@@ -25,6 +25,7 @@
       if builtins.isBool value
       then lib.boolToString value
       else toString value;
+    quotedLiteral = "'" + lib.replaceStrings ["'"] ["'\"'\"'"] literal + "'";
   in
     if !validVariable
     then throw "runtimeValues: invalid variable name ${variable}"
@@ -35,7 +36,7 @@
     else if argv && tainted
     then throw "${label}: secrets cannot be delivered through argv"
     else if ref == null
-    then ''${variable}=${lib.escapeShellArg literal}''
+    then ''${variable}=${quotedLiteral}''
     else ''
       if ${variable}="$(${lib.getExe (reader pkgs)} ${command})"; then
         :

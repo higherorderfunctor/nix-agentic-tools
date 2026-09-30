@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv mkTest ownPlan;
+  inherit (harness) deliveredFiles evalDevenv mkTest mkWrapperGrepTest ownPlan;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   rv = import ../../../lib/runtime-values {inherit lib;};
   # The Home Manager user config.json copy.
@@ -695,6 +695,32 @@ in {
         && !((projectFiles shadowed) ? "config.json")
         && lib.any (lib.hasInfix "user scope: telemetry") (failedAssertions withEndpoint)
     );
+
+    module-kimchi-devenv-runtime-env-reference = let
+      result = evalDevenv {
+        ai.kimchi.enable = true;
+        ai.environmentVariables.GITLAB_TOKEN = rv.file {path = "/run/secrets/kimchi-token";};
+      };
+    in
+      mkWrapperGrepTest {
+        bin = "kimchi";
+        name = "kimchi-devenv-runtime-env-reference";
+        needles = ["runtime-value-read" "/run/secrets/kimchi-token"];
+        package = lib.head result.config.packages;
+      };
+
+    module-kimchi-hm-runtime-env-reference = let
+      result = evalHm {
+        ai.kimchi.enable = true;
+        ai.environmentVariables.GITLAB_TOKEN = rv.file {path = "/run/secrets/kimchi-token";};
+      };
+    in
+      mkWrapperGrepTest {
+        bin = "kimchi";
+        name = "kimchi-hm-runtime-env-reference";
+        needles = ["runtime-value-read" "/run/secrets/kimchi-token"];
+        package = lib.head result.config.home.packages;
+      };
 
     module-kimchi-devenv-project-paths = mkTest "kimchi-devenv-project-paths" (
       let

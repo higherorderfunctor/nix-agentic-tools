@@ -19,6 +19,7 @@
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
+  rv = import ../runtime-values {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
@@ -380,7 +381,10 @@ in {
     };
 
     environmentVariables = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+      type = rv.keyAwareMap {
+        type = lib.types.nullOr lib.types.str;
+        path = ["environmentVariables"];
+      };
       default = {};
       description = ''
         Environment variables fanned out to every enabled AI app with a
@@ -388,10 +392,12 @@ in {
         replace root entries at the same key; null suppresses an inherited
         variable for that runtime.
 
-        Delivered by baking them into each app's wrapper, so they scope to
-        that process and the commands it spawns. They are NOT written into
-        the Home Manager session or the devenv project shell — this module
-        does not touch the shell environment, because a variable exported
+        A literal is baked into each app's wrapper; a reference (`rv.file` /
+        `rv.helper`) is read by the wrapper at launch, so the value never enters
+        the store. A key whose name says it holds a credential refuses a
+        literal. They scope to that process and the commands it spawns. They are
+        NOT written into the Home Manager session or the devenv project shell —
+        this module does not touch the shell environment, because a variable exported
         there also reaches the developer's own session and every other
         process in it. Codex's `shell_environment_policy` is a different
         thing again: it filters what SPAWNED commands inherit, not what

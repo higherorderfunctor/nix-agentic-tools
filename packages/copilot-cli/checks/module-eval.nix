@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (harness) deliveredFiles evalDevenv evalHm lspEntryOf mcpConfigKeyOf mkTest mkWrapperGrepTest ownedDocument ownPlan;
+  rv = import ../../../lib/runtime-values {inherit lib;};
   # The one directory target of Copilot's config writer: `configDir` on Home
   # Manager, `.github/copilot` on devenv. Its units are whole files, so a
   # check reads the declared bytes and the ledger of each. `ownPlan` throws
@@ -850,28 +851,28 @@ in {
     module-copilot-hm-top-level-env-fanout = let
       result = evalHm {
         ai.copilot.enable = true;
-        ai.environmentVariables.COPILOT_FOO = "copilot-hm-fanout-sentinel";
+        ai.environmentVariables.GITLAB_TOKEN = rv.file {path = "/run/secrets/copilot-token";};
       };
     in
       mkWrapperGrepTest {
         name = "copilot-hm-top-level-env-fanout";
         package = builtins.head result.config.home.packages;
         bin = "copilot";
-        needles = ["COPILOT_FOO" "copilot-hm-fanout-sentinel"];
+        needles = ["runtime-value-read" "/run/secrets/copilot-token"];
       };
 
     # Devenv: top-level ai.environmentVariables fans to the Copilot wrapper.
     module-copilot-devenv-top-level-env-fanout = let
       result = evalDevenv {
         ai.copilot.enable = true;
-        ai.environmentVariables.COPILOT_DEBUG = "copilot-devenv-fanout-sentinel";
+        ai.environmentVariables.GITLAB_TOKEN = rv.file {path = "/run/secrets/copilot-token";};
       };
     in
       mkWrapperGrepTest {
         name = "copilot-devenv-top-level-env-fanout";
         package = builtins.head result.config.packages;
         bin = "copilot";
-        needles = ["COPILOT_DEBUG" "copilot-devenv-fanout-sentinel"];
+        needles = ["runtime-value-read" "/run/secrets/copilot-token"];
       };
 
     # Copilot HM: typed LSP with `extensions` emits the fileExtensions

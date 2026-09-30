@@ -1613,7 +1613,9 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus
-  the rule enable filter)
+  the rule enable filter). Environment-variable maps accept literals and
+  `rv.file` / `rv.helper` references; credential-named keys require references,
+  and each runtime wrapper materializes the merged map at launch.
 - managed MCP proxy ownership, validation, and systemd unit aggregation →
   `lib/ai/sharedOptions.nix` + `lib/ai/mcpProxy.nix`
 - per-scope package ownership guard → `checks/module-provenance/helpers.nix`

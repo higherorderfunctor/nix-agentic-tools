@@ -295,7 +295,7 @@
     launcherEnvironment,
     requiredProjectRoot ? null,
   }: let
-    # Non-secret env vars — baked into the wrapper via `--set`.
+    # Process environment delivered by the wrapper at launch.
     shadowed = envShadowedSettings cfg.native.settings;
     kimchiEnvVars =
       lib.optionalAttrs cfg.noUpdateCheck {${sidecar.environmentName "KIMCHI_NO_UPDATE_CHECK"} = "1";}
@@ -313,14 +313,15 @@
     # options, not free-form entries.
     effectiveEnvVars = launcherEnvironment // kimchiEnvVars;
 
-    # The Cast AI key is a secret: read it from its decrypted file (or
-    # helper) at launch via the repo's shared credential snippet, so it is
-    # never serialized into the world-readable /nix/store. Same mechanism
-    # the MCP servers use (lib/mcp.nix); sops-nix / agenix agnostic.
-    credSnippet =
-      if cfg.apiKey != null
-      then mcpLib.credentialsEnvironment pkgs {apiKey.envVar = sidecar.environmentName "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
-      else "";
+    environmentSnippet = mcpLib.runtimeValues.environment {
+      inherit pkgs;
+      path = ["kimchi"];
+      values =
+        effectiveEnvVars
+        // lib.optionalAttrs (cfg.apiKey != null) {
+          ${sidecar.environmentName "KIMCHI_API_KEY"} = cfg.apiKey;
+        };
+    };
 
     # Kimchi resolves project config, MCP servers, and harness settings from
     # process.cwd() exactly. Changing cwd here would also change the directory
@@ -333,13 +334,11 @@
       fi
     '';
 
-    # wrapProgram args: `--set` for non-secret env, `--run` for the
-    # runtime secret export. Joined with a single space on the continued
-    # line — never a backslash-newline, which breaks multi-arg wrapping.
+    # Joined with a single space on the continued line — never a
+    # backslash-newline, which breaks multi-arg wrapping.
     wrapArgs =
-      lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
-      ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}"
-      ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
+      lib.optional (environmentSnippet != "") "--run ${lib.escapeShellArg environmentSnippet}"
+      ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}";
 
     # Not `lib.ai.mkLauncher`: that one writes `wrapProgram` on one line, and
     # moving this continued form onto it would change the wrapper's store path.

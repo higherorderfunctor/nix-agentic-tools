@@ -70,6 +70,42 @@ in {
         )
     );
 
+    module-codex-devenv-runtime-env-reference = let
+      result = evalDevenv {
+        ai = {
+          codex.enable = true;
+          environmentVariables = {
+            EDITOR = "vim";
+            GITLAB_TOKEN = rv.file {path = "/run/secrets/codex-token";};
+          };
+        };
+      };
+    in
+      mkWrapperGrepTest {
+        bin = "codex";
+        name = "codex-devenv-runtime-env-reference";
+        needles = ["EDITOR='vim'" "runtime-value-read" "/run/secrets/codex-token"];
+        package = lib.head result.config.packages;
+      };
+
+    module-codex-hm-runtime-env-reference = let
+      result = evalHm {
+        ai = {
+          codex.enable = true;
+          environmentVariables = {
+            EDITOR = "vim";
+            GITLAB_TOKEN = rv.file {path = "/run/secrets/codex-token";};
+          };
+        };
+      };
+    in
+      mkWrapperGrepTest {
+        bin = "codex";
+        name = "codex-hm-runtime-env-reference";
+        needles = ["EDITOR='vim'" "runtime-value-read" "/run/secrets/codex-token"];
+        package = lib.head result.config.home.packages;
+      };
+
     module-codex-default-sandbox-roots = mkTest "codex-default-sandbox-roots" (
       let
         settings = {

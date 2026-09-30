@@ -32,6 +32,7 @@
   };
   agent = import ../agent.nix {inherit lib;};
   aiCommon = import ../ai-common.nix {inherit lib;};
+  rv = import ../../runtime-values {inherit lib;};
   aiTypes = import ../types.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
@@ -201,7 +202,10 @@
       type = lib.types.nullOr aiCommon.optionalContentModule;
     };
     environmentVariables = {
-      type = lib.types.attrsOf lib.types.str;
+      type = rv.keyAwareMap {
+        type = lib.types.nullOr lib.types.str;
+        path = ["environmentVariables"];
+      };
     };
     hooks = {
       apply = lib.filterAttrs (_event: blocks: blocks != []);
@@ -519,8 +523,11 @@ in {
         // poolOptions.agentsDir);
     }
     // poolOption "environmentVariables" {
-      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-      description = "Environment variables baked into the ${appRecord.name} launcher wrapper. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
+      type = rv.keyAwareMap {
+        type = lib.types.nullOr lib.types.str;
+        path = ["environmentVariables"];
+      };
+      description = "A literal environment variable is baked into the ${appRecord.name} launcher wrapper; an rv.file or rv.helper reference is read at launch, so the value never enters the store. A credential-named key refuses a literal. Null suppresses a root entry at the same key.";
     }
     // poolOption "lspServers" {
       type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);

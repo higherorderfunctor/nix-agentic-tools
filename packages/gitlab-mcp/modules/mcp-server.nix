@@ -6,8 +6,8 @@
 # verification trail.
 #
 # Naming divergence from github-mcp (single generic `credentials`
-# vs three named `pat`/`apiUrl`/`jobToken`) is deliberate and
-# user-approved: each credential here describes a distinct
+# vs three named `instanceUrl`/`jobToken`/`pat`) is deliberate and
+# user-approved: each delivered value here describes a distinct
 # upstream env var whose purpose is meaningful to the consumer.
 # Normalizing all MCP modules to a unified credential schema is a
 # separate, deferred design — do not "fix" this in passing.
@@ -218,24 +218,17 @@ in {
     scope = "remote";
     defaultPort = 19761;
     credentialVars = {
-      pat = {
-        envVar = "GITLAB_PERSONAL_ACCESS_TOKEN";
-        required = true;
-      };
-      apiUrl = {
+      instanceUrl = {
         envVar = "GITLAB_API_URL";
         required = false;
-        # Deferred legacy locator belongs only to this option.
-        adapt = value:
-          if mcpLib.runtimeValues.isReference value
-          then value
-          else if value ? file
-          then mcpLib.runtimeValues.file {path = value.file;}
-          else mcpLib.runtimeValues.helper {path = value.helper;};
       };
       jobToken = {
         envVar = "GITLAB_JOB_TOKEN";
         required = false;
+      };
+      pat = {
+        envVar = "GITLAB_PERSONAL_ACCESS_TOKEN";
+        required = true;
       };
     };
     tools = knownTools;
@@ -243,21 +236,10 @@ in {
 
   settingsOptions = {
     # ── Credentials ────────────────────────────────────────────
-    pat = mkOption {
-      type = types.nullOr (mcpLib.runtimeValues.withReferences {
-        type = types.str;
-        secret = true;
-      });
+    instanceUrl = mkOption {
+      type = types.nullOr (mcpLib.runtimeValues.withReferences {type = types.str;});
       default = null;
-      description = "Runtime credential mapped to GITLAB_PERSONAL_ACCESS_TOKEN.";
-    };
-    apiUrl = mkOption {
-      type = types.nullOr (types.attrTag {
-        file = mkOption {type = types.str;};
-        helper = mkOption {type = types.str;};
-      });
-      default = null;
-      description = "Runtime GitLab API URL locator.";
+      description = "GitLab instance URL, mapped to `GITLAB_API_URL`. A literal is baked into the server's environment; `rv.file` / `rv.helper` reads it at start so a self-hosted hostname stays out of the store.";
     };
     jobToken = mkOption {
       type = types.nullOr (mcpLib.runtimeValues.withReferences {
@@ -267,19 +249,16 @@ in {
       default = null;
       description = "Runtime credential mapped to GITLAB_JOB_TOKEN.";
     };
+    pat = mkOption {
+      type = types.nullOr (mcpLib.runtimeValues.withReferences {
+        type = types.str;
+        secret = true;
+      });
+      default = null;
+      description = "Runtime credential mapped to GITLAB_PERSONAL_ACCESS_TOKEN.";
+    };
 
     # ── Typed options ──────────────────────────────────────────
-    instanceUrl = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = ''
-        GitLab instance URL (plain string, lands in Nix store).
-        Flows to GITLAB_API_URL. Use this when the URL is public
-        knowledge. For URLs that must stay out of the store, use
-        `settings.apiUrl.file` / `settings.apiUrl.helper` instead
-        — the two are mutually exclusive.
-      '';
-    };
 
     caCertPath = mkOption {
       type = types.nullOr types.str;
@@ -348,21 +327,10 @@ in {
     };
   };
 
-  # Both inputs target GITLAB_API_URL; reject conflicts before rendering settings.
-  settingsModule = {config, ...}: {
-    config.assertions = [
-      {
-        assertion = config.instanceUrl == null || ((config.apiUrl.file or null) == null && (config.apiUrl.helper or null) == null);
-        message = "gitlab-mcp: settings.instanceUrl and settings.apiUrl.file/helper are mutually exclusive";
-      }
-    ];
-  };
-
   settingsToEnv = cfg: _mode: let
     s = cfg.settings;
   in
-    optionalAttrs (s.instanceUrl != null) {GITLAB_API_URL = s.instanceUrl;}
-    // optionalAttrs (s.caCertPath != null) {GITLAB_CA_CERT_PATH = s.caCertPath;}
+    optionalAttrs (s.caCertPath != null) {GITLAB_CA_CERT_PATH = s.caCertPath;}
     // optionalAttrs (s.defaultProjectId != null) {GITLAB_PROJECT_ID = s.defaultProjectId;}
     // optionalAttrs (s.allowedProjectIds != []) {
       GITLAB_ALLOWED_PROJECT_IDS = concatStringsSep "," s.allowedProjectIds;

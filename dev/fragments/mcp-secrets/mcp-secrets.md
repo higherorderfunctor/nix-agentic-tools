@@ -48,6 +48,13 @@ The reader drops trailing newlines before the empty check and aborts on missing,
 unreadable, empty sources or failed helpers without printing helper output.
 Kiro's separate HTTP secret flow below is deferred.
 
+Stdio `env` maps accept the same references. A raw or packaged server with a
+reference gets one wrapper that materializes the whole map and any typed
+credentials; literal-only maps remain in mcp.json. Managed services materialize
+their whole environment in the existing start wrapper rather than systemd's
+`Environment=`, and file-backed env references join credential files in the
+rotation-restart fingerprint.
+
 ### The proxy path — `proxy.enable`, and why it is the preferred one
 
 `proxy.enable` on a `type = "http"` server moves the credential OFF the client

@@ -7,13 +7,14 @@
 # The returned submodule declares:
 #   enable          — bool
 #   settings        — typed submodule from server's settingsOptions
-#   env             — attrsOf str (escape hatch)
+#   env             — runtime-value-aware string map (escape hatch)
 #   args            — listOf str (escape hatch)
 #   scope           — readOnly enum (from meta.scope)
 #   package?        — package (when server has a local package)
 #   service.port?   — port (when server has HTTP mode + local package)
 #   service.host?   — bind address (when server has HTTP mode + local package)
 {lib}: let
+  rv = import ../../runtime-values {inherit lib;};
   inherit
     (lib)
     literalExpression
@@ -43,9 +44,12 @@ in
         };
 
         env = mkOption {
-          type = types.attrsOf types.str;
+          type = rv.keyAwareMap {
+            type = types.str;
+            path = ["env"];
+          };
           default = {};
-          description = "Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store -- use credentials for secrets.";
+          description = "Extra environment variables. Literals enter the store; rv.file and rv.helper references are read when the service starts, and credential-named keys require a reference.";
         };
 
         args = mkOption {

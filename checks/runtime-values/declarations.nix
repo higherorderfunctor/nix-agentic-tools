@@ -6,9 +6,17 @@
   rv = import ../../lib/runtime-values {inherit lib;};
   inherit (harness) mkTest;
   backends = [(harness.evalHm {}) (harness.evalDevenv {})];
-  # Pilot roots ONLY: glab and migrated credential leaves. Later PRs add their
-  # own delivered surfaces; this check deliberately does not audit all ai.* yet.
-  roots = [["glab"] ["ai" "kimchi" "apiKey"] ["ai" "kimchi" "gitTokens"]];
+  roots = [
+    ["ai" "codex" "environmentVariables"]
+    ["ai" "copilot" "environmentVariables"]
+    ["ai" "environmentVariables"]
+    ["ai" "kimchi" "apiKey"]
+    ["ai" "kimchi" "environmentVariables"]
+    ["ai" "kimchi" "gitTokens"]
+    ["ai" "kiro" "environmentVariables"]
+    ["ai" "mcpServers"]
+    ["glab"]
+  ];
   audit = options: rv.checkOptions {inherit options roots;};
   literalAdmitting = options:
     options
@@ -16,6 +24,7 @@
       ai =
         options.ai
         // {
+          environmentVariables = options.ai.environmentVariables // {type = lib.types.attrsOf lib.types.str;};
           kimchi =
             options.ai.kimchi
             // {
@@ -28,7 +37,7 @@
   mcpViolations = lib.concatMap (name: let
     definition = mcp.loadServer name;
     evaluated = lib.evalModules {modules = [{options = definition.settingsOptions;}];};
-    keys = builtins.filter (key: key != "apiUrl") (builtins.attrNames definition.meta.credentialVars);
+    keys = builtins.attrNames definition.meta.credentialVars;
   in
     rv.checkOptions {
       inherit (evaluated) options;
