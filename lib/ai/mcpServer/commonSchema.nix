@@ -72,13 +72,11 @@ in {
             default = null;
             description = "Codex authentication mode for this MCP server.";
           };
-          bearerTokenEnvVar =
-            lib.mkOption {
-              type = lib.types.nullOr lib.types.str;
-              default = null;
-              description = "Environment variable containing an HTTP bearer token; the token itself is never rendered.";
-            }
-            // {runtimeValueHints.secret = false;};
+          bearerTokenEnvVar = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Environment variable containing an HTTP bearer token; the token itself is never rendered.";
+          };
           cwd = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;

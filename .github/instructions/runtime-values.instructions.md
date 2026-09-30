@@ -31,10 +31,11 @@ uses strings for `extraSettings`; Kimchi uses nullable strings for `gitTokens`.
 
 The classifier normalizes camel case and underscores. A key is secret when its
 `keyring` hint is set, its container is secret, or a segment carries a
-credential word. An explicit `secret` hint handles a name that describes a
-credential but does not hold one, such as `bearerTokenEnvVar`. Current keys are
-glab's `job_token`, `oauth2_refresh_token`, `refresh_token`, and `token`, plus
-`apiKey`, `gitTokens`, and `CI_JOB_TOKEN`. Rules require current keys.
+credential word. A name ending in `env`, `var` is a locator rather than a
+payload, as in `bearerTokenEnvVar`, unless its `keyring` hint or container marks
+it secret. Current keys are glab's `job_token`, `oauth2_refresh_token`,
+`refresh_token`, and `token`, plus `apiKey`, `gitTokens`, and `CI_JOB_TOKEN`.
+Rules require current keys.
 
 `fromSchema` converts one flat field set into nullable options. `checkOptions`
 audits evaluated declarations. It understands runtime unions, guarded maps,

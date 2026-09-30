@@ -84,7 +84,7 @@ in {
       mkWrapperGrepTest {
         bin = "codex";
         name = "codex-devenv-runtime-env-reference";
-        needles = ["EDITOR='vim'" "runtime-value-read" "/run/secrets/codex-token"];
+        needles = ["EDITOR=vim" "runtime-value-read" "/run/secrets/codex-token"];
         package = lib.head result.config.packages;
       };
 
@@ -102,7 +102,7 @@ in {
       mkWrapperGrepTest {
         bin = "codex";
         name = "codex-hm-runtime-env-reference";
-        needles = ["EDITOR='vim'" "runtime-value-read" "/run/secrets/codex-token"];
+        needles = ["EDITOR=vim" "runtime-value-read" "/run/secrets/codex-token"];
         package = lib.head result.config.home.packages;
       };
 

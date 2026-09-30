@@ -94,6 +94,7 @@ in {
     runtime-values-classifier = mkTest "runtime-values-classifier" (let
       cases = {
         apiKey = true;
+        bearerTokenEnvVar = false;
         check_update = false;
         CI_JOB_TOKEN = true;
         client_key = false;
@@ -107,6 +108,7 @@ in {
         oauth2_refresh_token = true;
         refresh_token = true;
         token = true;
+        token_env_var = false;
       };
     in
       lib.all (name: rv.classify {path = [name];} == cases.${name}) (builtins.attrNames cases));

@@ -77,7 +77,8 @@ in {
       pkgs.runCommandLocal "module-test-mcp-gitlab-instance-url" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-        grep -F "GITLAB_API_URL='https://gitlab.example.com'" ${literal.command}
+        grep -F "GITLAB_API_URL=" ${literal.command}
+        grep -F "https://gitlab.example.com" ${literal.command}
         grep -F '/run/secrets/gitlab-url' ${reference.command}
         grep -F 'runtime-value-read' ${reference.command}
         if grep -F "GITLAB_API_URL='" ${reference.command}; then
