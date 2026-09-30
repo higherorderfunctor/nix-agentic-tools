@@ -72,6 +72,13 @@
         visible = false;
         description = "Whether normalized content should generate this AGENTS.md target.";
       };
+      hasOnDemandIndex = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        internal = true;
+        visible = false;
+        description = "Whether the index includes a model-selected or manual trigger.";
+      };
       index = lib.mkOption {
         type = lib.types.attrsOf deduplicatedLines;
         default = {};
@@ -121,7 +128,7 @@
   };
   allRendered = lib.mapAttrs (_filename: value:
     agentsmd.renderKeyed {
-      inherit (value) context index rules;
+      inherit (value) context hasOnDemandIndex index rules;
     })
   config.ai.internal.agentsMd;
   generatedRendered =

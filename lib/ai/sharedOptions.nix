@@ -218,8 +218,8 @@ in {
         `instructions/<name>.instructions.md` under `ai.copilot.projectDir`;
         Copilot Home Manager deliberately emits no normalized rules because
         github.com's reviewer consumes only the committed project tree). Codex
-        instead appends rules in key order
-        to its single AGENTS.md, translating `matcher` to a prose scope note.
+        instead appends rules in key order to its single AGENTS.md or points to
+        their `references` from an index.
         Kimchi has no rules pool, so root rules degrade to nothing for it.
         That exclusion is documented here and in the delivery matrix rather
         than warned about at activation: `ai.kimchi.rules` does not exist, so
@@ -231,8 +231,23 @@ in {
         higher-priority definition whichever field it targets; definitions at
         the same priority conflict. Same-priority `text` definitions concatenate
         in module order. Enabled rules must resolve to non-empty `text` or a
-        `source`. Kiro's native `inclusion` override exists only on
-        `ai.kiro.rules`.
+        `source`.
+
+        `inclusion` is a priority-ordered trigger list. Each enabled runtime
+        chooses its first supported entry. Claude and Copilot support `always`
+        and `fileMatch`. Kiro supports `always`, `auto`, `fileMatch`, and
+        `manual`. Codex supports `always` and `fileMatch`; it also supports
+        `auto` and `manual` when `references` is non-empty, because its index
+        can point the model at content to load on demand. Evaluation fails when
+        a runtime supports none of the requested triggers. `auto` requires a
+        non-empty description. When `inclusion` is omitted, a rule without a
+        matcher defaults to `["always"]`, and one with a matcher defaults to
+        `["fileMatch"]`.
+
+        Kiro keeps the established scalar spelling at
+        `ai.kiro.rules.<name>.inclusion`; when set, that runtime-local value
+        replaces the portable list for Kiro. Other runtime rule pools expose
+        the portable list directly.
       '';
       example = lib.literalExpression ''
         {

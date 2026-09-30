@@ -122,7 +122,12 @@
     lib.optionals (runtime == "codex") (lib.concatMap (entry:
         fieldWarning entry "tools" "Codex agents have no equivalent tool allowlist field.") (entries "agents"));
   ruleWarnings = lib.optionals (runtime == "kiro") (lib.concatMap (entry:
-    lib.optional ((entry.value.inclusion or null) == "manual")
+    lib.optional (aiCommon.resolveInclusion {
+        runtime = "kiro";
+        inherit (entry) name;
+        rule = entry.value;
+      }
+      == "manual")
     (message (entry.path ++ ["inclusion"]) "Kiro CLI does not load manual steering; this mode only works in IDE clients.")) (entries "rules"));
   hookWarnings = lib.optionals (runtime == "kiro") (lib.concatMap (name: let
     hook = cfg.hooks.${name};

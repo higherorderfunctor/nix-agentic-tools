@@ -36,8 +36,9 @@
 #                                    #   `home.packages` / `packages` lowering, so a
 #                                    #   factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
-#     sharedAgentsMd ? <absent>;     # callback (same args) → {key; index?; rules?; maxBytes?;
-#                                    #   defaultMaxBytes?}: the devenv repository AGENTS.md
+#     sharedAgentsMd ? <absent>;     # callback (same args) → {key; hasOnDemandIndex?;
+#                                    #   index?; rules?; maxBytes?; defaultMaxBytes?}:
+#                                    #   the devenv repository AGENTS.md
 #                                    #   contribution; `defaultMaxBytes` supplies the runtime's
 #                                    #   fallback bytes and an effective-limit resolver, and
 #                                    #   devenv shell entry warns past the resolved limit. The transform

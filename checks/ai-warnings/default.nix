@@ -182,6 +182,15 @@
     ++ [
       {
         runtime = "kiro";
+        path = ["ai" "rules" "probe"];
+        value = {
+          text = "probe";
+          inclusion = ["manual"];
+        };
+        suffix = ".inclusion";
+      }
+      {
+        runtime = "kiro";
         path = ["ai" "kiro" "rules" "probe"];
         value = {
           text = "probe";
@@ -343,6 +352,32 @@
     contains needle (evaluate mode (lib.recursiveUpdate enabled input))
     && !contains needle (evaluate mode enabled)
     && evaluate mode input == [];
+  kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
+    {
+      ai = {
+        kiro.enable = true;
+        rules.probe = {
+          inclusion = ["always" "manual"];
+          text = "root";
+        };
+      };
+    }
+    {
+      ai = {
+        kiro = {
+          enable = true;
+          rules.probe = {
+            inclusion = "always";
+            text = "native";
+          };
+        };
+        rules.probe = {
+          inclusion = ["manual"];
+          text = "root";
+        };
+      };
+    }
+  ];
   mcp = import ../../lib/mcp.nix {inherit lib;};
   # `isDarwin` is forced in BOTH directions rather than left to the host: this
   # check runs on x86_64-linux and aarch64-darwin, so reading the real platform
@@ -420,6 +455,7 @@ in {
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
+      && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
       && lib.assertMsg effortSilent "reasoning effort warns where the factory closes the gap or no per-runtime remedy exists"
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
     );

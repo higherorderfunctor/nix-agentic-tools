@@ -685,11 +685,15 @@
   steeringPath = cfg: name: "${cfg.configDir}/steering/${name}.md";
   contextSteeringPath = cfg: "${cfg.configDir}/steering/${cfg.context.filename}";
 
-  # An unscoped always-on rule, which AGENTS.md carries when Kiro shares it.
-  isSharedRule = rule:
-    rule.matcher
-    == null
-    && ((rule.inclusion or null) == null || rule.inclusion == "always");
+  # An always-on rule, which AGENTS.md carries when Kiro shares it. Resolve the
+  # portable priority list before routing so `auto` and `manual` stay in native
+  # steering even when they have no matcher.
+  isSharedRule = name: rule:
+    aiCommon.resolveInclusion {
+      inherit name rule;
+      runtime = "kiro";
+    }
+    == "always";
 
   # Steering emitters route first, render second, and contribute the final
   # native files to `ai.kiro.files` at default priority. Rule steering is a
@@ -706,7 +710,7 @@
     # The shared AGENTS.md carries the unscoped always-on rules on devenv.
     steeringRules =
       if sharedAgentsMd
-      then lib.filterAttrs (_name: rule: !(isSharedRule rule)) mergedRules
+      then lib.filterAttrs (name: rule: !(isSharedRule name rule)) mergedRules
       else mergedRules;
   in [
     # Attrs-shape ai.rules / ai.kiro.rules → `<name>.md` entries,
@@ -727,6 +731,7 @@
         };
         path = steeringPath cfg;
         rules = steeringRules;
+        runtime = "kiro";
         transformer = lib.ai.transformers.kiro.kiroTransformer;
       };
     }
@@ -1896,7 +1901,7 @@ in
       else {
         context = cfg.context.filename;
         rules = lib.mapAttrs (name: rule:
-          if isSharedRule rule
+          if isSharedRule name rule
           then cfg.context.filename
           else steeringPath cfg name)
         mergedRules;
@@ -1909,6 +1914,6 @@ in
       ...
     }: {
       key = cfg.context.filename;
-      rules = lib.mapAttrs (_name: aiCommon.readContent) (lib.filterAttrs (_name: isSharedRule) mergedRules);
+      rules = lib.mapAttrs (_name: aiCommon.readContent) (lib.filterAttrs isSharedRule mergedRules);
     };
   }

@@ -253,8 +253,10 @@ inside the required `test` job without evaluating or building Nix themselves.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-09-29 — fragment locations are limited to the dev and
-> package trees; category declaration is SPLIT: shared categories in
+> **Last verified:** 2026-09-30 — normalized rules default their
+> priority-ordered trigger list from matcher presence before each runtime
+> resolves support. Fragment locations are limited to the dev and package trees;
+> category declaration is SPLIT: shared categories in
 > `config/fragment-categories.nix`, owner-specific ones in the owning package's
 > `registry.nix`, merged by `lib/facets/registry.nix`. The orchestration layer
 > produces content; `ai.*` renders and writes it, with AGENTS.md's index and
@@ -348,21 +350,23 @@ them.
 - `copilot` — emits `applyTo:` as a quoted string. List input is joined with
   commas (Copilot's native multi-glob syntax). Null input defaults to
   `applyTo: "**"` (global fallback).
-- `kiro { name }` — emits `inclusion: always | auto | fileMatch | manual`,
-  `name: ${name}`, and optionally `description:` + `fileMatchPattern:`. A null
-  inclusion preserves the legacy derivation (`paths = null` → `always`, paths
-  set → `fileMatch`); an explicit mode overrides that derivation only for Kiro.
-  `auto` requires non-empty name + description, and explicit `fileMatch`
-  requires paths. The pattern uses a quoted string for single-element lists and
-  a block YAML sequence for multi-element lists. Kiro requires a list for
-  multi-pattern matching; a previous comma-joined string was silently read as
-  one literal pattern and matched nothing.
+- `kiro { name }` — emits the scalar inclusion chosen by the shared rule
+  resolver, `name: ${name}`, and optionally `description:` plus
+  `fileMatchPattern:`. Kiro supports `always`, `auto`, `fileMatch`, and
+  `manual`; its runtime-local scalar `inclusion` overrides the portable list.
+  The resolver requires a description for `auto` and a matcher for `fileMatch`;
+  the transformer still requires a name for `auto` and paths for `fileMatch`.
+  The pattern uses a quoted string for single-element lists and a block YAML
+  sequence for multi-element lists. Kiro requires a list for multi-pattern
+  matching; a previous comma-joined string was silently read as one literal
+  pattern and matched nothing.
 - `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
-  AGENTS.md is a flat, always-loaded file, so it cannot enforce glob scopes. Its
-  `renderKeyed` writes a compact `## Path-scoped rules` index of every scoped
-  rule that names `references`, then the inlined rules, then the context, so
-  Codex's default 32 KiB read keeps the index and every rule and cuts only the
-  context's tail; Codex applies that index manually.
+  AGENTS.md is a flat file, so it cannot enforce native trigger metadata. Its
+  `renderKeyed` writes a compact path-scoped index for `fileMatch` rules with
+  references and a generic rule index when `auto` or `manual` entries are
+  present, then the inlined rules and context. Codex's default 32 KiB read keeps
+  the index and every rule and cuts only the context's tail; Codex applies that
+  index manually.
 
 ### Orchestration details worth knowing
 
@@ -438,11 +442,12 @@ them.
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-29 — `generate:all` writes every generated file,
-> committed and gitignored; the generator produces content only; `dev/ai.nix`
-> hands it to `ai.*`, which writes every agent instruction file from its
-> generated-file tree, formatted there with this repository's treefmt; the drift
-> check compares the built files.
+> **Last verified:** 2026-09-30 — generated scoped rules rely on the normalized
+> matcher-derived `fileMatch` trigger default. `generate:all` writes every
+> generated file, committed and gitignored; the generator produces content only;
+> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
+> from its generated-file tree, formatted there with this repository's treefmt;
+> the drift check compares the built files.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -457,13 +462,14 @@ Two kinds of generated content, two owners:
 - **Agent instructions** — `dev/generate.nix` returns `context` (the
   always-loaded orientation) and `rules` (one path-scoped rule per registry
   category: its composed text, its scope globs as `matcher`, its source
-  documents as `references`). `dev/ai.nix` sets them as `ai.context` and
-  `ai.rules` in this repository's own devenv, and `ai.*` renders and writes each
-  runtime's files exactly as it would for any consumer: AGENTS.md (Codex, Kiro,
-  Kimchi, with a path-scoped index of the rules), `.claude/CLAUDE.md` and
-  `.claude/rules/`, `.github/copilot-instructions.md` and
-  `.github/instructions/`, and `.kiro/steering/`. The committed ones (AGENTS.md
-  and `.github/`) are read-only copies.
+  documents as `references`, and the matcher-derived default `fileMatch`
+  trigger). `dev/ai.nix` sets them as `ai.context` and `ai.rules` in this
+  repository's own devenv, and `ai.*` renders and writes each runtime's files
+  exactly as it would for any consumer: AGENTS.md (Codex, Kiro, Kimchi, with a
+  path-scoped index of the rules), `.claude/CLAUDE.md` and `.claude/rules/`,
+  `.github/copilot-instructions.md` and `.github/instructions/`, and
+  `.kiro/steering/`. The committed ones (AGENTS.md and `.github/`) are read-only
+  copies.
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
   `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
