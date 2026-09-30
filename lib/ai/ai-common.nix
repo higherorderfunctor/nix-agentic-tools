@@ -44,17 +44,50 @@
         };
       };
 
+  inclusionKinds = ["always" "auto" "fileMatch" "manual"];
+  inclusionSupport = {
+    claude = {
+      kinds = ["always" "fileMatch"];
+      onDemandWithReferences = false;
+    };
+    codex = {
+      kinds = ["always" "fileMatch"];
+      onDemandWithReferences = true;
+    };
+    copilot = {
+      kinds = ["always" "fileMatch"];
+      onDemandWithReferences = false;
+    };
+    kiro = {
+      kinds = inclusionKinds;
+      onDemandWithReferences = false;
+    };
+  };
+  inclusionOption = lib.mkOption {
+    type = lib.types.listOf (lib.types.enum inclusionKinds);
+    default = [];
+    example = ["auto" "fileMatch"];
+    description = ''
+      Priority-ordered rule triggers. Each runtime uses the first trigger it
+      supports: Claude and Copilot support `always` and `fileMatch`; Kiro
+      supports all four triggers; Codex supports `always` and `fileMatch`, plus
+      `auto` and `manual` when `references` is non-empty. `fileMatch` consumes
+      `matcher`, and `auto` requires a non-empty `description` when selected.
+      When omitted, the default is `["always"]` without a matcher and
+      `["fileMatch"]` with one.
+    '';
+  };
   kiroInclusionOption = lib.mkOption {
     type = lib.types.nullOr (lib.types.enum ["always" "auto" "fileMatch" "manual"]);
     default = null;
     example = "auto";
     description = ''
-      Kiro steering inclusion mode. null preserves the portable default:
-      `matcher = null` becomes `always`, while a matcher becomes `fileMatch`.
-      `fileMatch` consumes `matcher`; `auto` requires a non-empty name and
-      description. Other ecosystems continue translating `matcher` through
-      their native scoping mechanism and intentionally ignore this Kiro-only
-      override.
+      Kiro-only scalar trigger override. When set on
+      `ai.kiro.rules.<name>.inclusion`, it replaces the root rule's portable
+      priority list for Kiro. null derives the portable default from
+      `matcher`: `always` without a matcher and `fileMatch` with one. The Kiro
+      pool keeps this established scalar spelling; root and other runtime pools
+      use a priority-ordered list at the same option name.
     '';
   };
   matcherOption = lib.mkOption {
@@ -66,11 +99,11 @@
     ];
     default = null;
     description = ''
-      File globs selecting where this rule applies. null means always-on.
-      Runtimes translate the normalized matcher into their native scoping
-      mechanism. Flat AGENTS.md consumers have none: they preserve it as a
-      prose scope note above the inlined body, or, when the rule names
-      `references`, as a path-scoped index entry that replaces the body.
+      File globs consumed when the resolved trigger is `fileMatch`. null means
+      the rule has no file scope and defaults its trigger list to `["always"]`;
+      a non-empty list defaults it to `["fileMatch"]`. Claude lowers the globs
+      to `paths`, Copilot to `applyTo`, Kiro to `fileMatchPattern`, and Codex to
+      a prose scope note or a compact index entry when `references` is non-empty.
     '';
   };
   referencesOption = lib.mkOption {
@@ -81,30 +114,69 @@
       Project-relative paths of the documents that hold this rule's
       authoritative text. Runtimes with native path scoping (Claude, Copilot,
       Kiro) ignore it and deliver the body. A flat AGENTS.md renderer (Codex)
-      lists a scoped rule that names references in a compact "Path-scoped
-      rules" index — its globs and links to these documents — instead of
-      inlining its body into the always-loaded file. An unscoped rule is always
-      inlined. Paths resolve against the directory the runtime runs in, so on
-      Home Manager, where AGENTS.md is user-global, they name files of whatever
-      project is open.
+      lists a `fileMatch` rule that names references in a compact path-scoped
+      index — its globs and links to these documents — instead of inlining its
+      body into the always-loaded file. References also let Codex support
+      `auto` and `manual` through an on-demand index entry. Paths resolve
+      against the directory the runtime runs in, so on Home Manager, where
+      AGENTS.md is user-global, they name files of whatever project is open.
     '';
   };
   mkRuleModule = {kiroNative ? false}:
-    aiTypes.extendSubmodule (contentType true) {
-      options =
-        {
-          description = lib.mkOption {
-            type = lib.types.str;
-            default = "";
-            description = "Short description forwarded to runtime renderers.";
-          };
-          matcher = matcherOption;
-          references = referencesOption;
-        }
-        // lib.optionalAttrs kiroNative {
-          inclusion = kiroInclusionOption;
+    aiTypes.extendSubmodule (contentType true) ({config, ...}: {
+      options = {
+        description = lib.mkOption {
+          type = lib.types.str;
+          default = "";
+          description = "Short description forwarded to runtime renderers.";
         };
-    };
+        inclusion =
+          if kiroNative
+          then kiroInclusionOption
+          else inclusionOption;
+        matcher = matcherOption;
+        references = referencesOption;
+      };
+
+      config = lib.optionalAttrs (!kiroNative) {
+        inclusion = lib.mkDefault (
+          if config.matcher == null
+          then ["always"]
+          else ["fileMatch"]
+        );
+      };
+    });
+
+  normalizeInclusion = rule:
+    if builtins.isList rule.inclusion
+    then rule.inclusion
+    else if rule.inclusion != null
+    then [rule.inclusion]
+    else if rule.matcher == null
+    then ["always"]
+    else ["fileMatch"];
+
+  resolveInclusion = {
+    runtime,
+    name,
+    rule,
+  }: let
+    requested = normalizeInclusion rule;
+    support = inclusionSupport.${runtime} or (throw "resolveInclusion: unknown runtime '${runtime}'");
+    supported =
+      support.kinds
+      ++ lib.optionals (support.onDemandWithReferences && rule.references != []) ["auto" "manual"];
+    selected = lib.findFirst (kind: builtins.elem kind supported) null requested;
+    requestedJson = builtins.toJSON requested;
+    supportedJson = builtins.toJSON supported;
+  in
+    if selected == null
+    then throw "ai.rules.${name}: runtime '${runtime}' supports ${supportedJson}, but requested inclusion priority list ${requestedJson} has no supported trigger"
+    else if selected == "auto" && rule.description == ""
+    then throw "ai.rules.${name}: resolved inclusion 'auto' for runtime '${runtime}' requires a non-empty description"
+    else if selected == "fileMatch" && rule.matcher == null
+    then throw "ai.rules.${name}: resolved inclusion 'fileMatch' for runtime '${runtime}' requires a non-null matcher"
+    else selected;
   # Flatten nested Nix attrsets into dot-notation keys for CLIs that
   # expect flat JSON (e.g., Kiro's cli.json uses `"chat.enableTangentMode"`
   # not `{"chat":{"enableTangentMode":...}}`). Supports grouping:
@@ -188,7 +260,7 @@ in {
   # Context and rules share one text-source record. The type resolves source
   # contents and higher-priority inline overrides into the effective `text`,
   # while `_sourceWins` lets file emission keep a source-only winner lazy.
-  inherit flattenDotKeysUntil;
+  inherit flattenDotKeysUntil inclusionSupport normalizeInclusion resolveInclusion;
 
   optionalContentModule = mkContentModule {};
   runtimeContextModule = defaultFilename:
@@ -239,13 +311,18 @@ in {
     fields ? {},
     path,
     rules,
+    runtime,
     transformer,
   }:
     lib.mapAttrs' (name: rule: let
+      inclusion = resolveInclusion {inherit name rule runtime;};
       rendered = fragments.mkRendered transformer (context name) (rule
         // {
-          inherit name;
-          paths = rule.matcher;
+          inherit inclusion name;
+          paths =
+            if inclusion == "fileMatch"
+            then rule.matcher
+            else null;
           text = readContent rule;
         });
     in
@@ -400,9 +477,9 @@ in {
     };
 
   # ── Rule submodule types ───────────────────────────────────────────
-  # The portable record stays closed around normalized content + matcher.
-  # Kiro's per-runtime pool extends it with its native inclusion modes; those
-  # modes are intentionally unavailable at the root and on other runtimes.
+  # The portable record carries the priority-ordered inclusion list. Kiro's
+  # per-runtime pool keeps its established scalar option as a native override;
+  # the backend transform normalizes it to a one-item list after pool merging.
   ruleModule = mkRuleModule {};
   kiroRuleModule = mkRuleModule {kiroNative = true;};
 

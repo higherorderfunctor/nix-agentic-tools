@@ -2076,6 +2076,7 @@ in {
         (markdownInput hm ".codex/AGENTS.md").text
         == expected
         && (markdownInput devenv "AGENTS.md").text == expected
+        && !devenv.config.ai.internal.agentsMd."AGENTS.md".hasOnDemandIndex
         && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? alpha
         && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? alpha)
     );

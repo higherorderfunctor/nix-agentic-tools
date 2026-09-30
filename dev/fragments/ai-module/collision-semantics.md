@@ -1,14 +1,16 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-28 — Semble's CLI rule gate is `cli.instructions`.
-> A shared target's byte limit is checked on the built final file, in the same
-> delivery tree when that file is `raw`. Merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
-> text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target, matched on the key
-> each record's `sharedAgentsMd` callback declares. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-30 — rule triggers resolve from one portable
+> priority list against one runtime support table before native rendering.
+> Semble's CLI rule gate is `cli.instructions`. A shared target's byte limit is
+> checked on the built final file, in the same delivery tree when that file is
+> `raw`. Merged pools are public `ai.<runtime>.normalized.<pool>` options fed
+> per-key defaults, and a text-source record crosses into them with only its
+> winning arm. Path claims fail across runtimes except the shared AGENTS.md
+> target, matched on the key each record's `sharedAgentsMd` callback declares.
+> Rules and context use entry-local `enable` suppression; delivery entries
+> default `content` alone, and `content.enable = false` suppresses every content
+> form.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -34,7 +36,7 @@ commit.
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
-| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                             |
+| B6a | normalized rule trigger → native inclusion        | field   | The first supported `inclusion` entry wins; `fileMatch` consumes `matcher` and lowers to native scope or Codex routing prose.                     |
 | B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the file with `content.enable = false`. |
 | B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                    |
 | B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                            |

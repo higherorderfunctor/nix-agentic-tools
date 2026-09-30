@@ -1,17 +1,19 @@
 # Steering inclusion modes: what actually loads in the CLI
 
-> **Last verified:** 2026-09-27 — `lib/ai/transformers/kiro.nix` now emits a
-> multi-path `fileMatchPattern` as a block sequence. The engine findings are
-> unchanged from the first revision (2026-09-03): measured against KAS
-> **0.46.1** by reading the extracted `acp-server.js`, cross-checked against a
-> live `kiro-cli` 2.21.0 run that reproduced each verdict. Byte offsets below
-> are into that 0.46.1 bundle and WILL move on the next bump; the mechanisms are
-> what to carry forward, and the re-measure recipe at the end is how to
-> re-derive the offsets. They are grep LANDMARKS falling inside the named
-> function, not the address of its declaration, so slice BACKWARDS from them as
-> the recipe shows. If you change `lib/ai/transformers/kiro.nix`,
-> `kiroInclusionOption` in `lib/ai/ai-common.nix`, or bump kiro-cli and this
-> fragment is not updated in the same commit, stop and fix it.)
+> **Last verified:** 2026-09-30 — portable rule triggers now resolve before the
+> Kiro transformer; `ai.kiro.rules.<name>.inclusion` remains its scalar native
+> override. `lib/ai/transformers/kiro.nix` emits a multi-path `fileMatchPattern`
+> as a block sequence. The engine findings are unchanged from the first revision
+> (2026-09-03): measured against KAS **0.46.1** by reading the extracted
+> `acp-server.js`, cross-checked against a live `kiro-cli` 2.21.0 run that
+> reproduced each verdict. Byte offsets below are into that 0.46.1 bundle and
+> WILL move on the next bump; the mechanisms are what to carry forward, and the
+> re-measure recipe at the end is how to re-derive the offsets. They are grep
+> LANDMARKS falling inside the named function, not the address of its
+> declaration, so slice BACKWARDS from them as the recipe shows. If you change
+> `lib/ai/transformers/kiro.nix`, `kiroInclusionOption` in
+> `lib/ai/ai-common.nix`, or bump kiro-cli and this fragment is not updated in
+> the same commit, stop and fix it.)
 
 Kiro's public documentation describes the IDE. **Two of the four inclusion modes
 behave differently in the CLI, and both differences fail silently** — no error,
@@ -152,15 +154,17 @@ rewrites one that runs past the line width into the multi-line flow array with a
 trailing comma, so formatting the generated Markdown would have produced the
 broken shape. The hazard remains for hand-authored steering files.
 
-## What the transformer already guarantees
+## What the resolver and transformer guarantee
 
-`lib/ai/transformers/kiro.nix` throws rather than emitting a document that would
-vanish or misbehave: an unknown mode, `auto` without a non-empty `name`, `auto`
-without a non-empty `description`, and `fileMatch` without paths are all eval
-errors. The `auto`-plus-`description` guard in particular is load-bearing
-against the two-stage reject above — **do not relax it as redundant
-validation**, because the engine's own failure for that case is silent absence
-from the pool.
+`lib/ai/ai-common.nix:resolveInclusion` chooses the first Kiro-supported entry
+from a portable rule's priority list. It rejects selected `auto` without a
+non-empty `description` and selected `fileMatch` without a matcher.
+`lib/ai/transformers/kiro.nix` separately rejects an unknown mode, `auto`
+without a non-empty `name`, and `fileMatch` without paths. The
+`auto`-plus-`description` guard is load-bearing against the two-stage reject
+above — **do not relax it as redundant validation**, because the engine's own
+failure for that case is silent absence from the pool. It lives in the resolver
+so every runtime that selects `auto` gets the same check exactly once.
 
 Still open, and deliberately not decided here: whether the repo should keep
 accepting `inclusion = "manual"` at all for CLI-targeted output, given that it

@@ -404,6 +404,7 @@ in
               fields = instructionFields instructionsLedger;
               path = instructionPath cfg;
               rules = mergedRules;
+              runtime = "copilot";
               transformer = lib.ai.transformers.copilot.copilotTransformer;
             };
           }

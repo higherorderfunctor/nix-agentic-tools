@@ -1,37 +1,38 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-30 — the shared AGENTS.md notice resolves each
-> runtime's effective limit at shell entry. Claude delivers every surface
-> through `ai.claude.files`; its settings.json and devenv .mcp.json are
-> read-only links. Every delivered entry is a file the layer writes. L5 is the
-> delivery router plus one adapter per backend; every runtime describes delivery
-> once through the record-level `config`, which `mkRuntime` makes the only
-> delivery callback, and the delivery matrix is generated from the layer for
-> every runtime's files. Normalized pools carry only a text-source record's
-> winning arm. Claude's devenv rules and Codex's execpolicy rules are read-only
-> copies whose writers survive a disable. Copilot's settings files are read-only
-> copies of one `materialize-copilot-config` writer; its only reconciled
-> document is the HM `trustedFolders` leaf of its state file `config.json`.
-> Kiro's `cli.json` and `mcp.json` are read-only copies in one directory ledger.
-> Kimchi shares its HM user `config.json` and `harness/settings.json`; its other
-> settings files are read-only copies of one `kimchiFiles` writer. Codex's
-> `config.toml` is a store symlink on both backends and its daemon
-> `settings.json` a read-only copy of `materialize-codex-daemon-settings`. Kiro
-> excludes the normalized `settings` pool. Native file settings live under
-> `ai.<runtime>.native`. The builder publishes each record's devenv shared
-> AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`, from the
-> record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
-> mode-narrowing command writer beside its unpin ledger. Codex's daemon
-> `settings.json` maps to no matrix cell. The builder declares the per-runtime
-> `agents`, `environmentVariables` and `lspServers` options and an opt-in
-> `agentsDir`; a record's `poolOptions` carries only what differs.
-> `checkRecord.nix` rejects a `poolOptions` key the builder would not read and a
-> stray field in the `sharedAgentsMd` result. Every reconciled document is one
-> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
-> `index` entries: Codex renders a scoped rule that names `references` as a
-> path-scoped index entry instead of inlining its body. The shared AGENTS.md map
-> lowers through the router as `internal`, as a read-only copy, and a
-> contribution's `defaultMaxBytes` supplies fallback bytes plus an
+> **Last verified:** 2026-09-30 — rule inclusion resolves from one portable
+> priority list and runtime support table before L4 rendering. The shared
+> AGENTS.md notice resolves each runtime's effective limit at shell entry.
+> Claude delivers every surface through `ai.claude.files`; its settings.json and
+> devenv .mcp.json are read-only links. Every delivered entry is a file the
+> layer writes. L5 is the delivery router plus one adapter per backend; every
+> runtime describes delivery once through the record-level `config`, which
+> `mkRuntime` makes the only delivery callback, and the delivery matrix is
+> generated from the layer for every runtime's files. Normalized pools carry
+> only a text-source record's winning arm. Claude's devenv rules and Codex's
+> execpolicy rules are read-only copies whose writers survive a disable.
+> Copilot's settings files are read-only copies of one
+> `materialize-copilot-config` writer; its only reconciled document is the HM
+> `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
+> `mcp.json` are read-only copies in one directory ledger. Kimchi shares its HM
+> user `config.json` and `harness/settings.json`; its other settings files are
+> read-only copies of one `kimchiFiles` writer. Codex's `config.toml` is a store
+> symlink on both backends and its daemon `settings.json` a read-only copy of
+> `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
+> pool. Native file settings live under `ai.<runtime>.native`. The builder
+> publishes each record's devenv shared AGENTS.md contribution, and its key in
+> `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`. Claude's
+> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
+> ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
+> declares the per-runtime `agents`, `environmentVariables` and `lspServers`
+> options and an opt-in `agentsDir`; a record's `poolOptions` carries only what
+> differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
+> read and a stray field in the `sharedAgentsMd` result. Every reconciled
+> document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
+> contribution may carry `index` entries: Codex renders a scoped rule that names
+> `references` as a path-scoped index entry instead of inlining its body. The
+> shared AGENTS.md map lowers through the router as `internal`, as a read-only
+> copy, and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
 > effective-limit resolver for the owner's notice under a raised `maxBytes`; its
 > built bytes are measured in the generated-file tree. The router builds one
 > tree per invocation for static Markdown, JSON, TOML and YAML, while
@@ -252,11 +253,13 @@ not move them back.
   composed sources; rendered bytes remain lazy until that default survives B7.
   Repository-local Codex, Kimchi, and Kiro targets contribute to the shared L4
   owner instead of creating competing runtime writers.
-- **Rule matchers lower only before L4.** `matcher = null` is always-on; a
-  non-empty glob list becomes native routing metadata where one exists and
-  explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
-  Codex contributes both unscoped rules and scoped rules degraded to prose; Kiro
-  contributes only unscoped always-on rules. The keyed writer deduplicates
+- **Rule triggers resolve before L4.** Each runtime selects the first supported
+  entry from the portable `inclusion` list through `aiCommon.resolveInclusion`.
+  `fileMatch` consumes `matcher` and becomes native routing metadata where one
+  exists or explicit prose for flat AGENTS.md consumers. Codex can route `auto`
+  and `manual` only through a non-empty `references` index. In the shared devenv
+  AGENTS.md, Codex contributes every resolved inline or indexed rule; Kiro
+  contributes only rules resolved to `always`. The keyed writer deduplicates
   byte-identical same-key contributions.
 - **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
   for each supported pool and is public, writable with `mkForce`. Keyed pools
@@ -378,18 +381,20 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
   entries, an optional `maxBytes` and an optional `defaultMaxBytes` (fallback
   bytes plus a command that resolves the effective limit at shell entry; past it
   the owner warns), and nothing else: the builder reads those by name, so
-  `checkRecord.nix` rejects a missing `key` or any other field. Codex lists a
-  scoped rule that names `references` as an index entry (its globs plus links to
-  those documents) and inlines every other rule, a scoped one behind a prose
-  scope note. `agentsmd.renderKeyed` writes the `## Path-scoped rules` index,
-  then the inlined rules, then the context: a file with many scoped rules stays
-  under Codex's document limit, and a long context that does not (read at the 32
-  KiB default because the raised limit is absent or untrusted) loses only its
-  own tail. The builder adds the merged context and publishes it on devenv. A
-  limit is published even without content, because the runtime reads the file
-  whoever wrote it. The Markdown formatter handles the generated layout (one
-  blank line between units and after each rule comment, one glob or link per
-  index line) before the tree is installed.
+  `checkRecord.nix` rejects a missing `key` or any other field. The optional
+  `hasOnDemandIndex` bit selects the general rule-index heading from routed
+  trigger data rather than rendered Markdown. Codex lists a scoped rule that
+  names `references` as an index entry (its globs plus links to those documents)
+  and inlines every other rule, a scoped one behind a prose scope note.
+  `agentsmd.renderKeyed` writes the general `## Rule index` when that bit is set
+  and `## Path-scoped rules` otherwise, then the inlined rules and context. A
+  file with many scoped rules stays under Codex's document limit, and a long
+  context that does not (read at the 32 KiB default because the raised limit is
+  absent or untrusted) loses only its own tail. The builder adds the merged
+  context and publishes it on devenv. A limit is published even without content,
+  because the runtime reads the file whoever wrote it. The Markdown formatter
+  handles the generated layout (one blank line between units and after each rule
+  comment, one glob or link per index line) before the tree is installed.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit

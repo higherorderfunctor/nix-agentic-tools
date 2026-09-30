@@ -1,18 +1,20 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-30 — stacked-workflows' Git preset is `mkDefault`
-> sugar over the shared `git.*` options. Claude delivers every surface as its
-> own file through `ai.claude.files` on both backends and fails evaluation
-> beside its upstream module, and every delivery method writes the file itself.
-> Every enabled runtime installs a package by default; `package = null` keeps
-> configuration enabled without installing one. Codex's `config.toml` is a
-> read-only store symlink on both backends, its daemon `settings.json` a Home
-> Manager copy of `native.daemonSettings`, and Nix declares the trust of every
-> hook it generates; Codex rejects a declared MCP OAuth client secret. AGENTS.md
-> puts the index and rules before the context. The repository AGENTS.md,
-> Copilot's devenv context and instruction files, and Kiro's devenv steering
-> land as read-only copies; Codex indexes scoped rules that name `references`; a
-> unit whose file is switched off or replaced warns, and so does a devenv Codex
+> **Last verified:** 2026-09-30 — rule inclusion is a priority-ordered portable
+> list resolved once per runtime; Kiro keeps its scalar per-runtime override.
+> Stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
+> options. Claude delivers every surface as its own file through
+> `ai.claude.files` on both backends and fails evaluation beside its upstream
+> module, and every delivery method writes the file itself. Every enabled
+> runtime installs a package by default; `package = null` keeps configuration
+> enabled without installing one. Codex's `config.toml` is a read-only store
+> symlink on both backends, its daemon `settings.json` a Home Manager copy of
+> `native.daemonSettings`, and Nix declares the trust of every hook it
+> generates; Codex rejects a declared MCP OAuth client secret. AGENTS.md puts
+> the index and rules before the context. The repository AGENTS.md, Copilot's
+> devenv context and instruction files, and Kiro's devenv steering land as
+> read-only copies; Codex indexes scoped rules that name `references`; a unit
+> whose file is switched off or replaced warns, and so does a devenv Codex
 > AGENTS.md past 32 KiB under a raised limit. Semble derives a Kiro
 > agent-private MCP server from `mcp.enable = false` plus an MCP-backed
 > subagent. Every runtime describes delivery once through `mkRuntime`'s
@@ -424,18 +426,31 @@ enabled ecosystem whose native model preserves the option's semantics):
   copilot-cli's user home. The transform derives structural `hasMergedContext`
   metadata before composition, so a final-file replacement or disable does not
   read discarded source-backed root/runtime context.
-- `ai.rules` — named Markdown rules. Codex writes these alphabetically to its
-  AGENTS.md ahead of the context, with trace comments. `matcher = null` means
-  always-on; non-empty glob lists lower to Claude `paths`, Kiro
-  `fileMatchPattern`, Copilot `applyTo`, and a Codex prose scope preamble. A
-  scoped rule that also names `references` (the documents holding its text)
-  becomes a Codex `## Path-scoped rules` index entry, rendered first in the
-  file, instead of an inlined body; runtimes with native scoping ignore the
-  field. Rules default enabled; a per-runtime same-key rule with
+- `ai.rules` — named Markdown rules. `inclusion` is a priority-ordered list of
+  trigger kinds; `lib/ai/ai-common.nix:resolveInclusion` chooses the first kind
+  the target runtime supports and fails when none match. Its one support table
+  is the contract:
+
+  | runtime | supported triggers                                                       |
+  | ------- | ------------------------------------------------------------------------ |
+  | Claude  | `always`, `fileMatch`                                                    |
+  | Codex   | `always`, `fileMatch`; `auto`, `manual` only with non-empty `references` |
+  | Copilot | `always`, `fileMatch`                                                    |
+  | Kiro    | `always`, `auto`, `fileMatch`, `manual`                                  |
+
+  Kiro's per-runtime `inclusion` remains a scalar native override; after
+  root/runtime replacement it becomes a one-item priority list for the shared
+  resolver. When the portable list is omitted, `matcher = null` defaults to
+  `["always"]` and a non-empty matcher defaults to `["fileMatch"]`. `fileMatch`
+  lowers the matcher to Claude `paths`, Kiro `fileMatchPattern`, Copilot
+  `applyTo`, and a Codex prose scope preamble. Codex writes rules alphabetically
+  to AGENTS.md ahead of context, with trace comments. A `fileMatch` rule that
+  names `references` becomes a path-scoped index entry; `auto` and `manual`
+  become on-demand index entries and require references. `auto` also requires a
+  description. Rules default enabled; a per-runtime same-key rule with
   `enable = false` suppresses an inherited root rule. Same-priority `text`
   definitions concatenate, and enabled rules require non-empty text or a source
-  path. Kiro alone retains native `manual`/`auto` inclusion overrides. After B7
-  arbitration, a surviving Codex AGENTS.md must fit
+  path. After B7 arbitration, a surviving Codex AGENTS.md must fit
   `ai.codex.projectDocMaxBytes` (32 KiB by default). The generated-file tree
   checks its built bytes in `installCheckPhase`, so an oversized file fails the
   build. A raised limit is also written to Codex's own `project_doc_max_bytes`,
@@ -450,8 +465,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   suppresses the generated bytes before they are read; a surviving store-backed
   `source` is measured after materialization. A `content.run` file cannot be
   measured in the build tree; the router warns about that limit at evaluation.
-  Codex also rejects `matcher = []` as ambiguous; use `null` for always-on
-  content or a non-empty list for scoped content.
+  Codex also rejects `matcher = []` as ambiguous; use `null` when there is no
+  file scope or a non-empty list for `fileMatch` content.
+
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP

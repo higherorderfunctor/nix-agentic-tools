@@ -127,11 +127,6 @@ in {
           (builtins.tryEval (builtins.deepSeq (ai.transformers.kiro.render fragment) true)).success;
       in
         !(succeeds {
-          inclusion = "auto";
-          name = "missing-description";
-          text = "body";
-        })
-        && !(succeeds {
           description = "Missing name";
           inclusion = "auto";
           text = "body";
@@ -151,6 +146,17 @@ in {
         };
       in
         out == "body only"
+    );
+
+    factory-transformer-agentsmd-index-heading-uses-structure = mkTest "transformer-agentsmd-index-heading-uses-structure" (
+      let
+        index = {example = "  - Trigger: rendered text is not metadata\n";};
+      in
+        lib.hasPrefix "## Path-scoped rules\n" (ai.transformers.agentsmd.renderKeyed {inherit index;})
+        && lib.hasPrefix "## Rule index\n" (ai.transformers.agentsmd.renderKeyed {
+          hasOnDemandIndex = true;
+          inherit index;
+        })
     );
   };
 }
