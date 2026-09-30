@@ -11,31 +11,33 @@
     ${rv.export {
       inherit pkgs;
       variable = "TOKEN";
-      value = rv.file {
-        path = "value";
-        newline = "preserve";
-      };
+      value = rv.file {path = "value";};
     }}
     printf '%s' "$TOKEN" > delivered
     touch reached
   '';
 in {
   checks.runtime-values-reader = pkgs.runCommand "runtime-values-reader" {} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
     read_value() { ${reader} test.option "$@"; }
     reject() {
-      if read_value "$@" >out 2>diagnostic; then echo 'unexpected reader success' >&2; exit 1; fi
+      if read_value "$@" >out 2>diagnostic; then
+        echo 'unexpected reader success' >&2
+        exit 1
+      fi
       test ! -s out
       grep -F 'test.option:' diagnostic
       if grep -F 'DO-NOT-LEAK' diagnostic; then exit 1; fi
     }
-    reject file missing strip-final-lf "" ""
+    reject file missing
     mkdir directory
-    reject file directory strip-final-lf "" ""
+    reject file directory
     touch empty
-    reject file empty strip-final-lf "" ""
+    reject file empty
     printf 'DO-NOT-LEAK' > unreadable
     chmod 000 unreadable
-    reject file unreadable strip-final-lf "" ""
+    reject file unreadable
     cat > helper <<'HELPER'
     #!${pkgs.bash}/bin/bash
     set -euETo pipefail
@@ -45,36 +47,13 @@ in {
     exit 7
     HELPER
     chmod +x helper
-    reject helper "$PWD/helper" strip-final-lf "" ""
-    printf 'value\n\n' > value
-    printf 'value\n' > expected
-    read_value file value strip-final-lf "" "" > actual
-    cmp expected actual
-    read_value file value preserve "" "" > actual
-    cmp value actual
-    printf '<value\n>' > expected
-    read_value file value strip-final-lf '<' '>' > actual
-    cmp expected actual
-    printf 'not-a-bool' > bad-type
-    reject file bad-type preserve "" "" bool
-    reject file bad-type preserve "" "" enum allowed another
-    printf true > bool-value
-    reject file bool-value preserve 'NOT-' "" bool
-    reject file bool-value preserve "" '-NO' bool
-    printf allowed > pattern-value
-    read_value file pattern-value preserve "" "" strMatching "allow(ed|ing)" > actual
-    cmp pattern-value actual
-    reject file bad-type preserve "" "" strMatching "allow(ed|ing)"
-    printf allowed > enum-value
-    read_value file enum-value preserve "" "" enum allowed another > actual
-    cmp enum-value actual
-    reject file enum-value preserve 'NOT-' "" enum allowed another
+    reject helper "$PWD/helper"
     printf 'bad\000bytes' > nul
-    reject file nul preserve "" ""
-    printf '\377' > invalid-utf8
-    reject file invalid-utf8 preserve "" ""
+    reject file nul
+    printf 'value\n\n' > value
     ${consumer}
-    cmp value delivered
+    printf value > expected
+    cmp expected delivered
     test -e reached
     rm reached
     : > value

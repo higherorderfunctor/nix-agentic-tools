@@ -22,10 +22,7 @@
   configured = {
     inherit package;
     host = rv.file {path = "host";};
-    token = rv.file {
-      path = "token";
-      newline = "preserve";
-    };
+    token = rv.file {path = "token";};
     settings.check_update = rv.file {path = "setting";};
   };
   wrapper = import ../lib/mkGlab.nix {
@@ -37,10 +34,7 @@
       inherit lib pkgs;
       cfg = configured // config;
     }).wrapperText;
-  secretFile = rv.file {
-    path = "/run/secret";
-    secret = true;
-  };
+  secretFile = (cfg {token = rv.file {path = "/run/secret";};}).token;
 in {
   checks = {
     module-glab-map-priorities = mkTest "glab-map-priorities" (let
@@ -86,34 +80,9 @@ in {
     module-glab-lib-map-classification = mkTest "glab-lib-map-classification" (let
       extraSettings.gitlab_token = rv.file {path = "/run/token";};
       stamped = (cfg {inherit extraSettings;}).extraSettings.gitlab_token;
-      dynamicOptions = rv.liftOptions {
-        options.value = lib.mkOption {
-          type = lib.types.attrsOf (lib.types.submodule {
-            freeformType = lib.types.attrsOf lib.types.str;
-            options.host = lib.mkOption {type = lib.types.str;};
-          });
-        };
-      };
-      dynamic =
-        (lib.evalModules {
-          modules = [
-            {
-              options = dynamicOptions;
-              config.value.credentials = {
-                alias = rv.file {path = "/run/freeform-host";};
-                host = rv.file {path = "/run/declared-host";};
-              };
-            }
-          ];
-        }).config.value.credentials;
     in
       stamped._runtime.secret
-      && stamped._runtime.classification == "secret"
       && succeeds (wrapperFor {inherit extraSettings;})
-      && dynamic.host._runtime.secret
-      && dynamic.alias._runtime.secret
-      && !succeeds (wrapperFor {inherit (dynamic) host;})
-      && !succeeds (wrapperFor {extraSettings.GITLAB_HOST = dynamic.alias;})
       && !succeeds (wrapperFor {extraSettings.GITLAB_HOST = stamped;})
       && !succeeds (wrapperFor {extraSettings.gitlab_token = "literal";}));
     module-glab-lib-validation =
@@ -221,11 +190,12 @@ in {
         touch pending
         export GITLAB_TOKEN=ignored
         ${sync.script}
-        cmp token login-token
+        printf token-value > expected-token
+        cmp expected-token login-token
         test ! -e pending
         grep -F -- '--stdin' login-argv
         if grep -F 'token-value' login-argv; then exit 1; fi
-        rm login-token token
+        rm expected-token login-token token
         touch pending
         export LOCKED=1
         if ${sync.script} >out 2>diagnostic; then exit 1; fi
@@ -242,8 +212,9 @@ in {
       printf 'false\n' > setting
       ${pkgs.bash}/bin/bash ${pkgs.writeText "glab-wrapper" wrapper.wrapperText} status
       printf 'gitlab.example.com' > expected-host
+      printf token > expected-token
       cmp expected-host host-delivered
-      cmp token token-delivered
+      cmp expected-token token-delivered
       test "$(cat setting-delivered)" = false
       rm token-delivered
       : > host

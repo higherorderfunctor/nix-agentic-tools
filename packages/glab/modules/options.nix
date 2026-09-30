@@ -25,9 +25,8 @@
   glabSchema = import ../lib/schema.nix {inherit lib;};
   inherit (glabSchema) byName envVarOf settingKeys topLevelKeys;
   generated = names: prefix:
-    (rv.fromSchema {
-      inherit prefix;
-      schema.fields = lib.genAttrs names (name: {
+    rv.fromSchema {
+      fields = lib.genAttrs names (name: {
         type =
           if byName.${name}.type == "bool"
           then types.bool
@@ -35,7 +34,8 @@
         description = "${byName.${name}.description} Mapped to ${envVarOf name}.";
         hints = {inherit (byName.${name}) keyring;};
       });
-    }).options;
+      inherit prefix;
+    };
 in {
   options.glab =
     {

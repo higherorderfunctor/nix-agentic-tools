@@ -28,8 +28,7 @@
     rv.classify {
       path = [name];
       hints = byName.${name};
-    }
-    == "secret") (builtins.attrNames byName);
+    }) (builtins.attrNames byName);
   topLevelKeys = lib.unique (["host"] ++ secretKeys);
 
   # Everything else the user may set.

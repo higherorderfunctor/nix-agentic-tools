@@ -55,18 +55,9 @@
     else
       rv.export {
         inherit pkgs value;
-        output =
-          if builtins.elem variable ["GITLAB_HOST" "GLAB_CONFIG_DIR"]
-          then "argv"
-          else "env";
+        argv = builtins.elem variable ["GITLAB_HOST" "GLAB_CONFIG_DIR"];
         inherit variable;
         path = ["glab" name];
-        secret =
-          rv.classify {
-            path = [name];
-            hints = glabSchema.byName.${name} or {};
-          }
-          == "secret";
       };
   exports = lib.concatStringsSep "\n" (
     map (name: emit "topLevel" name validated.${name}) topLevelKeys
@@ -76,7 +67,7 @@
   configDirExport = rv.export {
     inherit pkgs;
     variable = "GLAB_CONFIG_DIR";
-    output = "argv";
+    argv = true;
     value = validated.configDir;
     path = ["glab" "configDir"];
   };

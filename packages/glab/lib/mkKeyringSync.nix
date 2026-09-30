@@ -14,14 +14,13 @@
     inherit pkgs;
     variable = "glab_sync_host";
     value = cfg.host;
-    output = "argv";
+    argv = true;
     path = ["glab" "host"];
   };
   tokenAssignment = rv.assignment {
     inherit pkgs;
     variable = "glab_sync_token";
     value = cfg.token;
-    output = "stdin";
     secret = true;
     path = ["glab" "token"];
   };
@@ -36,7 +35,7 @@
       ${rv.assignment {
         inherit pkgs value;
         variable = "glab_sync_arg";
-        output = "argv";
+        argv = true;
         path = ["glab" "settings" flag];
       }}
       glab_sync_args+=(${lib.escapeShellArg flag} "$glab_sync_arg")'';
@@ -79,7 +78,7 @@
       inherit pkgs;
       variable = "glab_sync_api_protocol";
       value = apiProtocol;
-      output = "argv";
+      argv = true;
       path = ["glab" "settings" "api_protocol"];
     }}
     if [ -z "$glab_sync_api_protocol" ]; then
@@ -100,7 +99,7 @@
       inherit pkgs;
       variable = "glab_sync_config_dir";
       value = configDir;
-      output = "argv";
+      argv = true;
       path = ["glab" "configDir"];
     }}
     ${pkgs.coreutils}/bin/mkdir -p -m 0700 "$glab_sync_config_dir"
