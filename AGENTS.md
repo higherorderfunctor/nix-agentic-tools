@@ -49,9 +49,11 @@ for it. When several entries match, their guidance composes.
     - `lib/ai/hooks.nix`
     - `lib/ai/launcher.nix`
     - `lib/ai/mkSkillPackageModule.nix`
+    - `lib/ai/module-environment.nix`
     - `lib/ai/own.nix`
     - `lib/ai/own.py`
     - `lib/ai/program.nix`
+    - `lib/ai/programs/**`
     - `lib/ai/runtime-files.nix`
     - `lib/ai/runtimes.nix`
     - `lib/ai/sharedOptions.nix`

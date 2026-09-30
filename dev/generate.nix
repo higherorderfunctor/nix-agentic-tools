@@ -463,6 +463,7 @@
     | MCP credentials | Manual env vars | `rv.file` or `rv.helper` | `rv.file` or `rv.helper` |
     | Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
     | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
+    | Per-harness git and GitHub identity | Per-command env | `ai.programs.git` / `ai.programs.gh`, per harness under `ai.<cli>.programs.*` (all five CLIs) | Same; literal `GIT_CONFIG_GLOBAL` and `GH_CONFIG_DIR` paths are baked into each harness, while the credential helper reads an `rv.file` or `rv.helper` token reference at call time |
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `rv.file` or `rv.helper` | `rv.file` or `rv.helper` |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
@@ -587,11 +588,48 @@
 
     Enabling any harness also installs a sandbox-safe Git SSH default. It
     preserves Home Manager's `~/.ssh/config` host/key routing when a Linux
-    user-namespace sandbox remaps the Nix-store target's owner; devenv exports
-    the same wrapper as `GIT_SSH_COMMAND`, so ordinary dev-shell Git and
-    harness-launched Git behave the same. OpenSSH batch mode makes missing
-    credentials fail instead of opening a password dialog. Set
-    `ai.gitSshConfigWorkaround = false` to manage this yourself.
+    user-namespace sandbox remaps the Nix-store target's owner. Without Home
+    Manager's `programs.git` (devenv included), each harness receives the same
+    wrapper as `GIT_SSH_COMMAND` in its own launcher, never the project shell.
+    OpenSSH batch mode makes missing credentials fail instead of opening a
+    password dialog. Set `ai.gitSshConfigWorkaround = false` to manage this
+    yourself.
+
+    `ai.programs.git` and `ai.programs.gh` give each harness its own git and
+    GitHub CLI identity without touching yours. Each enabled harness gets a
+    store gitconfig that includes your own config first, then sets its name,
+    email, signing and a GitHub credential helper; it is published as
+    `GIT_CONFIG_GLOBAL`, and `ai.programs.gh.configDir` as `GH_CONFIG_DIR`.
+    Shared values go at the root and per-harness ones under
+    `ai.<cli>.programs.git`; `settings` deep-merges the two. The gitconfig path
+    and `GH_CONFIG_DIR` are literals baked into the harness launcher. The token
+    is an `rv.file` or `rv.helper` reference that the credential helper reads at
+    call time. The signing key stays a file read at run time, so only its path
+    reaches the store. No `GH_TOKEN` is set, because Copilot CLI would prefer it
+    over its own login. It covers HTTPS to github.com: a remote that stays SSH
+    still authenticates with your SSH identity.
+
+    ```nix
+    ai = {
+      programs.git = {
+        enable = true;
+        settings.user.email = "bot@example.com";
+        signing = {
+          format = "ssh";
+          signByDefault = true;
+        };
+        credentials = rv.file { path = "/run/secrets/bot-github-token"; };
+      };
+      programs.gh = {
+        enable = true;
+        configDir = "/home/me/.config/ai-gh"; # holds gh's hosts.yml
+      };
+      claude.programs.git = {
+        settings.user.name = "bot (claude)";
+        signing.key = "/run/secrets/bot-claude-signing-key";
+      };
+    };
+    ```
 
     Codex supports either the legacy `sandbox_mode` model or named permissions
     through `ai.codex.native.settings.default_permissions` and

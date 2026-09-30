@@ -1,18 +1,6 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-09-28 — settings files are read-only copies of one
-> writer, `materialize-copilot-config`: Home Manager always owns the user
-> `settings.json`, `mcp-config.json` and `lsp-config.json`; devenv owns the
-> fixed repository file `.github/copilot/settings.json` only when something is
-> declared, and writes LSP config to `<projectDir>/lsp.json` (both measured at
-> copilot-cli 1.0.88), so `configDir` holds only the wrapper-aimed
-> `mcp-config.json`. Folder trust is `ai.copilot.trustedFolders`, one Home
-> Manager-owned leaf of Copilot's state file `config.json`; devenv rejects it.
-> The repository context and instruction files are read-only copies, never store
-> symlinks. The repository file is read from the git root, and its `effortLevel`
-> by the interactive session only; devenv warns on both. Keys and value kinds
-> outside the repository schema, and LSP server names Copilot rejects, throw at
-> eval.
+> **Last verified:** 2026-09-30 — the launcher now carries git identity.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.
@@ -317,7 +305,11 @@ attrset and onto the wrapper on both backends. On devenv the env arm is
 effectively always live, because the default-on `gitSshConfigWorkaround`
 contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
 MCP-less devenv project no longer keeps the bare package. Home Manager still
-does, since it states that default in Git's own config instead.
+does when no module env is published (for example with `ai.programs.git` and
+`ai.programs.gh` off), since it states that SSH default in Git's own config
+instead; either identity puts its literal config path on the channel and HM
+wraps too. The git credential token remains a runtime reference read by the
+credential helper, not a process variable.
 
 ### Where LSP and settings go
 

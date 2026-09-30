@@ -178,9 +178,7 @@ in {
         mcpPathMappingsGone = rejected {ai.programs.semble.mcp.pathMappings = [];};
       };
 
-    # The program factory has no `pools` field (the keyed-models design needed
-    # it; a list does not), and a runtime `models` list replaces the portable
-    # one wholesale.
+    # A runtime `models` list replaces the portable one wholesale.
     module-semble-models-runtime-list = mkTest "semble-models-runtime-list" (
       let
         spec = {
@@ -189,6 +187,7 @@ in {
           options.entries = lib.mkOption {
             type = lib.types.listOf lib.types.str;
             default = [];
+            description = "Fixture entries.";
           };
         };
         program = programFactory.mkProgram spec;
@@ -216,9 +215,8 @@ in {
           }).config.home.packages;
         tables = lib.mapAttrs (_: package: package.sembleModels.MODELS or null) installed.sembleRuntimePackages;
       in
-        !(program ? pools)
-        && !(program.spec ? pools)
-        && (program.resolve evaluated.config "claude").entries == ["runtime-a"]
+        (program.resolve evaluated.config "claude").entries
+        == ["runtime-a"]
         && tables
         == {
           claude = [
