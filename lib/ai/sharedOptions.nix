@@ -178,11 +178,9 @@ in {
         lib.mkOption {
           type = lib.types.lines;
           default = "";
-          defaultText = lib.literalExpression "(lib.ai.generated pkgs).defaultCheck.${type}";
           description = ''
-            Shell snippet checking the built ${type} files. Definitions append
-            to the ordinary-priority default; mkForce replaces it. A nonzero
-            exit fails the store-tree build. Paths are target-relative.
+            Shell snippet checking the built ${type} files. A nonzero exit
+            fails the store-tree build. Paths are target-relative.
           '';
         });
       guards = lib.genAttrs ["parseCompare" "splitCodeSpans" "tableCells"] (name:
@@ -525,13 +523,6 @@ in {
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
     (lib.optionalAttrs hasAssertions {assertions = proxyAssertions;})
-    # The default check, as a DEFINITION rather than the option default, so a
-    # consumer's definitions append to it. `mkOverride` at the ordinary
-    # priority rather than a plain value, and that is load-bearing: a plain
-    # definition is evaluated even when a consumer's `mkForce` wins, which
-    # would instantiate rumdl and markdownlint-cli2 for a check that never
-    # runs. Measured; do not "simplify" it to a plain string.
-    {ai.generated.check = lib.mapAttrs (_: value: lib.mkOverride lib.modules.defaultOverridePriority value) generated.defaultCheck;}
     # Drop the systemd path entirely in devenv. `mkIf false` would still define
     # an unknown option there; the option-tree probe is a build-time condition
     # and does not force config. Unsupported active declarations fail through
@@ -541,8 +532,8 @@ in {
     })
     {
       # Root-pool writes are sanctioned only from the module that declares
-      # the option: these `*Dir` expansions, and the `ai.generated.check`
-      # default above. Every other module writes `ai.<runtime>.<pool>`,
+      # the option: these `*Dir` expansions. Every other module writes
+      # `ai.<runtime>.<pool>`,
       # enforced by `rootPoolViolations` in
       # `checks/module-provenance/helpers.nix`, which permits a root
       # definition only from a file that declares the option (`declaredIn`

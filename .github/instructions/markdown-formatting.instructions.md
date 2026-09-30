@@ -131,9 +131,9 @@ living only in one caller does not survive a second caller being added.
 ### A pipe in a table cell — `markdown-table-cells`
 
 Gated. Two linters, one hook, because the defect has two states and no single
-tool sees both. The script, its markdownlint config and the full rationale are
-defined once in `lib/markdown/table-cells.nix`; the prek hook and the fixture
-suite (`checks/markdown/markdown-table-cells-fixtures.nix`) both read it.
+tool sees both. The rationale lives here; the script and its markdownlint config
+live in `lib/markdown/table-cells.nix`, which the prek hook and fixture suite
+(`checks/markdown/markdown-table-cells-fixtures.nix`) both read.
 
 **The cause is always the same: an unescaped `|` in a cell.** A table row is
 split into cells at BLOCK level, before inline parsing runs, so a backtick gives

@@ -477,12 +477,10 @@ Biome for JSON, prettier with `proseWrap = "always"` for Markdown and YAML, and
 Taplo for TOML. The settings are defined once in `lib/generated-style.nix`. A
 formatter must preserve the declared files; removing one fails the build.
 
-`ai.generated.check.<type>` is a `types.lines` shell snippet. Its default is the
-no-op `:` because the built-in guards run separately. Ordinary definitions
-append to that default; `lib.mkForce` replaces it, and `lib.mkForce ""` disables
-it. The default is contributed at normal priority so a forced replacement does
-not evaluate unused default tools. Checks run on the installed bytes. The named
-guards below are separate and remain on when a check is replaced or disabled.
+`ai.generated.check.<type>` is a `types.lines` shell snippet. Its default is
+empty because the built-in guards run separately. Checks run on the installed
+bytes. The named guards below are separate and remain on when a check is
+replaced or disabled.
 
 To use your own treefmt config, pass the `config` of any treefmt-nix
 `evalModule` result to the helper:

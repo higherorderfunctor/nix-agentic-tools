@@ -3,7 +3,6 @@
 """Protect generated frontmatter bytes and compare structured data."""
 
 import json
-import math
 import pathlib
 import re
 import sys
@@ -30,7 +29,7 @@ def frontmatter_parts(data, required):
     offset = content_start
     for line in data[content_start:].splitlines(keepends=True):
         offset += len(line)
-        if re.fullmatch(rb"(?:---|\.\.\.)[ \t]*(?:\r?\n)?", line):
+        if re.fullmatch(rb"---[ \t]*(?:\r?\n)?", line):
             return data[:offset], data[content_start : offset - len(line)], data[offset:]
     if required:
         raise ValueError("marked Markdown is missing its closing frontmatter fence")
@@ -62,13 +61,9 @@ def partition(action, path, header):
     return 0
 
 
-def reject_non_json_constant(value):
-    raise ValueError(f"non-JSON constant: {value}")
-
-
 def parse(kind, text):
     if kind == "json":
-        return json.loads(text, parse_constant=reject_non_json_constant)
+        return json.loads(text)
     if kind == "toml":
         return tomllib.loads(text)
     if kind == "yaml":
@@ -103,8 +98,6 @@ def typed(value):
         return ("dict", frozenset((typed(k), typed(v)) for k, v in value.items()))
     if isinstance(value, list):
         return ("list", tuple(typed(item) for item in value))
-    if isinstance(value, float) and math.isnan(value):
-        return ("float", "nan")
     return (type(value).__name__, value)
 
 

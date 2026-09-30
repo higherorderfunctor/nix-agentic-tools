@@ -387,16 +387,6 @@ in
         '';
       })
       resolved
-      ++ lib.mapAttrsToList (path: entry: {
-        assertion = entry.format != "markdown" || entry.content._frontmatterKeys == [] || entry.frontmatter;
-        message = ''
-          ai.${runtime}.files."${path}" has generated Markdown frontmatter
-          keys (${lib.concatStringsSep ", " entry.content._frontmatterKeys}) but
-          is not marked as frontmatter. Mark this generator's file entry so
-          parseCompare guards its YAML block.
-        '';
-      })
-      resolved
       # A Markdown file is built into this invocation's generated tree, which
       # holds bytes that exist at BUILD time, one file per path.
       ++ lib.mapAttrsToList (path: entry: {

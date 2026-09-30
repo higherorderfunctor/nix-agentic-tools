@@ -35,8 +35,8 @@
 # catches a header/delimiter disagreement (the break) and markdownlint
 # cannot, because once the counts disagree its parser stops seeing a
 # table at all. Measured: rumdl 0.04s over this corpus, markdownlint
-# 8.2s, which is why the Rust one leads. Neither is redundant; that
-# file's header comment carries the table.
+# 8.2s, which is why the Rust one leads. Neither is redundant; the
+# markdown-formatting fragment carries the full rationale.
 #
 # Free (MIT). ensureUnfreeCheck in default.nix passes free packages
 # through unwrapped.

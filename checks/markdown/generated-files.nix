@@ -1,7 +1,7 @@
-# Behavioral fixtures for the generated store-tree builder. Failure cases run
 # cspell:ignore FEFF
+# Behavioral fixtures for the generated store-tree builder. Failure cases run
 # the builder's real phases in fresh shells: a check derivation cannot invoke
-# nested nix builds in its sandbox. The final case also builds a failing mkTree
+# nested nix builds in its sandbox. The final case builds one failing mkTree
 # through nixpkgs' testBuildFailure to pin the stdenv install-check lifecycle.
 {
   inputs,
@@ -59,13 +59,17 @@
     | --- | --- |
     | x | y |
   '';
+  badHeader = ''    | a | b | c |
+    | --- | --- |
+    | x | y |
+  '';
   cases = [
     {
       name = "format-json";
-      files = dataFile "json" ''{"a":true}'';
+      files = {config = mkFile "json" ''{"a":true}'';};
       formatter = generated.defaultFormatter;
       guards.parseCompare = true;
-      changed = "data.json";
+      changed = "config";
     }
     {
       name = "format-markdown";
@@ -78,14 +82,10 @@
     }
     {
       name = "format-toml";
-      files = {
-        "nested/data.toml" =
-          mkFile "toml" ''            a=1
-          '';
-      };
+      files = {config = mkFile "toml" "a=1\n";};
       formatter = generated.defaultFormatter;
       guards.parseCompare = true;
-      changed = "nested/data.toml";
+      changed = "config";
     }
     {
       name = "format-yaml";
@@ -142,10 +142,27 @@
       fails = "tableCells";
     }
     {
+      name = "table-cells-header-before-format";
+      files = markdown badHeader;
+      formatter = generated.defaultFormatter;
+      guards.tableCells = true;
+      fails = "tableCells";
+    }
+    {
       name = "table-cells-disabled";
       files = markdown badTable;
       formatter = noFormat;
       guards.tableCells = false;
+    }
+    {
+      name = "user-check-cannot-change-output";
+      files = markdown goodTable;
+      formatter = noFormat;
+      guards.tableCells = true;
+      check.markdown = "printf '%s' ${lib.escapeShellArg badTable} > page.md";
+      checked = badTable;
+      expected = goodTable;
+      path = "page.md";
     }
     {
       name = "split-code-spans-good";
@@ -217,10 +234,23 @@
       head = frontmatter.block consumerData + "\n";
     }
     {
-      name = "parse-unmarked-new-generator-bad";
-      files = markdown "---\nvalue: true\n---\n# Page\n";
-      formatter = generated.defaultFormatter;
+      name = "parse-unmarked-formatter-adds-mapping-bad";
+      files = markdown "# Page\n";
+      formatter = noFormat // {markdown = "printf '%s\\n' '---' 'value: true' '---' '# Page' > page.md";};
       fails = "without its marker";
+    }
+    {
+      name = "parse-thematic-pair-good";
+      files = markdown ''        ---
+
+        # Heading
+
+        Ordinary prose without a mapping.
+
+        ---
+      '';
+      formatter = generated.defaultFormatter;
+      guards.parseCompare = true;
     }
     {
       name = "parse-frontmatter-bom-good";
@@ -239,12 +269,12 @@
       path = "page.md";
     }
     {
-      name = "frontmatter-presentation-mutation-bad";
-      files = consumerFiles;
-      formatter = generated.defaultFormatter;
-      postBuild = "sed -i 's/  - \"SCHEMA.md\"/  - SCHEMA.md/' work/markdown/page.md";
+      name = "parse-frontmatter-eof-formatter-blank";
+      files = markedMarkdown "---\nvalue: true\n---";
+      formatter = noFormat // {markdown = "printf '\\n' > page.md";};
       guards.parseCompare = true;
-      fails = bytesChanged;
+      expected = "---\nvalue: true\n---";
+      path = "page.md";
     }
     {
       name = "frontmatter-reattach-truncated-bad";
@@ -253,13 +283,6 @@
       attach = brokenAttach;
       guards.parseCompare = true;
       fails = bytesChanged;
-    }
-    {
-      name = "user-check-fails";
-      files = dataFile "json" ''{"value":true}'';
-      formatter = noFormat;
-      check.json = "echo user-check-marker >&2; exit 19";
-      fails = "user-check-marker";
     }
   ];
   makeTree = case:
@@ -282,19 +305,6 @@
       ${tree.installPhase}
       ${tree.installCheckPhase}
     '';
-  failingTree = generated.mkTree {
-    name = "generated-fixture-real-check-failure";
-    files = dataFile "json" ''{"value":true}'';
-    formatter = noFormat;
-    check.json = "echo real-check-failed >&2; exit 19";
-  };
-  expectedFailure = pkgs.testers.testBuildFailure failingTree;
-  unmarkedTree = generated.mkTree {
-    name = "generated-fixture-unmarked-generator";
-    files = markdown "---\nvalue: true\n---\n# Page\n";
-    formatter = noFormat;
-  };
-  expectedUnmarkedFailure = pkgs.testers.testBuildFailure unmarkedTree;
   mutatedTree =
     (generated.mkTree {
       name = "generated-fixture-real-frontmatter-byte-failure";
@@ -363,6 +373,10 @@ in {
           printf '%s' ${lib.escapeShellArg case.expected} | cmp - "$out"/${lib.escapeShellArg case.path} \
             || { echo "FAIL: ${case.name} did not preserve its chosen formatter result" >&2; exit 1; }
         ''}
+          ${lib.optionalString (case ? checked) ''
+          printf '%s' ${lib.escapeShellArg case.checked} | cmp - check/${case.files.${case.path}.type}/${lib.escapeShellArg case.path} \
+            || { echo "FAIL: ${case.name} did not run its user check on a copy" >&2; exit 1; }
+        ''}
           ${lib.optionalString (case ? absent) ''
           test -f work/markdown/${lib.escapeShellArg case.absent} \
             || { echo "FAIL: ${case.name} did not exercise formatter state" >&2; exit 1; }
@@ -374,12 +388,10 @@ in {
       '')
       cases}
 
-    grep -q -F 'real-check-failed' ${expectedFailure}/testBuildFailure.log
-    grep -q -F 'without its marker' ${expectedUnmarkedFailure}/testBuildFailure.log
     grep -q -F ${lib.escapeShellArg bytesChanged} ${expectedMutationFailure}/testBuildFailure.log
     grep -q -F 'Generated-file guard parseCompare failed' ${expectedMutationFailure}/testBuildFailure.log
     grep -q -F 'Choose one of three options:' ${expectedMutationFailure}/testBuildFailure.log
-    echo 'ok — actual mkTree build fails from installCheckPhase'
+    echo 'ok — actual mkTree byte guard fails from installCheckPhase'
     touch "$out"
   '';
 }

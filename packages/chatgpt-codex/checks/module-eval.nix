@@ -2049,6 +2049,45 @@ in {
         && (settingsOf explicit).project_doc_max_bytes == 65536
     );
 
+    # Codex's limit is checked on the built file in the tree that delivers it.
+    # Home Manager keys it by `.codex/AGENTS.md`, so replacements and generated
+    # content carry the same limit. The boundary arithmetic is covered by
+    # `checks/markdown/markdown-byte-limit-scripts.nix`.
+    module-codex-agents-md-byte-limit = let
+      path = ".codex/AGENTS.md";
+      hint = "Trim or replace the final content, or raise ai.codex.projectDocMaxBytes.";
+      limit.${path} = {
+        bytes = 32768;
+        inherit hint;
+      };
+      generated = evalHm {
+        ai.codex = {
+          context.text = "CONTEXT";
+          enable = true;
+        };
+      };
+      replaced = size:
+        evalHm {
+          ai.codex = {
+            enable = true;
+            files.${path}.content.text = lib.concatStrings (lib.replicate (size - 1) "x") + "\n";
+          };
+        };
+      treeFor = codexGeneratedTree;
+      exact = replaced 32768;
+      above = replaced 32769;
+      failure = pkgs.testers.testBuildFailure (treeFor above);
+    in
+      assert lib.assertMsg (generated.config.ai.codex._maxBytes == limit && exact.config.ai.codex._maxBytes == limit)
+      "codex-agents-md-byte-limit: ai.codex._maxBytes is not the 32768-byte limit on ${path}";
+      assert lib.assertMsg (lib.all (evaluated: fromGeneratedTree path evaluated.config.home.file.${path}) [generated exact above])
+      "codex-agents-md-byte-limit: ${path} is not delivered from a tree carrying its limit";
+        pkgs.runCommand "module-test-codex-agents-md-byte-limit" {} ''
+          test -f ${treeFor exact}/${path}
+          grep -q -F ${lib.escapeShellArg "${path} renders to 32769 bytes, exceeding its limit (32768 bytes). ${hint}"} ${failure}/testBuildFailure.log
+          echo PASS > "$out"
+        '';
+
     # On devenv a RAISED limit lands in trust-gated project config, so a file
     # past Codex's own 32 KiB is all an untrusted project reads. Every shell
     # entry runs the window notice on the project's AGENTS.md, which it
@@ -2170,8 +2209,50 @@ in {
         pkgs.runCommand "module-test-codex-raw-agents-md-is-measured-not-formatted" {} ''
           cmp -- ${fits.hm}/.codex/AGENTS.md ${expected}
           cmp -- ${fits.devenv}/AGENTS.md ${expected}
-          grep -q -F ${lib.escapeShellArg ".codex/AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes)."} ${past.hm}/testBuildFailure.log
+          grep -q -F ${lib.escapeShellArg ".codex/AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes). Trim or replace the final content, or raise ai.codex.projectDocMaxBytes."} ${past.hm}/testBuildFailure.log
           grep -q -F ${lib.escapeShellArg "AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes)."} ${past.devenv}/testBuildFailure.log
+          echo PASS > "$out"
+        '';
+
+    # The shared AGENTS.md carries the limit of every runtime that reads it,
+    # whoever supplies the content: here Codex's limit, and Kiro's rule alone.
+    # The internal tree is built with that limit and fails past it.
+    module-codex-shared-byte-limit-covers-kiro-only-content = let
+      hint = "Trim the contributing context or rules, replace the final file, or raise the runtime's document-size limit.";
+      limit."AGENTS.md" = {
+        bytes = 16;
+        inherit hint;
+      };
+      oversized = evalDevenv {
+        ai = {
+          codex = {
+            enable = true;
+            projectDocMaxBytes = 16;
+          };
+          kiro = {
+            enable = true;
+            rules.kiro-only.text = lib.concatStrings (lib.replicate 32 "x");
+          };
+        };
+      };
+      empty = evalDevenv {ai.codex.enable = true;};
+      tree = (aiBase.generated pkgs).mkTree {
+        name = "ai-devenv-internal-generated";
+        files."AGENTS.md" = markdownInput oversized "AGENTS.md" // {type = oversized.config.ai.internal.files."AGENTS.md".format;};
+        inherit (oversized.config.ai.generated) check formatter guards;
+        maxBytes = limit;
+      };
+      failure = pkgs.testers.testBuildFailure tree;
+    in
+      assert lib.assertMsg (oversized.config.ai.internal._maxBytes == limit)
+      "codex-shared-byte-limit-covers-kiro-only-content: ai.internal._maxBytes is not Codex's limit on AGENTS.md";
+      assert lib.assertMsg ((deliveredFiles oversized.config)."AGENTS.md".source == "${tree}/AGENTS.md")
+      "codex-shared-byte-limit-covers-kiro-only-content: AGENTS.md is not delivered from a tree carrying its limit";
+      assert lib.assertMsg (!((deliveredFiles empty.config) ? "AGENTS.md"))
+      "codex-shared-byte-limit-covers-kiro-only-content: a limit alone delivered an AGENTS.md";
+        pkgs.runCommand "module-test-codex-shared-byte-limit-covers-kiro-only-content" {} ''
+          grep -q -F ${lib.escapeShellArg "AGENTS.md renders to"} ${failure}/testBuildFailure.log
+          grep -q -F ${lib.escapeShellArg hint} ${failure}/testBuildFailure.log
           echo PASS > "$out"
         '';
 

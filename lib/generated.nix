@@ -41,9 +41,6 @@ in rec {
     '';
     yaml = "find . -type f -print0 | xargs -0 -r ${prettier} --write --parser yaml --config ${prettierConfig}";
   };
-  # A normal-priority default allows types.lines definitions to append and
-  # mkForce to replace without forcing default tool references.
-  defaultCheck = lib.genAttrs types (_: ":");
   mkTree = {
     check ? {},
     files,

@@ -32,7 +32,7 @@
 # because its parser stops recognizing a table at all. Measured over this
 # corpus with only MD056 enabled, rumdl runs in 0.04s against
 # markdownlint's 8.2s, which is why the Rust one is primary. Neither is
-# redundant; that file's header comment carries the full table.
+# redundant; the markdown-formatting fragment carries the full rationale.
 #
 # NOT a formatter, and this changes nothing about formatting.
 # `dev/fragments/markdown-formatting/` records the measured survey: no
