@@ -165,6 +165,13 @@
       path = "page.md";
     }
     {
+      name = "user-check-fails";
+      files = dataFile "json" ''{"value":true}'';
+      formatter = noFormat;
+      check.json = "echo user-check-marker >&2; exit 19";
+      fails = "user-check-marker";
+    }
+    {
       name = "split-code-spans-good";
       files =
         markdown ''          A `single span` is sound.
@@ -232,6 +239,13 @@
       formatter = generated.defaultFormatter;
       guards.parseCompare = true;
       head = frontmatter.block consumerData + "\n";
+    }
+    {
+      name = "parse-unmarked-new-generator-bad";
+      files = markdown "---\nvalue: true\n---\n# Page\n";
+      # Strips the mapping, so only the pre-format scan can see it.
+      formatter = noFormat // {markdown = "printf '%s\\n' '# Page' > page.md";};
+      fails = "without its marker";
     }
     {
       name = "parse-unmarked-formatter-adds-mapping-bad";
