@@ -11,30 +11,49 @@
 # Canonical shape:
 #
 #   pathOrSubmodule : path | { path, filter? }
-#     path   — Nix path literal to the source directory
-#     filter — name → bool, applied to each direntry name
-#              (default varies per helper — .md for rules,
-#              .json for hooks, always-true for skills/agents
-#              since those are directories of their own shape).
+#     path   — the source directory: a path literal, or a path-like
+#              string or derivation (a flake input's "${src}/agents")
+#     filter — name → bool, applied to each direntry name; null or
+#              absent uses the helper's own default (.md for rules,
+#              the runtime's suffixes for agents, every entry for
+#              skills and hooks).
 #
 # Polymorphic input resolution happens at each helper's call
 # site rather than being lifted here so the helpers stay
 # thin. `resolveDirArg` centralizes the shape normalization.
 {lib}: let
+  # A path literal stays a path, and a store-path string or derivation
+  # becomes its store string, so `path + "/${name}"` works for both. Any
+  # other absolute string (`"${config.devenv.root}/agents"`) becomes a path
+  # literal, so each entry is a path or a store string and every runtime
+  # copies its content instead of writing its path as the file's text.
+  asDir = value:
+    if builtins.isPath value
+    then value
+    else let
+      s = "${value}";
+    in
+      if lib.hasPrefix "${builtins.storeDir}/" s
+      then s
+      else /. + s;
   # Normalize a polymorphic path | { path, filter? } argument to
   # a concrete `{ path, filter }` record. Consumers may pass a
-  # bare path literal and rely on the helper's default filter.
+  # bare path-like value and rely on the helper's default filter; a null
+  # filter (the option's default) means the same.
   resolveDirArg = defaultFilter: arg:
-    if lib.isPath arg
+    if lib.isStringLike arg
     then {
-      path = arg;
+      path = asDir arg;
       filter = defaultFilter;
     }
     else {
-      inherit (arg) path;
-      filter = arg.filter or defaultFilter;
+      path = asDir arg.path;
+      filter =
+        if (arg.filter or null) == null
+        then defaultFilter
+        else arg.filter;
     };
-in rec {
+in {
   # Rules from a directory of `.md` files. Each `.md` file
   # becomes one rule entry. The attrset key is the basename
   # with the `.md` suffix stripped (so emission can re-append
@@ -82,33 +101,42 @@ in rec {
     )
     matches;
 
-  # Agents from a directory of `.md` files. Each file becomes
-  # one agent. Attrset value shape matches the per-CLI agents
-  # option (`attrsOf (either lines path)`) — we return the
-  # path directly (no wrapper record) so the existing rule
-  # emission code is unchanged.
-  #
-  # Kiro is intentionally excluded from the agents fanout in
-  # the factory: its tool vocabulary is capability tags, not
-  # the tool names these files carry, and the Rust CLI's
-  # directory scan skips `.md` agents (see `ai.agents` and the
-  # agents note in packages/kiro-cli/lib/mkKiro.nix). This
-  # helper is therefore wired only into the runtimes that read
-  # Markdown agents, via their `ai.<cli>.agentsDir` options.
-  agentsFromDir = arg: let
-    cfg = resolveDirArg (name: lib.hasSuffix ".md" name) arg;
+  # Agents from a directory of native agent files. Each top-level regular
+  # file whose name ends in one of `suffixes` becomes one raw entry of a
+  # per-runtime `ai.<runtime>.agents` pool, keyed by the basename minus that
+  # suffix, with the file's path as its value, so it blends with named
+  # entries there. Subdirectories and other files are not expanded. The
+  # builder passes the runtime record's `agentsDirSuffixes` (`.md` unless
+  # the runtime's native files differ, like Kiro's `.json`). Two files with
+  # one stem (`foo.json` and `foo.md`) would name one agent twice, so that
+  # throws instead of keeping either.
+  agentsFromDirWith = suffixes: arg: let
+    matchesSuffix = name: lib.any (suffix: lib.hasSuffix suffix name) suffixes;
+    cfg = resolveDirArg matchesSuffix arg;
     entries = builtins.readDir cfg.path;
     matches =
       lib.filterAttrs
       (name: kind: kind == "regular" && cfg.filter name)
       entries;
-    stripMd = name: lib.removeSuffix ".md" name;
+    stripSuffix = name:
+      lib.foldl' (stem: suffix:
+        if stem == name
+        then lib.removeSuffix suffix name
+        else stem)
+      name
+      suffixes;
+    collisions =
+      lib.filterAttrs (_: names: builtins.length names > 1)
+      (lib.groupBy stripSuffix (builtins.attrNames matches));
   in
-    lib.mapAttrs' (
-      name: _:
-        lib.nameValuePair (stripMd name) (cfg.path + "/${name}")
-    )
-    matches;
+    if collisions != {}
+    then throw "agentsDir ${toString cfg.path}: ${lib.concatStringsSep "; " (lib.mapAttrsToList (stem: names: "${lib.concatStringsSep " and " names} both map to agent `${stem}`") collisions)}. Keep one file per agent."
+    else
+      lib.mapAttrs' (
+        name: _:
+          lib.nameValuePair (stripSuffix name) (cfg.path + "/${name}")
+      )
+      matches;
 
   # Claude-only hook files. Default filter accepts any regular
   # file — Claude hooks are shell scripts and typically have

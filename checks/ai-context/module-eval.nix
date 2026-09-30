@@ -458,20 +458,5 @@ in {
       in
         probe.success
     );
-
-    # Top-level `ai.agentsDir` fans out to every enabled agent-
-    # consumer (Claude, Copilot — NOT kiro).
-    module-top-level-agentsdir-fans-out-to-claude = mkTest "top-level-agentsdir-fans-out-to-claude" (
-      let
-        result = evalHm {
-          ai = {
-            claude.enable = true;
-            agentsDir = ../../packages/claude-code/checks/fixtures/claude-agents;
-          };
-        };
-        files = result.config.home.file;
-      in
-        files ? ".claude/agents/agent-one.md" && files ? ".claude/agents/agent-two.md"
-    );
   };
 }

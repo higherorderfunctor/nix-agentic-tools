@@ -1,13 +1,15 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-30 — Kimchi 1.1.37 shares Home Manager's user
-> config.json and harness/settings.json with the runtime; the remaining files
-> and every devenv file stay read-only copies. Its rules use the shared flat
-> AGENTS.md renderer and repository aggregate. Region is required. The pinned pi
-> dependency is 0.85.1. Agents are read-only copies from the runtime's generated
-> Markdown tree; the opt-in docs skill uses the shared frontmatter renderer and
-> a guarded generated-file tree; a store-path string is an input just as a path
-> is. Full lineage: `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-09-30 — a normalized agent's `tools` list is dropped
+> with a warning instead of failing evaluation. Kimchi 1.1.37 shares Home
+> Manager's user config.json and harness/settings.json with the runtime; the
+> remaining files and every devenv file stay read-only copies. Its rules use the
+> shared flat AGENTS.md renderer and repository aggregate. Region is required.
+> The pinned pi dependency is 0.85.1. Agents are read-only copies from the
+> runtime's generated Markdown tree; the opt-in docs skill uses the shared
+> frontmatter renderer and a guarded generated-file tree; a store-path string is
+> an input just as a path is. Full lineage:
+> `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -377,18 +379,18 @@ Those destinations need their own owner if they are to be managed from Nix.
 Manager that write does not persist. Declare the package's settings from Nix
 instead.
 
-A portable record renders as `description:` frontmatter plus the instructions
-body, with no `name:`. Two inputs fail evaluation, naming `ai.kimchi.agents` as
-the remedy: a record with a non-empty `tools` list (Claude/Copilot names; Kimchi
-matches its lowercase builtins exactly, `agent-types.ts:12`, so dropping it
-would widen the agent and translating it would fail silently), and root Markdown
-(written for Claude, and Kimchi ignores `name:` and reads `model: sonnet` as a
-model id). Markdown under `ai.kimchi.agents` or `ai.kimchi.agentsDir` is
-Kimchi's own and lands verbatim. A path-like entry, a store-path string such as
-a flake input's `"${src}/a.md"` included, is copied from that source by
+A normalized record renders as `description:` frontmatter plus the instructions
+body, with no `name:`. Its Claude/Copilot `tools` list is dropped (Kimchi
+matches its lowercase builtins exactly, `agent-types.ts:12`, so translating it
+would fail silently), which widens the agent to every tool; the shared delivery
+warning names native Markdown under `ai.kimchi.agents` as the remedy. Root
+`ai.agents` takes only normalized records, so Claude Markdown no longer reaches
+Kimchi from the root. Markdown under `ai.kimchi.agents` or `ai.kimchi.agentsDir`
+is Kimchi's own and lands verbatim. A path-like entry, a store-path string such
+as a flake input's `"${src}/a.md"` included, is copied from that source by
 `lib.ai.agent.fileContent`, which tests `isPathLike`; `builtins.isPath` alone
 would write the path itself as the agent's text. Locked by
-`module-kimchi-agents-rejected` and, for the string form on both backends,
+`module-kimchi-agent-tools-warns` and, for the string form on both backends,
 `module-kimchi-agents`.
 
 ## Hooks: project `hooks.json` only

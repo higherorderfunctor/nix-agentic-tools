@@ -61,11 +61,38 @@ in {
         && (builtins.tryEval (ai.app.mkRuntime (base // {hm.installPackage = _: pkgs.hello;}))).success
     );
 
+    # A native agent layer is one pair on the record, `agentNativeType` with
+    # `agentTransformer`, and it lowers the agents pool. Either half alone, or
+    # the pair on a record without that pool, must fail where the record is
+    # built. The pair with the agents pool is the positive control.
+    factory-mkRuntime-native-agent-contract = mkTest "mkRuntime-native-agent-contract" (
+      let
+        base = {
+          inherit pkgs;
+          name = "testapp";
+          defaults.package = pkgs.hello;
+        };
+        withAgents = base // {supportedPools = ["agents"];};
+        rejected = record: !(builtins.tryEval (ai.app.mkRuntime record)).success;
+        nativeLayer = {
+          agentNativeType = lib.types.attrsOf lib.types.anything;
+          agentTransformer = _: _: {};
+        };
+      in
+        rejected (withAgents // {inherit (nativeLayer) agentNativeType;})
+        && rejected (withAgents // {inherit (nativeLayer) agentTransformer;})
+        && rejected (base // nativeLayer)
+        && (builtins.tryEval (ai.app.mkRuntime (withAgents // nativeLayer))).success
+    );
+
     # The record's `poolOptions` and the value its `sharedAgentsMd` callback
     # returns are read by name, so a key nothing reads would be dropped with
     # no error: a misspelt pool, a pool the builder does not declare
     # (`hooks`), one the record does not support, `agentsDir` without
     # `agents`, or a stray callback field such as `context` or `maxbytes`.
+    # An `agents` override would shadow the builder's description, so it is
+    # rejected too; `agentsDescriptionSuffix` is the runtime's hook, and it
+    # and `agentsDirSuffixes` need the agents pool, the latter non-empty.
     # Each must fail, `poolOptions` both where the record is built and where a
     # transform reads it. The well-formed record, every callback field, and a
     # bare `key` are the positive controls.
@@ -76,8 +103,8 @@ in {
           name = "testapp";
           supportedPools = ["agents" "lspServers" "rules"];
           defaults.package = pkgs.hello;
+          agentsDescriptionSuffix = "Test agents.";
           poolOptions = {
-            agents.description = "Test agents.";
             agentsDir.description = "Test agents directory.";
             lspServers.description = "Test LSP servers.";
           };
@@ -116,9 +143,22 @@ in {
           };
       in
         rejected (withPoolOptions {agnets.description = "misspelt";})
+        && rejected (withPoolOptions {agents.description = "shadows the builder";})
         && rejected (withPoolOptions {environmentVariables.description = "unsupported";})
+        && rejected (base // {agentsDirSuffixes = [];})
+        && rejected (base // {agentsDirSuffixes = [1];})
+        && rejected ((removeAttrs base ["poolOptions"])
+          // {
+            supportedPools = ["lspServers"];
+            agentsDescriptionSuffix = "no agents pool";
+          })
+        && rejected ((removeAttrs base ["poolOptions" "agentsDescriptionSuffix"])
+          // {
+            supportedPools = ["lspServers"];
+            agentsDirSuffixes = [".md"];
+          })
         && rejected (withPoolOptions {hooks.description = "undeclared";} // {supportedPools = base.supportedPools ++ ["hooks"];})
-        && rejected (base
+        && rejected ((removeAttrs base ["agentsDescriptionSuffix"])
           // {
             supportedPools = ["lspServers"];
             poolOptions.agentsDir.description = "no agents pool";
@@ -128,6 +168,7 @@ in {
           && (transformed backend built).success)
         ["devenv" "hm"]
         && (evaluate "hm" built).ai.testapp.agentsDir == null
+        && (evaluate "hm" (ai.app.mkRuntime (base // {agentsDirSuffixes = [".json"];}))).ai.testapp.agentsDir == null
         && rejectedResult {
           key = "AGENTS.md";
           maxbytes = 1;

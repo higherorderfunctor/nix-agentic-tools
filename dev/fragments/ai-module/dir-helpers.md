@@ -1,10 +1,18 @@
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-09-27 — directory-generated per-runtime entries
-> replace or null-suppress same-key root entries under the normalized keyed-pool
-> contract; see "Consumer patterns" below. The builder expands every per-runtime
-> Dir option, `agentsDir` included, outside the enable gate. The path-type
-> pitfall is about strict `lib.isPath` checks. Full lineage:
+> **Last verified:** 2026-09-30 — root `ai.agentsDir` is gone; every
+> `ai.<runtime>.agentsDir` expands through `agentsFromDirWith` (exported; there
+> is no `agentsFromDir`) into raw per-runtime agent entries, Kiro taking `.json`
+> and `.md` and Codex `.toml`. Only top-level regular files with those suffixes
+> are expanded; subdirectories and other files are not delivered, and two files
+> with one stem throw. A Dir option takes a path-like string too: a store string
+> stays one and any other absolute string becomes a path literal, so every
+> expanded entry is a path or a store string. A null `filter` means the helper's
+> default. Directory-generated per-runtime entries replace or null-suppress
+> same-key root entries under the normalized keyed-pool contract; see "Consumer
+> patterns" below. The builder expands every per-runtime Dir option, `agentsDir`
+> included, outside the enable gate. The path-type pitfall is about strict
+> `lib.isPath` checks. Full lineage:
 > `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
 
 ### The helpers
@@ -15,9 +23,15 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
   is basename minus `.md`.
 - `skillsFromDir` — directory-of-directories → `attrsOf path`. Key is the subdir
   name unchanged.
-- `agentsFromDir` — directory of `.md` files → `attrsOf path`. Key is basename
-  minus `.md`. Expanded by the builder for Claude, Copilot and Kimchi, the
-  records that name `agentsDir` in `poolOptions`.
+- `agentsFromDirWith suffixes` — directory of native agent files → an attrset of
+  paths, keeping top-level regular files that end in one of `suffixes`. Key is
+  basename minus that suffix; two files with one stem throw. This is the
+  exported helper. The builder expands `ai.<runtime>.agentsDir` for every
+  runtime with the agents pool, with the record's `agentsDirSuffixes` (default
+  `.md`; Kiro `.json` and `.md`, Codex `.toml`). The paths are raw
+  `ai.<runtime>.agents` entries at `mkDefault`, so they blend with named entries
+  and a named entry at the same key wins. There is no root `ai.agentsDir`: root
+  `ai.agents` takes only normalized records.
 - `hooksFromDir` — directory of regular files → `attrsOf lines` (via
   `readFile`). Key is the filename unchanged (hooks are typically extensionless
   shell scripts). Claude-only.
@@ -26,8 +40,16 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 
 Per the refactor plan §3.5 — every Dir option is either:
 
-- A bare Nix path literal, or
-- A submodule `{ path, filter? }` where `filter : name → bool`.
+- A bare Nix path literal, or a path-like string or derivation (a flake input's
+  `"${src}/agents"`), or
+- A submodule `{ path, filter? }` where `filter : name → bool`. A null `filter`
+  (the default) uses the helper's own default below.
+
+`resolveDirArg` keeps a store-path string or derivation as its store string and
+turns any other absolute string (`"${config.devenv.root}/agents"`) into a path
+literal. Every expanded entry is then a path or a store string, which every
+writer's `isPathLike` copies. A non-store string entry would instead ship its
+own path as the file's text.
 
 The option type lives in `lib/ai/ai-common.nix:dirOptionType` and is shared
 across sharedOptions and the per-CLI baselines.
@@ -40,12 +62,12 @@ without over-engineering. User directive: "just name is fine on the filter".
 
 Default filters per helper:
 
-| Helper          | Default filter                 |
-| --------------- | ------------------------------ |
-| `rulesFromDir`  | `name: hasSuffix ".md" name`   |
-| `skillsFromDir` | `_: true` (every subdir)       |
-| `agentsFromDir` | `name: hasSuffix ".md" name`   |
-| `hooksFromDir`  | `_: true` (every regular file) |
+| Helper                       | Default filter                 |
+| ---------------------------- | ------------------------------ |
+| `rulesFromDir`               | `name: hasSuffix ".md" name`   |
+| `skillsFromDir`              | `_: true` (every subdir)       |
+| `agentsFromDirWith suffixes` | name ends in one of `suffixes` |
+| `hooksFromDir`               | `_: true` (every regular file) |
 
 ### Consumer patterns
 
@@ -89,7 +111,9 @@ dir, which a consumer may also populate directly or via a separate module.
 The helpers use `builtins.readDir cfg.path` and compute per-file paths as
 `cfg.path + "/${name}"`. Path addition preserves the `"path"` type when
 `cfg.path` is a literal, so downstream consumers that strict-check `lib.isPath`
-still see a path (not a store-path string). Do NOT replace the path literal in
-consumer code with `builtins.path { path = ...; }` or a `builtins.filterSource`
-result — those return strings and silently break every strict `lib.isPath` check
-downstream. See `hm-modules/module-conventions.md` on "Nix path types".
+still see a path (not a store-path string). A string or derivation directory
+yields store-path strings instead, which is why every writer tests `isPathLike`.
+Do NOT replace the path literal in consumer code with
+`builtins.path { path = ...; }` or a `builtins.filterSource` result — those
+return strings and silently break every strict `lib.isPath` check downstream.
+See `hm-modules/module-conventions.md` on "Nix path types".

@@ -67,7 +67,24 @@
     if supportsPool poolName
     then aiCommon.mergePool {inherit topPool cliPool;}
     else {};
-  mergedAgents = mergePool "agents" config.ai.agents (cfg.agents or {});
+  # Agents are layered when the runtime supplies a native agent record:
+  #
+  #   ai.agents.<n>                 normalized record, fanned out here
+  #   ai.<runtime>.agents.<n>       normalized record, or a raw native file
+  #   ai.<runtime>.native.agents.<n> typed native record: `agentTransformer`
+  #                                 lowers each normalized record into it at
+  #                                 mkDefault, so consumer fields win
+  #
+  # A raw file replaces the root record at its key and bypasses the native
+  # layer; the runtime's delivery callback receives the raw files as
+  # `rawAgents` and the native records as `nativeAgents`, already apart.
+  # Without a native record every merged entry stays in the normalized pool
+  # (`mergedAgents`), raw files included.
+  hasNativeAgents = supportsPool "agents" && appRecord ? agentNativeType;
+  agentsDirSuffixes = appRecord.agentsDirSuffixes or [".md"];
+  poolAgents = mergePool "agents" config.ai.agents (cfg.agents or {});
+  rawAgents = lib.optionalAttrs hasNativeAgents (lib.filterAttrs (_: value: !(agent.isSemantic value)) poolAgents);
+  mergedAgents = removeAttrs poolAgents (builtins.attrNames rawAgents);
   mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
   mergedLspServers = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
   # Suppression applies after runtime entries replace root entries so a
@@ -174,11 +191,19 @@
     then config.ai.hooks
     else {};
 
-  normalizedAgents = lib.mapAttrs (_: value:
+  # An evaluated record's text source carries both arms; only the winner
+  # crosses into a pool or native default (see `toNormalizedTextSource`).
+  normalizeAgent = value:
     if agent.isSemantic value
     then value // {instructions = toNormalizedTextSource value.instructions;}
-    else value)
-  mergedAgents;
+    else value;
+  normalizedAgents = lib.mapAttrs (_: normalizeAgent) mergedAgents;
+  # Each field of a lowered record is its own mkDefault definition, so a
+  # consumer who sets one field of `native.agents.<n>` overrides that field
+  # and keeps the rest; a mkDefault on the whole record would be discarded.
+  nativeAgentDefaults = lib.mapAttrs (name: value:
+    lib.mapAttrs (_: lib.mkDefault) (appRecord.agentTransformer name (normalizeAgent value)))
+  cfg.normalized.agents;
   # Kiro keeps its established runtime-local scalar `inclusion` override.
   # Root rules and every other runtime expose the portable priority list.
   # After root/runtime replacement has chosen one complete entry, normalize
@@ -204,7 +229,11 @@
   };
   normalizedPools = {
     agents = {
-      type = lib.types.attrsOf agent.agentType;
+      type = lib.types.attrsOf (
+        if hasNativeAgents
+        then agent.semanticAgentType
+        else agent.agentType
+      );
     };
     context = {
       default = normalizedContext;
@@ -242,17 +271,50 @@
     };
   };
   checkRecord = import ./checkRecord.nix {inherit lib;};
+  # A runtime's own options may already declare `native.*` (settings), so the
+  # native agent option joins that attrset rather than replacing it.
+  runtimeOptions = (appRecord.options or {}) // backendOptions;
+  nativeOptions =
+    runtimeOptions
+    // lib.optionalAttrs hasNativeAgents {
+      native =
+        (runtimeOptions.native or {})
+        // {
+          agents = lib.mkOption {
+            type = lib.types.attrsOf appRecord.agentNativeType;
+            default = {};
+            description = ''
+              Native ${appRecord.name} agent records, one file each. Every
+              normalized agent that reaches ${appRecord.name} (root
+              `ai.agents` and `ai.${appRecord.name}.agents`, after
+              replacement and null withdrawal) lowers into the entry at its
+              key at `mkDefault`, field by field, so a field defined here wins
+              and runtime-only fields are added here. Define an entry field by
+              field: an entry wrapped whole in `mkDefault` is discarded when a
+              normalized agent exists at the same key, so a module default
+              must set each field at `mkDefault` instead. An entry with no
+              normalized counterpart is a native-only agent, including one
+              whose normalized agent was withdrawn with null. A raw file at
+              `ai.${appRecord.name}.agents.<name>` bypasses this layer and
+              cannot share its key.
+            '';
+          };
+        };
+    };
   # A per-runtime pool option the builder declares for a supported pool, with
   # the record's `poolOptions.<pool>` merged over it, so a runtime states only
-  # what differs: its own description, or a native type (Codex's agents).
-  # `agentsDir` is opt-in by naming it there, because Codex consumes `agents`
-  # and deliberately has no directory form of it.
+  # what differs, such as its own description. `agents` takes no override
+  # (checkRecord rejects one): a runtime appends its own sentence through
+  # `agentsDescriptionSuffix` and supplies its `native.agents` type as
+  # `agentNativeType`. Every runtime with the agents pool gets `agentsDir`,
+  # which expands into raw `agents` entries with the record's
+  # `agentsDirSuffixes`.
   poolOptions = appRecord.poolOptions or {};
   poolOption = pool: declaration:
     lib.optionalAttrs (supportsPool pool) {
       ${pool} = lib.mkOption ({default = {};} // declaration // poolOptions.${pool} or {});
     };
-  hasAgentsDir = supportsPool "agents" && poolOptions ? agentsDir;
+  hasAgentsDir = supportsPool "agents";
   normalizedPool = name: neutral:
     if supportsPool name
     then cfg.normalized.${name}
@@ -307,6 +369,8 @@
       // callbackArgs.mergedEnvironmentVariables;
     hasMergedContext = normalizedHasContext;
     mergedAgents = normalizedPool "agents" {};
+    inherit rawAgents;
+    nativeAgents = lib.optionalAttrs hasNativeAgents cfg.native.agents;
     mergedContext = normalizedPool "context" null;
     mergedEnvironmentVariables = normalizedPool "environmentVariables" {};
     mergedLspServers = normalizedPool "lspServers" {};
@@ -523,15 +587,18 @@ in {
     }
     // poolOption "agents" {
       type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
-      description = "${appRecord.name}-specific agents. Entries replace top-level ai.agents at the same key; null suppresses an inherited agent.";
+      description =
+        "${appRecord.name}-specific agents: a normalized record or a raw native file. Entries replace top-level ai.agents at the same key; null suppresses an inherited agent."
+        + lib.optionalString hasNativeAgents " Normalized records lower into `ai.${appRecord.name}.native.agents`; raw files bypass that layer. Null withdraws only the normalized record: a `native.agents` entry at the same key still ships as a native-only agent."
+        + lib.optionalString (appRecord ? agentsDescriptionSuffix) " ${appRecord.agentsDescriptionSuffix}";
     }
     // lib.optionalAttrs hasAgentsDir {
       agentsDir = lib.mkOption ({
           type = lib.types.nullOr aiCommon.dirOptionType;
           default = null;
-          description = "Directory of `.md` agent files, expanded into `ai.${appRecord.name}.agents` keyed by basename minus `.md`.";
+          description = "Directory of native agent files (${lib.concatStringsSep ", " agentsDirSuffixes}), expanded into raw `ai.${appRecord.name}.agents` entries keyed by basename minus the suffix. Accepts a path, a path-like string or derivation, or `{ path, filter? }`. Only top-level regular files with those suffixes are expanded; subdirectories and other files are not delivered, and two files with one stem fail evaluation. They blend with named entries; a named entry at the same key wins.";
         }
-        // poolOptions.agentsDir);
+        // poolOptions.agentsDir or {});
     }
     // poolOption "environmentVariables" {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
@@ -627,8 +694,7 @@ in {
         '';
       };
     }
-    // (appRecord.options or {})
-    // backendOptions;
+    // nativeOptions;
 
   config = lib.mkMerge [
     # Both real backends expose warnings. Minimal evalModules callers without
@@ -639,6 +705,19 @@ in {
         lib.mapAttrs (_: pool: lib.mapAttrs (_: lib.mkDefault) pool)
         (lib.filterAttrs (pool: _: supportsPool pool) normalizedKeyedPools);
     }
+    (lib.optionalAttrs hasNativeAgents {
+      ai.${appRecord.name}.native.agents = nativeAgentDefaults;
+    })
+    (lib.optionalAttrs (hasNativeAgents && options ? assertions) {
+      assertions = let
+        shared = builtins.attrNames (builtins.intersectAttrs rawAgents cfg.native.agents);
+      in [
+        {
+          assertion = !cfg.enable || shared == [];
+          message = "ai.${appRecord.name}.native.agents ${lib.concatStringsSep ", " shared}: ai.${appRecord.name}.agents sets a raw native file at the same key, which bypasses the native layer. Keep one of the two.";
+        }
+      ];
+    })
     # Narrow compatibility cleanup may need to run on the generation that
     # disables a runtime. Product output remains solely inside cfg.enable.
     migrationConfig
@@ -653,7 +732,7 @@ in {
     }))
     (lib.optionalAttrs hasAgentsDir (lib.mkIf (cfg.agentsDir != null) {
       ai.${appRecord.name}.agents = lib.mapAttrs (_: lib.mkDefault) (
-        dirHelpers.agentsFromDir cfg.agentsDir
+        dirHelpers.agentsFromDirWith agentsDirSuffixes cfg.agentsDir
       );
     }))
     (lib.optionalAttrs (supportsPool "skills") (lib.mkIf (cfg.skillsDir != null) {

@@ -1,17 +1,20 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-30 — rule inclusion resolves from one portable
-> priority list and runtime support table before L4 rendering. The shared
-> AGENTS.md notice resolves each runtime's effective limit at shell entry.
-> Claude delivers every surface through `ai.claude.files`; its settings.json and
-> devenv .mcp.json are read-only links. Every delivered entry is a file the
-> layer writes. L5 is the delivery router plus one adapter per backend; every
-> runtime describes delivery once through the record-level `config`, which
-> `mkRuntime` makes the only delivery callback, and the delivery matrix is
-> generated from the layer for every runtime's files. Normalized pools carry
-> only a text-source record's winning arm. Claude's devenv rules and Codex's
-> execpolicy rules are read-only copies whose writers survive a disable.
-> Copilot's settings files are read-only copies of one
+> **Last verified:** 2026-09-30 — a record's `agentNativeType` +
+> `agentTransformer` give it a typed `native.agents` layer below the normalized
+> agents pool; every agents runtime gets `agentsDir`, and a runtime extends the
+> builder's `agents` description only through `agentsDescriptionSuffix`. Rule
+> inclusion resolves from one portable priority list and runtime support table
+> before L4 rendering. The shared AGENTS.md notice resolves each runtime's
+> effective limit at shell entry. Claude delivers every surface through
+> `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
+> Every delivered entry is a file the layer writes. L5 is the delivery router
+> plus one adapter per backend; every runtime describes delivery once through
+> the record-level `config`, which `mkRuntime` makes the only delivery callback,
+> and the delivery matrix is generated from the layer for every runtime's files.
+> Normalized pools carry only a text-source record's winning arm. Claude's
+> devenv rules and Codex's execpolicy rules are read-only copies whose writers
+> survive a disable. Copilot's settings files are read-only copies of one
 > `materialize-copilot-config` writer; its only reconciled document is the HM
 > `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
 > `mcp.json` are read-only copies in one directory ledger. Kimchi shares its HM
@@ -25,20 +28,21 @@
 > `.claude.json` has an ungated mode-narrowing command writer beside its unpin
 > ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
 > declares the per-runtime `agents`, `environmentVariables` and `lspServers`
-> options and an opt-in `agentsDir`; a record's `poolOptions` carries only what
-> differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
-> read and a stray field in the `sharedAgentsMd` result. Every reconciled
-> document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
-> contribution may carry `index` entries: Codex and Kimchi render a scoped rule
-> that names `references` as a path-scoped index entry instead of inlining its
-> body. The shared AGENTS.md map lowers through the router as `internal`, as a
-> read-only copy, and a contribution's `defaultMaxBytes` supplies fallback bytes
-> plus an effective-limit resolver for the owner's notice under a raised
-> `maxBytes`; its built bytes are measured in the generated-file tree. The
-> router builds one tree per invocation for static Markdown, JSON, TOML and
-> YAML, while switch-time overlays and `content.run` stay outside it. Generators
-> mark their `content` with `_generated`, so a consumer's replacement of a
-> unit's file warns like a switch-off. Rule and semantic-agent generators use
+> options, plus `agentsDir` for every agents runtime; a record's `poolOptions`
+> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
+> builder would not read, a malformed native agent layer or agent field, and a
+> stray field in the `sharedAgentsMd` result. Every reconciled document is one
+> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
+> `index` entries: Codex and Kimchi render a scoped rule that names `references`
+> as a path-scoped index entry instead of inlining its body. The shared
+> AGENTS.md map lowers through the router as `internal`, as a read-only copy,
+> and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
+> effective-limit resolver for the owner's notice under a raised `maxBytes`; its
+> built bytes are measured in the generated-file tree. The router builds one
+> tree per invocation for static Markdown, JSON, TOML and YAML, while
+> switch-time overlays and `content.run` stay outside it. Generators mark their
+> `content` with `_generated`, so a consumer's replacement of a unit's file
+> warns like a switch-off. Rule and semantic-agent generators use
 > `lib/frontmatter.nix` to render YAML and mark the content. The router passes
 > that marker to the generated-file builder, which accepts BOM/CRLF, formats
 > only the body and restores the exact fenced frontmatter bytes with one blank
@@ -358,14 +362,23 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
   `lib/ai/app/mkBackendTransform.nix` (`lib/ai/app/default.nix` selects it once
-  per backend). That includes `agentsDir`, declared only for a record whose
-  `poolOptions` names it: Codex consumes `agents` with no directory form.
-  `poolOptions.<pool>` is merged over the builder's declaration, so a runtime
-  states only its own description or a native type (Codex's agents). The builder
-  reads `poolOptions` by pool name, so `lib/ai/app/checkRecord.nix` rejects any
-  other key, in `mkRuntime` and again in the transform: a pool outside `agents`,
-  `environmentVariables` and `lspServers`, one the record's `supportedPools`
-  omits, or `agentsDir` without `agents`.
+  per backend). That includes `agentsDir`, declared for every runtime with the
+  agents pool, whose suffixes come from the record's `agentsDirSuffixes`
+  (default `.md`). It also includes `native.agents`, declared for a record that
+  supplies `agentNativeType` and `agentTransformer` and joined to the record's
+  own `native.*` options. `poolOptions.<pool>` is merged over the builder's
+  declaration of `agentsDir`, `environmentVariables` or `lspServers`, so a
+  runtime states only its own description. The `agents` description takes no
+  override: the record's `agentsDescriptionSuffix` is the only per-runtime hook
+  for it, appended to the builder's text so the shared sentences stay in one
+  place. The builder reads `poolOptions` by pool name, so
+  `lib/ai/app/checkRecord.nix` rejects any other key, in `mkRuntime` and again
+  in the transform: `agents`, a pool outside `environmentVariables` and
+  `lspServers`, one the record's `supportedPools` omits, or `agentsDir` without
+  `agents`. It also rejects `agentNativeType` without `agentTransformer` or the
+  reverse, either one, `agentsDirSuffixes` or `agentsDescriptionSuffix` without
+  the agents pool, and an empty or non-string `agentsDirSuffixes`. The native
+  pair is tested for presence, so an explicit null counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus

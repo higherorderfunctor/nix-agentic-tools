@@ -118,9 +118,18 @@
       then (entry.value.${field} or {}) != {}
       else nonEmpty (entry.value.${field} or null)
     ) (message (entry.path ++ [field]) reason);
-  agentWarnings =
-    lib.optionals (runtime == "codex") (lib.concatMap (entry:
-        fieldWarning entry "tools" "Codex agents have no equivalent tool allowlist field.") (entries "agents"));
+  # A normalized agent's `tools` names Claude/Copilot tools. A runtime with
+  # another vocabulary does not lower it, so the guardrail it expresses is
+  # lost unless restated natively; a native `tools` for the same agent is that
+  # restatement and silences the warning.
+  agentToolReasons = {
+    codex = _: "Codex agents have no equivalent tool allowlist field.";
+    kimchi = name: "Kimchi matches its own lowercase builtins, so the agent gets every tool. Set ${lib.showOption ["ai" "kimchi" "agents" name]} to native Kimchi Markdown with its own `tools:` line to apply the guardrail there.";
+    kiro = name: "Kiro takes capability tags, not Claude/Copilot tool names. Set ${lib.showOption ["ai" "kiro" "native" "agents" name "tools"]} (capability tags) and permissions to apply the guardrail there.";
+  };
+  agentWarnings = lib.optionals (agentToolReasons ? ${runtime}) (lib.concatMap (entry:
+    lib.optionals ((cfg.native.agents.${entry.name}.tools or null) == null)
+    (fieldWarning entry "tools" (agentToolReasons.${runtime} entry.name))) (entries "agents"));
   ruleWarnings = lib.optionals (runtime == "kiro") (lib.concatMap (entry:
     lib.optional (aiCommon.resolveInclusion {
         runtime = "kiro";

@@ -48,8 +48,16 @@
       else []
     else if surface == "settings"
     then [["ai" ecosystem "native" "settings"]] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "native" "harnessSettings"]
-    else if ecosystem == "kiro" && builtins.elem surface ["agents" "hooks"]
-    then [["ai" "kiro" surface] ["ai" "kiro" "${surface}Dir"]] ++ lib.optional (surface == "hooks") ["ai" "kiro" "hooksJson"]
+    # Every agents runtime has `agentsDir`; Codex and Kiro also take native
+    # records, which alone can produce a file (a native-only agent). The
+    # ai-warnings-delivery check holds this list to the records'
+    # `agentNativeType`.
+    else if surface == "agents"
+    then
+      [["ai" "agents"] ["ai" ecosystem "agents"] ["ai" ecosystem "agentsDir"]]
+      ++ lib.optional (builtins.elem ecosystem ["codex" "kiro"]) ["ai" ecosystem "native" "agents"]
+    else if ecosystem == "kiro" && surface == "hooks"
+    then [["ai" "kiro" "hooks"] ["ai" "kiro" "hooksDir"] ["ai" "kiro" "hooksJson"]]
     else [["ai" surface] ["ai" ecosystem surface]];
   both = value: {
     devenv = value;

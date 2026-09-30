@@ -21,11 +21,26 @@
 #     contextDescription ? null;     # runtime-specific option description override
 #     rulesDescription ? null;       # runtime-specific option description override
 #     poolOptions ? {};              # {<pool> = mkOption attrs;} merged over the
-#                                    #   builder's declaration of `agents`,
-#                                    #   `environmentVariables` or `lspServers`;
-#                                    #   naming `agentsDir` opts into that option.
+#                                    #   builder's declaration of `agentsDir`,
+#                                    #   `environmentVariables` or `lspServers`.
 #                                    #   Any other key, or a pool not in
 #                                    #   `supportedPools`, is rejected.
+#     agentNativeType ? <absent>;    # option type of ONE native agent record.
+#                                    #   With `agentTransformer`, declares
+#                                    #   `ai.<name>.native.agents` and splits
+#                                    #   `ai.<name>.agents` into normalized
+#                                    #   records and raw native files.
+#     agentTransformer ? <absent>;   # name: normalized → native attrset, whose
+#                                    #   fields land in `native.agents.<name>` at
+#                                    #   mkDefault. `instructions` arrives with
+#                                    #   one text-source arm. Set both or neither.
+#                                    #   Both are tested for PRESENCE, so an
+#                                    #   explicit null counts as set.
+#     agentsDirSuffixes ? [".md"];   # file suffixes `ai.<name>.agentsDir` expands
+#                                    #   into raw `ai.<name>.agents` entries
+#     agentsDescriptionSuffix ? null; # runtime-specific text appended to the
+#                                    #   builder's `ai.<name>.agents` description;
+#                                    #   the only per-runtime hook for it
 #     config ? _: {};                # ONE delivery callback for BOTH backends; it
 #                                    #   receives `backend` and describes delivery
 #                                    #   rather than lowering it.
@@ -65,10 +80,12 @@
 # The callbacks receive ONE attrset, assembled in exactly one place —
 # `callbackArgs` in `mkBackendTransform.nix` — and read it rather than
 # trusting a list here. It carries `backend`, `cfg`, `config`, `normalized`,
-# every `merged*` pool, `resolvedSettings`, `resolvedShell`, `mergedContext`,
-# `launcherEnvironment` and `topHooks`; every callback takes `...`, so a
+# every `merged*` pool, `rawAgents` and `nativeAgents` (a native-agent
+# runtime's raw files and native records), `resolvedSettings`,
+# `resolvedShell`, `mergedContext`, `launcherEnvironment` and `topHooks`;
+# every callback takes `...`, so a
 # stale list here would mislead without ever breaking a build.
-{lib}: {
+{lib}: args @ {
   name,
   defaults ? {},
   options ? {},
@@ -77,6 +94,13 @@
   contextDescription ? null,
   ruleModule ? null,
   rulesDescription ? null,
+  # Tested for PRESENCE, never compared: a native type built from
+  # `pkgs.formats.*` forces the factory's `pkgs` when evaluated, and this
+  # record is built while modules are still being imported (see `pkgs`).
+  agentNativeType ? null,
+  agentTransformer ? null,
+  agentsDirSuffixes ? null,
+  agentsDescriptionSuffix ? null,
   poolOptions ? {},
   config ? null,
   installPackage ? null,
@@ -105,7 +129,14 @@
   # need it must degrade rather than throw.
   pkgs ? null,
 }:
-assert (import ./checkRecord.nix {inherit lib;}).record {inherit name defaults hm devenv poolOptions supportedPools;};
+assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults hm devenv poolOptions supportedPools;}
+  // builtins.intersectAttrs {
+    agentNativeType = null;
+    agentTransformer = null;
+    agentsDirSuffixes = null;
+    agentsDescriptionSuffix = null;
+  }
+  args);
   {
     inherit name defaults options poolOptions supportedPools hm devenv pkgs;
   }
@@ -118,3 +149,7 @@ assert (import ./checkRecord.nix {inherit lib;}).record {inherit name defaults h
   // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
   // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
   // lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}
+  // lib.optionalAttrs (args ? agentNativeType) {inherit agentNativeType;}
+  // lib.optionalAttrs (args ? agentTransformer) {inherit agentTransformer;}
+  // lib.optionalAttrs (agentsDirSuffixes != null) {inherit agentsDirSuffixes;}
+  // lib.optionalAttrs (agentsDescriptionSuffix != null) {inherit agentsDescriptionSuffix;}

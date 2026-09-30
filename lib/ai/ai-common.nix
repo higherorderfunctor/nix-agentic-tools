@@ -527,10 +527,8 @@ in {
   # full direntry attrs). Downstream normalization happens in
   # lib/ai/dir-helpers.nix via `resolveDirArg`.
   #
-  # The default filter here keeps `.md` files — it's the common
-  # case for rules/agents. Helpers that want different defaults
-  # (skills: always-true, hooks: always-true) override the filter
-  # at their call site; the option's default text is cosmetic.
+  # `filter` defaults to null, which each helper resolves to its own
+  # default, so the submodule form filters like the bare-path form.
   dirOptionType = lib.types.either lib.types.path (lib.types.submodule {
     options = {
       path = lib.mkOption {
@@ -538,10 +536,9 @@ in {
         description = "Source directory.";
       };
       filter = lib.mkOption {
-        type = lib.types.functionTo lib.types.bool;
-        default = name: lib.hasSuffix ".md" name;
-        defaultText = lib.literalExpression "name: lib.hasSuffix \".md\" name";
-        description = "Predicate `name → bool`. Entries for which this returns false are skipped.";
+        type = lib.types.nullOr (lib.types.functionTo lib.types.bool);
+        default = null;
+        description = "Predicate `name → bool`. Entries for which this returns false are skipped. Null uses the consuming helper's default: `.md` files for rules, the runtime's agent file suffixes for agents, every subdirectory for skills.";
       };
     };
   });

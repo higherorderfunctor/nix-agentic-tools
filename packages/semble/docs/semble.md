@@ -1,18 +1,19 @@
 # Semble integrations
 
-> **Last verified:** 2026-09-29 — the snapshots regenerate through
-> `passthru.regenerateExtracted`. `install` gates only the package, never the
-> rules. `models` is a root list routed by exact content set, with
-> `defaultContent` and `defaultModel`; the CLI and the MCP server route alike
-> through `patches/models.patch`, and there is no `--model`. `pathMappings` is
-> an ordered root list of `{ language; content; patterns; }` where the first
-> match wins, validated against `extracted.json`, and `language = null` means
-> line chunking with no parser. `mcp.content` and `mcp.rootExposure` are gone:
-> `mcp.enable = false` with an MCP-backed subagent is a Kiro agent-private
-> server. Every installed package is a bin-only launcher set that unsets
-> PYTHONPATH. Model examples use the flake's
-> `lib.packaging.fetchHuggingFaceModel` and forward `files` as `passthru.files`,
-> which turns on the model2vec layout check.
+> **Last verified:** 2026-09-30 — Semble's Kiro subagent is the portable record
+> on `ai.kiro.agents` plus per-field native fields on `ai.kiro.native.agents`.
+> The snapshots regenerate through `passthru.regenerateExtracted`. `install`
+> gates only the package, never the rules. `models` is a root list routed by
+> exact content set, with `defaultContent` and `defaultModel`; the CLI and the
+> MCP server route alike through `patches/models.patch`, and there is no
+> `--model`. `pathMappings` is an ordered root list of
+> `{ language; content; patterns; }` where the first match wins, validated
+> against `extracted.json`, and `language = null` means line chunking with no
+> parser. `mcp.content` and `mcp.rootExposure` are gone: `mcp.enable = false`
+> with an MCP-backed subagent is a Kiro agent-private server. Every installed
+> package is a bin-only launcher set that unsets PYTHONPATH. Model examples use
+> the flake's `lib.packaging.fetchHuggingFaceModel` and forward `files` as
+> `passthru.files`, which turns on the model2vec layout check.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -185,25 +186,29 @@ its ordinary `semble` command targets a stable canonical variant, while
 runtime-generated guidance uses `semble-<runtime>` and each MCP entry points
 directly at its own variant. Distinct variants use package-keyed cache
 subdirectories, so incompatible customization fingerprints never alternate in
-one index. Named MCP entries plus Claude and Codex normalized subagents use a
-whole-entry `mkDefault`, so an ordinary consumer value replaces the generated
-record atomically and `null` suppresses it for that runtime. The CLI rule
-instead defaults each content field: a consumer's higher-priority `text`
-overrides the packaged `source`, which remains visible on the resolved rule. Set
-`ai.<runtime>.rules.semble.enable = false` to retract it at the normalized pool,
-or disable `ai.<runtime>.programs.semble.cli.instructions` at its package gate.
-Kiro's runtime-native subagent is not a normalized nullable pool: consumers can
-replace the generated entry atomically, but cannot suppress it with `null`.
-Claude writes the guidance as the always-on rule file `.claude/rules/semble.md`,
-and Codex inlines it in AGENTS.md. Kiro receives the same named rule: Home
-Manager writes it to `.kiro/steering/semble.md`, while devenv, where Kiro shares
-the repository AGENTS.md, inlines it there beside Codex's identical copy. The
-rule key `semble` is public API, so a repository that also keys an architecture
-rule by it should rename its own (this repository's is `semble-integration`).
-`ai.programs.semble.install = false` skips the launchers and the cache guard and
-nothing else, so the rules, and any committed file that carries them, do not
-depend on whether the package is installed. It is portable-only: installation is
-one decision per backend.
+one index. Named MCP entries plus the Claude, Codex and Kiro normalized
+subagents use a whole-entry `mkDefault`, so an ordinary consumer value replaces
+the generated record atomically and `null` suppresses it for that runtime. The
+CLI rule instead defaults each content field: a consumer's higher-priority
+`text` overrides the packaged `source`, which remains visible on the resolved
+rule. Set `ai.<runtime>.rules.semble.enable = false` to retract it at the
+normalized pool, or disable `ai.<runtime>.programs.semble.cli.instructions` at
+its package gate. Kiro takes the same portable record on
+`ai.kiro.agents.semble-search`, plus its native fields (capability-tag `tools`,
+and for the MCP interface `includeMcpJson` and the agent-scoped server) on
+`ai.kiro.native.agents.semble-search`, one `mkDefault` per field. Consumers
+replace those native fields there. A Kiro `null` on
+`ai.kiro.agents.semble-search` removes the subagent and its native fields
+together. Claude writes the guidance as the always-on rule file
+`.claude/rules/semble.md`, and Codex inlines it in AGENTS.md. Kiro receives the
+same named rule: Home Manager writes it to `.kiro/steering/semble.md`, while
+devenv, where Kiro shares the repository AGENTS.md, inlines it there beside
+Codex's identical copy. The rule key `semble` is public API, so a repository
+that also keys an architecture rule by it should rename its own (this
+repository's is `semble-integration`). `ai.programs.semble.install = false`
+skips the launchers and the cache guard and nothing else, so the rules, and any
+committed file that carries them, do not depend on whether the package is
+installed. It is portable-only: installation is one decision per backend.
 
 Home Manager fixes the global cache at `${config.xdg.cacheHome}/semble`, even on
 Darwin where Semble's platform default would otherwise be `~/Library/Caches`.
@@ -467,7 +472,7 @@ in {
 
   ai.kiro = {
     mcpServers.semble = nat.lib.ai.mcpServers.mkSemble {inherit lib pkgs;} {};
-    agents.semble-search = nat.lib.ai.semble.mcp.kiroAgent;
+    native.agents.semble-search = nat.lib.ai.semble.mcp.kiroAgent;
     rules.semble = nat.lib.ai.semble.rule;
   };
 }

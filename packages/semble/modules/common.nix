@@ -242,18 +242,17 @@
 
   mcpSubagent = state: state.selected "subagent" && state.cfg.subagent.interface == "mcp";
 
-  agentRecord = state: let
-    interfaceRecords =
-      if state.cfg.subagent.interface == "mcp"
-      then records.forMcp (routingFor state)
-      else recordsFor state;
-    base =
-      if state.runtime == "kiro"
-      then interfaceRecords.kiroAgent
-      else interfaceRecords.semanticAgent;
-  in
-    base
-    // lib.optionalAttrs (state.runtime == "kiro" && state.cfg.subagent.interface == "mcp") {
+  interfaceRecords = state:
+    if state.cfg.subagent.interface == "mcp"
+    then records.forMcp (routingFor state)
+    else recordsFor state;
+
+  # The Kiro-only part of the subagent: the native fields the portable record
+  # does not lower (capability-tag tools and, for the MCP interface, an
+  # agent-scoped server). Description and prompt come from the portable one.
+  kiroAgentFields = state:
+    removeAttrs (interfaceRecords state).kiroAgent ["description" "prompt"]
+    // lib.optionalAttrs (state.cfg.subagent.interface == "mcp") {
       includeMcpJson = false;
       mcpServers.semble = mcpEntry state;
     };
@@ -270,14 +269,19 @@
       (lib.mkIf (state.selected "mcp") {
         ai.${runtime}.mcpServers.semble = lib.mkDefault (mcpEntry state);
       })
-      (lib.mkIf (state.selected "subagent") {
-        # Both records are typed attrsets (Kiro's shape differs from the
-        # portable semantic one, but neither is pre-rendered). Default the
-        # whole entry so a consumer can replace it atomically. Claude/Codex
-        # agents are normalized nullable entries and also accept null
-        # tombstones; Kiro's runtime-native agent pool is replace-only.
-        ai.${runtime}.agents.semble-search = lib.mkDefault (agentRecord state);
-      })
+      # Every runtime takes the portable record on its own pool, defaulted
+      # whole, so a consumer value replaces it atomically, null suppresses
+      # it, and it replaces a same-key root agent the same way everywhere.
+      # Kiro adds its native fields on `native.agents` one `mkDefault` per
+      # field: a whole-entry default there would be discarded by the
+      # lowered record. They follow the portable record, so a Kiro null
+      # removes the whole agent rather than leaving one with no prompt.
+      (lib.mkIf (state.selected "subagent") (lib.mkMerge ([
+          {ai.${runtime}.agents.semble-search = lib.mkDefault (interfaceRecords state).semanticAgent;}
+        ]
+        ++ lib.optional (runtime == "kiro") (lib.mkIf ((config.ai.kiro.agents.semble-search or null) != null) {
+          ai.kiro.native.agents.semble-search = lib.mapAttrs (_: lib.mkDefault) (kiroAgentFields state);
+        }))))
     ];
 
   # An MCP caller passes `content` as one category or "all", or omits it for

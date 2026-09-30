@@ -7,8 +7,14 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-30 — rule inclusion is a priority-ordered portable
-> list resolved once per runtime; Kiro keeps its scalar per-runtime override.
+> **Last verified:** 2026-09-30 — agents are layered: root `ai.agents` takes
+> only the normalized record, `ai.<runtime>.agents` a normalized record or a raw
+> native file, and a runtime record's `agentNativeType` + `agentTransformer`
+> lower normalized records into typed `ai.<runtime>.native.agents` (Kiro and
+> Codex today); callbacks get `rawAgents` and `nativeAgents` apart. Root
+> `ai.agentsDir` is gone; every runtime's `ai.<runtime>.agentsDir` expands into
+> raw per-runtime entries. Rule inclusion is a priority-ordered portable list
+> resolved once per runtime; Kiro keeps its scalar per-runtime override.
 > Stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
 > options. Claude delivers every surface as its own file through
 > `ai.claude.files` on both backends and fails evaluation beside its upstream
@@ -73,10 +79,10 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 >   0.146.1, where this repo's own former profile silently dropped the
 >   module-contributed `~/.cache/nix` root — hence the hard assert rejecting the
 >   combination rather than trying to reconcile it.
-> - **`ai.kiro.agents.<name>` defaults `name` from the attribute key — don't
->   remove it as redundant.** Kiro ships two agent-schema parsers with different
->   requirements: the Rust CLI requires `name`, the Node/ACP parser treats it as
->   optional. The default satisfies both.
+> - **`ai.kiro.native.agents.<name>` defaults `name` from the attribute key —
+>   don't remove it as redundant.** Kiro ships two agent-schema parsers with
+>   different requirements: the Rust CLI requires `name`, the Node/ACP parser
+>   treats it as optional. The default satisfies both.
 > - **`ai.codex.profiles` cannot deliver "this agent sees only X" — dropped
 >   2026-09-19, not merely re-locked.** The whole-file `codex --profile <name>`
 >   layer was locked out by assertion from the day it landed (a profile layer
@@ -296,14 +302,19 @@ The ai module fans out TWO kinds of configuration:
   per-entry files remain declarative while that native mutation can coexist.
   Trusted project rules are declarative and may use `default` because Codex's
   native writer targets only the user layer.
-- `ai.codex.agents.<name>` — the semantic agent record plus a freeform `codex`
-  TOML extension. Home Manager emits `${configDir}/agents/<name>.toml`; devenv
-  emits trusted-project `.codex/agents/<name>.toml`. The filename stem supplies
-  native `name`, while `description` and resolved `instructions.text` lower to
-  the two other required native fields. `instructions.source` reads a packaged
-  file into that text. Reserved core fields cannot be redefined in `codex`.
-  Global concurrency, model/effort defaults, and interruption behavior live in
-  the typed `ai.codex.native.settings.agents` table.
+- `ai.codex.agents.<name>` — a normalized agent record or a raw standalone TOML
+  role file, delivered verbatim (not scanned for OAuth secrets);
+  `ai.codex.agentsDir` expands `.toml` files into raw entries. A normalized
+  record lowers into `ai.codex.native.agents.<name>` at `mkDefault`, a typed
+  TOML record with required `name`, `description` and `developer_instructions`
+  over a freeform TOML tail: `name` defaults to the key, and `description` and
+  the instructions' text (a `source` is read) supply the other two. A
+  native-only entry must set those two itself; an assertion names a missing one.
+  Native keys (`model`, `sandbox_mode`, `skills.config`) go on the native record
+  and win field by field. Home Manager emits `${configDir}/agents/<name>.toml`;
+  devenv emits trusted-project `.codex/agents/<name>.toml`. Global concurrency,
+  model/effort defaults, and interruption behavior live in the typed
+  `ai.codex.native.settings.agents` table.
 - `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
   appended after portable `ai.hooks` groups and emitted in adjacent
   `hooks.json`. The handler extends the portable command handler, so the two
@@ -359,39 +370,57 @@ enabled ecosystem whose native model preserves the option's semantics):
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, Kimchi, and
   Kiro use their established native directories.
-- `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
-  portable `{ description, instructions = { text | source; }; tools?; codex?; }`
-  record. Semantic records render Claude/Copilot frontmatter plus body and Codex
-  standalone TOML. The shared frontmatter renderer returns header bytes and
-  marker metadata together. The optional `tools` list uses Claude and Copilot's
-  shared tool names and renders a non-empty value as their comma-separated
-  frontmatter allowlist; `null` and `[]` both omit the header. Codex
-  deliberately omits it because its standalone agent format has no equivalent
-  field. Codex fails loudly on a legacy raw entry instead of pretending Markdown
-  is a valid agent config. Claude writes `.claude/agents/<name>.md` on both
-  backends through `agent.renderFile`. A path-like legacy entry — a Nix path, a
-  store-path string such as a flake input's `"${src}/a.md"`, or a derivation,
-  i.e. Home Manager's `isPathLike` — stays a file `source` for Claude and Kimchi
-  on both backends (`agent.fileContent`, which tests `agent.isPathLike`), and is
-  read into text by `renderCopilot` for Copilot's file writer; an `agentsDir`
-  given as a string yields string entries, so every writer must test
-  `isPathLike`, never `builtins.isPath`. Raw `ai.kiro.agents` entries route the
-  same way to `source` through the same `agent.fileContent`. Kiro remains
-  excluded from this pool, but NOT because its agents are untyped JSON —
-  `ai.kiro.agents` is a typed record modelling Kiro's v3 agent schema, and its
-  `prompt` uses the same `text`/`source` content shape. The blocker is the tool
-  VOCABULARY: this pool's `tools` carries Claude/Copilot tool names (`Bash`,
-  `Read`) while Kiro takes capability tags (`shell`, `read`, `@mcp`), so
-  lowering needs a translation table, not a pass-through. Add one and the
-  exclusion can be revisited. Kimchi takes semantic records as frontmatter plus
-  body with no `name:`, and rejects a non-empty `tools` (its lowercase builtin
-  names differ) and root Markdown (it misreads Claude's
-  `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries Kimchi-native Markdown.
-  Its files are the one Markdown surface a harness rewrites (the `/agents`
-  commands), so they state `method = "copy-ro"` and take the reconciler's
-  default `0444` mode. Edit, Disable and Enable therefore fail for a declared
-  agent instead of changing Nix-owned content; Create and Eject can still add an
-  unowned sibling.
+- `ai.agents` — only the normalized
+  `{ description, instructions = { text | source; }; tools?; }` record; a string
+  or path is a type error there (a path is coerced to a thrown message, because
+  a bare submodule would import it as Nix). Each runtime's `ai.<runtime>.agents`
+  replaces it per key, null withdraws it, and also takes a raw native file (text
+  or path) that is written as is. `ai.<runtime>.agentsDir` expands its files
+  into those raw entries at `mkDefault` (`agentsDirSuffixes`, `.md` by default;
+  Kiro `.json` and `.md`, Codex `.toml`), so they blend with named entries; two
+  files with one stem throw.
+
+  The layering lives in `mkBackendTransform.nix`. A record that supplies
+  `agentNativeType` (one native record's option type) and `agentTransformer`
+  (`name: normalized → native attrset`) gets `ai.<runtime>.native.agents`; the
+  builder splits raw entries out of the pool, keeps `normalized.agents` to
+  normalized records, lowers each through the transformer with every field at
+  its own `mkDefault` (a whole-record `mkDefault` would be discarded by one
+  consumer field), and hands the callback raw files as `rawAgents` and native
+  records as `nativeAgents`, so no runtime re-splits them; `mergedAgents` stays
+  the normalized pool. A native entry with no normalized counterpart is a
+  native-only agent, and so is one left behind when a per-runtime null withdraws
+  the normalized record; one sharing a raw entry's key fails an assertion. A
+  module that defaults a native entry must do it field by field too: Semble puts
+  its portable record on `ai.<runtime>.agents` and only Kiro's own fields on
+  `native.agents`. The transformer receives instructions with one text-source
+  arm (`toNormalizedTextSource`), so Kiro's `prompt` takes it as is and Codex
+  reads a `source`. Presence of the two fields is checked, never their values: a
+  type built from `pkgs.formats.*` forces the factory's `pkgs` while modules are
+  still importing.
+
+  Without the native layer (Claude, Copilot, Kimchi) the normalized pool keeps
+  raw entries and the runtime renders the record directly: Claude/Copilot
+  frontmatter plus body, Kimchi Markdown without `name:`. `tools` uses Claude
+  and Copilot's tool names and renders a non-empty value as their frontmatter
+  allowlist; `null` and `[]` both omit it. Codex, Kimchi and Kiro drop it, and
+  `lib/ai/delivery-warnings.nix` warns at the path that set it, naming the
+  native remedy (Kimchi Markdown; `ai.kiro.native.agents.<name>.tools` and
+  `permissions`); a native `tools` on the same agent silences it. Claude writes
+  `.claude/agents/<name>.md` on both backends through `agent.renderFile`. A
+  path-like raw entry — a Nix path, a store-path string such as a flake input's
+  `"${src}/a.md"`, or a derivation, i.e. Home Manager's `isPathLike` — stays a
+  file `source` (`agent.fileContent`, which tests `agent.isPathLike`) for
+  Claude, Codex, Kimchi and Kiro, and is read into text by `renderCopilot` for
+  Copilot; an `agentsDir` given as a store-path string yields store-string
+  entries (any other absolute string becomes a path literal), so every writer
+  must test `isPathLike`, never `builtins.isPath`. Kiro keeps a raw `.md` path's
+  suffix and writes everything else as `.json`. Kimchi's agent files are the one
+  Markdown surface a harness rewrites (the `/agents` commands), so they state
+  `method = "copy-ro"` and take the reconciler's default `0444` mode. Edit,
+  Disable and Enable therefore fail for a declared agent instead of changing
+  Nix-owned content; Create and Eject can still add an unowned sibling.
+
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex
@@ -491,8 +520,9 @@ scope or a non-empty list for `fileMatch` content.
   values never enter generated TOML. `oauth.client_secret` has no such
   indirection upstream, so an assertion rejects it on both backends on every
   typed route into an `[mcp_servers.<name>.oauth]` table: each server's `codex`
-  block, `native.settings.mcp_servers`, and an agent's `codex.mcp_servers`. Raw
-  `ai.codex.files` content is not inspected. Direct
+  block, `native.settings.mcp_servers`, and
+  `ai.codex.native.agents.<name>.mcp_servers`. Raw `ai.codex.files` content and
+  raw `ai.codex.agents` TOML are not inspected. Direct
   `ai.codex.native.settings.mcp_servers` cannot be combined with either typed
   pool because their table ownership would be ambiguous. Credential-injecting
   `proxy.enable` entries lower at their declaration scope before pool merging: a
@@ -591,8 +621,7 @@ check over both backend module trees. Managed MCP proxy ownership is another
 separate check: `sharedOptions.nix` aggregates declaration scopes, rejects
 reused unit keys, and validates only active owners. Runtime-specific
 materialization assertions remain inside the enabled runtime's factory—for
-example, Codex's semantic-agent requirement and its `hooks.json` versus
-inline-hook ownership check.
+example, Codex's `hooks.json` versus inline-hook ownership check.
 
 ### Other boundaries
 
@@ -702,8 +731,8 @@ The shared option descriptions and generated README capability matrix must name
 each registered runtime as a consumer or an intentional exclusion. In
 particular, Codex has no native LSP registry; its `shell_environment_policy`
 filters child-command inheritance rather than setting the Codex process
-environment; legacy Markdown agents cannot become native Codex TOML; and only
-the Claude/Codex lifecycle intersection belongs in portable hooks.
+environment; a raw Codex agent is TOML, never Markdown; and only the
+Claude/Codex lifecycle intersection belongs in portable hooks.
 
 `lib/options-doc.nix` evaluates both complete published module trees and
 produces their CommonMark/JSON references. The old mdbook/NuschtOS site is gone,
@@ -1201,11 +1230,19 @@ root/runtime precedence.
 
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-09-27 — directory-generated per-runtime entries
-> replace or null-suppress same-key root entries under the normalized keyed-pool
-> contract; see "Consumer patterns" below. The builder expands every per-runtime
-> Dir option, `agentsDir` included, outside the enable gate. The path-type
-> pitfall is about strict `lib.isPath` checks. Full lineage:
+> **Last verified:** 2026-09-30 — root `ai.agentsDir` is gone; every
+> `ai.<runtime>.agentsDir` expands through `agentsFromDirWith` (exported; there
+> is no `agentsFromDir`) into raw per-runtime agent entries, Kiro taking `.json`
+> and `.md` and Codex `.toml`. Only top-level regular files with those suffixes
+> are expanded; subdirectories and other files are not delivered, and two files
+> with one stem throw. A Dir option takes a path-like string too: a store string
+> stays one and any other absolute string becomes a path literal, so every
+> expanded entry is a path or a store string. A null `filter` means the helper's
+> default. Directory-generated per-runtime entries replace or null-suppress
+> same-key root entries under the normalized keyed-pool contract; see "Consumer
+> patterns" below. The builder expands every per-runtime Dir option, `agentsDir`
+> included, outside the enable gate. The path-type pitfall is about strict
+> `lib.isPath` checks. Full lineage:
 > `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
 
 ### The helpers
@@ -1216,9 +1253,15 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
   is basename minus `.md`.
 - `skillsFromDir` — directory-of-directories → `attrsOf path`. Key is the subdir
   name unchanged.
-- `agentsFromDir` — directory of `.md` files → `attrsOf path`. Key is basename
-  minus `.md`. Expanded by the builder for Claude, Copilot and Kimchi, the
-  records that name `agentsDir` in `poolOptions`.
+- `agentsFromDirWith suffixes` — directory of native agent files → an attrset of
+  paths, keeping top-level regular files that end in one of `suffixes`. Key is
+  basename minus that suffix; two files with one stem throw. This is the
+  exported helper. The builder expands `ai.<runtime>.agentsDir` for every
+  runtime with the agents pool, with the record's `agentsDirSuffixes` (default
+  `.md`; Kiro `.json` and `.md`, Codex `.toml`). The paths are raw
+  `ai.<runtime>.agents` entries at `mkDefault`, so they blend with named entries
+  and a named entry at the same key wins. There is no root `ai.agentsDir`: root
+  `ai.agents` takes only normalized records.
 - `hooksFromDir` — directory of regular files → `attrsOf lines` (via
   `readFile`). Key is the filename unchanged (hooks are typically extensionless
   shell scripts). Claude-only.
@@ -1227,8 +1270,16 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 
 Per the refactor plan §3.5 — every Dir option is either:
 
-- A bare Nix path literal, or
-- A submodule `{ path, filter? }` where `filter : name → bool`.
+- A bare Nix path literal, or a path-like string or derivation (a flake input's
+  `"${src}/agents"`), or
+- A submodule `{ path, filter? }` where `filter : name → bool`. A null `filter`
+  (the default) uses the helper's own default below.
+
+`resolveDirArg` keeps a store-path string or derivation as its store string and
+turns any other absolute string (`"${config.devenv.root}/agents"`) into a path
+literal. Every expanded entry is then a path or a store string, which every
+writer's `isPathLike` copies. A non-store string entry would instead ship its
+own path as the file's text.
 
 The option type lives in `lib/ai/ai-common.nix:dirOptionType` and is shared
 across sharedOptions and the per-CLI baselines.
@@ -1241,12 +1292,12 @@ without over-engineering. User directive: "just name is fine on the filter".
 
 Default filters per helper:
 
-| Helper          | Default filter                 |
-| --------------- | ------------------------------ |
-| `rulesFromDir`  | `name: hasSuffix ".md" name`   |
-| `skillsFromDir` | `_: true` (every subdir)       |
-| `agentsFromDir` | `name: hasSuffix ".md" name`   |
-| `hooksFromDir`  | `_: true` (every regular file) |
+| Helper                       | Default filter                 |
+| ---------------------------- | ------------------------------ |
+| `rulesFromDir`               | `name: hasSuffix ".md" name`   |
+| `skillsFromDir`              | `_: true` (every subdir)       |
+| `agentsFromDirWith suffixes` | name ends in one of `suffixes` |
+| `hooksFromDir`               | `_: true` (every regular file) |
 
 ### Consumer patterns
 
@@ -1290,27 +1341,32 @@ dir, which a consumer may also populate directly or via a separate module.
 The helpers use `builtins.readDir cfg.path` and compute per-file paths as
 `cfg.path + "/${name}"`. Path addition preserves the `"path"` type when
 `cfg.path` is a literal, so downstream consumers that strict-check `lib.isPath`
-still see a path (not a store-path string). Do NOT replace the path literal in
-consumer code with `builtins.path { path = ...; }` or a `builtins.filterSource`
-result — those return strings and silently break every strict `lib.isPath` check
-downstream. See `hm-modules/module-conventions.md` on "Nix path types".
+still see a path (not a store-path string). A string or derivation directory
+yields store-path strings instead, which is why every writer tests `isPathLike`.
+Do NOT replace the path literal in consumer code with
+`builtins.path { path = ...; }` or a `builtins.filterSource` result — those
+return strings and silently break every strict `lib.isPath` check downstream.
+See `hm-modules/module-conventions.md` on "Nix path types".
 
 <!-- Fragment: dev/fragments/ai-module/layered-fanout.md -->
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-30 — rule inclusion resolves from one portable
-> priority list and runtime support table before L4 rendering. The shared
-> AGENTS.md notice resolves each runtime's effective limit at shell entry.
-> Claude delivers every surface through `ai.claude.files`; its settings.json and
-> devenv .mcp.json are read-only links. Every delivered entry is a file the
-> layer writes. L5 is the delivery router plus one adapter per backend; every
-> runtime describes delivery once through the record-level `config`, which
-> `mkRuntime` makes the only delivery callback, and the delivery matrix is
-> generated from the layer for every runtime's files. Normalized pools carry
-> only a text-source record's winning arm. Claude's devenv rules and Codex's
-> execpolicy rules are read-only copies whose writers survive a disable.
-> Copilot's settings files are read-only copies of one
+> **Last verified:** 2026-09-30 — a record's `agentNativeType` +
+> `agentTransformer` give it a typed `native.agents` layer below the normalized
+> agents pool; every agents runtime gets `agentsDir`, and a runtime extends the
+> builder's `agents` description only through `agentsDescriptionSuffix`. Rule
+> inclusion resolves from one portable priority list and runtime support table
+> before L4 rendering. The shared AGENTS.md notice resolves each runtime's
+> effective limit at shell entry. Claude delivers every surface through
+> `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
+> Every delivered entry is a file the layer writes. L5 is the delivery router
+> plus one adapter per backend; every runtime describes delivery once through
+> the record-level `config`, which `mkRuntime` makes the only delivery callback,
+> and the delivery matrix is generated from the layer for every runtime's files.
+> Normalized pools carry only a text-source record's winning arm. Claude's
+> devenv rules and Codex's execpolicy rules are read-only copies whose writers
+> survive a disable. Copilot's settings files are read-only copies of one
 > `materialize-copilot-config` writer; its only reconciled document is the HM
 > `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
 > `mcp.json` are read-only copies in one directory ledger. Kimchi shares its HM
@@ -1324,20 +1380,21 @@ downstream. See `hm-modules/module-conventions.md` on "Nix path types".
 > `.claude.json` has an ungated mode-narrowing command writer beside its unpin
 > ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
 > declares the per-runtime `agents`, `environmentVariables` and `lspServers`
-> options and an opt-in `agentsDir`; a record's `poolOptions` carries only what
-> differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
-> read and a stray field in the `sharedAgentsMd` result. Every reconciled
-> document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
-> contribution may carry `index` entries: Codex and Kimchi render a scoped rule
-> that names `references` as a path-scoped index entry instead of inlining its
-> body. The shared AGENTS.md map lowers through the router as `internal`, as a
-> read-only copy, and a contribution's `defaultMaxBytes` supplies fallback bytes
-> plus an effective-limit resolver for the owner's notice under a raised
-> `maxBytes`; its built bytes are measured in the generated-file tree. The
-> router builds one tree per invocation for static Markdown, JSON, TOML and
-> YAML, while switch-time overlays and `content.run` stay outside it. Generators
-> mark their `content` with `_generated`, so a consumer's replacement of a
-> unit's file warns like a switch-off. Rule and semantic-agent generators use
+> options, plus `agentsDir` for every agents runtime; a record's `poolOptions`
+> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
+> builder would not read, a malformed native agent layer or agent field, and a
+> stray field in the `sharedAgentsMd` result. Every reconciled document is one
+> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
+> `index` entries: Codex and Kimchi render a scoped rule that names `references`
+> as a path-scoped index entry instead of inlining its body. The shared
+> AGENTS.md map lowers through the router as `internal`, as a read-only copy,
+> and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
+> effective-limit resolver for the owner's notice under a raised `maxBytes`; its
+> built bytes are measured in the generated-file tree. The router builds one
+> tree per invocation for static Markdown, JSON, TOML and YAML, while
+> switch-time overlays and `content.run` stay outside it. Generators mark their
+> `content` with `_generated`, so a consumer's replacement of a unit's file
+> warns like a switch-off. Rule and semantic-agent generators use
 > `lib/frontmatter.nix` to render YAML and mark the content. The router passes
 > that marker to the generated-file builder, which accepts BOM/CRLF, formats
 > only the body and restores the exact fenced frontmatter bytes with one blank
@@ -1657,14 +1714,23 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
   `lib/ai/app/mkBackendTransform.nix` (`lib/ai/app/default.nix` selects it once
-  per backend). That includes `agentsDir`, declared only for a record whose
-  `poolOptions` names it: Codex consumes `agents` with no directory form.
-  `poolOptions.<pool>` is merged over the builder's declaration, so a runtime
-  states only its own description or a native type (Codex's agents). The builder
-  reads `poolOptions` by pool name, so `lib/ai/app/checkRecord.nix` rejects any
-  other key, in `mkRuntime` and again in the transform: a pool outside `agents`,
-  `environmentVariables` and `lspServers`, one the record's `supportedPools`
-  omits, or `agentsDir` without `agents`.
+  per backend). That includes `agentsDir`, declared for every runtime with the
+  agents pool, whose suffixes come from the record's `agentsDirSuffixes`
+  (default `.md`). It also includes `native.agents`, declared for a record that
+  supplies `agentNativeType` and `agentTransformer` and joined to the record's
+  own `native.*` options. `poolOptions.<pool>` is merged over the builder's
+  declaration of `agentsDir`, `environmentVariables` or `lspServers`, so a
+  runtime states only its own description. The `agents` description takes no
+  override: the record's `agentsDescriptionSuffix` is the only per-runtime hook
+  for it, appended to the builder's text so the shared sentences stay in one
+  place. The builder reads `poolOptions` by pool name, so
+  `lib/ai/app/checkRecord.nix` rejects any other key, in `mkRuntime` and again
+  in the transform: `agents`, a pool outside `environmentVariables` and
+  `lspServers`, one the record's `supportedPools` omits, or `agentsDir` without
+  `agents`. It also rejects `agentNativeType` without `agentTransformer` or the
+  reverse, either one, `agentsDirSuffixes` or `agentsDescriptionSuffix` without
+  the agents pool, and an empty or non-string `agentsDirSuffixes`. The native
+  pair is tested for presence, so an explicit null counts as set.
 - L2b options (CLI-specific, like Claude's `hookScriptsDir`) →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 replacement/suppression filtering → transform (`aiCommon.mergePool` plus

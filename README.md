@@ -338,7 +338,7 @@ instruction building.
 | Generated-file formatting | N/A | `ai.generated.{formatter,check}.{json,markdown,toml,yaml}` (Nix-owned static files, including settings; consumer-supplied skills and runtime-rendered files excluded) | Same; project-native static files included |
 | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
-| Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi) | Same; project-native paths |
+| Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi + Kiro) | Same; project-native paths |
 | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
 | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
 | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
@@ -773,7 +773,7 @@ ai.codex = {
 };
 
 ai.kiro = {
-  agents.semble-search =
+  native.agents.semble-search =
     inputs.nix-agentic-tools.lib.ai.semble.kiroAgent;
   rules.semble = inputs.nix-agentic-tools.lib.ai.semble.rule;
 };

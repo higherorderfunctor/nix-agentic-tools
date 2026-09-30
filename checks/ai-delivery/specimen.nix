@@ -50,7 +50,7 @@
               permissions.allow = ["probe"];
             };
             kiro = {
-              agents.probe.prompt = {text = "probe";};
+              native.agents.probe.prompt = {text = "probe";};
               hooksJson.probe = ''{"event":"pre-commit"}'';
               native.settings =
                 if mode == "hm"

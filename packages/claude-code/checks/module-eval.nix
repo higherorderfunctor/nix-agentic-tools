@@ -623,8 +623,8 @@ in {
         let
           result = evalHm {
             ai = {
-              agents.probe = "probe agent";
               claude = {
+                agents.probe = "probe agent";
                 enable = true;
                 hookScripts.probe = "probe script";
                 native.settings.permissions.allow = ["Read"];
@@ -1073,16 +1073,20 @@ in {
           == "go"
       );
 
-      # HM: top-level ai.agents fans out to ~/.claude/agents/<name>.md.
+      # HM: a top-level normalized ai.agents record fans out to
+      # ~/.claude/agents/<name>.md as frontmatter plus body.
       module-claude-hm-top-level-agents-fanout = mkTest "claude-hm-top-level-agents-fanout" (
         let
           result = evalHm {
             ai.claude.enable = true;
-            ai.agents.reviewer = "# Reviewer\n\nReview carefully.";
+            ai.agents.reviewer = {
+              description = "Reviews changes.";
+              instructions.text = "Review carefully.";
+            };
           };
         in
           fromGeneratedTree ".claude/agents/reviewer.md" result.config.home.file.".claude/agents/reviewer.md"
-          && (markdownInput result ".claude/agents/reviewer.md").text == "# Reviewer\n\nReview carefully."
+          && (markdownInput result ".claude/agents/reviewer.md").text == "---\ndescription: \"Reviews changes.\"\nname: \"reviewer\"\n---\n\nReview carefully.\n"
       );
 
       # Precedence: ai.claude.agents wins over ai.agents on name collision.
@@ -1091,7 +1095,10 @@ in {
           result = evalHm {
             ai = {
               claude.enable = true;
-              agents.reviewer = "# Top-level";
+              agents.reviewer = {
+                description = "Top-level.";
+                instructions.text = "Top-level.";
+              };
               claude.agents.reviewer = "# Claude-specific";
             };
           };
@@ -1440,12 +1447,9 @@ in {
           result.config.home.file.".claude/skills/skill-a".source == ./fixtures/claude-skills/skill-a
       );
 
-      # ── ai.*.agentsDir Dir helper ──────────────────────────────
-      # Legacy Markdown directories are Claude + Copilot only. Codex is excluded
-      # because its agents are semantic records rendered to standalone TOML; Kiro
-      # is excluded because these are Markdown while Kiro's agents are JSON, and
-      # its tool tags are a different vocabulary (separate `ai.kiro.agents` /
-      # `ai.kiro.agentsDir` surfaces handle that).
+      # ── ai.claude.agentsDir Dir helper ─────────────────────────
+      # Claude's directory of `.md` agent files, expanded into raw
+      # `ai.claude.agents` entries.
 
       # Path-only form: `ai.claude.agentsDir = ./fixtures/claude-agents;`
       # expands to two entries (agent-one, agent-two). Emission lands
@@ -1485,7 +1489,10 @@ in {
       module-claude-agentsdir-entry-replaces-root-single = mkTest "claude-agentsdir-entry-replaces-root-single" (
         let
           result = evalHm {
-            ai.agents.agent-one = "Explicit top-level agent";
+            ai.agents.agent-one = {
+              description = "Explicit top-level agent.";
+              instructions.text = "Explicit top-level agent.";
+            };
             ai.claude = {
               enable = true;
               agentsDir = ./fixtures/claude-agents;
@@ -1509,14 +1516,19 @@ in {
                   description = "Probe agent.";
                   instructions.text = "PROBE-AGENT-BODY-TOKEN.";
                 };
-                # A store-path STRING, as a flake input yields: a source, the
-                # way Home Manager's `isPathLike` classifies it.
-                store-string = "${./fixtures/claude-agents}/agent-one.md";
-                suppressed = "Suppressed agent.";
+                suppressed = {
+                  description = "Suppressed agent.";
+                  instructions.text = "Suppressed agent.";
+                };
               };
               claude = {
                 enable = true;
-                agents.suppressed = null;
+                agents = {
+                  # A store-path STRING, as a flake input yields: a source,
+                  # the way Home Manager's `isPathLike` classifies it.
+                  store-string = "${./fixtures/claude-agents}/agent-one.md";
+                  suppressed = null;
+                };
               };
             };
           };

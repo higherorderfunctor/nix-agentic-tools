@@ -229,12 +229,11 @@ in
     defaults = {
       package = pkgs.ai.copilot-cli;
     };
+    agentsDescriptionSuffix = "Each lands at `<configDir>/agents/<name>.md` under Home Manager and `<projectDir>/agents/<name>.agent.md` under devenv.";
     # The builder declares these pool options, `environmentVariables` (baked
     # into ./wrapPackage.nix on both backends) included, and expands
     # `agentsDir` into `agents`; Copilot states where each one lands.
     poolOptions = {
-      agents.description = "Agent Markdown or portable semantic records (HM: <configDir>/agents/<name>.md; devenv: <projectDir>/agents/<name>.agent.md). Null suppresses a root entry at the same key.";
-      agentsDir.description = "Directory of `.md` agent files (expanded into `ai.copilot.agents`).";
       lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkCopilotLspFile` into the `lspServers` envelope: `<configDir>/lsp-config.json` under Home Manager, `<projectDir>/lsp.json` under devenv. Every entry must set `extensions`, because Copilot requires `fileExtensions`, and its name must be non-empty ASCII letters, digits, `_` and `-`, because Copilot rejects the whole file otherwise.";
     };
     options = {
