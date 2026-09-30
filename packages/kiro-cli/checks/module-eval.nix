@@ -2431,9 +2431,10 @@ in {
               agentsDir = ./fixtures/kiro-agents-dir;
             };
           }).config.files;
+        sourceRoot = "${./fixtures/kiro-agents-dir}";
       in
         files.".kiro/agents/dir-agent.json".source
-        == ./fixtures/kiro-agents-dir/dir-agent.json
+        == "${sourceRoot}/dir-agent.json"
         # The directory itself is never an entry on devenv: that would be a
         # single store symlink, and the leaves would never appear.
         && !(files ? ".kiro/agents")

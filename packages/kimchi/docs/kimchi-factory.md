@@ -512,3 +512,10 @@ relative to SKILL.md, so no temporary copy or exit cleanup is needed. Upstream's
 copy preserved the store's 0555 directory modes, causing EACCES during recursive
 cleanup. Filtering still omits bundled names supplied by stronger roots and now
 recognizes symlinked skill directories, including broken-link tolerance.
+
+Cross-harness duplicate discovery uses the same identity rule. Codex owns a
+project `.agents/skills` Layout A directory link while Kimchi uses Layout B leaf
+links. The shared recursive delivery walker points those leaves beneath the same
+interpolated store root, so Pi's realpath deduplication sees one skill. Separate
+leaf string contexts preserve devenv's per-file direnv inputs without changing
+the link targets.
