@@ -26,6 +26,11 @@
 #                                    #   naming `agentsDir` opts into that option.
 #                                    #   Any other key, or a pool not in
 #                                    #   `supportedPools`, is rejected.
+#     agentType ? <shared type>;      # normalized agent value after lowering
+#     normalizeAgent ? ({value, ...}: value);
+#                                    #   { name, value, normalizeTextSource } →
+#                                    #   normalized value; `value` already
+#                                    #   carries one text-source arm
 #     config ? _: {};                # ONE delivery callback for BOTH backends; it
 #                                    #   receives `backend` and describes delivery
 #                                    #   rather than lowering it.
@@ -76,6 +81,8 @@
   contextDescription ? null,
   ruleModule ? null,
   rulesDescription ? null,
+  agentType ? null,
+  normalizeAgent ? null,
   poolOptions ? {},
   config ? null,
   installPackage ? null,
@@ -117,3 +124,5 @@ assert (import ./checkRecord.nix {inherit lib;}).record {inherit name defaults h
   // lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
   // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
   // lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}
+  // lib.optionalAttrs (agentType != null) {inherit agentType;}
+  // lib.optionalAttrs (normalizeAgent != null) {inherit normalizeAgent;}

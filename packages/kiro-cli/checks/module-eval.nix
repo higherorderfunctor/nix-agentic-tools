@@ -2153,6 +2153,140 @@ in {
         agentFile != null
     );
 
+    # Portable semantic records lower to Kiro JSON. The `kiro` extension uses
+    # native capability tags and permission records; those fields win over the
+    # generated core record while description and instructions stay portable.
+    module-kiro-root-semantic-agent = mkTest "kiro-root-semantic-agent" (
+      let
+        config = {
+          ai = {
+            agents.worker = {
+              description = "Reads the workspace";
+              instructions.text = "Inspect files without changing them.";
+              kiro = {
+                permissions.rules = [
+                  {
+                    capability = "filesystem";
+                    effect = "deny";
+                    match = ["write"];
+                  }
+                ];
+                tools = ["read"];
+              };
+            };
+            kiro.enable = true;
+          };
+        };
+        emitted = entry: builtins.fromJSON (builtins.readFile entry.source);
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        valid = value:
+          value.name
+          == "worker"
+          && value.description == "Reads the workspace"
+          && value.prompt == "Inspect files without changing them."
+          && value.tools == ["read"]
+          && value.permissions.rules
+          == [
+            {
+              capability = "filesystem";
+              effect = "deny";
+              match = ["write"];
+            }
+          ];
+      in
+        valid (emitted hm.config.home.file.".kiro/agents/worker.json")
+        && valid (emitted devenv.config.files.".kiro/agents/worker.json")
+    );
+
+    # Claude/Copilot tool names cannot be guessed into Kiro capability tags.
+    module-kiro-root-agent-tools-rejected = mkTest "kiro-root-agent-tools-rejected" (
+      let
+        messages = evaluate:
+          map (assertion: assertion.message) (builtins.filter (assertion: !assertion.assertion)
+            (evaluate {
+              ai = {
+                agents.worker = {
+                  description = "d";
+                  instructions.text = "p";
+                  tools = ["Read"];
+                };
+                kiro.enable = true;
+              };
+            }).config.assertions);
+        expected = "Set ai.agents.<name>.kiro.tools to Kiro capability tags, or withdraw the agent with ai.kiro.agents.<name> = null.";
+      in
+        lib.all (evaluate: lib.any (lib.hasInfix expected) (messages evaluate)) [evalHm evalDevenv]
+    );
+
+    # Kiro's Rust CLI skips root Markdown/path agents; rejecting them prevents
+    # a silent missing profile.
+    module-kiro-root-legacy-agent-rejected = mkTest "kiro-root-legacy-agent-rejected" (
+      let
+        messages = evaluate:
+          map (assertion: assertion.message) (builtins.filter (assertion: !assertion.assertion)
+            (evaluate {
+              ai = {
+                agents.legacy = ../../claude-code/checks/fixtures/claude-agents/agent-one.md;
+                kiro.enable = true;
+              };
+            }).config.assertions);
+        expected = "use the legacy Markdown/path form, which Kiro's Rust CLI does not load as native JSON";
+      in
+        lib.all (evaluate: lib.any (lib.hasInfix expected) (messages evaluate)) [evalHm evalDevenv]
+    );
+
+    # A runtime null is the keyed-pool tombstone: it suppresses root lowering
+    # and both root-agent assertions.
+    module-kiro-root-agent-withdrawn = mkTest "kiro-root-agent-withdrawn" (
+      let
+        config = {
+          ai = {
+            agents.worker = {
+              description = "d";
+              instructions.text = "p";
+              tools = ["Read"];
+            };
+            kiro = {
+              enable = true;
+              agents.worker = null;
+            };
+          };
+        };
+        valid = evaluated:
+          !(evaluated.config.ai.kiro.files ? ".kiro/agents/worker.json")
+          && builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions == [];
+      in
+        valid (evalHm config) && valid (evalDevenv config)
+    );
+
+    # Adding Kiro-native fields to a portable record does not change the bytes
+    # rendered for Claude or Copilot when Kiro is disabled.
+    module-kiro-extension-does-not-change-markdown-agents = mkTest "kiro-extension-does-not-change-markdown-agents" (
+      let
+        evaluate = kiro:
+          evalHm {
+            ai = {
+              agents.worker = {
+                description = "Reads the workspace";
+                instructions.text = "Inspect files without changing them.";
+                inherit kiro;
+                tools = ["Read"];
+              };
+              claude.enable = true;
+              copilot.enable = true;
+            };
+          };
+        baseline = evaluate {};
+        extended = evaluate {tools = ["read"];};
+        text = evaluated: path: (markdownInput evaluated path).text;
+      in
+        text baseline ".claude/agents/worker.md"
+        == text extended ".claude/agents/worker.md"
+        && text baseline ".copilot/agents/worker.md"
+        == text extended ".copilot/agents/worker.md"
+    );
+
     # A TYPED agent record lowers to JSON with `name` defaulted from the attr
     # key. That default is the whole point of the typed surface: Kiro's Rust CLI
     # REJECTS an agent file with no `name`, while the Node/ACP parser treats it
@@ -3560,21 +3694,6 @@ in {
       in
         lib.hasSuffix "/bin/hello"
         ((lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "hello-lsp").command or "")
-    );
-
-    # Kiro independence: the top-level `ai.agents` pool carries Claude/Copilot
-    # tool NAMES, while Kiro's typed record takes capability TAGS — different
-    # vocabularies, so there is no pass-through lowering. Setting ai.agents.foo
-    # when ai.kiro.enable = true must NOT produce a .kiro/agents/foo file.
-    module-kiro-ignores-top-level-agents = mkTest "kiro-ignores-top-level-agents" (
-      let
-        result = evalHm {
-          ai.kiro.enable = true;
-          ai.agents.reviewer = "# Reviewer markdown";
-        };
-      in
-        !(result.config.home.file ? ".kiro/agents/reviewer.json")
-        && !(result.config.home.file ? ".kiro/agents/reviewer.md")
     );
 
     # ── ai.*.rulesDir Dir helper ──────────────────────────────────

@@ -20,6 +20,11 @@
           };
           description = "Core instructions defining the agent's behavior.";
         };
+        kiro = lib.mkOption {
+          type = lib.types.attrs;
+          default = {};
+          description = "Kiro-native agent settings layered onto the generated JSON agent record.";
+        };
         tools = lib.mkOption {
           type = lib.types.nullOr (lib.types.listOf lib.types.str);
           default = null;
@@ -84,8 +89,17 @@
       developer_instructions = value.instructions.text;
       inherit name;
     };
+
+  # `instructions` arrives with one text-source arm, so it is the prompt as-is.
+  renderKiro = name: value:
+    {
+      inherit (value) description;
+      inherit name;
+      prompt = value.instructions;
+    }
+    // value.kiro;
 in {
-  inherit fileContent isPathLike isSemantic mkSemanticAgentType renderCodex renderFile semanticAgentType;
+  inherit fileContent isPathLike isSemantic mkSemanticAgentType renderCodex renderFile renderKiro semanticAgentType;
 
   agentType = lib.types.either (lib.types.either lib.types.lines lib.types.path) semanticAgentType;
 

@@ -1,10 +1,11 @@
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-09-27 — directory-generated per-runtime entries
-> replace or null-suppress same-key root entries under the normalized keyed-pool
-> contract; see "Consumer patterns" below. The builder expands every per-runtime
-> Dir option, `agentsDir` included, outside the enable gate. The path-type
-> pitfall is about strict `lib.isPath` checks. Full lineage:
+> **Last verified:** 2026-09-30 — Kiro takes semantic root agents as JSON but
+> remains outside the Markdown `agentsFromDir` helper. Directory-generated
+> per-runtime entries replace or null-suppress same-key root entries under the
+> normalized keyed-pool contract; see "Consumer patterns" below. The builder
+> expands every per-runtime Dir option, `agentsDir` included, outside the enable
+> gate. The path-type pitfall is about strict `lib.isPath` checks. Full lineage:
 > `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
 
 ### The helpers
@@ -16,8 +17,9 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 - `skillsFromDir` — directory-of-directories → `attrsOf path`. Key is the subdir
   name unchanged.
 - `agentsFromDir` — directory of `.md` files → `attrsOf path`. Key is basename
-  minus `.md`. Expanded by the builder for Claude, Copilot and Kimchi, the
-  records that name `agentsDir` in `poolOptions`.
+  minus `.md`. Expanded by the builder for Claude, Copilot, and Kimchi, the
+  records that name a Markdown `agentsDir` in `poolOptions`. Kiro consumes
+  semantic root records as JSON but does not consume this Markdown directory.
 - `hooksFromDir` — directory of regular files → `attrsOf lines` (via
   `readFile`). Key is the filename unchanged (hooks are typically extensionless
   shell scripts). Claude-only.

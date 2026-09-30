@@ -348,6 +348,10 @@
     };
   };
 
+  # The runtime pool keeps raw native JSON/path compatibility while semantic
+  # root records are normalized into the typed arm before this type sees them.
+  kiroAgentType = lib.types.either (lib.types.either lib.types.lines lib.types.path) kiroAgentRecord;
+
   # Drop nulls AND empty collections, recursively, so an agent file carries
   # only what was actually declared. `aiCommon.filterNulls` is not enough on
   # its own: it drops `null` and `{}` but KEEPS `[]`, so a list-valued option
@@ -539,7 +543,10 @@
   # pairs, hook file-name charset, package composition, and native option
   # guards.
   # Steering entry shape/path validation now belongs to runtime-files.nix.
-  mkAssertions = cfg: let
+  mkAssertions = {
+    cfg,
+    rootAgents,
+  }: let
     # Assertion evaluation must not call a missing custom-package rollout
     # function before the dedicated assertion below can report that shape.
     resolvedPackage =
@@ -553,11 +560,36 @@
       && pkgs.stdenv.hostPlatform.isLinux
       && cfg.trustedMcpTools != []
       && (packageNeedsFhsPayload cfg.package || packageNeedsFhsPayload resolvedPackage);
+    liveAgents = lib.filterAttrs (_: value: value != null) cfg.agents;
+    # A per-runtime null withdraws the root entry for Kiro, so neither
+    # assertion below may count it.
+    withdrawn = name: (cfg.agents ? ${name}) && cfg.agents.${name} == null;
+    rootLegacyAgents = builtins.attrNames (lib.filterAttrs (name: value:
+      value
+      != null
+      && !(agent.isSemantic value)
+      && !(withdrawn name))
+    rootAgents);
+    rootToolAgents = builtins.attrNames (lib.filterAttrs (name: value:
+      agent.isSemantic value
+      && (value.tools or null) != null
+      && value.tools != []
+      && !(value.kiro ? tools)
+      && !(withdrawn name))
+    rootAgents);
   in
     [
       {
-        assertion = !(cfg.agents != {} && cfg.agentsDir != null);
+        assertion = !(liveAgents != {} && cfg.agentsDir != null);
         message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
+      }
+      {
+        assertion = rootToolAgents == [];
+        message = "ai.agents ${lib.concatStringsSep ", " rootToolAgents} carry a `tools` allowlist in Claude/Copilot tool names, which Kiro does not read (it uses capability tags such as read, write, shell, and subagent). Set ai.agents.<name>.kiro.tools to Kiro capability tags, or withdraw the agent with ai.kiro.agents.<name> = null.";
+      }
+      {
+        assertion = rootLegacyAgents == [];
+        message = "ai.agents ${lib.concatStringsSep ", " rootLegacyAgents} use the legacy Markdown/path form, which Kiro's Rust CLI does not load as native JSON. Use a portable { description, instructions, kiro? } record, or withdraw each agent with ai.kiro.agents.<name> = null.";
       }
       {
         assertion = cfg.useFhsSandbox || resolvedPackage ? unwrapped;
@@ -1122,6 +1154,20 @@ in
     # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
+    agentType = kiroAgentType;
+    # A semantic root record lowers to the typed JSON record. A typed record
+    # from `ai.kiro.agents` is already evaluated, so its `prompt` carries both
+    # arms and must be reduced to one before it becomes a pool definition.
+    normalizeAgent = {
+      name,
+      value,
+      normalizeTextSource,
+    }:
+      if agent.isSemantic value
+      then agent.renderKiro name value
+      else if builtins.isAttrs value && value ? prompt
+      then value // {prompt = normalizeTextSource value.prompt;}
+      else value;
     contextFilename = "AGENTS.md";
     ruleModule = aiCommon.kiroRuleModule;
     # No "settings": Kiro persists effort only inside per-model
@@ -1130,6 +1176,7 @@ in
     # Like any unsupported pool, the root `ai.settings.reasoningEffort` is
     # ignored for Kiro without a warning: nothing per-runtime could silence it.
     supportedPools = [
+      "agents"
       "context"
       "environmentVariables"
       "lspServers"
@@ -1141,9 +1188,23 @@ in
     defaults = {
       package = pkgs.ai.kiro-cli;
     };
-    # The builder declares `environmentVariables` (baked into the launcher on
-    # both backends) and `lspServers`.
-    poolOptions.lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
+    # The builder declares `agents`, `environmentVariables` (baked into the
+    # launcher on both backends), and `lspServers`.
+    poolOptions = {
+      agents = {
+        type = lib.types.attrsOf (lib.types.nullOr kiroAgentType);
+        description = ''
+          Kiro-native agent definitions replace portable `ai.agents` entries
+          at the same key; null suppresses an inherited agent. Native records
+          are written to `<configDir>/agents/<name>.json`.
+        '';
+      };
+      agentsDir = {
+        type = lib.types.nullOr lib.types.path;
+        description = "External directory of agent JSON files, delivered recursively at <configDir>/agents. It does not consume root ai.agentsDir Markdown files.";
+      };
+      lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
+    };
     options = {
       # Dark-shipped upstream features, unlocked by patching the rollout
       # manifest the chat binary carries in rodata (see
@@ -1528,45 +1589,6 @@ in
       # PreToolUse PostToolUse PreTaskExec PostTaskExec UserPromptSubmit
       # PostFileCreate PostFileSave PostFileDelete Manual. v2 embedded hooks
       # still work transitionally; `kiro-cli agent migrate` converts.
-      # Inline agent JSON content. Written under
-      # `<configDir>/agents/<name>.json` in both backends.
-      agents = lib.mkOption {
-        # Typed record OR the legacy raw forms. `either` tries the string/path
-        # arms first; a typed record is a plain attrset, which is neither
-        # `isString` nor stringLike, so the arms cannot collide. Raw JSON text
-        # and paths keep working unchanged — this widening is additive.
-        type = lib.types.attrsOf (
-          lib.types.either
-          (lib.types.either lib.types.lines lib.types.path)
-          kiroAgentRecord
-        );
-        default = {};
-        description = ''
-          Agent definitions written to `<configDir>/agents/<name>.json`.
-
-          Prefer the typed record: `name` defaults to the attribute key, so the
-          field Kiro's Rust CLI requires can never be omitted, and null/empty
-          fields are dropped from the emitted JSON. Raw JSON text or a path is
-          still accepted. Generated JSON is formatted before delivery; set the
-          file entry's `format` to `raw` when its exact bytes must be retained.
-        '';
-        example = lib.literalExpression ''
-          {
-            reviewer = {
-              description = "Reviews diffs";
-              prompt.source = ./reviewer-prompt.md;
-              tools = ["read" "shell"];
-            };
-          }
-        '';
-      };
-      # External agents directory, delivered recursively at
-      # `<configDir>/agents` on both backends.
-      agentsDir = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
-        default = null;
-        description = "External directory of agent JSON files (symlinked into <configDir>/agents).";
-      };
       # Typed v3 hook records (keyed by hook name) — the northbound surface.
       # Each lowers into a `{ version:"v1", hooks:[…] }` envelope written under
       # `<configDir>/hooks/<file>.json` in both backends — `<file>` is the
@@ -1626,6 +1648,8 @@ in
     config = {
       backend,
       cfg,
+      config,
+      mergedAgents,
       mergedServers,
       mergedSkills,
       mergedRules,
@@ -1659,7 +1683,14 @@ in
           # the user-global workflows setting.
           {ai.kiro.hooks = workflowReminderHooks cfg;}
           (lib.mkIf isHm (workflowsSettingImplication cfg))
-          {assertions = mkAssertions cfg ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);}
+          {
+            assertions =
+              mkAssertions {
+                inherit cfg;
+                rootAgents = config.ai.agents;
+              }
+              ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);
+          }
           {
             # Writer identities survive empty declarations: N→0 must retract
             # earlier files, including when the final hook disappears.
@@ -1757,7 +1788,7 @@ in
                   format = lib.mkDefault "json";
                   executable = null;
                 })
-              cfg.agents)
+              mergedAgents)
               (lib.mkIf (cfg.agentsDir != null) {
                 "${cfg.configDir}/agents" = {
                   content = lib.mkDefault {source = cfg.agentsDir;};

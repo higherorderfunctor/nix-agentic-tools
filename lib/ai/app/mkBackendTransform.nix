@@ -174,11 +174,23 @@
     then config.ai.hooks
     else {};
 
-  normalizedAgents = lib.mapAttrs (_: value:
-    if agent.isSemantic value
-    then value // {instructions = toNormalizedTextSource value.instructions;}
-    else value)
-  mergedAgents;
+  # Every merged agent crosses into the normalized pool with one text-source
+  # arm (see `toNormalizedTextSource`). A runtime that types its pool
+  # differently lowers the record AFTER that, through its own `normalizeAgent`
+  # hook, and receives the same normalizer for the text sources its record
+  # carries.
+  normalizeAgent = name: value: let
+    generic =
+      if agent.isSemantic value
+      then value // {instructions = toNormalizedTextSource value.instructions;}
+      else value;
+  in
+    (appRecord.normalizeAgent or ({value, ...}: value)) {
+      inherit name;
+      value = generic;
+      normalizeTextSource = toNormalizedTextSource;
+    };
+  normalizedAgents = lib.mapAttrs normalizeAgent mergedAgents;
   normalizedRules = lib.mapAttrs (_: toNormalizedTextSource) mergedRules;
 
   # A whole-pool option default disappears when a consumer adds just one key.
@@ -194,7 +206,7 @@
   };
   normalizedPools = {
     agents = {
-      type = lib.types.attrsOf agent.agentType;
+      type = lib.types.attrsOf (appRecord.agentType or agent.agentType);
     };
     context = {
       default = normalizedContext;
