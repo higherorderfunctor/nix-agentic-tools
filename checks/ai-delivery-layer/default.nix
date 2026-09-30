@@ -71,9 +71,12 @@
     then "yaml"
     else null;
   candidateCovered = entry: entry.format == candidateType entry.path;
-  frontmatterCovered = entry: entry.frontmatter && entry.format == "markdown";
   frontmatterEntries = evaluated:
-    lib.filter (entry: entry.format == "markdown" && entry.content._frontmatterKeys != [])
+    lib.filter (entry:
+      entry.format
+      == "markdown"
+      && entry.content ? text
+      && lib.hasPrefix "---\n" entry.content.text)
     (generatedEntries evaluated);
 
   codexExtension = extended:
@@ -296,33 +299,13 @@ in {
         lib.all verifies entries) ["devenv" "hm"]
     );
 
-    module-delivery-generated-untagged-candidate-detected = mkTest "delivery-generated-untagged-candidate-detected" (
-      let
-        hooks = lib.filter (entry: lib.hasInfix "/hooks/" entry.path) (generatedEntries generatedEvaluations.hm);
-      in
-        builtins.length hooks
-        == 2
-        && lib.all candidateCovered hooks
-        && lib.all (path:
-          !candidateCovered {
-            inherit path;
-            format = "raw";
-          }) [
-          "probe.json"
-          "probe.md"
-          "probe.toml"
-          "probe.yaml"
-          "probe.yml"
-        ]
-    );
-
     module-delivery-generated-frontmatter-markers = mkTest "delivery-generated-frontmatter-markers" (
       lib.all (backend: let
         entries = frontmatterEntries generatedEvaluations.${backend};
       in
         builtins.length entries
         >= 5
-        && lib.all frontmatterCovered entries)
+        && lib.all (entry: entry.content._frontmatter) entries)
       ["devenv" "hm"]
     );
     # Every typed file in the same runtime points into the same tree, even

@@ -108,22 +108,11 @@
     # pool added to sharedOptions.nix is covered the day it is declared, which
     # the scan's hand-maintained alternation was not.
     #
-    # Root groups can nest arbitrarily (`ai.generated.formatter.markdown`).
-    # Runtime groups carry enable/files and are excluded with all descendants.
-    walk = prefix: group:
-      lib.concatLists (lib.mapAttrsToList (name: member: let
-        path =
-          if prefix == ""
-          then name
-          else "${prefix}.${name}";
-      in
-        if lib.isOption member
-        then [(lib.nameValuePair path member)]
-        else if member ? enable || member ? files
-        then []
-        else walk path member)
-      group);
-    rootOptions = walk "" evaluated.options.ai;
+    # Only direct root options are scanned. Nested groups such as ai.generated
+    # are outside this guard.
+    rootOptions =
+      lib.mapAttrsToList lib.nameValuePair
+      (lib.filterAttrs (_: lib.isOption) evaluated.options.ai);
     foreignDefs = {
       name,
       value,

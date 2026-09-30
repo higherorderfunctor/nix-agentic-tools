@@ -116,7 +116,7 @@
 
     NATIVE
   '';
-  agentConfig = agentDir: {
+  agentConfig = {
     ai = {
       agents.reviewer = {
         description = "Reviews code";
@@ -125,9 +125,6 @@
       kimchi = {
         enable = true;
         agents.native = nativeAgent;
-        # This native fixture already has YAML frontmatter. Keep it in the
-        # Markdown tree and explicitly protect its header bytes.
-        files."${agentDir}/native.md".frontmatter = true;
       };
     };
   };
@@ -1160,8 +1157,8 @@ in {
     # retracts it.
     module-kimchi-agents = mkTest "kimchi-agents" (
       let
-        hm = evalHm (agentConfig hmAgentsDir);
-        devenv = evalDevenv (agentConfig devenvAgentsDir);
+        hm = evalHm agentConfig;
+        devenv = evalDevenv agentConfig;
         expected = {
           "native.md" = nativeAgent;
           "reviewer.md" = "---\ndescription: \"Reviews code\"\n---\n\nBODY\n";
@@ -1300,9 +1297,9 @@ in {
           if backend == "hm"
           then ".config/kimchi/harness/agents"
           else ".kimchi/agents";
-        declared = script backend (evaluate (agentConfig dir));
+        declared = script backend (evaluate agentConfig);
         empty = script backend (evaluate {ai.kimchi.enable = true;});
-        expected = pkgs.writeText "kimchi-reviewer.md" (markdownInput (evalHm (agentConfig hmAgentsDir)) "${hmAgentsDir}/reviewer.md").text;
+        expected = pkgs.writeText "kimchi-reviewer.md" (markdownInput (evalHm agentConfig) "${hmAgentsDir}/reviewer.md").text;
       in ''
         export HOME="$TMPDIR/${backend}-home"
         export XDG_STATE_HOME="$TMPDIR/${backend}-state"
@@ -1360,7 +1357,6 @@ in {
         })
         (mkDevenvKimchiPackage {
           ai.kimchi.agents.native = nativeAgent;
-          ai.kimchi.files."${devenvAgentsDir}/native.md".frontmatter = true;
         })
         (mkDevenvKimchiPackage {
           ai.kimchi.permissions.defaultMode = "plan";

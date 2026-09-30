@@ -14,7 +14,7 @@
 in rec {
   inherit block;
   content = rendered: {
-    _frontmatterKeys = rendered.keys;
+    _frontmatter = rendered.frontmatter;
     inherit (rendered) text;
   };
 
@@ -24,7 +24,6 @@ in rec {
   }: {
     text = lib.optionalString (data != {}) (block data + "\n") + body;
     frontmatter = data != {};
-    keys = lib.attrNames data;
   };
 
   treeFile = rendered: {

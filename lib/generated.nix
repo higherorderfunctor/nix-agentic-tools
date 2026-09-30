@@ -23,22 +23,11 @@
     echo "See README.md: Generated-file guards." >&2
     exit 1
   '';
-  formatStdin = type: command: ''
-    ${pkgs.findutils}/bin/find . -type f -print0 | while IFS= read -r -d "" file; do
-      formatted="$(${pkgs.coreutils}/bin/mktemp "$TMPDIR/generated-${type}.XXXXXXXX")"
-      ${command}
-      ${pkgs.coreutils}/bin/mv "$formatted" "$file"
-    done
-  '';
 in rec {
   defaultFormatter = {
-    json = formatStdin "json" ''
-      ${lib.getExe pkgs.biome} format --stdin-file-path="$file.json" --indent-style=${style.biome.indentStyle} --indent-width=${toString style.biome.indentWidth} < "$file" > "$formatted"
-    '';
+    json = "find . -type f -print0 | xargs -0 -r ${lib.getExe pkgs.biome} format --write --indent-style=${style.biome.indentStyle} --indent-width=${toString style.biome.indentWidth}";
     markdown = "find . -type f -print0 | xargs -0 -r ${prettier} --write --parser markdown --config ${prettierConfig}";
-    toml = formatStdin "toml" ''
-      ${lib.getExe pkgs.taplo} fmt --no-auto-config --stdin-filepath="$file.toml" - < "$file" > "$formatted"
-    '';
+    toml = "find . -type f -print0 | xargs -0 -r ${lib.getExe pkgs.taplo} fmt --no-auto-config";
     yaml = "find . -type f -print0 | xargs -0 -r ${prettier} --write --parser yaml --config ${prettierConfig}";
   };
   mkTree = {
@@ -59,31 +48,25 @@ in rec {
     eachType = f: lib.concatStrings (map (type: lib.optionalString (selected type != {}) (f type)) types);
     parseGuard = lib.optionalString (guardOn "parseCompare") (lib.concatStrings (map (type:
       withFiles type (path: file: ''
-        ${python}/bin/python3 ${./generated-guard.py} ${lib.escapeShellArgs [file.type (lib.boolToString (file.frontmatter or false)) "before/${file.type}/${path}"]} "$out"/${lib.escapeShellArg path} || {
+        ${python}/bin/python3 ${./generated-guard.py} ${lib.escapeShellArgs [file.type (lib.boolToString (file.frontmatter or false)) (sourceOf path file)]} "$out"/${lib.escapeShellArg path} || {
           ${guardError "parseCompare"}
         }
       ''))
     types));
-    frontmatterInventory = directory:
-      withFiles "markdown" (path: file:
-        lib.optionalString (!(file.frontmatter or false)) ''
-          ${python}/bin/python3 ${./generated-guard.py} discover ${directory}/${lib.escapeShellArg path} || exit 1
-        '');
     markedFrontmatter = action:
       withFiles "markdown" (path: file:
         lib.optionalString (file.frontmatter or false) ''
           ${python}/bin/python3 ${./generated-guard.py} ${action} work/markdown/${lib.escapeShellArg path} frontmatter/${lib.escapeShellArg path} || exit 1
         '');
-    tableGuard = directory:
-      lib.optionalString (guardOn "tableCells" && selected "markdown" != {}) ''
-        pushd ${directory} >/dev/null
-        ${lib.getExe tableCells.package} ${lib.escapeShellArgs (lib.attrNames (selected "markdown"))} || {
-          ${guardError "tableCells"}
-        }
-        popd >/dev/null
-      '';
+    tableGuard = lib.optionalString (guardOn "tableCells" && selected "markdown" != {}) ''
+      pushd work/markdown >/dev/null
+      ${lib.getExe tableCells.package} ${lib.escapeShellArgs (lib.attrNames (selected "markdown"))} || {
+        ${guardError "tableCells"}
+      }
+      popd >/dev/null
+    '';
     splitGuard = lib.optionalString (guardOn "splitCodeSpans" && selected "markdown" != {}) ''
-      pushd check/markdown >/dev/null
+      pushd work/markdown >/dev/null
       ${pkgs.python3}/bin/python3 ${../checks/markdown/split-code-spans.py} ${lib.escapeShellArgs (lib.attrNames (selected "markdown"))} || {
         ${guardError "splitCodeSpans"}
       }
@@ -98,13 +81,12 @@ in rec {
       buildPhase = ''
         runHook preBuild
         export HOME="$TMPDIR"
-        ${pkgs.coreutils}/bin/mkdir -p before frontmatter work
+        ${pkgs.coreutils}/bin/mkdir -p frontmatter work
         ${allFiles (path: file: ''
           install -D -m 644 ${lib.escapeShellArg (sourceOf path file)} work/${file.type}/${lib.escapeShellArg path}
-          install -D -m 644 ${lib.escapeShellArg (sourceOf path file)} before/${file.type}/${lib.escapeShellArg path}
         '')}
-        ${tableGuard "before/markdown"}
-        ${frontmatterInventory "before/markdown"}
+        ${tableGuard}
+        ${splitGuard}
         ${markedFrontmatter "split"}
         ${eachType (type:
           lib.optionalString ((formatter.${type} or null) != null) ''
@@ -115,15 +97,11 @@ in rec {
         ${markedFrontmatter "attach"}
         runHook postBuild
       '';
-      # Copy only declared paths; formatter-created state stays in work/.
+      # Copy only declared paths.
       installPhase = ''
         runHook preInstall
         ${pkgs.coreutils}/bin/mkdir -p "$out"
         ${allFiles (path: file: ''
-          if [ ! -f work/${file.type}/${lib.escapeShellArg path} ]; then
-            echo ${lib.escapeShellArg "${name}: formatter removed ${path}"} >&2
-            exit 1
-          fi
           install -D -m 644 work/${file.type}/${lib.escapeShellArg path} "$out"/${lib.escapeShellArg path}
         '')}
         runHook postInstall
@@ -131,18 +109,10 @@ in rec {
       doInstallCheck = true;
       installCheckPhase = ''
         runHook preInstallCheck
-        ${eachType (type: ''
-          ${pkgs.coreutils}/bin/mkdir -p check/${type}
-          ${withFiles type (path: _: ''              install -D -m 644 "$out"/${lib.escapeShellArg path} check/${type}/${lib.escapeShellArg path}
-            '')}
-        '')}
-        ${tableGuard "check/markdown"}
-        ${frontmatterInventory "check/markdown"}
-        ${splitGuard}
         ${parseGuard}
         ${eachType (type:
           lib.optionalString ((check.${type} or "") != "") ''
-            pushd check/${type} >/dev/null
+            pushd work/${type} >/dev/null
             ${check.${type}}
             popd >/dev/null
           '')}

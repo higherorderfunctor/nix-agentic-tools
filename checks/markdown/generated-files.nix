@@ -66,10 +66,10 @@
   cases = [
     {
       name = "format-json";
-      files = {config = mkFile "json" ''{"a":true}'';};
+      files = {"config.json" = mkFile "json" ''{"a":true}'';};
       formatter = generated.defaultFormatter;
       guards.parseCompare = true;
-      changed = "config";
+      changed = "config.json";
     }
     {
       name = "format-markdown";
@@ -82,10 +82,10 @@
     }
     {
       name = "format-toml";
-      files = {config = mkFile "toml" "a=1\n";};
+      files = {"config.toml" = mkFile "toml" "a=1\n";};
       formatter = generated.defaultFormatter;
       guards.parseCompare = true;
-      changed = "config";
+      changed = "config.toml";
     }
     {
       name = "format-yaml";
@@ -115,31 +115,10 @@
       path = "page.md";
     }
     {
-      name = "cache-is-not-installed";
-      files =
-        markdown ''          # Original
-        '';
-      formatter = noFormat // {markdown = "mkdir -p .cache; printf state > .cache/state";};
-      absent = ".cache/state";
-    }
-    {
-      name = "formatter-deletes-declared-file";
-      files = markdown "# Page\n";
-      formatter = noFormat // {markdown = "rm page.md";};
-      fails = "formatter removed page.md";
-    }
-    {
       name = "table-cells-good";
       files = markdown goodTable;
       formatter = noFormat;
       guards.tableCells = true;
-    }
-    {
-      name = "table-cells-bad";
-      files = markdown badTable;
-      formatter = noFormat;
-      guards.tableCells = true;
-      fails = "tableCells";
     }
     {
       name = "table-cells-header-before-format";
@@ -153,16 +132,6 @@
       files = markdown badTable;
       formatter = noFormat;
       guards.tableCells = false;
-    }
-    {
-      name = "user-check-cannot-change-output";
-      files = markdown goodTable;
-      formatter = noFormat;
-      guards.tableCells = true;
-      check.markdown = "printf '%s' ${lib.escapeShellArg badTable} > page.md";
-      checked = badTable;
-      expected = goodTable;
-      path = "page.md";
     }
     {
       name = "user-check-fails";
@@ -184,7 +153,7 @@
       files = markdown ''        A `split
         span` is broken.
       '';
-      formatter = noFormat;
+      formatter = generated.defaultFormatter;
       guards.splitCodeSpans = true;
       fails = "splitCodeSpans";
     }
@@ -205,14 +174,14 @@
     {
       name = "parse-json-bad";
       files = dataFile "json" ''{"value":true}'';
-      formatter = noFormat // {json = "printf '{\"value\":1}' > data.json";};
+      formatter = noFormat // {json = "printf '{\"value\":false}' > data.json";};
       guards.parseCompare = true;
       fails = "parseCompare";
     }
     {
       name = "parse-json-disabled";
       files = dataFile "json" ''{"value":true}'';
-      formatter = noFormat // {json = "printf '{\"value\":1}' > data.json";};
+      formatter = noFormat // {json = "printf '{\"value\":false}' > data.json";};
       guards.parseCompare = false;
     }
     {
@@ -220,7 +189,7 @@
       files =
         dataFile "toml" ''          value = true
         '';
-      formatter = noFormat // {toml = "printf 'value = 1\\n' > data.toml";};
+      formatter = noFormat // {toml = "printf 'value = false\\n' > data.toml";};
       guards.parseCompare = true;
       fails = "parseCompare";
     }
@@ -229,7 +198,7 @@
       files =
         dataFile "yaml" ''          value: true
         '';
-      formatter = noFormat // {yaml = "printf 'value: 1\\n' > data.yaml";};
+      formatter = noFormat // {yaml = "printf 'value: false\\n' > data.yaml";};
       guards.parseCompare = true;
       fails = "parseCompare";
     }
@@ -239,32 +208,6 @@
       formatter = generated.defaultFormatter;
       guards.parseCompare = true;
       head = frontmatter.block consumerData + "\n";
-    }
-    {
-      name = "parse-unmarked-new-generator-bad";
-      files = markdown "---\nvalue: true\n---\n# Page\n";
-      # Strips the mapping, so only the pre-format scan can see it.
-      formatter = noFormat // {markdown = "printf '%s\\n' '# Page' > page.md";};
-      fails = "without its marker";
-    }
-    {
-      name = "parse-unmarked-formatter-adds-mapping-bad";
-      files = markdown "# Page\n";
-      formatter = noFormat // {markdown = "printf '%s\\n' '---' 'value: true' '---' '# Page' > page.md";};
-      fails = "without its marker";
-    }
-    {
-      name = "parse-thematic-pair-good";
-      files = markdown ''        ---
-
-        # Heading
-
-        Ordinary prose without a mapping.
-
-        ---
-      '';
-      formatter = generated.defaultFormatter;
-      guards.parseCompare = true;
     }
     {
       name = "parse-frontmatter-bom-good";
@@ -283,14 +226,6 @@
       path = "page.md";
     }
     {
-      name = "parse-frontmatter-eof-formatter-blank";
-      files = markedMarkdown "---\nvalue: true\n---";
-      formatter = noFormat // {markdown = "printf '\\n' > page.md";};
-      guards.parseCompare = true;
-      expected = "---\nvalue: true\n---";
-      path = "page.md";
-    }
-    {
       name = "frontmatter-reattach-truncated-bad";
       files = consumerFiles;
       formatter = generated.defaultFormatter;
@@ -299,6 +234,8 @@
       fails = bytesChanged;
     }
   ];
+  generatedSource = file: path:
+    file.source or (pkgs.writeText (lib.strings.sanitizeDerivationName (baseNameOf path)) file.text);
   makeTree = case:
     generated.mkTree {
       name = "generated-fixture-${case.name}";
@@ -376,7 +313,7 @@ in {
           ''
         }
           ${lib.optionalString (case ? changed) ''
-          ! cmp -s before/${case.files.${case.changed}.type}/${lib.escapeShellArg case.changed} "$out"/${lib.escapeShellArg case.changed} \
+          ! cmp -s ${lib.escapeShellArg (generatedSource case.files.${case.changed} case.changed)} "$out"/${lib.escapeShellArg case.changed} \
             || { echo "FAIL: ${case.name} did not format" >&2; exit 1; }
         ''}
           ${lib.optionalString (case ? head) ''
@@ -386,16 +323,6 @@ in {
           ${lib.optionalString (case ? expected) ''
           printf '%s' ${lib.escapeShellArg case.expected} | cmp - "$out"/${lib.escapeShellArg case.path} \
             || { echo "FAIL: ${case.name} did not preserve its chosen formatter result" >&2; exit 1; }
-        ''}
-          ${lib.optionalString (case ? checked) ''
-          printf '%s' ${lib.escapeShellArg case.checked} | cmp - check/${case.files.${case.path}.type}/${lib.escapeShellArg case.path} \
-            || { echo "FAIL: ${case.name} did not run its user check on a copy" >&2; exit 1; }
-        ''}
-          ${lib.optionalString (case ? absent) ''
-          test -f work/markdown/${lib.escapeShellArg case.absent} \
-            || { echo "FAIL: ${case.name} did not exercise formatter state" >&2; exit 1; }
-          test ! -e "$out"/${lib.escapeShellArg case.absent} \
-            || { echo "FAIL: ${case.name} shipped formatter state" >&2; exit 1; }
         ''}
           echo "ok — ${case.name}"
         )

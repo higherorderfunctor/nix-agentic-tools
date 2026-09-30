@@ -72,11 +72,11 @@ services.mcp-servers.servers.github-mcp = {
 ```
 
 > **Static runtime files:** every runtime exposes
-> `ai.<runtime>.files."<relative-path>" = { text = "…"; };` (or
-> `source = ./file`). Generated context/rule outputs use the same final map at
-> default priority, so an ordinary whole entry replaces them and `null`
-> suppresses them. Paths are relative to HOME here and to the project under
-> devenv.
+> `ai.<runtime>.files."<relative-path>" = { text = "…"; };`. An entry can
+> instead set `source = ./file`. Generated context/rule outputs use the same
+> final map at default priority, so an ordinary whole entry replaces them and
+> `null` suppresses them. Paths are relative to HOME here and to the project
+> under devenv.
 
 </details>
 
@@ -540,19 +540,17 @@ Guards check semantic and structural properties independently of the selected
 formatter and of `ai.generated.check`. They use this flake's pinned tools. Each
 guard defaults to enabled and can be disabled by name.
 
-| Guard            | What it catches                                                                              | Disable                                       |
-| ---------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `tableCells`     | Markdown table cells broken by unescaped pipes; rumdl and markdownlint catch different forms | `ai.generated.guards.tableCells = false;`     |
-| `splitCodeSpans` | A newline left inside a Markdown inline code span                                            | `ai.generated.guards.splitCodeSpans = false;` |
-| `parseCompare`   | Invalid or changed JSON, TOML or YAML data; changed frontmatter bytes on marked Markdown     | `ai.generated.guards.parseCompare = false;`   |
+| Guard            | What it catches                                                                          | Disable                                       |
+| ---------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `tableCells`     | Inconsistent input Markdown table cells; rumdl and markdownlint catch different forms    | `ai.generated.guards.tableCells = false;`     |
+| `splitCodeSpans` | A newline inside a Markdown inline code span in the input                                | `ai.generated.guards.splitCodeSpans = false;` |
+| `parseCompare`   | Invalid or changed JSON, TOML or YAML data; changed frontmatter bytes on marked Markdown | `ai.generated.guards.parseCompare = false;`   |
 
 Generated frontmatter is marked by `lib/frontmatter.nix`. The builder formats
 only the body and restores the generator's exact fenced header bytes, including
-BOM, CRLF and the closing fence. A nonempty body gets one blank separator; an
-empty body gets none. `parseCompare` rejects any installed header byte change
-and compares parsed values for JSON, TOML and YAML. The builder also rejects
-unmarked YAML mapping frontmatter before and after formatting. Ordinary thematic
-breaks and raw skill sources stay outside that check.
+BOM, CRLF and the closing fence. The body gets one blank separator.
+`parseCompare` rejects any installed header byte change and compares parsed
+values for JSON, TOML and YAML.
 
 If your own formatter also runs over committed generated files, stop it from
 touching that frontmatter; otherwise the frontmatter is reformatted and differs
@@ -563,12 +561,12 @@ generated paths.
 
 For example, these formatter outcomes differ:
 
-| Formatter                                                           | Guard result | Reason                                                  |
-| ------------------------------------------------------------------- | ------------ | ------------------------------------------------------- |
-| Default Biome JSON and Taplo TOML                                   | Good         | They change presentation while preserving parsed values |
-| Default Prettier Markdown and YAML                                  | Good         | Markdown gets body formatting; YAML keeps parsed values |
-| A formatter that rewrites JSON `true` to `1`                        | Bad          | `parseCompare` detects changed data                     |
-| A formatter that removes a pipe escape inside a Markdown table cell | Bad          | `tableCells` detects an extra cell                      |
+| Example                                                   | Guard result | Reason                                                  |
+| --------------------------------------------------------- | ------------ | ------------------------------------------------------- |
+| Default Biome JSON and Taplo TOML                         | Good         | They change presentation while preserving parsed values |
+| Default Prettier Markdown and YAML                        | Good         | Markdown gets body formatting; YAML keeps parsed values |
+| A formatter that changes JSON `true` to `false`           | Bad          | `parseCompare` detects changed data                     |
+| Input with an unescaped pipe inside a Markdown table cell | Bad          | `tableCells` detects an extra input cell                |
 
 A guard error names what failed and why, then gives three choices: fix the input
 or formatter; disable that named guard if its invariant is unsuitable; or set

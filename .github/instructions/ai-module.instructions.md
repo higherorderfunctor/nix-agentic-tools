@@ -1303,14 +1303,11 @@ downstream. See `hm-modules/module-conventions.md` on "Nix path types".
 > TOML and YAML, while switch-time overlays and `content.run` stay outside it.
 > Generators mark their `content` with `_generated`, so a consumer's replacement
 > of a unit's file warns like a switch-off. Rule and semantic-agent generators
-> use `lib/frontmatter.nix` to render YAML and record its keys on the content;
-> the file entry derives its `frontmatter` marker from those keys. The router
-> passes the marker to the generated-file builder, which accepts BOM/CRLF,
-> formats only the body and restores the exact fenced frontmatter bytes. It
-> gives nonempty body text one blank separator line in the header's line-ending
-> style. `parseCompare` requires those fenced bytes in the installed file. A
-> built-tree scan catches an omitted marker, and the delivery assertion catches
-> an explicit marker override.
+> use `lib/frontmatter.nix` to render YAML and mark the content. The router
+> passes that marker to the generated-file builder, which accepts BOM/CRLF,
+> formats only the body and restores the exact fenced frontmatter bytes with one
+> blank separator. `parseCompare` requires those fenced bytes in the installed
+> file.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 

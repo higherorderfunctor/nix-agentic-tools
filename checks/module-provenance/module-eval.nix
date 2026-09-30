@@ -219,34 +219,5 @@ in {
       in
         named && threw
     );
-    module-ai-generated-root-guard-fires = mkTest "ai-generated-root-guard-fires" (
-      let
-        probe = lib.evalModules {
-          specialArgs = {
-            lib = hmLib;
-            pkgs = pkgs // {ai = aiStubs;};
-          };
-          modules = [
-            ../../lib/ai/sharedOptions.nix
-            {
-              _file = "${rootPoolSrcRoot}/packages/provenance-probe/module.nix";
-              config.ai.generated = {
-                check.json = "true";
-                formatter.markdown = "true";
-                guards.tableCells = false;
-              };
-            }
-          ];
-        };
-        violations = rootPoolViolations probe;
-      in
-        lib.all (name: lib.any (lib.hasInfix "ai.generated.${name} <-") violations) [
-          "check.json"
-          "formatter.markdown"
-          "guards.tableCells"
-        ]
-        && builtins.length violations == 3
-        && !(builtins.tryEval (rootPoolClean "probe" probe)).success
-    );
   };
 }

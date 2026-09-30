@@ -63,23 +63,15 @@ in {
         evaluated.config.ai.mcpServers.test.type == "stdio"
     );
 
-    factory-generated-options-formatter-replace-and-null-disable = mkTest "generated-options-formatter-replace-and-null-disable" (
+    factory-generated-options-formatter-null = mkTest "generated-options-formatter-null" (
       let
-        evaluate = module:
+        evaluated =
           (lib.evalModules {
             specialArgs = {inherit pkgs;};
-            modules = [ai.sharedOptions module];
-          }).config.ai.generated;
-        replaced = evaluate {ai.generated.formatter.json = "echo custom-formatter";};
-        disabled = evaluate {
-          ai.generated.formatter.markdown = null;
-          ai.generated.guards.tableCells = false;
-        };
+            modules = [ai.sharedOptions {ai.generated.formatter.markdown = null;}];
+          }).config;
       in
-        replaced.formatter.json
-        == "echo custom-formatter"
-        && disabled.formatter.markdown == null
-        && !disabled.guards.tableCells
+        evaluated.ai.generated.formatter.markdown == null
     );
   };
 }

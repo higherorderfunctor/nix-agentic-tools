@@ -17,10 +17,10 @@ Generated `ai.*` Markdown is formatted in its store tree alongside static JSON,
 TOML and YAML. The default formatter shares this repository's prose style;
 `lib.ai.treefmtFormatter` accepts a treefmt-nix `evalModule` config, including
 devenv's `config.treefmt.config`. Authored docs and wiki pages need their own
-treefmt run. `tableCells` runs independently of user checks. The builder formats
-only marked Markdown bodies, restores generator-owned frontmatter bytes, and
-compares the installed prefix under `parseCompare`. It also rejects unmarked
-YAML mapping frontmatter. Raw skill sources and steering retain their own bytes.
+treefmt run. `tableCells` and `splitCodeSpans` check the input before
+formatting. The builder formats only marked Markdown bodies, restores
+generator-owned frontmatter bytes, and compares the installed prefix under
+`parseCompare`. Raw skill sources and steering retain their own bytes.
 
 ### Never break a line mid-token
 

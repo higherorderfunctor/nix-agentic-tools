@@ -68,9 +68,9 @@
           internal = true;
           visible = false;
         };
-        _frontmatterKeys = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [];
+        _frontmatter = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
           internal = true;
           visible = false;
         };
@@ -98,7 +98,7 @@
       };
     };
 
-  fileEntry = lib.types.submodule ({config, ...}: {
+  fileEntry = lib.types.submodule (_: {
     options = {
       content = lib.mkOption {
         type = contentType;
@@ -182,20 +182,13 @@
           `content.source`: it is built into this runtime's Markdown store
           tree at its target path and delivered from there. The factories set
           it on the Markdown files they generate, beside the content, so a
-          replacement of the content alone stays Markdown. That includes a
-          `content.run` replacement, whose bytes do not exist when the tree is
-          built, so it must also state `format = "raw"`. AGENTS.md is the
+          replacement of the content alone stays Markdown. AGENTS.md is the
           exception (Codex's on Home Manager, the shared one on devenv): its
           generated entry is one whole-entry default that a replacement
           discards, `format` with it, so the replacement is `raw` unless it
           states `markdown`. A `raw` file is delivered as written, and a byte
           limit on its path is still checked.
         '';
-      };
-      frontmatter = lib.mkOption {
-        type = lib.types.bool;
-        default = config.content._frontmatterKeys != [];
-        description = "This generated Markdown file starts with generator-owned YAML frontmatter whose bytes parseCompare guards.";
       };
       ledger = lib.mkOption {
         type = lib.types.nullOr lib.types.str;

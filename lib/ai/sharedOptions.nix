@@ -533,8 +533,7 @@ in {
     {
       # Root-pool writes are sanctioned only from the module that declares
       # the option: these `*Dir` expansions. Every other module writes
-      # `ai.<runtime>.<pool>`,
-      # enforced by `rootPoolViolations` in
+      # `ai.<runtime>.<pool>`, enforced by `rootPoolViolations` in
       # `checks/module-provenance/helpers.nix`, which permits a root
       # definition only from a file that declares the option (`declaredIn`
       # there).

@@ -110,7 +110,7 @@ in
             )
             // {
               type = entry.format;
-              inherit (entry) frontmatter;
+              frontmatter = entry.content._frontmatter;
             })
           entries;
           maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
@@ -337,17 +337,6 @@ in
       tasks = mergeBundles ["tasks"];
     };
 
-    # A limited path whose bytes are not in the tree is not measured. A
-    # warning rather than an assertion: a limit cannot be unset, so refusing
-    # would lock a body that writes the file at activation out of that path.
-    warnings = lib.mapAttrsToList (path: entry: let
-      origin =
-        if entry.content.run != null
-        then "is written at activation (`content.run`)"
-        else "is rendered outside the generated-file tree";
-    in "ai.${runtime}.files.\"${path}\" ${origin}, so its ${toString limits.${path}.bytes}-byte limit is not checked.")
-    (lib.filterAttrs (path: entry: limits ? ${path} && !(builtWithTree entry)) live);
-
     # Everything the layer can check about a delivery description, said where
     # the option path is still known. Silently dropping a file is the one
     # outcome that looks like success.
@@ -384,29 +373,6 @@ in
             else "not a `source` at all"
           }. A single
           file is delivered by naming its own path.
-        '';
-      })
-      resolved
-      # A Markdown file is built into this invocation's generated tree, which
-      # holds bytes that exist at BUILD time, one file per path.
-      ++ lib.mapAttrsToList (path: entry: {
-        assertion = entry.format != "markdown" || entry.content.run == null;
-        message = ''
-          ai.${runtime}.files."${path}" has format `markdown` but its bytes
-          come from `content.run`, which writes them at activation. They do not
-          exist when the generated tree is built, so the file cannot be in it:
-          state `format = "raw"`. If you never set `format` here, `markdown`
-          is the generated entry's default, which a replacement of the
-          content alone keeps.
-        '';
-      })
-      resolved
-      ++ lib.mapAttrsToList (path: entry: {
-        assertion = entry.format != "markdown" || !entry.recursive;
-        message = ''
-          ai.${runtime}.files."${path}" has format `markdown` and sets
-          `recursive`. A Markdown entry is ONE file in the generated tree; a
-          directory of files is delivered with `format = "raw"`.
         '';
       })
       resolved

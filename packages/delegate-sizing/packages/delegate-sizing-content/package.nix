@@ -38,9 +38,9 @@
         }
         // frontmatter.treeFile (frontmatter.render {
           data = skillData;
-          body = import ../../lib/render.nix ({inherit lib presets;} // builtins.removeAttrs args ["formatter"]);
+          body = import ../../lib/render.nix ({inherit lib presets;} // args);
         });
-      formatter.markdown = args.formatter or generated.defaultFormatter.markdown;
+      formatter.markdown = generated.defaultFormatter.markdown;
       guards.parseCompare = true;
       passthru.text = render args;
     };

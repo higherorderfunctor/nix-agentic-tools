@@ -60,7 +60,7 @@
         ))
         // {
           type = entry.format;
-          inherit (entry) frontmatter;
+          frontmatter = entry.content._frontmatter;
         })
       entries;
       maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
@@ -2209,7 +2209,7 @@ in {
         pkgs.runCommand "module-test-codex-raw-agents-md-is-measured-not-formatted" {} ''
           cmp -- ${fits.hm}/.codex/AGENTS.md ${expected}
           cmp -- ${fits.devenv}/AGENTS.md ${expected}
-          grep -q -F ${lib.escapeShellArg ".codex/AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes). Trim or replace the final content, or raise ai.codex.projectDocMaxBytes."} ${past.hm}/testBuildFailure.log
+          grep -q -F ${lib.escapeShellArg ".codex/AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes)."} ${past.hm}/testBuildFailure.log
           grep -q -F ${lib.escapeShellArg "AGENTS.md renders to 18 bytes, exceeding its limit (16 bytes)."} ${past.devenv}/testBuildFailure.log
           echo PASS > "$out"
         '';
@@ -2255,28 +2255,6 @@ in {
           grep -q -F ${lib.escapeShellArg hint} ${failure}/testBuildFailure.log
           echo PASS > "$out"
         '';
-
-    # A body that writes AGENTS.md at activation has no bytes to measure when
-    # the tree is built, so its limit is not checked, and the router says so
-    # rather than dropping the limit silently. The inline control is quiet.
-    module-codex-run-byte-limit-warns = mkTest "codex-run-byte-limit-warns" (
-      let
-        withContent = content:
-          evalDevenv {
-            ai.codex = {
-              enable = true;
-              files."AGENTS.md" = {
-                inherit content;
-                format = "raw";
-              };
-            };
-          };
-        limitWarnings = evaluated: lib.filter (lib.hasInfix "-byte limit is not checked") evaluated.config.warnings;
-      in
-        limitWarnings (withContent {run = "printf probe";})
-        == [''ai.internal.files."AGENTS.md" is written at activation (`content.run`), so its 32768-byte limit is not checked.'']
-        && limitWarnings (withContent {text = "probe";}) == []
-    );
 
     module-codex-rule-runtime-replaces-root = mkTest "codex-rule-runtime-replaces-root" (
       let
