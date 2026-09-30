@@ -159,8 +159,16 @@
         inherit mode primitive;
         ecosystem = runtime;
         # A retired ledger's former surface is consumer knowledge.
-        surface = assert lib.assertMsg (runtime == "kiro" && lib.hasSuffix "/steering" declaration.path)
-        "ai-delivery: an unclaimed ledger needs a surface association"; "context";
+        surface =
+          if runtime == "kiro" && lib.hasSuffix "/steering" declaration.path
+          then "context"
+          # Kimchi's user config.json became a shared document on 2026-09-30.
+          # Its directory ledger stays declared so an upgrade retracts the old
+          # 0400 copy before the reconciler, which keeps an existing file's
+          # mode, writes the shared one.
+          else if runtime == "kimchi" && declaration.path == ".config/kimchi"
+          then "settings"
+          else throw "ai-delivery: an unclaimed ledger needs a surface association: ${mode}/${runtime}/${ledger} -> ${declaration.path}";
         target = prefix mode + declaration.path + "/<legacy-owned-file>";
         writerAttr = writerPath mode named.name;
         pruneTrigger = facts.pruneTrigger mode primitive;
