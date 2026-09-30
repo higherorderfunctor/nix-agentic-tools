@@ -127,11 +127,6 @@ in {
           (builtins.tryEval (builtins.deepSeq (ai.transformers.kiro.render fragment) true)).success;
       in
         !(succeeds {
-          inclusion = "auto";
-          name = "missing-description";
-          text = "body";
-        })
-        && !(succeeds {
           description = "Missing name";
           inclusion = "auto";
           text = "body";

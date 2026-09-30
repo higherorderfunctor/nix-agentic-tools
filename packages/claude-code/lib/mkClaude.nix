@@ -845,6 +845,7 @@ in
             };
             path = rulePath;
             rules = mergedRules;
+            runtime = "claude";
             transformer = lib.ai.transformers.claude.claudeTransformer;
           };
         }

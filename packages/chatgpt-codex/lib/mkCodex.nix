@@ -627,29 +627,40 @@
   # many bytes of a project document and silently drops the rest.
   codexProjectDocMaxBytes = 32768;
 
-  renderScope = matcher:
-    lib.optionalString (matcher != null) (
+  renderScope = inclusion: matcher:
+    lib.optionalString (inclusion == "fileMatch") (
       "_Apply this guidance only when working with files matching: "
       + lib.concatMapStringsSep ", " (path: "`${path}`") matcher
       + "_\n\n"
     );
 
   mkRuleBody = _name: rule:
-    renderScope rule.matcher
+    renderScope rule.inclusion rule.matcher
     + lib.ai.transformers.agentsmd.render {
       text = aiCommon.readContent rule;
     };
 
-  # AGENTS.md has no path scoping, so a scoped rule costs its whole body on
-  # every turn. One that names the documents holding its text becomes an
-  # index entry instead, and the agent reads the documents only when it edits
-  # a matching path. Every other rule is inlined as before.
-  isIndexedRule = rule: rule.matcher != null && rule.references != [];
-  agentsMdUnits = mergedRules: {
+  # AGENTS.md has no native trigger metadata. fileMatch rules with references
+  # retain the compact path index; auto/manual rules require references and use
+  # the same index as their on-demand pointer. Everything else is inlined.
+  isIndexedRule = rule:
+    builtins.elem rule.inclusion ["auto" "manual"]
+    || (rule.inclusion == "fileMatch" && rule.references != []);
+  agentsMdUnits = mergedRules: let
+    routedRules = lib.mapAttrs (name: rule:
+      rule
+      // {
+        inclusion = aiCommon.resolveInclusion {
+          inherit name rule;
+          runtime = "codex";
+        };
+      })
+    mergedRules;
+  in {
     index =
       lib.mapAttrs lib.ai.transformers.agentsmd.renderIndexEntry
-      (lib.filterAttrs (_name: isIndexedRule) mergedRules);
-    rules = lib.mapAttrs mkRuleBody (lib.filterAttrs (_name: rule: !(isIndexedRule rule)) mergedRules);
+      (lib.filterAttrs (_name: isIndexedRule) routedRules);
+    rules = lib.mapAttrs mkRuleBody (lib.filterAttrs (_name: rule: !(isIndexedRule rule)) routedRules);
   };
 
   isExecpolicyPathLike = content:

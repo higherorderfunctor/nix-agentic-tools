@@ -7,45 +7,47 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-29 — stacked-workflows' Git preset is `mkDefault`
-> sugar over the shared `git.*` options. Claude delivers every surface as its
-> own file through `ai.claude.files` on both backends and fails evaluation
-> beside its upstream module, and every delivery method writes the file itself.
-> Every enabled runtime installs a package; `installPackage` has no `null`
-> opt-out. Codex's `config.toml` is a read-only store symlink on both backends,
-> its daemon `settings.json` a Home Manager copy of `native.daemonSettings`, and
-> Nix declares the trust of every hook it generates; Codex rejects a declared
-> MCP OAuth client secret. AGENTS.md puts the index and rules before the
-> context. The repository AGENTS.md, Copilot's devenv context and instruction
-> files, and Kiro's devenv steering land as read-only copies; Codex indexes
-> scoped rules that name `references`; a unit whose file is switched off or
-> replaced warns, and so does a devenv Codex AGENTS.md past 32 KiB under a
-> raised limit. Semble derives a Kiro agent-private MCP server from
-> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
-> delivery once through `mkRuntime`'s record-level `config`, and both
-> `mkRuntime` and the backend transforms reject a backend spec carrying anything
-> but `installPackage`, `migrationConfig` and `options`, since an overridden or
-> hand-built record reaches a transform without the constructor. Kiro hook
-> commands resolve packages through the shared `commandType`. Launchers bake the
-> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
-> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
-> through `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
-> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
-> `agent.fileContent` where it copies, so a store-path string is a file, never a
-> body naming its own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). A root request nothing per-runtime can withdraw
-> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
-> owned read-only copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
-> declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Ledger-owned
-> copies whose files nothing else retracts opt into `runWhenDisabled`.
-> `ai.lspServers` renders whole files with each runtime's envelope, Copilot/Kiro
-> require `extensions`, and Copilot constrains server names.
+> **Last verified:** 2026-09-30 — rule inclusion is a priority-ordered portable
+> list resolved once per runtime; Kiro keeps its scalar per-runtime override.
+> Stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
+> options. Claude delivers every surface as its own file through
+> `ai.claude.files` on both backends and fails evaluation beside its upstream
+> module, and every delivery method writes the file itself. Every enabled
+> runtime installs a package; `installPackage` has no `null` opt-out. Codex's
+> `config.toml` is a read-only store symlink on both backends, its daemon
+> `settings.json` a Home Manager copy of `native.daemonSettings`, and Nix
+> declares the trust of every hook it generates; Codex rejects a declared MCP
+> OAuth client secret. AGENTS.md puts the index and rules before the context.
+> The repository AGENTS.md, Copilot's devenv context and instruction files, and
+> Kiro's devenv steering land as read-only copies; Codex indexes scoped rules
+> that name `references`; a unit whose file is switched off or replaced warns,
+> and so does a devenv Codex AGENTS.md past 32 KiB under a raised limit. Semble
+> derives a Kiro agent-private MCP server from `mcp.enable = false` plus an
+> MCP-backed subagent. Every runtime describes delivery once through
+> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
+> transforms reject a backend spec carrying anything but `installPackage`,
+> `migrationConfig` and `options`, since an overridden or hand-built record
+> reaches a transform without the constructor. Kiro hook commands resolve
+> packages through the shared `commandType`. Launchers bake the builder's one
+> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
+> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
+> `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and `ai.claude.agentsDir`
+> to `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot,
+> Kimchi, Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it
+> copies, so a store-path string is a file, never a body naming its own path.
+> File content at `mkDefault` enables its entry; `content.enable = false`
+> suppresses every content form. The builder entry point is
+> `lib.ai.app.mkRuntime`. Native file settings live under `ai.<runtime>.native`
+> (`native.settings`; Kimchi also `native.harnessSettings`). A root request
+> nothing per-runtime can withdraw (excluded or non-keyed pool) never warns.
+> Portable agents reach Kimchi as owned read-only copies and portable hooks
+> reach its project `hooks.json` on devenv. Reasoning effort lowers to Claude,
+> Codex, Copilot and Kimchi, and Kiro declares no normalized settings pool;
+> authored prose and final delivery share one priority-aware text-source record
+> with enable semantics. Ledger-owned copies whose files nothing else retracts
+> opt into `runWhenDisabled`. `ai.lspServers` renders whole files with each
+> runtime's envelope, Copilot/Kiro require `extensions`, and Copilot constrains
+> server names.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -421,18 +423,31 @@ enabled ecosystem whose native model preserves the option's semantics):
   copilot-cli's user home. The transform derives structural `hasMergedContext`
   metadata before composition, so a final-file replacement or disable does not
   read discarded source-backed root/runtime context.
-- `ai.rules` — named Markdown rules. Codex writes these alphabetically to its
-  AGENTS.md ahead of the context, with trace comments. `matcher = null` means
-  always-on; non-empty glob lists lower to Claude `paths`, Kiro
-  `fileMatchPattern`, Copilot `applyTo`, and a Codex prose scope preamble. A
-  scoped rule that also names `references` (the documents holding its text)
-  becomes a Codex `## Path-scoped rules` index entry, rendered first in the
-  file, instead of an inlined body; runtimes with native scoping ignore the
-  field. Rules default enabled; a per-runtime same-key rule with
+- `ai.rules` — named Markdown rules. `inclusion` is a priority-ordered list of
+  trigger kinds; `lib/ai/ai-common.nix:resolveInclusion` chooses the first kind
+  the target runtime supports and fails when none match. Its one support table
+  is the contract:
+
+  | runtime | supported triggers                                                       |
+  | ------- | ------------------------------------------------------------------------ |
+  | Claude  | `always`, `fileMatch`                                                    |
+  | Codex   | `always`, `fileMatch`; `auto`, `manual` only with non-empty `references` |
+  | Copilot | `always`, `fileMatch`                                                    |
+  | Kiro    | `always`, `auto`, `fileMatch`, `manual`                                  |
+
+  Kiro's per-runtime `inclusion` remains a scalar native override; after
+  root/runtime replacement it becomes a one-item priority list for the shared
+  resolver. When the portable list is omitted, `matcher = null` defaults to
+  `["always"]` and a non-empty matcher defaults to `["fileMatch"]`. `fileMatch`
+  lowers the matcher to Claude `paths`, Kiro `fileMatchPattern`, Copilot
+  `applyTo`, and a Codex prose scope preamble. Codex writes rules alphabetically
+  to AGENTS.md ahead of context, with trace comments. A `fileMatch` rule that
+  names `references` becomes a path-scoped index entry; `auto` and `manual`
+  become on-demand index entries and require references. `auto` also requires a
+  description. Rules default enabled; a per-runtime same-key rule with
   `enable = false` suppresses an inherited root rule. Same-priority `text`
   definitions concatenate, and enabled rules require non-empty text or a source
-  path. Kiro alone retains native `manual`/`auto` inclusion overrides. After B7
-  arbitration, a surviving Codex AGENTS.md must fit
+  path. After B7 arbitration, a surviving Codex AGENTS.md must fit
   `ai.codex.projectDocMaxBytes` (32 KiB by default). The generated-file tree
   checks its built bytes in `installCheckPhase`, so an oversized file fails the
   build. A raised limit is also written to Codex's own `project_doc_max_bytes`,
@@ -447,8 +462,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   suppresses the generated bytes before they are read; a surviving store-backed
   `source` is measured after materialization. A `content.run` file cannot be
   measured in the build tree; the router warns about that limit at evaluation.
-  Codex also rejects `matcher = []` as ambiguous; use `null` for always-on
-  content or a non-empty list for scoped content.
+  Codex also rejects `matcher = []` as ambiguous; use `null` when there is no
+  file scope or a non-empty list for `fileMatch` content.
+
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP
@@ -860,15 +876,17 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-28 — Semble's CLI rule gate is `cli.instructions`.
-> A shared target's byte limit is checked on the built final file, in the same
-> delivery tree when that file is `raw`. Merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
-> text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target, matched on the key
-> each record's `sharedAgentsMd` callback declares. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-30 — rule triggers resolve from one portable
+> priority list against one runtime support table before native rendering.
+> Semble's CLI rule gate is `cli.instructions`. A shared target's byte limit is
+> checked on the built final file, in the same delivery tree when that file is
+> `raw`. Merged pools are public `ai.<runtime>.normalized.<pool>` options fed
+> per-key defaults, and a text-source record crosses into them with only its
+> winning arm. Path claims fail across runtimes except the shared AGENTS.md
+> target, matched on the key each record's `sharedAgentsMd` callback declares.
+> Rules and context use entry-local `enable` suppression; delivery entries
+> default `content` alone, and `content.enable = false` suppresses every content
+> form.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -894,7 +912,7 @@ commit.
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
-| B6a | normalized rule matcher → native scope            | field   | Null is always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex routing prose.                             |
+| B6a | normalized rule trigger → native inclusion        | field   | The first supported `inclusion` entry wins; `fileMatch` consumes `matcher` and lowers to native scope or Codex routing prose.                     |
 | B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the file with `content.enable = false`. |
 | B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                    |
 | B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                            |
@@ -1270,38 +1288,39 @@ downstream. See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-30 — the shared AGENTS.md notice resolves each
-> runtime's effective limit at shell entry. Claude delivers every surface
-> through `ai.claude.files`; its settings.json and devenv .mcp.json are
-> read-only links. Every delivered entry is a file the layer writes. L5 is the
-> delivery router plus one adapter per backend; every runtime describes delivery
-> once through the record-level `config`, which `mkRuntime` makes the only
-> delivery callback, and the delivery matrix is generated from the layer for
-> every runtime's files. Normalized pools carry only a text-source record's
-> winning arm. Claude's devenv rules and Codex's execpolicy rules are read-only
-> copies whose writers survive a disable. Copilot's settings files are read-only
-> copies of one `materialize-copilot-config` writer; its only reconciled
-> document is the HM `trustedFolders` leaf of its state file `config.json`.
-> Kiro's `cli.json` and `mcp.json` are read-only copies in one directory ledger.
-> Kimchi shares its HM user `config.json` and `harness/settings.json`; its other
-> settings files are read-only copies of one `kimchiFiles` writer. Codex's
-> `config.toml` is a store symlink on both backends and its daemon
-> `settings.json` a read-only copy of `materialize-codex-daemon-settings`. Kiro
-> excludes the normalized `settings` pool. Native file settings live under
-> `ai.<runtime>.native`. The builder publishes each record's devenv shared
-> AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`, from the
-> record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
-> mode-narrowing command writer beside its unpin ledger. Codex's daemon
-> `settings.json` maps to no matrix cell. The builder declares the per-runtime
-> `agents`, `environmentVariables` and `lspServers` options and an opt-in
-> `agentsDir`; a record's `poolOptions` carries only what differs.
-> `checkRecord.nix` rejects a `poolOptions` key the builder would not read and a
-> stray field in the `sharedAgentsMd` result. Every reconciled document is one
-> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
-> `index` entries: Codex renders a scoped rule that names `references` as a
-> path-scoped index entry instead of inlining its body. The shared AGENTS.md map
-> lowers through the router as `internal`, as a read-only copy, and a
-> contribution's `defaultMaxBytes` supplies fallback bytes plus an
+> **Last verified:** 2026-09-30 — rule inclusion resolves from one portable
+> priority list and runtime support table before L4 rendering. The shared
+> AGENTS.md notice resolves each runtime's effective limit at shell entry.
+> Claude delivers every surface through `ai.claude.files`; its settings.json and
+> devenv .mcp.json are read-only links. Every delivered entry is a file the
+> layer writes. L5 is the delivery router plus one adapter per backend; every
+> runtime describes delivery once through the record-level `config`, which
+> `mkRuntime` makes the only delivery callback, and the delivery matrix is
+> generated from the layer for every runtime's files. Normalized pools carry
+> only a text-source record's winning arm. Claude's devenv rules and Codex's
+> execpolicy rules are read-only copies whose writers survive a disable.
+> Copilot's settings files are read-only copies of one
+> `materialize-copilot-config` writer; its only reconciled document is the HM
+> `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
+> `mcp.json` are read-only copies in one directory ledger. Kimchi shares its HM
+> user `config.json` and `harness/settings.json`; its other settings files are
+> read-only copies of one `kimchiFiles` writer. Codex's `config.toml` is a store
+> symlink on both backends and its daemon `settings.json` a read-only copy of
+> `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
+> pool. Native file settings live under `ai.<runtime>.native`. The builder
+> publishes each record's devenv shared AGENTS.md contribution, and its key in
+> `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`. Claude's
+> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
+> ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
+> declares the per-runtime `agents`, `environmentVariables` and `lspServers`
+> options and an opt-in `agentsDir`; a record's `poolOptions` carries only what
+> differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
+> read and a stray field in the `sharedAgentsMd` result. Every reconciled
+> document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
+> contribution may carry `index` entries: Codex renders a scoped rule that names
+> `references` as a path-scoped index entry instead of inlining its body. The
+> shared AGENTS.md map lowers through the router as `internal`, as a read-only
+> copy, and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
 > effective-limit resolver for the owner's notice under a raised `maxBytes`; its
 > built bytes are measured in the generated-file tree. The router builds one
 > tree per invocation for static Markdown, JSON, TOML and YAML, while
@@ -1522,11 +1541,13 @@ not move them back.
   composed sources; rendered bytes remain lazy until that default survives B7.
   Repository-local Codex, Kimchi, and Kiro targets contribute to the shared L4
   owner instead of creating competing runtime writers.
-- **Rule matchers lower only before L4.** `matcher = null` is always-on; a
-  non-empty glob list becomes native routing metadata where one exists and
-  explicit prose for flat AGENTS.md consumers. In the shared devenv AGENTS.md,
-  Codex contributes both unscoped rules and scoped rules degraded to prose; Kiro
-  contributes only unscoped always-on rules. The keyed writer deduplicates
+- **Rule triggers resolve before L4.** Each runtime selects the first supported
+  entry from the portable `inclusion` list through `aiCommon.resolveInclusion`.
+  `fileMatch` consumes `matcher` and becomes native routing metadata where one
+  exists or explicit prose for flat AGENTS.md consumers. Codex can route `auto`
+  and `manual` only through a non-empty `references` index. In the shared devenv
+  AGENTS.md, Codex contributes every resolved inline or indexed rule; Kiro
+  contributes only rules resolved to `always`. The keyed writer deduplicates
   byte-identical same-key contributions.
 - **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
   for each supported pool and is public, writable with `mkForce`. Keyed pools

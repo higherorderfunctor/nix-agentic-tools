@@ -179,7 +179,24 @@
     then value // {instructions = toNormalizedTextSource value.instructions;}
     else value)
   mergedAgents;
-  normalizedRules = lib.mapAttrs (_: toNormalizedTextSource) mergedRules;
+  # Kiro keeps its established runtime-local scalar `inclusion` override.
+  # Root rules and every other runtime expose the portable priority list.
+  # After root/runtime replacement has chosen one complete entry, normalize
+  # Kiro's scalar (or null-derived matcher default) into that common list so
+  # every emitter and shared AGENTS.md callback sees one rule shape.
+  normalizedRules = lib.mapAttrs (_: rule:
+    toNormalizedTextSource (rule
+      // {
+        inclusion =
+          if builtins.isList rule.inclusion
+          then rule.inclusion
+          else if rule.inclusion != null
+          then [rule.inclusion]
+          else if rule.matcher == null
+          then ["always"]
+          else ["fileMatch"];
+      }))
+  mergedRules;
 
   # A whole-pool option default disappears when a consumer adds just one key.
   # Keep these folds as per-key definitions, so ordinary additions preserve
@@ -217,7 +234,7 @@
       type = lib.types.attrsOf lib.types.raw;
     };
     rules = {
-      type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
+      type = lib.types.attrsOf aiCommon.ruleModule;
     };
     settings = {
       default = resolvedSettings;

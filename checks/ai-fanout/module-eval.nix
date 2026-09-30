@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib mkTest;
+  inherit (harness) aiStubs claudeSettings evalDevenv evalHm harnessNames hmLib markdownInput mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings withHmDaemonDefault;
   # Runtimes whose app record supports the normalized settings pool. Kiro is
   # excluded: it persists effort only per model, so it declares no
@@ -387,6 +387,145 @@ in {
         && devenv.options.stacked-workflows ? gitPreset
         && gitPresetValues hm == ["full" "minimal" "none"]
         && gitPresetValues hm == gitPresetValues devenv
+    );
+
+    # ── Priority-ordered rule triggers ─────────────────────────────
+    module-rule-inclusion-priority-falls-back-per-runtime = mkTest "rule-inclusion-priority-falls-back-per-runtime" (
+      let
+        evaluated = evalDevenv {
+          ai = {
+            claude.enable = true;
+            copilot.enable = true;
+            kiro.enable = true;
+            rules.priority = {
+              description = "Load when the task concerns source code";
+              inclusion = ["auto" "fileMatch"];
+              matcher = ["src/**"];
+              text = "PRIORITY-RULE.";
+            };
+          };
+        };
+        claude = (markdownInput evaluated ".claude/rules/priority.md").text;
+        copilot = (markdownInput evaluated ".github/instructions/priority.instructions.md").text;
+        kiro = (markdownInput evaluated ".kiro/steering/priority.md").text;
+      in
+        lib.hasInfix "paths:\n  - \"src/**\"" claude
+        && lib.hasInfix ''applyTo: "src/**"'' copilot
+        && lib.hasInfix "inclusion: auto" kiro
+        && lib.hasInfix "description: Load when the task concerns source code" kiro
+        && !(lib.hasInfix "fileMatchPattern:" kiro)
+    );
+
+    module-rule-inclusion-unsupported-runtime-fails = mkTest "rule-inclusion-unsupported-runtime-fails" (
+      let
+        unsupportedAttempt = builtins.tryEval (let
+          evaluated = evalDevenv {
+            ai = {
+              claude.enable = true;
+              rules.manual = {
+                inclusion = ["manual"];
+                text = "MANUAL-RULE.";
+              };
+            };
+          };
+        in
+          builtins.deepSeq (markdownInput evaluated ".claude/rules/manual.md").text true);
+      in
+        !unsupportedAttempt.success
+    );
+
+    module-rule-inclusion-auto-requires-description = mkTest "rule-inclusion-auto-requires-description" (
+      let
+        attempt = builtins.tryEval (let
+          evaluated = evalDevenv {
+            ai = {
+              kiro.enable = true;
+              rules.semantic = {
+                inclusion = ["auto"];
+                text = "SEMANTIC-RULE.";
+              };
+            };
+          };
+        in
+          builtins.deepSeq (markdownInput evaluated ".kiro/steering/semantic.md").text true);
+      in
+        !attempt.success
+    );
+
+    module-rule-inclusion-codex-auto-needs-references = mkTest "rule-inclusion-codex-auto-needs-references" (
+      let
+        withReferences = evalDevenv {
+          ai = {
+            codex.enable = true;
+            rules.semantic = {
+              description = "Load when semantic guidance applies";
+              inclusion = ["auto"];
+              references = ["docs/semantic.md"];
+              text = "SEMANTIC-RULE-BODY.";
+            };
+          };
+        };
+        agentsMd = (markdownInput withReferences "AGENTS.md").text;
+        withoutReferences = builtins.tryEval (let
+          evaluated = evalDevenv {
+            ai = {
+              codex.enable = true;
+              rules.semantic = {
+                description = "Load when semantic guidance applies";
+                inclusion = ["auto"];
+                text = "SEMANTIC-RULE-BODY.";
+              };
+            };
+          };
+        in
+          builtins.deepSeq (markdownInput evaluated "AGENTS.md").text true);
+      in
+        lib.hasInfix "## Rule index" agentsMd
+        && lib.hasInfix "Trigger: `auto`" agentsMd
+        && lib.hasInfix "Description: Load when semantic guidance applies" agentsMd
+        && lib.hasInfix "[`docs/semantic.md`](docs/semantic.md)" agentsMd
+        && !(lib.hasInfix "SEMANTIC-RULE-BODY." agentsMd)
+        && !withoutReferences.success
+    );
+
+    module-rule-inclusion-defaults-preserve-rendering = mkTest "rule-inclusion-defaults-preserve-rendering" (
+      let
+        config = {
+          ai = {
+            claude.enable = true;
+            codex.enable = true;
+            copilot.enable = true;
+            kiro.enable = true;
+            rules = {
+              always.text = "DEFAULT-ALWAYS.";
+              scoped = {
+                matcher = ["src/**"];
+                text = "DEFAULT-SCOPED.";
+              };
+            };
+          };
+        };
+        evaluated = evalDevenv config;
+        claudeAlways = (markdownInput evaluated ".claude/rules/always.md").text;
+        claudeScoped = (markdownInput evaluated ".claude/rules/scoped.md").text;
+        copilotAlways = (markdownInput evaluated ".github/instructions/always.instructions.md").text;
+        copilotScoped = (markdownInput evaluated ".github/instructions/scoped.instructions.md").text;
+        kiroScoped = (markdownInput evaluated ".kiro/steering/scoped.md").text;
+        agentsMd = (markdownInput evaluated "AGENTS.md").text;
+      in
+        evaluated.config.ai.rules.always.inclusion
+        == ["always"]
+        && evaluated.config.ai.rules.scoped.inclusion == ["fileMatch"]
+        && claudeAlways == "DEFAULT-ALWAYS."
+        && lib.hasInfix "paths:\n  - \"src/**\"" claudeScoped
+        && lib.hasInfix ''applyTo: "**"'' copilotAlways
+        && lib.hasInfix ''applyTo: "src/**"'' copilotScoped
+        && lib.hasInfix "inclusion: fileMatch" kiroScoped
+        && lib.hasInfix "fileMatchPattern: \"src/**\"" kiroScoped
+        && lib.hasInfix "<!-- rule: always -->" agentsMd
+        && lib.hasInfix "DEFAULT-ALWAYS." agentsMd
+        && lib.hasInfix "_Apply this guidance only when working with files matching: `src/**`_" agentsMd
+        && lib.hasInfix "DEFAULT-SCOPED." agentsMd
     );
 
     # ── Normalized keyed-pool suppression types ────────────────────

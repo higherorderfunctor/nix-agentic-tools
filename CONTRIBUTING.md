@@ -36,11 +36,12 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-29 — `generate:all` writes every generated file,
-> committed and gitignored; the generator produces content only; `dev/ai.nix`
-> hands it to `ai.*`, which writes every agent instruction file from its
-> generated-file tree, formatted there with this repository's treefmt; the drift
-> check compares the built files.
+> **Last verified:** 2026-09-30 — generated scoped rules rely on the normalized
+> matcher-derived `fileMatch` trigger default. `generate:all` writes every
+> generated file, committed and gitignored; the generator produces content only;
+> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
+> from its generated-file tree, formatted there with this repository's treefmt;
+> the drift check compares the built files.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -55,13 +56,14 @@ Two kinds of generated content, two owners:
 - **Agent instructions** — `dev/generate.nix` returns `context` (the
   always-loaded orientation) and `rules` (one path-scoped rule per registry
   category: its composed text, its scope globs as `matcher`, its source
-  documents as `references`). `dev/ai.nix` sets them as `ai.context` and
-  `ai.rules` in this repository's own devenv, and `ai.*` renders and writes each
-  runtime's files exactly as it would for any consumer: AGENTS.md (Codex, Kiro,
-  Kimchi, with a path-scoped index of the rules), `.claude/CLAUDE.md` and
-  `.claude/rules/`, `.github/copilot-instructions.md` and
-  `.github/instructions/`, and `.kiro/steering/`. The committed ones (AGENTS.md
-  and `.github/`) are read-only copies.
+  documents as `references`, and the matcher-derived default `fileMatch`
+  trigger). `dev/ai.nix` sets them as `ai.context` and `ai.rules` in this
+  repository's own devenv, and `ai.*` renders and writes each runtime's files
+  exactly as it would for any consumer: AGENTS.md (Codex, Kiro, Kimchi, with a
+  path-scoped index of the rules), `.claude/CLAUDE.md` and `.claude/rules/`,
+  `.github/copilot-instructions.md` and `.github/instructions/`, and
+  `.kiro/steering/`. The committed ones (AGENTS.md and `.github/`) are read-only
+  copies.
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
   `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the

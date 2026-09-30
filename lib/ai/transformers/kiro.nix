@@ -5,7 +5,8 @@
 # - inclusion: null + paths: null → inclusion = "always"
 # - inclusion: null + paths set → inclusion = "fileMatch"
 # - inclusion: "always" | "auto" | "manual" → omit fileMatchPattern
-# - inclusion: "fileMatch" → require paths and emit fileMatchPattern
+# - inclusion: "fileMatch" → emit fileMatchPattern (the shared resolver
+#     requires paths before this transformer runs)
 # - paths: list of 1 → fileMatchPattern = "<one>"
 # - paths: list of >1 → fileMatchPattern as a YAML block sequence
 #     (`- "<glob>"` per line). Kiro needs a YAML list, not a comma-joined
@@ -17,6 +18,7 @@
 # - description: "" → always omit
 # - description: null + paths set + name supplied → default to
 #     "Instructions for the ${name} package"
+# - `auto` description validation lives in the shared rule resolver
 # - `name` is an optional ctxExtra; when supplied, included as the
 #   `name:` field in frontmatter (matches kiro.dev steering schema).
 {lib}: let
@@ -48,8 +50,6 @@ in rec {
         then throw "Kiro transformer: invalid inclusion mode '${requestedInclusion}'"
         else if requestedInclusion == "auto" && (name == null || name == "")
         then throw ''Kiro transformer: inclusion = "auto" requires a non-empty name''
-        else if requestedInclusion == "auto" && (description == null || description == "")
-        then throw ''Kiro transformer: inclusion = "auto" requires a non-empty description''
         else if requestedInclusion == "fileMatch" && paths == null
         then throw ''Kiro transformer: inclusion = "fileMatch" requires paths''
         else requestedInclusion;
