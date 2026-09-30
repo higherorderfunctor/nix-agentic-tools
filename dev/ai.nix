@@ -81,7 +81,7 @@ in {
     # per runtime by the `ai:shell:verify` task in devenv.nix.
     shell = pkgs.bash;
 
-    programs.delegate-sizing = {
+    programs.delegate-routing = {
       enable = true;
       # Enable the package's own presets here because this repository is its primary consumer.
       whenToDelegate = {
@@ -212,7 +212,7 @@ in {
           "Read(dev/references/**)"
         ];
       };
-      programs.delegate-sizing = {
+      programs.delegate-routing = {
         extraRuntimes = ["codex"];
         manualExternalDelegates = ["kiro"];
       };

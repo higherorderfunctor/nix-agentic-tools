@@ -430,7 +430,7 @@ them.
   change and the tasks look stale, delete that file.
 - **Monorepo profile vs scoped profile differs semantically**. Only `monorepo`
   gets commonFragments. Scoped categories are intentionally lean. The
-  delegate-sizing and stacked-workflow routing rules are separate `ai.*` rules,
+  delegate-routing and stacked-workflow routing rules are separate `ai.*` rules,
   never orientation text. Don't "fix" this by re-adding commonFragments — that's
   the context-rot bug that was removed.
 
@@ -490,9 +490,9 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
   what `nix fmt` produces.
 - `packages/coding-standards/fragments/` — published coding standards, part of
   the orientation.
-- `packages/delegate-sizing/` and `packages/stacked-workflows/router.nix` — the
+- `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the
   always-on routing rules, delivered as `ai.*` rules of their own (the
-  delegate-sizing program and a root rule) rather than inlined into the
+  delegate-routing program and a root rule) rather than inlined into the
   orientation.
 - `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 

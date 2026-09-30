@@ -10,7 +10,7 @@
   frontmatter = import ../../../../lib/frontmatter.nix {inherit lib;};
   skillData = {
     description = "Before calling a subagent, spawning a delegate, or building a workflow, size the model and effort for the task and available runtime pools.";
-    name = "delegate-sizing";
+    name = "delegate-routing";
   };
   mkUsageScript = name: runtimeInputs:
     pkgs.writeShellApplication {
@@ -31,7 +31,7 @@
   # pkgs carries no overlay, so the overlay's linters are not in it.
   mkSkill = args:
     generated.mkTree {
-      name = "delegate-sizing-${args.runtime}-skill";
+      name = "delegate-routing-${args.runtime}-skill";
       files."SKILL.md" =
         {
           type = "markdown";
@@ -46,7 +46,7 @@
     };
   skills = lib.genAttrs ["claude" "codex" "kiro"] (runtime: mkSkill {inherit runtime;});
 in
-  pkgs.runCommand "delegate-sizing-content" {
+  pkgs.runCommand "delegate-routing-content" {
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
       inherit mkSkill presets render skills usageScripts;

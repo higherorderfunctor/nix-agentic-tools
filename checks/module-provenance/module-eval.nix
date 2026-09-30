@@ -30,7 +30,7 @@ in {
       lib.all (runtime: rootPoolProbeConfig.ai.${runtime}.enable) harnessNames
       && lib.all
       (program: rootPoolProbeConfig.ai.programs.${program}.enable)
-      ["delegate-sizing" "semble" "stacked-workflows"]
+      ["delegate-routing" "semble" "stacked-workflows"]
     );
 
     # Package ownership is checked independently per scope. These production

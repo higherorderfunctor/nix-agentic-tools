@@ -51,7 +51,7 @@ in {
   type = lib.types.attrsOf entryType;
   warnings = entries:
     lib.concatLists (lib.mapAttrsToList (newName: entry:
-      map (oldName: "ai.programs.delegate-sizing.whenToDelegate.${oldName} has been renamed to ai.programs.delegate-sizing.whenToDelegate.${newName}; update the attribute name.")
+      map (oldName: "ai.programs.delegate-routing.whenToDelegate.${oldName} has been renamed to ai.programs.delegate-routing.whenToDelegate.${newName}; update the attribute name.")
       (lib.unique entry._renamedFrom))
     entries);
 }

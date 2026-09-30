@@ -378,7 +378,7 @@ in {
             == optionShape devenv ["ai" runtime "programs" package])
           runtimes;
       in
-        programParity "delegate-sizing" {
+        programParity "delegate-routing" {
           enable = "boolean";
           whenToDelegate = "attribute set of (submodule)";
         } ["claude" "codex" "kiro"]

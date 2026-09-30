@@ -141,14 +141,14 @@
         fragmentsLib = fragments;
       };
       codingStdFragments = import ./packages/coding-standards/lib/fragments.nix fragmentArgs;
-      delegateSizingFragments = import ./packages/delegate-sizing/lib/fragments.nix fragmentArgs;
+      delegateRoutingFragments = import ./packages/delegate-routing/lib/fragments.nix fragmentArgs;
       swsContentFragments = import ./packages/stacked-workflows/lib/fragments.nix fragmentArgs;
       presets = {
         # Full dev environment — all coding standards + skill routing
         nix-agentic-tools-dev = fragments.compose {
           fragments =
             builtins.attrValues codingStdFragments
-            ++ builtins.attrValues delegateSizingFragments
+            ++ builtins.attrValues delegateRoutingFragments
             ++ builtins.attrValues swsContentFragments;
           description = "Full nix-agentic-tools dev standards";
         };

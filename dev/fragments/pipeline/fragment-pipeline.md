@@ -177,6 +177,6 @@ them.
   change and the tasks look stale, delete that file.
 - **Monorepo profile vs scoped profile differs semantically**. Only `monorepo`
   gets commonFragments. Scoped categories are intentionally lean. The
-  delegate-sizing and stacked-workflow routing rules are separate `ai.*` rules,
+  delegate-routing and stacked-workflow routing rules are separate `ai.*` rules,
   never orientation text. Don't "fix" this by re-adding commonFragments — that's
   the context-rot bug that was removed.

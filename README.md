@@ -56,7 +56,7 @@ ai = {
   };
   copilot.enable = true;
   kiro.enable = true;
-  programs.delegate-sizing.enable = true;
+  programs.delegate-routing.enable = true;
   programs.stacked-workflows.enable = true;
   settings.reasoningEffort = "high";
 };
@@ -148,13 +148,13 @@ way. If you have already added the `follows`, remove it — that is the fix.
 
 ## Skills
 
-Delegate sizing for models and effort, plus stacked commit workflows using
+Delegate routing for models and effort, plus stacked commit workflows using
 git-branchless, git-absorb, and git-revise.
 
 <!-- prettier-ignore -->
 | Skill | Description |
 |-------|-------------|
-| `/delegate-sizing` | Size model and effort before calling subagents or building workflows |
+| `/delegate-routing` | Size model and effort before calling subagents or building workflows |
 | `/kimchi-docs` | Search the pinned Kimchi docs snapshot; enable via ai.programs.kimchi-docs.enable |
 | `/stack-fix` | Absorb fixes into correct stack commits |
 | `/stack-plan` | Plan and build a commit stack from description or existing commits |
@@ -310,7 +310,7 @@ nix build .#dns-root-hints
 | Package | Description |
 |---------|-------------|
 | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-| `delegate-sizing-content` | Per-runtime model/effort sizing skills and a short routing rule |
+| `delegate-routing-content` | Per-runtime model/effort sizing skills and a short routing rule |
 | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
 Content packages are derivations with `passthru.fragments` for composable
@@ -323,7 +323,7 @@ instruction building.
 <!-- prettier-ignore -->
 | Feature | Without Nix | Home-Manager | DevEnv |
 |---------|-------------|--------------|--------|
-| Delegate sizing | Copy a generated runtime skill | `ai.programs.delegate-sizing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
+| Delegate routing | Copy a generated runtime skill | `ai.programs.delegate-routing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
 | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
@@ -938,11 +938,11 @@ services.mcp-servers.servers = {
 </details>
 
 <details>
-<summary><strong>Delegate Sizing</strong></summary>
+<summary><strong>Delegate Routing</strong></summary>
 
 ```nix
-ai.programs.delegate-sizing.enable = true;
-ai.claude.programs.delegate-sizing = {
+ai.programs.delegate-routing.enable = true;
+ai.claude.programs.delegate-routing = {
   extraRuntimes = ["codex"];
   manualExternalDelegates = ["kiro"];
 };

@@ -52,9 +52,9 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
   what `nix fmt` produces.
 - `packages/coding-standards/fragments/` — published coding standards, part of
   the orientation.
-- `packages/delegate-sizing/` and `packages/stacked-workflows/router.nix` — the
+- `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the
   always-on routing rules, delivered as `ai.*` rules of their own (the
-  delegate-sizing program and a root rule) rather than inlined into the
+  delegate-routing program and a root rule) rather than inlined into the
   orientation.
 - `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 
