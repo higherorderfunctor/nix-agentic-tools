@@ -209,9 +209,9 @@ three runtimes demonstrably do not perform.
 - **Always-on process defaults do not write hidden normalized-pool entries.**
   `ai.<cli>.environmentVariables` is the consumer's replacement/negation
   surface, and definition provenance treats package claims there as owned API.
-  Internal defaults such as the sandbox-safe SSH command and the git identity
-  (`ai.programs.git`) therefore ride the per-runtime internal channel
-  `ai.<runtime>.internal._moduleEnvironmentVariables` (published through
+  Internal defaults such as the sandbox-safe SSH command and the git identity's
+  config paths (`ai.programs.git`) therefore ride the per-runtime internal
+  channel `ai.<runtime>.internal._moduleEnvironmentVariables` (published through
   `lib/ai/module-environment.nix`) or the `resolvedShell` callback argument, and
   merge under consumer values at the wrapper call site. The channel is per
   runtime so a module can give each harness its own value; a shared value is

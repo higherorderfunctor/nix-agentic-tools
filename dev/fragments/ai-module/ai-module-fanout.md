@@ -3,8 +3,8 @@
 > **Last verified:** 2026-09-30 — module-contributed process environment rides a
 > per-runtime internal channel, which carries `ai.programs.git`'s per-harness
 > identity; its gitconfig pins `tag.forceSignAnnotated`, its signing assertions
-> read the body case-insensitively as git does, `gh.configDir` and
-> `credentials.file` must be absolute, a repository's own config is named as
+> read the body case-insensitively as git does, `gh.configDir` must be absolute,
+> its credential is a runtime reference, a repository's own config is named as
 > uncovered, and `mkProgram` takes `overrideDescriptions` for a leaf it does not
 > resolve. Claude delivers every surface as its own file through
 > `ai.claude.files` on both backends and fails evaluation beside its upstream
@@ -215,15 +215,18 @@ password dialog in an unattended harness session.
 `lib/ai/programs/git.nix`, imported by `sharedOptions.nix`, so both backends
 share one module and one option tree (`git-options.nix`). The leaves are Home
 Manager's names (`settings`, `signing.key/format/signByDefault`) plus the repo's
-`credentials` type; it is not a mirror of HM's `programs.git`. `mkProgram` gives
-every leaf an `ai.<runtime>.programs.<name>` override that REPLACES the root,
-except `settings`, which the module deep-merges itself (root, then runtime), so
-a per-harness `user.name` keeps the shared `user.email`.
+runtime-reference `credentials` option; it is not a mirror of HM's
+`programs.git`. `mkProgram` gives every leaf an `ai.<runtime>.programs.<name>`
+override that REPLACES the root, except `settings`, which the module deep-merges
+itself (root, then runtime), so a per-harness `user.name` keeps the shared
+`user.email`.
 
-Delivery: each enabled runtime gets its own store gitconfig, published as
-`GIT_CONFIG_GLOBAL` (plus `GH_CONFIG_DIR`) on its internal module-env channel,
-so it reaches launchers and Claude's `settings.env` like any module default and
-an explicit consumer entry wins. Invariants, each load-bearing:
+Delivery: each enabled runtime gets its own store gitconfig. Its path is
+published as `GIT_CONFIG_GLOBAL` (plus the literal `GH_CONFIG_DIR`) on the
+internal module-env channel, so those paths reach launchers and Claude's
+`settings.env` like any module default and an explicit consumer entry wins. The
+token remains an `rv.file` or `rv.helper` reference. The store credential helper
+reads that reference at call time. Invariants, each load-bearing:
 
 - **`[include]` is the first section.** `GIT_CONFIG_GLOBAL` replaces
   `~/.gitconfig` and the XDG config, so the file includes both, then overrides
@@ -235,11 +238,11 @@ an explicit consumer entry wins. Invariants, each load-bearing:
 - **The empty `credential."https://github.com".helper` is required.** It drops
   the user's own helper; without it an agent push that the agent helper cannot
   answer falls through to the user's token. The agent helper is a store script
-  that reads the `credentials` file on `get` only, and on any failure prints
-  `quit=1`: git ignores a helper's exit status and would otherwise go on to
-  askpass (including a `core.askPass` from the included user config) and the
-  terminal. With `credentials` null nothing is reset, so the user's helper
-  answers.
+  that resolves the `credentials` runtime reference on `get` only, and on any
+  failure prints `quit=1`: git ignores a helper's exit status and would
+  otherwise go on to askpass (including a `core.askPass` from the included user
+  config) and the terminal. With `credentials` null nothing is reset, so the
+  user's helper answers.
 - **Signing is always written.** `commit.gpgSign`, `tag.gpgSign` and
   `tag.forceSignAnnotated` render even when false, or a user global or XDG
   config that signs by default signs the agent's commits, or its `git tag -m`
@@ -262,8 +265,9 @@ an explicit consumer entry wins. Invariants, each load-bearing:
   Copilot, `GH_CONFIG_DIR` also feeds its last-resort `gh` login. Both are
   stated in the `gh` option text.
 - A signing key is a string refused under the store (a path literal would copy
-  the key there); so are `credentials.file` and `gh.configDir` (assertions).
-  Both must also be absolute: each is used verbatim, so nothing expands `~`.
+  the key there); so is `gh.configDir`. Both must also be absolute: each is used
+  verbatim, so nothing expands `~`. `credentials` is instead a secret `rv.file`
+  or `rv.helper` reference, validated by `lib.runtimeValues`.
   `settings.user.signingKey` is NOT refused: git also takes a public key file or
   a `key::` literal there for agent-backed ssh signing, and a public key in the
   store is harmless. `signByDefault` with a null key or format is an assertion
@@ -282,8 +286,10 @@ rewrites to SSH, measured: `insteadOf` is not re-applied to its result), and
 tools that ignore `GIT_CONFIG_GLOBAL` (git-mcp's GitPython commit; libgit2
 callers are unmeasured), and Copilot CLI's built-in GitHub MCP server, which
 reportedly acts as the Copilot login whatever `GH_CONFIG_DIR` says (unmeasured
-against the pinned build). On devenv each launcher bakes the project's own env,
-so the identity must be configured in the project (`devenv.local.nix`) too.
+against the pinned build). On devenv each launcher bakes the project's gitconfig
+and GitHub CLI config paths, while the credential helper reads the token
+reference at call time. The identity must therefore be configured in the project
+(`devenv.local.nix`) too.
 
 ### Fanout data flow
 

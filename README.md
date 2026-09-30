@@ -303,7 +303,7 @@ instruction building.
 | MCP credentials | Manual env vars | `rv.file` or `rv.helper` | `rv.file` or `rv.helper` |
 | Semble search integrations | Manual install | `ai.programs.semble` (Claude + Codex + Kiro) | Same; project-native paths |
 | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
-| Per-harness git and GitHub identity | Per-command env | `ai.programs.git` / `ai.programs.gh`, per harness under `ai.<cli>.programs.*` (all five CLIs) | Same; `GIT_CONFIG_GLOBAL` and `GH_CONFIG_DIR` baked into each harness, never the shell |
+| Per-harness git and GitHub identity | Per-command env | `ai.programs.git` / `ai.programs.gh`, per harness under `ai.<cli>.programs.*` (all five CLIs) | Same; literal `GIT_CONFIG_GLOBAL` and `GH_CONFIG_DIR` paths are baked into each harness, while the credential helper reads an `rv.file` or `rv.helper` token reference at call time |
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `rv.file` or `rv.helper` | `rv.file` or `rv.helper` |
 | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
@@ -439,10 +439,12 @@ that includes your own config first, then sets its name, email, signing and a
 GitHub credential helper; it is published as `GIT_CONFIG_GLOBAL`, and
 `ai.programs.gh.configDir` as `GH_CONFIG_DIR`. Shared values go at the root and
 per-harness ones under `ai.<cli>.programs.git`; `settings` deep-merges the two.
-The token and the signing key stay files read at run time, so only their paths
-reach the store, and no `GH_TOKEN` is set, because Copilot CLI would prefer it
-over its own login. It covers HTTPS to github.com: a remote that stays SSH still
-authenticates with your SSH identity.
+The gitconfig path and `GH_CONFIG_DIR` are literals baked into the harness
+launcher. The token is an `rv.file` or `rv.helper` reference that the credential
+helper reads at call time. The signing key stays a file read at run time, so
+only its path reaches the store. No `GH_TOKEN` is set, because Copilot CLI would
+prefer it over its own login. It covers HTTPS to github.com: a remote that stays
+SSH still authenticates with your SSH identity.
 
 ```nix
 ai = {
@@ -453,7 +455,7 @@ ai = {
       format = "ssh";
       signByDefault = true;
     };
-    credentials.file = "/run/secrets/bot-github-token";
+    credentials = rv.file { path = "/run/secrets/bot-github-token"; };
   };
   programs.gh = {
     enable = true;

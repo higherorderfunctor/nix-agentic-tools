@@ -320,7 +320,9 @@ contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
 MCP-less devenv project no longer keeps the bare package. Home Manager still
 does when no module env is published (for example with `ai.programs.git` and
 `ai.programs.gh` off), since it states that SSH default in Git's own config
-instead; either identity puts its variables on the channel and HM wraps too.
+instead; either identity puts its literal config path on the channel and HM
+wraps too. The git credential token remains a runtime reference read by the
+credential helper, not a process variable.
 
 ### Where LSP and settings go
 
