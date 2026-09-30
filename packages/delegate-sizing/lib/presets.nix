@@ -70,9 +70,12 @@
     delegateTools.text = ''
       Set `modelId` and `effortLevel` on `run_workflow` / `update_workflow`
       steps. Step values override workflow values, which override the session.
-      `orchestrate_subagent` cannot pin either. Call `validate_workflow` first
-      and read `warnings`: unknown ids fail at session creation; unsupported
-      efforts silently use the model default. Put steps with pinned models early.
+      `orchestrate_subagent` cannot pin either. Do not rely on
+      `validate_workflow` to catch an unknown `modelId`: at most it warns, and
+      the run is designed to fail at that step's session creation with no
+      fallback. An unsupported effort is reconciled to the model default.
+      Discover ids first and put steps with pinned models early, so a bad pin
+      fails fast.
     '';
     introspectModels.text = ''
       Run `kiro-cli chat --list-models -f json | jq -r '.models[].model_id'`
@@ -84,10 +87,12 @@
       current `cwd` and `mcpServers: []`. Query `_kiro/config/template` for
       that session and read the selected model's effort choices.
       Opus 5 and Sonnet 5 accept `low`, `medium`, `high`, `xhigh`, `max`;
-      Sol, Terra and Luna also accept `none`. When pinning a model other than
-      the `auto` model (CLI `--model auto`), set effort every time; the
-      default here is `high`. The `auto` model and Haiku have no effort
-      control.
+      Sol, Terra and Luna also accept `none`. When a `kiro-cli chat` launch
+      pins a model other than `auto` (`--model auto`), set effort every time:
+      a launch has no parent to inherit from. On a workflow step, set
+      `modelId` and `effortLevel` on the step itself; an omitted field
+      inherits from the workflow, then the session. The `auto` model and
+      Haiku have no effort control.
     '';
     launch.text = ''
       `kiro-cli chat --no-interactive --model auto "<prompt>"`

@@ -97,6 +97,11 @@ inputs:
 {inputs, ...}: {
   imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
+  # Required. The module does not apply the overlay itself, and the
+  # packages it installs for each enabled runtime (`pkgs.ai.*`) come from
+  # it, a separate flake output.
+  overlays = [inputs.nix-agentic-tools.overlays.default];
+
   ai = {
     claude.enable = true;
     codex.enable = true;

@@ -89,9 +89,12 @@ in rec {
   # emission code is unchanged.
   #
   # Kiro is intentionally excluded from the agents fanout in
-  # the factory (its agent shape is JSON, not markdown). This
-  # helper is therefore only wired into Claude + Copilot via
-  # `ai.<cli>.agentsDir` options.
+  # the factory: its tool vocabulary is capability tags, not
+  # the tool names these files carry, and the Rust CLI's
+  # directory scan skips `.md` agents (see `ai.agents` and the
+  # agents note in packages/kiro-cli/lib/mkKiro.nix). This
+  # helper is therefore wired only into the runtimes that read
+  # Markdown agents, via their `ai.<cli>.agentsDir` options.
   agentsFromDir = arg: let
     cfg = resolveDirArg (name: lib.hasSuffix ".md" name) arg;
     entries = builtins.readDir cfg.path;
