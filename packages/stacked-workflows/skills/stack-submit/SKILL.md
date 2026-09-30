@@ -20,16 +20,16 @@ stack (`$STACK`, pre-flight step 5).
    skill's directory) before proceeding.
 
 2. **Confirm repository initialization.** A devenv project with
-   `stacked-workflows.gitPreset` enabled initializes automatically before Git
-   hooks are installed. Outside that setup, initialize from the primary worktree
-   when the common branchless state is absent:
+   `git.branchless.enable` runs `git branchless init` on every shell entry.
+   Anywhere else, check and stop if it is missing:
 
    ```bash
-   git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
-   if [ ! -d "$git_common_dir/branchless" ]; then
-     git -C "$(dirname "$git_common_dir")" branchless init
-   fi
+   git config --get branchless.core.mainBranch >/dev/null ||
+     echo "not initialized: ask the user to run git branchless init"
    ```
+
+   Do not run `git branchless init` yourself: it rewrites the repository's
+   shared configuration and hooks for every worktree.
 
 3. **Require a clean working tree**:
 
