@@ -106,25 +106,19 @@
   # (sops-nix, agenix, ln, ...): it only needs the decrypted file path.
   credentialFilePaths = credentialVars: settings: env:
     lib.unique (builtins.filter (p: p != null) (
-      (mapAttrsToList (optName: _spec: let
-        value = settings.${optName} or null;
-      in
+      map (value:
         if runtimeValues.isReference value && value._runtime.source ? file
         then value._runtime.source.file
         else null)
-      credentialVars)
-      ++ (mapAttrsToList (_: value:
-        if runtimeValues.isReference value && value._runtime.source ? file
-        then value._runtime.source.file
-        else null)
-      env)
+      ((mapAttrsToList (optName: _spec: settings.${optName} or null) credentialVars)
+        ++ builtins.attrValues env)
     ));
 
   # ── Secrets wrapper for stdio servers with credentials ─────────────
   # Returns a string (store path) for use directly as a command.
   mkSecretsWrapper = {
     command,
-    env ? {},
+    env,
     pkgs,
     name,
     credentialVars ? {},
@@ -142,6 +136,60 @@
       exec ${lib.escapeShellArg command} "$@"
     '';
   in "${drv}";
+
+  pythonGuard = {
+    PYTHONNOUSERSITE = "true";
+    PYTHONPATH = "";
+  };
+
+  normalizeStdio = pkgs: name: {
+    args ? [],
+    command ? null,
+    credentialVars ? {},
+    env,
+    package ? null,
+    settings ? {},
+  }: let
+    checkedEnv =
+      (runtimeValues.keyAwareMap {
+        type = lib.types.str;
+        path = ["env"];
+      }).merge ["mcpServers" name "env"] [
+        {
+          file = "renderServer";
+          value = env;
+        }
+      ];
+    executable =
+      if command != null
+      then command
+      else getExe package;
+    guarded = package != null;
+    wrapped = hasCredentials credentialVars settings || any runtimeValues.isReference (builtins.attrValues checkedEnv);
+  in {
+    command =
+      if wrapped
+      then
+        mkSecretsWrapper {
+          inherit pkgs settings credentialVars;
+          command = executable;
+          env = builtins.removeAttrs checkedEnv (builtins.attrNames (
+            if guarded
+            then pythonGuard
+            else {}
+          ));
+          name = name + lib.optionalString (command != null) "-raw";
+        }
+      else executable;
+    inherit args wrapped;
+    env =
+      (
+        if wrapped
+        then {}
+        else checkedEnv
+      )
+      // lib.optionalAttrs guarded pythonGuard;
+  };
 
   # ── Typed-shape constructor (ai.mcpServers.<name> values) ────────
   # Returns the typed shape declared in
@@ -223,25 +271,13 @@
       // lib.optionalAttrs (timeout != null) {inherit timeout;}
     else if command != null
     then let
-      needsWrapper = any runtimeValues.isReference (builtins.attrValues env);
+      rendered = normalizeStdio pkgs name {inherit args command env;};
     in {
       type =
         if type != null
         then type
         else "stdio";
-      command =
-        if needsWrapper
-        then
-          mkSecretsWrapper {
-            inherit command env pkgs;
-            name = name + "-raw";
-          }
-        else command;
-      inherit args;
-      env =
-        if needsWrapper
-        then {}
-        else env;
+      inherit (rendered) args command env;
     }
     else if package != null
     then let
@@ -256,33 +292,15 @@
       srvEnv = effectiveEnv name cfgShim "stdio" env;
       srvArgs = effectiveArgs name cfgShim "stdio" args;
       credentialVars = serverDef.meta.credentialVars or {};
-      needsWrapper = hasCredentials credentialVars evaluatedSettings || any runtimeValues.isReference (builtins.attrValues srvEnv);
-      wrappedCommand = mkSecretsWrapper {
-        inherit pkgs name credentialVars;
-        command = getExe package;
+      rendered = normalizeStdio pkgs name {
+        args = stdioArgs ++ srvArgs;
+        inherit credentialVars package;
         env = srvEnv;
         settings = evaluatedSettings;
       };
     in {
       type = "stdio";
-      command =
-        if needsWrapper
-        then wrappedCommand
-        else getExe package;
-      args = stdioArgs ++ srvArgs;
-      # Prevent Python path pollution from parent process (e.g.,
-      # nixos-mcp sets PYTHONPATH for Python 3.13 which breaks
-      # Python 3.14 servers).
-      env =
-        (
-          if needsWrapper
-          then {}
-          else srvEnv
-        )
-        // {
-          PYTHONPATH = "";
-          PYTHONNOUSERSITE = "true";
-        };
+      inherit (rendered) args command env;
     }
     else throw "renderServer: server '${name}' must specify one of: package, command, or url";
 

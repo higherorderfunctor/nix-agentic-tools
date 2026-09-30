@@ -158,17 +158,20 @@
       then "mcp-proxy --pass-environment --host ${escapeShellArg srv.service.host} --port \"$MCP_PORT\" -- ${stdioCmdForBridge}"
       else httpCmd;
 
+    runtimeInputs =
+      [srv.package]
+      ++ optionals (httpCmd == "bridge") [pkgs.ai.mcpServers.mcp-proxy];
+
     wrapper = pkgs.writeShellApplication {
-      name = "mcp-" + name + "-start";
+      excludeShellChecks = ["SC2123"];
       extraShellCheckFlags = shellStrict.shellcheckFlags;
       inherit (shellStrict) bashOptions;
-      runtimeInputs =
-        [srv.package]
-        ++ optionals (httpCmd == "bridge") [pkgs.ai.mcpServers.mcp-proxy];
+      name = "mcp-" + name + "-start";
       text = ''
         ${shellStrict.shoptHeader}
         ${environmentSnippet}
         ${credentialSnippet}
+        export PATH=${lib.makeBinPath runtimeInputs}:$PATH
         exec ${rawCmd}${optionalString (argsStr != "") " ${argsStr}"}
       '';
     };

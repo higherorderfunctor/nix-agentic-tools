@@ -40,7 +40,11 @@ in {
         type = "stdio";
       };
       packaged = mcpLib.renderServer pkgs "context7-mcp" {
-        env.API_TOKEN = reference;
+        env = {
+          API_TOKEN = reference;
+          PYTHONNOUSERSITE = "false";
+          PYTHONPATH = "/unexpected/python";
+        };
         package = pkgs.ai.mcpServers.context7-mcp;
       };
       raw = mcpLib.renderServer pkgs "raw-reference" {
@@ -56,10 +60,27 @@ in {
         test ${lib.escapeShellArg literal.env.EDITOR} = vim
         grep -F '/run/secrets/mcp-token' ${packaged.command}
         grep -F 'runtime-value-read' ${packaged.command}
+        if grep -F 'PYTHONPATH' ${packaged.command}; then
+          exit 1
+        fi
+        test ${lib.escapeShellArg packaged.env.PYTHONPATH} = ""
+        test ${lib.escapeShellArg packaged.env.PYTHONNOUSERSITE} = true
         grep -F '/run/secrets/mcp-token' ${raw.command}
         grep -F 'runtime-value-read' ${raw.command}
         touch "$out"
       '';
+
+    module-mcp-stdio-env-secret-literal-rejected = mkTest "mcp-stdio-env-secret-literal-rejected" (
+      let
+        result = builtins.tryEval (builtins.deepSeq (mcpLib.renderServer pkgs "raw-literal-secret" {
+            command = "/bin/example";
+            env.API_TOKEN = "PLANTED_LITERAL";
+            type = "stdio";
+          })
+          true);
+      in
+        !result.success
+    );
 
     module-mcp-gitlab-instance-url = let
       render = instanceUrl:
@@ -197,41 +218,61 @@ in {
         result.config.services.mcp-servers.mcpConfig.mcpServers == {}
     );
 
-    # Credential rotation: enabling a file-credentialed HTTP server emits a
+    # Credential rotation: a file-backed credential or env reference emits a
     # restart-on-rotation activation entry that fingerprints the secret path
     # and targets the matching systemd user unit.
     module-mcp-services-rotation-restart-entry = mkTest "mcp-services-rotation-restart-entry" (
       let
-        result = evalHm {
-          services.mcp-servers.servers.github-mcp = {
-            enable = true;
-            settings.credentials = mcpLib.runtimeValues.file {path = "/run/secrets/gh-token";};
+        cases = {
+          credential = {
+            expectedPath = "/run/secrets/gh-token";
+            expectedUnit = "mcp-github-mcp.service";
+            module.services.mcp-servers.servers.github-mcp = {
+              enable = true;
+              settings.credentials = mcpLib.runtimeValues.file {path = "/run/secrets/gh-token";};
+            };
+          };
+          environment = {
+            expectedPath = "/run/secrets/context7-token";
+            expectedUnit = "mcp-context7-mcp.service";
+            module.services.mcp-servers.servers.context7-mcp = {
+              enable = true;
+              env.API_TOKEN = mcpLib.runtimeValues.file {path = "/run/secrets/context7-token";};
+            };
           };
         };
-        activation = result.config.home.activation.mcpRestartOnSecretRotation or null;
+        passes = case: let
+          result = evalHm case.module;
+          activation = result.config.home.activation.mcpRestartOnSecretRotation or null;
+        in
+          activation
+          != null
+          && lib.hasInfix case.expectedUnit (activation.text or "")
+          && lib.hasInfix "sha256sum" (activation.text or "")
+          && lib.hasInfix case.expectedPath (activation.text or "");
       in
-        activation
-        != null
-        && lib.hasInfix "mcp-github-mcp.service" (activation.text or "")
-        && lib.hasInfix "sha256sum" (activation.text or "")
-        && lib.hasInfix "/run/secrets/gh-token" (activation.text or "")
+        lib.all passes (builtins.attrValues cases)
     );
 
-    module-mcp-services-rotation-restart-env-reference = mkTest "mcp-services-rotation-restart-env-reference" (
-      let
-        result = evalHm {
-          services.mcp-servers.servers.context7-mcp = {
-            enable = true;
-            env.API_TOKEN = mcpLib.runtimeValues.file {path = "/run/secrets/context7-token";};
-          };
+    module-mcp-services-service-path-order = let
+      result = evalHm {
+        services.mcp-servers.servers.context7-mcp = {
+          enable = true;
+          env.PATH = "/nonexistent/a:/nonexistent/b";
         };
-        activation = result.config.home.activation.mcpRestartOnSecretRotation or null;
-      in
-        activation
-        != null
-        && lib.hasInfix "mcp-context7-mcp.service" (activation.text or "")
-        && lib.hasInfix "/run/secrets/context7-token" (activation.text or "")
-    );
+      };
+      exec = result.config.systemd.user.services.mcp-context7-mcp.Service.ExecStart;
+    in
+      pkgs.runCommandLocal "module-test-mcp-services-service-path-order" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        declared_line="$(grep -nF 'PATH=/nonexistent/a:/nonexistent/b' ${exec} | cut -d: -f1)"
+        exec_line="$(grep -nF 'exec mcp-proxy' ${exec} | cut -d: -f1)"
+        package_line="$(grep -nF 'export PATH=' ${exec} | tail -n1 | cut -d: -f1)"
+        test "$package_line" -gt "$declared_line"
+        test "$exec_line" -eq "$((package_line + 1))"
+        touch "$out"
+      '';
 
     # DRY-RUN INERTNESS. Every MUTATING command in the rotation script must be
     # routed through home-manager's `run` helper, which echoes instead of
