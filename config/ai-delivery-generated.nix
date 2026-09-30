@@ -1010,8 +1010,8 @@
     {
       additionalWriters = [
         {
-          primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          primitive = "ownLeaves";
+          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
           target = "$HOME/.config/kimchi/harness/settings.json";
           writerAttr = [
             "home"
@@ -1020,9 +1020,19 @@
           ];
         }
         {
-          primitive = "ownPathManaged";
-          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          primitive = "ownLeaves";
+          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
           target = "$HOME/.config/kimchi/config.json";
+          writerAttr = [
+            "home"
+            "activation"
+            "kimchiFilesPrune"
+          ];
+        }
+        {
+          primitive = "ownLeaves";
+          pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
+          target = "$HOME/.config/kimchi/harness/settings.json";
           writerAttr = [
             "home"
             "activation"
@@ -1032,18 +1042,28 @@
         {
           primitive = "ownPathManaged";
           pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
-          target = "$HOME/.config/kimchi/harness/settings.json";
+          target = "$HOME/.config/kimchi/<legacy-owned-file>";
           writerAttr = [
             "home"
             "activation"
             "kimchiFilesPrune"
           ];
         }
+        {
+          primitive = "ownPathManaged";
+          pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+          target = "$HOME/.config/kimchi/<legacy-owned-file>";
+          writerAttr = [
+            "home"
+            "activation"
+            "kimchiFiles"
+          ];
+        }
       ];
       ecosystem = "kimchi";
       mode = "hm";
-      primitive = "ownPathManaged";
-      pruneTrigger = "On activation, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      primitive = "ownLeaves";
+      pruneTrigger = "On activation, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
       surface = "settings";
       target = "$HOME/.config/kimchi/config.json";
       writerAttr = [

@@ -80,7 +80,20 @@
         description = "Rendered path-scoped index entries keyed by stable rule identity.";
       };
       defaultMaxBytes = lib.mkOption {
-        type = lib.types.attrsOf lib.types.ints.positive;
+        type = lib.types.attrsOf (lib.types.submodule {
+          options = {
+            bytes = lib.mkOption {
+              type = lib.types.ints.positive;
+              internal = true;
+              visible = false;
+            };
+            resolver = lib.mkOption {
+              type = lib.types.package;
+              internal = true;
+              visible = false;
+            };
+          };
+        });
         default = {};
         internal = true;
         visible = false;
@@ -123,15 +136,13 @@
       hint = "Trim the contributing context or rules, replace the final file, or raise the runtime's document-size limit.";
     })
     (lib.filterAttrs (_filename: value: value.maxBytes != null) config.ai.internal.agentsMd);
-  # A RAISED limit admits a file larger than what a runtime takes where that
-  # limit does not apply (Codex applies project config only in a trusted
-  # project, and nothing at evaluation or build time can see trust). The
-  # notice measures the file actually in the project on every shell entry, so
-  # it keeps firing for as long as the file stays past the reader's default.
+  # A raised build limit can admit more than the runtime currently reads. The
+  # notice resolves the effective limit at shell entry, where user config and
+  # repository trust are visible, and measures the file on disk against it.
   windowNotices = lib.concatStrings (lib.concatLists (lib.mapAttrsToList (filename: value:
-    lib.mapAttrsToList (reader: defaultBytes:
-      lib.optionalString (value.maxBytes != null && value.maxBytes > defaultBytes) ''
-        ${lib.getExe byteLimit.windowNotice} "$DEVENV_ROOT"/${lib.escapeShellArgs [filename (toString defaultBytes) reader]}
+    lib.mapAttrsToList (reader: notice:
+      lib.optionalString (value.maxBytes != null && value.maxBytes > notice.bytes) ''
+        ${lib.getExe byteLimit.windowNotice} "$DEVENV_ROOT"/${lib.escapeShellArgs [filename (toString notice.bytes) reader (lib.getExe notice.resolver)]}
       '')
     value.defaultMaxBytes)
   config.ai.internal.agentsMd));

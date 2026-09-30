@@ -7,18 +7,17 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-29 — Kimchi 1.1.37 delivers every managed settings
-> file as a read-only copy. Home Manager also owns config.json and trust.json;
-> devenv writes project files only. The HM option types seed values that would
-> otherwise require writes at launch, and region is required. The pinned pi
+> **Last verified:** 2026-09-29 — Kimchi 1.1.37 shares Home Manager's user
+> config.json and harness/settings.json with the runtime; the remaining files
+> and every devenv file stay read-only copies. Region is required. The pinned pi
 > dependency is 0.85.1. Agents are read-only copies from the runtime's generated
 > Markdown tree; the opt-in docs skill uses the shared frontmatter renderer and
 > a guarded generated-file tree; a store-path string is an input just as a path
 > is. Full lineage: `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
-closest in shape to `mkKiro` (dual config trees, settings as read-only copies).
-The HM and devenv modules are thin shims that apply `hmTransform` /
+closest in shape to `mkKiro` (dual config trees with runtime-writable user
+settings). The HM and devenv modules are thin shims that apply `hmTransform` /
 `devenvTransform` to the record.
 
 Its record-level `config`, `kimchiDelivery`, describes each file: its bytes,
@@ -62,16 +61,10 @@ HM manages that document it declares both:
   `highestPrio` inside the submodule, which looks at definition priorities and
   not values, so it cannot recurse. The shared `ai.settings` surface has no
   model field, so these two native keys are the only declaration path.
-  - **Mostly a lock.** Kimchi tries to persist a startup `--model` given over a
-    routed Auto default (`auto-model/index.ts:215-229`), as it does `/model`
-    set-default, the `set_model` tool and ACP model changes, through pi's
-    in-place settings write (`dist/core/settings-manager.js:101`). That write
-    fails on the read-only copy and is caught, so the choice lasts the session.
-    pi keeps the failed fields queued, though: if one of Kimchi's rename writers
-    (`src/config/json.ts:154-160`: status line, model roles, resources, the
-    shell-profile dismissal) has replaced the copy mid-session, pi's next save
-    lands the queued model in the replacement, and it holds until the next
-    activation restores the declaration.
+  - **Nix owns the pair.** Kimchi can persist a startup `--model`, `/model`
+    set-default, the `set_model` tool, and ACP model changes. The next
+    activation restores only the declared model leaves and preserves unrelated
+    runtime state.
   - **Multi-model.** Any saved default, Auto included, turns off the global
     `multiModel` default on a fresh launch whose model is not on `kimchi-dev`
     (`auto-model/index.ts:104-106,255-259`). An account whose catalog lacks Auto
@@ -79,11 +72,9 @@ HM manages that document it declares both:
     when none is declared, but that fallback runs with multi-model off.
     `multiModel = true` needs `defaultModel = null`.
 - **The marker**: `autoDefaultApplied = true` at `mkDefault`. It matters when
-  the consumer declares a non-Auto `kimchi-dev` model or nulls the pair. Both
-  explicit overrides are traps: Kimchi reads only `=== true`, installs Auto and
-  renames a file carrying `true` over the copy, and every activation restores a
-  copy that carries `false` or no marker at all, so Auto is reinstalled on the
-  first fresh launch after each one.
+  the consumer declares a non-Auto `kimchi-dev` model or nulls the pair. Kimchi
+  reads only `=== true`, so false or no marker re-arms Auto after every
+  activation.
 
 Devenv is an explicit exclusion for both. Kimchi reads the marker only from the
 user file and devenv rejects user-scope keys. A project model default would make
@@ -218,88 +209,65 @@ Kimchi settings are ordinary **nested** JSON (`telemetry`, `llmEndpoint`,
 `skillPaths`, `preferences`). The user harness contains runtime settings, MCP,
 context, and skills.
 
-Settings are Nix's to write, so every Kimchi JSON file is a read-only copy
-except one. Kimchi's writers either rename a temporary over the path (MCP edits:
-1.1.37's first-run migration `src/setup-wizard.ts:117-137`, ACP import
-`src/modes/acp/ext-methods/import-apply.ts:289`, `/mcp enable|disable` through
-the patched pi-mcp-adapter 2.34.0 `config.ts:1142-1147`; and every
-`writeConfigSetting`, `src/config/json.ts:154-160`) or write in place (pi's
-settings and trust stores, `/permissions … save`). A rename replaces a store
-symlink as easily as a 0444 file, and then Home Manager's next link check fails
-while devenv silently skips the path. So each file is `method = "copy-ro"` in a
-directory ledger of the one `kimchiFiles` writer (`ai:kimchi:files` on devenv,
-plus `kimchiFilesPrune` on HM), one ledger per directory, named
-`materialize/kimchi-files-<sha256 of the directory>.manifest`:
+Home Manager shares user `config.json` and harness `settings.json` with Kimchi.
+Nix owns its declared JSON leaves and preserves every other leaf. `own.py`
+creates a missing document as 0600, preserves an existing regular file's mode,
+and retries its compare-and-swap merge when Kimchi writes concurrently. This
+lets `/login`, `/model`, and changelog state persist without releasing Nix's
+declared policy.
 
-| directory                        | Home Manager                                        | devenv                                               |
-| -------------------------------- | --------------------------------------------------- | ---------------------------------------------------- |
-| `<configDir>`                    | `config.json` (0400)                                | none                                                 |
-| `<configDir>/harness`            | `settings.json`, `mcp.json`, `trust.json`           | none                                                 |
-| `.config/kimchi/harness` (fixed) | `permissions.json` (a second ledger if not default) | `settings.json`                                      |
-| `.kimchi`                        | none                                                | `config.json` (0400), `mcp.json`, `permissions.json` |
+The other JSON files remain read-only copies. Kimchi's writers either rename a
+temporary over the path (MCP edits and `writeConfigSetting`) or write in place
+(the trust and permissions stores). Those files use `method = "copy-ro"` in a
+directory ledger of the `kimchiFiles` writer; the shared documents use one JSON
+ledger each:
 
-A rename lasts until the next activation or shell entry, which backs the file up
-and restores the declaration (`lib/ai/own.py`'s `backup_overwrite` arm); an
-in-place write fails. The first run adopts a file an earlier generation
-reconciled the same way, with a backup, so there is no migration writer. The
-directories stay writable, because Kimchi keeps state and locks beside the
-copies. Home Manager owns every user-global copy whatever is declared (`{}` when
-nothing is); devenv claims a project copy only when something is declared, so a
-project file never overrides the user one by existing. Locked by
-`module-kimchi-hm-owns-user-files`, `module-kimchi-mcp-copies`,
-`module-kimchi-devenv-project-paths` and `module-kimchi-files-runtime`, which
-runs the real writers, adopts a reconciled `mcp.json` with an extra server, and
-replaces an in-app rename.
+| directory                        | Home Manager                                            | devenv                                               |
+| -------------------------------- | ------------------------------------------------------- | ---------------------------------------------------- |
+| `<configDir>`                    | shared `config.json`                                    | none                                                 |
+| `<configDir>/harness`            | shared `settings.json`; copied `mcp.json`, `trust.json` | none                                                 |
+| `.config/kimchi/harness` (fixed) | copied `permissions.json`                               | copied `settings.json`                               |
+| `.kimchi`                        | none                                                    | copied `config.json`, `mcp.json`, `permissions.json` |
 
-A read-only harness `settings.json` can no longer take what Kimchi seeds there
-at launch (`src/cli.ts:522-551`), and pi's defaults for two of them differ from
-Kimchi's. So `hmHarnessDefaults` also declares `hideThinkingBlock` and
-`quietStartup` as `mkDefault true`, beside `autoDefaultApplied`. Without
-`autoDefaultApplied`, the Auto router would rename its default model over the
-copy (`src/config.ts:831-843`).
+Home Manager always owns its declared leaves in the two shared documents and
+every immutable user-global copy. devenv claims a project copy only when
+something is declared. Locked by `module-kimchi-hm-owns-user-files`,
+`module-kimchi-mcp-copies`, `module-kimchi-devenv-project-paths`, and
+`module-kimchi-files-runtime`.
 
-Home Manager also owns the complete user `config.json` as a 0400 copy.
-`hmSettingsDefaults` declares `migrationState = "skip-forever"`, the
-`DEFAULT_SKILL_PATHS` list (including the default `ai.*` skill directory),
-`preferences.hideTips = true`, known onboarding markers, the pinned 1.1.37
-initial survey's `seenAt`, and `telemetry.enabled = false`. A future survey ID
-can reappear after activation until the declaration is updated. The device ID is
-absent because telemetry is disabled. `region` has no default: Home Manager
+The shared document makes launch-seed defaults unnecessary. `hmHarnessDefaults`
+does not declare `hideThinkingBlock`, `lastChangelogVersion`, `quietStartup`,
+`retry`, or `shellProfileApiKeyMigrationDismissed`; Kimchi owns and persists
+them. It keeps the actual Nix policy: the Auto model pair and marker,
+`defaultProjectTrust = "never"`, disabled install telemetry, and the
+`kimchi-minimal` theme.
+
+`hmSettingsDefaults` keeps only `telemetry.enabled = false` and the
+`DEFAULT_SKILL_PATHS` integration list. Kimchi owns migration, onboarding, tips,
+survey, login, and device state. `region` has no default: Home Manager
 evaluation fails until the account region is declared. The launcher sets
 `KIMCHI_REGION` and `KIMCHI_TELEMETRY_ENABLED` from the declared values. Devenv
 emits either variable only when it is declared, and it never writes `$HOME`.
 
-The harness type also declares `defaultProjectTrust = "never"`, so undeclared
-projects are quietly untrusted and pi does not show the startup trust prompt. It
-seeds Kimchi's theme and provider retry policy, disables pi install telemetry,
-pins `lastChangelogVersion` from the packaged pi dependency, and marks the
-shell-profile API-key migration dismissed. The latter prevents a prompt that can
-rename over a Home Manager shell profile.
-
 `ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
 `lib/credentials.nix` shape. Kimchi reads git tokens only from the user
 `config.json` and has no environment input for them
-(`src/extensions/teleport/provisioning/git-token.ts`), so the copy's content
-becomes a `run` renderer that exports each token from its file and merges it
-into the declaration with `jq` when the writer runs; the store holds the path.
-The writer is ordered after the `secrets` token. `native.settings` has no
-`gitTokens` option, which would write the secret into the store. Devenv rejects
-the option by name. The API key needs no leaf: Kimchi prefers `KIMCHI_API_KEY`
-over the file everywhere it reads the key (`loadConfig`, the telemetry and
-mismatch paths in `src/config.ts`), and the launcher exports it from
-`ai.kimchi.apiKey`. With it set, an in-app login or logout changes nothing the
-next launch reads. A leaf a login writes survives only until the next
-activation, which restores the complete declaration instead of preserving
-undeclared leaves. Locked by `module-kimchi-git-tokens` and
-`module-kimchi-files-runtime`.
+(`src/extensions/teleport/provisioning/git-token.ts`), so this branch cannot use
+shared delivery: its `content.run` renderer exports each token from its file and
+merges it into the declaration with `jq` when the writer runs. It remains a 0400
+`copy-ro` file; shared delivery accepts only `content.value`. The store holds
+the credential path. The writer is ordered after the `secrets` token.
+`native.settings` has no `gitTokens` option, which would write the secret into
+the store. Devenv rejects the option by name. The API key needs no leaf: Kimchi
+prefers `KIMCHI_API_KEY` over the file everywhere it reads the key
+(`loadConfig`, the telemetry and mismatch paths in `src/config.ts`), and the
+launcher exports it from `ai.kimchi.apiKey`. With it set, an in-app login or
+logout changes nothing the next launch reads. Locked by
+`module-kimchi-git-tokens` and `module-kimchi-files-runtime`.
 
-Home Manager writes `config.json` with mode 0400 because it may contain
-`gitTokens`. A login or other rename-over edit can replace the copy until the
-next activation, which backs it up and restores the declaration. No `deviceId`
-or undeclared login key survives that activation. Devenv's project copy is also
-0400, because Kimchi warns when a group or other user can read `config.json`
-(`src/config.ts:390-403,533`). Its `skillPaths` default stays unset so the
-project inherits the user list.
+Devenv's project copy is 0400 because Kimchi warns when a group or other user
+can read `config.json` (`src/config.ts:390-403,533`). Its `skillPaths` default
+stays unset so the project inherits the user list.
 
 `ai.kimchi.permissions` mirrors Kimchi's `.strict()` zod schema key for key
 (`src/extensions/permissions/config.ts:11-19`) with no freeform tail, because
@@ -324,7 +292,7 @@ one string (`orchestrator` and `compactor` in 1.1.37), come from the sidecar's
 rejects it at evaluation: an unknown role is an unknown option. Locked by
 `module-kimchi-model-roles-shape`.
 
-Everything else Kimchi delivers except the settings copies (above) and agents
+Everything else Kimchi delivers except the settings files (above) and agents
 (below) is immutable and symlink-readable, so it takes both defaults and states
 no fact at all. Normalized context renders into the `ai.kimchi.files` map on
 Home Manager. Devenv context joins the single root `AGENTS.md` owner shared with

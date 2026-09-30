@@ -16,6 +16,7 @@
   checks.markdown-byte-limit-scripts = let
     byteLimit = import ../../lib/markdown/byte-limit.nix pkgs;
     check = lib.getExe byteLimit.byteLimitCheck;
+    effective = lib.getExe (import ../../packages/chatgpt-codex/lib/effectiveProjectDocMaxBytes.nix pkgs);
     notice = lib.getExe byteLimit.windowNotice;
   in
     pkgs.runCommand "markdown-byte-limit-scripts" {} ''
@@ -33,6 +34,12 @@
       sized 32769 above.md
       sized 40000 big.md
       printf 'é\n' >unicode.md
+      probe="$TMPDIR/repo"
+      mkdir -p "$probe/.codex"
+      ${pkgs.git}/bin/git -c core.fsmonitor=false -C "$probe" init -q
+      export CODEX_HOME="$TMPDIR/codex-home"
+      export HOME="$TMPDIR/home"
+      mkdir -p "$CODEX_HOME"
 
       ${check} below.md 32768 probe 'Raise it.' || fail "32767 bytes fail a 32768-byte limit"
       ${check} exact.md 32768 probe 'Raise it.' || fail "32768 bytes fail a 32768-byte limit"
@@ -47,13 +54,33 @@
       fi
       grep -q -F "renders to 3 bytes" err || fail "unexpected failure message: $(cat err)"
 
-      ${notice} missing.md 32768 codex 2>err || fail "the notice fails on a missing file"
+      ${notice} missing.md 32768 codex ${effective} 2>err || fail "the notice fails on a missing file"
       [ -s err ] && fail "the notice warns about a missing file: $(cat err)"
-      ${notice} exact.md 32768 codex 2>err || fail "the notice fails on a file within the limit"
+      ${notice} exact.md 32768 codex ${effective} 2>err || fail "the notice fails on a file within the limit"
       [ -s err ] && fail "the notice warns about a file within the limit: $(cat err)"
-      ${notice} big.md 32768 codex 2>err || fail "the notice fails on a file past the limit"
-      [ "$(cat err)" = "warning: big.md is 40000 bytes; codex in an untrusted project reads only the first 32768. Trust the project in codex, or shrink the always-loaded content." ] \
+      ${notice} big.md 32768 codex ${effective} 2>err || fail "the notice fails on a file past the limit"
+      [ "$(cat err)" = "warning: big.md is 40000 bytes; codex reads only the first 32768 bytes with its current configuration. Raise the limit in codex, or shrink the always-loaded content." ] \
         || fail "unexpected notice: $(cat err)"
+
+      cp big.md "$probe/AGENTS.md"
+      printf 'project_doc_max_bytes = 40000\n' >"$CODEX_HOME/config.toml"
+      ${notice} "$probe/AGENTS.md" 32768 codex ${effective} 2>err || fail "the notice fails with a sufficient user limit"
+      [ -s err ] && fail "the notice ignores the user limit: $(cat err)"
+
+      main_checkout="$(${pkgs.coreutils}/bin/dirname "$(${pkgs.git}/bin/git -c core.fsmonitor=false -C "$probe" rev-parse --path-format=absolute --git-common-dir)")"
+      printf '[projects."%s"]\ntrust_level = "trusted"\n' "$main_checkout" >"$CODEX_HOME/config.toml"
+      printf 'project_doc_max_bytes = 40000\n' >"$probe/.codex/config.toml"
+      ${notice} "$probe/AGENTS.md" 32768 codex ${effective} 2>err || fail "the notice fails with a trusted project limit"
+      [ -s err ] && fail "the notice ignores the trusted project limit: $(cat err)"
+
+      rm "$probe/.codex/config.toml"
+      ${notice} "$probe/AGENTS.md" 32768 codex ${effective} 2>err || fail "the notice fails without project config"
+      [ -s err ] || fail "the notice is silent without project config"
+
+      printf '[projects."%s"]\ntrust_level = "untrusted"\n' "$main_checkout" >"$CODEX_HOME/config.toml"
+      printf 'project_doc_max_bytes = 40000\n' >"$probe/.codex/config.toml"
+      ${notice} "$probe/AGENTS.md" 32768 codex ${effective} 2>err || fail "the notice fails for an untrusted project"
+      [ -s err ] || fail "the notice applies project config without trust"
 
       echo PASS >"$out"
     '';
