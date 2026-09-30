@@ -1,0 +1,21 @@
+{
+  "args": {
+    "hash": "fixture branch a-1",
+    "inline_command": "git hide -r <hash>",
+    "scenario": "hide",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Safety invariants and scenario endpoint hold",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R4-S2",
+  "kind": "static",
+  "path": "skills/stack-submit/SKILL.md",
+  "pattern": "git hide -r <hash>",
+  "present": false,
+  "topology": "T8"
+}

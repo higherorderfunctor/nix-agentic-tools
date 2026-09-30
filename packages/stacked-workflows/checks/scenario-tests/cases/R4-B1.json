@@ -1,0 +1,19 @@
+{
+  "args": {
+    "scenario": "restructure",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [
+    "packages/stacked-workflows/skills/stack-summary/SKILL.md::Determine Range::1",
+    "packages/stacked-workflows/skills/stack-plan/SKILL.md::Restructure Mode::6"
+  ],
+  "block_roles": ["selection", "mutator"],
+  "env": {},
+  "expected": {
+    "description": "Safety invariants and scenario endpoint hold",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R4-B1",
+  "kind": "restructure",
+  "topology": "T1"
+}

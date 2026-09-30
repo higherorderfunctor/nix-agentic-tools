@@ -18,9 +18,9 @@ Each skill's own description states which operations it covers.
 
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-09-29 — `gitPreset` is `mkDefault` sugar over the
-> `git.*` options (packages/git/docs/git.md), declared once in
-> `modules/options.nix`.
+> **Last verified:** 2026-09-29 — owner checks include sequential scenario tests
+> of the published skill and reference recipes; `gitPreset` remains `mkDefault`
+> sugar over `git.*`, declared once in `modules/options.nix`.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.
@@ -117,3 +117,18 @@ nix build .#git-branchless      # Build git-branchless overlay
 nix build .#git-revise          # Build git-revise overlay
 nix flake check                 # Run module eval checks
 ```
+
+### Scenario tests
+
+`checks.stacked-workflows-scenarios` runs the published shell examples against
+isolated Git repositories using this flake's Git tools. Its runner lives in
+`checks/scenario-tests/` and supports both a checkout and an immutable source
+directory without Git history. Cases execute sequentially, without Nix or
+network access, and fail on any assertion or execution error.
+
+Run `nix build .#checks.x86_64-linux.stacked-workflows-scenarios -L` for the
+same check CI runs. To exercise working-tree edits with tools already on PATH,
+run `bash packages/stacked-workflows/checks/scenario-tests/run.sh`. The adjacent
+README documents targeted cases and retained failure artifacts. When changing a
+recipe, update its stable block IDs and add a behavioral case; verify that
+reverting the recipe in a scratch source copy makes that case fail.

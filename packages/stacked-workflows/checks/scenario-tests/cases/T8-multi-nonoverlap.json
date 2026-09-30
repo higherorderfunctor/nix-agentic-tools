@@ -1,0 +1,24 @@
+{
+  "allowed_deleted": ["refs/heads/a-1", "refs/heads/a-2"],
+  "args": {
+    "scenario": "squash-move",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Pre-flight::4",
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::2"
+  ],
+  "block_roles": ["selection", "mutator"],
+  "env": {
+    "SQUASH_COUNT": "multi",
+    "SQUASH_OVERLAP": "no"
+  },
+  "expected": {
+    "description": "Safety invariants and scenario endpoint hold",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "T8-multi-nonoverlap",
+  "kind": "squash-move",
+  "subjects": ["f", "g", "a3"],
+  "topology": "T8"
+}

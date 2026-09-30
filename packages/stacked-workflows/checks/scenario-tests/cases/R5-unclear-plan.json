@@ -1,0 +1,74 @@
+{
+  "args": {
+    "scenario": "static",
+    "shell_scope": "none"
+  },
+  "assertions": [
+    {
+      "id": "SWI-0406",
+      "pattern": "description:.*reset --soft",
+      "present": true
+    },
+    {
+      "id": "SWI-0407",
+      "pattern": "description:.*git move -F panics",
+      "present": true
+    },
+    {
+      "id": "SWI-0431",
+      "pattern": "delete it first",
+      "present": false
+    },
+    {
+      "id": "SWI-0439",
+      "pattern": "git checkout -B main",
+      "present": false
+    },
+    {
+      "id": "SWI-0450",
+      "pattern": "GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash",
+      "present": false
+    },
+    {
+      "id": "SWI-0451",
+      "pattern": "run `git restack`",
+      "present": false
+    },
+    {
+      "id": "SWI-0452",
+      "pattern": "git move -x <hash> -d <dest>",
+      "present": false
+    },
+    {
+      "id": "SWI-0453",
+      "pattern": "git revise -i",
+      "present": false
+    },
+    {
+      "id": "SWI-0454",
+      "pattern": "bare one would restack",
+      "present": false
+    },
+    {
+      "id": "SWI-0455",
+      "pattern": "Use `git move -x`",
+      "present": false
+    },
+    {
+      "id": "SWI-0456",
+      "pattern": "`git revise -i` for bulk",
+      "present": false
+    }
+  ],
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Plan inventory items are non-executable prose or removed repairs",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R5-unclear-plan",
+  "kind": "static-set",
+  "path": "skills/stack-plan/SKILL.md",
+  "topology": "T4"
+}

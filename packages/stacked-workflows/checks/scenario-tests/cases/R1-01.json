@@ -1,0 +1,19 @@
+{
+  "args": {
+    "scenario": "static",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Document references configured alias (external feature provenance not tested)",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R1-01",
+  "kind": "option-exists",
+  "path": "references/git-branchless.md",
+  "pattern": "scopedSync",
+  "present": true,
+  "topology": "T4"
+}

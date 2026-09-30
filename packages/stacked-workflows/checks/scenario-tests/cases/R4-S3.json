@@ -1,0 +1,19 @@
+{
+  "args": {
+    "scenario": "children",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Safety invariants and scenario endpoint hold",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R4-S3",
+  "kind": "static",
+  "path": "references/git-absorb.md",
+  "pattern": "git move -s 'children\\(<pre-rewrite-hash>\\)'",
+  "present": false,
+  "topology": "T2"
+}

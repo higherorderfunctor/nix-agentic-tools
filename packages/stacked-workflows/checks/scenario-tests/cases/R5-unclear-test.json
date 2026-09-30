@@ -1,0 +1,29 @@
+{
+  "args": {
+    "scenario": "static",
+    "shell_scope": "none"
+  },
+  "assertions": [
+    {
+      "id": "SWI-0564",
+      "pattern": "git test fix --strategy working-copy --jobs 1 --no-cache",
+      "present": true
+    },
+    {
+      "id": "SWI-0578",
+      "pattern": "git test clean 'all\\(\\)'",
+      "present": false
+    }
+  ],
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Test inventory items use guarded fix mode and preserve shared cache",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R5-unclear-test",
+  "kind": "static-set",
+  "path": "skills/stack-test/SKILL.md",
+  "topology": "T4"
+}

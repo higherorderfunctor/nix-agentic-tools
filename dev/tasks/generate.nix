@@ -137,29 +137,15 @@ in {
       '';
     };
 
-    # The instruction files are `ai.*`'s own read-only copies (dev/ai.nix
-    # configures them); this aggregate only orders the two writers whose
-    # files are COMMITTED, so `generate:all` refreshes every tracked file in
-    # a worktree. It names no gitignored writer (Claude, Kiro), whose output
-    # a worktree has no use for, and it is not a second writer: each file
-    # still has exactly one.
-    "generate:instructions" = {
-      description = "Regenerate the committed instruction files (AGENTS.md, .github/)";
+    # Every generated file: devenv:files writes the gitignored ones (Claude
+    # rules, Kiro steering, …); the ai:* writers the committed instruction
+    # files (AGENTS.md, .github/).
+    "generate:all" = {
+      description = "Generate every generated file, committed and gitignored";
       after = [
         "ai:agents-md:materialize"
         "ai:copilot:materialize-instructions"
-      ];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        log "Committed instruction files regenerated"
-      '';
-    };
-
-    "generate:all" = {
-      description = "Generate all content (instructions + repo)";
-      after = [
-        "generate:instructions"
+        "devenv:files"
         "generate:repo"
       ];
       exec = ''

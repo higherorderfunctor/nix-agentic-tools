@@ -84,7 +84,7 @@
         label = "AGENTS.md";
         tracked = ../../AGENTS.md;
         generated = agentsMd."AGENTS.md";
-        regenerate = "generate:instructions";
+        regenerate = "generate:all";
       }
       {
         label = "CONTRIBUTING.md";
@@ -102,7 +102,7 @@
         label = ".github/copilot-instructions.md";
         tracked = ../../.github/copilot-instructions.md;
         generated = copilotContext."copilot-instructions.md";
-        regenerate = "generate:instructions";
+        regenerate = "generate:all";
       }
     ];
 
@@ -192,7 +192,7 @@
           failed=1
           echo "" >&2
           echo "DRIFT: .github/instructions/" >&2
-          echo "  regenerate with: devenv tasks run --mode before generate:instructions" >&2
+          echo "  regenerate with: devenv tasks run --mode before generate:all" >&2
           "$sed" -n '1,80p' "$tmp/diff-dir" >&2
         fi
 

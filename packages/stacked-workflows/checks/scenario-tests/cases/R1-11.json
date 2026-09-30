@@ -1,0 +1,19 @@
+{
+  "args": {
+    "scenario": "static",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "No-remote fallback documented",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R1-11",
+  "kind": "static",
+  "path": "skills/stack-test/SKILL.md",
+  "pattern": "no upstream ref|no main branch|does not resolve",
+  "present": true,
+  "topology": "T4"
+}
