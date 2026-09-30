@@ -8,47 +8,48 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-09-30 — Kiro consumes semantic root `ai.agents`
-> records as native JSON through their `kiro` extension. Its normalized agent
-> type and lowering callback preserve the native per-runtime schema without
-> changing the shared semantic type used by other runtimes. Stacked-workflows'
-> Git preset is `mkDefault` sugar over the shared `git.*` options. Claude
-> delivers every surface as its own file through `ai.claude.files` on both
-> backends and fails evaluation beside its upstream module, and every delivery
-> method writes the file itself. Every enabled runtime installs a package;
-> `installPackage` has no `null` opt-out. Codex's `config.toml` is a read-only
-> store symlink on both backends, its daemon `settings.json` a Home Manager copy
-> of `native.daemonSettings`, and Nix declares the trust of every hook it
-> generates; Codex rejects a declared MCP OAuth client secret. AGENTS.md puts
-> the index and rules before the context. The repository AGENTS.md, Copilot's
-> devenv context and instruction files, and Kiro's devenv steering land as
-> read-only copies; Codex indexes scoped rules that name `references`; a unit
-> whose file is switched off or replaced warns, and so does a devenv Codex
-> AGENTS.md past 32 KiB under a raised limit. Semble derives a Kiro
-> agent-private MCP server from `mcp.enable = false` plus an MCP-backed
-> subagent. Every runtime describes delivery once through `mkRuntime`'s
-> record-level `config`, and both `mkRuntime` and the backend transforms reject
-> a backend spec carrying anything but `installPackage`, `migrationConfig` and
-> `options`, since an overridden or hand-built record reaches a transform
-> without the constructor. Kiro hook commands resolve packages through the
-> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
-> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
-> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
-> Claude delivers `ai.agents` and `ai.claude.agentsDir` to
-> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
-> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
-> so a store-path string is a file, never a body naming its own path. File
-> content at `mkDefault` enables its entry; `content.enable = false` suppresses
-> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). A root request nothing per-runtime can withdraw
-> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
-> owned read-only copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
-> declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Ledger-owned
-> copies whose files nothing else retracts opt into `runWhenDisabled`.
-> `ai.lspServers` renders whole files with each runtime's envelope, Copilot/Kiro
-> require `extensions`, and Copilot constrains server names.
+> records as typed JSON or Markdown through their `kiro` extension. Its
+> normalized agent type and lowering callback preserve the native per-runtime
+> schema without changing the shared semantic type used by other runtimes.
+> Stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
+> options. Claude delivers every surface as its own file through
+> `ai.claude.files` on both backends and fails evaluation beside its upstream
+> module, and every delivery method writes the file itself. Every enabled
+> runtime installs a package; `installPackage` has no `null` opt-out. Codex's
+> `config.toml` is a read-only store symlink on both backends, its daemon
+> `settings.json` a Home Manager copy of `native.daemonSettings`, and Nix
+> declares the trust of every hook it generates; Codex rejects a declared MCP
+> OAuth client secret. AGENTS.md puts the index and rules before the context.
+> The repository AGENTS.md, Copilot's devenv context and instruction files, and
+> Kiro's devenv steering land as read-only copies; Codex indexes scoped rules
+> that name `references`; a unit whose file is switched off or replaced warns,
+> and so does a devenv Codex AGENTS.md past 32 KiB under a raised limit. Semble
+> derives a Kiro agent-private MCP server from `mcp.enable = false` plus an
+> MCP-backed subagent. Every runtime describes delivery once through
+> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
+> transforms reject a backend spec carrying anything but `installPackage`,
+> `migrationConfig` and `options`, since an overridden or hand-built record
+> reaches a transform without the constructor. Kiro hook commands resolve
+> packages through the shared `commandType`. Launchers bake the builder's one
+> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
+> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
+> `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and `ai.claude.agentsDir`
+> to `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot,
+> Kimchi, Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it
+> copies, so a store-path string is a file, never a body naming its own path.
+> File content at `mkDefault` enables its entry; `content.enable = false`
+> suppresses every content form. The builder entry point is
+> `lib.ai.app.mkRuntime`. Native file settings live under `ai.<runtime>.native`
+> (`native.settings`; Kimchi also `native.harnessSettings`). A root request
+> nothing per-runtime can withdraw (excluded or non-keyed pool) never warns.
+> Portable agents reach Kimchi as owned read-only copies and portable hooks
+> reach its project `hooks.json` on devenv. Reasoning effort lowers to Claude,
+> Codex, Copilot and Kimchi, and Kiro declares no normalized settings pool;
+> authored prose and final delivery share one priority-aware text-source record
+> with enable semantics. Ledger-owned copies whose files nothing else retracts
+> opt into `runWhenDisabled`. `ai.lspServers` renders whole files with each
+> runtime's envelope, Copilot/Kiro require `extensions`, and Copilot constrains
+> server names.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -354,35 +355,39 @@ enabled ecosystem whose native model preserves the option's semantics):
   portable
   `{ description, instructions = { text | source; }; tools?; codex?; kiro?; }`
   record. Semantic records render Claude/Copilot frontmatter plus body, Codex
-  standalone TOML, Kimchi Markdown, and Kiro JSON. The shared frontmatter
-  renderer returns header bytes and marker metadata together. The optional
-  `tools` list uses Claude and Copilot's shared tool names and renders a
-  non-empty value as their comma-separated frontmatter allowlist; `null` and
+  standalone TOML, Kimchi Markdown, and Kiro JSON or Markdown. The shared
+  frontmatter renderer returns header bytes and marker metadata together. The
+  optional `tools` list uses Claude and Copilot's shared tool names and renders
+  a non-empty value as their comma-separated frontmatter allowlist; `null` and
   `[]` both omit the header. Codex deliberately omits it because its standalone
   agent format has no equivalent field. Kimchi and Kiro reject it unless their
   native replacement is supplied: Kimchi's lowercase builtins and Kiro's
   capability tags are different vocabularies, and guessing would silently widen
   or remove authority. The `kiro` extension layers Kiro-native fields such as
-  `tools`, `permissions`, `mcpServers`, `resources`, `model`, and
-  `welcomeMessage` over generated `name`, `description`, and `prompt`. Codex and
-  Kiro fail loudly on a legacy raw entry instead of pretending Markdown is a
-  valid native agent config. Claude writes `.claude/agents/<name>.md` on both
-  backends through `agent.renderFile`. A path-like legacy entry — a Nix path, a
-  store-path string such as a flake input's `"${src}/a.md"`, or a derivation,
-  i.e. Home Manager's `isPathLike` — stays a file `source` for Claude and Kimchi
-  on both backends (`agent.fileContent`, which tests `agent.isPathLike`), and is
-  read into text by `renderCopilot` for Copilot's file writer; an `agentsDir`
-  given as a string yields string entries, so every writer must test
-  `isPathLike`, never `builtins.isPath`. Raw `ai.kiro.agents` entries route the
-  same way to `source` through the same `agent.fileContent`. Kiro's semantic
-  lowering is a runtime-supplied normalization callback: it converts the root
-  record before the normalized pool applies Kiro's native agent type. A
-  per-runtime null remains the same keyed-pool tombstone and prevents both
-  emission and compatibility assertions. Root `agentsDir` remains excluded:
-  those files are Markdown, and Kiro's Rust scan skips `.md`; use semantic root
-  records or Kiro's native JSON `agentsDir`. Kimchi takes semantic records as
-  frontmatter plus body with no `name:`, and rejects a non-empty `tools` (its
-  lowercase builtin names differ) and root Markdown (it misreads Claude's
+  `fileType`, `tools`, `permissions`, `mcpServers`, `resources`, `model`, and
+  `welcomeMessage` over generated `name`, `description`, and `prompt`.
+  `ai.kiro.agentFileType` defaults typed records to JSON; a record's nullable
+  `fileType` overrides it. JSON can be dispatched and is visible to
+  `kiro-cli agent` commands, while Markdown can be dispatched through KAS/ACP
+  but is absent from that CLI registry. Codex and Kiro fail loudly on a legacy
+  raw entry instead of pretending Markdown is a valid native agent config.
+  Claude writes `.claude/agents/<name>.md` on both backends through
+  `agent.renderFile`. A path-like legacy entry — a Nix path, a store-path string
+  such as a flake input's `"${src}/a.md"`, or a derivation, i.e. Home Manager's
+  `isPathLike` — stays a file `source` for Claude and Kimchi on both backends
+  (`agent.fileContent`, which tests `agent.isPathLike`), and is read into text
+  by `renderCopilot` for Copilot's file writer; an `agentsDir` given as a string
+  yields string entries, so every writer must test `isPathLike`, never
+  `builtins.isPath`. Raw `ai.kiro.agents` entries route the same way to `source`
+  through the same `agent.fileContent`. Kiro's semantic lowering is a
+  runtime-supplied normalization callback: it converts the root record before
+  the normalized pool applies Kiro's native agent type. A per-runtime null
+  remains the same keyed-pool tombstone and prevents both emission and
+  compatibility assertions. Root `agentsDir` remains excluded: those files are
+  Markdown, and Kiro's Rust scan skips `.md`; use semantic root records or
+  Kiro's native JSON `agentsDir`. Kimchi takes semantic records as frontmatter
+  plus body with no `name:`, and rejects a non-empty `tools` (its lowercase
+  builtin names differ) and root Markdown (it misreads Claude's
   `name:`/`model:`/`tools:`); `ai.kimchi.agents` carries Kimchi-native Markdown.
   Its files are the one Markdown surface a harness rewrites (the `/agents`
   commands), so they state `method = "copy-ro"` and take the reconciler's
@@ -1181,12 +1186,13 @@ root/runtime precedence.
 
 ## ai.\* Dir Helpers
 
-> **Last verified:** 2026-09-30 — Kiro takes semantic root agents as JSON but
-> remains outside the Markdown `agentsFromDir` helper. Directory-generated
-> per-runtime entries replace or null-suppress same-key root entries under the
-> normalized keyed-pool contract; see "Consumer patterns" below. The builder
-> expands every per-runtime Dir option, `agentsDir` included, outside the enable
-> gate. The path-type pitfall is about strict `lib.isPath` checks. Full lineage:
+> **Last verified:** 2026-09-30 — Kiro takes semantic root agents as generated
+> JSON or Markdown but remains outside the legacy Markdown `agentsFromDir`
+> helper. Directory-generated per-runtime entries replace or null-suppress
+> same-key root entries under the normalized keyed-pool contract; see "Consumer
+> patterns" below. The builder expands every per-runtime Dir option, `agentsDir`
+> included, outside the enable gate. The path-type pitfall is about strict
+> `lib.isPath` checks. Full lineage:
 > `git show bfb6b663:dev/fragments/ai-module/dir-helpers.md`.
 
 ### The helpers
@@ -1200,7 +1206,8 @@ All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 - `agentsFromDir` — directory of `.md` files → `attrsOf path`. Key is basename
   minus `.md`. Expanded by the builder for Claude, Copilot, and Kimchi, the
   records that name a Markdown `agentsDir` in `poolOptions`. Kiro consumes
-  semantic root records as JSON but does not consume this Markdown directory.
+  semantic root records in their selected generated format but does not consume
+  this legacy Markdown directory.
 - `hooksFromDir` — directory of regular files → `attrsOf lines` (via
   `readFile`). Key is the filename unchanged (hooks are typically extensionless
   shell scripts). Claude-only.

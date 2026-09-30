@@ -328,16 +328,17 @@ in {
       description = ''
         Agent definitions fanned out to Claude and Copilot. Portable semantic
         records (`{ description, instructions, tools?, codex?, kiro? }`) also
-        fan out to Codex, Kimchi, and Kiro. Kiro lowers them to native JSON;
-        `kiro` is the escape hatch for native fields such as capability-tag
-        `tools`, `permissions`, `mcpServers`, `resources`, `model`, and
-        `welcomeMessage`. The portable `tools` list is rendered only for
-        Claude and Copilot because Codex has no equivalent agent field, while
-        Kimchi and Kiro use different tool vocabularies. Enabling either with a
-        non-empty portable list fails unless the runtime-specific form is
-        supplied. Legacy Markdown/path values remain Claude/Copilot-only and
-        cause a clear assertion when Codex, Kimchi, or Kiro is enabled. Each
-        entry becomes a file:
+        fan out to Codex, Kimchi, and Kiro. Kiro lowers them to typed JSON by
+        default or Markdown when `ai.kiro.agentFileType` or
+        `kiro.fileType` selects it; `kiro` is also the escape hatch for native
+        fields such as capability-tag `tools`, `permissions`, `mcpServers`,
+        `resources`, `model`, and `welcomeMessage`. The portable `tools` list is
+        rendered only for Claude and Copilot because Codex has no equivalent
+        agent field, while Kimchi and Kiro use different tool vocabularies.
+        Enabling either with a non-empty portable list fails unless the
+        runtime-specific form is supplied. Legacy Markdown/path values remain
+        Claude/Copilot-only and cause a clear assertion when Codex, Kimchi, or
+        Kiro is enabled. Each entry becomes a file:
         - Claude  → ~/.claude/agents/<name>.md (HM) or
                     .claude/agents/<name>.md (devenv)
         - Copilot → .github/agents/<name>.agent.md (devenv) or
@@ -346,8 +347,8 @@ in {
                     .codex/agents/<name>.toml (devenv)
         - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
                     .kimchi/agents/<name>.md (devenv), as a read-only copy
-        - Kiro    → ~/.kiro/agents/<name>.json (HM) or
-                    .kiro/agents/<name>.json (devenv)
+        - Kiro    → ~/.kiro/agents/<name>.{json,md} (HM) or
+                    .kiro/agents/<name>.{json,md} (devenv)
         Per-app entries replace root entries at the same key; null suppresses
         an inherited agent for that runtime.
       '';

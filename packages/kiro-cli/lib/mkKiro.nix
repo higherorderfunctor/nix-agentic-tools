@@ -24,6 +24,7 @@
   workflowReminder = import ./workflowReminder.nix {inherit lib pkgs;};
 
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
+  frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
 
   # Shared AI helpers (filterNulls, mkKiroLspFile, flattenDotKeysUntil, …). Hoisted to
   # the top-level `let` so option TYPES and renderers can reach it too — both
@@ -274,6 +275,16 @@
         default = null;
         description = "Human-facing guidance shown in `kiro-cli agent list`.";
       };
+      fileType = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["json" "markdown"]);
+        default = null;
+        description = ''
+          Override the generated file type for this agent; null inherits
+          `ai.kiro.agentFileType`, JSON can be dispatched and is available to
+          Kiro's list, validation, and default-selection commands, while
+          Markdown can be dispatched but is absent from those commands.
+        '';
+      };
       prompt = lib.mkOption {
         type = aiTypes.optionalTextSource {
           description = "the agent's system prompt";
@@ -374,14 +385,12 @@
       (lib.mapAttrs (_: pruneEmptyAgentFields) value)
     else value;
 
-  # Render one typed agent record → its JSON text. `attrName` supplies `name`
-  # unless the record overrides it — Kiro keys the agent on `name`, so the two
-  # must agree or the agent lists under an id that does not match its file.
-  # Null optionals and empty collections are dropped so the emitted file stays
-  # the minimal shape both parsers accept.
-  renderAgent = attrName: record: let
+  # Normalize one typed record for either native renderer. `attrName` supplies
+  # `name` unless the record overrides it. Delivery-only `fileType` never
+  # reaches either Kiro format.
+  normalizedAgent = attrName: record: let
     named =
-      record
+      removeAttrs record ["fileType"]
       // {
         name = record.name or null;
         prompt = enabledTextOrNull record.prompt;
@@ -396,7 +405,19 @@
           else named.name;
       };
   in
-    builtins.toJSON (pruneEmptyAgentFields withName);
+    pruneEmptyAgentFields withName;
+
+  renderJsonAgent = attrName: record:
+    builtins.toJSON (normalizedAgent attrName record);
+
+  renderMarkdownAgent = attrName: record: let
+    normalized = normalizedAgent attrName record;
+    rendered = frontmatter.render {
+      data = lib.mapAttrs (_: builtins.toJSON) (removeAttrs normalized ["prompt"]);
+      body = normalized.prompt or "";
+    };
+  in
+    frontmatter.treeFile rendered;
 
   # A typed record is a plain attrset; raw entries are strings or paths (a
   # derivation is stringLike and must stay on the raw path).
@@ -411,8 +432,32 @@
   # not JSON text whose body is its own path.
   mkAgentEntry = attrName: value:
     if isTypedAgent value
-    then {text = renderAgent attrName value;}
+    then {text = renderJsonAgent attrName value;}
     else agent.fileContent value;
+
+  mkAgentFile = cfg: name: value: let
+    fileType =
+      if isTypedAgent value
+      then value.fileType or null
+      else null;
+    effectiveFileType =
+      if fileType == null
+      then cfg.agentFileType
+      else fileType;
+  in
+    if isTypedAgent value && effectiveFileType == "markdown"
+    then
+      lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
+        content = lib.mkDefault (frontmatter.content (renderMarkdownAgent name value));
+        format = lib.mkDefault "markdown";
+        executable = null;
+      }
+    else
+      lib.nameValuePair "${cfg.configDir}/agents/${name}.json" {
+        content = lib.mkDefault (mkAgentEntry name value);
+        format = lib.mkDefault "json";
+        executable = null;
+      };
 
   # Render one typed record → its v3 hook object (an element of an envelope's
   # `hooks` list). `name` = the attr key; null optionals dropped (record +
@@ -1155,7 +1200,7 @@ in
     inherit pkgs;
     name = "kiro";
     agentType = kiroAgentType;
-    # A semantic root record lowers to the typed JSON record. A typed record
+    # A semantic root record lowers to the typed native record. A typed record
     # from `ai.kiro.agents` is already evaluated, so its `prompt` carries both
     # arms and must be reduced to one before it becomes a pool definition.
     normalizeAgent = {
@@ -1196,7 +1241,7 @@ in
         description = ''
           Kiro-native agent definitions replace portable `ai.agents` entries
           at the same key; null suppresses an inherited agent. Native records
-          are written to `<configDir>/agents/<name>.json`.
+          use `agentFileType` unless their nullable `fileType` overrides it.
         '';
       };
       agentsDir = {
@@ -1344,6 +1389,16 @@ in
         type = lib.types.str;
         default = ".kiro";
         description = "Config directory relative to HOME / devenv root.";
+      };
+      agentFileType = lib.mkOption {
+        type = lib.types.enum ["json" "markdown"];
+        default = "json";
+        description = ''
+          Generated typed-agent file type: JSON profiles can be dispatched and
+          are available to Kiro's list, validation, and default-selection
+          commands, while Markdown profiles can be dispatched but are absent
+          from those commands.
+        '';
       };
       # Kiro-specific freeform settings with typed subkeys for known
       # knobs. They are the whole of settings/cli.json, a read-only copy on
@@ -1782,13 +1837,7 @@ in
                   executable = null;
                 };
               }
-              (lib.mapAttrs' (name: value:
-                lib.nameValuePair "${cfg.configDir}/agents/${name}.json" {
-                  content = lib.mkDefault (mkAgentEntry name value);
-                  format = lib.mkDefault "json";
-                  executable = null;
-                })
-              mergedAgents)
+              (lib.mapAttrs' (mkAgentFile cfg) mergedAgents)
               (lib.mkIf (cfg.agentsDir != null) {
                 "${cfg.configDir}/agents" = {
                   content = lib.mkDefault {source = cfg.agentsDir;};

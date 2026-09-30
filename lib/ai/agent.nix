@@ -23,7 +23,7 @@
         kiro = lib.mkOption {
           type = lib.types.attrs;
           default = {};
-          description = "Kiro-native agent settings layered onto the generated JSON agent record.";
+          description = "Kiro-native agent settings layered onto the generated typed agent record, including the `fileType` delivery override.";
         };
         tools = lib.mkOption {
           type = lib.types.nullOr (lib.types.listOf lib.types.str);

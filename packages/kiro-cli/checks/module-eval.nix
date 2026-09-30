@@ -2197,6 +2197,93 @@ in {
       in
         valid (emitted hm.config.home.file.".kiro/agents/worker.json")
         && valid (emitted devenv.config.files.".kiro/agents/worker.json")
+        && !(hm.config.home.file ? ".kiro/agents/worker.md")
+        && !(devenv.config.files ? ".kiro/agents/worker.md")
+    );
+
+    # Markdown is a generated typed-agent backend, not a rename of raw input.
+    # Its KAS schema keeps configuration in frontmatter and the prompt in the
+    # body; the Rust CLI registry does not list these profiles.
+    module-kiro-agent-file-type-markdown = mkTest "kiro-agent-file-type-markdown" (
+      let
+        config = {
+          ai.kiro = {
+            agentFileType = "markdown";
+            enable = true;
+            agents.writer = {
+              description = "Writes release notes";
+              permissions.rules = [
+                {
+                  capability = "filesystem";
+                  effect = "allow";
+                  match = ["write"];
+                }
+              ];
+              prompt.text = "Write concise release notes.";
+              tools = ["read" "write"];
+            };
+          };
+        };
+        valid = evaluated: let
+          files =
+            if evaluated.config ? home
+            then evaluated.config.home.file
+            else evaluated.config.files;
+          text = builtins.readFile files.".kiro/agents/writer.md".source;
+        in
+          !(files ? ".kiro/agents/writer.json")
+          && lib.hasInfix ''name: "writer"'' text
+          && lib.hasInfix ''description: "Writes release notes"'' text
+          && lib.hasInfix ''tools: ["read","write"]'' text
+          && lib.hasInfix ''permissions: {"rules":[{"capability":"filesystem","effect":"allow","match":["write"]}]}'' text
+          && lib.hasInfix "\n---\n\nWrite concise release notes." text
+          && !(lib.hasInfix "fileType:" text)
+          && !(lib.hasInfix "prompt:" text);
+      in
+        valid (evalHm config) && valid (evalDevenv config)
+    );
+
+    # A native typed record and a portable semantic record can independently
+    # select JSON beneath a Markdown runtime default. The delivery-only field
+    # must not leak into either JSON document.
+    module-kiro-agent-file-type-per-agent-json = mkTest "kiro-agent-file-type-per-agent-json" (
+      let
+        config = {
+          ai = {
+            agents.portable = {
+              description = "Portable worker";
+              instructions.text = "Work portably.";
+              kiro.fileType = "json";
+            };
+            kiro = {
+              agentFileType = "markdown";
+              enable = true;
+              agents.native = {
+                description = "Native worker";
+                fileType = "json";
+                prompt.text = "Work natively.";
+              };
+            };
+          };
+        };
+        valid = evaluated: let
+          files =
+            if evaluated.config ? home
+            then evaluated.config.home.file
+            else evaluated.config.files;
+          native = builtins.fromJSON (builtins.readFile files.".kiro/agents/native.json".source);
+          portable = builtins.fromJSON (builtins.readFile files.".kiro/agents/portable.json".source);
+        in
+          !(files ? ".kiro/agents/native.md")
+          && !(files ? ".kiro/agents/portable.md")
+          && native.name == "native"
+          && native.prompt == "Work natively."
+          && !(native ? fileType)
+          && portable.name == "portable"
+          && portable.prompt == "Work portably."
+          && !(portable ? fileType);
+      in
+        valid (evalHm config) && valid (evalDevenv config)
     );
 
     # Claude/Copilot tool names cannot be guessed into Kiro capability tags.
@@ -2418,6 +2505,7 @@ in {
       let
         mod = {
           ai.kiro = {
+            agentFileType = "markdown";
             enable = true;
             agents.from-file = ./fixtures/kiro-agent-raw.json;
           };
