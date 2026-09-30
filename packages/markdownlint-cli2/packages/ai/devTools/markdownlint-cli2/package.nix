@@ -29,14 +29,14 @@
 # a bump. It is generated; do not hand-edit it or inherit nixpkgs' copy.
 #
 # WHAT IT IS FOR HERE. This is the BACKUP half of the markdown
-# table-cell-count gate in `config/repo-validation.nix`; rumdl is the
+# table-cell-count gate in `lib/markdown/table-cells.nix`; rumdl is the
 # primary. They share the rule number MD056 and catch DISJOINT halves of
 # it — markdownlint catches an over-wide body row (the cause), rumdl
 # catches a header/delimiter disagreement (the break) and markdownlint
 # cannot, because once the counts disagree its parser stops seeing a
 # table at all. Measured: rumdl 0.04s over this corpus, markdownlint
-# 8.2s, which is why the Rust one leads. Neither is redundant; that
-# config's header carries the table.
+# 8.2s, which is why the Rust one leads. Neither is redundant; the
+# markdown-formatting fragment carries the full rationale.
 #
 # Free (MIT). ensureUnfreeCheck in default.nix passes free packages
 # through unwrapped.

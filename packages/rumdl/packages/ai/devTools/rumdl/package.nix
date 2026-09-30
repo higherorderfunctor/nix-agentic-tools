@@ -24,15 +24,15 @@
 # sidecar is the whole mechanism.
 #
 # WHAT IT IS FOR HERE — read this before "simplifying" the pair. rumdl is
-# the PRIMARY half of the markdown table-cell-count gate declared in
-# `config/repo-validation.nix`; `markdownlint-cli2` is the backup half.
+# the PRIMARY half of the markdown table-cell-count gate defined in
+# `lib/markdown/table-cells.nix`; `markdownlint-cli2` is the backup half.
 # They share the rule NUMBER (MD056) and cover DISJOINT halves of it:
 # rumdl catches a header/delimiter disagreement (the break), markdownlint
 # catches an over-wide body row (the cause) and goes blind on the break
 # because its parser stops recognizing a table at all. Measured over this
 # corpus with only MD056 enabled, rumdl runs in 0.04s against
 # markdownlint's 8.2s, which is why the Rust one is primary. Neither is
-# redundant; that config's header carries the full table.
+# redundant; the markdown-formatting fragment carries the full rationale.
 #
 # NOT a formatter, and this changes nothing about formatting.
 # `dev/fragments/markdown-formatting/` records the measured survey: no

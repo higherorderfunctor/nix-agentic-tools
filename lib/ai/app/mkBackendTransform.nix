@@ -388,6 +388,7 @@
 in {
   options.ai.${appRecord.name} =
     {
+      _maxBytes = deliveryOptions.maxBytesOption;
       _ownPlans = deliveryOptions.ownPlansOption;
       activation = lib.mkOption {
         type = deliveryOptions.writerMapType;

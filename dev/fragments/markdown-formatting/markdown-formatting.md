@@ -1,22 +1,30 @@
 ### Markdown Formatting
 
-`treefmt` owns markdown wrapping. Prettier runs with
-`settings.proseWrap = "always"` (see `treefmt.nix`), so it reflows every
-paragraph to 80 columns on format. **Do not hand-wrap prose** — the line breaks
-you author are discarded, and hand-wrapping is what created the defect below.
+`treefmt` owns markdown wrapping. Prettier runs with `proseWrap = "always"`,
+defined once in `lib/markdown/prose-style.nix` and read by `treefmt.nix`, so it
+reflows every paragraph to 80 columns on format. **Do not hand-wrap prose** —
+the line breaks you author are discarded, and hand-wrapping is what created the
+defect below.
+
+Generated `ai.*` Markdown is formatted in its store tree alongside static JSON,
+TOML and YAML. The default formatter shares this repository's prose style;
+`lib.ai.treefmtFormatter` accepts a treefmt-nix `evalModule` config, including
+devenv's `config.treefmt.config`. Authored docs and wiki pages need their own
+treefmt run. `tableCells` and `splitCodeSpans` check the input before
+formatting. The builder formats only marked Markdown bodies, restores
+generator-owned frontmatter bytes, and compares the installed prefix under
+`parseCompare`. Raw skill sources and steering retain their own bytes.
+
+The three guards (`tableCells`, `splitCodeSpans`, `parseCompare`) are defined in
+`lib/markdown/guards.nix`. Generated trees run them with `ai.generated.guards`
+wording; `lib.ai.guards pkgs` exports the programs and a `check` builder for
+consumer files. A finding exits 1; exit 2 means nothing was checked (for
+`parseCompare`, an unreadable file or a BEFORE that does not parse).
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-09-01 — the pipe-in-a-table-cell defect is now gated
-> by `markdown-table-cells` (rumdl primary, markdownlint backup; same MD056 rule
-> number, disjoint coverage — do not deduplicate them). Corrects an earlier
-> draft of this section that blamed hand-padding, required every row to agree on
-> cell count, and shipped a hand-check awk snippet; the real failure modes are
-> version-dependent formatter behavior and `prettier-ignore` hiding the defect
-> outright.
->
-> Full lineage:
-> `git show 4705317b:dev/fragments/markdown-formatting/markdown-formatting.md`.
+> **Last verified:** 2026-09-29 — generated and consumer Markdown share guards;
+> tableCells pairs rumdl and markdownlint for distinct MD056 cases.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the
@@ -51,8 +59,9 @@ space" heuristic was measured across the tree: 96 hits, roughly 90% of them
 legitimate. Shipping it would have been a check that cries wolf.
 
 `checks/markdown/split-code-spans.nix` covers the adjacent case that IS
-decidable — a span whose content still contains a newline. Its `.py` carries the
-CommonMark backtick rule and why the obvious one-line regex is wrong.
+decidable — a span whose content still contains a newline. Its scanner,
+`lib/markdown/split-code-spans.py`, carries the CommonMark backtick rule and why
+the obvious one-line regex is wrong.
 
 #### The formatter launders new instances
 
@@ -122,7 +131,14 @@ living only in one caller does not survive a second caller being added.
 ### A pipe in a table cell — `markdown-table-cells`
 
 Gated. Two linters, one hook, because the defect has two states and no single
-tool sees both.
+tool sees both. The script, its markdownlint half and the full rationale are
+defined once in `lib/markdown/table-cells.nix`; the prek hook and the fixture
+suite (`checks/markdown/markdown-table-cells-fixtures.nix`) both read it.
+
+Both linters ignore configuration files in the checked tree. rumdl runs with
+`--no-config`; markdownlint runs through its library with MD056 selected. Inline
+directives still suppress MD056, and unrelated rules are never reported. The
+library is loaded through markdownlint-cli2's public export.
 
 **The cause is always the same: an unescaped `|` in a cell.** A table row is
 split into cells at BLOCK level, before inline parsing runs, so a backtick gives

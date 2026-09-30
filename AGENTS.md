@@ -55,6 +55,10 @@ for it. When several entries match, their guidance composes.
     - `lib/ai/runtime-files.nix`
     - `lib/ai/runtimes.nix`
     - `lib/ai/sharedOptions.nix`
+    - `lib/generated.nix`
+    - `lib/generated-guard.py`
+    - `lib/generated-style.nix`
+    - `lib/markdown/**`
     - `lib/testing/module-harness.nix`
     - `packages/*/checks/module-eval.nix`
     - `packages/chatgpt-codex/lib/mkCodex.nix`
@@ -205,10 +209,16 @@ for it. When several entries match, their guidance composes.
     - `checks/markdown/doubled-words.nix`
     - `checks/markdown/doubled-words.py`
     - `checks/markdown/fixtures/doubled-words/**`
+    - `checks/markdown/fixtures/guards-consumer/**`
+    - `checks/markdown/generated-files.nix`
+    - `checks/markdown/guards-consumer.nix`
     - `checks/markdown/markdown-scan.nix`
     - `checks/markdown/markdown-scanners.nix`
     - `checks/markdown/split-code-spans.nix`
-    - `checks/markdown/split-code-spans.py`
+    - `lib/generated.nix`
+    - `lib/generated-guard.py`
+    - `lib/generated-style.nix`
+    - `lib/markdown/**`
     - `treefmt.nix`
   - Read:
     - [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)
@@ -293,6 +303,7 @@ for it. When several entries match, their guidance composes.
     - `lib/ai/transformers/**`
     - `lib/fragments-registry.nix`
     - `lib/fragments.nix`
+    - `lib/generated.nix`
     - `lib/update.nix`
     - `packages/*/registry.nix`
   - Read:

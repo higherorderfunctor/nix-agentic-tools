@@ -51,9 +51,8 @@ in
       # a definition of an undeclared option is an error whatever its value —
       # which is why the harness had to grow a stub for options it has no use
       # for. The condition reads the OPTION tree, never config, so it settles
-      # before any definition is collected: the same seam `warnings` uses in
-      # mkBackendTransform.nix. Anything that WOULD have been dropped is said
-      # out loud rather than quietly not written.
+      # before any definition is collected. Anything dropped must be reported
+      # rather than quietly omitted.
       (lib.optionalAttrs (options ? tasks) {inherit tasks;})
       (lib.optionalAttrs (options ? enterTest) {
         enterTest = lib.mkIf (delivery.owned.enterTest != "") delivery.owned.enterTest;

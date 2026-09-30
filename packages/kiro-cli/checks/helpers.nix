@@ -86,10 +86,11 @@
   steeringTargetOf = entry: ev: planTarget "${ev.config.ai.kiro.configDir}/steering" (ownPlan "kiro" entry ev);
   hmMcpDirTarget = mcpDirOf "kiroMcpJson";
   dvMcpDirTarget = mcpDirOf "ai:kiro:materialize-mcp";
-  # cli.json's declared settings, decoded from its unit's bytes.
-  cliSettingsOf = target: builtins.fromJSON target.units."cli.json".text;
-  hmCliSettings = ev: cliSettingsOf (hmMcpDirTarget ev);
-  dvCliSettings = ev: cliSettingsOf (dvMcpDirTarget ev);
+  # cli.json's declared settings, before its generated tree renders the bytes.
+  cliSettingsOf = ev:
+    ev.config.ai.kiro.files."${ev.config.ai.kiro.configDir}/settings/cli.json".content.value;
+  hmCliSettings = cliSettingsOf;
+  dvCliSettings = cliSettingsOf;
   # The `--plan` argument out of an emitted body. `own` passes exactly one, so
   # this is the IDENTITY of the plan a phase applies: two entries that resolve
   # to the same store path cannot disagree about what is owned, which is what

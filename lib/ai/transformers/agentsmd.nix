@@ -15,12 +15,7 @@ in rec {
         link = _ctx: node: "[${node.label or node.target}](${node.target})";
         include = _ctx: node: node.path;
       };
-    frontmatter = _: "";
-    assemble = {
-      frontmatter,
-      body,
-    }:
-      frontmatter + body;
+    frontmatterData = _: {};
   };
 
   render = fragments.mkRenderer agentsmdTransformer {};
@@ -52,20 +47,11 @@ in rec {
   # context therefore loses its own tail, never the index or a rule. The rule
   # comments keep key provenance without introducing frontmatter or another
   # metadata schema.
-  #
-  # The layout is the Markdown formatter's fixed point, so a repository that
-  # commits this file and formats its tree never fights the writer: one blank
-  # line between units and after each rule comment, one trailing newline, and
-  # an index preamble wrapped at 80 columns.
   renderKeyed = {
     context ? null,
     index ? {},
     rules ? {},
   }: let
-    trimEnd = text:
-      if lib.hasSuffix "\n" text
-      then trimEnd (lib.removeSuffix "\n" text)
-      else text;
     units =
       lib.optional (index != {}) (
         ''
@@ -83,5 +69,5 @@ in rec {
       rules
       ++ lib.optional (context != null && context != "") context;
   in
-    lib.optionalString (units != []) (lib.concatMapStringsSep "\n\n" trimEnd units + "\n");
+    lib.optionalString (units != []) (lib.concatStringsSep "\n\n" units);
 }

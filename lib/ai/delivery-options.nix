@@ -68,6 +68,12 @@
           internal = true;
           visible = false;
         };
+        _frontmatter = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          internal = true;
+          visible = false;
+        };
         run = lib.mkOption {
           type = lib.types.nullOr lib.types.lines;
           default = null;
@@ -92,7 +98,7 @@
       };
     };
 
-  fileEntry = lib.types.submodule {
+  fileEntry = lib.types.submodule (_: {
     options = {
       content = lib.mkOption {
         type = contentType;
@@ -171,6 +177,17 @@
           Which renderer turns structured content into bytes. For a file whose
           leaves are reconciled it also names the on-disk container, which is
           why only `json` can carry one.
+
+          `markdown` marks a whole Markdown file from `content.text` or
+          `content.source`: it is built into this runtime's Markdown store
+          tree at its target path and delivered from there. The factories set
+          it on the Markdown files they generate, beside the content, so a
+          replacement of the content alone stays Markdown. AGENTS.md is the
+          exception (Codex's on Home Manager, the shared one on devenv): its
+          generated entry is one whole-entry default that a replacement
+          discards, `format` with it, so the replacement is `raw` unless it
+          states `markdown`. A `raw` file is delivered as written, and a byte
+          limit on its path is still checked.
         '';
       };
       ledger = lib.mkOption {
@@ -223,7 +240,7 @@
         '';
       };
     };
-  };
+  });
 
   # A writer's IDENTITY, normally declared under the runtime's `enable` gate and never
   # inferred from the files that happen to exist this generation. That is
@@ -340,6 +357,33 @@ in {
   inherit formats;
   fileMapType = lib.types.attrsOf fileEntry;
   writerMapType = lib.types.attrsOf writer;
+
+  # The byte limits a runtime's reader imposes, keyed by file path, declared
+  # for each runtime and for the shared AGENTS.md owner (`ai.internal`). Keyed
+  # by PATH rather than carried on the entry, so a consumer's replacement of
+  # the file, which discards the generated entry and every field on it, is
+  # measured all the same. The router builds a limited file into a tree
+  # whatever its format (a non-Markdown one into a tree that neither formats
+  # nor checks it), and the tree's install check fails the build past the
+  # limit.
+  maxBytesOption = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        bytes = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "The largest size, in bytes, the reader takes whole.";
+        };
+        hint = lib.mkOption {
+          type = lib.types.str;
+          description = "What to do about a file past the limit; ends the build failure's message.";
+        };
+      };
+    });
+    default = {};
+    internal = true;
+    visible = false;
+    description = "Byte limits on delivered files, keyed by path, checked on the built file.";
+  };
 
   # The eval-visible record of every writer's reconciliation plan, declared
   # for each runtime and for the shared AGENTS.md owner (`ai.internal`).

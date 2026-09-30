@@ -29,7 +29,7 @@ assertion is on the EXACT SET of hits: an unexpected hit fails as loudly as
 a missing one, so a fixture doubles as a false-positive control.
 
 A fixture with no `expect:` line at all is an ERROR, not an empty
-expectation. Same reasoning as `no_files` in ./split-code-spans.py: a
+expectation. Same reasoning as `no_files` in lib/markdown/split-code-spans.py: a
 declaration nobody wrote is indistinguishable from a declaration that
 passed, and the silent version of that is what lets a gate rot.
 
@@ -77,14 +77,14 @@ def _load(module, filename):
     try:
         return importlib.import_module(module)
     except ModuleNotFoundError:
-        spec = importlib.util.spec_from_file_location(module, Path(__file__).with_name(filename))
+        spec = importlib.util.spec_from_file_location(module, Path(__file__).parent / filename)
         loaded = importlib.util.module_from_spec(spec)
         sys.modules[module] = loaded
         spec.loader.exec_module(loaded)
         return loaded
 
 
-_load("split_code_spans", "split-code-spans.py")
+_load("split_code_spans", "../../lib/markdown/split-code-spans.py")
 doubled_words = _load("doubled_words", "doubled-words.py")
 
 
@@ -136,7 +136,7 @@ def main(argv):
         print()
         print("A MISSING hit is the dangerous direction: it means prose is being")
         print("blanked before the scan reads it, which presents as a clean file.")
-        print("Start at `strip_code_blocks` in checks/markdown/split-code-spans.py, and")
+        print("Start at `strip_code_blocks` in lib/markdown/split-code-spans.py, and")
         print("re-measure the corpus figures in checks/markdown/doubled-words.py's")
         print("docstring before changing them.")
         return 1

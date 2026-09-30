@@ -280,8 +280,8 @@
     ```
 
     > **Static runtime files:** every runtime exposes
-    > `ai.<runtime>.files."<relative-path>" = { text = "…"; };` (or `source =
-    > ./file`). Generated context/rule outputs use the same final map at default
+    > `ai.<runtime>.files."<relative-path>" = { text = "…"; };`. An entry can
+    > instead set `source = ./file`. Generated context/rule outputs use the same final map at default
     > priority, so an ordinary whole entry replaces them and `null` suppresses
     > them. Paths are relative to HOME here and to the project under devenv.
 
@@ -465,6 +465,7 @@
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
+    | Generated-file formatting | N/A | `ai.generated.{formatter,check}.{json,markdown,toml,yaml}` (Nix-owned static files, including settings; consumer-supplied skills and runtime-rendered files excluded) | Same; project-native static files included |
     | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi) | Same; project-native paths |
@@ -619,6 +620,177 @@
     > generation cannot safely infer the old custom directory.
 
     </details>
+
+    <details>
+    <summary><strong>Generated-file formatting</strong></summary>
+
+    Static, Nix-owned Markdown, JSON, TOML and YAML files are built into one
+    store tree per delivery-router invocation. The builder formats each type in
+    its own working directory, installs only the declared target paths, then
+    checks the installed bytes. A failed check fails the build. Formatter-created
+    caches and state stay out of the output. File paths in snippets are relative
+    to the target root, such as `.claude/rules/example.md`.
+
+    `ai.generated.formatter.<type>` is a shell snippet that replaces the default
+    for that type in trees Nix generates from `ai.*` inputs; repository content
+    you author yourself, such as docs and wiki pages, needs your own treefmt
+    run. `null` disables formatting. The defaults use the same house style as
+    this repository: Biome for JSON, prettier with
+    `proseWrap = "always"` for Markdown and YAML, and Taplo for TOML. The
+    settings are defined once in `lib/generated-style.nix`. A formatter must
+    preserve the declared files; removing one fails the build.
+
+    `ai.generated.check.<type>` is a `types.lines` shell snippet. Its default is
+    empty because the built-in guards run separately. Checks run on the
+    installed bytes. The named guards below are separate and remain on when a
+    check is replaced or disabled.
+
+    To use your own treefmt config, pass the `config` of any treefmt-nix
+    `evalModule` result to the helper:
+
+    ```nix
+    ai.generated.formatter.markdown =
+      lib.ai.treefmtFormatter (inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix).config;
+    ```
+
+    Take `treefmt-nix` as your own root input that follows this flake's pin:
+    `inputs.treefmt-nix.follows = "nix-agentic-tools/treefmt-nix";` in a
+    flake, or `follows: nix-agentic-tools/treefmt-nix` under
+    `inputs.treefmt-nix` in `devenv.yaml`. You get the same version this flake
+    uses with no extra lock node, and a root input also works with devenv's
+    treefmt integration. This is the opposite direction from the `follows`
+    warned against in "Do not make this flake follow your nixpkgs": this
+    flake's inputs stay unchanged, so nothing rehashes and the binary cache
+    still applies. Avoid `inputs.nix-agentic-tools.inputs.treefmt-nix`, which
+    depends on this flake's internal wiring.
+
+    Devenv's `config.treefmt.config` also works. The helper reads only
+    `.package` and `.build.configFile` from either config. Set another type's
+    formatter in the same way if your treefmt config covers it. The helper uses
+    the raw treefmt package with `--config-file`,
+    `--tree-root .`, `--walk filesystem` and `--no-cache` so it runs against the
+    build sandbox. Devenv's treefmt wrapper points at the project tree and does
+    not work here. There is no automatic detection of a devenv treefmt config.
+
+    Generated context, rules, AGENTS.md and agent Markdown participate on both
+    Home Manager and devenv, including Claude's direct Home Manager files.
+    Static JSON, TOML and YAML entries participate when their file entry names
+    the corresponding `format`. Switch-time overlays and private documents
+    rendered by `content.run` are excluded because their final bytes do not
+    exist at build time. Supplied skills and directory sources are delivered as
+    written.
+
+    | Runtime | Static JSON/TOML/YAML in scope | Outside the build tree |
+    | ------- | ------------------------------ | ---------------------- |
+    | Claude | `settings.json` on both backends; devenv `.mcp.json`; Home Manager plugin `.mcp.json`, `.lsp.json` and manifest | `.claude.json` shared mutable state |
+    | Codex | Agent TOML files, `hooks.json`, both `config.toml` locations, Home Manager daemon settings | Runtime-rendered files |
+    | Copilot | Home Manager `lsp-config.json`; devenv `.github/lsp.json`; `mcp-config.json`; both `settings.json` locations | Home Manager `config.json` shared trust and state |
+    | Kimchi | Static config, harness settings, MCP, permissions and devenv hooks | `trust.json` and credential-rendered `config.json` |
+    | Kiro | `cli.json`, `lsp.json`, Home Manager `permissions.yaml`, agent and hook JSON files | Runtime-rendered `mcp.json` |
+
+    A single file can opt out with
+    `ai.<runtime>.files."<path>".format = "raw"`. Byte limits still apply to
+    opted-out paths. A `content.run` replacement of a generated entry requires
+    `format = "raw"`; replacing an entire AGENTS.md entry may state
+    `format = "markdown"` to retain formatting.
+
+    `mkAgenticShell` generates no files in this delivery router, so it has no
+    corresponding option.
+
+    </details>
+
+    ### Generated-file guards
+
+    Guards check semantic and structural properties independently of the
+    selected formatter and of `ai.generated.check`. They use this flake's
+    pinned tools. Each guard defaults to enabled and can be disabled by name.
+
+    | Guard | What it catches | Disable |
+    | ----- | --------------- | ------- |
+    | `tableCells` | Inconsistent input Markdown table cells; rumdl and markdownlint catch different forms | `ai.generated.guards.tableCells = false;` |
+    | `splitCodeSpans` | A newline inside a Markdown inline code span in the input | `ai.generated.guards.splitCodeSpans = false;` |
+    | `parseCompare` | Invalid or changed JSON, TOML or YAML data; changed frontmatter bytes on marked Markdown | `ai.generated.guards.parseCompare = false;` |
+
+    Generated frontmatter is marked by `lib/frontmatter.nix`. The builder formats
+    only the body and restores the generator's exact fenced header bytes,
+    including BOM, CRLF and the closing fence. The body gets one blank
+    separator. `parseCompare` rejects any installed header byte change and
+    compares parsed values for JSON, TOML and YAML.
+
+    If your own formatter also runs over committed generated files, stop it
+    from touching that frontmatter; otherwise the frontmatter is reformatted
+    and differs from the generated bytes. For Prettier, set
+    `embeddedLanguageFormatting = "off"` so it leaves YAML frontmatter
+    untouched while still formatting the body; this also leaves fenced code
+    blocks unformatted. For other formatters, exclude the generated paths.
+
+    For example, these formatter outcomes differ:
+
+    | Example | Guard result | Reason |
+    | ------- | ------------ | ------ |
+    | Default Biome JSON and Taplo TOML | Good | They change presentation while preserving parsed values |
+    | Default Prettier Markdown and YAML | Good | Markdown gets body formatting; YAML keeps parsed values |
+    | A formatter that changes JSON `true` to `false` | Bad | `parseCompare` detects changed data |
+    | Input with an unescaped pipe inside a Markdown table cell | Bad | `tableCells` detects an extra input cell |
+
+    A guard error names what failed and why, then gives three choices: fix the
+    input or formatter; disable that named guard if its invariant is unsuitable;
+    or set the specific file's `format = "raw"` to opt out explicitly.
+
+    #### Using the guards on your own files
+
+    The same guards are exported as `lib.ai.guards pkgs` for files you author.
+    `pkgs` must include this flake's overlay for rumdl and markdownlint-cli2.
+    `tableCells` reports MD056 only. Configuration files in the checked tree
+    cannot change it; inline lint suppression comments still apply.
+
+    | Attribute | Program | Arguments |
+    | --------- | ------- | --------- |
+    | `tableCells` | `ai-guard-table-cells` | Markdown file paths |
+    | `splitCodeSpans` | `ai-guard-split-code-spans` | Markdown file paths |
+    | `parseCompare` | `ai-guard-parse-compare` | `TYPE BEFORE AFTER`, where `TYPE` is `json`, `markdown`, `toml` or `yaml` |
+    | `check` | Both Markdown guards in one derivation | `{ src; guards ? {}; }` |
+
+    `check` is a build-time gate for `nix flake check` or CI. It returns a
+    derivation that runs both Markdown guards over every `*.md` under `src` and
+    fails the build on a finding. It checks the store copy of `src`, not the
+    files you staged, so it is not a pre-commit hook:
+
+    ```nix
+    checks.''${system}.markdown-guards =
+      (inputs.nix-agentic-tools.lib.ai.guards pkgs).check {
+        src = ./docs;
+        # guards.tableCells = false; # disable a guard by name
+      };
+    ```
+
+    For a pre-commit hook, add the programs to your shell's packages and call
+    them on the staged paths:
+
+    ```bash
+    git diff --cached --name-only -z --diff-filter=d -- '*.md' \
+      | xargs -0 -r sh -c 'ai-guard-table-cells "$@" && ai-guard-split-code-spans "$@"' _
+    ```
+
+    `check` does not run `parseCompare`, because it needs two versions of the
+    same file and a source tree holds one. Call it in a hook after your
+    formatter rewrites a file: pass the staged version and the formatted
+    result. JSON, TOML and YAML compare parsed values. Markdown compares the
+    frontmatter bytes, so BEFORE must open with a `---` frontmatter fence,
+    close it, and hold valid YAML between the fences. If BEFORE does not parse,
+    nothing is compared and the program exits 2. If AFTER does not parse, that
+    is a finding. In a bash hook, a process substitution passes the staged
+    version:
+
+    ```bash
+    ai-guard-parse-compare yaml <(git show :config.yaml) config.yaml
+    ```
+
+    A finding exits 1 and prints the same what, why and three options as a
+    generated-file guard, worded for your files: fix the file or the formatter;
+    disable that guard by name in `check`, or stop running its program; or
+    leave the file out of the guarded file set. Exit 2 means nothing was
+    checked, for example an unreadable file.
 
     <details>
     <summary><strong>Semble code search</strong></summary>

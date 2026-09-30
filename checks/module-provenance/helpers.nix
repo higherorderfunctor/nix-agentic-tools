@@ -103,24 +103,27 @@
   rootPoolViolations = evaluated: let
     isOurs = file: lib.hasPrefix rootPoolSrcRoot (toString file);
     # `options.ai` holds root options alongside per-runtime GROUPS (ai.claude
-    # and friends), which are plain attrsets rather than options. `isOption`
-    # selects exactly the root surface, and with NO hardcoded pool list — a pool
-    # added to sharedOptions.nix is covered the day it is declared, which the
-    # scan's hand-maintained alternation was not.
+    # and friends, ai.internal), which are plain attrsets rather than options.
+    # `isOption` selects the root surface, and with NO hardcoded pool list — a
+    # pool added to sharedOptions.nix is covered the day it is declared, which
+    # the scan's hand-maintained alternation was not.
     #
-    # Limitation, stated because it is otherwise invisible: this walks ONE
-    # level. A root option nested under a non-option attrset would not be seen.
-    # None exists today — every member of `options.ai` is either an option or a
-    # per-runtime group.
-    rootOptions = lib.filterAttrs (_: lib.isOption) evaluated.options.ai;
-    foreignDefs = name: opt: let
-      declaredIn = map toString (opt.declarations or []);
+    # Only direct root options are scanned. Nested groups such as ai.generated
+    # are outside this guard.
+    rootOptions =
+      lib.mapAttrsToList lib.nameValuePair
+      (lib.filterAttrs (_: lib.isOption) evaluated.options.ai);
+    foreignDefs = {
+      name,
+      value,
+    }: let
+      declaredIn = map toString (value.declarations or []);
       foreign = d: isOurs d.file && !(lib.elem (toString d.file) declaredIn);
     in
       map (d: "ai.${name} <- ${toString d.file}")
-      (lib.filter foreign (opt.definitionsWithLocations or []));
+      (lib.filter foreign (value.definitionsWithLocations or []));
   in
-    lib.concatLists (lib.mapAttrsToList foreignDefs rootOptions);
+    lib.concatMap foreignDefs rootOptions;
 
   # Throws with the offending option/file pairs rather than a bare "FAIL",
   # because the whole value of this check is telling the next author WHERE. The

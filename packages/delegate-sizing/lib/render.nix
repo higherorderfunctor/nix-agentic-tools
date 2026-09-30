@@ -98,11 +98,6 @@
     ${joinBlocks [(block target "launch" "launch") (block target "introspectModels" "models and effort")]}
   '';
 in ''
-  ---
-  name: delegate-sizing
-  description: Before calling a subagent, spawning a delegate, or building a workflow, size the model and effort for the task and available runtime pools.
-  ---
-
   ${builtins.readFile ./rules.md}
   Use this skill for delegates and workflow nodes. Size each stage separately.
   Set effort every time; harness defaults differ. If a model has no effort

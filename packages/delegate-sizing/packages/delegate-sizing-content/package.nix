@@ -1,10 +1,17 @@
 {
   pkgs,
   fragmentsLib,
+  generatedLib,
   repoPath,
   ...
 }: let
   inherit (pkgs) lib;
+  generated = generatedLib pkgs;
+  frontmatter = import ../../../../lib/frontmatter.nix {inherit lib;};
+  skillData = {
+    description = "Before calling a subagent, spawning a delegate, or building a workflow, size the model and effort for the task and available runtime pools.";
+    name = "delegate-sizing";
+  };
   mkUsageScript = name: runtimeInputs:
     pkgs.writeShellApplication {
       inherit name runtimeInputs;
@@ -20,20 +27,23 @@
     codexUsageScript = lib.getExe usageScripts.codex-usage;
   };
   render = args: builtins.readFile "${mkSkill args}/SKILL.md";
-  mkSkill = args: let
-    text = import ../../lib/render.nix ({inherit lib presets;} // args);
-  in
-    pkgs.runCommand "delegate-sizing-${args.runtime}-skill" {
-      nativeBuildInputs = [pkgs.prettier];
+  # The skill in the house prose style. No table check: this package set's
+  # pkgs carries no overlay, so the overlay's linters are not in it.
+  mkSkill = args:
+    generated.mkTree {
+      name = "delegate-sizing-${args.runtime}-skill";
+      files."SKILL.md" =
+        {
+          type = "markdown";
+        }
+        // frontmatter.treeFile (frontmatter.render {
+          data = skillData;
+          body = import ../../lib/render.nix ({inherit lib presets;} // args);
+        });
+      formatter.markdown = generated.defaultFormatter.markdown;
+      guards.parseCompare = true;
       passthru.text = render args;
-    } ''
-      # Full strict mode is required here: stdenv does not set every flag (#909).
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      mkdir -p "$out"
-      install -m 644 ${pkgs.writeText "SKILL.md" text} "$out/SKILL.md"
-      prettier --write --prose-wrap always "$out/SKILL.md"
-    '';
+    };
   skills = lib.genAttrs ["claude" "codex" "kiro"] (runtime: mkSkill {inherit runtime;});
 in
   pkgs.runCommand "delegate-sizing-content" {

@@ -1,8 +1,8 @@
 # cspell:ignore Prio
 # Exercise the generated files as delivered through both consumer backends.
 {
-  lib,
   harness,
+  lib,
   ...
 }: let
   inherit (harness) evalDevenv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs hmLib mkTest;

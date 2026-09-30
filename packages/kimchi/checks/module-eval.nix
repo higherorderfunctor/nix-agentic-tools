@@ -6,14 +6,14 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv mkTest ownPlan;
+  inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownPlan;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   # The Home Manager user config.json copy.
   hmConfigDocument = evaluated: let
-    unit = (hmFiles evaluated.config.ai.kimchi.configDir evaluated)."config.json";
+    path = "${evaluated.config.ai.kimchi.configDir}/config.json";
   in {
     inherit (dirTarget "kimchiFiles" evaluated.config.ai.kimchi.configDir evaluated) ledger;
-    value = copyValue unit;
+    value = fileValue path evaluated;
   };
   # The units one writer owns in one directory, read from the plan it applies.
   dirTarget = entry: dir: evaluated:
@@ -22,10 +22,9 @@
   dirUnits = entry: dir: evaluated: (dirTarget entry dir evaluated).units;
   hmFiles = dirUnits "kimchiFiles";
   devenvFiles = dirUnits "ai:kimchi:files";
-  # A settings copy's declared JSON. The bytes can carry store-path context
-  # (an MCP server's command), which `fromJSON` refuses.
-  copyValue = unit: builtins.fromJSON (builtins.unsafeDiscardStringContext unit.text);
-  hmHarnessSettings = evaluated: copyValue (hmFiles "${evaluated.config.ai.kimchi.configDir}/harness" evaluated)."settings.json";
+  # A settings copy's declared JSON, before its generated tree renders bytes.
+  fileValue = path: evaluated: evaluated.config.ai.kimchi.files.${path}.content.value;
+  hmHarnessSettings = evaluated: fileValue "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated;
   projectFiles = devenvFiles ".kimchi";
   # devenv claims the copy only when something is declared, so an undeclared
   # harness settings.json is absent from the directory's units entirely.
@@ -33,7 +32,7 @@
     units = devenvFiles ".config/kimchi/harness" evaluated;
   in
     if units ? "settings.json"
-    then copyValue units."settings.json"
+    then fileValue ".config/kimchi/harness/settings.json" evaluated
     else {};
   # What Home Manager declares into the user config.json and harness
   # settings.json when nothing is set: Kimchi's own first-launch values.
@@ -117,18 +116,22 @@
 
     NATIVE
   '';
-  agentConfig.ai = {
-    agents.reviewer = {
-      description = "Reviews code";
-      instructions.text = "BODY";
-    };
-    kimchi = {
-      enable = true;
-      agents.native = nativeAgent;
+  agentConfig = {
+    ai = {
+      agents.reviewer = {
+        description = "Reviews code";
+        instructions.text = "BODY";
+      };
+      kimchi = {
+        enable = true;
+        agents.native = nativeAgent;
+      };
     };
   };
-  hmAgentUnits = dirUnits "kimchiAgents" ".config/kimchi/harness/agents";
-  devenvAgentUnits = dirUnits "ai:kimchi:agents" ".kimchi/agents";
+  hmAgentsDir = ".config/kimchi/harness/agents";
+  devenvAgentsDir = ".kimchi/agents";
+  hmAgentUnits = dirUnits "kimchiAgents" hmAgentsDir;
+  devenvAgentUnits = dirUnits "ai:kimchi:agents" devenvAgentsDir;
   failedAssertions = evaluated: map (entry: entry.message) (builtins.filter (entry: !entry.assertion) evaluated.config.assertions);
   # The Home Manager settings-copies writer as a runnable script: its prune
   # entry and then its write entry, with home-manager's `run` helper in scope.
@@ -263,10 +266,10 @@ in {
         devenv = evalDevenv config;
         expected = "Shared context.\n\nKimchi context.";
       in
-        hm.config.home.file.".config/kimchi/harness/AGENTS.md".text
-        == expected
-        # The shared repository AGENTS.md ends in one newline.
-        && (deliveredFiles devenv.config)."AGENTS.md".text == expected + "\n"
+        fromGeneratedTree ".config/kimchi/harness/AGENTS.md" hm.config.home.file.".config/kimchi/harness/AGENTS.md"
+        && (markdownInput hm ".config/kimchi/harness/AGENTS.md").text == expected
+        && fromGeneratedTree "AGENTS.md" (deliveredFiles devenv.config)."AGENTS.md"
+        && (markdownInput devenv "AGENTS.md").text == expected
     );
     # ── Kimchi (mkRuntime factory participant) ──────────────────────────
     module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);
@@ -283,7 +286,7 @@ in {
             native.settings.redaction.enabled = false;
           };
         };
-        inherit ((projectFiles result)."config.json") text;
+        text = builtins.toJSON (fileValue ".kimchi/config.json" result);
       in
         lib.hasInfix ''"redaction":{"enabled":false}'' text
         && !lib.hasInfix "redaction.enabled" text
@@ -323,8 +326,8 @@ in {
         && (hmConfigDocument evaluated).value == userConfigDefaults
         && builtins.attrNames units == ["mcp.json" "permissions.json" "settings.json" "trust.json"]
         && hmHarnessSettings evaluated == userHarnessDefaults
-        && copyValue units."mcp.json" == {}
-        && copyValue units."permissions.json" == {}
+        && fileValue ".config/kimchi/harness/mcp.json" evaluated == {}
+        && fileValue ".config/kimchi/harness/permissions.json" evaluated == {}
         # Every copy takes the reconciler's read-only default mode.
         && lib.all (unit: !(unit ? mode)) (builtins.attrValues units)
         && !(lib.any (lib.hasPrefix ".config/kimchi/harness/") (builtins.attrNames evaluated.config.home.file))
@@ -595,12 +598,12 @@ in {
         emptyHm = evalHm {ai.kimchi.enable = true;};
         emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
       in
-        (copyValue (hmFiles ".config/kimchi/harness" hm)."mcp.json").mcpServers.example.command
+        (fileValue ".config/kimchi/harness/mcp.json" hm).mcpServers.example.command
         == "hello"
         && !(hm.config.home.file ? ".config/kimchi/harness/mcp.json")
-        && (copyValue (projectFiles devenv)."mcp.json").mcpServers.example.command == "hello"
+        && (fileValue ".kimchi/mcp.json" devenv).mcpServers.example.command == "hello"
         && !(devenv.config.files ? ".kimchi/mcp.json")
-        && copyValue (hmFiles ".config/kimchi/harness" emptyHm)."mcp.json" == {}
+        && fileValue ".config/kimchi/harness/mcp.json" emptyHm == {}
         && !((projectFiles emptyDevenv) ? "mcp.json")
     );
 
@@ -654,17 +657,17 @@ in {
     module-kimchi-skill-paths-inherit = mkTest "kimchi-skill-paths-inherit" (
       let
         withPaths = extra:
-          projectFiles (evalDevenv {
+          evalDevenv {
             ai.kimchi =
               {
                 enable = true;
               }
               // extra;
-          });
+          };
       in
-        !((withPaths {}) ? "config.json")
-        && (copyValue (withPaths {native.settings.skillPaths = [];})."config.json").skillPaths == []
-        && (copyValue (withPaths {native.settings.skillPaths = [".custom/skills"];})."config.json").skillPaths == [".custom/skills"]
+        !((withPaths {}).config.ai.kimchi.files ? ".kimchi/config.json")
+        && (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [];})).skillPaths == []
+        && (fileValue ".kimchi/config.json" (withPaths {native.settings.skillPaths = [".custom/skills"];})).skillPaths == [".custom/skills"]
     );
 
     # `region` and `telemetry.enabled` are user scope in config.json, but
@@ -716,12 +719,12 @@ in {
         };
         files = deliveredFiles result.config;
       in
-        (copyValue files.".kimchi/config.json").redaction.enabled
+        (fileValue ".kimchi/config.json" result).redaction.enabled
         == false
         # Owner-only, so Kimchi's group/other read warning stays quiet.
         && files.".kimchi/config.json".mode == "0400"
         && result.config.tasks ? "ai:kimchi:files"
-        && (copyValue files.".kimchi/mcp.json").mcpServers.example.command == "hello"
+        && (fileValue ".kimchi/mcp.json" result).mcpServers.example.command == "hello"
         && !(result.config.files ? ".kimchi/mcp.json")
         && files ? ".kimchi/skills/example/SKILL.md"
         && files ? "AGENTS.md"
@@ -779,7 +782,7 @@ in {
         mentions = needle: lib.any (lib.hasInfix needle);
         hmHookPaths = lib.filter (lib.hasInfix "hooks") (builtins.attrNames hm.config.home.file);
       in
-        builtins.fromJSON devenv.config.files.".kimchi/hooks.json".text
+        builtins.fromJSON (builtins.readFile devenv.config.files.".kimchi/hooks.json".source)
         == {
           hooks = {
             PreToolUse = [
@@ -856,12 +859,12 @@ in {
             }).config.ai.kimchi.permissions
             true)).success;
       in
-        copyValue (hmFiles ".config/kimchi/harness" hm)."permissions.json"
+        fileValue ".config/kimchi/harness/permissions.json" hm
         == permissions
         && !(hm.config.home.file ? ".config/kimchi/harness/permissions.json")
-        && copyValue (projectFiles devenv)."permissions.json" == permissions
+        && fileValue ".kimchi/permissions.json" devenv == permissions
         && !(devenv.config.files ? ".kimchi/permissions.json")
-        && copyValue (hmFiles ".config/kimchi/harness" emptyHm)."permissions.json" == {}
+        && fileValue ".config/kimchi/harness/permissions.json" emptyHm == {}
         && !((projectFiles emptyDevenv) ? "permissions.json")
         && accepts {
           classifierMaxTotalMs = 1;
@@ -1066,7 +1069,7 @@ in {
       };
       hm = hmFilesWriter hmConfig;
       hmEvaluated = evalHm hmConfig;
-      declaredMcp = pkgs.writeText "kimchi-mcp.json" (hmFiles ".config/kimchi/harness" hmEvaluated)."mcp.json".text;
+      declaredMcp = (hmFiles ".config/kimchi/harness" hmEvaluated)."mcp.json".store;
       config = pkgs.writeShellScript "kimchi-config" ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -1147,17 +1150,28 @@ in {
     # `.kimchi/agents/*.md`. Each agent is a read-only copy in a real
     # directory, never a store symlink: no home.file or devenv files entry, a
     # dir ledger, the reconciler's default mode. A portable record renders
-    # without `name:` (the filename is the name); native Markdown lands
-    # verbatim. An empty declaration still emits the writer, so removing the
-    # last agent retracts it.
+    # without `name:` (the filename is the name); native
+    # Markdown is not translated, so it is the Markdown tree's input as
+    # written, and the tree's formatter and check then process it. An empty
+    # declaration still emits the writer, so removing the last agent
+    # retracts it.
     module-kimchi-agents = mkTest "kimchi-agents" (
       let
         hm = evalHm agentConfig;
         devenv = evalDevenv agentConfig;
         expected = {
-          "native.md".text = nativeAgent;
-          "reviewer.md".text = "---\ndescription: \"Reviews code\"\n---\n\nBODY\n";
+          "native.md" = nativeAgent;
+          "reviewer.md" = "---\ndescription: \"Reviews code\"\n---\n\nBODY\n";
         };
+        # Each agent is a writable copy of its file in the Markdown tree.
+        delivers = evaluated: dir: units:
+          lib.attrNames units
+          == lib.attrNames expected
+          && lib.all (name:
+            !(units.${name} ? mode)
+            && fromGeneratedTree "${dir}/${name}" {source = units.${name}.store;}
+            && (markdownInput evaluated "${dir}/${name}").text == expected.${name})
+          (lib.attrNames expected);
         emptyHm = evalHm {ai.kimchi.enable = true;};
         emptyDevenv = evalDevenv {ai.kimchi.enable = true;};
         fromDir = evalDevenv {
@@ -1178,14 +1192,16 @@ in {
             filter = name: name == "agent-one.md";
           };
         };
-        deliveredAsSource = units:
-          lib.all (unit: toString (unit.store or "") == fixtureAgent && !(unit ? text))
-          [units."agent-one.md" units."store-string.md"];
+        deliveredAsSource = evaluated: dir:
+          lib.all (name: let
+            input = markdownInput evaluated "${dir}/${name}";
+          in
+            toString (input.source or "") == fixtureAgent && !(input ? text))
+          ["agent-one.md" "store-string.md"];
         underAgents = prefix: lib.filter (lib.hasPrefix prefix);
       in
-        hmAgentUnits hm
-        == expected
-        && devenvAgentUnits devenv == expected
+        delivers hm hmAgentsDir (hmAgentUnits hm)
+        && delivers devenv devenvAgentsDir (devenvAgentUnits devenv)
         && failedAssertions hm == []
         && failedAssertions devenv == []
         && hm.config.home.activation ? kimchiAgents
@@ -1195,9 +1211,9 @@ in {
         && underAgents ".kimchi/agents" (builtins.attrNames devenv.config.files) == []
         && hmAgentUnits emptyHm == {}
         && devenvAgentUnits emptyDevenv == {}
-        && (devenvAgentUnits fromDir)."agent-one.md".store == ../../claude-code/checks/fixtures/claude-agents/agent-one.md
-        && deliveredAsSource (hmAgentUnits (evalHm stringConfig))
-        && deliveredAsSource (devenvAgentUnits (evalDevenv stringConfig))
+        && (markdownInput fromDir "${devenvAgentsDir}/agent-one.md").source == ../../claude-code/checks/fixtures/claude-agents/agent-one.md
+        && deliveredAsSource (evalHm stringConfig) hmAgentsDir
+        && deliveredAsSource (evalDevenv stringConfig) devenvAgentsDir
     );
 
     # What has no Kimchi reading fails evaluation instead of landing: a
@@ -1283,7 +1299,7 @@ in {
           else ".kimchi/agents";
         declared = script backend (evaluate agentConfig);
         empty = script backend (evaluate {ai.kimchi.enable = true;});
-        expected = pkgs.writeText "kimchi-reviewer.md" (hmAgentUnits (evalHm agentConfig))."reviewer.md".text;
+        expected = pkgs.writeText "kimchi-reviewer.md" (markdownInput (evalHm agentConfig) "${hmAgentsDir}/reviewer.md").text;
       in ''
         export HOME="$TMPDIR/${backend}-home"
         export XDG_STATE_HOME="$TMPDIR/${backend}-state"
