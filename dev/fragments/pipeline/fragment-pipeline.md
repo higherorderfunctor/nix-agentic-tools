@@ -1,7 +1,9 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-09-29 — fragment locations are limited to the dev and
-> package trees; category declaration is SPLIT: shared categories in
+> **Last verified:** 2026-09-30 — normalized rules default their
+> priority-ordered trigger list from matcher presence before each runtime
+> resolves support. Fragment locations are limited to the dev and package trees;
+> category declaration is SPLIT: shared categories in
 > `config/fragment-categories.nix`, owner-specific ones in the owning package's
 > `registry.nix`, merged by `lib/facets/registry.nix`. The orchestration layer
 > produces content; `ai.*` renders and writes it, with AGENTS.md's index and
@@ -95,21 +97,23 @@ them.
 - `copilot` — emits `applyTo:` as a quoted string. List input is joined with
   commas (Copilot's native multi-glob syntax). Null input defaults to
   `applyTo: "**"` (global fallback).
-- `kiro { name }` — emits `inclusion: always | auto | fileMatch | manual`,
-  `name: ${name}`, and optionally `description:` + `fileMatchPattern:`. A null
-  inclusion preserves the legacy derivation (`paths = null` → `always`, paths
-  set → `fileMatch`); an explicit mode overrides that derivation only for Kiro.
-  `auto` requires non-empty name + description, and explicit `fileMatch`
-  requires paths. The pattern uses a quoted string for single-element lists and
-  a block YAML sequence for multi-element lists. Kiro requires a list for
-  multi-pattern matching; a previous comma-joined string was silently read as
-  one literal pattern and matched nothing.
+- `kiro { name }` — emits the scalar inclusion chosen by the shared rule
+  resolver, `name: ${name}`, and optionally `description:` plus
+  `fileMatchPattern:`. Kiro supports `always`, `auto`, `fileMatch`, and
+  `manual`; its runtime-local scalar `inclusion` overrides the portable list.
+  The resolver requires a description for `auto` and a matcher for `fileMatch`;
+  the transformer still requires a name for `auto` and paths for `fileMatch`.
+  The pattern uses a quoted string for single-element lists and a block YAML
+  sequence for multi-element lists. Kiro requires a list for multi-pattern
+  matching; a previous comma-joined string was silently read as one literal
+  pattern and matched nothing.
 - `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
-  AGENTS.md is a flat, always-loaded file, so it cannot enforce glob scopes. Its
-  `renderKeyed` writes a compact `## Path-scoped rules` index of every scoped
-  rule that names `references`, then the inlined rules, then the context, so
-  Codex's default 32 KiB read keeps the index and every rule and cuts only the
-  context's tail; Codex applies that index manually.
+  AGENTS.md is a flat file, so it cannot enforce native trigger metadata. Its
+  `renderKeyed` writes a compact path-scoped index for `fileMatch` rules with
+  references and a generic rule index when `auto` or `manual` entries are
+  present, then the inlined rules and context. Codex's default 32 KiB read keeps
+  the index and every rule and cuts only the context's tail; Codex applies that
+  index manually.
 
 ### Orchestration details worth knowing
 

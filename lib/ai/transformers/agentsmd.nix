@@ -25,6 +25,8 @@ in rec {
   # a link is an unbreakable token, so no Markdown formatter re-wraps a line
   # of this shape and no reader can find a span split across two.
   renderIndexEntry = name: {
+    description ? "",
+    inclusion ? "fileMatch",
     matcher,
     references,
     ...
@@ -33,8 +35,15 @@ in rec {
     item = value: "    - ${value}\n";
   in
     "- **${code name}**\n"
-    + "  - Match:\n"
-    + lib.concatMapStrings (glob: item (code glob)) matcher
+    + (
+      if inclusion == "fileMatch"
+      then
+        "  - Match:\n"
+        + lib.concatMapStrings (glob: item (code glob)) matcher
+      else
+        "  - Trigger: `${inclusion}`\n"
+        + lib.optionalString (inclusion == "auto") "  - Description: ${description}\n"
+    )
     + "  - Read:\n"
     + lib.concatMapStrings (path: item "[${code path}](${path})") references;
 
@@ -52,15 +61,26 @@ in rec {
     index ? {},
     rules ? {},
   }: let
+    hasOnDemandIndex = lib.any (lib.hasInfix "  - Trigger:") (lib.attrValues index);
     units =
       lib.optional (index != {}) (
-        ''
-          ## Path-scoped rules
+        (
+          if hasOnDemandIndex
+          then ''
+            ## Rule index
 
-          Before editing a path that matches an entry below, read every document listed
-          for it. When several entries match, their guidance composes.
+            Read the documents listed for a rule when its trigger applies. Path matches
+            and model-selected triggers may compose, so read every applicable entry.
 
-        ''
+          ''
+          else ''
+            ## Path-scoped rules
+
+            Before editing a path that matches an entry below, read every document listed
+            for it. When several entries match, their guidance composes.
+
+          ''
+        )
         + lib.concatStrings (lib.attrValues index)
       )
       ++ lib.mapAttrsToList (
