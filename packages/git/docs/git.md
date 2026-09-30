@@ -1,8 +1,8 @@
 # The `git.*` option root: typed git configuration on both backends
 
 > **Last verified:** 2026-09-29 — `git.settings` plus `git.branchless`,
-> `git.absorb` and `git.revise` on Home Manager and devenv; devenv keeps its
-> include last and runs `git branchless init` on every entry.
+> `git.absorb` and `git.revise` on Home Manager and devenv; resilient branchless
+> init keeps config and hook tasks runnable.
 >
 > **Settled — do not relitigate.**
 >
@@ -19,6 +19,11 @@
 > - **Configuration reaches git-branchless and git-absorb only through files.**
 >   Their libgit2 ignores `git -c`, `GIT_CONFIG_*` and `GIT_CONFIG_GLOBAL`
 >   (measured); user-global means `$HOME` / `$XDG_CONFIG_HOME`.
+> - **No `branchless.*` key or revset alias can scope bare `git sync`.**
+>   `sync.rs:31-46` queries draft commits directly, and builtins resolve before
+>   revset aliases (`eval.rs:185-189`).
+> - **git-absorb's CLI booleans are ORed with configuration.** Once a config key
+>   enables one, no command-line flag disables it.
 
 ## Owners
 
@@ -70,10 +75,10 @@ has not written a repository value, and `scopedSync` needs a re-run of
 1. `git:branchless-init` (when `git.branchless.enable`), before `git:config` and
    `devenv:git-hooks:install`: `git -C "$DEVENV_ROOT" branchless init`, with
    `--main-branch` from the typed value, else the value `branchless/config`
-   already records (init without it re-detects and overwrites). Skipped with a
-   notice when HEAD is unborn or the primary repository is bare (init given
-   `--main-branch` was measured to succeed in both; they are skipped by
-   decision). Any other failure fails the task.
+   already records (init without it re-detects and overwrites). An unborn HEAD
+   and a linked worktree with a bare primary use the primary symbolic HEAD as
+   the explicit main branch. A failure prints the exact command to retry and
+   returns success so the dependent config and hook tasks still run.
 2. `git:config`: publishes `<common>/nix-agentic-tools.gitconfig` (0444,
    same-directory rename) and, unless
    `include.path = nix-agentic-tools.gitconfig` is already the last entry of
@@ -86,11 +91,9 @@ has not written a repository value, and `scopedSync` needs a re-run of
 
 Both hold `flock` on `<common>/.nix-agentic-tools-git.lock`.
 
-A failing task does not block shell entry. Measured with devenv 2.4.1: the entry
-reports `Running tasks (failed)`, every task ordered after the failed one is
-skipped as "dependency failed" (the `devenv:enterShell` task node included), and
-the shell still starts and exits 0. So a failed init skips `git:config` and
-prek's hook installation for that entry; the next entry retries both.
+The init task catches a failed `git branchless init`, prints its exit status and
+the exact command to retry, and exits 0. This keeps `git:config` and prek's hook
+installation runnable in the same entry; the next entry retries init.
 
 ## Per-key contract
 

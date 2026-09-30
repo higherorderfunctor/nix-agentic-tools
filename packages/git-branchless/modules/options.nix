@@ -21,8 +21,9 @@
     Git hooks are installed, passing `--main-branch` from
     `git.branchless.settings.core.mainBranch` when that is set (and otherwise
     the main branch the repository already recorded, so a re-run never
-    replaces it with auto-detection). A repository whose HEAD has no commits
-    yet, or whose primary repository is bare, is skipped with a notice.
+    replaces it with auto-detection). An unborn HEAD and a linked worktree with
+    a bare primary are initialized too. A failed init prints the command to
+    retry but does not block repository configuration or Git hook installation.
     Home Manager is user-global and cannot initialize repositories: there,
     run `git branchless init` in each repository yourself.
   '';

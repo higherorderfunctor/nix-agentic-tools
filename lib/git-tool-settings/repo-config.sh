@@ -17,14 +17,13 @@
 #       Run `git branchless init` for the repository at ROOT, with
 #       `--main-branch MAIN_BRANCH` when given. Without it, the main branch
 #       branchless/config already records is passed back, so a re-run never
-#       replaces a repository's choice with auto-detection. Skipped, with a
-#       one-line notice naming why, when the primary repository is bare or
-#       HEAD has no commits yet; every other failure is the task's.
+#       replaces a repository's choice with auto-detection. For an unborn HEAD
+#       or bare primary, the primary HEAD supplies the explicit branch that
+#       init needs. A failure names the command to retry by hand.
 #
 # Both hold one lock in the common git directory, so tasks entered from
 # different linked worktrees serialize on the shared config and branchless
 # state.
-set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
 name=nix-agentic-tools.gitconfig
@@ -116,27 +115,31 @@ include() {
 
 init() {
   [ "$#" -ge 2 ] && [ "$#" -le 3 ] || usage
-  local root="$1" branchless="$2" main="${3:-}"
+  local root="$1" branchless="$2" main="${3:-}" status=0
   common="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)"
-
-  if [ "$(git --git-dir="$common" rev-parse --is-bare-repository)" = true ]; then
-    notice "skipping git branchless init: the primary repository $common is bare"
-    return 0
-  fi
-  if ! git -C "$root" rev-parse --verify --quiet HEAD >/dev/null; then
-    notice "skipping git branchless init: HEAD in $root has no commits yet"
-    return 0
-  fi
 
   lock_common_dir
   if [ -z "$main" ] && [ -f "$common/branchless/config" ]; then
     main="$(git config --file "$common/branchless/config" branchless.core.mainBranch || :)"
   fi
+  if [ -z "$main" ] && {
+    [ "$(git --git-dir="$common" rev-parse --is-bare-repository)" = true ] ||
+      ! git -C "$root" rev-parse --verify --quiet HEAD >/dev/null
+  }; then
+    main="$(git --git-dir="$common" symbolic-ref --quiet --short HEAD || :)"
+  fi
   local args=(branchless init)
   if [ -n "$main" ]; then
     args+=(--main-branch "$main")
   fi
-  PATH="$(dirname "$branchless"):$PATH" git -C "$root" "${args[@]}" </dev/null
+  PATH="$(dirname "$branchless"):$PATH" git -C "$root" "${args[@]}" </dev/null || status=$?
+  if [ "$status" -ne 0 ]; then
+    notice "git branchless init failed for $root (exit $status)"
+    printf 'nix-agentic-tools git: run by hand: git -C %q' "$root" >&2
+    printf ' %q' "${args[@]}" >&2
+    printf '\n' >&2
+  fi
+  return "$status"
 }
 
 [ "$#" -ge 1 ] || usage

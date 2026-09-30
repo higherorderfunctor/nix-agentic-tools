@@ -10,10 +10,8 @@
 # guard would test for exists after a failed init or after any earlier
 # branchless command.
 #
-# A failing devenv task does not stop shell entry (measured, devenv 2.4.1):
-# devenv reports it and enters the shell, but every task ordered after it is
-# skipped as "dependency failed" for that entry — `git:config` and prek's hook
-# installation included. The next entry retries.
+# A failed init is reported with the command to retry, but the task succeeds so
+# `git:config` and prek's hook installation still run. The next entry retries.
 #
 # Picked up by native devenv module discovery in flake.nix.
 {
@@ -62,7 +60,9 @@ in {
           exec = ''
             set -euETo pipefail
             shopt -s inherit_errexit 2>/dev/null || :
-            ${lib.getExe script} init "$DEVENV_ROOT" ${lib.getExe pkgs.ai.gitTools.git-branchless}${lib.optionalString (cfg.settings.core.mainBranch != null) " ${lib.escapeShellArg cfg.settings.core.mainBranch}"}
+            if ! ${lib.getExe script} init "$DEVENV_ROOT" ${lib.getExe pkgs.ai.gitTools.git-branchless}${lib.optionalString (cfg.settings.core.mainBranch != null) " ${lib.escapeShellArg cfg.settings.core.mainBranch}"}; then
+              : # Keep dependent configuration and hook-install tasks runnable.
+            fi
           '';
         };
       };

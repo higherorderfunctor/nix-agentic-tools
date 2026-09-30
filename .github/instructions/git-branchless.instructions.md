@@ -9,8 +9,8 @@ applyTo: "packages/git-branchless/**"
 
 > **Last verified:** 2026-09-29 — tree-sitter walk of the patched 0.11.1 source:
 > 24 `branchless.*` keys (23 typed options, `branchless.mainBranch` excluded),
-> 17 foreign keys, 36 builtin revset functions; 44 mutants fail closed or move
-> the output as declared.
+> 17 foreign keys, 36 builtin revset functions, and sync's direct draft query;
+> 44 mutants fail closed or move the output as declared.
 >
 > **Settled — do not relitigate.**
 >
@@ -32,6 +32,9 @@ applyTo: "packages/git-branchless/**"
 >   `--jobs` above 1 switches strategy; a configured value above 1 with
 >   `test.strategy = working-copy` fails every `git test run` (measured
 >   2026-09-29). The prototype's annotation said otherwise and was wrong.
+> - **No config key or revset alias scopes bare `git sync`.** `sync.rs:31-46`
+>   queries draft commits directly, and builtins resolve before aliases in
+>   `eval.rs:185-189`; use the Git alias documented in the git fragment.
 
 ## Pipeline
 

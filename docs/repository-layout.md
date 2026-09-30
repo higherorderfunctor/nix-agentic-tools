@@ -50,6 +50,9 @@ packages/
     packages/delegate-sizing-content/package.nix
     modules/, lib/, checks.nix, checks/
     fragments/, scripts/             Runtime-generated sizing skills
+  git/
+    modules/, checks.nix
+    docs/                             Shared typed Git configuration
   stacked-workflows/
     packages/stacked-workflows-content/package.nix
     modules/, lib/, checks.nix, checks/

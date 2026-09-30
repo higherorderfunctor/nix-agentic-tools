@@ -12,8 +12,9 @@
 #
 # `enter <config> ROOT` runs what a devenv shell entry runs for that module
 # configuration, in devenv's order: `git:branchless-init` (when
-# git.branchless.enable), then `git:config`. `checks/git-config/module-eval.nix`
-# asserts that order in the task graph.
+# git.branchless.enable), then `git:config`, then a hook installer when the
+# fixture supplies one. `checks/git-config/module-eval.nix` asserts the real
+# order in the task graph.
 {
   harness,
   lib,
@@ -44,7 +45,7 @@
     lib.concatMapStrings (name:
       lib.optionalString (tasks ? ${name}) ''
         DEVENV_ROOT="$root" ${lib.getExe pkgs.bash} -c ${lib.escapeShellArg tasks.${name}.exec}
-      '') ["git:branchless-init" "git:config"];
+      '') ["git:branchless-init" "git:config" "devenv:git-hooks:install"];
 
   # Repository-local settings every observation below reads through a
   # different program: git itself, git-branchless and git-absorb.
@@ -369,17 +370,18 @@ in {
     git-config-scoped-sync-preinitialized =
       scopedSync "preinitialized" ''git -C "$repo" branchless init --main-branch main </dev/null'';
 
-    # Unborn HEAD: init is skipped with a notice, the entry succeeds, and the
-    # configuration is still delivered.
+    # Unborn HEAD: init gets the symbolic HEAD as its explicit main branch.
     git-config-unborn-repository =
       mkRuntime "unborn-repository" {
         configs.nat = natWithInit;
       } ''
         repo="$TMPDIR/repo"
         git init -q -b main "$repo"
-        enter nat "$repo" 2>"$TMPDIR/stderr"
-        grep -F 'skipping git branchless init: HEAD' "$TMPDIR/stderr" || fail "no notice for the unborn repository"
-        [ ! -e "$repo/.git/branchless" ] || fail "init ran on an unborn repository"
+        enter nat "$repo"
+        [ -f "$repo/.git/branchless/config" ] || fail "init did not run on an unborn repository"
+        grep -F 'branchless' "$repo/.git/hooks/post-commit" >/dev/null || fail "no branchless post-commit hook"
+        expect "branchless/config mainBranch" \
+          "$(git config --file "$repo/.git/branchless/config" branchless.core.mainBranch)" main
         expect_nat_last "$repo"
         expect "git merge.conflictStyle" "$(git -C "$repo" config merge.conflictStyle)" zdiff3
       '';
@@ -418,8 +420,7 @@ in {
         expect_nat_last "$repo"
       '';
 
-    # A bare primary with a linked worktree: init is skipped with a notice,
-    # and the configuration still reaches the worktree.
+    # A bare primary with a linked worktree: init uses the primary HEAD.
     git-config-bare-primary =
       mkRuntime "bare-primary" {
         configs.nat = natWithInit;
@@ -427,11 +428,37 @@ in {
         two_trunks "$TMPDIR/source"
         git clone -q --bare "$TMPDIR/source" "$TMPDIR/bare.git"
         git -C "$TMPDIR/bare.git" worktree add -q "$TMPDIR/worktree" -b worktree
-        enter nat "$TMPDIR/worktree" 2>"$TMPDIR/stderr"
-        grep -F 'is bare' "$TMPDIR/stderr" || fail "no notice for the bare primary"
-        [ ! -e "$TMPDIR/bare.git/branchless" ] || fail "init ran against a bare primary"
+        enter nat "$TMPDIR/worktree"
+        [ -f "$TMPDIR/bare.git/branchless/config" ] || fail "init did not run against a bare primary"
+        grep -F 'branchless' "$TMPDIR/bare.git/hooks/post-commit" >/dev/null || fail "no branchless post-commit hook"
         expect "merge.conflictStyle in the worktree" "$(git -C "$TMPDIR/worktree" config merge.conflictStyle)" zdiff3
         expect_nat_last "$TMPDIR/worktree"
+      '';
+
+    # A failed init reports a retry command but returns success to devenv, so
+    # the repository include and prek hook tasks still run.
+    git-config-init-failure-keeps-dependents =
+      mkRuntime "init-failure-keeps-dependents" {
+        configs.failed = {
+          inherit (natWithInit) git;
+          tasks."devenv:git-hooks:install".exec = ''
+            install -m 0755 ${pkgs.writeText "prek-pre-commit" ''
+              #!/usr/bin/env bash
+              set -euETo pipefail
+              shopt -s inherit_errexit 2>/dev/null || :
+              # installed by prek
+            ''} "$DEVENV_ROOT/.git/hooks/pre-commit"
+          '';
+        };
+      } ''
+        repo="$TMPDIR/repo"
+        two_trunks "$repo"
+        mkdir -p "$repo/.git/branchless/config"
+        enter failed "$repo" 2>"$TMPDIR/stderr"
+        grep -F 'git branchless init failed' "$TMPDIR/stderr" >/dev/null || fail "no init failure message"
+        grep -F "run by hand: git -C $repo branchless init" "$TMPDIR/stderr" >/dev/null || fail "no exact manual retry command"
+        expect_nat_last "$repo"
+        grep -F 'installed by prek' "$repo/.git/hooks/pre-commit" >/dev/null || fail "no prek pre-commit hook"
       '';
 
     # Reconciliation owns exactly its own include.path value: other includes
