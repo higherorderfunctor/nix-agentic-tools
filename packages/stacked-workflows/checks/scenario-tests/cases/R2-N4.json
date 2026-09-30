@@ -1,0 +1,19 @@
+{
+  "args": {
+    "scenario": "revise",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Safety invariants and scenario endpoint hold",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R2-N4",
+  "kind": "static",
+  "path": "skills/stack-fix/SKILL.md",
+  "pattern": "git revise \\\"\\$target\\\"",
+  "present": false,
+  "topology": "T4"
+}

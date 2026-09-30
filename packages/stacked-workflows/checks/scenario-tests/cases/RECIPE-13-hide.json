@@ -1,0 +1,15 @@
+{
+  "args": {},
+  "block_ids": [
+    "packages/stacked-workflows/references/git-branchless.md::13. Speculative / divergent development::1"
+  ],
+  "block_roles": ["mutation"],
+  "env": {},
+  "expected": {
+    "description": "Recipe preserves other worktrees and achieves its scoped endpoint",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "RECIPE-13-hide",
+  "kind": "recipe-hide",
+  "topology": "T2"
+}

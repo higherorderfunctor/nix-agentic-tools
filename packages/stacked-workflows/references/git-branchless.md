@@ -866,9 +866,16 @@ git move -x <hash> -d <target>
 
 ### 5. Move a commit stack to a new base
 
+Use the upstream ref and `$own` selection from **Selecting your own stack**.
+Review its local-main, merge and other-worktree guards before moving. Fetch the
+remote first when the destination is a remote-tracking ref; local `main` may be
+stale in the primary checkout.
+
 ```bash
-git move -d main               # move current stack onto main
-git move -b feature -d main    # move feature's lineage onto main
+git fetch origin
+selected="$(git query -r "${own:?run the selection block first}")" || exit 1
+[ -n "$selected" ] || exit 1
+git move -b "$own" -d "${base:?set the upstream destination first}" || exit 1
 ```
 
 ### 6. Split a large commit
@@ -959,9 +966,14 @@ git prev                       # go back to before approach A
 git record -m "temp: approach B"
 git sl                         # see both approaches as siblings
 # decide on B, hide A:
-git hide -r <approach-A-hash>
+git hide --no-delete-branches <approach-A-hash>
 # clean up temp commits with interactive rebase
 ```
+
+Hide only the reviewed approach-A commit. `--no-delete-branches` preserves
+branch refs, including branches on its children; it does not recursively hide
+those children. If approach A spans several commits, inspect their exact hashes
+and other worktrees before selecting more commits.
 
 ### 14. Find commits that touched specific files
 
@@ -980,17 +992,19 @@ git record -I -m "new middle commit"   # insert + restack children
 
 ### 16. Resolve "trying to rewrite N public commits"
 
-If main was force-pushed and commits are incorrectly marked as public:
+If main was force-pushed and commits are incorrectly marked as public, first
+verify that the abandoned commit and the descendants to repair belong to this
+task. Pass its explicit pre-rewrite hash:
 
 ```bash
-git restack -f                 # force past the public commit safety check
+git restack -f <abandoned-hash>  # force the public check only for this scoped repair
 ```
 
-To restack only one abandoned commit's descendants and skip everything else:
-
-```bash
-git restack <abandoned-hash>   # only that commit's descendants; the default draft() spans every worktree
-```
+Never omit that hash: bare `git restack -f` repairs abandoned commits across all
+worktrees. The hash scopes rebasing, but restack still repairs stale branch refs
+repository-wide (see **git restack** above). If another worktree owns a
+descendant or a branch on a rewritten commit, stop and ask for that line to be
+repaired from its own worktree.
 
 See arxanas/git-branchless#988 for background on unexpected public status.
 

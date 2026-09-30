@@ -10,8 +10,7 @@ devenv shell                  # Enter the devenv shell with all tools
 treefmt                       # Format all files (formats only — lints nothing)
 devenv tasks run devenv:git-hooks:run # Manual-stage local all-files diagnostic
 
-# Regenerate instruction files from fragments. `--mode before` is load-bearing:
-# without it devenv runs the aggregate and skips the leaves. Use generate:all,
-# not generate:instructions — the latter does not cover CONTRIBUTING.md.
+# Regenerate every generated file, committed and gitignored. `--mode before` is
+# load-bearing: without it devenv runs the aggregate and skips the leaves.
 devenv tasks run --mode before generate:all
 ```

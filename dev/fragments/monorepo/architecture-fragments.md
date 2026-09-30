@@ -1,8 +1,9 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-09-30 — fragment sources live in the dev or package
-> tree; package categories live in owner registries; `dev/generate.nix` turns
-> them into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
+> **Last verified:** 2026-09-30 — `generate:all` regenerates every projection,
+> committed and gitignored; fragment sources live in the dev or package tree;
+> package categories live in owner registries; `dev/generate.nix` turns them
+> into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
 > first; devenv warns where AGENTS.md is past the limit Codex will apply there.
 
 This repo ships path-scoped architecture fragments as dev-only context for
@@ -49,8 +50,8 @@ The source fragments are authoritative. Every runtime file above is a generated
 projection that `ai.*` writes: AGENTS.md and `.github/` are committed, the
 Claude and Kiro ones are gitignored and written on devenv shell entry. Never
 edit a projection directly; the next shell entry, or the drift check, undoes it.
-A `devenv shell` or direnv reload regenerates the local files after source or
-registry changes.
+`devenv tasks run --mode before generate:all` regenerates all of them, committed
+and gitignored, after source or registry changes.
 
 ### Maintenance is mandatory
 

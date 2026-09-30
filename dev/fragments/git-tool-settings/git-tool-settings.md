@@ -28,7 +28,7 @@
 | `lib/git-tool-settings/extraction.nix`  | `patchedSource`, `extracted`, and the three checks per tool                                          |
 | `lib/git-tool-settings/rust_tree.py`    | tree-sitter-rust helpers: literals, calls, token trees, doc comments, test filtering                 |
 | `lib/git-tool-settings/census.py`       | failure list, key-token net, fill-only annotations, sidecar writer                                   |
-| `lib/git-tool-settings/mutate.py`       | the mutation harness every tool's `<tool>-extractor-guards` runs                                     |
+| `lib/git-tool-settings/mutate.py`       | the mutation tests every tool's `<tool>-extractor-guards` runs                                       |
 | `packages/<owner>/extract/`             | the tool's own `extract.py` and `annotations.json`                                                   |
 | `packages/<owner>/lib/default.nix`      | `lib.<owner>.settings {lib}` — the generator over that sidecar, plus the tool's hand tables (if any) |
 | `lib/git-tool-settings/tool-module.nix` | the consumer-module factory: `git.<section>.{enable,settings}`, lowered into `git.settings`          |

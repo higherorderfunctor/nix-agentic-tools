@@ -178,9 +178,10 @@ alejandra) and markdown (via prettier).
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-09-30 — fragment sources live in the dev or package
-> tree; package categories live in owner registries; `dev/generate.nix` turns
-> them into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
+> **Last verified:** 2026-09-30 — `generate:all` regenerates every projection,
+> committed and gitignored; fragment sources live in the dev or package tree;
+> package categories live in owner registries; `dev/generate.nix` turns them
+> into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
 > first; devenv warns where AGENTS.md is past the limit Codex will apply there.
 
 This repo ships path-scoped architecture fragments as dev-only context for
@@ -227,8 +228,8 @@ The source fragments are authoritative. Every runtime file above is a generated
 projection that `ai.*` writes: AGENTS.md and `.github/` are committed, the
 Claude and Kiro ones are gitignored and written on devenv shell entry. Never
 edit a projection directly; the next shell entry, or the drift check, undoes it.
-A `devenv shell` or direnv reload regenerates the local files after source or
-registry changes.
+`devenv tasks run --mode before generate:all` regenerates all of them, committed
+and gitignored, after source or registry changes.
 
 ### Maintenance is mandatory
 
@@ -373,9 +374,8 @@ devenv shell                  # Enter the devenv shell with all tools
 treefmt                       # Format all files (formats only — lints nothing)
 devenv tasks run devenv:git-hooks:run # Manual-stage local all-files diagnostic
 
-# Regenerate instruction files from fragments. `--mode before` is load-bearing:
-# without it devenv runs the aggregate and skips the leaves. Use generate:all,
-# not generate:instructions — the latter does not cover CONTRIBUTING.md.
+# Regenerate every generated file, committed and gitignored. `--mode before` is
+# load-bearing: without it devenv runs the aggregate and skips the leaves.
 devenv tasks run --mode before generate:all
 ```
 

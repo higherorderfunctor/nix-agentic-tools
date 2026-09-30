@@ -1,0 +1,39 @@
+{
+  "args": {
+    "scenario": "static",
+    "shell_scope": "none"
+  },
+  "assertions": [
+    {
+      "id": "SWI-0469",
+      "pattern": "git restack$",
+      "present": false
+    },
+    {
+      "id": "SWI-0470",
+      "pattern": "bare `git restack`",
+      "present": false
+    },
+    {
+      "id": "SWI-0472",
+      "pattern": "git revise -c <hash>",
+      "present": false
+    },
+    {
+      "id": "SWI-0473",
+      "pattern": "git restack cannot repair",
+      "present": false
+    }
+  ],
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Split repairs stop instead of restacking or revising",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R5-unclear-split",
+  "kind": "static-set",
+  "path": "skills/stack-split/SKILL.md",
+  "topology": "T4"
+}

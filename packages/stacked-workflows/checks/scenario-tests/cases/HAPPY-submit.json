@@ -1,0 +1,22 @@
+{
+  "args": {
+    "scenario": "submit",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Pre-flight::4",
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::2",
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::6",
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Pre-flight::4",
+    "packages/stacked-workflows/skills/stack-submit/SKILL.md::Steps::9"
+  ],
+  "block_roles": ["selection", "mutator", "guard", "selection", "mutator"],
+  "env": {},
+  "expected": {
+    "description": "Safety invariants and scenario endpoint hold",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "HAPPY-submit",
+  "kind": "submit",
+  "topology": "T1"
+}

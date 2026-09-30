@@ -1,0 +1,34 @@
+{
+  "args": {
+    "scenario": "static",
+    "shell_scope": "none"
+  },
+  "assertions": [
+    {
+      "id": "SWI-0477",
+      "pattern": "Don't use `git stash`",
+      "present": true
+    },
+    {
+      "id": "SWI-0480",
+      "pattern": "git move -b .* --merge",
+      "present": false
+    },
+    {
+      "id": "SWI-0506",
+      "pattern": "git reword <commit>",
+      "present": false
+    }
+  ],
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Submit inventory items are warnings or removed rewrites",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R5-unclear-submit",
+  "kind": "static-set",
+  "path": "skills/stack-submit/SKILL.md",
+  "topology": "T4"
+}

@@ -1,0 +1,18 @@
+{
+  "args": {
+    "scenario": "absorb",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [
+    "packages/stacked-workflows/skills/stack-fix/SKILL.md::Path A: Absorb (automatic routing)::3"
+  ],
+  "block_roles": ["mutator"],
+  "env": {},
+  "expected": {
+    "description": "Safety invariants and scenario endpoint hold",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "HAPPY-fix-A",
+  "kind": "absorb",
+  "topology": "T4"
+}

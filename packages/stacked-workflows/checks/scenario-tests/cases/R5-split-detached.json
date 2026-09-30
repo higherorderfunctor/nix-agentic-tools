@@ -1,0 +1,21 @@
+{
+  "args": {
+    "scenario": "split",
+    "shell_scope": "ordered blocks share a shell when variable state is required"
+  },
+  "block_ids": [
+    "packages/stacked-workflows/skills/stack-split/SKILL.md::Steps::2",
+    "packages/stacked-workflows/skills/stack-split/SKILL.md::Steps::3",
+    "packages/stacked-workflows/skills/stack-split/SKILL.md::Steps::4",
+    "packages/stacked-workflows/skills/stack-split/SKILL.md::Steps::5"
+  ],
+  "block_roles": ["mutator", "mutator", "observation", "mutator"],
+  "env": {},
+  "expected": {
+    "description": "Update-refs split leaves a detached sibling worktree unchanged",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R5-split-detached",
+  "kind": "split",
+  "topology": "T6"
+}

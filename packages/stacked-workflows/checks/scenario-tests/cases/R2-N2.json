@@ -1,0 +1,19 @@
+{
+  "args": {
+    "scenario": "static",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "Documented safety requirement holds",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R2-N2",
+  "kind": "static",
+  "path": "skills/stack-submit/SKILL.md",
+  "pattern": "git push[^\\n]*\\borigin\\b",
+  "present": false,
+  "topology": "T4"
+}

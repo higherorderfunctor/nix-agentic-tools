@@ -1,0 +1,19 @@
+{
+  "args": {
+    "scenario": "static",
+    "shell_scope": "ordered blocks share a shell when variable state is required; unset case starts fresh"
+  },
+  "block_ids": [],
+  "block_roles": [],
+  "env": {},
+  "expected": {
+    "description": "No unsafe bare restack workaround",
+    "invariants": ["I1", "I2", "I3", "I4", "I5", "I6"]
+  },
+  "id": "R4-N2",
+  "kind": "static",
+  "path": "references/git-branchless.md",
+  "pattern": "`git restack` instead of `git amend`",
+  "present": false,
+  "topology": "T4"
+}

@@ -1,9 +1,10 @@
 ## Generation Architecture
 
-> **Last verified:** 2026-09-28 — the generator produces content only;
-> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
-> from its generated-file tree, formatted there with this repository's treefmt;
-> the drift check compares the built files.
+> **Last verified:** 2026-09-29 — `generate:all` writes every generated file,
+> committed and gitignored; the generator produces content only; `dev/ai.nix`
+> hands it to `ai.*`, which writes every agent instruction file from its
+> generated-file tree, formatted there with this repository's treefmt; the drift
+> check compares the built files.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -73,10 +74,12 @@ reads them like any tracked file.
 ### Running Generation
 
 ```bash
-devenv tasks run --mode before generate:all  # instructions + repo documents
+devenv tasks run --mode before generate:all  # every generated file
 ```
 
-`generate:instructions` orders the two `ai.*` writers whose files are committed
-(`ai:agents-md:materialize`, `ai:copilot:materialize-instructions`); it is not a
+`generate:all` orders the writers of every generated file: the two `ai.*`
+writers whose files are committed (`ai:agents-md:materialize`,
+`ai:copilot:materialize-instructions`), `devenv:files` for the gitignored ones
+(Claude rules, Kiro steering and the rest), and `generate:repo`. It is not a
 second writer. The aggregate form requires `--mode before`; without it devenv
 runs the named aggregate but skips its dependency leaves.
