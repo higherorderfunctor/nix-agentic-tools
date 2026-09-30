@@ -1,0 +1,44 @@
+diff --git a/git-branchless/src/commands/repair.rs b/git-branchless/src/commands/repair.rs
+index 23edec8..9ac2436 100644
+--- a/git-branchless/src/commands/repair.rs
++++ b/git-branchless/src/commands/repair.rs
+@@ -8,7 +8,7 @@ use lib::util::EyreExitOr;
+ use lib::{
+     core::{
+         effects::{Effects, OperationType},
+-        eventlog::{Event, EventLogDb, EventReplayer},
++        eventlog::{CommitActivityStatus, Event, EventLogDb, EventReplayer},
+         formatting::Pluralize,
+     },
+     git::Repo,
+@@ -27,6 +27,14 @@ pub fn repair(effects: &Effects, dry_run: bool) -> EyreExitOr<()> {
+         let cursor_oids = event_replayer.get_cursor_oids(event_cursor);
+         let mut result = HashSet::new();
+         for oid in cursor_oids.into_iter().with_progress(progress) {
++            // A commit a previous repair already obsoleted stays in the
++            // cursor's history; skip it so repair is idempotent.
++            if matches!(
++                event_replayer.get_cursor_commit_activity_status(event_cursor, oid),
++                CommitActivityStatus::Obsolete
++            ) {
++                continue;
++            }
+             if repo.find_commit(oid)?.is_none() {
+                 result.insert(oid);
+             }
+diff --git a/git-branchless/tests/test_repair.rs b/git-branchless/tests/test_repair.rs
+index 63cf802..6ff9e81 100644
+--- a/git-branchless/tests/test_repair.rs
++++ b/git-branchless/tests/test_repair.rs
+@@ -36,6 +36,11 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
+         insta::assert_snapshot!(stdout, @"Found and repaired 1 broken commit: 70deb1e28791d8e7dd5a1f0c871a51b91282562f");
+     }
+ 
++    {
++        let (stdout, _stderr) = git.branchless("repair", &["--no-dry-run"])?;
++        insta::assert_snapshot!(stdout, @"");
++    }
++
+     {
+         let stdout = git.smartlog()?;
+         insta::assert_snapshot!(stdout, @"

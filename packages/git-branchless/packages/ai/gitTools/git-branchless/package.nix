@@ -19,6 +19,12 @@
 #      the derivation version. Filter the hook out of
 #      nativeInstallCheckInputs to avoid a mismatch failure.
 #
+# Patches (packages/git-branchless/patches/), re-check on every bump:
+#   protect-checked-out-branches — refuse to move a branch another
+#     worktree has checked out (`branchless.core.protectCheckedOutBranches`).
+#   repair-idempotent — `git branchless repair` skips commits it already
+#     obsoleted; upstream re-reports and re-obsoletes them on every run.
+#
 # Source + Cargo.lock come from `inputs.git-branchless` (the
 # flake source), same data the upstream overlay uses. Updated via
 # `nix flake update git-branchless` (not nix-update).
@@ -38,9 +44,10 @@
   gbSrc = inputs.git-branchless;
   extraction = gitToolExtraction {pkgs = ourPkgs;};
 
-  # Unpack + patch of the package's own `src` and `patches`: the patch adds
-  # a key (`branchless.core.protectCheckedOutBranches`) the upstream tree
-  # does not read.
+  # Unpack + patch of the package's own `src` and `patches`: the
+  # checked-out-branch patch adds a key
+  # (`branchless.core.protectCheckedOutBranches`) the upstream tree does not
+  # read.
   patchedSource = extraction.patchedSource {
     name = "git-branchless";
     inherit package;
@@ -61,7 +68,12 @@
     cargoDeps = ourPkgs.rustPlatform.importCargoLock {
       lockFile = gbSrc + "/Cargo.lock";
     };
-    patches = (prev.patches or []) ++ [../../../../patches/protect-checked-out-branches.patch];
+    patches =
+      (prev.patches or [])
+      ++ [
+        ../../../../patches/protect-checked-out-branches.patch
+        ../../../../patches/repair-idempotent.patch
+      ];
     postPatch = "";
     nativeInstallCheckInputs =
       builtins.filter
