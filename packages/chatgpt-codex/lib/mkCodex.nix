@@ -195,7 +195,32 @@
     else throw "ai.codex expected exactly one extracted global flag record for ${name}, found ${toString matchCount}";
   approvalPolicyNames = rootFlagValues "--ask-for-approval";
   sandboxModeNames = rootFlagValues "--sandbox";
-  codexAgentType = agent.mkSemanticAgentType tomlFormat.type;
+  # One native Codex role file: freeform TOML with the three keys every role
+  # file needs. `name` defaults to the key. The other two default to null,
+  # which means unset: a native-only record must set them, an assertion
+  # rejects the null, and the null is never rendered.
+  codexAgentRequiredFields = ["description" "developer_instructions"];
+  codexAgentRecord = lib.types.submodule ({name, ...}: {
+    freeformType = tomlFormat.type;
+    options = {
+      name = lib.mkOption {
+        type = lib.types.str;
+        default = name;
+        defaultText = lib.literalExpression "<name>";
+        description = "Role name. Defaults to the attribute key, which is also the filename stem.";
+      };
+      description = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Guidance for selecting the role. Required by Codex role files.";
+      };
+      developer_instructions = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "The role's instructions. Required by Codex role files.";
+      };
+    };
+  });
   # The portable command handler plus Codex's own fields; other JSON fields
   # remain a native escape hatch through the freeform tail.
   codexHookHandlerType = aiTypes.extendSubmodule sharedHooks.portableHandlerType {
@@ -808,25 +833,29 @@
     message = "${optionPath} must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
   };
 
-  reservedAgentKeys = ["description" "developer_instructions" "name"];
-
-  mkAgentAssertions = agents:
-    lib.mapAttrsToList (name: value: {
+  # Every emitted agent (native record or raw TOML) becomes `<name>.toml`.
+  # A native record's `description` and `developer_instructions` default to
+  # null, so a native-only record that omits one would ship a role file
+  # Codex rejects; the second assertion names the gap.
+  mkAgentAssertions = {
+    nativeAgents,
+    rawAgents,
+  }:
+    lib.mapAttrsToList (name: _: {
       assertion =
-        agent.isSemantic value
-        && name != ""
+        name
+        != ""
         && builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" name != null
-        && !lib.hasSuffix ".toml" name
-        && lib.intersectLists reservedAgentKeys (builtins.attrNames (value.codex or {})) == [];
-      message = ''
-        Codex agent '${name}' must use the portable { description,
-        instructions, tools?, codex? } form, have a safe filename stem without
-        a .toml suffix, and keep name/description/developer_instructions out of
-        the codex extension. Codex ignores the portable tools allowlist because
-        its agent format has no equivalent field.
-      '';
+        && !lib.hasSuffix ".toml" name;
+      message = "Codex agent '${name}' needs a safe filename stem without a .toml suffix.";
+    }) (rawAgents // nativeAgents)
+    ++ lib.mapAttrsToList (name: record: let
+      missing = builtins.filter (field: record.${field} == null) codexAgentRequiredFields;
+    in {
+      assertion = missing == [];
+      message = "${lib.showOption ["ai" "codex" "native" "agents" name]} is missing ${lib.concatStringsSep " and " missing}, which every Codex role file requires. Set them there, or define a normalized ${lib.showOption ["ai" "codex" "agents" name]} that supplies them.";
     })
-    agents;
+    nativeAgents;
 
   # Codex reads `[mcp_servers.<name>.oauth] client_secret` as of rust-v0.158.0
   # (codex-rs/config/src/mcp_types.rs, McpServerOAuthConfig) and has no
@@ -836,7 +865,8 @@
   # agent layers), so each is refused rather than warned about.
   #
   # `tables` maps the option path of one server table to `{ agentScoped, table }`,
-  # where `agentScoped` marks a table declared under an agent's codex extension.
+  # where `agentScoped` marks a table declared under
+  # `ai.codex.native.agents.<name>.mcp_servers`.
   mkOAuthClientSecretAssertions = tables:
     lib.mapAttrsToList (optionPath: {
       agentScoped,
@@ -877,7 +907,6 @@
   # the same.
   oauthSecretTables = {
     cfg,
-    mergedAgents,
     mergedServers,
   }: let
     owner = pool: name:
@@ -896,19 +925,26 @@
     mergedServers
     // serverTables false "ai.codex.native.settings.mcp_servers" (cfg.native.settings.mcp_servers or {})
     // lib.concatMapAttrs (name: value:
-      serverTables true "${owner "agents" name}.${name}.codex.mcp_servers" (value.codex.mcp_servers or {}))
-    (lib.filterAttrs (_: agent.isSemantic) mergedAgents);
+      serverTables true "ai.codex.native.agents.${name}.mcp_servers" (value.mcp_servers or {}))
+    cfg.native.agents;
 
-  mkAgentEntries = prefix: agents:
-    lib.mapAttrs' (name: value:
+  # A native record renders to TOML; a raw entry is a TOML file already.
+  # TOML has no null, so an unset required field is dropped rather than
+  # rendered, in case a backend renders files before it checks assertions.
+  mkAgentEntries = prefix: {
+    nativeAgents,
+    rawAgents,
+  }: let
+    dropUnset = lib.filterAttrs (field: value: !(builtins.elem field codexAgentRequiredFields && value == null));
+    entry = name: content:
       lib.nameValuePair "${prefix}/agents/${name}.toml" {
-        content = lib.mkDefault {
-          source = tomlFormat.generate "codex-agent-${name}.toml" (agent.renderCodex name value);
-        };
+        content = lib.mkDefault content;
         format = lib.mkDefault "toml";
         executable = null;
-      })
-    (lib.filterAttrs (_: agent.isSemantic) agents);
+      };
+  in
+    lib.mapAttrs' (name: record: entry name {source = tomlFormat.generate "codex-agent-${name}.toml" (dropUnset record);}) nativeAgents
+    // lib.mapAttrs' (name: value: entry name (agent.fileContent value)) rawAgents;
 
   # Lower Codex's typed statusMessage to its text, then render through the
   # shared renderer, which drops a null field. A portable handler has no such
@@ -1051,20 +1087,16 @@ in
       "skills"
     ];
     defaults.package = pkgs.ai.chatgpt-codex;
-    # The builder declares `environmentVariables` (baked into the launcher,
-    # never the project shell) and `agents`, typed here with the Codex extension.
-    poolOptions.agents = {
-      type = lib.types.attrsOf (lib.types.nullOr codexAgentType);
-      description = ''
-        Codex-specific semantic agents replace portable `ai.agents` entries
-        at the same key; null suppresses an inherited agent. Each record
-        becomes one standalone TOML layer under the active config directory's
-        `agents/` child. Put normal Codex config keys such as model,
-        model_reasoning_effort, sandbox_mode, and skills.config under the
-        record's `codex` extension. Codex role layers ignore mcp_servers
-        (rust-v0.158.0), so declare MCP servers at top level instead.
-      '';
-    };
+    # The native agent layer (see mkRuntime.nix): each normalized agent
+    # lowers into `ai.codex.native.agents.<name>`, one standalone TOML role
+    # layer. `tools` is dropped: Codex role files have no allowlist field.
+    # The builder declares `agents`, `agentsDir` (`.toml` role files here) and
+    # `environmentVariables` (baked into the launcher, never the project
+    # shell).
+    agentNativeType = codexAgentRecord;
+    agentTransformer = agent.renderCodex;
+    agentsDirSuffixes = [".toml"];
+    agentsDescriptionSuffix = "Each agent becomes one standalone TOML role layer under the active config directory's `agents/` child. Normal Codex config keys such as model, model_reasoning_effort, sandbox_mode, and skills.config go on `ai.codex.native.agents.<name>`. A raw entry is delivered verbatim and is not scanned for `mcp_servers.*.oauth.client_secret`. Codex role layers ignore mcp_servers (rust-v0.158.0), so declare MCP servers at top level instead.";
 
     options = {
       configDir = lib.mkOption {
@@ -1224,12 +1256,13 @@ in
       cfg,
       config,
       hasMergedContext,
-      mergedAgents,
       mergedContext,
       mergedRules,
       mergedServers,
       mergedSkills,
+      nativeAgents,
       options,
+      rawAgents,
       resolvedSettings,
       topHooks,
       ...
@@ -1339,9 +1372,9 @@ in
             "ai.codex.package is null, so ai.codex.pinDaemonToPackage is inert: there is no package to pin the daemon to."
           ));
           assertions =
-            mkAgentAssertions mergedAgents
+            mkAgentAssertions {inherit nativeAgents rawAgents;}
             ++ mkExecpolicyAssertions cfg.execpolicyRules
-            ++ mkOAuthClientSecretAssertions (oauthSecretTables {inherit cfg mergedAgents mergedServers;})
+            ++ mkOAuthClientSecretAssertions (oauthSecretTables {inherit cfg mergedServers;})
             ++ mkSkillNameAssertions mergedSkills
             ++ [
               {
@@ -1410,7 +1443,7 @@ in
         }
         {
           ai.codex.files = lib.mkMerge [
-            (mkAgentEntries nativeDir mergedAgents)
+            (mkAgentEntries nativeDir {inherit nativeAgents rawAgents;})
             (mkExecpolicyEntries nativeDir cfg.execpolicyRules)
             (lib.mkIf (effectiveHooks != {}) {
               "${nativeDir}/hooks.json" = {

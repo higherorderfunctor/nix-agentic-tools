@@ -2,33 +2,40 @@
   aiTypes = import ./types.nix {inherit lib;};
   frontmatter = import ../frontmatter.nix {inherit lib;};
 
-  mkSemanticAgentType = codexType:
-    lib.types.submodule {
-      options = {
-        codex = lib.mkOption {
-          type = codexType;
-          default = {};
-          description = "Codex-native TOML settings layered onto the generated standalone agent file.";
+  # The normalized agent record `ai.agents.<name>` takes, and the normalized
+  # arm of every `ai.<runtime>.agents.<name>`. It carries no runtime-native
+  # field: a runtime's own settings belong on its typed
+  # `ai.<runtime>.native.agents.<name>` record, which the runtime's
+  # transformer lowers this record into.
+  #
+  # A bare submodule also admits a path, as a module file to import, so a
+  # root `ai.agents.<name> = ./agent.md` would be parsed as Nix and fail with
+  # a syntax error that `builtins.tryEval` cannot catch. A path is turned into
+  # a thrown message instead; a string already fails the submodule type check.
+  semanticAgentRecord = lib.types.submodule {
+    options = {
+      description = lib.mkOption {
+        type = lib.types.str;
+        description = "Human-facing guidance for selecting the agent.";
+      };
+      instructions = lib.mkOption {
+        type = aiTypes.textSource {
+          description = "core instructions defining the agent's behavior";
         };
-        description = lib.mkOption {
-          type = lib.types.str;
-          description = "Human-facing guidance for selecting the agent.";
-        };
-        instructions = lib.mkOption {
-          type = aiTypes.textSource {
-            description = "core instructions defining the agent's behavior";
-          };
-          description = "Core instructions defining the agent's behavior.";
-        };
-        tools = lib.mkOption {
-          type = lib.types.nullOr (lib.types.listOf lib.types.str);
-          default = null;
-          description = "Optional Claude/Copilot tool allowlist; Codex has no equivalent agent field and warns when this is non-empty.";
-        };
+        description = "Core instructions defining the agent's behavior.";
+      };
+      tools = lib.mkOption {
+        type = lib.types.nullOr (lib.types.listOf lib.types.str);
+        default = null;
+        description = "Optional Claude/Copilot tool allowlist. Runtimes without a matching field or with a different tool vocabulary do not lower it: Codex, Kimchi and Kiro drop it with a warning. Codex has no equivalent field; for Kimchi and Kiro the warning names the native form (native Markdown at `ai.kimchi.agents.<name>`, or `ai.kiro.native.agents.<name>.tools`).";
       };
     };
-
-  semanticAgentType = mkSemanticAgentType lib.types.attrs;
+  };
+  semanticAgentType =
+    lib.types.coercedTo lib.types.path (path:
+      throw "An agent given as the path ${toString path} is a native file, which a normalized agent record cannot hold. Put it on ai.<runtime>.agents.<name> or in ai.<runtime>.agentsDir, or write a { description, instructions } record.")
+    semanticAgentRecord
+    // {inherit (semanticAgentRecord) description descriptionClass;};
 
   isSemantic = value: builtins.isAttrs value && value ? description && value ? instructions;
 
@@ -77,16 +84,33 @@
       })
     else fileContent value;
 
-  renderCodex = name: value:
-    value.codex
-    // {
-      inherit (value) description;
-      developer_instructions = value.instructions.text;
-      inherit name;
-    };
-in {
-  inherit fileContent isPathLike isSemantic mkSemanticAgentType renderCodex renderFile semanticAgentType;
+  # A text source that crossed the pool boundary carries one arm, so its
+  # text is either inline or the source file's bytes.
+  instructionsText = instructions:
+    if aiTypes.textSourceUsesSource instructions
+    then builtins.readFile instructions.source
+    else instructions.text;
 
+  # Transformers: one normalized record (instructions with one text-source
+  # arm) to the runtime's native agent record. Neither sets `name`: the
+  # native side is its only source, defaulting it to the attribute key.
+  renderCodex = _: value: {
+    inherit (value) description;
+    developer_instructions = instructionsText value.instructions;
+  };
+
+  # Kiro's `prompt` is a text source itself, so the one-arm record passes
+  # through. `tools` is not lowered: Kiro takes capability tags, not the
+  # Claude/Copilot tool names this record carries.
+  renderKiro = _: value: {
+    inherit (value) description;
+    prompt = value.instructions;
+  };
+in {
+  inherit fileContent isPathLike isSemantic renderCodex renderFile renderKiro semanticAgentType;
+
+  # A per-runtime `ai.<runtime>.agents.<name>` entry: the normalized record,
+  # or a raw native file (text or path) in that runtime's own format.
   agentType = lib.types.either (lib.types.either lib.types.lines lib.types.path) semanticAgentType;
 
   renderClaude = name: value:

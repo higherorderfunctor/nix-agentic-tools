@@ -34,7 +34,7 @@ in {
   # surrendering the whole directory to a single derivation.
   inherit
     (dirHelpers)
-    agentsFromDir
+    agentsFromDirWith
     hooksFromDir
     rulesFromDir
     skillsFromDir

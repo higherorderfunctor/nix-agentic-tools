@@ -2219,6 +2219,148 @@ in {
         agentFile != null
     );
 
+    # A normalized root record lowers into `ai.kiro.native.agents.<name>` at
+    # mkDefault, field by field: native `permissions` and `tools` merge onto the
+    # lowered record, and a native `description` replaces the lowered one.
+    module-kiro-root-semantic-agent = mkTest "kiro-root-semantic-agent" (
+      let
+        config = {
+          ai = {
+            agents.worker = {
+              description = "Reads the workspace";
+              instructions.text = "Inspect files without changing them.";
+              tools = ["Read"];
+            };
+            kiro = {
+              enable = true;
+              native.agents.worker = {
+                description = "Reads the workspace natively";
+                permissions.rules = [
+                  {
+                    capability = "filesystem";
+                    effect = "deny";
+                    match = ["write"];
+                  }
+                ];
+                tools = ["read"];
+              };
+            };
+          };
+        };
+        emitted = entry: builtins.fromJSON (builtins.readFile entry.source);
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        valid = value:
+          value.name
+          == "worker"
+          && value.description == "Reads the workspace natively"
+          && value.prompt == "Inspect files without changing them."
+          && value.tools == ["read"]
+          && value.permissions.rules
+          == [
+            {
+              capability = "filesystem";
+              effect = "deny";
+              match = ["write"];
+            }
+          ];
+        quiet = evaluated:
+          builtins.filter (lib.hasInfix "ai.agents.worker.tools") evaluated.config.warnings == [];
+      in
+        valid (emitted hm.config.home.file.".kiro/agents/worker.json")
+        && valid (emitted devenv.config.files.".kiro/agents/worker.json")
+        && quiet hm
+        && quiet devenv
+    );
+
+    # A normalized `tools` list names Claude/Copilot tools, which Kiro does not
+    # read. It is not lowered; a warning names the native field that restores
+    # the guardrail, and the agent is still emitted without it.
+    module-kiro-root-agent-tools-warns = mkTest "kiro-root-agent-tools-warns" (
+      let
+        config = {
+          ai = {
+            agents.worker = {
+              description = "d";
+              instructions.text = "p";
+              tools = ["Read"];
+            };
+            kiro.enable = true;
+          };
+        };
+        expected = "Set ai.kiro.native.agents.worker.tools (capability tags";
+        valid = evaluated:
+          lib.any (lib.hasInfix expected) evaluated.config.warnings
+          && builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions == []
+          && !((builtins.fromJSON evaluated.config.ai.kiro.files.".kiro/agents/worker.json".content.text) ? tools);
+      in
+        valid (evalHm config) && valid (evalDevenv config)
+    );
+
+    # Root `ai.agents` takes only the normalized record. A runtime's own file
+    # format belongs on `ai.<runtime>.agents`, so text and paths are type
+    # errors at the root rather than assertions in each runtime.
+    module-kiro-root-raw-agent-type-error = mkTest "kiro-root-raw-agent-type-error" (
+      let
+        rejected = evaluate: value:
+          !(builtins.tryEval (builtins.deepSeq
+            (evaluate {
+              ai = {
+                agents.legacy = value;
+                kiro.enable = true;
+              };
+            }).config.ai.agents
+            true)).success;
+      in
+        lib.all (evaluate:
+          rejected evaluate ''{"name": "legacy"}''
+          && rejected evaluate ../../claude-code/checks/fixtures/claude-agents/agent-one.md)
+        [evalHm evalDevenv]
+    );
+
+    # A runtime null is the keyed-pool tombstone: it suppresses the root
+    # record, its native lowering and its `tools` warning.
+    module-kiro-root-agent-withdrawn = mkTest "kiro-root-agent-withdrawn" (
+      let
+        config = {
+          ai = {
+            agents.worker = {
+              description = "d";
+              instructions.text = "p";
+              tools = ["Read"];
+            };
+            kiro = {
+              enable = true;
+              agents.worker = null;
+            };
+          };
+        };
+        valid = evaluated:
+          !(evaluated.config.ai.kiro.files ? ".kiro/agents/worker.json")
+          && !(evaluated.config.ai.kiro.native.agents ? worker)
+          && builtins.filter (lib.hasInfix "ai.agents.worker.tools") evaluated.config.warnings == []
+          && builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions == [];
+      in
+        valid (evalHm config) && valid (evalDevenv config)
+    );
+
+    # A raw file bypasses the native layer, so a native record at its key
+    # would describe a second file for the same path.
+    module-kiro-raw-and-native-agent-same-key-rejected = mkTest "kiro-raw-and-native-agent-same-key-rejected" (
+      let
+        failed = evaluate:
+          map (assertion: assertion.message) (builtins.filter (assertion: !assertion.assertion)
+            (evaluate {
+              ai.kiro = {
+                enable = true;
+                agents.worker = ''{"name": "worker"}'';
+                native.agents.worker.tools = ["read"];
+              };
+            }).config.assertions);
+      in
+        lib.all (evaluate: lib.any (lib.hasInfix "ai.kiro.native.agents worker: ai.kiro.agents sets a raw native file") (failed evaluate)) [evalHm evalDevenv]
+    );
+
     # A TYPED agent record lowers to JSON with `name` defaulted from the attr
     # key. That default is the whole point of the typed surface: Kiro's Rust CLI
     # REJECTS an agent file with no `name`, while the Node/ACP parser treats it
@@ -2231,7 +2373,7 @@ in {
           builtins.fromJSON (backend {
             ai.kiro = {
               enable = true;
-              agents.reviewer = {
+              native.agents.reviewer = {
                 description = "Reviews diffs";
                 prompt.text = "You review diffs.";
                 tools = ["read" "shell"];
@@ -2267,7 +2409,7 @@ in {
             (evalHm {
               ai.kiro = {
                 enable = true;
-                agents.scoped = {
+                native.agents.scoped = {
                   description = "d";
                   permissions.rules = [
                     {
@@ -2317,11 +2459,11 @@ in {
           result = evalHm {
             ai.kiro = {
               enable = true;
-              agents.empty-welcome.welcomeMessage.enable = true;
+              native.agents.empty-welcome.welcomeMessage.enable = true;
             };
           };
         in
-          builtins.deepSeq result.config.ai.kiro.agents.empty-welcome.welcomeMessage true);
+          builtins.deepSeq result.config.ai.kiro.native.agents.empty-welcome.welcomeMessage true);
       in
         !attempt.success
     );
@@ -2334,7 +2476,7 @@ in {
           (evalHm {
             ai.kiro = {
               enable = true;
-              agents.file-stem = {
+              native.agents.file-stem = {
                 name = "explicit-id";
                 description = "d";
               };
@@ -2385,60 +2527,86 @@ in {
         resolves hmEntry && resolves devenvEntry
     );
 
-    # `agents` and `agentsDir` are mutually exclusive; the assertion existed but
-    # nothing exercised it.
-    module-kiro-agents-dir-exclusive = mkTest "kiro-agents-dir-exclusive" (
+    # `agentsDir` children expand into raw `ai.kiro.agents` entries, so they
+    # blend with named entries and normalized records on both backends. A
+    # `.md` child keeps its suffix; a `.json` child and every other agent
+    # land as `.json`.
+    module-kiro-named-and-dir-agents-coexist = mkTest "kiro-named-and-dir-agents-coexist" (
       let
-        cfg =
-          (evalHm {
-            ai.kiro = {
+        config = {
+          ai = {
+            agents.normalized = {
+              description = "d";
+              instructions.text = "p";
+            };
+            kiro = {
               enable = true;
               agents.reviewer = ''{"name":"reviewer"}'';
               agentsDir = ./fixtures/kiro-agents-dir;
             };
-          }).config;
-        failed = builtins.filter (a: !a.assertion) cfg.assertions;
+          };
+        };
+        copies = files: path: fixture:
+          fromGeneratedTree path files.${path}
+          && builtins.fromJSON (builtins.readFile files.${path}.source) == builtins.fromJSON (builtins.readFile fixture);
+        valid = files:
+          copies files ".kiro/agents/dir-agent.json" ./fixtures/kiro-agents-dir/dir-agent.json
+          && files ? ".kiro/agents/md-agent.md"
+          && files ? ".kiro/agents/reviewer.json"
+          && files ? ".kiro/agents/normalized.json"
+          # The directory itself is never an entry: each child is its own file.
+          && !(files ? ".kiro/agents");
+        hm = evalHm config;
+        devenv = evalDevenv config;
       in
-        builtins.length failed
-        == 1
-        && lib.hasInfix "cannot set both" (builtins.head failed).message
+        valid hm.config.home.file
+        && valid devenv.config.files
+        && builtins.filter (assertion: !assertion.assertion) hm.config.assertions == []
     );
 
-    # `agentsDir` alone symlinks the directory wholesale (HM Layout B).
-    module-kiro-agents-dir-symlinks = mkTest "kiro-agents-dir-symlinks" (
+    # `agentsDir` takes every Dir form, and each keeps Kiro's own suffixes:
+    # a store-path string (a flake input's "${src}/agents"), any other
+    # absolute string, and `{ path; }` with no filter all deliver the `.json`
+    # and the `.md` agent. Pure evaluation can read only the store, so the
+    # non-store string is the fixture's own path spelled with a leading `//`:
+    # it does not start with the store directory, and as a path it resolves
+    # to the fixture. It must still ship the file, not its own path as text.
+    module-kiro-agents-dir-forms = mkTest "kiro-agents-dir-forms" (
       let
-        entry =
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              agentsDir = ./fixtures/kiro-agents-dir;
-            };
-          }).config.home.file.".kiro/agents";
+        nonStoreString = "/" + builtins.unsafeDiscardStringContext (toString ./fixtures/kiro-agents-dir);
+        delivers = agentsDir: let
+          config.ai.kiro = {
+            enable = true;
+            inherit agentsDir;
+          };
+          valid = files:
+            files ? ".kiro/agents/dir-agent.json"
+            && files ? ".kiro/agents/md-agent.md"
+            && builtins.fromJSON (builtins.readFile files.".kiro/agents/dir-agent.json".source)
+            == builtins.fromJSON (builtins.readFile ./fixtures/kiro-agents-dir/dir-agent.json);
+        in
+          valid (evalHm config).config.home.file && valid (evalDevenv config).config.files;
       in
-        entry.source == ./fixtures/kiro-agents-dir && entry.recursive
+        !(lib.hasPrefix "${builtins.storeDir}/" nonStoreString)
+        && delivers "${./fixtures/kiro-agents-dir}"
+        && delivers nonStoreString
+        && delivers {path = ./fixtures/kiro-agents-dir;}
     );
 
-    # The devenv half of the same declaration. devenv has no recursive symlink
-    # primitive, so the router walks the tree and emits one entry per leaf; the
-    # walker that used to live in this factory is gone, and nothing else covers
-    # this backend for `agentsDir`.
-    module-kiro-devenv-agents-dir-walks = mkTest "kiro-devenv-agents-dir-walks" (
-      let
-        files =
-          (evalDevenv {
-            ai.kiro = {
-              enable = true;
-              agentsDir = ./fixtures/kiro-agents-dir;
-            };
-          }).config.files;
-        sourceRoot = "${./fixtures/kiro-agents-dir}";
-      in
-        files.".kiro/agents/dir-agent.json".source
-        == "${sourceRoot}/dir-agent.json"
-        # The directory itself is never an entry on devenv: that would be a
-        # single store symlink, and the leaves would never appear.
-        && !(files ? ".kiro/agents")
-    );
+    # `dup.json` and `dup.md` both name agent `dup`, which is ambiguous, so
+    # the expansion throws instead of keeping either file.
+    module-kiro-agents-dir-stem-collision = mkTest "kiro-agents-dir-stem-collision" (!(builtins.tryEval (builtins.attrNames
+      (evalHm {
+        ai.kiro = {
+          enable = true;
+          agentsDir = ./fixtures/kiro-agents-dir-collision;
+        };
+      })
+        .config
+        .ai
+        .kiro
+        .agents))
+      .success);
 
     # HM: hook JSON files written under configDir/hooks/.
     module-kiro-hm-writes-hook-files = mkTest "kiro-hm-writes-hook-files" (
@@ -3627,21 +3795,6 @@ in {
       in
         lib.hasSuffix "/bin/hello"
         ((lspEntryOf "languages" (result.config.home.file.".kiro/settings/lsp.json" or null) "hello-lsp").command or "")
-    );
-
-    # Kiro independence: the top-level `ai.agents` pool carries Claude/Copilot
-    # tool NAMES, while Kiro's typed record takes capability TAGS — different
-    # vocabularies, so there is no pass-through lowering. Setting ai.agents.foo
-    # when ai.kiro.enable = true must NOT produce a .kiro/agents/foo file.
-    module-kiro-ignores-top-level-agents = mkTest "kiro-ignores-top-level-agents" (
-      let
-        result = evalHm {
-          ai.kiro.enable = true;
-          ai.agents.reviewer = "# Reviewer markdown";
-        };
-      in
-        !(result.config.home.file ? ".kiro/agents/reviewer.json")
-        && !(result.config.home.file ? ".kiro/agents/reviewer.md")
     );
 
     # ── ai.*.rulesDir Dir helper ──────────────────────────────────

@@ -258,6 +258,36 @@
   # ~/.local/share/kiro-cli/kas/ — NOT in the Nix store — so it cannot feed
   # the drift-checked extraction sidecar the way `hookTriggers` does. Closed
   # enums copied from it by hand would rot unguarded; they stay `str`.
+  #
+  # v3 agent schema (`<configDir>/agents/<name>.{json,md}`; global
+  # ~/.kiro or project .kiro): { name, description, model, prompt,
+  # tools:[tag|"*"], mcpServers:{<name>:{command,args,env,timeout}},
+  # resources:["file://..."|"skill://..."],
+  # permissions:{rules:[{capability,effect,match,exclude}],policies:[…]},
+  # welcomeMessage }.
+  # Tool tags: read write shell web subagent knowledge todo_list @mcp
+  # @builtin *. `.md` = YAML frontmatter + system-prompt body.
+  # Default agent: `kiro-cli agent set-default <name>`.
+  #
+  # ALWAYS EMIT `name` — two parsers disagree about it, and the strict
+  # one fails closed (measured on 2.16.0):
+  #   * Rust CLI (kiro-cli-chat) parses agents as JSON ONLY and REQUIRES
+  #     `name`. A `.json` file without it is rejected outright with
+  #     "missing field name" on EVERY `kiro-cli` invocation, so that
+  #     agent never loads. Its directory scan also SILENTLY skips `.md`
+  #     agents — measured on 2.16.0, a frontmatter agent beside a valid
+  #     JSON one produced no diagnostic and simply never appeared in
+  #     `kiro-cli agent list`, so absence there says nothing about
+  #     whether a `.md` agent is well-formed.
+  #   * Node/ACP bundle (`acp-server.js`) marks `name` `.optional()` in
+  #     both its JSON and frontmatter schemas ("explicit agent name that
+  #     overrides filename-based ID") and falls back to the filename
+  #     stem, so the IDE/ACP path keeps working and HIDES the defect.
+  # When present, `name` overrides the filename-derived id, so emit it
+  # equal to the `<name>` attr key unless a rename is intended.
+  #
+  # `.md` agents therefore serve the ACP/IDE path only; `agentsDir` delivers
+  # them for that path.
   kiroAgentRecord = lib.types.submodule {
     freeformType = (pkgs.formats.json {}).type;
     options = {
@@ -396,21 +426,37 @@
   in
     builtins.toJSON (pruneEmptyAgentFields withName);
 
-  # A typed record is a plain attrset; raw entries are strings or paths (a
-  # derivation is stringLike and must stay on the raw path).
-  isTypedAgent = value: builtins.isAttrs value && !(lib.isDerivation value);
+  # A native record → its JSON file entry.
+  nativeAgentEntry = configDir: name: record:
+    lib.nameValuePair "${configDir}/agents/${name}.json" {
+      content = lib.mkDefault {text = renderAgent name record;};
+      format = lib.mkDefault "json";
+      executable = null;
+    };
 
-  # One `agents` entry → the `{source|text}` attrs BOTH backends write, so the
-  # two cannot drift. Previously HM routed a path to `source` while devenv
-  # assigned it to `.text`, which wrote the store path STRING as the file body
-  # instead of its contents; going through one helper fixes that asymmetry.
-  # `isPathLike`, not `lib.isPath`: the `lines` arm also admits a store-path
-  # string (a flake input's `"${src}/agent.json"`), which is a file to copy,
-  # not JSON text whose body is its own path.
-  mkAgentEntry = attrName: value:
-    if isTypedAgent value
-    then {text = renderAgent attrName value;}
-    else agent.fileContent value;
+  # A raw entry → its file entry, the same `{source|text}` on BOTH backends
+  # (they once disagreed, and devenv wrote a path's store-path STRING as the
+  # body). `agent.fileContent` tests `isPathLike`, not `lib.isPath`, so a
+  # store-path string (a flake input's `"${src}/agent.json"`) is a file to
+  # copy, not JSON text whose body is its own path. A path keeps its own
+  # suffix, so an `agentsDir` Markdown agent lands as `.md`; JSON text and
+  # JSON files land as `.json`.
+  rawAgentEntry = configDir: name: value: let
+    isMarkdown = agent.isPathLike value && lib.hasSuffix ".md" (toString value);
+  in
+    lib.nameValuePair "${configDir}/agents/${name}.${
+      if isMarkdown
+      then "md"
+      else "json"
+    }" {
+      content = lib.mkDefault (agent.fileContent value);
+      format = lib.mkDefault (
+        if isMarkdown
+        then "markdown"
+        else "json"
+      );
+      executable = null;
+    };
 
   # Render one typed record → its v3 hook object (an element of an envelope's
   # `hooks` list). `name` = the attr key; null optionals dropped (record +
@@ -474,7 +520,7 @@
   hookTargetDir = cfg: "${cfg.configDir}/hooks";
 
   # `hooksDir` contributes the source directory's TOP-LEVEL `*.json` files,
-  # enumerated at eval (same idiom as the devenv `agentsDir` walker below;
+  # enumerated at eval (same idiom as `lib/ai/dir-helpers.nix`;
   # a `hooksDir` pointing at a derivation OUTPUT is therefore IFD, which the
   # activation-time `cp -rL` this replaced was not).
   #
@@ -561,10 +607,6 @@
       && (packageNeedsFhsPayload cfg.package || packageNeedsFhsPayload resolvedPackage);
   in
     [
-      {
-        assertion = !(cfg.agents != {} && cfg.agentsDir != null);
-        message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
-      }
       {
         # No resolved package at all (`package = null`) means no wrapper is
         # built, so this constraint — which is about what the WRAPPER can
@@ -1138,6 +1180,16 @@ in
     # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
+    # The native agent layer (see mkRuntime.nix): each normalized agent
+    # lowers into `ai.kiro.native.agents.<name>`, a typed JSON record.
+    # `tools` is not lowered — Kiro takes capability tags, not the
+    # Claude/Copilot tool names a normalized record carries.
+    agentNativeType = kiroAgentRecord;
+    agentTransformer = agent.renderKiro;
+    # `.md` agents serve the ACP/IDE path; kiro-cli-chat skips them (see the
+    # `kiroAgentRecord` comment).
+    agentsDirSuffixes = [".json" ".md"];
+    agentsDescriptionSuffix = "A normalized or native record is written as `<configDir>/agents/<name>.json`; a raw file is written as is, keeping a `.md` path's suffix.";
     contextFilename = "AGENTS.md";
     ruleModule = aiCommon.kiroRuleModule;
     # No "settings": Kiro persists effort only inside per-model
@@ -1146,6 +1198,7 @@ in
     # Like any unsupported pool, the root `ai.settings.reasoningEffort` is
     # ignored for Kiro without a warning: nothing per-runtime could silence it.
     supportedPools = [
+      "agents"
       "context"
       "environmentVariables"
       "lspServers"
@@ -1157,9 +1210,11 @@ in
     defaults = {
       package = pkgs.ai.kiro-cli;
     };
-    # The builder declares `environmentVariables` (baked into the launcher on
-    # both backends) and `lspServers`.
-    poolOptions.lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
+    # The builder declares `agents`, `agentsDir`, `environmentVariables`
+    # (baked into the launcher on both backends), and `lspServers`.
+    poolOptions = {
+      lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
+    };
     options = {
       # Dark-shipped upstream features, unlocked by patching the rollout
       # manifest the chat binary carries in rodata (see
@@ -1505,37 +1560,9 @@ in
           }
         ];
       };
-      # -- Agents & hooks --------------------------------------------------
-      # Typed as `kiroAgentRecord` and `kiroHookRecord`; agents still accept
-      # the legacy raw forms, and raw hook envelopes go in `hooksJson`. Kiro
-      # OWNS both schemas; there is no upstream format we wrap.
-      #
-      # v3 agent schema (`<configDir>/agents/<name>.{json,md}`; global
-      # ~/.kiro or project .kiro): { name, description, model, prompt,
-      # tools:[tag|"*"], mcpServers:{<name>:{command,args,env,timeout}},
-      # resources:["file://..."|"skill://..."],
-      # permissions:{rules:[{capability,effect,match,exclude}],policies:[…]},
-      # welcomeMessage }.
-      # Tool tags: read write shell web subagent knowledge todo_list @mcp
-      # @builtin *. `.md` = YAML frontmatter + system-prompt body.
-      # Default agent: `kiro-cli agent set-default <name>`.
-      #
-      # ALWAYS EMIT `name` — two parsers disagree about it, and the strict
-      # one fails closed (measured on 2.16.0):
-      #   * Rust CLI (kiro-cli-chat) parses agents as JSON ONLY and REQUIRES
-      #     `name`. A `.json` file without it is rejected outright with
-      #     "missing field name" on EVERY `kiro-cli` invocation, so that
-      #     agent never loads. Its directory scan also SILENTLY skips `.md`
-      #     agents — measured on 2.16.0, a frontmatter agent beside a valid
-      #     JSON one produced no diagnostic and simply never appeared in
-      #     `kiro-cli agent list`, so absence there says nothing about
-      #     whether a `.md` agent is well-formed.
-      #   * Node/ACP bundle (`acp-server.js`) marks `name` `.optional()` in
-      #     both its JSON and frontmatter schemas ("explicit agent name that
-      #     overrides filename-based ID") and falls back to the filename
-      #     stem, so the IDE/ACP path keeps working and HIDES the defect.
-      # When present, `name` overrides the filename-derived id, so emit it
-      # equal to the `<name>` attr key unless a rename is intended.
+      # -- Hooks -----------------------------------------------------------
+      # Typed as `kiroHookRecord`; raw hook envelopes go in `hooksJson`. Kiro
+      # OWNS the schema; there is no upstream format we wrap.
       #
       # v3 hook schema (`<configDir>/hooks/<name>.json`): { version:"v1",
       # hooks:[{ name, description?, trigger, matcher?,
@@ -1544,45 +1571,6 @@ in
       # PreToolUse PostToolUse PreTaskExec PostTaskExec UserPromptSubmit
       # PostFileCreate PostFileSave PostFileDelete Manual. v2 embedded hooks
       # still work transitionally; `kiro-cli agent migrate` converts.
-      # Inline agent JSON content. Written under
-      # `<configDir>/agents/<name>.json` in both backends.
-      agents = lib.mkOption {
-        # Typed record OR the legacy raw forms. `either` tries the string/path
-        # arms first; a typed record is a plain attrset, which is neither
-        # `isString` nor stringLike, so the arms cannot collide. Raw JSON text
-        # and paths keep working unchanged — this widening is additive.
-        type = lib.types.attrsOf (
-          lib.types.either
-          (lib.types.either lib.types.lines lib.types.path)
-          kiroAgentRecord
-        );
-        default = {};
-        description = ''
-          Agent definitions written to `<configDir>/agents/<name>.json`.
-
-          Prefer the typed record: `name` defaults to the attribute key, so the
-          field Kiro's Rust CLI requires can never be omitted, and null/empty
-          fields are dropped from the emitted JSON. Raw JSON text or a path is
-          still accepted. Generated JSON is formatted before delivery; set the
-          file entry's `format` to `raw` when its exact bytes must be retained.
-        '';
-        example = lib.literalExpression ''
-          {
-            reviewer = {
-              description = "Reviews diffs";
-              prompt.source = ./reviewer-prompt.md;
-              tools = ["read" "shell"];
-            };
-          }
-        '';
-      };
-      # External agents directory, delivered recursively at
-      # `<configDir>/agents` on both backends.
-      agentsDir = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
-        default = null;
-        description = "External directory of agent JSON files (symlinked into <configDir>/agents).";
-      };
       # Typed v3 hook records (keyed by hook name) — the northbound surface.
       # Each lowers into a `{ version:"v1", hooks:[…] }` envelope written under
       # `<configDir>/hooks/<file>.json` in both backends — `<file>` is the
@@ -1643,6 +1631,8 @@ in
       backend,
       cfg,
       mergedEnvironmentVariables,
+      nativeAgents,
+      rawAgents,
       mergedServers,
       mergedSkills,
       mergedRules,
@@ -1845,20 +1835,13 @@ in
                   executable = null;
                 };
               }
-              (lib.mapAttrs' (name: value:
-                lib.nameValuePair "${cfg.configDir}/agents/${name}.json" {
-                  content = lib.mkDefault (mkAgentEntry name value);
-                  format = lib.mkDefault "json";
-                  executable = null;
-                })
-              cfg.agents)
-              (lib.mkIf (cfg.agentsDir != null) {
-                "${cfg.configDir}/agents" = {
-                  content = lib.mkDefault {source = cfg.agentsDir;};
-                  executable = null;
-                  recursive = true;
-                };
-              })
+              # Native records and raw files, one file each; `agentsDir`
+              # children arrive here as raw entries. One attrset, so a raw
+              # and a native entry at one key (an assertion rejects that)
+              # yield one file definition rather than a merge conflict that
+              # would hide the assertion.
+              (lib.mapAttrs' (nativeAgentEntry cfg.configDir) nativeAgents
+                // lib.mapAttrs' (rawAgentEntry cfg.configDir) rawAgents)
               # Kiro v3's hook scan keeps only entry.isFile() (Kiro#9787), so
               # hooks need real copies. The ledger claims individual files;
               # unrelated hand-placed hooks survive, including at N→0.

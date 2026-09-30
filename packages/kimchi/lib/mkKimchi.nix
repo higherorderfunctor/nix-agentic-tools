@@ -346,7 +346,6 @@
   kimchiDelivery = {
     backend,
     cfg,
-    config,
     hasMergedContext,
     mergedAgents,
     mergedContext,
@@ -429,18 +428,6 @@
         writer = "kimchiFiles";
       };
     relativeTrustKeys = builtins.filter (key: !(lib.hasPrefix "/" key)) (builtins.attrNames cfg.projectTrust);
-    # A semantic record's `tools` names Claude/Copilot tools (`Read`), while
-    # Kimchi compares its own lowercase builtins exactly
-    # (src/extensions/agents/personas/agent-types.ts:12). Dropping the list
-    # would widen the agent to every tool, and translating it would fail
-    # silently on the first unmatched name, so the record is rejected instead.
-    toolAgents = builtins.attrNames (lib.filterAttrs (_: value: lib.ai.agent.isSemantic value && (value.tools or null) != null && value.tools != []) mergedAgents);
-    # Root Markdown is written for Claude and Copilot. Kimchi reads the same
-    # file differently: `name:` is ignored, `model: sonnet` becomes a Kimchi
-    # model id, and `tools:` is matched against its lowercase builtins
-    # (custom-agents.ts:52-85,125-132). Only a portable record crosses over;
-    # Markdown under ai.kimchi.agents is Kimchi's own.
-    rootMarkdownAgents = builtins.attrNames (lib.filterAttrs (name: value: value != null && !(lib.ai.agent.isSemantic value) && !(cfg.agents ? ${name})) config.ai.agents);
     # Git tokens are secrets with no environment input: Kimchi reads them only
     # from the user config.json (src/extensions/teleport/provisioning/
     # git-token.ts). So the renderer reads each one from its file or helper
@@ -469,14 +456,6 @@
                 ai.kimchi environment variables ${lib.concatStringsSep ", " fixedEnvironmentVariables} are overwritten by Kimchi before anything reads them (${lib.concatMapStringsSep "; " (name: "${name}: ${sidecar.fixedEnvironmentVariables.${name}}") fixedEnvironmentVariables}), so a value set here is never read.
                 Remove it from ai.kimchi.environmentVariables, or tombstone a root ai.environmentVariables entry with ai.kimchi.environmentVariables.<name> = null.
               '';
-            }
-            {
-              assertion = toolAgents == [];
-              message = "ai.kimchi agents ${lib.concatStringsSep ", " toolAgents} carry a `tools` allowlist in Claude/Copilot tool names, which Kimchi does not read (it matches its lowercase builtins read, bash, edit, write, grep, find, ls exactly). Set ai.kimchi.agents.<name> to native Kimchi Markdown with its own `tools:` line, or to null.";
-            }
-            {
-              assertion = rootMarkdownAgents == [];
-              message = "ai.agents ${lib.concatStringsSep ", " rootMarkdownAgents} are Markdown written for Claude/Copilot, which Kimchi misreads (`name:` ignored, `model:` taken as a Kimchi model id, `tools:` matched against its lowercase builtins). Set ai.kimchi.agents.<name> to native Kimchi Markdown, a portable { description, instructions } record, or null.";
             }
           ]
           ++ lib.optional (!isDevenv) {
@@ -640,12 +619,22 @@
       # and Eject write new ones beside it (src/extensions/agents/index.ts:
       # 2556-2874): an edit of a declared agent fails, and a file Kimchi
       # created is an unowned sibling that is never touched.
+      #
+      # A normalized record's Claude/Copilot `tools` list is dropped: Kimchi
+      # compares its own lowercase builtins exactly
+      # (src/extensions/agents/personas/agent-types.ts:12), so a translated
+      # list would fail on the first unmatched name.
+      # lib/ai/delivery-warnings.nix names the native remedy.
       {
         ai.kimchi.files = lib.mapAttrs' (name: value:
           lib.nameValuePair "${agentsDir}/${name}.md" {
             # A store-path string, as a flake input yields, is a source too;
             # `builtins.isPath` alone would write the path as the agent's text.
-            content = lib.mkDefault (lib.ai.agent.renderFile false name value);
+            content = lib.mkDefault (lib.ai.agent.renderFile false name (
+              if lib.ai.agent.isSemantic value
+              then value // {tools = null;}
+              else value
+            ));
             entry = "kimchiAgents";
             format = lib.mkDefault "markdown";
             ledger = agentsLedger;
@@ -702,25 +691,16 @@ in
       "skills"
     ];
     defaults.package = pkgs.ai.kimchi;
+    agentsDescriptionSuffix = lib.concatStringsSep " " [
+      "Each lands as one `<name>.md`: Home Manager writes `<configDir>/harness/agents/`, devenv a trusted project's `.kimchi/agents/`."
+      "A normalized record renders to Kimchi frontmatter plus body."
+      "Markdown here is Kimchi's own and is not translated, but it is built into the runtime's generated-file tree, where `ai.generated.formatter.markdown` and `ai.generated.check.markdown` process it;"
+      "set `ai.kimchi.files.\"<path>\".format = \"raw\"` to deliver one agent file as written."
+      "A record's Claude/Copilot `tools` list has no Kimchi reading: it is dropped with a warning naming this option as the remedy."
+      "Each file is a read-only copy: Kimchi's /agents commands cannot edit a declared agent, and an agent they create beside it is left alone."
+    ];
     # The builder declares these pool options and expands `agentsDir`.
     poolOptions = {
-      agents.description = ''
-        Kimchi agents, one `<name>.md` each: Home Manager writes
-        `<configDir>/harness/agents/`, devenv a trusted project's
-        `.kimchi/agents/`. A portable `{ description, instructions }` record
-        renders to Kimchi frontmatter plus body. Markdown here is Kimchi's
-        own and is not translated, but it is built into the runtime's
-        generated-file tree, where `ai.generated.formatter.markdown` and
-        `ai.generated.check.markdown` process it; set
-        `ai.kimchi.files."<path>".format = "raw"` to deliver
-        one agent file as written. Entries replace root `ai.agents` at the same
-        key and null suppresses one. Root Markdown and a record's
-        Claude/Copilot `tools` list have no Kimchi reading and fail
-        evaluation, naming this option as the remedy. Each file is a
-        read-only copy: Kimchi's /agents commands cannot edit a declared
-        agent, and an agent they create beside it is left alone.
-      '';
-      agentsDir.description = "Directory of Kimchi-native `.md` agent files, expanded into `ai.kimchi.agents` keyed by basename minus `.md`.";
       environmentVariables.description = ''
         Environment variables exported when launching kimchi. Null suppresses
         a root entry at the same key. A variable Kimchi overwrites at launch

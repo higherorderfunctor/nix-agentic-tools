@@ -11,7 +11,14 @@
 # `poolOptions` is closed the same way. The transform reads it by pool name
 # for the pools its `poolOption` declares, and only when the record supports
 # that pool, so a misspelt key, an undeclared or unsupported pool, or
-# `agentsDir` without the `agents` pool would change nothing.
+# `agentsDir` without the `agents` pool would change nothing. `agents` is not
+# among them: a runtime appends its own sentence through
+# `agentsDescriptionSuffix`, so a whole override cannot shadow the builder's.
+#
+# The agent fields are closed too: `agentNativeType` and `agentTransformer`
+# come as a pair; they, `agentsDirSuffixes` and `agentsDescriptionSuffix` need
+# the `agents` pool; and `agentsDirSuffixes` must be a non-empty list of
+# strings, since an empty one makes `agentsDir` expand nothing.
 #
 # `record` returns true, or throws naming the offending fields.
 # `sharedAgentsMd` checks the value that record callback returns, which exists
@@ -21,13 +28,13 @@
   defaultsKeys = ["package"];
   # The pools whose option `mkBackendTransform.nix` declares through
   # `poolOption`, and so the only ones `poolOptions` can override.
-  poolOptionPools = ["agents" "environmentVariables" "lspServers"];
+  poolOptionPools = ["environmentVariables" "lspServers"];
   sharedAgentsMdKeys = ["defaultMaxBytes" "hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
   contentTargetsKeys = ["context" "rules"];
   unknownIn = allowed: attrs: lib.subtractLists allowed (builtins.attrNames attrs);
   listed = lib.concatStringsSep ", ";
 in {
-  record = {
+  record = record @ {
     name,
     defaults ? {},
     hm ? {},
@@ -52,7 +59,16 @@ in {
     && lib.assertMsg (unknownDefaults == [])
     "ai runtime ${name}: defaults carries ${listed unknownDefaults}; it takes only ${listed defaultsKeys}."
     && lib.assertMsg (unknownPoolOptions == [])
-    "ai runtime ${name}: poolOptions carries ${listed unknownPoolOptions}; it takes only a pool the builder declares (${listed poolOptionPools}) that supportedPools names, plus agentsDir when that includes agents.";
+    "ai runtime ${name}: poolOptions carries ${listed unknownPoolOptions}; it takes only a pool the builder declares (${listed poolOptionPools}) that supportedPools names, plus agentsDir when that includes agents."
+    # Presence only: evaluating a native type can force the factory's `pkgs`.
+    && lib.assertMsg (record ? agentNativeType == record ? agentTransformer)
+    "ai runtime ${name}: agentNativeType and agentTransformer describe one native agent layer; set both or neither."
+    && lib.assertMsg (!(record ? agentNativeType) || lib.elem "agents" supportedPools)
+    "ai runtime ${name}: agentNativeType needs the agents pool in supportedPools."
+    && lib.assertMsg (!(record ? agentsDirSuffixes || record ? agentsDescriptionSuffix) || lib.elem "agents" supportedPools)
+    "ai runtime ${name}: agentsDirSuffixes and agentsDescriptionSuffix need the agents pool in supportedPools."
+    && lib.assertMsg (!(record ? agentsDirSuffixes) || (record.agentsDirSuffixes != [] && lib.all lib.isString record.agentsDirSuffixes))
+    "ai runtime ${name}: agentsDirSuffixes must be a non-empty list of strings.";
 
   contentTargets = name: result: let
     unknown = unknownIn contentTargetsKeys result;

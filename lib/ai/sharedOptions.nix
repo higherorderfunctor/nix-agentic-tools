@@ -336,17 +336,31 @@ in {
     };
 
     agents = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.nullOr agent.agentType);
+      type = lib.types.attrsOf (lib.types.nullOr agent.semanticAgentType);
       default = {};
       description = ''
-        Agent definitions fanned out to Claude and Copilot. Portable semantic
-        records (`{ description, instructions, tools?, codex? }`) also fan out
-        to Codex and Kimchi; `tools` is rendered only for Claude and Copilot
-        because Codex has no equivalent agent field, and Kimchi rejects a
-        non-empty one because its tool names differ. Legacy Markdown/path
-        values remain Claude/Copilot-only and cause a clear assertion when
-        Codex or Kimchi is enabled; `ai.kimchi.agents` takes Kimchi-native
-        Markdown. Each entry becomes a file:
+        Normalized agent records (`{ description, instructions, tools? }`)
+        fanned out to every enabled runtime that supports agents. Only this
+        record is accepted here; a runtime's own file format goes on that
+        runtime, as a raw text or path entry of `ai.<runtime>.agents` or a
+        file in `ai.<runtime>.agentsDir`.
+
+        Agents are layered. Each root record reaches `ai.<runtime>.agents`
+        at the same key, where a per-runtime entry replaces it and null
+        withdraws it. A runtime with a typed native agent record then lowers
+        each normalized record into `ai.<runtime>.native.agents.<name>` at
+        `mkDefault`, field by field, so native fields a consumer sets there
+        win and runtime-only fields (Kiro `permissions`, capability-tag
+        `tools`) are added there. Kiro and Codex have that layer today; the
+        other runtimes render the normalized record directly.
+
+        `tools` names Claude/Copilot tools. Claude and Copilot render it;
+        Codex, Kimchi and Kiro drop it with a warning, because they have no
+        matching field or use a different tool vocabulary. Codex has no tool
+        allowlist; for Kimchi and Kiro, set the native guardrail instead
+        (`ai.kiro.native.agents.<name>.tools` and `permissions`, or native
+        Kimchi Markdown at `ai.kimchi.agents.<name>`). Each agent becomes a
+        file:
         - Claude  → ~/.claude/agents/<name>.md (HM) or
                     .claude/agents/<name>.md (devenv)
         - Copilot → .github/agents/<name>.agent.md (devenv) or
@@ -355,36 +369,9 @@ in {
                     .codex/agents/<name>.toml (devenv)
         - Kimchi  → ~/.config/kimchi/harness/agents/<name>.md (HM) or
                     .kimchi/agents/<name>.md (devenv), as a read-only copy
-        Kiro intentionally excluded, but no longer because its agents are
-        untyped JSON — `ai.kiro.agents` is a typed record now. The blocker is
-        the tool vocabulary: this pool's `tools` list uses Claude/Copilot tool
-        NAMES (`Bash`, `Read`), while Kiro takes capability TAGS (`shell`,
-        `read`, `@mcp`), so lowering one to the other needs a translation
-        table rather than a pass-through. Use `ai.kiro.agents` directly for
-        that ecosystem. Per-app entries replace root entries at the same key;
-        null suppresses an inherited agent for that runtime.
+        - Kiro    → ~/.kiro/agents/<name>.json (HM) or
+                    .kiro/agents/<name>.json (devenv)
       '';
-    };
-
-    agentsDir = lib.mkOption {
-      type = lib.types.nullOr aiCommon.dirOptionType;
-      default = null;
-      description = ''
-        Directory of legacy `.md` agent files fanned out to Claude and
-        Copilot. Each file becomes one entry in `ai.agents` keyed by the
-        basename minus `.md`. Codex and Kimchi do not take these files, and
-        they are NOT skipped silently: enabling either one with a non-empty
-        `agentsDir` fails evaluation, because Codex needs a semantic record
-        (standalone TOML) and Kimchi misreads Claude Markdown (`model:` and
-        `tools:` mean something else to it). Withdraw each name with
-        `ai.codex.agents.<name> = null` or `ai.kimchi.agents.<name> = null`,
-        use explicit `ai.agents` records for wider fanout, or
-        `ai.kimchi.agentsDir` for Kimchi-native files. Kiro is excluded because these are Markdown
-        files while Kiro's agents are JSON, and because its tool tags are a
-        different vocabulary from the Claude/Copilot tool names this pool
-        carries; use `ai.kiro.agentsDir` for that ecosystem.
-      '';
-      example = lib.literalExpression ''./agents'';
     };
 
     hooks = lib.mkOption {
@@ -563,9 +550,6 @@ in {
         );
         skills = lib.mkIf (config.ai.skillsDir != null) (
           lib.mapAttrs (_: lib.mkDefault) (dirHelpers.skillsFromDir config.ai.skillsDir)
-        );
-        agents = lib.mkIf (config.ai.agentsDir != null) (
-          lib.mapAttrs (_: lib.mkDefault) (dirHelpers.agentsFromDir config.ai.agentsDir)
         );
       };
     }

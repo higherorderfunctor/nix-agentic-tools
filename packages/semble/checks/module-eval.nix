@@ -24,7 +24,7 @@ in {
           && evaluated.config.ai.programs.semble.mcp.enable == null
           && !(evaluated.config.ai.claude.mcpServers ? semble)
           && !(evaluated.config.ai.codex.agents ? semble-search)
-          && !(evaluated.config.ai.kiro.agents ? semble-search);
+          && !(evaluated.config.ai.kiro.native.agents ? semble-search);
       in
         clean hm
         && clean devenv
@@ -190,6 +190,7 @@ in {
         && lib.all (runtime: cfg.ai.${runtime}.mcpServers ? semble) ["claude" "codex" "kiro"]
         && lib.all (runtime: cfg.ai.${runtime}.rules == {}) ["claude" "codex" "kiro"]
         && lib.all (runtime: !(cfg.ai.${runtime}.agents ? semble-search)) ["claude" "codex" "kiro"]
+        && !(cfg.ai.kiro.native.agents ? semble-search)
         && !(cfg.ai.copilot.mcpServers ? semble)
         && !(cfg.ai.copilot.agents ? semble-search)
         && cfg.ai.copilot.rules == {}
@@ -217,6 +218,47 @@ in {
         && emitted.tools == ["shell" "read"]
         && emitted ? description
         && !(lib.hasPrefix builtins.storeDir emitted.prompt)
+    );
+
+    # A consumer's root `ai.agents.semble-search` meets the generated subagent.
+    # Semble's portable record sits on each runtime's own pool, so it replaces
+    # the root agent on Kiro exactly as on Claude, and Kiro's native fields
+    # (capability tags, the agent-scoped MCP server) still reach the file. A
+    # whole-entry default on `native.agents` would lose them to the record the
+    # root agent lowers there.
+    module-semble-root-agent-collision = mkTest "semble-root-agent-collision" (
+      let
+        cfg =
+          (evalHm {
+            ai = {
+              agents.semble-search = {
+                description = "Root agent.";
+                instructions.text = "Root instructions.";
+              };
+              claude.enable = true;
+              kiro.enable = true;
+              programs.semble = {
+                enable = true;
+                subagent = {
+                  enable = true;
+                  interface = "mcp";
+                };
+              };
+            };
+          }).config;
+        claudeAgent = cfg.ai.claude.agents.semble-search;
+        emitted =
+          builtins.fromJSON
+          (builtins.unsafeDiscardStringContext (builtins.readFile cfg.home.file.".kiro/agents/semble-search.json".source));
+      in
+        claudeAgent.description
+        != "Root agent."
+        && emitted.description == claudeAgent.description
+        && emitted.prompt == builtins.readFile ../mcp-agent-instructions.md
+        && emitted.tools == ["@semble"]
+        && emitted.includeMcpJson == false
+        && emitted.mcpServers ? semble
+        && builtins.filter (lib.hasInfix "semble-search.tools") cfg.warnings == []
     );
 
     module-semble-feature-enable-overrides = mkTest "semble-feature-enable-overrides" (
@@ -293,13 +335,13 @@ in {
         && !(top.ai.codex.agents ? semble-search)
         && top.ai.codex.rules == {}
         && !(top.ai.claude.mcpServers ? semble)
-        && !(top.ai.kiro.agents ? semble-search)
+        && !(top.ai.kiro.native.agents ? semble-search)
         && perFeature.ai.kiro.mcpServers ? semble
         && !(perFeature.ai.claude.mcpServers ? semble)
         && perFeature.ai.claude.rules ? semble
         && perFeature.ai.codex.rules == {}
         && perFeature.ai.codex.agents ? semble-search
-        && !(perFeature.ai.kiro.agents ? semble-search)
+        && !(perFeature.ai.kiro.native.agents ? semble-search)
         && runtimeFeatureWins.ai.codex.mcpServers ? semble
         && !(runtimeFeatureWins.ai.codex.rules ? semble)
     );
@@ -929,8 +971,8 @@ in {
           (assertion: !assertion.assertion && lib.hasInfix needle assertion.message)
           evaluated.assertions;
         mcpPrompt = ../mcp-agent-instructions.md;
-        rootAgent = rootVisible.ai.kiro.agents.semble-search;
-        isolatedAgent = isolated.ai.kiro.agents.semble-search;
+        rootAgent = rootVisible.ai.kiro.native.agents.semble-search;
+        isolatedAgent = isolated.ai.kiro.native.agents.semble-search;
         emitted =
           builtins.fromJSON
           (builtins.unsafeDiscardStringContext (builtins.readFile isolated.home.file.".kiro/agents/semble-search.json".source));
@@ -943,7 +985,7 @@ in {
         && builtins.attrNames isolated.ai.kiro.mcpServers == []
         && passes isolated
         && builtins.attrNames subagentOnly.ai.kiro.mcpServers == []
-        && subagentOnly.ai.kiro.agents.semble-search.mcpServers ? semble
+        && subagentOnly.ai.kiro.native.agents.semble-search.mcpServers ? semble
         && passes subagentOnly
         && isolatedAgent.tools == ["@semble"]
         && isolatedAgent.includeMcpJson == false
@@ -1241,7 +1283,7 @@ in {
         && records.mcp.semanticAgent.tools
         == ["mcp__semble__find_related" "mcp__semble__search"]
         # `kiroAgent` is a typed record, not pre-rendered JSON. It deliberately
-        # carries NO `name`: the typed `ai.kiro.agents` option defaults that from
+        # carries NO `name`: the typed `ai.kiro.native.agents` option defaults that from
         # the attr key, which keeps the id and the filename a single source of
         # truth. `prompt.source` stays a path here and resolves at emission.
         && records.kiroAgent.tools == ["shell" "read"]
@@ -1285,6 +1327,27 @@ in {
           && evaluated.config.ai.kiro.mcpServers.semble == null;
       in
         suppressed (evalHm config) && suppressed (evalDevenv config)
+    );
+
+    # A Kiro null on the portable subagent removes the whole agent: the native
+    # fields follow the record rather than shipping a native-only agent with
+    # no prompt. The same config without the null is the positive control.
+    module-semble-kiro-null-removes-subagent = mkTest "semble-kiro-null-removes-subagent" (
+      let
+        config = withdrawn: {
+          ai = {
+            programs.semble = {
+              enable = true;
+              subagent.enable = true;
+            };
+            kiro =
+              {enable = true;}
+              // lib.optionalAttrs withdrawn {agents.semble-search = null;};
+          };
+        };
+        hasNative = evaluated: evaluated.config.ai.kiro.native.agents ? semble-search;
+      in
+        lib.all (evaluate: !(hasNative (evaluate (config true))) && hasNative (evaluate (config false))) [evalHm evalDevenv]
     );
   };
 }

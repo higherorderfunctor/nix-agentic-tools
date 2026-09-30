@@ -940,7 +940,10 @@ in {
       let
         result = evalHm {
           ai.copilot.enable = true;
-          ai.agents.reviewer = "# Reviewer";
+          ai.agents.reviewer = {
+            description = "Reviewer";
+            instructions.text = "Review the change.";
+          };
         };
       in
         fromGeneratedTree ".copilot/agents/reviewer.md" result.config.home.file.".copilot/agents/reviewer.md"
@@ -951,7 +954,7 @@ in {
       let
         result = evalHm {
           ai.copilot.enable = true;
-          ai.agents.reviewer = ../../claude-code/checks/fixtures/claude-agents/agent-one.md;
+          ai.copilot.agents.reviewer = ../../claude-code/checks/fixtures/claude-agents/agent-one.md;
         };
       in
         fromGeneratedTree ".copilot/agents/reviewer.md" result.config.home.file.".copilot/agents/reviewer.md"
@@ -963,7 +966,10 @@ in {
       let
         result = evalDevenv {
           ai.copilot.enable = true;
-          ai.agents.reviewer = "# Reviewer";
+          ai.agents.reviewer = {
+            description = "Reviewer";
+            instructions.text = "Review the change.";
+          };
         };
       in
         fromGeneratedTree ".github/agents/reviewer.agent.md" (deliveredFiles result.config).".github/agents/reviewer.agent.md"

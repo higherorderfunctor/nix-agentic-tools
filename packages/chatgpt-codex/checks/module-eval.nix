@@ -1537,10 +1537,6 @@ in {
               tools = [];
             };
             reviewer = {
-              codex = {
-                model = "review-model";
-                sandbox_mode = "read-only";
-              };
               description = "Review changes for correctness.";
               instructions.text = "Read first, then report concrete findings.";
               tools = ["Bash" "Read"];
@@ -1551,7 +1547,13 @@ in {
             };
           };
           claude.enable = true;
-          codex.enable = true;
+          codex = {
+            enable = true;
+            native.agents.reviewer = {
+              model = "review-model";
+              sandbox_mode = "read-only";
+            };
+          };
           copilot.enable = true;
         };
         hm = evalHm config;
@@ -1596,12 +1598,12 @@ in {
         ai.codex = {
           enable = true;
           agents.reviewer = {
-            codex = {
-              model = "review-model";
-              sandbox_mode = "read-only";
-            };
             description = "Review changes.";
             instructions.text = "Report concrete findings.";
+          };
+          native.agents.reviewer = {
+            model = "review-model";
+            sandbox_mode = "read-only";
           };
         };
       };
@@ -1638,36 +1640,109 @@ in {
         && agent.developer_instructions == "Use Codex instructions."
     );
 
-    module-codex-legacy-markdown-agent-fails-loudly = mkTest "codex-legacy-markdown-agent-fails-loudly" (
+    # A native-only record (no normalized agent at its key) renders when it
+    # sets the role fields itself, and one missing `developer_instructions`
+    # fails an assertion that names the option, not a TOML render.
+    module-codex-native-only-agent = mkTest "codex-native-only-agent" (
       let
-        result = evalHm {
-          ai.codex.enable = true;
-          ai.agents.legacy = "# Legacy Markdown agent";
-        };
-      in
-        builtins.any (assertion:
-          !assertion.assertion
-          && lib.hasInfix "must use the portable" assertion.message)
-        result.config.assertions
-    );
-
-    module-codex-agent-native-reserved-keys-fail = mkTest "codex-agent-native-reserved-keys-fail" (
-      let
-        result = evalDevenv {
-          ai.codex = {
-            enable = true;
-            agents.reviewer = {
-              description = "Review.";
-              instructions.text = "Review carefully.";
-              codex.name = "different-name";
+        config.ai.codex = {
+          enable = true;
+          native.agents = {
+            broken.description = "Missing its instructions.";
+            solo = {
+              description = "Native only.";
+              developer_instructions = "Work alone.";
+              model = "solo-model";
             };
           };
         };
+        expected = {
+          description = "Native only.";
+          developer_instructions = "Work alone.";
+          model = "solo-model";
+          name = "solo";
+        };
+        valid = evaluated:
+          evaluated.config.ai.codex.files.".codex/agents/solo.toml".content.source.value
+          == expected
+          && lib.any (assertion:
+            !assertion.assertion
+            && lib.hasInfix "ai.codex.native.agents.broken is missing developer_instructions" assertion.message)
+          evaluated.config.assertions
+          && !(lib.any (assertion: !assertion.assertion && lib.hasInfix "native.agents.solo" assertion.message) evaluated.config.assertions);
       in
-        builtins.any (assertion:
-          !assertion.assertion
-          && lib.hasInfix "keep name/description/developer_instructions out" assertion.message)
-        result.config.assertions
+        valid (evalHm config) && valid (evalDevenv config)
+    );
+
+    # A wrong-typed role field fails with its type error. It must not be
+    # reported as missing: that message would hide the real one.
+    module-codex-native-agent-type-error = mkTest "codex-native-agent-type-error" (
+      let
+        config.ai.codex = {
+          enable = true;
+          native.agents.typed = {
+            description = 42;
+            developer_instructions = "Typed.";
+          };
+        };
+        fails = evaluated: !(builtins.tryEval (builtins.deepSeq (map (assertion: assertion.assertion) evaluated.config.assertions) true)).success;
+      in
+        fails (evalHm config) && fails (evalDevenv config)
+    );
+
+    # A raw TOML role file, as text or a path, is delivered verbatim beside
+    # the native layer, and replaces a root record at its key.
+    module-codex-raw-agents = mkTest "codex-raw-agents" (
+      let
+        rawText = ''
+          name = "rawText"
+          description = "Raw text role."
+          developer_instructions = "Use the raw text."
+        '';
+        rawPath = pkgs.writeText "raw-path.toml" ''
+          name = "rawPath"
+          description = "Raw path role."
+          developer_instructions = "Use the raw path."
+        '';
+        config.ai = {
+          agents.rawText = {
+            description = "Root record.";
+            instructions.text = "Replaced by the raw file.";
+          };
+          codex = {
+            enable = true;
+            agents = {inherit rawPath rawText;};
+          };
+        };
+        valid = evaluated: let
+          files = evaluated.config.ai.codex.files;
+        in
+          files.".codex/agents/rawText.toml".content.text
+          == rawText
+          && files.".codex/agents/rawPath.toml".content.source == rawPath
+          && !(evaluated.config.ai.codex.native.agents ? rawText)
+          && !(evaluated.config.ai.codex.native.agents ? rawPath)
+          && builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions == [];
+      in
+        valid (evalHm config) && valid (evalDevenv config)
+    );
+
+    # Codex's `agentsDir` expands `.toml` role files into raw entries and
+    # skips every other file.
+    module-codex-agents-dir = mkTest "codex-agents-dir" (
+      let
+        config.ai.codex = {
+          enable = true;
+          agentsDir = ./fixtures/codex-agents-dir;
+        };
+        valid = evaluated: let
+          files = evaluated.config.ai.codex.files;
+        in
+          files.".codex/agents/reviewer.toml".content.source
+          == ./fixtures/codex-agents-dir/reviewer.toml
+          && !(lib.any (lib.hasInfix "notes") (builtins.attrNames files));
+      in
+        valid (evalHm config) && valid (evalDevenv config)
     );
 
     # Each route into an `[mcp_servers.<name>.oauth]` table refuses a client
@@ -1684,13 +1759,17 @@ in {
         reviewAgent = {
           description = "Review.";
           instructions.text = "Review carefully.";
-          codex.mcp_servers.tracker = remote {inherit oauth;};
         };
+        agentServers.mcp_servers.tracker = remote {inherit oauth;};
         pooled.ai = {
           agents.reviewer = reviewAgent;
           codex = {
             enable = true;
             agents.auditor = reviewAgent;
+            native.agents = {
+              auditor = agentServers;
+              reviewer = agentServers;
+            };
             mcpServers = {
               local = remote {codex.oauth = oauth;};
               replaced = remote {codex.oauth.client_id = "public-client";};
@@ -1734,8 +1813,8 @@ in {
         agentRemedy = "Codex role layers ignore mcp_servers";
         serverRemedy = "set proxy.enable with the";
         pooledPaths = {
-          "ai.agents.reviewer.codex.mcp_servers.tracker" = agentRemedy;
-          "ai.codex.agents.auditor.codex.mcp_servers.tracker" = agentRemedy;
+          "ai.codex.native.agents.auditor.mcp_servers.tracker" = agentRemedy;
+          "ai.codex.native.agents.reviewer.mcp_servers.tracker" = agentRemedy;
           "ai.codex.mcpServers.local.codex" = serverRemedy;
           "ai.mcpServers.shared.codex" = serverRemedy;
         };

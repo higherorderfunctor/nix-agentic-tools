@@ -281,21 +281,9 @@ in
     defaults = {
       package = pkgs.ai.claude-code;
     };
+    agentsDescriptionSuffix = "Each lands at `.claude/agents/<name>.md` under the backend root (`~` for Home Manager, the project for devenv).";
     # The builder declares these pool options; Claude states its delivery.
     poolOptions = {
-      agents.description = ''
-        Claude-specific agent Markdown or portable semantic records. Entries
-        replace top-level `ai.agents` at the same key; null suppresses an
-        inherited agent. Each lands at `.claude/agents/<name>.md` under the
-        backend root (`~` for Home Manager, the project for devenv).
-      '';
-      agentsDir.description = ''
-        Claude-specific directory of `.md` agent files. Each file
-        becomes one entry in `ai.claude.agents` keyed by basename
-        minus `.md`. Accepts a path literal or
-        `{ path, filter? }` (filter: name → bool, default keeps
-        `.md`).
-      '';
       lspServers.description = ''
         Typed Claude-specific LSP server declarations. Entries replace
         top-level `ai.lspServers` at the same key; null suppresses an

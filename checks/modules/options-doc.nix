@@ -49,6 +49,7 @@
       lib.concatStringsSep "\n" [
         "ai.codex.activation"
         "ai.codex.agents"
+        "ai.codex.agentsDir"
         "ai.codex.configDir"
         "ai.codex.context"
         "ai.codex.enable"
@@ -75,7 +76,6 @@
     );
     sharedDescriptionsThatMustDiscussCodex = [
       "ai.agents"
-      "ai.agentsDir"
       "ai.context"
       "ai.environmentVariables"
       "ai.hooks"
@@ -92,7 +92,6 @@
     ];
     sharedDescriptionsThatMustDiscussKimchi = [
       "ai.agents"
-      "ai.agentsDir"
       "ai.context"
       "ai.hooks"
       "ai.mcpServers"

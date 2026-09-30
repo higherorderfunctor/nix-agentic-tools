@@ -394,10 +394,10 @@ forced through Markdown. Their current disposition is:
   (progressive disclosure, agent-initiated) and converge across ecosystems
   (`~/.claude/skills/`, `~/.agents/skills/`, `~/.kiro/skills/`,
   `~/.copilot/skills/`). `ai.<cli>.skills` remains separate from instructions.
-- **Custom agents — partially unified.** Portable semantic records fan out to
-  Claude, Codex, and Copilot; Codex renders standalone TOML. Legacy Markdown
-  remains Claude/Copilot-only, and Kiro's incompatible JSON agent model remains
-  native-only.
+- **Custom agents — partially unified.** Normalized records fan out to Claude,
+  Codex, Copilot, Kimchi and Kiro; Codex renders standalone TOML and Kiro JSON.
+  Raw native files come through each runtime's own `ai.<runtime>.agents` or
+  `ai.<runtime>.agentsDir`.
 - **Project-scope guidance — shipped through devenv.** The same option names
   route to project-native paths such as root `AGENTS.md`, `.kiro/steering/`, and
   `.github/instructions/` rather than Home Manager's user-global paths.

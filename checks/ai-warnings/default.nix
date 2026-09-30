@@ -31,7 +31,7 @@
   sample = {
     agents.probe = {
       description = "probe";
-      instructions = "probe";
+      instructions.text = "probe";
     };
     context.text = "probe";
     environmentVariables.PROBE = "value";
@@ -98,7 +98,7 @@
   # `acp` arm and Darwin's bundle-discovery launcher — is asserted by
   # ai-warnings-darwin-trust below.
   #
-  # Root pools nothing per-runtime can withdraw (`ai.agents`/`ai.hooks` on
+  # Root pools nothing per-runtime can withdraw (`ai.hooks` on
   # Kiro, `ai.shell` on Kimchi and Copilot, `ai.context` on Copilot's and
   # `ai.hooks` on Kimchi's Home Manager rows) are not cases either: they are
   # silent by design, and rowCase above asserts that silence.
@@ -116,12 +116,16 @@
         value.probe.text = "probe";
         mode = "hm";
       }
-      {
-        runtime = "codex";
-        path = ["ai" "agents" "probe"];
-        value = sample.agents.probe // {tools = ["Read"];};
-        suffix = ".tools";
-      }
+    ]
+    # A normalized `tools` list is Claude/Copilot tool names; runtimes with
+    # another vocabulary drop it and say so at the path that set it.
+    ++ map (runtime: {
+      inherit runtime;
+      path = ["ai" "agents" "probe"];
+      value = sample.agents.probe // {tools = ["Read"];};
+      suffix = ".tools";
+    }) ["codex" "kimchi" "kiro"]
+    ++ [
       {
         runtime = "claude";
         path = ["ai" "claude" "mcpServers" "probe"];
@@ -378,6 +382,14 @@
       };
     }
   ];
+  # config/ai-delivery-facts.nix is pure `{lib}` data, so it lists the
+  # runtimes with a native agent layer by name. The record is the source of
+  # truth: `native.agents` must be an agents row's input exactly when the
+  # runtime's record has `agentNativeType`.
+  nativeAgentsListed = lib.all (row:
+    builtins.elem ["ai" row.ecosystem "native" "agents"] (row.inputOptions or [])
+    == (records.${row.ecosystem} ? agentNativeType))
+  (lib.filter (row: row.surface == "agents") policy.rows);
   mcp = import ../../lib/mcp.nix {inherit lib;};
   # `isDarwin` is forced in BOTH directions rather than left to the host: this
   # check runs on x86_64-linux and aarch64-darwin, so reading the real platform
@@ -458,6 +470,7 @@ in {
       && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
       && lib.assertMsg effortSilent "reasoning effort warns where the factory closes the gap or no per-runtime remedy exists"
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
+      && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
       let

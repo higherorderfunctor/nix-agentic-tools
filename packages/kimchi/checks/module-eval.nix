@@ -1323,14 +1323,14 @@ in {
         && deliveredAsSource (evalDevenv stringConfig) devenvAgentsDir
     );
 
-    # What has no Kimchi reading fails evaluation instead of landing: a
-    # record's Claude/Copilot `tools` list, and root Markdown written for
-    # Claude/Copilot. A null or a Kimchi-native value under ai.kimchi.agents is
-    # the remedy each message names, and it clears the failure.
-    module-kimchi-agents-rejected = mkTest "kimchi-agents-rejected" (
+    # A normalized record's Claude/Copilot `tools` list has no Kimchi reading.
+    # It is dropped from the rendered file and warns at the path that set it,
+    # naming native Markdown as the remedy; withdrawing the agent, or an empty
+    # list, stays silent.
+    module-kimchi-agent-tools-warns = mkTest "kimchi-agent-tools-warns" (
       let
-        failures = evaluate: agents: kimchiAgents:
-          failedAssertions (evaluate {
+        evaluate = evaluator: agents: kimchiAgents:
+          evaluator {
             ai = {
               inherit agents;
               kimchi = {
@@ -1338,42 +1338,38 @@ in {
                 agents = kimchiAgents;
               };
             };
-          });
+          };
         withTools = {
           description = "d";
           instructions.text = "BODY";
           tools = ["Read"];
         };
-        claudeMarkdown = "---\nname: probe\nmodel: sonnet\n---\n\nBODY\n";
-        dirFailures = evaluate: kimchiAgents:
-          failedAssertions (evaluate {
-            ai = {
-              agentsDir = ../../claude-code/checks/fixtures/claude-agents;
-              kimchi = {
-                enable = true;
-                agents = kimchiAgents;
-              };
-            };
-          });
-        says = needle: lib.any (lib.hasInfix needle);
+        warnsAt = path: evaluated:
+          lib.any (message: lib.hasPrefix "${path} is set but" message && lib.hasInfix "native Kimchi Markdown" message) evaluated.config.warnings;
+        quiet = evaluated: !(lib.any (lib.hasInfix ".tools is set but") evaluated.config.warnings);
       in
-        lib.all (evaluate:
-          says "carry a `tools` allowlist" (failures evaluate {probe = withTools;} {})
-          && says "carry a `tools` allowlist" (failures evaluate {} {probe = withTools;})
-          && says "Markdown written for Claude/Copilot" (failures evaluate {probe = claudeMarkdown;} {})
-          && failures evaluate {probe = claudeMarkdown;} {probe = null;} == []
-          && failures evaluate {probe = claudeMarkdown;} {probe = nativeAgent;} == []
-          && failures evaluate {probe = withTools // {tools = [];};} {} == []
-          # Root agentsDir feeds ai.agents, so a Claude agents directory is
-          # rejected too — not skipped silently, as the option once said — and
-          # withdrawing each name is the per-runtime remedy.
-          && says "Markdown written for Claude/Copilot" (dirFailures evaluate {})
-          && dirFailures evaluate {
-            agent-one = null;
-            agent-two = null;
+        lib.all ({
+          evaluator,
+          dir,
+        }: let
+          rootTools = evaluate evaluator {probe = withTools;} {};
+        in
+          warnsAt "ai.agents.probe.tools" rootTools
+          && failedAssertions rootTools == []
+          && !(lib.hasInfix "tools:" (markdownInput rootTools "${dir}/probe.md").text)
+          && warnsAt "ai.kimchi.agents.probe.tools" (evaluate evaluator {} {probe = withTools;})
+          && quiet (evaluate evaluator {probe = withTools;} {probe = null;})
+          && quiet (evaluate evaluator {probe = withTools // {tools = [];};} {}))
+        [
+          {
+            evaluator = evalHm;
+            dir = hmAgentsDir;
           }
-          == [])
-        [evalHm evalDevenv]
+          {
+            evaluator = evalDevenv;
+            dir = devenvAgentsDir;
+          }
+        ]
     );
 
     # The delivery itself, executed: the real HM prune and write entries and

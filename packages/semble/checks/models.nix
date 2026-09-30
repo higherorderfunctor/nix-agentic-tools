@@ -484,7 +484,7 @@ in {
         };
         rule = evaluated.config.ai.claude.rules.semble.text;
         agent = evaluated.config.ai.claude.agents.semble-search;
-        kiroAgent = evaluated.config.ai.kiro.agents.semble-search;
+        kiroAgent = evaluated.config.ai.kiro.native.agents.semble-search;
         mcpAgent =
           (evalHm {
             ai.programs.semble = {
