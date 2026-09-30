@@ -1,7 +1,8 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-29 — repository-level branchless initialization
-> precedes prek hook installation; worktrees still need no bootstrap.
+> **Last verified:** 2026-09-30 — prek hooks take their config from the
+> session's launch checkout; worktrees are materialized only by choice;
+> repository-level branchless initialization precedes prek hook installation.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -18,17 +19,22 @@
 >   materialize `.pre-commit-config.yaml` either — measured 2026-07-31 in two
 >   fresh worktrees, where the task succeeded and the next commit was still
 >   rejected.
-> - **Do not move prek config resolution back to the committing worktree.**
->   Evaluated and declined 2026-09-29: CI already runs each branch's own config,
->   while materializing a fresh worktree's `files.*` costs about 17 seconds cold
->   (`devenv tasks run --mode single devenv:files`), so there is no
->   post-checkout materializer. The premise: every local validator has a CI
->   backend, enforced by `config/repo-validation.nix`, so a branch that ADDS a
->   gate cannot escape it. That premise carries the weight — a branch that
->   DELETES a gate fails loudly under the primary checkout's config, but one
->   that adds a gate is skipped silently locally, and only the CI backend
->   catches it. A repository without that enforced property should not copy this
->   decision.
+> - **Hooks and tool config come from the LAUNCH checkout; a worktree is
+>   materialized only by choice.** Operator, 2026-09-30: "cwd llm launch from
+>   wins which will always be from a materialized shell" — usually the primary
+>   clone, sometimes a long-lived worktree used as a base — and "the llm should
+>   also just materialize if it needs (to test devenv stuff) and prek is a
+>   subset of that. dont materialize direnv/devenv as default though in wts".
+>   Rejected: worktree-only config (every fresh worktree blocked until a 17 s
+>   cold materialize, `devenv tasks run --mode single devenv:files`); a
+>   post-checkout or async materializer (cost for no day-to-day benefit); "the
+>   worktree's config wins when present" (a stale snapshot silently gates
+>   commits after a rebase). The premise that carries the weight: every local
+>   validator has a CI backend, enforced by `config/repo-validation.nix`, so a
+>   branch that ADDS a gate is skipped locally but cannot escape CI; a
+>   repository without that property should not copy this decision. This kept
+>   drifting because summaries kept the first half and dropped the second; write
+>   both.
 > - **Do not restore `devenv-test` as a required context.** It was promoted
 >   2026-08-03 and demoted two days later as a merge-blocking liability, risk
 >   accepted; it left automatic PR/push execution entirely on 2026-08-29.
@@ -247,7 +253,7 @@ silently resolves one level too deep, into
    `feat`, `fix`, `perf`, `refactor`, `style`, `test`).
 
 2. **There is no worktree bootstrap step.** `git worktree add` and commit — the
-   shared prek hooks resolve their config from the primary checkout, and
+   shared prek hooks resolve their config from the launch checkout, and
    `PREK_HOME` from the committing worktree, so a worktree that has never
    entered `devenv shell` validates exactly like one that has.
 
@@ -264,19 +270,23 @@ silently resolves one level too deep, into
    anything else that wants a `files.*` artifact in a worktree; it just no
    longer gates commits.
 
-   The primary checkout is the one that is entered — sessions launch there and
-   the agent process runs with cwd in a linked worktree — so its config always
-   exists and always tracks regeneration. **Only the primary checkout needs
-   `devenv shell true`, and only after a fresh clone or a `devenv.nix` change.**
-   If a commit is ever rejected for a missing config, the hook names that path
-   and that fix; do not silence it with `PREK_ALLOW_NO_CONFIG=1`,
-   `--allow-missing-config`, or `prek uninstall` — all three skip every check
-   rather than fixing the bootstrap.
+   The launch checkout is the one that is entered — sessions launch in its
+   devenv shell and the agent process runs with cwd in a linked worktree — so
+   its config always exists and always tracks regeneration. It is usually the
+   primary clone, sometimes a long-lived worktree used as a base for prototype
+   work. **Only the launch checkout needs `devenv shell true`, and only after a
+   fresh clone or a `devenv.nix` change.** If a commit is ever rejected for a
+   missing config, the hook names that path and that fix; do not silence it with
+   `PREK_ALLOW_NO_CONFIG=1`, `--allow-missing-config`, or `prek uninstall` — all
+   three skip every check rather than fixing the bootstrap.
 
-   Enter `devenv shell` in a **worktree** only when you specifically need its
-   generated artifacts there (regenerating instruction projections, say). It is
-   no longer a prerequisite for anything, and under the sandbox-stack topology
-   it is not the intended shape.
+   Materialize a **worktree** only when you need to test devenv output there —
+   regenerating instruction projections, or checking your own hook changes. It
+   is your call, never a default. For hook changes, materialize the worktree and
+   run `prek run` in it: stock prek finds the worktree's own config from cwd,
+   while commits keep using the launch checkout's. CI builds `checks.repo-lints`
+   from the branch's own config, so a gate the branch adds is enforced there
+   even though local commits do not run it yet.
 
 3. **Push at the first commit** — not at the end — so the branch is a continuous
    off-machine backup. Open the PR **ready (non-draft) as soon as the work is
@@ -379,13 +389,15 @@ The prek **config and runtime state** resolve from different places, and the
 split is deliberate. The `hooks:isolate-config` devenv task rewrites the
 installed hooks so that at hook-run time they resolve:
 
-- **`.pre-commit-config.yaml` from the PRIMARY CHECKOUT**, via
-  `$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")` — the
-  same derivation the worktree recipe above uses. The primary checkout is the
-  one that is entered, so its config always exists and always tracks
-  regeneration, and the answer no longer depends on which checkout entered a
-  shell last. That is what stops a shell entry in one worktree from changing
-  what another validates against.
+- **`.pre-commit-config.yaml` from the LAUNCH CHECKOUT** — the committing
+  process's `$DEVENV_ROOT` when it belongs to this repository, else the primary
+  checkout via
+  `$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")` (an
+  editor or plain-terminal commit has no devenv shell). The same-repository test
+  runs with `GIT_DIR` scrubbed: git exports it to hooks, and left in place it
+  makes any `DEVENV_ROOT` look like this repository. Resolution happens per
+  commit from the committing process's environment, so a shell entry in one
+  worktree never changes what another validates against.
 - **`PREK_HOME` beneath the COMMITTING worktree's `.devenv/state`.** A devenv
   shell's `PREK_HOME` is not inherited by commits launched from an editor or
   agent, so deriving it beats falling back to the user-global XDG cache; and

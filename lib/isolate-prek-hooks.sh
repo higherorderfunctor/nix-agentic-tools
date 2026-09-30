@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Rewrite shared prek hooks so config follows the primary checkout while state
-# follows the committing worktree. Non-prek hooks are left byte-for-byte alone.
+# Rewrite shared prek hooks so config follows the checkout the session was
+# launched from while state follows the committing worktree. Non-prek hooks are
+# left byte-for-byte alone.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
@@ -17,24 +18,17 @@ guard_end="# --- end devenv worktree bootstrap guard ---"
 IFS= read -r -d "" guard_body <<'GUARD' || :
 PREK_HOME="$(git rev-parse --show-toplevel)/.devenv/state/prek"
 export PREK_HOME
-_devenv_primary="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-_devenv_config="$_devenv_primary/.pre-commit-config.yaml"
+_devenv_common="$(git rev-parse --path-format=absolute --git-common-dir)"
+_devenv_base="$(dirname "$_devenv_common")"
+# Git exports GIT_DIR to hooks, so do not let it override -C.
+if [ -n "${DEVENV_ROOT:-}" ] &&
+  [ "$(env -u GIT_DIR git -C "$DEVENV_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$_devenv_common" ]; then
+    _devenv_base="$DEVENV_ROOT"
+fi
+_devenv_config="$_devenv_base/.pre-commit-config.yaml"
 if [ ! -f "$_devenv_config" ]; then
-    echo 'prek: the primary checkout has not been bootstrapped.' >&2
-    echo "  missing: $_devenv_config" >&2
-    echo >&2
-    echo '  .pre-commit-config.yaml is a devenv files.* artifact: it is' >&2
-    echo '  materialized on devenv shell entry, and neither "git clone"' >&2
-    echo '  nor "git worktree add" runs devenv.' >&2
-    echo >&2
-    echo "  Fix: run \"devenv shell true\" in $_devenv_primary once," >&2
-    echo '  then commit again. Linked worktrees need no bootstrap of' >&2
-    echo '  their own: they read the primary checkout config.' >&2
-    echo >&2
-    echo '  Do NOT silence this with PREK_ALLOW_NO_CONFIG=1,' >&2
-    echo '  --allow-missing-config, or "prek uninstall". prek suggests' >&2
-    echo '  them, but they skip every pre-commit check instead of fixing' >&2
-    echo '  the bootstrap.' >&2
+    echo "prek: missing: $_devenv_config" >&2
+    echo "  Run \"devenv shell true\" in $_devenv_base, then commit again." >&2
     exit 1
 fi
 GUARD
