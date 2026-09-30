@@ -41,15 +41,15 @@
 # treefmt would also rewrite the exact cell counts each one encodes.
 {pkgs, ...}: {
   checks.markdown-table-cells-fixtures = let
-    # The SAME packages the hook runs, not `pkgs.rumdl` / `pkgs.markdownlint-cli2`
-    # from the nixpkgs pin. A fixture suite that validated different binaries from
-    # the ones the gate uses would be measuring nothing.
-    inherit (pkgs.ai.devTools) markdownlint-cli2 rumdl;
-
-    # The hook's own config, so the suite measures markdownlint under exactly
-    # the rule set the gate enables, and the hook's own script.
+    # The SAME two programs the hook's `markdown-table-cells` runs, one per
+    # half, from lib/markdown/table-cells.nix: our overlay's rumdl and
+    # markdownlint-cli2 under exactly the flags and rule set the gate uses,
+    # not `pkgs.rumdl` / `pkgs.markdownlint-cli2` from the nixpkgs pin. A
+    # fixture suite that validated different binaries or flags from the ones
+    # the gate uses would be measuring nothing. The last case below runs the
+    # combined script itself.
     tableCells = import ../../lib/markdown/table-cells.nix {inherit pkgs;};
-    inherit (tableCells) markdownlintConfig;
+    inherit (tableCells) markdownlintTables rumdlTables;
 
     fixtures = ./fixtures/markdown-table-cells;
   in
@@ -81,21 +81,18 @@
         local tool="$1" file="$2"
         case "$tool" in
           rumdl)
-            if ${rumdl}/bin/rumdl check --enable MD056 --no-config "$file" >/dev/null 2>&1
+            if ${pkgs.lib.getExe rumdlTables} "$file" >/dev/null 2>&1
             then return 1; else return 0; fi ;;
           markdownlint)
-            if ${markdownlint-cli2}/bin/markdownlint-cli2 --config ${markdownlintConfig} "$file" >/dev/null 2>&1
+            if ${pkgs.lib.getExe markdownlintTables} "$file" >/dev/null 2>&1
             then return 1; else return 0; fi ;;
           *) fail "unknown tool '$tool'" ;;
         esac
       }
 
-      # markdownlint-cli2 resolves its arguments as globs and silently scans
-      # NOTHING when a literal path does not match one — measured, and it reports
-      # "0 issues in 0 files" while exiting 0, which reads exactly like a pass.
-      # Copying each fixture to a plain `.md` under $TMPDIR sidesteps that and
-      # also gives both tools the extension they expect. It is a copy, so the
-      # tracked fixture keeps its `.md.fixture` name.
+      # Copying each fixture to a plain `.md` under $TMPDIR gives both tools
+      # the extension they expect. It is a copy, so the tracked fixture keeps
+      # its `.md.fixture` name.
       check() {
         local name="$1" wantRumdl="$2" wantMdl="$3"
         # --no-preserve=mode: store files are read-only, and without this the
@@ -129,7 +126,7 @@
       ${pkgs.lib.getExe tableCells.package} "$TMPDIR/case.md" >/dev/null 2>"$TMPDIR/err" || rc=$?
       if [ "$rc" -ne 1 ] || ! ${pkgs.gnugrep}/bin/grep -q -F 'fixed:   | id |' "$TMPDIR/err"; then
         echo "FAIL: markdown-table-cells exited $rc on a broken table (expected 1) or did not print its worked example:" >&2
-        cat "$TMPDIR/err" >&2
+        ${pkgs.coreutils}/bin/cat "$TMPDIR/err" >&2
         exit 1
       fi
       echo "ok — markdown-table-cells exits 1 and prints the worked example"

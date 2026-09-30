@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # cspell:ignore keepends
-"""Protect generated frontmatter bytes and compare structured data."""
+"""Protect generated frontmatter bytes and compare structured data.
+
+`compare` is the parseCompare guard; lib/markdown/guards.nix wraps it for both
+generated trees and consumer files.
+"""
 
 import json
 import pathlib
@@ -22,14 +26,14 @@ def frontmatter_parts(data):
     start = len(bom) if data.startswith(bom) else 0
     opening = re.match(rb"---(?:\r?\n)", data[start:])
     if opening is None:
-        raise ValueError("marked Markdown is missing its opening frontmatter fence")
+        raise ValueError("Markdown is missing its opening frontmatter fence")
     content_start = start + opening.end()
     offset = content_start
     for line in data[content_start:].splitlines(keepends=True):
         offset += len(line)
         if re.fullmatch(rb"---\r?\n", line):
             return data[:offset], data[content_start : offset - len(line)], data[offset:]
-    raise ValueError("marked Markdown is missing its closing frontmatter fence")
+    raise ValueError("Markdown is missing its closing frontmatter fence")
 
 
 def partition(action, path, header):
@@ -53,47 +57,66 @@ def partition(action, path, header):
     return 0
 
 
+USAGE = "usage: ai-guard-parse-compare TYPE BEFORE AFTER  (TYPE: json, markdown, toml or yaml)"
+
+
 def parse(kind, text):
     if kind == "json":
         return json.loads(text)
     if kind == "toml":
         return tomllib.loads(text)
-    if kind == "yaml":
-        return list(yaml.safe_load_all(text))
-    raise ValueError(f"unsupported generated type: {kind}")
+    return list(yaml.safe_load_all(text))
 
 
-def main(kind, frontmatter, before, after):
+def read(kind, data):
+    """The data a file carries: Markdown frontmatter bytes, else parsed values."""
+    if kind == "markdown":
+        prefix, yaml_bytes, _ = frontmatter_parts(data)
+        # Byte identity covers syntax and presentation; parsing keeps invalid
+        # YAML from passing as unchanged.
+        yaml.safe_load(yaml_bytes.decode("utf-8"))
+        return prefix
+    return parse(kind, data.decode("utf-8"))
+
+
+def compare(kind, before, after):
+    """parseCompare: exit 0 when AFTER carries BEFORE's data, 1 when it does not.
+
+    Exit 2 means nothing was compared: an unknown TYPE, an unreadable file, or
+    a BEFORE that does not parse as TYPE on its own.
+    """
+    if kind not in ("json", "markdown", "toml", "yaml"):
+        print(USAGE, file=sys.stderr)
+        return 2
     try:
-        marked = frontmatter == "true"
-        if kind == "markdown" and marked:
-            # `before` is the generator's immutable source file, so a split or
-            # reattach defect fails here too,
-            # except a defect in `frontmatter_parts`, which split and verify share.
-            original_bytes, yaml_bytes, _ = frontmatter_parts(pathlib.Path(before).read_bytes())
-            formatted_bytes, _, _ = frontmatter_parts(pathlib.Path(after).read_bytes())
-            if original_bytes != formatted_bytes:
-                print(f"{after}: installed Markdown frontmatter bytes differ from the generator bytes", file=sys.stderr)
-                print("The formatter or the split/reattach step changed them.", file=sys.stderr)
-                return 1
-            # Byte identity covers syntax and presentation; parse the original
-            # once to keep invalid generated YAML from reaching consumers.
-            yaml.safe_load(yaml_bytes.decode("utf-8"))
-            return 0
-        if kind == "markdown":
-            return 0
-        original = parse(kind, pathlib.Path(before).read_text(encoding="utf-8"))
-        formatted = parse(kind, pathlib.Path(after).read_text(encoding="utf-8"))
-    except (OSError, ValueError, yaml.YAMLError) as error:
-        print(f"{after}: generated {kind} cannot be parsed: {error}", file=sys.stderr)
+        # Read each path once: it may be a pipe from a process substitution.
+        before_data = pathlib.Path(before).read_bytes()
+        after_data = pathlib.Path(after).read_bytes()
+    except OSError as error:
+        print(f"{kind} cannot be compared: {error}", file=sys.stderr)
+        return 2
+    try:
+        original = read(kind, before_data)
+    except (ValueError, yaml.YAMLError) as error:
+        print(f"{before}: {kind} cannot be parsed: {error}", file=sys.stderr)
+        print("Nothing was compared: BEFORE must parse on its own.", file=sys.stderr)
+        return 2
+    try:
+        formatted = read(kind, after_data)
+    except (ValueError, yaml.YAMLError) as error:
+        print(f"{after}: {kind} cannot be parsed: {error}", file=sys.stderr)
         return 1
     if original != formatted:
-        print(f"{after}: formatter changed parsed {kind} content", file=sys.stderr)
+        what = "Markdown frontmatter bytes" if kind == "markdown" else f"parsed {kind} values"
+        print(f"{after}: {what} differ from {before}", file=sys.stderr)
         return 1
     return 0
 
 
 if __name__ == "__main__":
-    if sys.argv[1] in ("split", "attach"):
+    if sys.argv[1:2] in (["split"], ["attach"]) and len(sys.argv) == 4:
         sys.exit(partition(*sys.argv[1:]))
-    sys.exit(main(*sys.argv[1:]))
+    if sys.argv[1:2] == ["compare"] and len(sys.argv) == 5:
+        sys.exit(compare(*sys.argv[2:]))
+    print(USAGE, file=sys.stderr)
+    sys.exit(2)

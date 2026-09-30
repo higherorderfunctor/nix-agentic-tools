@@ -1,0 +1,7 @@
+# Clean file
+
+| Command           | Effect          |
+| ----------------- | --------------- |
+| `make \|\| true`  | ignores failure |
+
+Set `services.example.settings` to change the defaults.

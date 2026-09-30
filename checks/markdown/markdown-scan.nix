@@ -58,7 +58,7 @@
 # Each scanner's `main()` refuses an empty argument list as well, and that
 # duplication is deliberate: this guard protects THIS CALLER, and the
 # invariant has to survive a second one being added (a prek mirror is the
-# obvious candidate). See `no_files` in ./split-code-spans.py.
+# obvious candidate). See `no_files` in lib/markdown/split-code-spans.py.
 #
 # THE SCANNERS SHARE ONE STORE DIRECTORY, built by ./markdown-scanners.nix
 # so that ./doubled-words-fixtures.nix can reuse it rather than assemble a

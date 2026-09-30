@@ -2,7 +2,7 @@
 # straddles a newline.
 #
 # Rationale, the scanner's CommonMark rule, and why a naive regex is wrong
-# all live in the module docstring of ./split-code-spans.py. Read that file
+# all live in the module docstring of lib/markdown/split-code-spans.py. Read that file
 # before changing either half.
 #
 # Division of labour with treefmt:
@@ -22,10 +22,12 @@
 # checks/markdown/doubled-words.nix started sharing them; the rationale for each is
 # preserved there verbatim. The scanner keeps its OWN empty-set guard
 # (`no_files`) so the invariant survives a second caller — see that
-# function. ./split-code-spans.py is also copied into the shared scanner
+# function. lib/markdown/split-code-spans.py is also copied into the shared scanner
 # directory as `split_code_spans.py`, so doubled_words.py can import its
 # CommonMark backtick rule and its list-aware code-block stripper rather
-# than keep a second copy of either.
+# than keep a second copy of either. The same file is the splitCodeSpans
+# guard program in lib/markdown/guards.nix, for generated trees and for
+# consumers' own files.
 {pkgs, ...}: {
   checks.split-code-spans = (import ./markdown-scan.nix {inherit pkgs;}) {
     name = "split-code-spans-check";
