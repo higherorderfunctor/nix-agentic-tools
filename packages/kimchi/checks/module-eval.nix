@@ -253,6 +253,112 @@ in {
         && fromGeneratedTree "AGENTS.md" (deliveredFiles devenv.config)."AGENTS.md"
         && (markdownInput devenv "AGENTS.md").text == expected
     );
+
+    module-kimchi-rules-agentsmd = mkTest "kimchi-rules-agentsmd" (
+      let
+        config.ai = {
+          kimchi.enable = true;
+          rules = {
+            always.text = "ALWAYS-RULE.";
+            scoped = {
+              matcher = ["src/**"];
+              references = ["docs/scoped.md"];
+              text = "SCOPED-RULE-BODY.";
+            };
+          };
+        };
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        hmAgents = (markdownInput hm ".config/kimchi/harness/AGENTS.md").text;
+        projectAgents = (markdownInput devenv "AGENTS.md").text;
+      in
+        hmAgents
+        == projectAgents
+        && lib.hasInfix "## Path-scoped rules" projectAgents
+        && lib.hasInfix "Match:\n    - `src/**`" projectAgents
+        && lib.hasInfix "[`docs/scoped.md`](docs/scoped.md)" projectAgents
+        && lib.hasInfix "<!-- rule: always -->\n\nALWAYS-RULE." projectAgents
+        && !(lib.hasInfix "SCOPED-RULE-BODY." projectAgents)
+        && devenv.config.ai.internal.agentsMd."AGENTS.md".index ? scoped
+        && !(devenv.config.ai.internal.agentsMd."AGENTS.md".rules ? scoped)
+    );
+
+    module-kimchi-rules-dedupe-with-codex = mkTest "kimchi-rules-dedupe-with-codex" (
+      let
+        evaluated = evalDevenv {
+          ai = {
+            codex.enable = true;
+            kimchi.enable = true;
+            rules.shared.text = "SHARED-RULE.";
+          };
+        };
+      in
+        (markdownInput evaluated "AGENTS.md").text
+        == "<!-- rule: shared -->\n\nSHARED-RULE."
+    );
+
+    module-kimchi-rules-on-demand-index = mkTest "kimchi-rules-on-demand-index" (
+      let
+        evaluated = evalDevenv {
+          ai = {
+            kimchi.enable = true;
+            rules.semantic = {
+              description = "Load for semantic work";
+              inclusion = ["auto"];
+              references = ["docs/semantic.md"];
+              text = "SEMANTIC-RULE-BODY.";
+            };
+          };
+        };
+        agents = (markdownInput evaluated "AGENTS.md").text;
+      in
+        lib.hasInfix "## Rule index" agents
+        && lib.hasInfix "Trigger: `auto`" agents
+        && lib.hasInfix "Description: Load for semantic work" agents
+        && lib.hasInfix "[`docs/semantic.md`](docs/semantic.md)" agents
+        && !(lib.hasInfix "SEMANTIC-RULE-BODY." agents)
+        && evaluated.config.ai.internal.agentsMd."AGENTS.md".hasOnDemandIndex
+    );
+
+    # tryEval cannot expose a throw message. Evaluate the resolver in a
+    # subprocess so the diagnostic itself stays part of the contract.
+    module-kimchi-rules-on-demand-needs-references = let
+      probe = pkgs.writeText "kimchi-rule-inclusion.nix" ''
+        { withReferences ? false }:
+        let
+          lib = import ${pkgs.path}/lib;
+          aiCommon = import ${../../../lib/ai/ai-common.nix} { inherit lib; };
+        in
+          aiCommon.resolveInclusion {
+            name = "semantic";
+            rule = {
+              description = "Load for semantic work";
+              inclusion = ["auto"];
+              matcher = null;
+              references = if withReferences then ["docs/semantic.md"] else [];
+            };
+            runtime = "kimchi";
+          }
+      '';
+    in
+      pkgs.runCommandLocal "module-test-kimchi-rules-on-demand-needs-references" {
+        nativeBuildInputs = [pkgs.nix];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        export NIX_STATE_DIR="$TMPDIR/nix-state"
+        export USER="''${USER:-nixbld}"
+        mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
+        test "$(nix-instantiate --eval --strict ${probe} --arg withReferences true)" = '"auto"'
+        if nix-instantiate --eval --strict ${probe} --arg withReferences false >actual.stdout 2>actual.stderr; then
+          echo "FAIL: Kimchi auto rule without references unexpectedly succeeded" >&2
+          exit 1
+        fi
+        grep -F "runtime 'kimchi'" actual.stderr
+        grep -F 'requested inclusion priority list ["auto"] has no supported trigger' actual.stderr
+        touch "$out"
+      '';
+
     # ── Kimchi (mkRuntime factory participant) ──────────────────────────
     module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);
 

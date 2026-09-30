@@ -20,6 +20,49 @@ in rec {
 
   render = fragments.mkRenderer agentsmdTransformer {};
 
+  renderScope = inclusion: matcher:
+    lib.optionalString (inclusion == "fileMatch") (
+      "_Apply this guidance only when working with files matching: "
+      + lib.concatMapStringsSep ", " (path: "`${path}`") matcher
+      + "_\n\n"
+    );
+
+  mkRuleBody = readContent: _name: rule:
+    renderScope rule.inclusion rule.matcher
+    + render {
+      text = readContent rule;
+    };
+
+  # AGENTS.md has no native trigger metadata. fileMatch rules with references
+  # use the compact path index; auto/manual rules require references and use
+  # the same index as their on-demand pointer. Everything else is inlined.
+  isIndexedRule = rule:
+    builtins.elem rule.inclusion ["auto" "manual"]
+    || (rule.inclusion == "fileMatch" && rule.references != []);
+
+  agentsMdUnits = {
+    readContent,
+    resolveInclusion,
+    rules,
+    runtime,
+  }: let
+    routedRules = lib.mapAttrs (name: rule:
+      rule
+      // {
+        inclusion = resolveInclusion {
+          inherit name rule runtime;
+        };
+      })
+    rules;
+    indexedRules = lib.filterAttrs (_name: isIndexedRule) routedRules;
+  in {
+    hasOnDemandIndex = lib.any (
+      rule: builtins.elem rule.inclusion ["auto" "manual"]
+    ) (lib.attrValues indexedRules);
+    index = lib.mapAttrs renderIndexEntry indexedRules;
+    rules = lib.mapAttrs (mkRuleBody readContent) (lib.filterAttrs (_name: rule: !(isIndexedRule rule)) routedRules);
+  };
+
   # One entry of the path-scoped index: the rule's key, the globs that select
   # it and links to the documents that hold its text, ONE per line. A glob or
   # a link is an unbreakable token, so no Markdown formatter re-wraps a line

@@ -850,6 +850,31 @@
       ];
     }
     {
+      ecosystem = "kimchi";
+      mode = "devenv";
+      primitive = "ownPathManaged";
+      pruneTrigger = "On shell entry, lib/ai/own.py removes every file the prior generation's ledger recorded and this one no longer declares, then rewrites the ledger; a file in the same directory that it never wrote is left alone. The arms are `DirContainer.remove` against that program's REMOVE_ARMS table, transcribed from the shell it replaced.";
+      surface = "rules";
+      target = "$DEVENV_ROOT/AGENTS.md";
+      writerAttr = [
+        "tasks"
+        "ai:agents-md:materialize"
+      ];
+    }
+    {
+      ecosystem = "kimchi";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "rules";
+      target = "$HOME/.config/kimchi/harness/AGENTS.md";
+      writerAttr = [
+        "home"
+        "file"
+        ".config/kimchi/harness/AGENTS.md"
+      ];
+    }
+    {
       additionalWriters = [
         {
           primitive = "ownPathManaged";

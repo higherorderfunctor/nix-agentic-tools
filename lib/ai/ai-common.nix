@@ -58,6 +58,10 @@
       kinds = ["always" "fileMatch"];
       onDemandWithReferences = false;
     };
+    kimchi = {
+      kinds = ["always" "fileMatch"];
+      onDemandWithReferences = true;
+    };
     kiro = {
       kinds = inclusionKinds;
       onDemandWithReferences = false;
@@ -70,9 +74,10 @@
     description = ''
       Priority-ordered rule triggers. Each runtime uses the first trigger it
       supports: Claude and Copilot support `always` and `fileMatch`; Kiro
-      supports all four triggers; Codex supports `always` and `fileMatch`, plus
-      `auto` and `manual` when `references` is non-empty. `fileMatch` consumes
-      `matcher`, and `auto` requires a non-empty `description` when selected.
+      supports all four triggers; Codex and Kimchi support `always` and
+      `fileMatch`, plus `auto` and `manual` when `references` is non-empty.
+      `fileMatch` consumes `matcher`, and `auto` requires a non-empty
+      `description` when selected.
       When omitted, the default is `["always"]` without a matcher and
       `["fileMatch"]` with one.
     '';

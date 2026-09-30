@@ -627,45 +627,12 @@
   # many bytes of a project document and silently drops the rest.
   codexProjectDocMaxBytes = 32768;
 
-  renderScope = inclusion: matcher:
-    lib.optionalString (inclusion == "fileMatch") (
-      "_Apply this guidance only when working with files matching: "
-      + lib.concatMapStringsSep ", " (path: "`${path}`") matcher
-      + "_\n\n"
-    );
-
-  mkRuleBody = _name: rule:
-    renderScope rule.inclusion rule.matcher
-    + lib.ai.transformers.agentsmd.render {
-      text = aiCommon.readContent rule;
+  agentsMdUnits = mergedRules:
+    lib.ai.transformers.agentsmd.agentsMdUnits {
+      inherit (aiCommon) readContent resolveInclusion;
+      rules = mergedRules;
+      runtime = "codex";
     };
-
-  # AGENTS.md has no native trigger metadata. fileMatch rules with references
-  # retain the compact path index; auto/manual rules require references and use
-  # the same index as their on-demand pointer. Everything else is inlined.
-  isIndexedRule = rule:
-    builtins.elem rule.inclusion ["auto" "manual"]
-    || (rule.inclusion == "fileMatch" && rule.references != []);
-  agentsMdUnits = mergedRules: let
-    routedRules = lib.mapAttrs (name: rule:
-      rule
-      // {
-        inclusion = aiCommon.resolveInclusion {
-          inherit name rule;
-          runtime = "codex";
-        };
-      })
-    mergedRules;
-    indexedRules = lib.filterAttrs (_name: isIndexedRule) routedRules;
-  in {
-    hasOnDemandIndex = lib.any (
-      rule: builtins.elem rule.inclusion ["auto" "manual"]
-    ) (lib.attrValues indexedRules);
-    index =
-      lib.mapAttrs lib.ai.transformers.agentsmd.renderIndexEntry
-      indexedRules;
-    rules = lib.mapAttrs mkRuleBody (lib.filterAttrs (_name: rule: !(isIndexedRule rule)) routedRules);
-  };
 
   isExecpolicyPathLike = content:
     builtins.isPath content

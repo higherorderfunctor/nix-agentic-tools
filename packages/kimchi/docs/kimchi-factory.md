@@ -1,8 +1,9 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-29 — Kimchi 1.1.37 shares Home Manager's user
+> **Last verified:** 2026-09-30 — Kimchi 1.1.37 shares Home Manager's user
 > config.json and harness/settings.json with the runtime; the remaining files
-> and every devenv file stay read-only copies. Region is required. The pinned pi
+> and every devenv file stay read-only copies. Its rules use the shared flat
+> AGENTS.md renderer and repository aggregate. Region is required. The pinned pi
 > dependency is 0.85.1. Agents are read-only copies from the runtime's generated
 > Markdown tree; the opt-in docs skill uses the shared frontmatter renderer and
 > a guarded generated-file tree; a store-path string is an input just as a path
@@ -175,6 +176,7 @@ is:
 | pool             | Home Manager user path                            | devenv project path                    |
 | ---------------- | ------------------------------------------------- | -------------------------------------- |
 | context          | `<configDir>/harness/AGENTS.md`                   | root `AGENTS.md`                       |
+| rules            | `<configDir>/harness/AGENTS.md`                   | shared root `AGENTS.md`                |
 | MCP servers      | `<configDir>/harness/mcp.json`                    | `.kimchi/mcp.json`                     |
 | skills           | `<configDir>/harness/skills/<name>`               | `.kimchi/skills/<name>`                |
 | Kimchi settings  | `<configDir>/config.json`                         | `.kimchi/config.json`                  |
@@ -287,14 +289,14 @@ rejects it at evaluation: an unknown role is an unknown option. Locked by
 
 Everything else Kimchi delivers except the settings files (above) and agents
 (below) is immutable and symlink-readable, so it takes both defaults and states
-no fact at all. Normalized context renders into the `ai.kimchi.files` map on
-Home Manager. Devenv context joins the single root `AGENTS.md` owner shared with
-Codex and Kiro, through the record's `sharedAgentsMd`, which names that fixed
-key and no rules. In either backend, the generated body is a default on the
-entry's `content` option, so a consumer can replace or suppress it. When root
-and Kimchi-specific context are both configured, their bodies concatenate
-root-first. Home Manager honors `ai.kimchi.context.filename`; devenv always
-writes `AGENTS.md`.
+no fact at all. Normalized context and rules render into one `ai.kimchi.files`
+AGENTS.md entry on Home Manager. Devenv contributes the same keyed units to the
+single root `AGENTS.md` owner shared with Codex and Kiro, through the record's
+`sharedAgentsMd`; identical rule keys and bytes deduplicate there. In either
+backend, the generated body is a default on the entry's `content` option, so a
+consumer can replace or suppress it. When root and Kimchi-specific context are
+both configured, their bodies concatenate root-first. Home Manager honors
+`ai.kimchi.context.filename`; devenv always writes `AGENTS.md`.
 
 Project config, MCP, skills, and harness settings remain inert until project
 trust is established. The decision lives in the user's harness `trust.json`:
@@ -422,21 +424,18 @@ Claude Code hook adapter, a shared hook that also reaches
 ## Normalized pool capability boundary
 
 The app record's `supportedPools` is exactly `agents`, `context`,
-`environmentVariables`, `hooks`, `mcpServers`, `settings`, and `skills`. Kimchi
-has no native path-scoped rules, LSP, or shell-selection landing key. Those
-per-runtime normalized options are absent; root values for them remain valid and
-silently degrade for Kimchi. `settings` is the uniform closed normalized
-namespace; its current field lowers to `defaultThinkingLevel` in the mutable
-harness settings document.
+`environmentVariables`, `hooks`, `mcpServers`, `rules`, `settings`, and
+`skills`. Kimchi has no native path-scoped rule loader, so rules use the same
+flat AGENTS.md handling as Codex. LSP and shell-selection landing keys remain
+absent; root values for them remain valid and silently degrade for Kimchi.
+`settings` is the uniform closed normalized namespace; its current field lowers
+to `defaultThinkingLevel` in the mutable harness settings document.
 
-The three keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`, and
-`skills`) follow the shared atomic replacement rule. A Kimchi-specific same-key
-value replaces the root entry wholesale; null suppresses it before Kimchi's
-wrapper or file emitters run.
-
-In particular, `ai.kimchi.rules` and `ai.kimchi.rulesDir` do not exist. Do not
-restore them in anticipation of future rules support: Kimchi's rules support is
-deliberately unimplemented.
+The four keyed pools Kimchi consumes (`environmentVariables`, `mcpServers`,
+`rules`, and `skills`) follow the shared atomic replacement rule. A
+Kimchi-specific same-key value replaces the root entry wholesale; null
+suppresses nullable entries before Kimchi's wrapper or file emitters run, while
+`rules` uses `enable = false`.
 
 ## Gotcha: config.json is NESTED, not flat
 
@@ -470,9 +469,10 @@ devenv stay at parity by construction. Locked by `module-kimchi-wrapper-builds`.
 ## Orientation-only steering
 
 Kimchi takes a flat, always-injected user `harness/AGENTS.md` or project-root
-`AGENTS.md` (orientation tier, like Codex). It has **no** path-scoped steering
-(no Claude `rules/` or Kiro `steering/` equivalent), so the scoped-fragment
-transforms do not apply to it.
+`AGENTS.md` (orientation tier, like Codex). It has no native path-scoped loader
+(no Claude `rules/` or Kiro `steering/` equivalent), so `fileMatch` rules become
+scope prose or compact reference indexes in that one file. `auto` and `manual`
+also use reference-backed index entries.
 
 ## Shared prep
 

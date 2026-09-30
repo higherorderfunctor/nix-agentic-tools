@@ -29,16 +29,16 @@
 > differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
 > read and a stray field in the `sharedAgentsMd` result. Every reconciled
 > document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
-> contribution may carry `index` entries: Codex renders a scoped rule that names
-> `references` as a path-scoped index entry instead of inlining its body. The
-> shared AGENTS.md map lowers through the router as `internal`, as a read-only
-> copy, and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
-> effective-limit resolver for the owner's notice under a raised `maxBytes`; its
-> built bytes are measured in the generated-file tree. The router builds one
-> tree per invocation for static Markdown, JSON, TOML and YAML, while
-> switch-time overlays and `content.run` stay outside it. Generators mark their
-> `content` with `_generated`, so a consumer's replacement of a unit's file
-> warns like a switch-off. Rule and semantic-agent generators use
+> contribution may carry `index` entries: Codex and Kimchi render a scoped rule
+> that names `references` as a path-scoped index entry instead of inlining its
+> body. The shared AGENTS.md map lowers through the router as `internal`, as a
+> read-only copy, and a contribution's `defaultMaxBytes` supplies fallback bytes
+> plus an effective-limit resolver for the owner's notice under a raised
+> `maxBytes`; its built bytes are measured in the generated-file tree. The
+> router builds one tree per invocation for static Markdown, JSON, TOML and
+> YAML, while switch-time overlays and `content.run` stay outside it. Generators
+> mark their `content` with `_generated`, so a consumer's replacement of a
+> unit's file warns like a switch-off. Rule and semantic-agent generators use
 > `lib/frontmatter.nix` to render YAML and mark the content. The router passes
 > that marker to the generated-file builder, which accepts BOM/CRLF, formats
 > only the body and restores the exact fenced frontmatter bytes with one blank
@@ -256,11 +256,11 @@ not move them back.
 - **Rule triggers resolve before L4.** Each runtime selects the first supported
   entry from the portable `inclusion` list through `aiCommon.resolveInclusion`.
   `fileMatch` consumes `matcher` and becomes native routing metadata where one
-  exists or explicit prose for flat AGENTS.md consumers. Codex can route `auto`
-  and `manual` only through a non-empty `references` index. In the shared devenv
-  AGENTS.md, Codex contributes every resolved inline or indexed rule; Kiro
-  contributes only rules resolved to `always`. The keyed writer deduplicates
-  byte-identical same-key contributions.
+  exists or explicit prose for flat AGENTS.md consumers. Codex and Kimchi can
+  route `auto` and `manual` only through a non-empty `references` index. In the
+  shared devenv AGENTS.md, Codex and Kimchi contribute every resolved inline or
+  indexed rule; Kiro contributes only rules resolved to `always`. The keyed
+  writer deduplicates byte-identical same-key contributions.
 - **Merged pools are ordinary options.** `ai.<runtime>.normalized.<pool>` exists
   for each supported pool and is public, writable with `mkForce`. Keyed pools
   have neutral `{}` option defaults and receive the root-to-runtime fold as
@@ -376,25 +376,26 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L4 per-runtime routing/rendering into `ai.<runtime>.files` →
   `packages/<pkg>/lib/mk<Cli>.nix`
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
-  which returns the key, the rules under that runtime's own policy (Codex every
-  rule; Kiro only unscoped always-on rules; Kimchi none), optional `index`
+  which returns the key, the rules under that runtime's own policy (Codex and
+  Kimchi every rule; Kiro only unscoped always-on rules), optional `index`
   entries, an optional `maxBytes` and an optional `defaultMaxBytes` (fallback
   bytes plus a command that resolves the effective limit at shell entry; past it
   the owner warns), and nothing else: the builder reads those by name, so
   `checkRecord.nix` rejects a missing `key` or any other field. The optional
   `hasOnDemandIndex` bit selects the general rule-index heading from routed
-  trigger data rather than rendered Markdown. Codex lists a scoped rule that
-  names `references` as an index entry (its globs plus links to those documents)
-  and inlines every other rule, a scoped one behind a prose scope note.
-  `agentsmd.renderKeyed` writes the general `## Rule index` when that bit is set
-  and `## Path-scoped rules` otherwise, then the inlined rules and context. A
-  file with many scoped rules stays under Codex's document limit, and a long
-  context that does not (read at the 32 KiB default because the raised limit is
-  absent or untrusted) loses only its own tail. The builder adds the merged
-  context and publishes it on devenv. A limit is published even without content,
-  because the runtime reads the file whoever wrote it. The Markdown formatter
-  handles the generated layout (one blank line between units and after each rule
-  comment, one glob or link per index line) before the tree is installed.
+  trigger data rather than rendered Markdown. Codex and Kimchi list a scoped
+  rule that names `references` as an index entry (its globs plus links to those
+  documents) and inline every other rule, a scoped one behind a prose scope
+  note. `agentsmd.renderKeyed` writes the general `## Rule index` when that bit
+  is set and `## Path-scoped rules` otherwise, then the inlined rules and
+  context. A file with many scoped rules stays under Codex's document limit, and
+  a long context that does not (read at the 32 KiB default because the raised
+  limit is absent or untrusted) loses only its own tail. The builder adds the
+  merged context and publishes it on devenv. A limit is published even without
+  content, because the runtime reads the file whoever wrote it. The Markdown
+  formatter handles the generated layout (one blank line between units and after
+  each rule comment, one glob or link per index line) before the tree is
+  installed.
 - L4 unit paths → the record's optional `contentTargets` callback,
   `{context?; rules?}`: the path each context and rule unit lands in, built from
   the same bindings the delivery uses. `delivery-warnings.nix` warns for a unit

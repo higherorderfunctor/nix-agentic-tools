@@ -1085,7 +1085,9 @@ in {
           evaluate = evalHm;
           path = ".config/kimchi/harness/AGENTS.md";
           runtime = "kimchi";
-          sibling = fact;
+          # Kimchi now follows Codex's whole-entry default for a composed
+          # AGENTS.md. A consumer sibling must therefore restate content.
+          sibling = fact // {content.text = "KIMCHI-CONSUMER";};
         };
         kiroRule = withSibling {
           evaluate = evalHm;
@@ -1101,7 +1103,7 @@ in {
         && claudeRule.method == "copy-ro"
         && lib.hasInfix "GENERATED-RULE" copilotRule.content.text
         && copilotRule.facts.symlinkReadable == true
-        && kimchiContext.content.text == "GENERATED-CONTEXT"
+        && kimchiContext.content.text == "KIMCHI-CONSUMER"
         && kimchiContext.facts.symlinkReadable == false
         && lib.hasInfix "GENERATED-RULE" kiroRule.content.text
         && kiroRule.facts.symlinkReadable == false

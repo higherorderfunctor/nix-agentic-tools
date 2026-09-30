@@ -122,6 +122,7 @@ in {
             claude.rules.disabled.enable = false;
             codex.rules.disabled.enable = false;
             copilot.rules.disabled.enable = false;
+            kimchi.rules.disabled.enable = false;
             kiro.rules.disabled.enable = false;
           };
         };
@@ -393,22 +394,23 @@ in {
         probe.success
     );
 
-    module-ai-rules-excluded-for-kimchi = mkTest "ai-rules-excluded-for-kimchi" (
+    module-ai-rules-accepted-for-kimchi = mkTest "ai-rules-accepted-for-kimchi" (
       let
-        probe =
-          builtins.tryEval
+        probe = builtins.tryEval (lib.attrNames
           (evalHm {
             ai.kimchi = {
               enable = true;
               rules.test.text = "test";
             };
           })
-      .config.home.packages;
+          .config
+          .home
+          .file);
       in
-        !probe.success
+        probe.success
     );
 
-    module-ai-rules-root-degrades-for-kimchi = mkTest "ai-rules-root-degrades-for-kimchi" (
+    module-ai-rules-root-fans-out-to-kimchi = mkTest "ai-rules-root-fans-out-to-kimchi" (
       let
         result = evalHm {
           ai.kimchi.enable = true;
@@ -417,7 +419,9 @@ in {
       in
         builtins.length result.config.home.packages
         == 1
-        && !(result.config.ai.kimchi ? rules)
+        && result.config.ai.kimchi ? rules
+        && (markdownInput result ".config/kimchi/harness/AGENTS.md").text
+        == "<!-- rule: test -->\n\ntest"
     );
 
     # A REAL directory, not `../fixtures`, which never existed: with a probe on
@@ -439,19 +443,20 @@ in {
         probe.success
     );
 
-    module-ai-rules-dir-excluded-for-kimchi = mkTest "ai-rules-dir-excluded-for-kimchi" (
+    module-ai-rules-dir-accepted-for-kimchi = mkTest "ai-rules-dir-accepted-for-kimchi" (
       let
-        probe =
-          builtins.tryEval
+        probe = builtins.tryEval (lib.attrNames
           (evalHm {
             ai.kimchi = {
               enable = true;
               rulesDir = ../../packages/kiro-cli/checks/fixtures/kiro-steering;
             };
           })
-      .config.home.packages;
+          .config
+          .home
+          .file);
       in
-        !probe.success
+        probe.success
     );
 
     # Top-level `ai.agentsDir` fans out to every enabled agent-
