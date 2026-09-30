@@ -6458,6 +6458,12 @@
     },
     {
       "defaultReasoningLevel": "low",
+      "displayName": "GPT-6.1-Sol",
+      "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
+      "slug": "gpt-6.1-sol"
+    },
+    {
+      "defaultReasoningLevel": "low",
       "displayName": "Daybreak Blue",
       "reasoningLevels": ["high", "low", "max", "medium", "ultra", "xhigh"],
       "slug": "gpt-daybreak-blue-latest"
@@ -6470,7 +6476,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.159.0",
+    "codexVersion": "0.159.2",
     "extractorSchema": 1
   }
 }
