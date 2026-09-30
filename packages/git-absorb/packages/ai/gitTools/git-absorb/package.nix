@@ -10,6 +10,7 @@
 # builds (packages/git-absorb/extract/, lib/git-tool-settings). passthru is
 # not a derivation input, so it does not move this package's store path.
 {
+  gitToolExtraction,
   inputs,
   pkgs,
   packageLib,
@@ -37,7 +38,7 @@
     inherit rev;
     hash = "sha256-jAR+Vq6SZZXkseOxZVJSjsQOStIip8ThiaLroaJcIfc=";
   };
-  extraction = import ../../../../../../lib/git-tool-settings/extraction.nix {inherit pkgs;};
+  extraction = gitToolExtraction {inherit pkgs;};
 
   package = ourPkgs.git-absorb.override (_: {
     rustPlatform.buildRustPackage = args:

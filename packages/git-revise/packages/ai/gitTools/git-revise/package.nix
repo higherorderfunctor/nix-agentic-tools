@@ -12,6 +12,7 @@
 # builds (packages/git-revise/extract/, lib/git-tool-settings). passthru is
 # not a derivation input, so it does not move this package's store path.
 {
+  gitToolExtraction,
   packageLib,
   pkgs,
   repoPath,
@@ -29,7 +30,7 @@
     hash = "sha256-D3MicmtruCNiW/WI37y18XDXAl7J9oJdJnDY4Ohj+rE=";
   };
 
-  extraction = import ../../../../../../lib/git-tool-settings/extraction.nix {pkgs = ourPkgs;};
+  extraction = gitToolExtraction {pkgs = ourPkgs;};
   patchedSource = extraction.patchedSource {
     name = "git-revise";
     inherit package;

@@ -27,6 +27,7 @@
 # (packages/git-branchless/docs/extraction.md). passthru is not a
 # derivation input, so it does not move this package's store path.
 {
+  gitToolExtraction,
   inputs,
   packageLib,
   pkgs,
@@ -35,7 +36,7 @@
 }: let
   ourPkgs = pkgs;
   gbSrc = inputs.git-branchless;
-  extraction = import ../../../../../../lib/git-tool-settings/extraction.nix {pkgs = ourPkgs;};
+  extraction = gitToolExtraction {pkgs = ourPkgs;};
 
   # Unpack + patch of the package's own `src` and `patches`: the patch adds
   # a key (`branchless.core.protectCheckedOutBranches`) the upstream tree

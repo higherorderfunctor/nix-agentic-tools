@@ -13,11 +13,12 @@
 #   git-branchless-extracted-binary   every key the census reports is a
 #                                     string in the built binary.
 {
+  gitToolExtraction,
   pkgs,
   self,
   ...
 }: {
-  checks = (import ../../../lib/git-tool-settings/extraction.nix {inherit pkgs;}).checks {
+  checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-branchless";
     package = self.packages.${pkgs.stdenv.hostPlatform.system}.git-branchless;
     sidecar = "packages/git-branchless/extracted.json";

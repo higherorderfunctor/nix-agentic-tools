@@ -11,11 +11,12 @@
 #   git-revise-extracted-binary   every key the census reports is a string in
 #                                 the installed Python package.
 {
+  gitToolExtraction,
   pkgs,
   self,
   ...
 }: {
-  checks = (import ../../../lib/git-tool-settings/extraction.nix {inherit pkgs;}).checks {
+  checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-revise";
     package = self.packages.${pkgs.stdenv.hostPlatform.system}.git-revise;
     sidecar = "packages/git-revise/extracted.json";

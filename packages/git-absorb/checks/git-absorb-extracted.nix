@@ -11,11 +11,12 @@
 #   git-absorb-extracted-binary   every key the census reports is a string in
 #                                 the built binary.
 {
+  gitToolExtraction,
   pkgs,
   self,
   ...
 }: {
-  checks = (import ../../../lib/git-tool-settings/extraction.nix {inherit pkgs;}).checks {
+  checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-absorb";
     package = self.packages.${pkgs.stdenv.hostPlatform.system}.git-absorb;
     sidecar = "packages/git-absorb/extracted.json";

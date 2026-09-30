@@ -12,6 +12,10 @@
   inherit (registry) index repoPath;
   inherit (registry.config) update;
   cacheHitParity = registry.config.checks.cacheHitParity;
+  # The git tools' census builder, handed to owner packages and checks as an
+  # argument so an owner never reaches into lib/ by a relative path (the
+  # facet-owner-relocation check moves an owner and re-evaluates it).
+  gitToolExtraction = import ../git-tool-settings/extraction.nix;
   packageWorlds = lib.genAttrs systems (system:
     facets.realizePackages {
       inherit index inputs system;
@@ -20,7 +24,7 @@
         config.allowUnfree = true;
       };
       scopeArgs = {
-        inherit repoPath;
+        inherit gitToolExtraction repoPath;
         packageLib = import ../packaging.nix;
         fragmentsLib = import ../fragments.nix {inherit lib;};
         traceSource = import ../traceSource.nix {inherit lib;};
@@ -88,7 +92,7 @@ in {
       context =
         builtins.removeAttrs context ["rootModules"]
         // {
-          inherit inputs lib;
+          inherit gitToolExtraction inputs lib;
           harness = import ../testing/module-harness.nix {
             inherit lib;
             inherit (context) pkgs;
