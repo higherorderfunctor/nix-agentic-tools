@@ -32,6 +32,20 @@
   # writes; shared by the emitter and `contentTargets`.
   userHarnessDir = cfg: "${cfg.configDir}/harness";
   userContextPath = cfg: "${userHarnessDir cfg}/${cfg.context.filename}";
+  agentsMdUnits = mergedRules:
+    lib.ai.transformers.agentsmd.agentsMdUnits {
+      inherit (aiCommon) readContent resolveInclusion;
+      rules = mergedRules;
+      runtime = "kimchi";
+    };
+  mkAgentsMd = {
+    mergedContext,
+    mergedRules,
+  }:
+    lib.ai.transformers.agentsmd.renderKeyed ({
+        context = aiCommon.readContent mergedContext;
+      }
+      // agentsMdUnits mergedRules);
   # Home Manager's Auto model default: below `mkDefault` (1000), so a
   # consumer's own key-level mkDefault wins, and above the option default
   # (1500), which a non-null value at the same priority would conflict with.
@@ -337,13 +351,15 @@
     mergedAgents,
     mergedContext,
     mergedEnvironmentVariables,
+    mergedRules,
     mergedServers,
     mergedSkills,
     resolvedSettings,
     topHooks,
     ...
   }: let
-    contextEntry = aiCommon.contentFileEntry mergedContext;
+    agentsMd = mkAgentsMd {inherit mergedContext mergedRules;};
+    hasAgentsMdContent = hasMergedContext || mergedRules != {};
     filteredSettings = aiCommon.filterNulls cfg.native.settings;
     filteredProjectSettings = projectSettings cfg;
     filteredHarnessSettings = aiCommon.filterNulls cfg.native.harnessSettings;
@@ -605,10 +621,18 @@
         (lib.mkIf (gitTokens == {}) (sharedSettings "${cfg.configDir}/config.json" filteredSettings))
       ]))
 
-      # User harness context stays runtime-owned. Project context joins the
-      # shared repository AGENTS.md through the record's `sharedAgentsMd`.
-      (lib.mkIf (hasMergedContext && !isDevenv) {
-        ai.kimchi.files.${userContextPath cfg} = contextEntry;
+      # Home Manager's user harness AGENTS.md carries merged context and every
+      # inline or indexed Kimchi rule. Devenv contributes the same units to the
+      # shared repository AGENTS.md through `sharedAgentsMd` below.
+      (lib.mkIf (hasAgentsMdContent && !isDevenv) {
+        ai.kimchi.files.${userContextPath cfg} = lib.mkDefault {
+          content = {
+            _generated = true;
+            enable = agentsMd != "";
+            text = agentsMd;
+          };
+          format = "markdown";
+        };
       })
 
       # agents/<name>.md — one read-only copy per agent. Kimchi's /agents
@@ -673,6 +697,7 @@ in
       "environmentVariables"
       "hooks"
       "mcpServers"
+      "rules"
       "settings"
       "skills"
     ];
@@ -844,18 +869,25 @@ in
 
     config = kimchiDelivery;
     installPackage = kimchiInstallPackage;
-    # Context only, at a fixed key: context.filename names the Home Manager
-    # harness file.
-    sharedAgentsMd = _: {key = projectContextFilename;};
-    # Context only: Kimchi has no rules pool.
+    # context.filename names the Home Manager harness file; devenv always
+    # contributes context and rule units at the fixed repository key.
+    sharedAgentsMd = {mergedRules, ...}:
+      {key = projectContextFilename;}
+      // agentsMdUnits mergedRules;
     contentTargets = {
       backend,
       cfg,
+      mergedRules,
       ...
     }: {
       context =
         if backend == "devenv"
         then projectContextFilename
         else userContextPath cfg;
+      rules = lib.mapAttrs (_name: _rule:
+        if backend == "devenv"
+        then projectContextFilename
+        else userContextPath cfg)
+      mergedRules;
     };
   }

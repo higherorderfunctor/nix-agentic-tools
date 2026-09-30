@@ -84,7 +84,6 @@
     };
     rules = {
       copilot = {hm = absent "Home Manager rules are deliberately inert; the agents pool is a separate surface, not a rules fallback.";};
-      kimchi = both (absent "Kimchi's supportedPools excludes rules.");
     };
   };
   hand = builtins.listToAttrs (lib.concatMap (surface:

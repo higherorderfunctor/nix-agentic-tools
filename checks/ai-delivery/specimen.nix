@@ -104,11 +104,9 @@
     else if lib.hasInfix "/skills/" path || lib.hasSuffix "/skills" path
     then ["skills"]
     else if path == "AGENTS.md" || path == ".codex/AGENTS.md"
-    then
-      # Kimchi contributes its context alone; it excludes the rules pool.
-      ["context"] ++ lib.optional (runtime != "kimchi") "rules"
+    then ["context" "rules"]
     else if lib.hasSuffix "/AGENTS.md" path || lib.hasSuffix "/CLAUDE.md" path || lib.hasSuffix "/copilot-instructions.md" path
-    then ["context"]
+    then ["context"] ++ lib.optional (runtime == "kimchi") "rules"
     else if lib.hasInfix "/rules/" path || lib.hasInfix "/instructions/" path || lib.hasInfix "/steering/" path
     then ["rules"]
     else if lib.hasSuffix "/permissions.yaml" path || lib.hasSuffix "/permissions.json" path

@@ -1,6 +1,6 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-28 — devenv's Codex launcher always passes
+> **Last verified:** 2026-09-30 — devenv's Codex launcher always passes
 > `--no-daemon`, so it always wraps. The builder entry point is
 > `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
 > callback. Native file settings live under `ai.<runtime>.native`
@@ -27,8 +27,8 @@ places:
 An unsupported per-runtime write is therefore an "option does not exist" eval
 error. An unsupported ROOT value is different: root `ai.*` is the portable
 surface, so its fanout degrades to the pool's neutral value for that runtime.
-For example, `ai.kimchi.rules` does not exist, while root `ai.rules` remains
-valid and simply does not reach Kimchi.
+For example, Kimchi exposes `rules` but not `shell`: `ai.kimchi.rules` exists,
+while `ai.kimchi.shell` does not and root `ai.shell` does not reach Kimchi.
 
 The list is read off the RECORD, keeping it a build-time parameter in the same
 category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
@@ -261,6 +261,5 @@ exclusion tests. Those assert an eval failure, which a broken harness satisfies
 for free; the control runs the identical `tryEval` shape against a supported
 runtime and requires success. Delete them as a set or not at all.
 
-The generalized gate has the same paired controls for Kimchi's removed `rules`
-and `rulesDir` options: `module-ai-rules{-dir,}-accepted-for-claude` and
-`module-ai-rules{-dir,}-excluded-for-kimchi`.
+The generalized gate has positive controls for Kimchi's `rules` and `rulesDir`
+options: `module-ai-rules{-dir,}-accepted-for-kimchi`.

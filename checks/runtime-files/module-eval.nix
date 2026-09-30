@@ -739,7 +739,10 @@ in {
         == "CLAUDE-REPLACEMENT"
         && markdownOf devenvClaude.config ".claude/CLAUDE.md" == "CLAUDE-REPLACEMENT"
         && markdownOf devenvCopilot.config ".github/copilot-instructions.md" == "COPILOT-REPLACEMENT"
-        && markdownOf hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
+        # Kimchi has no byte limit. A consumer replacement also replaces the
+        # generated Markdown format, so Home Manager lowers it inline.
+        && (deliveredFiles hmKimchi.config).".config/kimchi/harness/AGENTS.md".text or null
+        == "KIMCHI-REPLACEMENT"
         # No `format` and no limit on the shared AGENTS.md, so `raw`: inline,
         # as written.
         && (deliveredFiles devenvKimchi.config)."AGENTS.md".text or null == "KIMCHI-REPLACEMENT"
