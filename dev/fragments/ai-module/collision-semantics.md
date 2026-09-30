@@ -1,14 +1,6 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-30 — `ai.<runtime>.programs.git.settings` is the
-> one program leaf that deep-merges instead of replacing. Semble's CLI rule gate
-> is `cli.instructions`. Merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
-> text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target, matched on the key
-> each record's `sharedAgentsMd` callback declares. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-30 — git settings now deep-merge across scopes.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.

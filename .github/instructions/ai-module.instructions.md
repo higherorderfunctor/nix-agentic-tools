@@ -7,50 +7,7 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-30 — module-contributed process environment rides a
-> per-runtime internal channel, which carries `ai.programs.git`'s per-harness
-> identity; its gitconfig pins `tag.forceSignAnnotated`, its signing assertions
-> read the body case-insensitively as git does, `gh.configDir` must be absolute,
-> its credential is a runtime reference, a repository's own config is named as
-> uncovered, and `mkProgram` takes `overrideDescriptions` for a leaf it does not
-> resolve. Claude delivers every surface as its own file through
-> `ai.claude.files` on both backends and fails evaluation beside its upstream
-> module, and every delivery method writes the file itself. Every enabled
-> runtime installs a package; `installPackage` has no `null` opt-out. Codex's
-> `config.toml` is a read-only store symlink on both backends, its daemon
-> `settings.json` a Home Manager copy of `native.daemonSettings`, and Nix
-> declares the trust of every hook it generates; Codex rejects a declared MCP
-> OAuth client secret. AGENTS.md puts the index and rules before the context.
-> The repository AGENTS.md, Copilot's devenv context and instruction files, and
-> Kiro's devenv steering land as read-only copies; Codex indexes scoped rules
-> that name `references`; a unit whose file is switched off or replaced warns,
-> and so does a devenv Codex AGENTS.md past 32 KiB under a raised limit. Semble
-> derives a Kiro agent-private MCP server from `mcp.enable = false` plus an
-> MCP-backed subagent. Every runtime describes delivery once through
-> `mkRuntime`'s record-level `config`, and both `mkRuntime` and the backend
-> transforms reject a backend spec carrying anything but `installPackage`,
-> `migrationConfig` and `options`, since an overridden or hand-built record
-> reaches a transform without the constructor. Kiro hook commands resolve
-> packages through the shared `commandType`. Launchers bake the builder's one
-> `launcherEnvironment`. Claude's and Codex's hook matcher groups share
-> `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files through
-> `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and `ai.claude.agentsDir`
-> to `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot,
-> Kimchi, Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it
-> copies, so a store-path string is a file, never a body naming its own path.
-> File content at `mkDefault` enables its entry; `content.enable = false`
-> suppresses every content form. The builder entry point is
-> `lib.ai.app.mkRuntime`. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). A root request
-> nothing per-runtime can withdraw (excluded or non-keyed pool) never warns.
-> Portable agents reach Kimchi as owned read-only copies and portable hooks
-> reach its project `hooks.json` on devenv. Reasoning effort lowers to Claude,
-> Codex, Copilot and Kimchi, and Kiro declares no normalized settings pool;
-> authored prose and final delivery share one priority-aware text-source record
-> with enable semantics. Ledger-owned copies whose files nothing else retracts
-> opt into `runWhenDisabled`. `ai.lspServers` renders whole files with each
-> runtime's envelope, Copilot/Kiro require `extensions`, and Copilot constrains
-> server names.
+> **Last verified:** 2026-09-30 — added per-harness git and GitHub CLI identity.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -272,9 +229,9 @@ reads that reference at call time. Invariants, each load-bearing:
   Copilot, `GH_CONFIG_DIR` also feeds its last-resort `gh` login. Both are
   stated in the `gh` option text.
 - A signing key is a string refused under the store (a path literal would copy
-  the key there); so is `gh.configDir`. Both must also be absolute: each is used
-  verbatim, so nothing expands `~`. `credentials` is instead a secret `rv.file`
-  or `rv.helper` reference, validated by `lib.runtimeValues`.
+  the key there); so is `gh.configDir`. `gh.configDir` must also be absolute
+  because it is used verbatim, so nothing expands `~`. `credentials` is instead
+  a secret `rv.file` or `rv.helper` reference, validated by `lib.runtimeValues`.
   `settings.user.signingKey` is NOT refused: git also takes a public key file or
   a `key::` literal there for agent-backed ssh signing, and a public key in the
   store is harmless. `signByDefault` with a null key or format is an assertion
@@ -947,15 +904,7 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-30 — `ai.<runtime>.programs.git.settings` is the
-> one program leaf that deep-merges instead of replacing. Semble's CLI rule gate
-> is `cli.instructions`. Merged pools are public
-> `ai.<runtime>.normalized.<pool>` options fed per-key defaults, and a
-> text-source record crosses into them with only its winning arm. Path claims
-> fail across runtimes except the shared AGENTS.md target, matched on the key
-> each record's `sharedAgentsMd` callback declares. Rules and context use
-> entry-local `enable` suppression; delivery entries default `content` alone,
-> and `content.enable = false` suppresses every content form.
+> **Last verified:** 2026-09-30 — git settings now deep-merge across scopes.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -1804,20 +1753,7 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-30 — module-contributed environment rides the
-> per-runtime internal channel
-> `ai.<runtime>.internal._moduleEnvironmentVariables`, found through the option
-> tree so downstream `mkRuntime` runtimes get it too; Home Manager ships Codex
-> bare only while that channel is empty. devenv's Codex launcher always passes
-> `--no-daemon`, so it always wraps. The builder entry point is
-> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
-> callback. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
-> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
-> a runtime-specific implicit shell default. `ai.shell` stays null; see below
-> for the standing decision and the override rule it shares with normalized
-> `settings`. The builder merges every launcher's process environment once, as
-> `launcherEnvironment`; Codex and Copilot wrap through `lib.ai.mkLauncher`.
+> **Last verified:** 2026-09-30 — git identity now uses the module environment.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 

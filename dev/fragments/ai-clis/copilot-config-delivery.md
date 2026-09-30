@@ -1,19 +1,6 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-09-30 — Home Manager keeps the bare package only while
-> no module environment is published. Settings files are read-only copies of one
-> writer, `materialize-copilot-config`: Home Manager always owns the user
-> `settings.json`, `mcp-config.json` and `lsp-config.json`; devenv owns the
-> fixed repository file `.github/copilot/settings.json` only when something is
-> declared, and writes LSP config to `<projectDir>/lsp.json` (both measured at
-> copilot-cli 1.0.88), so `configDir` holds only the wrapper-aimed
-> `mcp-config.json`. Folder trust is `ai.copilot.trustedFolders`, one Home
-> Manager-owned leaf of Copilot's state file `config.json`; devenv rejects it.
-> The repository context and instruction files are read-only copies, never store
-> symlinks. The repository file is read from the git root, and its `effortLevel`
-> by the interactive session only; devenv warns on both. Keys and value kinds
-> outside the repository schema, and LSP server names Copilot rejects, throw at
-> eval.
+> **Last verified:** 2026-09-30 — the launcher now carries git identity.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 89dce4c4:dev/fragments/ai-clis/copilot-config-delivery.md`.

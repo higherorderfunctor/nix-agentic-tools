@@ -74,12 +74,12 @@ in {
           The GitHub token git pushes and fetches with. Renders an empty
           `credential."https://github.com".helper` (dropping every helper
           your own config set, so a push never falls back to your token)
-          and then a store helper that reads this secret on every
-          credential request and answers `username=x-access-token`; if the
+          and then a store helper that reads this secret on every `get`
+          request and answers `username=x-access-token`; if the
           secret is missing or empty it tells git to stop rather than
           prompt. Only the path reaches the store, and the token is never
           put in the environment. An `rv.helper` executable runs on every
-          request, not once at start. Set this with `rv.file` or `rv.helper`.
+          `get` request, not once at start. Set this with `rv.file` or `rv.helper`.
 
           Left null, nothing is reset: git uses whatever helper your own
           config sets for github.com, which may be your token.
