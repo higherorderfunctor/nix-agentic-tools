@@ -22,14 +22,15 @@
 
 ## Owners
 
-| Path                                         | Owns                                                                                                 |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `packages/git/modules/`                      | `git.settings`: HM alias of `programs.git.settings`; devenv option + `git:config` task               |
-| `packages/git-{absorb,branchless,revise}/`   | `modules/options.nix`: `git.<section>.{enable,settings}` through the factory below                   |
-| `packages/git-branchless/modules/`           | `scopedSync`; devenv `git:branchless-init`; per-backend `test.jobs` checks                           |
-| `lib/git-tool-settings/tool-module.nix`      | the factory: option tree + the ONE lowering into `git.settings` + package install                    |
-| `lib/git-tool-settings/ini-type.nix`         | Home Manager's `gitIniType`, shared by devenv's option and both HM stubs                             |
-| `lib/git-tool-settings/repo-config.{sh,nix}` | `nix-agentic-tools-git` (`include`, `init`), run by the tasks and by `checks/git-config/runtime.nix` |
+| Path                                             | Owns                                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `packages/git/modules/`                          | `git.settings`: HM alias of `programs.git.settings`; devenv option + `git:config` task               |
+| `packages/git-{absorb,branchless,revise}/`       | `modules/options.nix`: `git.<section>.{enable,settings}` through the factory below                   |
+| `packages/git-branchless/modules/`               | `scopedSync`; devenv `git:branchless-init`; per-backend `test.jobs` checks                           |
+| `lib/git-tool-settings/tool-module.nix`          | the factory: option tree + the ONE lowering into `git.settings` + package install                    |
+| `lib/git-tool-settings/ini-type.nix`             | Home Manager's `gitIniType`, shared by devenv's option and both HM stubs                             |
+| `lib/git-tool-settings/repo-config.{sh,nix}`     | `nix-agentic-tools-git` (`include`, `init`), run by the tasks and by `checks/git-config/runtime.nix` |
+| `packages/stacked-workflows/modules/options.nix` | `gitPreset`: `mkDefault` sugar over all of the above                                                 |
 
 Owners share code only through `lib/`; the tool modules reach the git layer by
 setting `git.settings`, never by importing it.

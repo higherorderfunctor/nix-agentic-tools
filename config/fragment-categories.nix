@@ -216,7 +216,7 @@ _: {
     # tree-walking extractors' helpers, the sidecar schema, and the typed
     # option generator every git-tool owner calls.
     # The `git.*` option root: packages/git and the three git tool owners
-    # declare it together.
+    # declare it together, and the stacked-workflows preset sets it.
     git = {
       scopes = [
         "checks/git-config/**"
@@ -228,6 +228,7 @@ _: {
         "packages/git-branchless/modules/**"
         "packages/git-revise/modules/**"
         "packages/git/**"
+        "packages/stacked-workflows/modules/**"
       ];
       sources = [
         {

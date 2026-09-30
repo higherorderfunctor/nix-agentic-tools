@@ -12,29 +12,15 @@
 # factory's header. Those pools are per-`evalModules`, so this HM-scope
 # contribution is independent of the devenv module's.
 #
-# On TOP of the factory, this module keeps the user-global
-# `stacked-workflows.gitPreset` companion option outside `ai.*`: Git presets
-# configure Home Manager's `programs.git.settings` surface. The devenv module
-# exposes the same option at repository scope; neither belongs under a runtime.
-# Skill sources are the deref'd, self-contained skill dirs from
+# On TOP of the factory, both backends import `stacked-workflows.gitPreset`
+# (../options.nix) outside `ai.*`: it is sugar over the `git.*` options, which
+# Home Manager delivers through `programs.git.settings`. It has no runtime
+# meaning. Skill sources are the deref'd, self-contained skill dirs from
 # `pkgs.stacked-workflows-content.passthru.skills` (real reference files
 # bundled inside each, so they resolve in every scope).
 #
 # Picked up by `native Home Manager module discovery` in flake.nix.
-{
-  config,
-  lib,
-  ...
-}: let
-  cfg = config.ai.programs.stacked-workflows;
-  gitPreset = config.stacked-workflows.gitPreset;
-
-  # Apply mkDefault to every leaf value in a nested attrset so users can
-  # override individual keys at normal priority.
-  mkDefaultRecursive = lib.mapAttrsRecursive (_path: lib.mkDefault);
-
-  gitSettings = import ../../lib/git-presets.nix;
-in {
+{lib, ...}: {
   imports = [
     (import ../../../../lib/ai/mkSkillPackageModule.nix {
       name = "stacked-workflows";
@@ -47,57 +33,6 @@ in {
       }:
         import ../../router.nix {inherit lib pkgs;};
     })
+    (import ../options.nix {inherit lib;})
   ];
-
-  options.stacked-workflows = {
-    gitPreset = lib.mkOption {
-      type = lib.types.enum (builtins.attrNames gitSettings);
-      default = "none";
-      description = ''
-        Git configuration preset for stacked workflows.
-
-        - `"minimal"` -- required + strongly recommended settings
-        - `"full"` -- all recommended settings (branchless, revise, general git)
-        - `"none"` -- no git configuration changes
-
-        The preset is applied only when
-        `ai.programs.stacked-workflows.enable` is true. Per-runtime program
-        overrides control only that runtime's skills and routing rule; they do
-        not enable or disable this machine-wide Git companion.
-
-        All values are set at `mkDefault` priority so you can override
-        individual keys at normal priority in `programs.git.settings`.
-      '';
-    };
-  };
-
-  config = lib.mkIf cfg.enable (lib.mkMerge [
-    # ── Assertions ─────────────────────────────────────────────────────
-    {
-      assertions = [
-        {
-          assertion =
-            !(gitPreset
-              != "none"
-              && (lib.attrByPath ["pull" "ff"] null
-                config.programs.git.settings)
-              != null);
-          message = ''
-            programs.git.settings.pull.ff conflicts with
-            stacked-workflows.gitPreset.
-
-            Since Git 2.34, pull.ff = "only" takes priority over
-            pull.rebase = true, causing "git pull" to fail when local
-            commits exist. Remove pull.ff from your git settings or set
-            stacked-workflows.gitPreset = "none".
-          '';
-        }
-      ];
-    }
-
-    # ── Git configuration ──────────────────────────────────────────────
-    (lib.mkIf (gitPreset != "none") {
-      programs.git.settings = mkDefaultRecursive gitSettings.${gitPreset};
-    })
-  ]);
 }

@@ -1,0 +1,101 @@
+{
+  "full": {
+    "absorb": {
+      "fixupTargetAlwaysSHA": true,
+      "maxStack": 50,
+      "oneFixupPerCommit": true
+    },
+    "branchless": {
+      "core": {
+        "mainBranch": "main"
+      },
+      "navigation": {
+        "autoSwitchBranches": true
+      },
+      "next": {
+        "interactive": true
+      },
+      "restack": {
+        "preserveTimestamps": true
+      },
+      "smartlog": {
+        "defaultRevset": "(@ % main()) | stack() | descendants(@) | @"
+      },
+      "test": {
+        "jobs": 1,
+        "strategy": "worktree"
+      }
+    },
+    "commit": {
+      "verbose": true
+    },
+    "diff": {
+      "algorithm": "histogram",
+      "colorMoved": "plain",
+      "mnemonicPrefix": true
+    },
+    "fetch": {
+      "all": true,
+      "prune": true,
+      "pruneTags": true
+    },
+    "init": {
+      "defaultBranch": "main"
+    },
+    "merge": {
+      "conflictStyle": "zdiff3"
+    },
+    "pull": {
+      "rebase": true
+    },
+    "push": {
+      "autoSetupRemote": true,
+      "followTags": true
+    },
+    "rebase": {
+      "autoSquash": true,
+      "autoStash": true,
+      "updateRefs": true
+    },
+    "rerere": {
+      "autoupdate": true,
+      "enabled": true
+    },
+    "revise": {
+      "autoSquash": true
+    },
+    "tag": {
+      "sort": "version:refname"
+    }
+  },
+  "minimal": {
+    "absorb": {
+      "fixupTargetAlwaysSHA": true,
+      "maxStack": 50,
+      "oneFixupPerCommit": true
+    },
+    "branchless": {
+      "core": {
+        "mainBranch": "main"
+      }
+    },
+    "init": {
+      "defaultBranch": "main"
+    },
+    "merge": {
+      "conflictStyle": "zdiff3"
+    },
+    "pull": {
+      "rebase": true
+    },
+    "rebase": {
+      "autoSquash": true,
+      "autoStash": true,
+      "updateRefs": true
+    },
+    "rerere": {
+      "autoupdate": true,
+      "enabled": true
+    }
+  }
+}

@@ -7,36 +7,36 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-29 — stacked-workflows exposes one shared Git
-> preset option and mapping through both module backends. Claude delivers every
-> surface as its own file through `ai.claude.files` on both backends and fails
-> evaluation beside its upstream module, and every delivery method writes the
-> file itself. Every enabled runtime installs a package; `installPackage` has no
-> `null` opt-out. Codex's `config.toml` is a read-only store symlink on both
-> backends, its daemon `settings.json` a Home Manager copy of
-> `native.daemonSettings`, and Nix declares the trust of every hook it
-> generates; Codex rejects a declared MCP OAuth client secret. AGENTS.md puts
-> the index and rules before the context. The repository AGENTS.md, Copilot's
-> devenv context and instruction files, and Kiro's devenv steering land as
-> read-only copies; Codex indexes scoped rules that name `references`; a unit
-> whose file is switched off or replaced warns, and so does a devenv Codex
-> AGENTS.md past 32 KiB under a raised limit. Semble derives a Kiro
-> agent-private MCP server from `mcp.enable = false` plus an MCP-backed
-> subagent. Every runtime describes delivery once through `mkRuntime`'s
-> record-level `config`, and both `mkRuntime` and the backend transforms reject
-> a backend spec carrying anything but `installPackage`, `migrationConfig` and
-> `options`, since an overridden or hand-built record reaches a transform
-> without the constructor. Kiro hook commands resolve packages through the
-> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
-> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
-> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
-> Claude delivers `ai.agents` and `ai.claude.agentsDir` to
-> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
-> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
-> so a store-path string is a file, never a body naming its own path. File
-> content at `mkDefault` enables its entry; `content.enable = false` suppresses
-> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-29 — stacked-workflows' Git preset is `mkDefault`
+> sugar over the shared `git.*` options. Claude delivers every surface as its
+> own file through `ai.claude.files` on both backends and fails evaluation
+> beside its upstream module, and every delivery method writes the file itself.
+> Every enabled runtime installs a package; `installPackage` has no `null`
+> opt-out. Codex's `config.toml` is a read-only store symlink on both backends,
+> its daemon `settings.json` a Home Manager copy of `native.daemonSettings`, and
+> Nix declares the trust of every hook it generates; Codex rejects a declared
+> MCP OAuth client secret. AGENTS.md puts the index and rules before the
+> context. The repository AGENTS.md, Copilot's devenv context and instruction
+> files, and Kiro's devenv steering land as read-only copies; Codex indexes
+> scoped rules that name `references`; a unit whose file is switched off or
+> replaced warns, and so does a devenv Codex AGENTS.md past 32 KiB under a
+> raised limit. Semble derives a Kiro agent-private MCP server from
+> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
+> delivery once through `mkRuntime`'s record-level `config`, and both
+> `mkRuntime` and the backend transforms reject a backend spec carrying anything
+> but `installPackage`, `migrationConfig` and `options`, since an overridden or
+> hand-built record reaches a transform without the constructor. Kiro hook
+> commands resolve packages through the shared `commandType`. Launchers bake the
+> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
+> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
+> through `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and
+> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
+> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
+> `agent.fileContent` where it copies, so a store-path string is a file, never a
+> body naming its own path. File content at `mkDefault` enables its entry;
+> `content.enable = false` suppresses every content form. The builder entry
+> point is `lib.ai.app.mkRuntime`. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned read-only copies and portable hooks reach its project `hooks.json` on
@@ -830,9 +830,9 @@ pool exists in the current evaluation;
 `ai.<runtime>.programs.stacked-workflows.enable = false` retracts that runtime's
 package contribution without affecting siblings. The removed top-level package
 enable option has no alias. `stacked-workflows.gitPreset` is deliberately not
-part of the program tree: it configures Home Manager's machine-wide
-`programs.git.settings` in Home Manager and a repository-local include in
-devenv. It has no runtime meaning, so both backends expose the same top-level
+part of the program tree: it sets the `git.*` options, which Home Manager
+delivers through `programs.git.settings` and devenv as a repository-local
+include. It has no runtime meaning, so both backends expose the same top-level
 companion instead of creating misleading runtime overrides.
 
 **The contributions land PER RUNTIME, not on the root pool** — since 2026-08-14

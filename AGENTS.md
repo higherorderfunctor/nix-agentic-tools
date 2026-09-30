@@ -153,6 +153,7 @@ for it. When several entries match, their guidance composes.
     - `packages/git-branchless/modules/**`
     - `packages/git-revise/modules/**`
     - `packages/git/**`
+    - `packages/stacked-workflows/modules/**`
   - Read:
     - [`packages/git/docs/git.md`](packages/git/docs/git.md)
 - **`git-branchless`**

@@ -3,12 +3,9 @@
 {
   lib,
   harness,
-  pkgs,
   ...
 }: let
-  inherit (harness) evalDevenv evalDevenvModules evalHm harnessNames mkTest;
-  presetPath = ".devenv/stacked-workflows.gitconfig";
-  sharedGitConfig = import ../lib/git-presets.nix;
+  inherit (harness) evalDevenv evalHm harnessNames mkTest;
 in {
   checks = {
     # ── Stacked-workflows: skills + router, user-global (HM) + project (devenv) ──
@@ -118,17 +115,23 @@ in {
     );
 
     # Runtime overrides control runtime pool writes only. A runtime-only enable
-    # cannot activate the machine-wide Git companion when the portable program
-    # remains disabled.
+    # cannot activate the Git companion when the portable program remains
+    # disabled.
     module-sws-git-preset-requires-portable-enable = mkTest "sws-git-preset-requires-portable-enable" (
       let
-        result = evalHm {
+        config = {
           ai.codex.programs.stacked-workflows.enable = true;
           stacked-workflows.gitPreset = "minimal";
         };
+        hm = evalHm config;
+        devenv = evalDevenv config;
       in
-        !(result.config.programs.git.settings ? branchless)
-        && result.config.ai.codex.skills ? stack-fix
+        hm.config.programs.git.settings
+        == {}
+        && !hm.config.git.branchless.enable
+        && devenv.config.git.settings == {}
+        && !(devenv.config.tasks ? "git:branchless-init")
+        && hm.config.ai.codex.skills ? stack-fix
     );
 
     # Conversely, a runtime negation does not retract Git configuration selected
@@ -141,272 +144,144 @@ in {
           stacked-workflows.gitPreset = "minimal";
         };
       in
-        result.config.programs.git.settings ? branchless
+        result.config.programs.git.settings.pull.rebase
         && !(result.config.ai.codex.skills ? stack-fix)
     );
 
-    # Git config applies when preset is "minimal".
-    module-sws-git-config-minimal = mkTest "sws-git-config-minimal" (
+    # The presets are sugar over `git.*`. Against the preset data frozen at
+    # cd934bb4, the rendered configuration on BOTH backends differs by
+    # exactly the approved changes: branchless.core.mainBranch gone from
+    # both, fetch.pruneTags gone from full, alias.sync (scopedSync) added to
+    # full. Every other leaf is byte-identical.
+    module-sws-presets-approved-diff = mkTest "sws-presets-approved-diff" (
       let
-        result = evalHm {
+        before = lib.importJSON ./fixtures/git-presets-cd934bb4.json;
+        approved = {
+          full = {
+            added = {"alias.sync" = "branchless sync 'stack()'";};
+            removed = ["branchless.core.mainBranch" "fetch.pruneTags"];
+          };
+          minimal = {
+            added = {};
+            removed = ["branchless.core.mainBranch"];
+          };
+        };
+        leaves = attrs:
+          lib.listToAttrs (lib.collect (x: x ? name) (lib.mapAttrsRecursive (path: value: {
+              name = lib.concatStringsSep "." path;
+              inherit value;
+            })
+            attrs));
+        rendered = backend: preset: let
+          config = {
+            ai.programs.stacked-workflows.enable = true;
+            stacked-workflows.gitPreset = preset;
+          };
+        in
+          if backend == "hm"
+          then (evalHm config).config.programs.git.settings
+          else (evalDevenv config).config.git.settings;
+        diffOf = old: new: {
+          added = removeAttrs new (lib.attrNames old);
+          removed = lib.attrNames (removeAttrs old (lib.attrNames new));
+          changed = lib.filter (key: new ? ${key} && new.${key} != old.${key}) (lib.attrNames old);
+        };
+        nest = flat: lib.foldl' lib.recursiveUpdate {} (lib.mapAttrsToList (key: lib.setAttrByPath (lib.splitString "." key)) flat);
+        matches = backend: preset: let
+          old = leaves before.${preset};
+          new = rendered backend preset;
+          diff = diffOf old (leaves new);
+          # The old rendering with exactly the approved edits applied.
+          expected = removeAttrs old approved.${preset}.removed // approved.${preset}.added;
+        in
+          diff.added
+          == approved.${preset}.added
+          && diff.removed == approved.${preset}.removed
+          && diff.changed == []
+          && lib.generators.toGitINI new == lib.generators.toGitINI (nest expected);
+      in
+        lib.all (backend: lib.all (matches backend) ["full" "minimal"]) ["devenv" "hm"]
+        && rendered "hm" "none" == {}
+        && rendered "devenv" "none" == {}
+    );
+
+    # One rendering: Home Manager's settings and devenv's included file are the
+    # same git configuration for every preset.
+    module-sws-presets-hm-devenv-same-ini = mkTest "sws-presets-hm-devenv-same-ini" (
+      lib.all (preset: let
+        config = {
+          ai.programs.stacked-workflows.enable = true;
+          stacked-workflows.gitPreset = preset;
+        };
+      in
+        lib.generators.toGitINI (evalHm config).config.programs.git.settings
+        == lib.generators.toGitINI (evalDevenv config).config.git.settings) ["full" "minimal" "none"]
+    );
+
+    # Every leaf of a tool's section in the preset data is a typed option
+    # (the rest go to `git.settings`), and presets set values at mkDefault:
+    # the typed option carries priority 1000 and enables the three tools the
+    # same way.
+    module-sws-preset-leaves-are-options = mkTest "sws-preset-leaves-are-options" (
+      let
+        presets = import ../lib/git-presets.nix;
+        evaluated = evalHm {
+          ai.programs.stacked-workflows.enable = true;
+          stacked-workflows.gitPreset = "full";
+        };
+        tools = ["absorb" "branchless" "revise"];
+        typedLeaf = section: path: let
+          option = lib.attrByPath path null evaluated.options.git.${section}.settings;
+        in
+          option != null && lib.isOption option && option.highestPrio == 1000;
+        sectionLeaves = section: data:
+          lib.collect lib.isList (lib.mapAttrsRecursive (path: _: path) (data.${section} or {}));
+      in
+        lib.all (preset:
+          lib.all (section: lib.all (typedLeaf section) (sectionLeaves section presets.${preset}.settings)) tools)
+        (lib.attrNames presets)
+        && lib.all (section: evaluated.config.git.${section}.enable && evaluated.options.git.${section}.enable.highestPrio == 1000) tools
+        && evaluated.options.git.branchless.scopedSync.highestPrio == 1000
+    );
+
+    # pull.ff beats pull.rebase since Git 2.34, so an active preset rejects it
+    # on both backends; "none" does not care.
+    module-sws-pull-ff-assertion = mkTest "sws-pull-ff-assertion" (
+      let
+        fails = evaluate: preset: raw:
+          lib.any (a: !a.assertion)
+          (evaluate ({
+              ai.programs.stacked-workflows.enable = true;
+              stacked-workflows.gitPreset = preset;
+            }
+            // raw))
+          .config
+          .assertions;
+      in
+        fails evalHm "minimal" {programs.git.settings.pull.ff = "only";}
+        && fails evalDevenv "full" {git.settings.pull.ff = "only";}
+        && !(fails evalHm "none" {programs.git.settings.pull.ff = "only";})
+        && !(fails evalDevenv "minimal" {})
+    );
+
+    # devenv: a preset enables git.branchless, so the init task exists; "none"
+    # and a disabled portable program leave no init task and nothing rendered.
+    module-sws-devenv-preset-tasks = mkTest "sws-devenv-preset-tasks" (
+      let
+        tasksOf = config: (evalDevenv config).config.tasks;
+      in
+        (tasksOf {
           ai.programs.stacked-workflows.enable = true;
           stacked-workflows.gitPreset = "minimal";
-        };
-        gitSettings = result.config.programs.git.settings;
-      in
-        (gitSettings ? branchless)
-        && (gitSettings ? pull)
-        && (gitSettings ? rebase)
-    );
-
-    # Git config applies when preset is "full" (includes extended settings).
-    module-sws-git-config-full = mkTest "sws-git-config-full" (
-      let
-        result = evalHm {
-          ai.programs.stacked-workflows.enable = true;
-          stacked-workflows.gitPreset = "full";
-        };
-        gitSettings = result.config.programs.git.settings;
-      in
-        (gitSettings ? branchless)
-        && (gitSettings ? diff)
-        && (gitSettings ? fetch)
-        && (gitSettings ? push)
-        && (gitSettings ? revise)
-    );
-
-    # Git config NOT set when preset is "none".
-    module-sws-git-config-none = mkTest "sws-git-config-none" (
-      let
-        result = evalHm {
+        })
+        ? "git:branchless-init"
+        && !((tasksOf {
           ai.programs.stacked-workflows.enable = true;
           stacked-workflows.gitPreset = "none";
-        };
-        gitSettings = result.config.programs.git.settings;
-      in
-        !(gitSettings ? branchless)
+        })
+        ? "git:branchless-init")
+        && (tasksOf {stacked-workflows.gitPreset = "none";}) ? "git:config"
     );
-
-    # Devenv renders the same minimal preset into a repository-local fragment
-    # and orders both mutation tasks before the upstream hook installer.
-    module-sws-devenv-git-config-minimal = mkTest "sws-devenv-git-config-minimal" (
-      let
-        result = evalDevenvModules [
-          {
-            options.git-hooks.enable = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-            };
-          }
-          {
-            config = {
-              ai.programs.stacked-workflows.enable = true;
-              git-hooks.enable = true;
-              stacked-workflows.gitPreset = "minimal";
-            };
-          }
-        ];
-        includeTask = result.config.tasks."stacked-workflows:git-config";
-        initTask = result.config.tasks."stacked-workflows:branchless-init";
-      in
-        result.config.files.${presetPath}.text
-        == lib.generators.toGitINI sharedGitConfig.minimal
-        && includeTask.after == ["devenv:files"]
-        && includeTask.before == ["stacked-workflows:branchless-init"]
-        && initTask.after == ["stacked-workflows:git-config"]
-        && initTask.before == ["devenv:git-hooks:install"]
-    );
-
-    # Full uses the same shared data and includes its extended sections.
-    module-sws-devenv-git-config-full = mkTest "sws-devenv-git-config-full" (
-      let
-        result = evalDevenv {
-          ai.programs.stacked-workflows.enable = true;
-          stacked-workflows.gitPreset = "full";
-        };
-      in
-        result.config.files.${presetPath}.text
-        == lib.generators.toGitINI sharedGitConfig.full
-        && lib.hasInfix ''[branchless "test"]'' result.config.files.${presetPath}.text
-        && result.config.tasks ? "stacked-workflows:branchless-init"
-        && result.config.tasks ? "stacked-workflows:git-config"
-    );
-
-    # None keeps only the reconciliation task so it can remove stale state.
-    module-sws-devenv-git-config-none = mkTest "sws-devenv-git-config-none" (
-      let
-        result = evalDevenv {
-          ai.programs.stacked-workflows.enable = true;
-          stacked-workflows.gitPreset = "none";
-        };
-      in
-        !(result.config.files ? ${presetPath})
-        && !(result.config.tasks ? "stacked-workflows:branchless-init")
-        && result.config.tasks ? "stacked-workflows:git-config"
-    );
-
-    # The option alone cannot activate its side effects; the portable program
-    # enable remains the owner of both the skills and Git companion.
-    module-sws-devenv-git-preset-requires-portable-enable = mkTest "sws-devenv-git-preset-requires-portable-enable" (
-      let
-        result = evalDevenv {stacked-workflows.gitPreset = "minimal";};
-      in
-        !(result.config.files ? ${presetPath})
-        && !(result.config.tasks ? "stacked-workflows:branchless-init")
-        && result.config.tasks ? "stacked-workflows:git-config"
-    );
-
-    # The common-config include is stable across linked worktrees. Transitions
-    # to either inactive state remove only the exact include this module owns.
-    module-sws-devenv-git-config-reconciliation = let
-      enabled = evalDevenv {
-        ai.programs.stacked-workflows.enable = true;
-        stacked-workflows.gitPreset = "minimal";
-      };
-      disabled = evalDevenv {stacked-workflows.gitPreset = "minimal";};
-      none = evalDevenv {
-        ai.programs.stacked-workflows.enable = true;
-        stacked-workflows.gitPreset = "none";
-      };
-      enabledFragment = pkgs.writeText "stacked-workflows.gitconfig" enabled.config.files.${presetPath}.text;
-    in
-      pkgs.runCommand "module-sws-devenv-git-config-reconciliation" {} ''
-        repository="$TMPDIR/repository"
-        linked="$TMPDIR/linked"
-        ${lib.getExe pkgs.git} init --initial-branch=main "$repository"
-        ${lib.getExe pkgs.git} -C "$repository" config user.email test@example.invalid
-        ${lib.getExe pkgs.git} -C "$repository" config user.name Test
-        touch "$repository/tracked"
-        ${lib.getExe pkgs.git} -C "$repository" add tracked
-        ${lib.getExe pkgs.git} -C "$repository" commit -m initial
-        ${lib.getExe pkgs.git} -C "$repository" worktree add "$linked" -b linked
-        mkdir -p "$linked/.devenv"
-        ln -s ${enabledFragment} "$linked/${presetPath}"
-
-        repository_config="$repository/.git/config"
-        preset_path="$repository/.git/stacked-workflows.gitconfig"
-        unrelated="$TMPDIR/unrelated.gitconfig"
-        printf '%s\n' '[test]' '  unrelated = true' >"$unrelated"
-        ${lib.getExe pkgs.git} config --file "$repository_config" --add include.path "$unrelated"
-
-        DEVENV_ROOT="$linked" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg enabled.config.tasks."stacked-workflows:git-config".exec}
-        test "$(${lib.getExe pkgs.git} config --file "$repository_config" --fixed-value --get-all include.path "$preset_path")" = "$preset_path"
-        test "$(${lib.getExe pkgs.git} -C "$linked" config --get branchless.core.mainBranch)" = main
-
-        rm "$preset_path"
-        DEVENV_ROOT="$linked" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg none.config.tasks."stacked-workflows:git-config".exec}
-        ! ${lib.getExe pkgs.git} config --file "$repository_config" --fixed-value --get-all include.path "$preset_path"
-        test "$(${lib.getExe pkgs.git} config --file "$repository_config" --fixed-value --get-all include.path "$unrelated")" = "$unrelated"
-        test ! -e "$preset_path"
-
-        DEVENV_ROOT="$linked" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg enabled.config.tasks."stacked-workflows:git-config".exec}
-        DEVENV_ROOT="$linked" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg disabled.config.tasks."stacked-workflows:git-config".exec}
-        ! ${lib.getExe pkgs.git} config --file "$repository_config" --fixed-value --get-all include.path "$preset_path"
-        test "$(${lib.getExe pkgs.git} config --file "$repository_config" --fixed-value --get-all include.path "$unrelated")" = "$unrelated"
-        touch "$out"
-      '';
-
-    # The common config and branchless state are shared by linked worktrees.
-    # Repeated paired invocations must serialize both transactions: the include
-    # and fragment agree after every enable/disable race, and two first-time
-    # initializers both succeed.
-    module-sws-devenv-common-state-concurrency = let
-      enabled = evalDevenv {
-        ai.programs.stacked-workflows.enable = true;
-        stacked-workflows.gitPreset = "minimal";
-      };
-      none = evalDevenv {
-        ai.programs.stacked-workflows.enable = true;
-        stacked-workflows.gitPreset = "none";
-      };
-      enabledFragment = pkgs.writeText "stacked-workflows.gitconfig" enabled.config.files.${presetPath}.text;
-    in
-      pkgs.runCommand "module-sws-devenv-common-state-concurrency" {} ''
-        export HOME="$TMPDIR/home"
-        mkdir -p "$HOME"
-
-        for iteration in $(${lib.getExe' pkgs.coreutils "seq"} 1 20); do
-          repository="$TMPDIR/repository-$iteration"
-          first="$TMPDIR/first-$iteration"
-          second="$TMPDIR/second-$iteration"
-          ${lib.getExe pkgs.git} init --initial-branch=main "$repository"
-          ${lib.getExe pkgs.git} -C "$repository" config user.email test@example.invalid
-          ${lib.getExe pkgs.git} -C "$repository" config user.name Test
-          touch "$repository/tracked"
-          ${lib.getExe pkgs.git} -C "$repository" add tracked
-          ${lib.getExe pkgs.git} -C "$repository" commit -m initial
-          ${lib.getExe pkgs.git} -C "$repository" worktree add "$first" -b first
-          ${lib.getExe pkgs.git} -C "$repository" worktree add "$second" -b second
-          mkdir -p "$first/.devenv" "$second/.devenv"
-          ln -s ${enabledFragment} "$first/${presetPath}"
-          ln -s ${enabledFragment} "$second/${presetPath}"
-
-          DEVENV_ROOT="$first" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg enabled.config.tasks."stacked-workflows:git-config".exec} &
-          enable_pid="$!"
-          DEVENV_ROOT="$second" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg none.config.tasks."stacked-workflows:git-config".exec} &
-          disable_pid="$!"
-          wait "$enable_pid"
-          wait "$disable_pid"
-
-          repository_config="$repository/.git/config"
-          preset_path="$repository/.git/stacked-workflows.gitconfig"
-          include_present=false
-          if ${lib.getExe pkgs.git} config --file "$repository_config" \
-            --fixed-value --get-all include.path "$preset_path" >/dev/null; then
-            include_present=true
-          else
-            include_status="$?"
-            test "$include_status" -eq 1
-          fi
-          fragment_present=false
-          if test -e "$preset_path"; then
-            fragment_present=true
-            test "$(${lib.getExe pkgs.git} config --file "$preset_path" branchless.core.mainBranch)" = main
-          fi
-          test "$include_present" = "$fragment_present"
-
-          DEVENV_ROOT="$first" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg enabled.config.tasks."stacked-workflows:git-config".exec}
-          DEVENV_ROOT="$first" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg enabled.config.tasks."stacked-workflows:branchless-init".exec} &
-          first_pid="$!"
-          DEVENV_ROOT="$second" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg enabled.config.tasks."stacked-workflows:branchless-init".exec} &
-          second_pid="$!"
-          wait "$first_pid"
-          wait "$second_pid"
-          test -d "$repository/.git/branchless"
-        done
-
-        DEVENV_ROOT="$first" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg enabled.config.tasks."stacked-workflows:git-config".exec}
-        touch "$repository/.git/config.lock"
-        if DEVENV_ROOT="$first" ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg none.config.tasks."stacked-workflows:git-config".exec}; then
-          echo "disabled reconciliation unexpectedly ignored config.lock" >&2
-          exit 1
-        fi
-        test -e "$repository/.git/stacked-workflows.gitconfig"
-
-        touch "$out"
-      '';
-
-    # Check the rendered task bodies as standalone Bash, which is how devenv
-    # executes tasks. This catches strict-mode and quoting regressions early.
-    module-sws-devenv-task-shellcheck = let
-      result = evalDevenv {
-        ai.programs.stacked-workflows.enable = true;
-        stacked-workflows.gitPreset = "full";
-      };
-      includeScript = pkgs.writeText "stacked-workflows-git-config.sh" ''
-        #!/usr/bin/env bash
-        ${result.config.tasks."stacked-workflows:git-config".exec}
-      '';
-      initScript = pkgs.writeText "stacked-workflows-branchless-init.sh" ''
-        #!/usr/bin/env bash
-        ${result.config.tasks."stacked-workflows:branchless-init".exec}
-      '';
-    in
-      pkgs.runCommand "module-sws-devenv-task-shellcheck" {} ''
-        ${lib.getExe pkgs.shellcheck} ${includeScript}
-        ${lib.getExe pkgs.shellcheck} ${initScript}
-        touch "$out"
-      '';
 
     # References are bundled as REAL files inside each skill dir (deref'd at
     # build) — NOT written as separate .claude/references/* files anymore.

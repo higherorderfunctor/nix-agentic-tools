@@ -18,9 +18,9 @@ Each skill's own description states which operations it covers.
 
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-09-29 — Home Manager and devenv share the Git preset
-> map; devenv reconciles one common-directory include and initializes branchless
-> before hook installation.
+> **Last verified:** 2026-09-29 — `gitPreset` is `mkDefault` sugar over the
+> `git.*` options (packages/git/docs/git.md), declared once in
+> `modules/options.nix`.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.
@@ -37,11 +37,14 @@ content package with per-backend modules:
   `packages/stacked-workflows/packages/stacked-workflows-content/package.nix`)
 - `packages/stacked-workflows/router.nix` — the keyed skill-routing rule, shared
   by both backend modules
-- `packages/stacked-workflows/lib/git-config*.nix` — shared Git preset data
+- `packages/stacked-workflows/lib/git-config*.nix`, `lib/git-presets.nix` —
+  shared Git preset data (git-key shaped)
+- `packages/stacked-workflows/modules/options.nix` — `gitPreset`, declared once
+  and imported by both backends
 - `packages/stacked-workflows/modules/homeManager/` — user-global module
-  (skills + skill-routing rule + Git preset projection)
+  (skills + skill-routing rule)
 - `packages/stacked-workflows/modules/devenv/` — project-local module (skills +
-  skill-routing rule + repository Git preset projection + branchless init)
+  skill-routing rule)
 - `packages/stacked-workflows/docs/development.md` — this package-owned
   development guide
 - `packages/git-absorb/`, `packages/git-branchless/`, `packages/git-revise/` —
@@ -50,38 +53,39 @@ content package with per-backend modules:
 
 ### Git Config Presets
 
-One preset map under `packages/stacked-workflows/lib/` owns both the enum values
-and the `"minimal"` / `"full"` / `"none"` settings. Both backends expose
-`stacked-workflows.gitPreset` from that map. It stays outside `ai.*` because Git
-configuration is not runtime-specific.
+`stacked-workflows.gitPreset` (`"none"`, `"minimal"`, `"full"`) is declared once
+in `modules/options.nix` and is pure sugar over the `git.*` options that
+packages/git and the three git tool owners declare. It applies only while
+`ai.programs.stacked-workflows.enable` is true, and sets everything at
+`mkDefault`:
 
-Home Manager applies every selected leaf to `programs.git.settings` at
-`mkDefault` priority. The pinned devenv revision has no declarative Git-settings
-surface: its option index exposes only `git.root`, and
-`src/modules/integrations/git.nix` defines that as automatically populated root
-metadata. The devenv module therefore renders the same attrset as a read-only
-`files.*` Git config fragment. Its reconciliation task copies that fragment to
-`stacked-workflows.gitconfig` under the common Git directory and idempotently
-adds that stable absolute path to `include.path` in the common repository
-config. The common directory is shared by every linked worktree, unlike
-`DEVENV_ROOT`, so the include resolves from all of them. Repository-local values
-take priority over identical Home Manager values, so combining both is a no-op.
-Reconciliation and branchless initialization use one lock in that common
-directory, so tasks launched from different worktrees cannot race on the shared
-config or branchless state. Reconciliation publishes the fragment with a
-same-directory temporary file and atomic rename. Initialization checks for an
-existing branchless directory only after taking the lock, making concurrent and
-repeated initialization idempotent.
+- a tool's section of the preset data (`absorb`, `branchless`, `revise`) → that
+  tool's typed `git.<section>.settings`, whole option values. A key that is not
+  a typed option fails evaluation;
+- every other key → `git.settings`, per leaf;
+- `scopedSync = true` (full only) → `git.branchless.scopedSync`;
+- `git.{absorb,branchless,revise}.enable`, which installs the three tools on
+  both backends and runs `git branchless init` on devenv.
 
-The reconciliation task always runs after `devenv:files`. When the preset is
-active, the branchless-init task follows it and precedes
-`devenv:git-hooks:install`, so git-branchless owns its hooks before prek
-installs or chains its own. For `"none"` or a disabled portable program,
-reconciliation removes only its exact `include.path` value and its owned
-common-directory fragment; the generated fragment and branchless-init task are
-absent. Because devenv has no declarative Git-settings attrset, there is no
-repository-side `pull.ff` option on which to mirror Home Manager's
-evaluation-time conflict assertion.
+Delivery, precedence and init are the git layer's (packages/git/docs/git.md):
+Home Manager writes `programs.git.settings`, devenv a repository-local include
+kept last. The package installs are new with this sugar: before it, Home Manager
+installed nothing and devenv installed git-branchless.
+
+Value changes against the data before this design, and nothing else (checked by
+`module-sws-presets-approved-diff` against a fixture frozen at `cd934bb4`):
+
+- `branchless.core.mainBranch = "main"` is gone from both presets. Init writes
+  the detected main branch into every repository, so a user-global value is dead
+  there and a repository-local one forced `main` onto `master` repositories.
+  `init.defaultBranch = "main"` still steers detection.
+- `fetch.pruneTags` is gone from full: it deletes local tags without a remote
+  counterpart from every worktree on any fetch, including pre-rebase backups.
+- full adds `alias.sync = "branchless sync 'stack()'"` (scopedSync).
+
+The `pull.ff` assertion (`pull.ff = "only"` beats `pull.rebase` since Git 2.34)
+is shared as well: it reads the merged `git.settings`, which on Home Manager is
+`programs.git.settings`, so devenv now has it too.
 
 ### Skills + Skill-Routing Rule
 

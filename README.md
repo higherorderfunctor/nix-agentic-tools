@@ -61,8 +61,8 @@ ai = {
   settings.reasoningEffort = "high";
 };
 
-# Git companion; Home Manager applies it user-global, while devenv applies
-# the same preset at repository scope.
+# Git companion: mkDefault values on the git.* options, which Home Manager
+# applies user-global and devenv at repository scope.
 stacked-workflows.gitPreset = "full";
 
 services.mcp-servers.servers.github-mcp = {
@@ -796,7 +796,8 @@ same options.
 ```nix
 ai.programs.stacked-workflows.enable = true;
 
-# Home Manager applies this user-global; devenv applies it repository-local.
+# mkDefault values on the git.* options (see Git Tools): Home Manager
+# applies them user-global, devenv repository-local.
 stacked-workflows.gitPreset = "full"; # or "minimal" or "none"
 
 # Optional runtime override: null inherits, false disables one runtime.

@@ -351,8 +351,8 @@ in {
     # HM/devenv root and runtime option trees within its capability set,
     # including nested runtime-only settings.
     # `gitPreset` deliberately stays out of this tree as a top-level companion
-    # because it configures Git, not a runtime. Both backends expose the same
-    # enum: Home Manager projects it user-global, devenv repository-local.
+    # because it configures Git, not a runtime. Both backends import one
+    # declaration of it (packages/stacked-workflows/modules/options.nix).
     module-skill-packages-program-option-parity = mkTest "skill-packages-program-option-parity" (
       let
         shape = declarations:
