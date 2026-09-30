@@ -997,6 +997,10 @@ from pathlib import Path
 args = sys.argv[1:]
 with open(os.environ['NIX_CALLS'], 'a') as f: f.write(json.dumps(args) + '\\n')
 mode = os.environ.get('NIX_MODE', '')
+# regenerate_sidecars' roster: the fixture packages expose no
+# passthru.regenerateExtracted, so both its build and its eval list nothing.
+if args[:1] in (['build'], ['eval']) and 'regenerateExtracted' in ' '.join(args):
+    raise SystemExit(0)
 if args[:1] == ['eval']:
     joined = ' '.join(args)
     if 'builtins.currentSystem' in joined: print('x86_64-linux')

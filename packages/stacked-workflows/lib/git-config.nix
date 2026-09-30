@@ -1,17 +1,16 @@
 # Recommended git configuration for stacked commit workflows.
 #
-# Usage in home-manager:
-#   programs.git.settings = inputs.stacked-workflow-skills.lib.gitConfig;
+# Git-key shaped: `<section>.<key>`. ../modules/options.nix applies it as
+# sugar over the `git.*` options, the tools' sections (`absorb`, `branchless`,
+# `revise`) to their typed settings and everything else to `git.settings`, so
+# a key here that is not a typed option fails evaluation.
 #
-# Or via the home-manager module (applies mkDefault to each leaf):
-#   ai.programs.stacked-workflows.enable = true;
-#   stacked-workflows.gitPreset = "minimal";
-#
-# See packages/stacked-workflows/references/recommended-config.md for explanations of each setting.
+# No `branchless.core.mainBranch`: `git branchless init` writes the detected
+# main branch into every repository it initializes, so a user-global value is
+# dead there, and a repository-local one would force `main` onto a `master`
+# repository. `init.defaultBranch` below still steers init's detection.
 {
   # ── Required ──────────────────────────────────────────────────────
-
-  branchless.core.mainBranch = "main";
 
   init.defaultBranch = "main";
 

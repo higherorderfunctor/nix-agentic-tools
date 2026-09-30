@@ -130,6 +130,27 @@
       gitEntries
     );
     tableFile = pkgs.writeText "update-targets-parity.tsv" table;
+
+    # An update target whose package carries a census (`passthru.extracted`)
+    # and is NOT bumped through its own `--use-update-script` (whose
+    # `extraExtract` regenerates the sidecar) must expose
+    # `regenerateExtracted`: update-pkg.sh runs it after the rev bump and
+    # nix-update, and nothing else would refresh the sidecar.
+    staleCensusTargets = builtins.filter (name: let
+      passthru = packages.${name}.passthru or {};
+    in
+      passthru ? extracted
+      && !(passthru ? regenerateExtracted)
+      && !(lib.elem "--use-update-script" (updateTargets.${name}.flags or [])))
+    targetPackageNames;
+
+    # Every sidecar a package's `regenerateExtracted` writes must be a
+    # committed file: the update scripts stage exactly these paths, and a
+    # wrong one aborts the whole `git add`.
+    regeneratedSidecars =
+      lib.unique (lib.concatMap (package: package.passthru.regenerateExtracted.sidecars)
+        (builtins.filter (package: (package.passthru or {}) ? regenerateExtracted) (builtins.attrValues packages)));
+    sidecarsFile = pkgs.writeText "update-targets-regenerated-sidecars.txt" (lib.concatStringsSep "\n" regeneratedSidecars);
   in
     pkgs.runCommandLocal "update-targets-parity-check" {
       nativeBuildInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep];
@@ -146,6 +167,23 @@
         echo "ERROR: removing the context7-mcp row did not make its package uncovered" >&2
         exit 1
       fi
+
+      if [ -n "${toString staleCensusTargets}" ]; then
+        echo "ERROR: update targets with passthru.extracted but no sidecar regeneration: ${toString staleCensusTargets}" >&2
+        echo "Give each passthru.regenerateExtracted (packageLib.mkRegenerateExtracted)." >&2
+        exit 1
+      fi
+
+      if [ ! -s ${sidecarsFile} ]; then
+        echo "ERROR: no package exposes passthru.regenerateExtracted, though Semble's snapshots alone need one" >&2
+        exit 1
+      fi
+      while IFS= read -r sidecar || [ -n "$sidecar" ]; do
+        if [ ! -f "$sidecar" ]; then
+          echo "ERROR: passthru.regenerateExtracted names $sidecar, which is not a committed file" >&2
+          exit 1
+        fi
+      done < ${sidecarsFile}
 
       echo "Versioned flake package update coverage:"
       cat ${coverageFile}

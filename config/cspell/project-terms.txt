@@ -75,6 +75,7 @@ codesign
 codewhisperer
 COLORFGBG
 COLORTERM
+commentchar
 commondir
 completionist
 configdir
@@ -109,6 +110,7 @@ direnv
 direnvrc
 disableable
 disjointness
+docbook
 docnix
 docsite
 dogfood
@@ -249,6 +251,7 @@ lifecycles
 lintable
 linuxbrew
 listdir
+literallayout
 livelink
 livelock
 llms
@@ -270,6 +273,7 @@ memsize
 Menlo
 mergetool
 metacharacter
+metavariable
 minishlab
 misattributes
 miscited
@@ -284,6 +288,7 @@ moff
 mojibake
 mountpoint
 mtimes
+multivar
 mystor
 napi
 narinfo
@@ -306,6 +311,7 @@ nohup
 nomic
 northstar
 nosuid
+NOSYSTEM
 NPROCESSORS
 nrfutil
 nullary
@@ -354,6 +360,7 @@ pname
 posh
 posttooluse
 prefilter
+preinitialized
 prek
 prepatched
 prestart
@@ -380,10 +387,12 @@ rebuildable
 recharacterize
 recognised
 reflog
+refsect
 reftable
 regen
 rehosted
 reimplementation
+reinit
 relitigate
 relpath
 remapper
@@ -419,6 +428,7 @@ sadjow
 sandboxed
 sarif
 scriptable
+scrutinee
 sdiehl
 segs
 semble
@@ -433,6 +443,7 @@ shortrev
 sigmask
 sigpipe
 sigtool
+simpara
 sixel
 skillname
 skillsdir
@@ -460,6 +471,7 @@ subshell
 subshells
 substituters
 superlinear
+supersection
 supersets
 swapfile
 sweepability
@@ -486,6 +498,8 @@ tryeval
 tsgo
 tsgolint
 tummychow
+turbofish
+ufcs
 ugrep
 ultracode
 unapprove
@@ -532,6 +546,7 @@ wikilink
 WINDIR
 worktree
 worktrees
+writeln
 WSLENV
 wyhash
 xhigh

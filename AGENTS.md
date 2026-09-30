@@ -146,6 +146,34 @@ for it. When several entries match, their guidance composes.
     - `devenv.nix`
   - Read:
     - [`dev/fragments/flake/binary-cache.md`](dev/fragments/flake/binary-cache.md)
+- **`git`**
+  - Match:
+    - `checks/git-config/**`
+    - `lib/git-tool-settings/ini-type.nix`
+    - `lib/git-tool-settings/repo-config.nix`
+    - `lib/git-tool-settings/repo-config.sh`
+    - `lib/git-tool-settings/tool-module.nix`
+    - `packages/git-absorb/modules/**`
+    - `packages/git-branchless/modules/**`
+    - `packages/git-revise/modules/**`
+    - `packages/git/**`
+    - `packages/stacked-workflows/modules/**`
+  - Read:
+    - [`packages/git/docs/git.md`](packages/git/docs/git.md)
+- **`git-branchless`**
+  - Match:
+    - `packages/git-branchless/**`
+  - Read:
+    - [`packages/git-branchless/docs/extraction.md`](packages/git-branchless/docs/extraction.md)
+- **`git-tool-settings`**
+  - Match:
+    - `checks/git-tool-settings/**`
+    - `lib/git-tool-settings/**`
+    - `packages/git-absorb/**`
+    - `packages/git-branchless/**`
+    - `packages/git-revise/**`
+  - Read:
+    - [`dev/fragments/git-tool-settings/git-tool-settings.md`](dev/fragments/git-tool-settings/git-tool-settings.md)
 - **`hm-modules`**
   - Match:
     - `packages/*/modules/homeManager/**`
@@ -857,8 +885,8 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-28 — follow-ups amend the PR whose scope they
-> belong to; the removed validation Stop hook no longer mirrors prek state.
+> **Last verified:** 2026-09-29 — repository-level branchless initialization
+> precedes prek hook installation; worktrees still need no bootstrap.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -875,6 +903,17 @@ the repo before committing.
 >   materialize `.pre-commit-config.yaml` either — measured 2026-07-31 in two
 >   fresh worktrees, where the task succeeded and the next commit was still
 >   rejected.
+> - **Do not move prek config resolution back to the committing worktree.**
+>   Evaluated and declined 2026-09-29: CI already runs each branch's own config,
+>   while materializing a fresh worktree's `files.*` costs about 17 seconds cold
+>   (`devenv tasks run --mode single devenv:files`), so there is no
+>   post-checkout materializer. The premise: every local validator has a CI
+>   backend, enforced by `config/repo-validation.nix`, so a branch that ADDS a
+>   gate cannot escape it. That premise carries the weight — a branch that
+>   DELETES a gate fails loudly under the primary checkout's config, but one
+>   that adds a gate is skipped silently locally, and only the CI backend
+>   catches it. A repository without that enforced property should not copy this
+>   decision.
 > - **Do not restore `devenv-test` as a required context.** It was promoted
 >   2026-08-03 and demoted two days later as a merge-blocking liability, risk
 >   accepted; it left automatic PR/push execution entirely on 2026-08-29.

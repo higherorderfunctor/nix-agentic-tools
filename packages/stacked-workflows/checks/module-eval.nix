@@ -115,17 +115,23 @@ in {
     );
 
     # Runtime overrides control runtime pool writes only. A runtime-only enable
-    # cannot activate the machine-wide Git companion when the portable program
-    # remains disabled.
+    # cannot activate the Git companion when the portable program remains
+    # disabled.
     module-sws-git-preset-requires-portable-enable = mkTest "sws-git-preset-requires-portable-enable" (
       let
-        result = evalHm {
+        config = {
           ai.codex.programs.stacked-workflows.enable = true;
           stacked-workflows.gitPreset = "minimal";
         };
+        hm = evalHm config;
+        devenv = evalDevenv config;
       in
-        !(result.config.programs.git.settings ? branchless)
-        && result.config.ai.codex.skills ? stack-fix
+        hm.config.programs.git.settings
+        == {}
+        && !hm.config.git.branchless.enable
+        && devenv.config.git.settings == {}
+        && !(devenv.config.tasks ? "git:branchless-init")
+        && hm.config.ai.codex.skills ? stack-fix
     );
 
     # Conversely, a runtime negation does not retract Git configuration selected
@@ -138,50 +144,143 @@ in {
           stacked-workflows.gitPreset = "minimal";
         };
       in
-        result.config.programs.git.settings ? branchless
+        result.config.programs.git.settings.pull.rebase
         && !(result.config.ai.codex.skills ? stack-fix)
     );
 
-    # Git config applies when preset is "minimal".
-    module-sws-git-config-minimal = mkTest "sws-git-config-minimal" (
+    # The presets are sugar over `git.*`. Against the preset data frozen at
+    # cd934bb4, the rendered configuration on BOTH backends differs by
+    # exactly the approved changes: branchless.core.mainBranch gone from
+    # both, fetch.pruneTags gone from full, alias.sync (scopedSync) added to
+    # full. Every other leaf is byte-identical.
+    module-sws-presets-approved-diff = mkTest "sws-presets-approved-diff" (
       let
-        result = evalHm {
-          ai.programs.stacked-workflows.enable = true;
-          stacked-workflows.gitPreset = "minimal";
+        before = lib.importJSON ./fixtures/git-presets-cd934bb4.json;
+        approved = {
+          full = {
+            added = {"alias.sync" = "branchless sync 'stack()'";};
+            removed = ["branchless.core.mainBranch" "fetch.pruneTags"];
+          };
+          minimal = {
+            added = {};
+            removed = ["branchless.core.mainBranch"];
+          };
         };
-        gitSettings = result.config.programs.git.settings;
+        leaves = attrs:
+          lib.listToAttrs (lib.collect (x: x ? name) (lib.mapAttrsRecursive (path: value: {
+              name = lib.concatStringsSep "." path;
+              inherit value;
+            })
+            attrs));
+        rendered = backend: preset: let
+          config = {
+            ai.programs.stacked-workflows.enable = true;
+            stacked-workflows.gitPreset = preset;
+          };
+        in
+          if backend == "hm"
+          then (evalHm config).config.programs.git.settings
+          else (evalDevenv config).config.git.settings;
+        diffOf = old: new: {
+          added = removeAttrs new (lib.attrNames old);
+          removed = lib.attrNames (removeAttrs old (lib.attrNames new));
+          changed = lib.filter (key: new ? ${key} && new.${key} != old.${key}) (lib.attrNames old);
+        };
+        nest = flat: lib.foldl' lib.recursiveUpdate {} (lib.mapAttrsToList (key: lib.setAttrByPath (lib.splitString "." key)) flat);
+        matches = backend: preset: let
+          old = leaves before.${preset};
+          new = rendered backend preset;
+          diff = diffOf old (leaves new);
+          # The old rendering with exactly the approved edits applied.
+          expected = removeAttrs old approved.${preset}.removed // approved.${preset}.added;
+        in
+          diff.added
+          == approved.${preset}.added
+          && diff.removed == approved.${preset}.removed
+          && diff.changed == []
+          && lib.generators.toGitINI new == lib.generators.toGitINI (nest expected);
       in
-        (gitSettings ? branchless)
-        && (gitSettings ? pull)
-        && (gitSettings ? rebase)
+        lib.all (backend: lib.all (matches backend) ["full" "minimal"]) ["devenv" "hm"]
+        && rendered "hm" "none" == {}
+        && rendered "devenv" "none" == {}
     );
 
-    # Git config applies when preset is "full" (includes extended settings).
-    module-sws-git-config-full = mkTest "sws-git-config-full" (
+    # One rendering: Home Manager's settings and devenv's included file are the
+    # same git configuration for every preset.
+    module-sws-presets-hm-devenv-same-ini = mkTest "sws-presets-hm-devenv-same-ini" (
+      lib.all (preset: let
+        config = {
+          ai.programs.stacked-workflows.enable = true;
+          stacked-workflows.gitPreset = preset;
+        };
+      in
+        lib.generators.toGitINI (evalHm config).config.programs.git.settings
+        == lib.generators.toGitINI (evalDevenv config).config.git.settings) ["full" "minimal" "none"]
+    );
+
+    # Every leaf of a tool's section in the preset data is a typed option
+    # (the rest go to `git.settings`), and presets set values at mkDefault:
+    # the typed option carries priority 1000 and enables the three tools the
+    # same way.
+    module-sws-preset-leaves-are-options = mkTest "sws-preset-leaves-are-options" (
       let
-        result = evalHm {
+        presets = import ../lib/git-presets.nix;
+        evaluated = evalHm {
           ai.programs.stacked-workflows.enable = true;
           stacked-workflows.gitPreset = "full";
         };
-        gitSettings = result.config.programs.git.settings;
+        tools = ["absorb" "branchless" "revise"];
+        typedLeaf = section: path: let
+          option = lib.attrByPath path null evaluated.options.git.${section}.settings;
+        in
+          option != null && lib.isOption option && option.highestPrio == 1000;
+        sectionLeaves = section: data:
+          lib.collect lib.isList (lib.mapAttrsRecursive (path: _: path) (data.${section} or {}));
       in
-        (gitSettings ? branchless)
-        && (gitSettings ? diff)
-        && (gitSettings ? fetch)
-        && (gitSettings ? push)
-        && (gitSettings ? revise)
+        lib.all (preset:
+          lib.all (section: lib.all (typedLeaf section) (sectionLeaves section presets.${preset}.settings)) tools)
+        (lib.attrNames presets)
+        && lib.all (section: evaluated.config.git.${section}.enable && evaluated.options.git.${section}.enable.highestPrio == 1000) tools
+        && evaluated.options.git.branchless.scopedSync.highestPrio == 1000
     );
 
-    # Git config NOT set when preset is "none".
-    module-sws-git-config-none = mkTest "sws-git-config-none" (
+    # pull.ff beats pull.rebase since Git 2.34, so an active preset rejects it
+    # on both backends; "none" does not care.
+    module-sws-pull-ff-assertion = mkTest "sws-pull-ff-assertion" (
       let
-        result = evalHm {
+        fails = evaluate: preset: raw:
+          lib.any (a: !a.assertion)
+          (evaluate ({
+              ai.programs.stacked-workflows.enable = true;
+              stacked-workflows.gitPreset = preset;
+            }
+            // raw))
+          .config
+          .assertions;
+      in
+        fails evalHm "minimal" {programs.git.settings.pull.ff = "only";}
+        && fails evalDevenv "full" {git.settings.pull.ff = "only";}
+        && !(fails evalHm "none" {programs.git.settings.pull.ff = "only";})
+        && !(fails evalDevenv "minimal" {})
+    );
+
+    # devenv: a preset enables git.branchless, so the init task exists; "none"
+    # and a disabled portable program leave no init task and nothing rendered.
+    module-sws-devenv-preset-tasks = mkTest "sws-devenv-preset-tasks" (
+      let
+        tasksOf = config: (evalDevenv config).config.tasks;
+      in
+        (tasksOf {
+          ai.programs.stacked-workflows.enable = true;
+          stacked-workflows.gitPreset = "minimal";
+        })
+        ? "git:branchless-init"
+        && !((tasksOf {
           ai.programs.stacked-workflows.enable = true;
           stacked-workflows.gitPreset = "none";
-        };
-        gitSettings = result.config.programs.git.settings;
-      in
-        !(gitSettings ? branchless)
+        })
+        ? "git:branchless-init")
+        && (tasksOf {stacked-workflows.gitPreset = "none";}) ? "git:config"
     );
 
     # References are bundled as REAL files inside each skill dir (deref'd at

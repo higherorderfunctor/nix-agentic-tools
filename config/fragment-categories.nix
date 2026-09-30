@@ -217,6 +217,42 @@ _: {
     # HM module file so conventions load whenever a contributor is
     # touching any module. Post-factory, HM modules live in
     # packages/*/modules/homeManager/.
+    # The shared census + generator for git tools' own config keys: the
+    # tree-walking extractors' helpers, the sidecar schema, and the typed
+    # option generator every git-tool owner calls.
+    # The `git.*` option root: packages/git and the three git tool owners
+    # declare it together, and the stacked-workflows preset sets it.
+    git = {
+      scopes = [
+        "checks/git-config/**"
+        "lib/git-tool-settings/ini-type.nix"
+        "lib/git-tool-settings/repo-config.nix"
+        "lib/git-tool-settings/repo-config.sh"
+        "lib/git-tool-settings/tool-module.nix"
+        "packages/git-absorb/modules/**"
+        "packages/git-branchless/modules/**"
+        "packages/git-revise/modules/**"
+        "packages/git/**"
+        "packages/stacked-workflows/modules/**"
+      ];
+      sources = [
+        {
+          dir = "git";
+          location = "package";
+          name = "git";
+        }
+      ];
+    };
+    git-tool-settings = {
+      scopes = [
+        "checks/git-tool-settings/**"
+        "lib/git-tool-settings/**"
+        "packages/git-absorb/**"
+        "packages/git-branchless/**"
+        "packages/git-revise/**"
+      ];
+      sources = ["git-tool-settings"];
+    };
     hm-modules = {
       scopes = [
         "packages/*/modules/homeManager/**"

@@ -18,9 +18,9 @@ Each skill's own description states which operations it covers.
 
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-09-13 — package structure re-stated for the owner
-> layout: the content derivation is `packages/stacked-workflows-content/`, and
-> the three git tools are separate owner facets rather than one shared dir.
+> **Last verified:** 2026-09-29 — `gitPreset` is `mkDefault` sugar over the
+> `git.*` options (packages/git/docs/git.md), declared once in
+> `modules/options.nix`.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.
@@ -37,8 +37,12 @@ content package with per-backend modules:
   `packages/stacked-workflows/packages/stacked-workflows-content/package.nix`)
 - `packages/stacked-workflows/router.nix` — the keyed skill-routing rule, shared
   by both backend modules
+- `packages/stacked-workflows/lib/git-config*.nix`, `lib/git-presets.nix` —
+  shared Git preset data (git-key shaped)
+- `packages/stacked-workflows/modules/options.nix` — `gitPreset`, declared once
+  and imported by both backends
 - `packages/stacked-workflows/modules/homeManager/` — user-global module
-  (skills + skill-routing rule + git-config presets)
+  (skills + skill-routing rule)
 - `packages/stacked-workflows/modules/devenv/` — project-local module (skills +
   skill-routing rule)
 - `packages/stacked-workflows/docs/development.md` — this package-owned
@@ -49,12 +53,39 @@ content package with per-backend modules:
 
 ### Git Config Presets
 
-Two preset levels are exported via `lib.gitConfig` (essential aliases) and
-`lib.gitConfigFull` (extended configuration). The HM module wires these into
-`programs.git.settings` via the `gitPreset` option (`"minimal"` / `"full"` /
-`"none"`). That option remains `stacked-workflows.gitPreset`, outside `ai.*`,
-because it is machine-wide Home Manager configuration with no runtime-specific
-or devenv lowering.
+`stacked-workflows.gitPreset` (`"none"`, `"minimal"`, `"full"`) is declared once
+in `modules/options.nix` and is pure sugar over the `git.*` options that
+packages/git and the three git tool owners declare. It applies only while
+`ai.programs.stacked-workflows.enable` is true, and sets everything at
+`mkDefault`:
+
+- a tool's section of the preset data (`absorb`, `branchless`, `revise`) → that
+  tool's typed `git.<section>.settings`, whole option values. A key that is not
+  a typed option fails evaluation;
+- every other key → `git.settings`, per leaf;
+- `scopedSync = true` (full only) → `git.branchless.scopedSync`;
+- `git.{absorb,branchless,revise}.enable`, which installs the three tools on
+  both backends and runs `git branchless init` on devenv.
+
+Delivery, precedence and init are the git layer's (packages/git/docs/git.md):
+Home Manager writes `programs.git.settings`, devenv a repository-local include
+kept last. The package installs are new with this sugar: before it, Home Manager
+installed nothing and devenv installed git-branchless.
+
+Value changes against the data before this design, and nothing else (checked by
+`module-sws-presets-approved-diff` against a fixture frozen at `cd934bb4`):
+
+- `branchless.core.mainBranch = "main"` is gone from both presets. Init writes
+  the detected main branch into every repository, so a user-global value is dead
+  there and a repository-local one forced `main` onto `master` repositories.
+  `init.defaultBranch = "main"` still steers detection.
+- `fetch.pruneTags` is gone from full: it deletes local tags without a remote
+  counterpart from every worktree on any fetch, including pre-rebase backups.
+- full adds `alias.sync = "branchless sync 'stack()'"` (scopedSync).
+
+The `pull.ff` assertion (`pull.ff = "only"` beats `pull.rebase` since Git 2.34)
+is shared as well: it reads the merged `git.settings`, which on Home Manager is
+`programs.git.settings`, so devenv now has it too.
 
 ### Skills + Skill-Routing Rule
 

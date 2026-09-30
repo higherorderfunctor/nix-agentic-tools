@@ -1,12 +1,13 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-28 — JSON document targets retire independently; no
-> runtime flips an upstream `programs.<cli>.enable`; skills reach Claude through
-> `mkSkillFiles`, and Claude has no wrapper. Claude's devenv
-> `.claude/settings.json` and `.mcp.json`, Copilot's settings files, and Kiro's
-> and Kimchi's settings copies are written only when something is declared;
-> other devenv writes are unconditional. Settings are read-only copies or
-> symlinks where the CLI's write primitive permits; only Claude and Copilot
+> **Last verified:** 2026-09-29 — stacked-workflows' Git preset is `mkDefault`
+> sugar over the shared `git.*` options. JSON document targets retire
+> independently; no runtime flips an upstream `programs.<cli>.enable`; skills
+> reach Claude through `mkSkillFiles`, and Claude has no wrapper. Claude's
+> devenv `.claude/settings.json` and `.mcp.json`, Copilot's settings files, and
+> Kiro's and Kimchi's settings copies are written only when something is
+> declared; other devenv writes are unconditional. Settings are read-only copies
+> or symlinks where the CLI's write primitive permits; only Claude and Copilot
 > retain writable state documents with Nix-owned leaves. The JSON document
 > reconciler has no TOML codec, document mode or native-writer lock. Semble's
 > `pathMappings` and model routing live at the program root. Native file
@@ -385,12 +386,12 @@ pools. A runtime false therefore removes only that runtime's skill/rule
 contribution.
 
 `stacked-workflows.gitPreset` is the deliberate companion exception. It stays
-outside `ai.*` and exists only in Home Manager because it configures
-machine-wide `programs.git.settings`; putting it in the program specification
-would generate per-runtime Git-preset overrides that have no coherent lowering.
-The normalized program tree itself remains exactly parity-checked. Keep this
-boundary explicit in consumer docs rather than presenting the companion as a
-devenv option.
+outside `ai.*`, is declared once (`modules/options.nix`) for both backends, and
+only sets `mkDefault` values on the `git.*` options (packages/git/docs/git.md),
+which Home Manager delivers through `programs.git.settings` and devenv as one
+repository-local include. Putting it in the program specification would generate
+per-runtime Git-preset overrides that have no coherent lowering. The normalized
+program tree itself remains exactly parity-checked.
 
 Both sinks wrap every Semble entry point with its selected cache location. Home
 Manager deliberately fixes the user-global root at

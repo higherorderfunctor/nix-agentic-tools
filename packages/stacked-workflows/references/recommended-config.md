@@ -101,7 +101,9 @@ These improve the development experience.
 
 ```gitconfig
 [revise]
-  # Auto-apply fixup!/squash! when using interactive mode
+  # Imply --autosquash with -i. Redundant while rebase.autoSquash is true (the
+  # fallback when this is unset); it keeps autosquash on for git-revise in a repo
+  # that turns rebase.autoSquash off.
   autoSquash = true
 ```
 
@@ -184,9 +186,11 @@ Convenience settings that some users prefer.
 
 ### git-revise (all config keys)
 
-| Key                 | Type | Default | What it does                                  |
-| ------------------- | ---- | ------- | --------------------------------------------- |
-| `revise.autoSquash` | bool | `false` | Auto-apply fixup!/squash! in interactive mode |
+| Key                 | Type | Default                                          | What it does                                                                      |
+| ------------------- | ---- | ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `revise.autoSquash` | bool | `rebase.autoSquash`, then `false`                | Imply `--autosquash` whenever `-i` is given                                       |
+| `revise.gpgSign`    | bool | `commit.gpgSign`, then `false`                   | Sign rewritten commits; `false` strips existing signatures from rewritten commits |
+| `revise.rerere`     | bool | `rerere.enabled`, then whether `rr-cache` exists | Record and replay conflict resolutions (undocumented upstream)                    |
 
 ## Nix Integration
 
@@ -229,8 +233,10 @@ programs.git.settings =
 ### git-revise + git-branchless
 
 git-revise does NOT call `post-rewrite` hooks, so git-branchless cannot track
-revise operations. Both old and new commits appear in `git sl`. Always run
-`git restack` after using git-revise.
+revise operations. Both old and new commits appear in `git sl`, and
+`git restack` finds nothing to do. git-revise moves only the checked-out branch:
+use it when no other branch sits in the rewritten range, then hide the old
+commits with `git hide --no-delete-branches` (see git-revise.md).
 
 ### git-absorb internals
 

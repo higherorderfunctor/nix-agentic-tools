@@ -13,15 +13,25 @@
 # so they resolve in every scope). Values are store-path strings, accepted by
 # the skills fanout helpers.
 #
+# `stacked-workflows.gitPreset` (../options.nix, shared with Home Manager) is
+# sugar over the `git.*` options; packages/git delivers them as a
+# repository-local include and packages/git-branchless runs
+# `git branchless init`.
+#
 # Picked up by `native devenv module discovery` in flake.nix.
-import ../../../../lib/ai/mkSkillPackageModule.nix {
-  name = "stacked-workflows";
-  enableDescription = "stacked workflow skills + skill-routing rule (project-local devenv scope)";
-  skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
-  rules = {
-    lib,
-    pkgs,
-    ...
-  }:
-    import ../../router.nix {inherit lib pkgs;};
+{lib, ...}: {
+  imports = [
+    (import ../../../../lib/ai/mkSkillPackageModule.nix {
+      name = "stacked-workflows";
+      enableDescription = "stacked workflow skills + skill-routing rule (project-local devenv scope)";
+      skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
+      rules = {
+        lib,
+        pkgs,
+        ...
+      }:
+        import ../../router.nix {inherit lib pkgs;};
+    })
+    (import ../options.nix {inherit lib;})
+  ];
 }

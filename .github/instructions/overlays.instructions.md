@@ -348,8 +348,10 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-28 — recipes receive every `scopeArgs` entry in
-> `lib/facets/repository.nix`, `generatedLib` included.
+> **Last verified:** 2026-09-29 — recipes receive every `scopeArgs` entry in
+> `lib/facets/repository.nix`, `generatedLib` and `gitToolExtraction` included;
+> flake-input and rev-bumped packages regenerate their sidecars through
+> `passthru.regenerateExtracted`.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -910,6 +912,15 @@ Wiring that regeneration is not optional for an extracted package, and glab
 demonstrates the cost of missing it: it was the one such package that never had
 it, which nothing caught until its first-ever version bump (PR #621) turned
 `checks.<system>.glab-extracted` red on a sidecar that still described 1.110.0.
+
+A package owned by a flake input, or bumped by rev without its own update script
+(git-absorb, git-revise), has no `mkUpdateScript`, so it carries
+`passthru.regenerateExtracted = packageLib.mkRegenerateExtracted { … }` instead.
+`update-input.sh` discovers it through `passthru.updateFlakeInput`,
+`update-pkg.sh` by the target's own name, and both commit its `sidecars`.
+Semble's targets are its drift checks' `passthru.extracted`, which keeps the
+package byte-identical to upstream; git-branchless's is its own
+`passthru.extracted`.
 
 The hash fixers (`mkGoVendorFix`, `mkNpmDepsFix`, and the src-only fixer
 `mkGoUpdateExtract` builds internally) are one body — `vu.mkHashFix` —
