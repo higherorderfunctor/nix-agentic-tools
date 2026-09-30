@@ -972,14 +972,14 @@ in {
         hm = evalHm {
           ai.kimchi = {
             enable = true;
-            gitTokens."github.com"._runtime.source.file = "/run/secrets/kimchi-github";
+            gitTokens."github.com" = rv.file {path = "/run/secrets/kimchi-github";};
           };
         };
         target = dirTarget "kimchiFiles" hm.config.ai.kimchi.configDir hm;
         rejected = evalDevenv {
           ai.kimchi = {
             enable = true;
-            gitTokens."github.com"._runtime.source.file = "/run/secrets/kimchi-github";
+            gitTokens."github.com" = rv.file {path = "/run/secrets/kimchi-github";};
           };
         };
       in
@@ -1078,11 +1078,13 @@ in {
           mcpServers.declared = server;
           kimchi = {
             enable = true;
-            gitTokens."github.com"._runtime.source.helper = "${pkgs.writeShellScript "kimchi-git-token" ''
-              set -euETo pipefail
-              shopt -s inherit_errexit 2>/dev/null || :
-              echo token-from-helper
-            ''}";
+            gitTokens."github.com" = rv.helper {
+              path = "${pkgs.writeShellScript "kimchi-git-token" ''
+                set -euETo pipefail
+                shopt -s inherit_errexit 2>/dev/null || :
+                echo token-from-helper
+              ''}";
+            };
             projectTrust."/srv/projects" = true;
           };
         };
@@ -1406,7 +1408,7 @@ in {
         result = evalDevenv {
           ai.kimchi = {
             enable = true;
-            apiKey = {_runtime.source.file = "/run/secrets/kimchi-key";};
+            apiKey = rv.file {path = "/run/secrets/kimchi-key";};
           };
         };
       in
@@ -1430,7 +1432,7 @@ in {
       result = evalHm {
         ai.kimchi = {
           enable = true;
-          apiKey = {_runtime.source.file = "/run/secrets/kimchi-test";};
+          apiKey = rv.file {path = "/run/secrets/kimchi-test";};
           environmentVariables.KIMCHI_EXTRA = "yes";
         };
       };

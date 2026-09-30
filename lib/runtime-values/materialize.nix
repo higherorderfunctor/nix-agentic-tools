@@ -1,5 +1,6 @@
 {
   lib,
+  classify,
   recognize,
 }: let
   reader = pkgs: import ./reader.nix {inherit pkgs;};
@@ -14,7 +15,7 @@
     ref = recognize value;
     label = lib.showOption path;
     validVariable = builtins.match "[a-zA-Z_][a-zA-Z0-9_]*" variable != null;
-    tainted = secret || (ref != null && ref.secret);
+    tainted = secret || classify {inherit path;} || (ref != null && ref.secret);
     kind =
       if ref.source ? file
       then "file"
@@ -29,6 +30,8 @@
     then throw "runtimeValues: invalid variable name ${variable}"
     else if value == null
     then ""
+    else if tainted && ref == null
+    then throw "${label}: secret literals are forbidden"
     else if argv && tainted
     then throw "${label}: secrets cannot be delivered through argv"
     else if ref == null

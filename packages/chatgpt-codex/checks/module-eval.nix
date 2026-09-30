@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (harness) aiStubs claudeSettings deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm hasLiteral mkTest mkWrapperGrepTest ownPlan tomlFormat;
+  rv = import ../../../lib/runtime-values {inherit lib;};
   # The daemon's settings.json is a read-only copy in the one directory target
   # of Home Manager's daemon-settings writer. `ownPlan` throws on an absent
   # writer, so a renamed entry fails the check.
@@ -584,7 +585,7 @@ in {
           codex.enable = true;
           mcpServers.context7-mcp = {
             package = pkgs.hello;
-            settings.credentials = {_runtime.source.file = "/run/secrets/context7-api-key";};
+            settings.credentials = rv.file {path = "/run/secrets/context7-api-key";};
           };
         };
         hmServer = (hmCodexSettings (evalHm config)).mcp_servers.context7-mcp;
@@ -611,13 +612,13 @@ in {
           mcpServers = {
             context7-mcp = {
               package = pkgs.hello;
-              settings.credentials = {_runtime.source.file = "/run/secrets/context7-api-key";};
+              settings.credentials = rv.file {path = "/run/secrets/context7-api-key";};
             };
             effect-mcp.url = "http://127.0.0.1:19760/mcp";
             git-mcp.package = pkgs.hello;
             github-mcp = {
               package = pkgs.hello;
-              settings.credentials = {_runtime.source.file = "/run/secrets/github-token";};
+              settings.credentials = rv.file {path = "/run/secrets/github-token";};
             };
             nixos-mcp.url = "http://127.0.0.1:19761/mcp";
             openmemory = {

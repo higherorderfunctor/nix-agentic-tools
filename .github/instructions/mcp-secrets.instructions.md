@@ -51,9 +51,9 @@ Typed packaged MCP credentials and Kimchi's API key now use `rv.file` /
 `rv.helper` envelopes from `lib/runtime-values`. `lib/mcp.nix` renders their
 environment through that library's shared reader. HTTP `secretValue` remains a
 legacy shape in this pilot; the proxy adapts it to the shared reader locally.
-The reader strips exactly one terminal LF by default, supports `preserve`, and
-aborts on missing, unreadable, empty sources or failed helpers without printing
-helper output. Kiro's separate HTTP secret flow below is deferred.
+The reader drops trailing newlines before the empty check and aborts on missing,
+unreadable, empty sources or failed helpers without printing helper output.
+Kiro's separate HTTP secret flow below is deferred.
 
 ### The proxy path — `proxy.enable`, and why it is the preferred one
 

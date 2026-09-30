@@ -39,34 +39,15 @@ keys:
 }
 ```
 
-Credential segments take precedence over name exceptions. For example,
-`secret_tokens`, `auth_tokens`, `tokens`, and `client_secret_file` require
-references. Exact count names such as `max_tokens` and `token_limit` accept
-literals. A path or environment-variable locator is sensitive only when its
-whole stem is one credential name: `token_file`, `token_path`, `token_env`,
-`token_var`, and `apiKeyHelper` accept literal locator values. An explicit
-secret hint or a containing secret option still requires references.
+The shared option library supports string and boolean literals or references.
+Secret keys reject literals.
 
-The shared option library adds references to exact canonical string, boolean,
-integer, and float types. External dynamic Nix types such as nullable values,
-collections, submodules, and enums fail with their option path and type because
-their checks or merge behavior cannot be proved identical after reconstruction.
-`fromSchema` builds optional records from supported scalar leaves. A supplied
-runtime schema cannot bypass this type boundary. The
-[library contract](../../../dev/fragments/runtime-values/architecture.md) also
-describes the inherited classification used by option lifting and the
-declaration audit.
-
-The reader removes exactly one final LF by default. `newline = "preserve"`
-retains it; `prefix` and `suffix` decorate string references only. Only
-`decode = "string"` is supported. Boolean references contain the textual value
-that glab's own environment parser accepts, such as `false`.
-
-A missing, unreadable, empty or directory source, or a failed helper, aborts
+A missing, unreadable, empty or directory source, or a failed helper aborts
 before glab runs. Diagnostics name the option and failure, never the resolved
-value or helper output. Values refresh on each invocation. A reference marked
-`secret = true` cannot be passed through argv; this includes a host used by
-glab's host-entry initialization.
+value or helper output. The reader drops trailing newlines before the empty
+check. Values refresh on each invocation. A reference marked `secret = true`
+cannot be passed through argv; this includes a host used by glab's host-entry
+initialization.
 
 ## OS-keyring synchronization
 
@@ -100,12 +81,11 @@ own graphical-session login services.
 
 ## Generated settings and state
 
-`settings.*` comes from the committed `extracted.json` sidecar, adapted to the
-shared runtime-value schema generator. Upstream descriptions and environment
-aliases are retained. List-valued keys such as `custom_headers` have no scalar
-environment representation and remain excluded. Keys glab maintains itself
-remain settable when upstream marks them settable; pinning one prevents glab
-from updating it.
+`settings.*` comes from the committed `extracted.json` sidecar. Upstream
+descriptions and environment aliases are retained. List-valued keys such as
+`custom_headers` have no scalar environment representation and remain excluded.
+Keys glab maintains itself remain settable when upstream marks them settable;
+pinning one prevents glab from updating it.
 
 `extraSettings` supports future scalar keys. Known keys use upstream environment
 aliases; unknown keys use the uppercase fallback. Keys are classified during

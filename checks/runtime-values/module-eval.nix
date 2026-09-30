@@ -37,6 +37,23 @@ in {
         value = "literal";
         variable = "ARG";
       })
+      && !succeeds (rv.assignment {
+        inherit pkgs;
+        secret = true;
+        value = "literal";
+        variable = "ENV";
+      })
+      && !succeeds (rv.assignment {
+        inherit pkgs;
+        value._runtime = {
+          secret = true;
+          source = {
+            file = "/run/example";
+            helper = "/run/helper";
+          };
+        };
+        variable = "ENV";
+      })
       && succeeds (rv.assignment {
         inherit pkgs;
         argv = true;
@@ -97,6 +114,7 @@ in {
       ];
     in
       !succeeds (evaluate classified [{gitlab_token = "literal";}])
+      && !succeeds (evaluate classified [{gitlab_token = "first";} {gitlab_token = "second";}])
       && (evaluate classified [{gitlab_token = file;}]).gitlab_token._runtime.secret
       && defaultThenStrong.host._runtime.source.file == "/run/example"
       && forced.host._runtime.source.file == "/run/other"
@@ -141,6 +159,28 @@ in {
     in
       lib.all accepts cases
       && !succeeds (evaluate secret ["literal"])
+      && !succeeds (evaluate secret ["first" "second"])
+      && !succeeds (evaluate secret [{_runtime = null;}])
+      && !succeeds (evaluate secret [
+        {
+          _runtime = {
+            secret = true;
+            source = {
+              file = "/run/example";
+              helper = "/run/helper";
+            };
+          };
+        }
+      ])
+      && !succeeds (evaluate secret [
+        {
+          _runtime = {
+            extra = true;
+            secret = true;
+            source.file = "/run/example";
+          };
+        }
+      ])
       && evaluate secret [null] == null
       && (evaluate secret [file])._runtime.secret
       && lib.all (type: !succeeds (rv.withReferences {inherit type;})) unsupported);

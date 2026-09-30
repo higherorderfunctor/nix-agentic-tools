@@ -20,7 +20,7 @@
         chars).text;
   in
     builtins.filter (segment: segment != "")
-    (lib.splitString "_" (lib.toLower (lib.replaceStrings ["-" "."] ["_" "_"] normalized)));
+    (lib.splitString "_" (lib.toLower normalized));
   contains = values: parts: lib.any (part: builtins.elem part values) parts;
 in {
   classify = {
@@ -34,11 +34,9 @@ in {
       else segments (lib.last path);
   in
     hints.keyring or false
-    || hints.secret or false
     || secretContainer
     || contains ["apikey" "authorization" "clientsecret" "credential" "credentials" "passwd" "password" "pat" "privatekey" "secret" "token" "tokens"] parts
     || parts == ["access" "key"]
     || parts == ["api" "key"]
-    || parts == ["client" "secret"]
     || parts == ["private" "key"];
 }

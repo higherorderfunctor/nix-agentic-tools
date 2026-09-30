@@ -26,6 +26,7 @@ pkgs.writeShellApplication {
     if IFS= read -r -d "" value <"$source_path" 2>/dev/null; then
       fail 'reference contains a NUL byte'
     fi
+    while [[ $value == *$'\n' ]]; do value=''${value%$'\n'}; done
     [[ -n "$value" ]] || fail 'reference resolved empty'
     printf '%s' "$value"
   '';

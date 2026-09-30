@@ -210,7 +210,7 @@ in {
         result = evalHm {
           services.mcp-servers.servers.github-mcp = {
             enable = true;
-            settings.credentials = {_runtime.source.file = "/run/secrets/gh-token";};
+            settings.credentials = mcpLib.runtimeValues.file {path = "/run/secrets/gh-token";};
           };
         };
         activation = result.config.home.activation.mcpRestartOnSecretRotation or null;
@@ -244,7 +244,7 @@ in {
         result = evalHm {
           services.mcp-servers.servers.github-mcp = {
             enable = true;
-            settings.credentials = {_runtime.source.file = "/run/secrets/gh-token";};
+            settings.credentials = mcpLib.runtimeValues.file {path = "/run/secrets/gh-token";};
           };
         };
         text = result.config.home.activation.mcpRestartOnSecretRotation.text or "";
@@ -318,7 +318,7 @@ in {
         result = evalHm {
           services.mcp-servers.servers.github-mcp = {
             enable = true;
-            settings.credentials = {_runtime.source.helper = "/run/wrappers/gh-token-helper";};
+            settings.credentials = mcpLib.runtimeValues.helper {path = "/run/wrappers/gh-token-helper";};
           };
         };
       in

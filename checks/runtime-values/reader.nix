@@ -35,6 +35,8 @@ in {
     reject file directory
     touch empty
     reject file empty
+    printf '\n\n' > newline-only
+    reject file newline-only
     printf 'DO-NOT-LEAK' > unreadable
     chmod 000 unreadable
     reject file unreadable

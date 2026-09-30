@@ -489,8 +489,9 @@ key Kimchi cannot read. Locked by `module-kimchi-config-json-nested`.
 `apiKey` accepts only runtime references, for example
 `apiKey = rv.file { path = "/run/secrets/kimchi-key"; };`. The shared
 `lib/runtime-values` reader exports `KIMCHI_API_KEY` at launch through the
-existing `wrapProgram --run` delivery. Failed or empty reads abort launch;
-newline handling follows the reference policy. No literal branch is available.
+existing `wrapProgram --run` delivery. Failed or empty reads abort launch. The
+reader drops trailing newlines before the empty check. No literal branch is
+available.
 
 ## Gotcha: wrapProgram separator
 

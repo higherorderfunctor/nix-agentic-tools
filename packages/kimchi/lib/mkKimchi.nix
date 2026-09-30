@@ -880,7 +880,7 @@ in
           secretContainer = true;
         };
         default = {};
-        example = {"github.com"._runtime.source.file = "/run/secrets/kimchi-github-token";};
+        example = lib.literalExpression ''{ "github.com" = rv.file { path = "/run/secrets/kimchi-github-token"; }; }'';
         description = ''
           Git tokens Kimchi's teleport and remote runs use, keyed by host.
           Kimchi reads them only from the user config.json and has no
