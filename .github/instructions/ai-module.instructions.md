@@ -1270,7 +1270,7 @@ downstream. See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-29 — the shared AGENTS.md notice resolves each
+> **Last verified:** 2026-09-30 — the shared AGENTS.md notice resolves each
 > runtime's effective limit at shell entry. Claude delivers every surface
 > through `ai.claude.files`; its settings.json and devenv .mcp.json are
 > read-only links. Every delivered entry is a file the layer writes. L5 is the
@@ -1317,10 +1317,14 @@ downstream. See `hm-modules/module-conventions.md` on "Nix path types".
 
 **Settled — do not relitigate.** User-local settings are asserted at switch.
 Choose a store symlink when an in-app write fails cleanly (Codex `config.toml`),
-a read-only copy when the CLI renames over its file (Copilot, Kiro, Kimchi and
-Codex daemon settings), and a switch-time overlay only for a mixed state file
-(Claude `~/.claude.json`, Copilot `~/.copilot/config.json`). The overlay repairs
-Nix-owned leaves while preserving harness state.
+a read-only copy when the CLI renames over its file (Copilot, Kiro, Kimchi's
+`mcp.json`/`permissions.json`/`trust.json` and Codex daemon settings), and a
+switch-time overlay only for a mixed state file (Claude `~/.claude.json`,
+Copilot `~/.copilot/config.json`, Kimchi's user `config.json` and
+`harness/settings.json`, which carry `/login` and `/model` state). The overlay
+repairs Nix-owned leaves while preserving harness state. Kimchi's two were
+read-only copies from 2026-09-29 to 2026-09-30, which locked `/login` out; do
+not move them back.
 
 | Mechanism                     | Portability and effect                                                                              | Decision               |
 | ----------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |

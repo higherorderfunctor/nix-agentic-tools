@@ -28,7 +28,7 @@ import ../../../lib/strict-shell-application.nix pkgs {
       fi
     fi
 
-    common_dir="$(${pkgs.git}/bin/git -c core.fsmonitor=false -C "$directory" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || :)"
+    common_dir="$(${pkgs.git}/bin/git -C "$directory" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || :)"
     if [ -n "$common_dir" ] && [ -f "$user_config" ]; then
       main_checkout="$(${pkgs.coreutils}/bin/dirname "$common_dir")"
       trusted="$(${pkgs.gawk}/bin/awk -v header="[projects.\"$main_checkout\"]" '

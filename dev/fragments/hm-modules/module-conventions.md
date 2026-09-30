@@ -1,17 +1,18 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-29 — stacked-workflows' Git preset is `mkDefault`
-> sugar over the shared `git.*` options. JSON document targets retire
-> independently; no runtime flips an upstream `programs.<cli>.enable`; skills
-> reach Claude through `mkSkillFiles`, and Claude has no wrapper. Claude's
-> devenv `.claude/settings.json` and `.mcp.json`, Copilot's settings files, and
-> Kiro's and Kimchi's settings copies are written only when something is
-> declared; other devenv writes are unconditional. Settings are read-only copies
-> or symlinks where the CLI's write primitive permits; only Claude and Copilot
-> retain writable state documents with Nix-owned leaves. The JSON document
-> reconciler has no TOML codec, document mode or native-writer lock. Semble's
-> `pathMappings` and model routing live at the program root. Native file
-> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-09-30 — Kimchi's user config.json and harness
+> settings.json are shared documents; stacked-workflows' Git preset is
+> `mkDefault` sugar over the shared `git.*` options. JSON document targets
+> retire independently; no runtime flips an upstream `programs.<cli>.enable`;
+> skills reach Claude through `mkSkillFiles`, and Claude has no wrapper.
+> Claude's devenv `.claude/settings.json` and `.mcp.json`, Copilot's settings
+> files, and Kiro's and Kimchi's settings copies are written only when something
+> is declared; other devenv writes are unconditional. Settings are read-only
+> copies or symlinks where the CLI's write primitive permits; only Claude and
+> Copilot retain writable state documents with Nix-owned leaves. The JSON
+> document reconciler has no TOML codec, document mode or native-writer lock.
+> Semble's `pathMappings` and model routing live at the program root. Native
+> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Shared documents, each declared by
 > `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
@@ -201,11 +202,13 @@ on an error. Never `exit 0` for a cache-hit fast path.
 states `facts.harnessWrites` on the file and names the writer whose JSON ledger
 claims it. The delivery router builds one `lib/ai/own.nix` bundle: declared
 leaves are asserted, retired leaves are retracted, and unowned state survives.
-Kimchi's `config.json` is entirely configuration and is a 0400 read-only copy. A
-blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has no way to tell a
-native key from a Nix key that was deleted. Only a STATE file the harness must
-keep writing is a document; a file whose every key is configuration is a
-read-only copy.
+Kimchi's user `config.json` and `harness/settings.json` are documents too, since
+`/login` and `/model` write into them (settled 2026-09-30 after a read-only copy
+locked `/login` out); its `mcp.json`, `permissions.json` and `trust.json` stay
+read-only copies. A blind `jq -s '.[0] * .[1]'` cannot do the middle one: it has
+no way to tell a native key from a Nix key that was deleted. Only a STATE file
+the harness must keep writing is a document; a file whose every key is
+configuration is a read-only copy.
 
 The JSON codec reads past leading full-line `//` comments and writes them back
 verbatim: Copilot heads its state file `config.json`, whose `trustedFolders`

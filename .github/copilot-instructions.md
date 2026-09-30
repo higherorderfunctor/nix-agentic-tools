@@ -178,10 +178,10 @@ alejandra) and markdown (via prettier).
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-09-28 — fragment sources live in the dev or package
+> **Last verified:** 2026-09-30 — fragment sources live in the dev or package
 > tree; package categories live in owner registries; `dev/generate.nix` turns
 > them into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
-> first; devenv warns while AGENTS.md is past 32 KiB.
+> first; devenv warns where AGENTS.md is past the limit Codex will apply there.
 
 This repo ships path-scoped architecture fragments as dev-only context for
 agents working on it. They are SEPARATE from the published consumer-facing
@@ -217,9 +217,11 @@ it per runtime through the `lib/ai/transformers/` pipeline:
   rule that names `references` as an index entry for the same reason. The index
   and the always-on rules come before the orientation, so Codex's default 32 KiB
   read keeps them in a fresh clone or a linked worktree, where the raised
-  `project_doc_max_bytes` in the gitignored `.codex/` does not apply. Every
-  devenv shell entry warns that AGENTS.md is past that window; the warning is
-  deliberate and stays until the orientation shrinks below 32 KiB.
+  `project_doc_max_bytes` in the gitignored `.codex/` does not apply. A devenv
+  shell entry warns when AGENTS.md is past the limit Codex will actually apply
+  there — resolved at entry from the user config and, for a trusted main
+  checkout, the project `.codex/config.toml` — so the primary checkout is silent
+  and a linked worktree warns until the orientation shrinks below 32 KiB.
 
 The source fragments are authoritative. Every runtime file above is a generated
 projection that `ai.*` writes: AGENTS.md and `.github/` are committed, the
