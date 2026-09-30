@@ -57,9 +57,15 @@
           default = [];
         };
       };
-      programs.git.settings = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
+      # Home Manager's real value type, so a check rejects what Home Manager
+      # rejects (a four-level key, a null); an `attrsOf anything` stub hid
+      # exactly that once. `enable` defaults to false, as in Home Manager.
+      programs.git = {
+        enable = lib.mkEnableOption "Git";
+        settings = lib.mkOption {
+          type = import ../git-tool-settings/ini-type.nix {inherit lib;};
+          default = {};
+        };
       };
       systemd.user = {
         paths = lib.mkOption {

@@ -215,6 +215,28 @@ _: {
     # The shared census + generator for git tools' own config keys: the
     # tree-walking extractors' helpers, the sidecar schema, and the typed
     # option generator every git-tool owner calls.
+    # The `git.*` option root: packages/git and the three git tool owners
+    # declare it together.
+    git = {
+      scopes = [
+        "checks/git-config/**"
+        "lib/git-tool-settings/ini-type.nix"
+        "lib/git-tool-settings/repo-config.nix"
+        "lib/git-tool-settings/repo-config.sh"
+        "lib/git-tool-settings/tool-module.nix"
+        "packages/git-absorb/modules/**"
+        "packages/git-branchless/modules/**"
+        "packages/git-revise/modules/**"
+        "packages/git/**"
+      ];
+      sources = [
+        {
+          dir = "git";
+          location = "package";
+          name = "git";
+        }
+      ];
+    };
     git-tool-settings = {
       scopes = [
         "checks/git-tool-settings/**"

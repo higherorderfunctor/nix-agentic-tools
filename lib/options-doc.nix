@@ -106,9 +106,12 @@
           description = "User packages.";
         };
       };
-      programs = {
-        git.settings = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
+      programs.git = {
+        enable = lib.mkEnableOption "Git";
+        # Home Manager's real type: `git.settings` is an alias of this option
+        # and takes its type, which the parity check compares with devenv's.
+        settings = lib.mkOption {
+          type = import ./git-tool-settings/ini-type.nix {inherit lib;};
           default = {};
           description = "Git configuration.";
         };
@@ -124,6 +127,11 @@
           default = {};
           description = "Systemd user services.";
         };
+      };
+      warnings = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Module warnings.";
       };
       xdg = {
         configHome = lib.mkOption {
@@ -213,6 +221,11 @@
         default = {};
         description = "Devenv tasks.";
       };
+      warnings = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Module warnings.";
+      };
     };
   };
 
@@ -239,6 +252,7 @@
 
   hmPrefixes = [
     "ai."
+    "git."
     "glab."
     "services.mcp-servers."
     "stacked-workflows."
@@ -270,6 +284,7 @@
 
   devenvPrefixes = [
     "ai."
+    "git."
     "glab."
     "services.beads."
     "stacked-workflows."

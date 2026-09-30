@@ -1,8 +1,9 @@
 # Git tool settings: census, sidecar, generator
 
 > **Last verified:** 2026-09-29 — one generator
-> (`lib/git-tool-settings/default.nix`) serves git-branchless and git-absorb (7
-> keys, 36 mutants).
+> (`lib/git-tool-settings/default.nix`) serves git-branchless, git-absorb and
+> git-revise; `tool-module.nix` mounts each tree at `git.<section>.settings`
+> (packages/git/docs/git.md).
 >
 > **Settled — do not relitigate.**
 >
@@ -21,15 +22,18 @@
 
 ## Files
 
-| Path                                   | Role                                                                                                 |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `lib/git-tool-settings/default.nix`    | the generator: sidecar → closed option tree, `leaves`, `report`                                      |
-| `lib/git-tool-settings/extraction.nix` | `patchedSource`, `extracted`, and the three checks per tool                                          |
-| `lib/git-tool-settings/rust_tree.py`   | tree-sitter-rust helpers: literals, calls, token trees, doc comments, test filtering                 |
-| `lib/git-tool-settings/census.py`      | failure list, key-token net, fill-only annotations, sidecar writer                                   |
-| `lib/git-tool-settings/mutate.py`      | the mutation harness every tool's `<tool>-extractor-guards` runs                                     |
-| `packages/<owner>/extract/`            | the tool's own `extract.py` and `annotations.json`                                                   |
-| `packages/<owner>/lib/default.nix`     | `lib.<owner>.settings {lib}` — the generator over that sidecar, plus the tool's hand tables (if any) |
+| Path                                    | Role                                                                                                 |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `lib/git-tool-settings/default.nix`     | the generator: sidecar → closed option tree, `leaves`, `report`                                      |
+| `lib/git-tool-settings/extraction.nix`  | `patchedSource`, `extracted`, and the three checks per tool                                          |
+| `lib/git-tool-settings/rust_tree.py`    | tree-sitter-rust helpers: literals, calls, token trees, doc comments, test filtering                 |
+| `lib/git-tool-settings/census.py`       | failure list, key-token net, fill-only annotations, sidecar writer                                   |
+| `lib/git-tool-settings/mutate.py`       | the mutation harness every tool's `<tool>-extractor-guards` runs                                     |
+| `packages/<owner>/extract/`             | the tool's own `extract.py` and `annotations.json`                                                   |
+| `packages/<owner>/lib/default.nix`      | `lib.<owner>.settings {lib}` — the generator over that sidecar, plus the tool's hand tables (if any) |
+| `lib/git-tool-settings/tool-module.nix` | the consumer-module factory: `git.<section>.{enable,settings}`, lowered into `git.settings`          |
+| `lib/git-tool-settings/ini-type.nix`    | Home Manager's `gitIniType`, the type of `git.settings` on both backends                             |
+| `lib/git-tool-settings/repo-config.*`   | the devenv task script (`include`, `init`); `packages/git/docs/git.md` describes it                  |
 
 Owners live under `packages/` and share code only through `lib/`, which is why
 the generator and helpers sit here and not in one owner.

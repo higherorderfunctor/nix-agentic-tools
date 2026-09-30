@@ -311,6 +311,7 @@ nohup
 nomic
 northstar
 nosuid
+NOSYSTEM
 NPROCESSORS
 nrfutil
 nullary
@@ -359,6 +360,7 @@ pname
 posh
 posttooluse
 prefilter
+preinitialized
 prek
 prepatched
 prestart
@@ -390,6 +392,7 @@ reftable
 regen
 rehosted
 reimplementation
+reinit
 relitigate
 relpath
 remapper
@@ -468,6 +471,7 @@ subshell
 subshells
 substituters
 superlinear
+supersection
 supersets
 swapfile
 sweepability

@@ -142,6 +142,19 @@ for it. When several entries match, their guidance composes.
     - `devenv.nix`
   - Read:
     - [`dev/fragments/flake/binary-cache.md`](dev/fragments/flake/binary-cache.md)
+- **`git`**
+  - Match:
+    - `checks/git-config/**`
+    - `lib/git-tool-settings/ini-type.nix`
+    - `lib/git-tool-settings/repo-config.nix`
+    - `lib/git-tool-settings/repo-config.sh`
+    - `lib/git-tool-settings/tool-module.nix`
+    - `packages/git-absorb/modules/**`
+    - `packages/git-branchless/modules/**`
+    - `packages/git-revise/modules/**`
+    - `packages/git/**`
+  - Read:
+    - [`packages/git/docs/git.md`](packages/git/docs/git.md)
 - **`git-branchless`**
   - Match:
     - `packages/git-branchless/**`
