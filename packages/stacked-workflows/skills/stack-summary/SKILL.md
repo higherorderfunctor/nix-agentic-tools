@@ -5,7 +5,7 @@ description: >-
   restructuring. Produces a structured summary with per-commit classification,
   philosophy audit, and violation flags. Output feeds directly into /stack-plan
   restructure mode. Use INSTEAD of manual git log inspection.
-argument-hint: "<range | --root | (none for stack())>"
+argument-hint: "<range | --root | (none for this worktree's stack)>"
 disable-model-invocation: false
 compatibility: "Requires git-branchless"
 ---
@@ -34,10 +34,14 @@ purposes:
    ```
 
 3. **Check for stale rebase state**:
+
    ```bash
-   ls .git/rebase-merge .git/rebase-apply 2>/dev/null
+   ls -d "$(git rev-parse --git-path rebase-merge)" \
+     "$(git rev-parse --git-path rebase-apply)" 2>/dev/null
    ```
-   If present, run `git rebase --abort` before proceeding.
+
+   If either exists, run `git rebase --abort` before proceeding. In a linked
+   worktree `.git` is a file, so ask Git for the paths.
 
 ## Determine Range
 
@@ -45,8 +49,16 @@ Examine `$ARGUMENTS` to select the commit range:
 
 - If `$ARGUMENTS` is a range (`main..HEAD`, `hash..hash`) → use it
 - If `$ARGUMENTS` is `--root` → use the full history from root to HEAD
-- If `$ARGUMENTS` is empty → use `stack()` (current stack)
-- If on main with no stack → use full history (`--root`)
+- If `$ARGUMENTS` is empty → use this worktree's own stack (`$STACK`, below)
+- If `$STACK` is empty (on main, or a fresh worktree) → use full history
+  (`--root`)
+
+Plain `stack()` is not the current stack while local `main` is behind its
+upstream, the normal state when worktrees branch from `origin/main`: it also
+holds the upstream commits and every stack another worktree branched from them.
+For the same reason, a `main..HEAD` range holds upstream commits then; use the
+fork-point range `$(git merge-base "$base" HEAD)..HEAD`. See **Selecting your
+own stack** in `references/git-branchless.md`.
 
 Resolve to `BASE` and `TIP`:
 
@@ -58,9 +70,23 @@ BASE=<resolved>; TIP=<resolved>
 BASE=$(git hash-object -t tree /dev/null)   # empty tree
 TIP=HEAD
 
-# stack() (use branchless commands, not git log):
-git sl
+# Default, this worktree's stack:
+main_branch="$(git config branchless.core.mainBranch || echo main)"
+remote="$(git config "branch.${main_branch}.remote" || echo origin)"
+base="$(git rev-parse --abbrev-ref "${main_branch}@{upstream}" 2>/dev/null \
+  || echo "${remote}/${main_branch}")"
+git rev-parse --verify -q "${base}^{commit}" >/dev/null || base="$main_branch"
+STACK="descendants(roots((stack() & ::HEAD) - ::$base)) - ::$base"
+stack_commits="$(git query -r "$STACK")" || exit 1
+test -n "$stack_commits" || { echo "empty stack selection" >&2; exit 1; }
+git sl "$STACK" || exit 1
+BASE="$(git merge-base "$base" HEAD)" || exit 1
+TIP="$(git query -r "heads($STACK)")" || exit 1
+test -n "$TIP" || { echo "empty stack heads" >&2; exit 1; }
 ```
+
+If `TIP` has several lines, the stack forks; summarize each head separately.
+Every selection and guard must exit 0 and produce the required non-empty value.
 
 ## Gather Data
 

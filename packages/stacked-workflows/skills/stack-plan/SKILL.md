@@ -40,10 +40,33 @@ Plan and execute a commit stack. Determines mode automatically based on input:
    ```
 
 3. **Check for stale rebase state**:
+
    ```bash
-   ls .git/rebase-merge .git/rebase-apply 2>/dev/null
+   ls -d "$(git rev-parse --git-path rebase-merge)" \
+     "$(git rev-parse --git-path rebase-apply)" 2>/dev/null
    ```
-   If present, run `git rebase --abort` before proceeding.
+
+   If either exists, run `git rebase --abort` before proceeding. In a linked
+   worktree `.git` is a file, so ask Git for the paths.
+
+4. **Select this worktree's own stack** as `$STACK`, and use it wherever this
+   skill needs the stack or its base:
+
+   ```bash
+   main_branch="$(git config branchless.core.mainBranch || echo main)"
+   remote="$(git config "branch.${main_branch}.remote" || echo origin)"
+   base="$(git rev-parse --abbrev-ref "${main_branch}@{upstream}" 2>/dev/null \
+     || echo "${remote}/${main_branch}")"
+   git rev-parse --verify -q "${base}^{commit}" >/dev/null || base="$main_branch"
+   STACK="descendants(roots((stack() & ::HEAD) - ::$base)) - ::$base"
+   ```
+
+   `$base` is main's upstream ref (the last fetched one), or local `main` when
+   there is none. Plain `stack()` is not your stack while local `main` is behind
+   its upstream, the normal state when worktrees branch from `origin/main`: it
+   also holds the upstream commits and every stack another worktree branched
+   from them. See **Selecting your own stack** in
+   `references/git-branchless.md`.
 
 ## Determine Mode
 
@@ -171,8 +194,8 @@ Existing commits need to be reorganized into a clean atomic stack.
    BASE=<resolved base>
    TIP=<resolved tip>
 
-   # For a branch name, find the merge-base:
-   BASE=$(git merge-base main <branch>)
+   # For a branch name, find the merge-base with the upstream, not local main:
+   BASE=$(git merge-base "$base" <branch>)
    TIP=<branch>
 
    # For --root (entire history):
@@ -195,6 +218,11 @@ Existing commits need to be reorganized into a clean atomic stack.
    ```
 
    Read the full diff and per-commit stats. Count total lines changed.
+
+   A range written against local `main` (`main..HEAD`) also holds the upstream
+   commits while `main` is stale, and using the upstream tip itself as the base
+   stages upstream-only commits as deletions. For this worktree's stack, use
+   `$(git merge-base "$base" HEAD)..HEAD`.
 
 3. **Classify every change** into logical groups (same as Working Tree mode step
    2).
@@ -219,14 +247,9 @@ Existing commits need to be reorganized into a clean atomic stack.
    If there are uncommitted changes, warn the user and ask whether to stash or
    commit them first.
 
-7. **Create a backup branch**:
-
-   ```bash
-   git branch backup-before-restructure
-   ```
-
-   If a branch with this name already exists, delete it first or use a unique
-   name (e.g., `backup-restructure-$(date +%s)`).
+7. **Confirm the recovery point.** Record the current commit ID in the task
+   report. Do not create or delete a generic repository-global backup branch; it
+   may belong to another worktree or session.
 
 8. **Save the tree hash** for post-verification:
 
@@ -348,12 +371,9 @@ only the final tree state matters.
 
 ## Post-execution
 
-1. **Move branch pointer** (from-root only):
-
-   ```bash
-   # If on orphan branch, move main to the new history:
-   git checkout -B main
-   ```
+1. **Choose the destination for a from-root rebuild.** Stop and ask the user
+   which new branch should own the orphan history. Never replace local `main`;
+   the primary checkout may hold it.
 
 2. **Verify the result**:
 
@@ -370,11 +390,6 @@ only the final tree state matters.
    # Tree hash comparison (catches ALL content differences):
    test "$(git rev-parse HEAD^{tree})" = "$FINAL_TREE" && echo "trees match"
 
-   # If MISMATCH, identify which files differ:
-   git diff backup-before-restructure HEAD --stat
-
-   # Then inspect each differing file:
-   git diff backup-before-restructure HEAD -- <file>
    ```
 
    Do NOT proceed if trees don't match. Fix the diverging files first using
@@ -398,10 +413,10 @@ only the final tree state matters.
    ```
 
    Pick `<revset>` per **Choosing the test revset** in
-   `references/git-branchless.md`. Restructuring is one of the cases that argues
-   for `stack()` even inside a single PR — the intermediate commits are newly
-   built and untested — but say so rather than widening silently, and size `<N>`
-   by memory, not cores.
+   `references/git-branchless.md`, reading `stack()` there as `$STACK`.
+   Restructuring is one of the cases that argues for `$STACK` even inside a
+   single PR — the intermediate commits are newly built and untested — but say
+   so rather than widening silently, and size `<N>` by memory, not cores.
 
    Report any commits that break the build.
 
@@ -427,17 +442,5 @@ only the final tree state matters.
   working tree is intentionally inconsistent between commits — hook errors are
   harmless and will pass once all files are committed. Use `--no-verify` on
   intermediate commits if needed.
-- **Fixup pattern for post-hoc corrections:** when you discover a missed change
-  after a commit is already made, use `git commit --fixup <hash>` to create a
-  fixup commit, then squash it with
-  `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <hash>~1` (the no-op editor
-  `:` lets `--autosquash` do the work). Follow with `git restack` to update
-  branchless tracking. This is faster than checking out each commit to amend.
-- **Avoid scripted `GIT_SEQUENCE_EDITOR` reorders when files are built
-  incrementally.** Use `git move -x <hash> -d <dest>` for individual commit
-  reorders — it's in-memory and avoids context-dependent conflicts.
-- **`git revise -i` for pure reorders** (no content changes, no splits, no
-  drops). Operates in-memory, faster than scripted editors. But same logical
-  conflicts with incrementally-built files, no `drop`/`exec` support, and
-  requires `git restack` afterward for branchless tracking. Use `git move -x`
-  for individual reorders, `git revise -i` for bulk.
+- For corrections discovered after rebuilding, stop and use `/stack-fix` with a
+  known target. Do not improvise a rebase, move, revise, or restack repair.

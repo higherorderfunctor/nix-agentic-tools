@@ -38,10 +38,12 @@ cannot help.
 3. **Check for stale rebase state**:
 
    ```bash
-   ls .git/rebase-merge .git/rebase-apply 2>/dev/null
+   ls -d "$(git rev-parse --git-path rebase-merge)" \
+     "$(git rev-parse --git-path rebase-apply)" 2>/dev/null
    ```
 
-   If present, run `git rebase --abort` before proceeding.
+   If either exists, run `git rebase --abort` before proceeding. In a linked
+   worktree `.git` is a file, so ask Git for the paths.
 
 4. **Snapshot current state** for post-fix verification:
    ```bash
@@ -63,16 +65,17 @@ introduced (typos, bug fixes, adjustments to existing code).
    If nothing is staged, check for unstaged changes and ask the user what to
    stage. Suggest `git add -p` for selective staging.
 
-2. **Determine if the target commit is known** — if the fix is from review
-   feedback or the user specified a commit, use `--base` to constrain absorb:
+2. **Require a known target commit.** If the fix is from review feedback or the
+   user specified a commit, use `--base` to constrain absorb:
 
    ```bash
    # Target known (review feedback, specific commit):
    git absorb --dry-run --base <target-commit>^
 
-   # Target unknown (let absorb auto-discover):
-   git absorb --dry-run
    ```
+
+   If the target is unknown, stop and ask the user. Auto-discovery can search a
+   wider draft component than this worktree owns.
 
    **Always use `--base` when the target is known.** Without it, absorb searches
    the full stack by diff context matching and may route to a later commit that
@@ -94,11 +97,7 @@ introduced (typos, bug fixes, adjustments to existing code).
 5. **Absorb and rebase**:
 
    ```bash
-   # With known target:
-   git absorb --and-rebase --base <target-commit>^
-
-   # Auto-discover:
-   git absorb --and-rebase
+   git absorb --and-rebase --base <target-commit>^ -- --update-refs
    ```
 
 6. **Verify the result** with `git sl` to show the updated stack.
@@ -110,146 +109,16 @@ introduced (typos, bug fixes, adjustments to existing code).
    git diff --stat
    ```
 
-   If hunks remain (couldn't be absorbed), inform the user. Options:
-   - Switch to **Path B** for the leftover changes
-   - Create a new commit if the changes are genuinely new work
+   If hunks remain, stop and ask the user whether to create a new commit or
+   handle the structural change in an isolated follow-up.
 
 8. **Post-fix verification** (see below).
 
-## Path B: Manual amend (guided conflict resolution)
+## Structural fixes
 
-Use this path when absorb cannot route the changes: content moves between
-commits, adding to files that descendants also touch, structural edits, or new
-file additions to earlier commits.
-
-### Identify the target
-
-1. **Determine which commit to edit**. Ask the user, or if changes are staged,
-   use the smartlog to find the most likely target:
-   ```bash
-   git sl
-   ```
-
-### Pre-analyze conflict risk
-
-2. **Check file overlap** between the target commit and its descendants:
-
-   ```bash
-   # Files the target commit touches
-   git show --stat <target>
-
-   # Files each descendant touches
-   git log --stat <target>..HEAD
-   ```
-
-   If descendants modify the same files, warn the user:
-   - **Same file, different regions** → restack will likely succeed in-memory
-   - **Same file, overlapping regions** → expect per-commit conflicts at each
-     descendant that touches those regions
-   - **Descendant reorganizes the file** (reorders sections, restructures) →
-     expect a conflict cascade; consider editing the reorganization commit
-     directly instead
-
-### Navigate and edit
-
-3. **Navigate to the target commit**:
-
-   ```bash
-   git prev <N>  # or git checkout <target>
-   ```
-
-   **Always verify you landed on the right commit before editing:**
-
-   ```bash
-   git log --oneline -1   # works in detached HEAD (git branch --show-current does not)
-   ```
-
-   If checkout fails (e.g. "local changes would be overwritten"), you are still
-   on the PREVIOUS commit. Stash or commit changes first, then retry. Never
-   proceed with `git add` + `git amend` after a failed checkout — the amend goes
-   into whatever commit you are currently on.
-
-4. **Make the edit**. The user (or you) modifies files as needed.
-
-5. **Amend the commit**:
-   ```bash
-   git amend
-   ```
-   If `git amend` succeeds with in-memory restack, skip to step 8.
-
-### Handle conflicts
-
-6. If amend reports conflicts ("To resolve merge conflicts, run:
-   `git restack --merge`"), run:
-
-   ```bash
-   git restack --merge
-   ```
-
-   This starts an on-disk rebase that stops at each conflicting commit.
-
-7. **For each conflict**:
-
-   ```bash
-   # See what's conflicting
-   git diff --name-only --diff-filter=U
-
-   # Resolve the conflict (edit files, git add)
-   git add <resolved-files>
-   git rebase --continue
-   ```
-
-   **Watch for orphaned additions**: when removing content from an earlier
-   commit, conflict resolution may drop additions that later commits made to the
-   same block. After each resolution, verify the resolved file contains all
-   expected content.
-
-### Return and verify
-
-8. **Return to the stack tip**:
-
-   ```bash
-   git next -a
-   ```
-
-9. **Post-fix verification** (see below).
-
-## Path C: In-memory amend (git-revise)
-
-Use this path when the fix is small (a few lines), the target is deep in the
-stack (5+ commits back), and you want to avoid checking out the target commit
-(preserves build cache, avoids "local changes would be overwritten" errors).
-
-**Limitations:** No rename detection. Requires `git restack` afterward
-(branchless can't track git-revise rewrites). Not suitable for structural
-changes, new file additions, or complex multi-hunk edits.
-
-1. **Stage the fix** at the current position (stack tip):
-
-   ```bash
-   git add -p   # or git add <files>
-   ```
-
-2. **Apply in-memory** to the target commit:
-
-   ```bash
-   git revise <target-hash>
-   ```
-
-   If conflicts occur, git-revise opens an editor for resolution. If the
-   conflict is too complex for editor-based resolution, abort and use Path B
-   instead.
-
-3. **Fix branchless tracking**:
-
-   ```bash
-   git restack
-   ```
-
-   If restack reports conflicts, resolve with `git restack --merge` (same as
-   Path B step 6-7).
-
-4. **Post-fix verification** (see below).
+If absorb cannot route the change, stop and ask the user. Manual amend,
+git-revise, restack, and branch-repair recipes can rewrite or move a sibling,
+stacked, or detached worktree. This skill does not attempt those repairs.
 
 ## Post-fix Verification
 
@@ -269,8 +138,8 @@ Run after either path to confirm the stack is healthy.
    git diff $BEFORE_SHA..HEAD --stat
    ```
 
-   For commit message fixes (not content), use `git reword <hash>` directly —
-   this skill handles content changes only.
+   For commit-message-only fixes, stop and ask the user; this skill handles
+   content changes only.
 
 3. **Run tests** if a test command is readily identifiable:
 
@@ -279,8 +148,21 @@ Run after either path to confirm the stack is healthy.
    ```
 
    Pick `<revset>` per **Choosing the test revset** in
-   `references/git-branchless.md`: `heads(stack())` for one PR with several
-   commits, `stack()` only for a stack of independent PRs. Size `<N>` by memory,
+   `references/git-branchless.md`: `heads($STACK)` for one PR with several
+   commits, `$STACK` only for a stack of independent PRs. Size `<N>` by memory,
    not cores, and never pass `--jobs 0`.
+
+   `$STACK` is this worktree's own stack. Plain `stack()` also holds other
+   worktrees' stacks while local `main` is behind its upstream (see **Selecting
+   your own stack** in the reference):
+
+   ```bash
+   main_branch="$(git config branchless.core.mainBranch || echo main)"
+   remote="$(git config "branch.${main_branch}.remote" || echo origin)"
+   base="$(git rev-parse --abbrev-ref "${main_branch}@{upstream}" 2>/dev/null \
+     || echo "${remote}/${main_branch}")"
+   git rev-parse --verify -q "${base}^{commit}" >/dev/null || base="$main_branch"
+   STACK="descendants(roots((stack() & ::HEAD) - ::$base)) - ::$base"
+   ```
 
    Report any regressions introduced by the fix.

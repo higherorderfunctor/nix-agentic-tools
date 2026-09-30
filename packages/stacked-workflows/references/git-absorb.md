@@ -345,10 +345,13 @@ The primary workflow for stacked commits:
 ```bash
 # Make fixes to code in the stack
 git add -p
-git absorb --and-rebase
-# If branchless shows abandoned commits:
-git restack
+git absorb --and-rebase -- --update-refs   # moves the branches in the range
 ```
+
+If branchless shows abandoned commits after the rebase, stop and inspect them.
+An abandoned `children(<pre-rewrite-hash>)` fork can belong to a worktree
+stacked on yours. Leave that line for its owner to move from that worktree; do
+not repair it with a broad restack or subtree move.
 
 Configure `absorb.maxStack=50` to match typical branchless stack depths.
 
