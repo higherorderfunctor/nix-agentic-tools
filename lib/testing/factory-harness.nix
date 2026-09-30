@@ -119,7 +119,10 @@
         default = {};
       };
       environmentVariables = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+        type = (import ../runtime-values {inherit lib;}).keyAwareMap {
+          type = lib.types.nullOr lib.types.str;
+          path = ["environmentVariables"];
+        };
         default = {};
       };
       lspServers = lib.mkOption {

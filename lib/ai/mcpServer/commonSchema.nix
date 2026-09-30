@@ -13,9 +13,8 @@
 #
 #   (B) Raw command — escape hatch for ad-hoc wrappers
 #       { type = "stdio"; command = "<abs-path>"; args = [...]; env = {...}; }
-#       Pass-through. Useful when the user hand-rolls a wrapper script
-#       that doesn't need the server-module machinery (no credential
-#       injection, no settings translation).
+#       Literal-only env passes through. A reference adds the shared runtime
+#       environment wrapper while args remain in mcp.json.
 #
 #   (C) External HTTP — for already-running / remote services
 #       { type = "http"; url = "..."; headers = {...}; timeout = <ms>; }
@@ -32,6 +31,7 @@
 #       secretValue.nix.
 #       Used by services.mcp-servers outputs and lib.ai.externalServers.
 {lib, ...}: let
+  rv = import ../../runtime-values {inherit lib;};
   secretValue = import ./secretValue.nix lib;
 in {
   options = {
@@ -58,9 +58,9 @@ in {
       type = lib.types.nullOr lib.types.str;
       default = null;
       description = ''
-        Absolute command path. Set this for shape (B) — raw
-        pass-through, no wrapping. Leave null for shape (A) where the
-        renderer derives the command from the package.
+        Absolute command path. Set this for shape (B). A referenced env value
+        wraps this command at runtime; otherwise it passes through. Leave null
+        for shape (A), where the renderer derives the command from the package.
       '';
     };
     codex = lib.mkOption {
@@ -103,7 +103,7 @@ in {
             description = "Allowlist of MCP tool names Codex exposes from this server.";
           };
           envHttpHeaders = lib.mkOption {
-            type = lib.types.attrsOf lib.types.str;
+            type = lib.types.attrsOf (lib.types.strMatching "[A-Za-z_][A-Za-z0-9_]*");
             default = {};
             description = "HTTP header names mapped to environment-variable names; secret values stay out of the Nix store.";
           };
@@ -118,9 +118,12 @@ in {
             description = "Experimental Codex execution environment for this MCP server.";
           };
           httpHeaders = lib.mkOption {
-            type = lib.types.attrsOf lib.types.str;
+            type = rv.keyAwareMap {
+              type = lib.types.str;
+              path = ["httpHeaders"];
+            };
             default = {};
-            description = "Non-secret literal HTTP headers. These values are written to the Nix store; use envHttpHeaders for secrets.";
+            description = "Literal HTTP headers written to the Codex config. A header whose name says it carries a credential (`Authorization`, `X-Api-Key`, …) refuses a literal; `rv.file` / `rv.helper` references for headers arrive with the HTTP delivery change and are refused by the renderer until then.";
           };
           oauthResource = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
@@ -168,7 +171,10 @@ in {
       description = "Arguments passed to the server binary.";
     };
     env = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
+      type = rv.keyAwareMap {
+        type = lib.types.str;
+        path = ["env"];
+      };
       default = {};
       description = "Environment variables for the server process.";
     };

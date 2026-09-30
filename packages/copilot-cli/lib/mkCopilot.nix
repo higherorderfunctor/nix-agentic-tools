@@ -229,9 +229,11 @@ in
     defaults = {
       package = pkgs.ai.copilot-cli;
     };
-    # The builder declares these pool options, `environmentVariables` (baked
-    # into ./wrapPackage.nix on both backends) included, and expands
-    # `agentsDir` into `agents`; Copilot states where each one lands.
+    # The builder declares these pool options, including `environmentVariables`,
+    # rendered by one `rv.environment` call in `lib/ai/launcher.nix`. A literal
+    # is exported by the launcher; an `rv.file` or `rv.helper` reference is read
+    # there at launch so its value never enters the store. The builder also
+    # expands `agentsDir` into `agents`; Copilot states where each one lands.
     poolOptions = {
       agents.description = "Agent Markdown or portable semantic records (HM: <configDir>/agents/<name>.md; devenv: <projectDir>/agents/<name>.agent.md). Null suppresses a root entry at the same key.";
       agentsDir.description = "Directory of `.md` agent files (expanded into `ai.copilot.agents`).";

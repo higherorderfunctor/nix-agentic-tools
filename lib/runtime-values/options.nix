@@ -28,6 +28,10 @@
     options,
     roots,
   }: let
+    unwrapNullOr = type:
+      if type.name == "nullOr"
+      then unwrapNullOr type.nestedTypes.elemType
+      else type;
     auditType = path: secret: type:
       if type.name == "nullOr"
       then auditType path secret type.nestedTypes.elemType
@@ -35,6 +39,13 @@
       then lib.optional (secret && !type.runtimeValue.secret) (lib.showOption path)
       else if type ? runtimeValueMap
       then lib.optional (secret && !type.runtimeValueMap.secretContainer) (lib.showOption path)
+      else if type.name == "attrsOf"
+      then let
+        elemType = unwrapNullOr type.nestedTypes.elemType;
+      in
+        if elemType.name == lib.types.str.name
+        then [(lib.showOption path)]
+        else auditType path secret elemType
       else if type.name == "submodule"
       then
         if secret

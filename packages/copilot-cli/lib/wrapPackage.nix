@@ -1,10 +1,9 @@
 # Wrap copilot-cli so it reads the MCP config the module renders — shared by
 # BOTH backends (DRY). Returns the raw package when nothing needs wrapping.
 #
-# `environmentVariables` are baked as `--set` args on BOTH backends. devenv
-# used to pass `{}` and export through its native `env` attrset instead; that
-# wrote the PROJECT SHELL, handing every variable to the developer's own
-# session, so it was retired on 2026-08-10.
+# `environmentVariables` are rendered by one `rv.environment` call in the
+# shared launcher. A literal becomes an `export`; an `rv.file` or `rv.helper`
+# reference is read there at launch, so its value never enters the store.
 #
 # devenv independently needs the flag injection regardless, because Copilot
 # reads MCP config from `$HOME/.copilot/mcp-config.json` and from whatever

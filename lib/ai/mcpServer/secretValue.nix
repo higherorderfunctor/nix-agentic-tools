@@ -20,8 +20,7 @@
 #
 # The file XOR helper mutex (and the "exactly one set" rule) is NOT
 # encoded in the type — a submodule cannot assert cleanly without a full
-# module eval. It is enforced by an `if/throw` at render/collect time,
-# matching the gitlab-mcp `instanceUrl` ⊕ `apiUrl` precedent.
+# module eval. It is enforced by an `if/throw` at render/collect time.
 #
 # Rendering + env-var derivation + the wrapper export live in the shared
 # `lib.ai` helpers so the placeholder written into mcp.json and the var

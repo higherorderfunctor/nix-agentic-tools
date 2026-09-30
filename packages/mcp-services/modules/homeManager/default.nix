@@ -132,11 +132,14 @@
     credVars = credentialVarsFor name;
     evaluatedSettings = mcpLib.evalSettings name srv.settings;
     hasCreds = mcpLib.hasCredentials credVars evaluatedSettings;
+    srvEnv = effectiveEnvFor name srv effectiveMode;
 
-    credSnippet =
-      if hasCreds
-      then mcpLib.credentialsEnvironment pkgs credVars evaluatedSettings
-      else "";
+    environmentSnippet = mcpLib.runtimeValues.environment {
+      inherit pkgs;
+      values = srvEnv;
+      path = ["services" "mcp-servers" "servers" name "env"];
+    };
+    credentialSnippet = lib.optionalString hasCreds (mcpLib.credentialsEnvironment pkgs credVars evaluatedSettings);
 
     # `--host` is passed explicitly rather than left to mcp-proxy's own
     # default. That default IS 127.0.0.1 today, so bridge servers were
@@ -155,16 +158,20 @@
       then "mcp-proxy --pass-environment --host ${escapeShellArg srv.service.host} --port \"$MCP_PORT\" -- ${stdioCmdForBridge}"
       else httpCmd;
 
+    runtimeInputs =
+      [srv.package]
+      ++ optionals (httpCmd == "bridge") [pkgs.ai.mcpServers.mcp-proxy];
+
     wrapper = pkgs.writeShellApplication {
-      name = "mcp-" + name + "-start";
+      excludeShellChecks = ["SC2123"];
       extraShellCheckFlags = shellStrict.shellcheckFlags;
       inherit (shellStrict) bashOptions;
-      runtimeInputs =
-        [srv.package]
-        ++ optionals (httpCmd == "bridge") [pkgs.ai.mcpServers.mcp-proxy];
+      name = "mcp-" + name + "-start";
       text = ''
         ${shellStrict.shoptHeader}
-        ${credSnippet}
+        ${environmentSnippet}
+        ${credentialSnippet}
+        export PATH=${lib.makeBinPath runtimeInputs}:$PATH
         exec ${rawCmd}${optionalString (argsStr != "") " ${argsStr}"}
       '';
     };
@@ -205,7 +212,8 @@
     (mapAttrs (name: srv:
       mcpLib.credentialFilePaths
       (credentialVarsFor name)
-      (mcpLib.evalSettings name srv.settings))
+      (mcpLib.evalSettings name srv.settings)
+      (effectiveEnvFor name srv "http"))
     serviceServers);
 
   mkRotationCheck = name: paths: let
@@ -326,7 +334,6 @@ in {
 
     systemd.user.services = mkIf pkgs.stdenv.hostPlatform.isLinux (mapAttrs' (name: srv: let
       serverDef = serverFiles.${name};
-      srvEnv = effectiveEnvFor name srv "http";
       # Optional per-server ExecStartPre, contributed by a server module's
       # `settingsToPreStart`, for setup that must happen before the daemon
       # inits. NO SERVER DECLARES ONE TODAY: openmemory-mcp was the only
@@ -354,9 +361,7 @@ in {
             ExecStart = mkExecStart name srv;
             Restart = "on-failure";
             RestartSec = 5;
-            Environment =
-              [("MCP_PORT=" + toString srv.service.port)]
-              ++ mapAttrsToList (k: v: k + "=" + escapeShellArg v) srvEnv;
+            Environment = [("MCP_PORT=" + toString srv.service.port)];
           }
           // optionalAttrs (preStart != []) {ExecStartPre = preStart;};
         Install = {

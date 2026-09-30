@@ -12,6 +12,7 @@
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+  rv = import ../../../lib/runtime-values {inherit lib;};
   # Codex's launcher, installed by both backends. Codex takes its
   # command shell from `SHELL` in its OWN process environment (via
   # `portable_pty`) and has no config key for it: `shell_environment_policy`
@@ -572,7 +573,13 @@
       // lib.optionalAttrs ((native.envHttpHeaders or {}) != {}) {env_http_headers = native.envHttpHeaders;}
       // lib.optionalAttrs ((native.envVars or []) != []) {env_vars = native.envVars;}
       // lib.optionalAttrs ((native.experimentalEnvironment or null) != null) {experimental_environment = native.experimentalEnvironment;}
-      // lib.optionalAttrs ((native.httpHeaders or {}) != {}) {http_headers = native.httpHeaders;}
+      // lib.optionalAttrs ((native.httpHeaders or {}) != {}) {
+        http_headers = lib.mapAttrs (header: value:
+          if rv.isReference value
+          then throw "ai.mcpServers.${name}.codex.httpHeaders.${header}: header references are not delivered for Codex yet"
+          else value)
+        native.httpHeaders;
+      }
       // lib.optionalAttrs ((native.oauthResource or null) != null) {oauth_resource = native.oauthResource;}
       // lib.optionalAttrs ((native.required or null) != null) {inherit (native) required;}
       // lib.optionalAttrs ((native.scopes or []) != []) {inherit (native) scopes;}
@@ -1062,8 +1069,11 @@ in
       "skills"
     ];
     defaults.package = pkgs.ai.chatgpt-codex;
-    # The builder declares `environmentVariables` (baked into the launcher,
-    # never the project shell) and `agents`, typed here with the Codex extension.
+    # The builder declares `environmentVariables`, rendered by one
+    # `rv.environment` call in `lib/ai/launcher.nix`: a literal is exported by
+    # the launcher, while an `rv.file` or `rv.helper` reference is read there
+    # at launch so its value never enters the store. It also declares `agents`,
+    # typed here with the Codex extension.
     poolOptions.agents = {
       type = lib.types.attrsOf (lib.types.nullOr codexAgentType);
       description = ''

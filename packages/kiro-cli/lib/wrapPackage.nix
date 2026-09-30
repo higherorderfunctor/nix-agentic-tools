@@ -1,8 +1,8 @@
 # Wrap kiro-cli so it launches the way the config asks — shared by BOTH backends
 # (DRY). Returns the raw package when nothing needs wrapping.
 #
-# `environmentVariables` are baked as `export`s on BOTH backends. devenv used
-# to pass `{}` here and export through its native `env` attrset instead; that
+# `environmentVariables` are materialized on BOTH backends. devenv used to
+# pass `{}` here and export through its native `env` attrset instead; that
 # wrote the PROJECT SHELL, handing every variable to the developer's own
 # session, so it was retired on 2026-08-10. devenv also still needs the flag
 # injection so `devenv shell` launches the v3 TUI exactly like HM does.
@@ -59,6 +59,7 @@
   lib,
   pkgs,
 }: let
+  rv = import ../../../lib/runtime-values {inherit lib;};
   inherit
     (import ../../../lib/idempotentFlags.nix {inherit lib;})
     gateOnSubcommand
@@ -94,15 +95,11 @@
     hasIdentity = identityMaterializer != null;
     needsWrapper = hasEnv || hasExtraPackages || hasSecret || hasTrust || hasV3 || hasIdentity;
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
-    # env baked as `export`s (was makeWrapper `--set`), so the hand-written
-    # wrapper can ALSO position the flags. makeWrapper only appends
-    # (`--append-flags`) or prepends blindly (`--add-flags`), with no way to
-    # skip a flag the caller already passed or to gate one on the subcommand.
-    envExports =
-      lib.concatStringsSep "\n"
-      (lib.mapAttrsToList
-        (k: v: "export ${lib.escapeShellArg k}=${lib.escapeShellArg v}")
-        environmentVariables);
+    envExports = rv.environment {
+      inherit pkgs;
+      values = environmentVariables;
+      path = ["kiro"];
+    };
 
     # SOPS/agenix secrets read at RUNTIME — the decrypted file is `cat`ed into
     # the env just before `exec`, so the VALUE never enters the world-readable

@@ -35,8 +35,13 @@ in {
   in
     hints.keyring or false
     || secretContainer
-    || contains ["apikey" "authorization" "clientsecret" "credential" "credentials" "passwd" "password" "pat" "privatekey" "secret" "token" "tokens"] parts
-    || parts == ["access" "key"]
-    || parts == ["api" "key"]
-    || parts == ["private" "key"];
+    || (
+      !(lib.length parts >= 2 && lib.drop (lib.length parts - 2) parts == ["env" "var"])
+      && (
+        contains ["apikey" "authorization" "clientsecret" "credential" "credentials" "passwd" "password" "pat" "privatekey" "secret" "token" "tokens"] parts
+        || parts == ["access" "key"]
+        || parts == ["api" "key"]
+        || parts == ["private" "key"]
+      )
+    );
 }

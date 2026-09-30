@@ -81,19 +81,10 @@
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
   runtimeValues = import ./runtime-values {inherit lib;};
-  credentialReference = name: spec: value: let
-    adapted =
-      if value != null && spec ? adapt
-      then spec.adapt value
-      else value;
-  in
-    if adapted == null || runtimeValues.isReference adapted
-    then adapted
-    else throw "MCP credential ${name}: expected a runtime reference envelope";
   credentialsEnvironment = pkgs: credentialVars: settings:
     runtimeValues.environment {
       inherit pkgs;
-      values = lib.mapAttrs' (name: spec: lib.nameValuePair spec.envVar (credentialReference name spec settings.${name})) credentialVars;
+      values = lib.mapAttrs' (name: spec: lib.nameValuePair spec.envVar settings.${name}) credentialVars;
     };
 
   # ── Credentials helpers ──────────────────────────────────────────
@@ -113,33 +104,92 @@
   # changes), so callers hash these files to decide whether a dependent
   # long-lived service must restart. Agnostic to the secret manager
   # (sops-nix, agenix, ln, ...): it only needs the decrypted file path.
-  credentialFilePaths = credentialVars: settings:
-    builtins.filter (p: p != null)
-    (mapAttrsToList (optName: spec: let
-      cred = settings.${optName} or null;
-      ref = credentialReference optName spec cred;
-    in
-      if ref != null && ref._runtime.source ? file
-      then ref._runtime.source.file
-      else null)
-    credentialVars);
+  credentialFilePaths = credentialVars: settings: env:
+    lib.unique (builtins.filter (p: p != null) (
+      map (value:
+        if runtimeValues.isReference value && value._runtime.source ? file
+        then value._runtime.source.file
+        else null)
+      ((mapAttrsToList (optName: _spec: settings.${optName} or null) credentialVars)
+        ++ builtins.attrValues env)
+    ));
 
   # ── Secrets wrapper for stdio servers with credentials ─────────────
   # Returns a string (store path) for use directly as a command.
   mkSecretsWrapper = {
+    command,
+    env,
     pkgs,
     name,
-    package,
-    credentialVars,
-    settings,
+    credentialVars ? {},
+    settings ? {},
   }: let
     drv = pkgs.writeShellScript (name + "-env") ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
+      ${runtimeValues.environment {
+        inherit pkgs;
+        values = env;
+        path = ["mcpServers" name "env"];
+      }}
       ${credentialsEnvironment pkgs credentialVars settings}
-      exec "${getExe package}" "$@"
+      exec ${lib.escapeShellArg command} "$@"
     '';
   in "${drv}";
+
+  pythonGuard = {
+    PYTHONNOUSERSITE = "true";
+    PYTHONPATH = "";
+  };
+
+  normalizeStdio = pkgs: name: {
+    args ? [],
+    command ? null,
+    credentialVars ? {},
+    env,
+    package ? null,
+    settings ? {},
+  }: let
+    checkedEnv =
+      (runtimeValues.keyAwareMap {
+        type = lib.types.str;
+        path = ["env"];
+      }).merge ["mcpServers" name "env"] [
+        {
+          file = "renderServer";
+          value = env;
+        }
+      ];
+    executable =
+      if command != null
+      then command
+      else getExe package;
+    guarded = package != null;
+    wrapped = hasCredentials credentialVars settings || any runtimeValues.isReference (builtins.attrValues checkedEnv);
+  in {
+    command =
+      if wrapped
+      then
+        mkSecretsWrapper {
+          inherit pkgs settings credentialVars;
+          command = executable;
+          env = builtins.removeAttrs checkedEnv (builtins.attrNames (
+            if guarded
+            then pythonGuard
+            else {}
+          ));
+          name = name + lib.optionalString (command != null) "-raw";
+        }
+      else executable;
+    inherit args wrapped;
+    env =
+      (
+        if wrapped
+        then {}
+        else checkedEnv
+      )
+      // lib.optionalAttrs guarded pythonGuard;
+  };
 
   # ── Typed-shape constructor (ai.mcpServers.<name> values) ────────
   # Returns the typed shape declared in
@@ -164,7 +214,7 @@
   # Discriminates on which fields are set, in order:
   #
   #   url != null        → HTTP pass-through
-  #   command != null    → raw pass-through (no wrapping)
+  #   command != null    → raw command, wrapped when env has references
   #                        Explicit command always wins so users can
   #                        override or skip the server-module pipeline.
   #   package != null    → typed-via-package — runs the
@@ -220,12 +270,14 @@
       }
       // lib.optionalAttrs (timeout != null) {inherit timeout;}
     else if command != null
-    then {
+    then let
+      rendered = normalizeStdio pkgs name {inherit args command env;};
+    in {
       type =
         if type != null
         then type
         else "stdio";
-      inherit command args env;
+      inherit (rendered) args command env;
     }
     else if package != null
     then let
@@ -240,27 +292,15 @@
       srvEnv = effectiveEnv name cfgShim "stdio" env;
       srvArgs = effectiveArgs name cfgShim "stdio" args;
       credentialVars = serverDef.meta.credentialVars or {};
-      needsWrapper = hasCredentials credentialVars evaluatedSettings;
-      wrappedCommand = mkSecretsWrapper {
-        inherit pkgs name credentialVars package;
+      rendered = normalizeStdio pkgs name {
+        args = stdioArgs ++ srvArgs;
+        inherit credentialVars package;
+        env = srvEnv;
         settings = evaluatedSettings;
       };
     in {
       type = "stdio";
-      command =
-        if needsWrapper
-        then wrappedCommand
-        else getExe package;
-      args = stdioArgs ++ srvArgs;
-      # Prevent Python path pollution from parent process (e.g.,
-      # nixos-mcp sets PYTHONPATH for Python 3.13 which breaks
-      # Python 3.14 servers).
-      env =
-        srvEnv
-        // {
-          PYTHONPATH = "";
-          PYTHONNOUSERSITE = "true";
-        };
+      inherit (rendered) args command env;
     }
     else throw "renderServer: server '${name}' must specify one of: package, command, or url";
 

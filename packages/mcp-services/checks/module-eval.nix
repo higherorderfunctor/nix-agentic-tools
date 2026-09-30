@@ -32,65 +32,81 @@
   };
 in {
   checks = {
-    # Evaluate settings directly so a renderer-local throw cannot satisfy this test.
-    module-mcp-gitlab-settings-mutex = let
-      source = lib.fileset.toSource {
-        root = ../../..;
-        fileset = lib.fileset.unions [
-          ../../../lib/runtime-values
-          ../../../lib/mcp.nix
-          ../../../packages/gitlab-mcp/modules/mcp-server.nix
-        ];
+    module-mcp-stdio-env-runtime-values = let
+      reference = mcpLib.runtimeValues.file {path = "/run/secrets/mcp-token";};
+      literal = mcpLib.renderServer pkgs "raw-literal" {
+        command = "/bin/example";
+        env.EDITOR = "vim";
+        type = "stdio";
       };
-      probe = pkgs.writeText "gitlab-settings-mutex.nix" ''
-        { credential ? "none", instance ? false, callerPassing ? true }:
-        let
-          lib = import ${pkgs.path}/lib;
-          mcpLib = import ${source}/lib/mcp.nix { inherit lib; };
-          settings = {
-            assertions = [{ assertion = callerPassing; message = "gitlab caller assertion failed"; }];
-            instanceUrl = if instance then "https://gitlab.example.com" else null;
-          } // lib.optionalAttrs (credential != "none") {
-            apiUrl.''${credential} = "/run/secrets/gitlab-url";
-          };
-          result = mcpLib.evalSettings "gitlab-mcp" settings;
-        in
-          builtins.deepSeq result (
-            assert !(result ? assertions);
-            assert result.instanceUrl == settings.instanceUrl;
-            assert credential == "none" || result.apiUrl.''${credential} == "/run/secrets/gitlab-url";
-            true
-          )
-      '';
+      packaged = mcpLib.renderServer pkgs "context7-mcp" {
+        env = {
+          API_TOKEN = reference;
+          PYTHONNOUSERSITE = "false";
+          PYTHONPATH = "/unexpected/python";
+        };
+        package = pkgs.ai.mcpServers.context7-mcp;
+      };
+      raw = mcpLib.renderServer pkgs "raw-reference" {
+        command = "/bin/example";
+        env.API_TOKEN = reference;
+        type = "stdio";
+      };
     in
-      pkgs.runCommandLocal "module-test-mcp-gitlab-settings-mutex" {
-        nativeBuildInputs = [pkgs.nix];
-      } ''
-        export NIX_STATE_DIR="$TMPDIR/nix-state"
-        mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
-        for credential in none file helper; do
-          nix-instantiate --eval --strict ${probe} --argstr credential "$credential"
-        done
-        nix-instantiate --eval --strict ${probe} --arg instance true
-        for credential in file helper; do
-          if nix-instantiate --eval --strict ${probe} --argstr credential "$credential" --arg instance true >actual.stdout 2>actual.stderr; then
-            echo "FAIL: gitlab instanceUrl + apiUrl.$credential unexpectedly succeeded" >&2
-            exit 1
-          fi
-          grep -F 'MCP server gitlab-mcp settings assertions failed:' actual.stderr
-          grep -F 'settings.instanceUrl and settings.apiUrl.file/helper are mutually exclusive' actual.stderr
-        done
-        # The server's passing assertion must not hide a failing caller assertion.
-        if nix-instantiate --eval --strict ${probe} --arg callerPassing false >actual.stdout 2>actual.stderr; then
-          echo "FAIL: gitlab caller assertion unexpectedly succeeded" >&2
+      pkgs.runCommandLocal "module-test-mcp-stdio-env-runtime-values" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        test ${lib.escapeShellArg literal.command} = /bin/example
+        test ${lib.escapeShellArg literal.env.EDITOR} = vim
+        grep -F '/run/secrets/mcp-token' ${packaged.command}
+        grep -F 'runtime-value-read' ${packaged.command}
+        if grep -F 'PYTHONPATH' ${packaged.command}; then
           exit 1
         fi
-        grep -F 'gitlab caller assertion failed' actual.stderr
-        if grep -F 'mutually exclusive' actual.stderr; then
-          echo "FAIL: diagnostic includes a passing server assertion" >&2
+        test ${lib.escapeShellArg packaged.env.PYTHONPATH} = ""
+        test ${lib.escapeShellArg packaged.env.PYTHONNOUSERSITE} = true
+        grep -F '/run/secrets/mcp-token' ${raw.command}
+        grep -F 'runtime-value-read' ${raw.command}
+        touch "$out"
+      '';
+
+    module-mcp-stdio-env-secret-literal-rejected = mkTest "mcp-stdio-env-secret-literal-rejected" (
+      let
+        result = builtins.tryEval (builtins.deepSeq (mcpLib.renderServer pkgs "raw-literal-secret" {
+            command = "/bin/example";
+            env.API_TOKEN = "PLANTED_LITERAL";
+            type = "stdio";
+          })
+          true);
+      in
+        !result.success
+    );
+
+    module-mcp-gitlab-instance-url = let
+      render = instanceUrl:
+        mcpLib.renderServer pkgs "gitlab-mcp" {
+          package = pkgs.ai.mcpServers.gitlab-mcp;
+          settings = {
+            inherit instanceUrl;
+            pat = mcpLib.runtimeValues.file {path = "/run/secrets/gitlab-pat";};
+          };
+        };
+      literal = render "https://gitlab.example.com";
+      reference = render (mcpLib.runtimeValues.file {path = "/run/secrets/gitlab-url";});
+      literalPat = builtins.tryEval (builtins.deepSeq (mcpLib.evalSettings "gitlab-mcp" {pat = "literal";}) true);
+    in
+      pkgs.runCommandLocal "module-test-mcp-gitlab-instance-url" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        grep -F "GITLAB_API_URL=" ${literal.command}
+        grep -F "https://gitlab.example.com" ${literal.command}
+        grep -F '/run/secrets/gitlab-url' ${reference.command}
+        grep -F 'runtime-value-read' ${reference.command}
+        if grep -F "GITLAB_API_URL='" ${reference.command}; then
           exit 1
         fi
-        echo "PASS: gitlab mutex rejects file/helper conflicts; valid settings and caller assertions verified" | tee "$out"
+        test ${lib.escapeShellArg (lib.boolToString (!literalPat.success))} = true
+        touch "$out"
       '';
 
     # tryEval cannot expose throw messages. Follow facet-mock-negative by
@@ -202,25 +218,61 @@ in {
         result.config.services.mcp-servers.mcpConfig.mcpServers == {}
     );
 
-    # Credential rotation: enabling a file-credentialed HTTP server emits a
+    # Credential rotation: a file-backed credential or env reference emits a
     # restart-on-rotation activation entry that fingerprints the secret path
     # and targets the matching systemd user unit.
     module-mcp-services-rotation-restart-entry = mkTest "mcp-services-rotation-restart-entry" (
       let
-        result = evalHm {
-          services.mcp-servers.servers.github-mcp = {
-            enable = true;
-            settings.credentials = mcpLib.runtimeValues.file {path = "/run/secrets/gh-token";};
+        cases = {
+          credential = {
+            expectedPath = "/run/secrets/gh-token";
+            expectedUnit = "mcp-github-mcp.service";
+            module.services.mcp-servers.servers.github-mcp = {
+              enable = true;
+              settings.credentials = mcpLib.runtimeValues.file {path = "/run/secrets/gh-token";};
+            };
+          };
+          environment = {
+            expectedPath = "/run/secrets/context7-token";
+            expectedUnit = "mcp-context7-mcp.service";
+            module.services.mcp-servers.servers.context7-mcp = {
+              enable = true;
+              env.API_TOKEN = mcpLib.runtimeValues.file {path = "/run/secrets/context7-token";};
+            };
           };
         };
-        activation = result.config.home.activation.mcpRestartOnSecretRotation or null;
+        passes = case: let
+          result = evalHm case.module;
+          activation = result.config.home.activation.mcpRestartOnSecretRotation or null;
+        in
+          activation
+          != null
+          && lib.hasInfix case.expectedUnit (activation.text or "")
+          && lib.hasInfix "sha256sum" (activation.text or "")
+          && lib.hasInfix case.expectedPath (activation.text or "");
       in
-        activation
-        != null
-        && lib.hasInfix "mcp-github-mcp.service" (activation.text or "")
-        && lib.hasInfix "sha256sum" (activation.text or "")
-        && lib.hasInfix "/run/secrets/gh-token" (activation.text or "")
+        lib.all passes (builtins.attrValues cases)
     );
+
+    module-mcp-services-service-path-order = let
+      result = evalHm {
+        services.mcp-servers.servers.context7-mcp = {
+          enable = true;
+          env.PATH = "/nonexistent/a:/nonexistent/b";
+        };
+      };
+      exec = result.config.systemd.user.services.mcp-context7-mcp.Service.ExecStart;
+    in
+      pkgs.runCommandLocal "module-test-mcp-services-service-path-order" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        declared_line="$(grep -nF 'PATH=/nonexistent/a:/nonexistent/b' ${exec} | cut -d: -f1)"
+        exec_line="$(grep -nF 'exec mcp-proxy' ${exec} | cut -d: -f1)"
+        package_line="$(grep -nF 'export PATH=' ${exec} | tail -n1 | cut -d: -f1)"
+        test "$package_line" -gt "$declared_line"
+        test "$exec_line" -eq "$((package_line + 1))"
+        touch "$out"
+      '';
 
     # DRY-RUN INERTNESS. Every MUTATING command in the rotation script must be
     # routed through home-manager's `run` helper, which echoes instead of

@@ -7,10 +7,9 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/app/mkBacken
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-09-28 — Claude's settings and MCP files are Nix-owned
-> read-only links. Proxy ownership is explicit and keyed by server name, so each
-> owner gets its own daemon; every ecosystem renders servers via `renderServer`;
-> Kiro's mcp.json is always a read-only copy.
+> **Last verified:** 2026-09-30 — stdio env is classified on every render path;
+> wrapped servers retain the Python guard, and service wrappers retain package
+> path precedence.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -54,6 +53,14 @@ legacy shape in this pilot; the proxy adapts it to the shared reader locally.
 The reader drops trailing newlines before the empty check and aborts on missing,
 unreadable, empty sources or failed helpers without printing helper output.
 Kiro's separate HTTP secret flow below is deferred.
+
+Stdio `env` maps accept the same references. A raw or packaged server with a
+reference gets one wrapper that materializes the whole map and any typed
+credentials. Unwrapped maps remain in mcp.json; a wrapped server's env is
+exported by the wrapper, except the Python guard, which stays in mcp.json.
+Managed services materialize their whole environment in the existing start
+wrapper rather than systemd's `Environment=`, and file-backed env references
+join credential files in the rotation-restart fingerprint.
 
 ### The proxy path — `proxy.enable`, and why it is the preferred one
 

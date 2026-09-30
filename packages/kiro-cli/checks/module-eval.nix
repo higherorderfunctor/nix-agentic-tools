@@ -7,6 +7,7 @@
   ...
 }: let
   inherit (harness) deliveredFiles evalDevenv evalHm hasLiteral lspEntryOf mkTest mkWrapperGrepTest;
+  rv = import ../../../lib/runtime-values {inherit lib;};
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) dvCliSettings dvHookTarget dvHookTaskExec dvMcpDirTarget dvMcpTaskExec dvTaskExec hmCliSettings hmHookPruneScript hmHookTarget hmHookWriteScript hmMcpDirTarget hmMcpPruneScript hmMcpWriteScript hmRetirementLedgerScript hmRetirementScript idempotentFlags kiroSteeringContent kiroWrappedDrvs ownPlanArg renderKiroSecrets renderedMcpJson soleFork soleSame steeringTargetOf;
   # The settings writer of one backend as a runnable script: Home Manager
   # replays its prune entry and then its write entry (activation text needs
@@ -3482,28 +3483,28 @@ in {
     module-kiro-hm-top-level-env-fanout = let
       result = evalHm {
         ai.kiro.enable = true;
-        ai.environmentVariables.KIRO_FOO = "kiro-hm-fanout-sentinel";
+        ai.environmentVariables.GITLAB_TOKEN = rv.file {path = "/run/secrets/kiro-token";};
       };
     in
       mkWrapperGrepTest {
         name = "kiro-hm-top-level-env-fanout";
         package = builtins.head result.config.home.packages;
         bin = "kiro-cli";
-        needles = ["KIRO_FOO" "kiro-hm-fanout-sentinel"];
+        needles = ["runtime-value-read" "/run/secrets/kiro-token"];
       };
 
     # Devenv: top-level ai.environmentVariables fans to the Kiro wrapper.
     module-kiro-devenv-top-level-env-fanout = let
       result = evalDevenv {
         ai.kiro.enable = true;
-        ai.environmentVariables.KIRO_DEBUG = "kiro-devenv-fanout-sentinel";
+        ai.environmentVariables.GITLAB_TOKEN = rv.file {path = "/run/secrets/kiro-token";};
       };
     in
       mkWrapperGrepTest {
         name = "kiro-devenv-top-level-env-fanout";
         package = builtins.head result.config.packages;
         bin = "kiro-cli";
-        needles = ["KIRO_DEBUG" "kiro-devenv-fanout-sentinel"];
+        needles = ["runtime-value-read" "/run/secrets/kiro-token"];
       };
 
     # Devenv: per-CLI ai.kiro.environmentVariables wins over top-level on name

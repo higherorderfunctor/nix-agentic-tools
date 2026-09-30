@@ -1,6 +1,6 @@
 # Runtime values
 
-> **Last verified:** 2026-09-30 — documented validation and map merging.
+> **Last verified:** 2026-09-30 — documented open string map auditing.
 
 `lib.runtimeValues` is the public library, and both module sets supply `rv`
 through `_module.args`. `file { path; }` and `helper { path; }` return a
@@ -24,15 +24,20 @@ uses strings for `extraSettings`; Kimchi uses nullable strings for `gitTokens`.
 
 The classifier normalizes camel case and underscores. A key is secret when its
 `keyring` hint is set, its container is secret, or a segment carries a
-credential word. Current keys are glab's `job_token`, `oauth2_refresh_token`,
+credential word. A name ending in `env`, `var` is a locator rather than a
+payload, as in `bearerTokenEnvVar`, unless its `keyring` hint or container marks
+it secret. Current keys are glab's `job_token`, `oauth2_refresh_token`,
 `refresh_token`, and `token`, plus `apiKey`, `gitTokens`, and `CI_JOB_TOKEN`.
 Rules require current keys.
 
 `fromSchema` converts one flat field set into nullable options. `checkOptions`
 audits evaluated declarations. It understands runtime unions, guarded maps,
-`nullOr`, and declared submodules; every other type fails when its option path
-is classified secret. The pilot roots are glab and Kimchi's `apiKey` and
-`gitTokens`, plus the four migrated MCP credential schemas.
+`nullOr`, and declared submodules. An `attrsOf str` after `nullOr` is always a
+violation because user-chosen keys require `runtimeValueMap`; every other
+`attrsOf` is descended. Every other type fails when its option path is
+classified secret. The pilot roots are glab, the shared and four runtime
+environment maps, the shared MCP server pool, Kimchi's `apiKey` and `gitTokens`,
+and the four migrated MCP credential schemas.
 
 The reader accepts `<label> <file|helper> <path>`. It rejects missing,
 directory, unreadable, empty, failed-helper, and NUL-bearing inputs. Helper
