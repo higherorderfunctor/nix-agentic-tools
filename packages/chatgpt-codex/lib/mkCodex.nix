@@ -55,6 +55,7 @@
       inherit (cfg) package;
     };
   daemonSelect = import ./daemonSelect.nix pkgs;
+  effectiveProjectDocMaxBytes = import ./effectiveProjectDocMaxBytes.nix pkgs;
   packageLayout = import ./packageLayout.nix;
   jsonFormat = pkgs.formats.json {};
   tomlFormat = pkgs.formats.toml {};
@@ -1153,11 +1154,10 @@ in
           other than Codex's own default (32768) is also written to Codex's
           `project_doc_max_bytes` at default priority, so Codex reads as much
           as this limit admits. On devenv that key lands in the project's
-          `.codex/config.toml`, which Codex applies only in a trusted project,
-          so when a raised limit is in force, every devenv shell entry warns
-          while AGENTS.md is larger than 32768 bytes, since an untrusted
-          session reads only the first 32768. Home Manager writes the key to
-          user config, which no trust gates, so it does not warn.
+          `.codex/config.toml`, which Codex applies only in a trusted project.
+          On every devenv shell entry, a file larger than Codex's effective
+          user or trusted-project limit warns before Codex can truncate it.
+          Home Manager writes the key to user config, which no trust gates.
         '';
       };
       native.settings = lib.mkOption {
@@ -1220,7 +1220,10 @@ in
       ...
     }:
       {
-        defaultMaxBytes = codexProjectDocMaxBytes;
+        defaultMaxBytes = {
+          bytes = codexProjectDocMaxBytes;
+          resolver = effectiveProjectDocMaxBytes;
+        };
         key = agentsMdPath "devenv" cfg;
         maxBytes = cfg.projectDocMaxBytes;
       }

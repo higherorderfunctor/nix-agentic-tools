@@ -38,9 +38,9 @@
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
 #     sharedAgentsMd ? <absent>;     # callback (same args) → {key; index?; rules?; maxBytes?;
 #                                    #   defaultMaxBytes?}: the devenv repository AGENTS.md
-#                                    #   contribution; `defaultMaxBytes` is what the runtime
-#                                    #   reads where a raised `maxBytes` does not apply, and
-#                                    #   devenv shell entry warns past it. The transform
+#                                    #   contribution; `defaultMaxBytes` supplies the runtime's
+#                                    #   fallback bytes and an effective-limit resolver, and
+#                                    #   devenv shell entry warns past the resolved limit. The transform
 #                                    #   rejects any other field
 #     contentTargets ? <absent>;     # callback (same args) → {context?; rules?}: the
 #                                    #   path each context/rule unit lands in, from the

@@ -33,24 +33,28 @@ pkgs: let
     '';
   };
 
-  # `FILE BYTES READER`: one warning on stderr when FILE is larger than what
-  # READER takes where a raised limit does not apply, and silence otherwise,
-  # including when FILE does not exist. It measures the file on disk, so it
-  # runs where that file is, at devenv shell entry.
+  # `FILE BYTES READER RESOLVER`: one warning on stderr when FILE is larger
+  # than RESOLVER reports READER will take, and silence otherwise, including
+  # when FILE does not exist. A failed or invalid resolution uses BYTES.
   windowNotice = strictShellApplication {
     name = "ai-markdown-window-notice";
     text = ''
-      if [ "$#" -ne 3 ]; then
-        echo "usage: ai-markdown-window-notice FILE BYTES READER" >&2
+      if [ "$#" -ne 4 ]; then
+        echo "usage: ai-markdown-window-notice FILE BYTES READER RESOLVER" >&2
         exit 2
       fi
       file=$1
       limit=$2
       reader=$3
+      resolver=$4
       [ -f "$file" ] || exit 0
       size=$(${pkgs.coreutils}/bin/wc -c <"$file")
+      resolved="$("$resolver" "$(${pkgs.coreutils}/bin/dirname "$file")" "$limit" 2>/dev/null || :)"
+      if [[ "$resolved" =~ ^[0-9]+$ ]]; then
+        limit=$resolved
+      fi
       if [ "$size" -gt "$limit" ]; then
-        echo "warning: $file is $size bytes; $reader in an untrusted project reads only the first $limit. Trust the project in $reader, or shrink the always-loaded content." >&2
+        echo "warning: $file is $size bytes; $reader reads only the first $limit bytes with its current configuration. Raise the limit in $reader, or shrink the always-loaded content." >&2
       fi
     '';
   };

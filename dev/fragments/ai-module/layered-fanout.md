@@ -1,19 +1,20 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-29 — Claude delivers every surface through
-> `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
-> Every delivered entry is a file the layer writes. L5 is the delivery router
-> plus one adapter per backend; every runtime describes delivery once through
-> the record-level `config`, which `mkRuntime` makes the only delivery callback,
-> and the delivery matrix is generated from the layer for every runtime's files.
-> Normalized pools carry only a text-source record's winning arm. Claude's
-> devenv rules and Codex's execpolicy rules are read-only copies whose writers
-> survive a disable. Copilot's settings files are read-only copies of one
-> `materialize-copilot-config` writer; its only reconciled document is the HM
-> `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
-> `mcp.json` are read-only copies in one directory ledger. Kimchi's settings
-> files, including HM user `config.json`, are read-only copies of one
-> `kimchiFiles` writer. Codex's `config.toml` is a store symlink on both
+> **Last verified:** 2026-09-29 — the shared AGENTS.md notice resolves each
+> runtime's effective limit at shell entry. Claude delivers every surface
+> through `ai.claude.files`; its settings.json and devenv .mcp.json are
+> read-only links. Every delivered entry is a file the layer writes. L5 is the
+> delivery router plus one adapter per backend; every runtime describes delivery
+> once through the record-level `config`, which `mkRuntime` makes the only
+> delivery callback, and the delivery matrix is generated from the layer for
+> every runtime's files. Normalized pools carry only a text-source record's
+> winning arm. Claude's devenv rules and Codex's execpolicy rules are read-only
+> copies whose writers survive a disable. Copilot's settings files are read-only
+> copies of one `materialize-copilot-config` writer; its only reconciled
+> document is the HM `trustedFolders` leaf of its state file `config.json`.
+> Kiro's `cli.json` and `mcp.json` are read-only copies in one directory ledger.
+> Kimchi's settings files, including HM user `config.json`, are read-only copies
+> of one `kimchiFiles` writer. Codex's `config.toml` is a store symlink on both
 > backends and its daemon `settings.json` a read-only copy of
 > `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
 > pool. Native file settings live under `ai.<runtime>.native`. The builder
@@ -29,17 +30,17 @@
 > contribution may carry `index` entries: Codex renders a scoped rule that names
 > `references` as a path-scoped index entry instead of inlining its body. The
 > shared AGENTS.md map lowers through the router as `internal`, as a read-only
-> copy, and a contribution's `defaultMaxBytes` makes the owner warn past it
-> under a raised `maxBytes`; its built bytes are measured in the generated-file
-> tree. The router builds one tree per invocation for static Markdown, JSON,
-> TOML and YAML, while switch-time overlays and `content.run` stay outside it.
-> Generators mark their `content` with `_generated`, so a consumer's replacement
-> of a unit's file warns like a switch-off. Rule and semantic-agent generators
-> use `lib/frontmatter.nix` to render YAML and mark the content. The router
-> passes that marker to the generated-file builder, which accepts BOM/CRLF,
-> formats only the body and restores the exact fenced frontmatter bytes with one
-> blank separator. `parseCompare` requires those fenced bytes in the installed
-> file.
+> copy, and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
+> effective-limit resolver for the owner's notice under a raised `maxBytes`; its
+> built bytes are measured in the generated-file tree. The router builds one
+> tree per invocation for static Markdown, JSON, TOML and YAML, while
+> switch-time overlays and `content.run` stay outside it. Generators mark their
+> `content` with `_generated`, so a consumer's replacement of a unit's file
+> warns like a switch-off. Rule and semantic-agent generators use
+> `lib/frontmatter.nix` to render YAML and mark the content. The router passes
+> that marker to the generated-file builder, which accepts BOM/CRLF, formats
+> only the body and restores the exact fenced frontmatter bytes with one blank
+> separator. `parseCompare` requires those fenced bytes in the installed file.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -369,9 +370,9 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex every
   rule; Kiro only unscoped always-on rules; Kimchi none), optional `index`
-  entries, an optional `maxBytes` and an optional `defaultMaxBytes` (what the
-  runtime reads where a raised `maxBytes` does not apply; past it the owner
-  warns), and nothing else: the builder reads those by name, so
+  entries, an optional `maxBytes` and an optional `defaultMaxBytes` (fallback
+  bytes plus a command that resolves the effective limit at shell entry; past it
+  the owner warns), and nothing else: the builder reads those by name, so
   `checkRecord.nix` rejects a missing `key` or any other field. Codex lists a
   scoped rule that names `references` as an index entry (its globs plus links to
   those documents) and inlines every other rule, a scoped one behind a prose

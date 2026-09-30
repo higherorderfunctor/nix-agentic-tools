@@ -2097,7 +2097,7 @@ in {
     # `checks/markdown/markdown-byte-limit-scripts.nix`.
     module-codex-window-notice = mkTest "codex-window-notice" (
       let
-        expected = ["${lib.getExe (import ../../../lib/markdown/byte-limit.nix pkgs).windowNotice} \"$DEVENV_ROOT\"/${lib.escapeShellArgs ["AGENTS.md" "32768" "codex"]}"];
+        expected = ["${lib.getExe (import ../../../lib/markdown/byte-limit.nix pkgs).windowNotice} \"$DEVENV_ROOT\"/${lib.escapeShellArgs ["AGENTS.md" "32768" "codex" (lib.getExe (import ../lib/effectiveProjectDocMaxBytes.nix pkgs))]}"];
         devenv = projectDocMaxBytes:
           evalDevenv {
             ai = {
