@@ -23,7 +23,6 @@
       shopt -s inherit_errexit 2>/dev/null || :
       exit 0
     '';
-  launcherRuntimes = lib.remove "claude" harnessNames;
   ghDir = "/run/ai-gh";
   tokenFile = "/run/secrets/ai-github-token";
   identityWith = credentials: {
@@ -68,17 +67,27 @@
     if backend == "hm"
     then evaluated.config.home.packages
     else evaluated.config.packages;
-  wrapperRows = config:
+  sink = backend: evaluated: runtime:
+    if runtime == "claude"
+    then {
+      type = "environment";
+      value = evaluated.config.ai.claude.files.".claude/settings.json".content.value.env or {};
+    }
+    else {
+      type = "launcher";
+      bin = exes.${runtime};
+      packages = installed backend evaluated;
+    };
+  deliveryRows = config:
     lib.concatMap (backend: let
       evaluated = backends.${backend} config;
     in
       map (runtime: {
         inherit backend runtime;
-        bin = exes.${runtime};
-        packages = installed backend evaluated;
         env = channel evaluated runtime;
+        sink = sink backend evaluated runtime;
       })
-      launcherRuntimes)
+      harnessNames)
     (builtins.attrNames backends);
 in {
   checks = {
@@ -89,7 +98,6 @@ in {
         && evaluates backends.${backend} (rv.helper {path = "/run/helpers/token";}))
       (builtins.attrNames backends)
     );
-
     module-ai-programs-git-credential-assertions = mkTest "ai-programs-git-credential-assertions" (
       builtins.all (backend: let
         evaluate = value: backends.${backend} (identityWith value);
@@ -104,7 +112,6 @@ in {
         && gitFailures (evaluate (rv.helper {path = "relative-helper";})) == [])
       (builtins.attrNames backends)
     );
-
     module-ai-programs-git-configuration-assertions = mkTest "ai-programs-git-configuration-assertions" (
       builtins.all (backend: let
         evaluate = config: backends.${backend} (lib.recursiveUpdate identity config);
@@ -145,47 +152,48 @@ in {
     );
     module-ai-programs-git-launchers = let
       explicitGit = "/explicit/gitconfig";
-      overridden = lib.recursiveUpdate identity {
-        ai.codex.environmentVariables.GIT_CONFIG_GLOBAL = explicitGit;
-      };
-      rows = wrapperRows identity;
+      override = runtime:
+        if runtime == "claude"
+        then {ai.claude.native.settings.env.GIT_CONFIG_GLOBAL = explicitGit;}
+        else {ai.${runtime}.environmentVariables.GIT_CONFIG_GLOBAL = explicitGit;};
+      rows = map (row:
+        row
+        // {
+          overridden = (builtins.head (builtins.filter (candidate: candidate.backend == row.backend && candidate.runtime == row.runtime) (deliveryRows (lib.recursiveUpdate identity (override row.runtime))))).sink;
+        })
+      (deliveryRows identity);
+      assertions = row: checkedSink:
+        if checkedSink.type == "environment"
+        then ''
+          [ '${checkedSink.value.GIT_CONFIG_GLOBAL or ""}' = '${row.env.GIT_CONFIG_GLOBAL}' ] || fail "${row.backend}/${row.runtime}: GIT_CONFIG_GLOBAL"
+          [ '${checkedSink.value.GH_CONFIG_DIR or ""}' = '${row.env.GH_CONFIG_DIR}' ] || fail "${row.backend}/${row.runtime}: GH_CONFIG_DIR"
+        ''
+        else ''
+          found=
+          for package in ${lib.concatMapStringsSep " " toString checkedSink.packages}; do
+            if [ -e "$package/bin/${checkedSink.bin}" ]; then
+              found="$package/bin/${checkedSink.bin}"
+            fi
+          done
+          [ -n "$found" ] || fail "${row.backend}/${row.runtime}: launcher missing"
+          ${pkgs.gnugrep}/bin/grep -Fq '${row.env.GIT_CONFIG_GLOBAL}' "$found" || fail "${row.backend}/${row.runtime}: GIT_CONFIG_GLOBAL"
+          ${pkgs.gnugrep}/bin/grep -Fq '${row.env.GH_CONFIG_DIR}' "$found" || fail "${row.backend}/${row.runtime}: GH_CONFIG_DIR"
+        '';
     in
       pkgs.runCommand "module-test-ai-programs-git-launchers" {} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-
         fail() {
           echo "FAIL: ai-programs-git-launchers: $1" >&2
           exit 1
         }
         ${lib.concatMapStringsSep "\n" (row: ''
-            found=
-            for package in ${lib.concatMapStringsSep " " toString row.packages}; do
-              if [ -e "$package/bin/${row.bin}" ]; then
-                found="$package/bin/${row.bin}"
-              fi
-            done
-            [ -n "$found" ] || fail "${row.backend}/${row.runtime}: launcher missing"
-            ${pkgs.gnugrep}/bin/grep -Fq '${row.env.GIT_CONFIG_GLOBAL}' "$found" || fail "${row.backend}/${row.runtime}: GIT_CONFIG_GLOBAL"
-            ${pkgs.gnugrep}/bin/grep -Fq '${row.env.GH_CONFIG_DIR}' "$found" || fail "${row.backend}/${row.runtime}: GH_CONFIG_DIR"
+            ${assertions row row.sink}
+            ${(assertions (row // {env = row.env // {GIT_CONFIG_GLOBAL = explicitGit;};}) row.overridden)}
           '')
           rows}
-        ${lib.concatMapStringsSep "\n" (backend: let
-            evaluated = backends.${backend} overridden;
-            packages = installed backend evaluated;
-          in ''
-            found=
-            for package in ${lib.concatMapStringsSep " " toString packages}; do
-              if [ -e "$package/bin/${exes.codex}" ]; then
-                found="$package/bin/${exes.codex}"
-              fi
-            done
-            ${pkgs.gnugrep}/bin/grep -Fq '${explicitGit}' "$found" || fail "${backend}/codex: consumer environment did not win"
-          '')
-          (builtins.attrNames backends)}
         touch "$out"
       '';
-
     module-ai-programs-git-rendered = let
       token = "TOKEN_MUST_NOT_REACH_HELPER";
       tokenSource = pkgs.writeShellScript "runtime-token-source" ''
