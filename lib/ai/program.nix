@@ -2,21 +2,30 @@
 {lib}: let
   aiCommon = import ./ai-common.nix {inherit lib;};
 
-  mapOptionTree = transform:
-    lib.mapAttrs (_: value:
-      if lib.isOption value
-      then transform value
-      else mapOptionTree transform value);
+  # `transform` receives each option's attribute path within the tree.
+  mapOptionTree = transform: let
+    go = path:
+      lib.mapAttrs (name: value:
+        if lib.isOption value
+        then transform (path ++ [name]) value
+        else go (path ++ [name]) value);
+  in
+    go [];
 
-  mkOverrideOption = option: let
+  defaultOverrideDescription = ''
+    Runtime override for the portable program option. null inherits the value
+    from `ai.programs`; any non-null value wins.
+  '';
+
+  # `overrideDescriptions` mirrors the option tree. It replaces the generated
+  # sentence for a leaf whose resolution is NOT the replace-the-leaf rule —
+  # the program module resolves such a leaf itself, and the text must say how.
+  mkOverrideOption = overrideDescriptions: path: option: let
     nullableType =
       if option.type.check null
       then option.type
       else lib.types.nullOr option.type;
-    description = ''
-      Runtime override for the portable program option. null inherits the value
-      from `ai.programs`; any non-null value wins.
-    '';
+    description = lib.attrByPath path defaultOverrideDescription overrideDescriptions;
   in
     (builtins.removeAttrs option ["default" "defaultText"])
     // {
@@ -48,9 +57,10 @@ in {
   mkProgram = spec @ {
     name,
     options,
+    overrideDescriptions ? {},
     supportedRuntimes,
   }: let
-    overrideOptions = mapOptionTree mkOverrideOption options;
+    overrideOptions = mapOptionTree (mkOverrideOption overrideDescriptions) options;
     mkProgramOption = optionDeclarations: description:
       lib.mkOption {
         type = lib.types.submodule {options = optionDeclarations;};

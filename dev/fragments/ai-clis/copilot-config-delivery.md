@@ -1,6 +1,7 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-09-28 — settings files are read-only copies of one
+> **Last verified:** 2026-09-30 — Home Manager keeps the bare package only while
+> no module environment is published. Settings files are read-only copies of one
 > writer, `materialize-copilot-config`: Home Manager always owns the user
 > `settings.json`, `mcp-config.json` and `lsp-config.json`; devenv owns the
 > fixed repository file `.github/copilot/settings.json` only when something is
@@ -317,7 +318,9 @@ attrset and onto the wrapper on both backends. On devenv the env arm is
 effectively always live, because the default-on `gitSshConfigWorkaround`
 contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
 MCP-less devenv project no longer keeps the bare package. Home Manager still
-does, since it states that default in Git's own config instead.
+does when no module env is published (for example with `ai.programs.git` and
+`ai.programs.gh` off), since it states that SSH default in Git's own config
+instead; either identity puts its variables on the channel and HM wraps too.
 
 ### Where LSP and settings go
 

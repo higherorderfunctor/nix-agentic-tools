@@ -1,6 +1,10 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-28 — devenv's Codex launcher always passes
+> **Last verified:** 2026-09-30 — module-contributed environment rides the
+> per-runtime internal channel
+> `ai.<runtime>.internal._moduleEnvironmentVariables`, found through the option
+> tree so downstream `mkRuntime` runtimes get it too; Home Manager ships Codex
+> bare only while that channel is empty. devenv's Codex launcher always passes
 > `--no-daemon`, so it always wraps. The builder entry point is
 > `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
 > callback. Native file settings live under `ai.<runtime>.native`
@@ -185,7 +189,9 @@ three runtimes demonstrably do not perform.
 - **On devenv that empty case is unreachable.** devenv's Codex launcher always
   passes `--no-daemon` (`packages/chatgpt-codex/docs/codex-daemon.md` says why),
   so enabling Codex on devenv ALWAYS builds a wrapper, whatever the environment
-  pool holds, while Home Manager ships it bare. That divergence is asserted by
+  pool holds. Home Manager ships it bare only when no module environment is
+  published; enabling `ai.programs.git` or `ai.programs.gh` publishes one and
+  wraps it there too. That divergence is asserted by
   `module-codex-enabled-installs-package`; if you are wondering why the two
   backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
@@ -203,11 +209,15 @@ three runtimes demonstrably do not perform.
 - **Always-on process defaults do not write hidden normalized-pool entries.**
   `ai.<cli>.environmentVariables` is the consumer's replacement/negation
   surface, and definition provenance treats package claims there as owned API.
-  Internal defaults such as the sandbox-safe SSH command therefore ride
-  `ai._sandboxSafeSshCommand` / the `resolvedShell` callback argument and merge
-  under consumer values at the wrapper call site. Opt-in packages may publish
-  documented per-runtime pool entries; two packages still cannot own the same
-  key and scope. See `collision-semantics.md`.
+  Internal defaults such as the sandbox-safe SSH command and the git identity
+  (`ai.programs.git`) therefore ride the per-runtime internal channel
+  `ai.<runtime>.internal._moduleEnvironmentVariables` (published through
+  `lib/ai/module-environment.nix`) or the `resolvedShell` callback argument, and
+  merge under consumer values at the wrapper call site. The channel is per
+  runtime so a module can give each harness its own value; a shared value is
+  published to each runtime. Opt-in packages may publish documented per-runtime
+  pool entries; two packages still cannot own the same key and scope. See
+  `collision-semantics.md`.
 
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.
