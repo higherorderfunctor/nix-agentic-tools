@@ -6,15 +6,13 @@
   harness,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownPlan;
+  inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
-  # The Home Manager user config.json copy.
+  # The Home Manager user config.json shared document.
   hmConfigDocument = evaluated: let
     path = "${evaluated.config.ai.kimchi.configDir}/config.json";
-  in {
-    inherit (dirTarget "kimchiFiles" evaluated.config.ai.kimchi.configDir evaluated) ledger;
-    value = fileValue path evaluated;
-  };
+  in
+    ownedDocument "kimchi" path evaluated;
   # The units one writer owns in one directory, read from the plan it applies.
   dirTarget = entry: dir: evaluated:
     lib.head (lib.filter (target: target.codec == "dir" && target.path == dir)
@@ -24,7 +22,8 @@
   devenvFiles = dirUnits "ai:kimchi:files";
   # A settings copy's declared JSON, before its generated tree renders bytes.
   fileValue = path: evaluated: evaluated.config.ai.kimchi.files.${path}.content.value;
-  hmHarnessSettings = evaluated: fileValue "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated;
+  hmHarnessSettings = evaluated:
+    (ownedDocument "kimchi" "${evaluated.config.ai.kimchi.configDir}/harness/settings.json" evaluated).value;
   projectFiles = devenvFiles ".kimchi";
   # devenv claims the copy only when something is declared, so an undeclared
   # harness settings.json is absent from the directory's units entirely.
@@ -34,20 +33,11 @@
     if units ? "settings.json"
     then fileValue ".config/kimchi/harness/settings.json" evaluated
     else {};
-  # What Home Manager declares into the user config.json and harness
-  # settings.json when nothing is set: Kimchi's own first-launch values.
+  # What Home Manager owns in the user config.json and harness settings.json
+  # when nothing is set: policy and integration defaults only.
   userConfigDefaults = {
-    migrationState = "skip-forever";
-    onboarding = {
-      hideSessionModeDialog = true;
-      sessionModeWizardSeenAt = "1970-01-01T00:00:00.000Z";
-      studioOnboardingSeenAt = "1970-01-01T00:00:00.000Z";
-      teleportHelpSeenAt = "1970-01-01T00:00:00.000Z";
-    };
-    preferences.hideTips = true;
     region = "us";
     skillPaths = [".config/kimchi/harness/skills" ".pi/agent/skills" ".claude/skills"];
-    surveys."019e87cc-5033-0000-d9bd-5e6501640b6e".seenAt = "1970-01-01T00:00:00.000Z";
     telemetry.enabled = false;
   };
   userHarnessDefaults = {
@@ -56,14 +46,6 @@
     defaultProjectTrust = "never";
     defaultProvider = "kimchi-dev";
     enableInstallTelemetry = false;
-    hideThinkingBlock = true;
-    lastChangelogVersion = "0.85.1";
-    quietStartup = true;
-    retry.provider = {
-      maxRetries = 0;
-      timeoutMs = 600000;
-    };
-    shellProfileApiKeyMigrationDismissed = true;
     theme = "kimchi-minimal";
   };
   # The keys come from the sidecar; each needs a sample value here, so a key
@@ -292,7 +274,7 @@ in {
         && !lib.hasInfix "redaction.enabled" text
     );
 
-    # Parity: the same config.json surface triggers the HM copy writer.
+    # Parity: the same config.json surface triggers the HM shared writer.
     module-kimchi-config-json-hm-copy = mkTest "kimchi-config-json-hm-copy" (
       let
         result = evalHm {
@@ -306,12 +288,9 @@ in {
         && (hmConfigDocument result).value.telemetry.enabled == false
     );
 
-    # Home Manager owns every user-global file whatever is declared. The user
-    # config.json and the harness files are read-only copies of the
-    # `kimchiFiles` writer, seeded with Kimchi's first-launch values. The
-    # config ledger name is the live migration contract every previously
-    # written ownership record hangs off. Devenv, with nothing declared, keeps
-    # its writer and both ledgers and claims no file.
+    # Home Manager owns declared leaves in config.json and settings.json, and
+    # keeps the other harness files as read-only copies. Devenv, with nothing
+    # declared, keeps its writer and both directory ledgers and claims no file.
     module-kimchi-hm-owns-user-files = mkTest "kimchi-hm-owns-user-files" (
       let
         evaluated = evalHm {ai.kimchi.enable = true;};
@@ -322,13 +301,17 @@ in {
       in
         lib.hasInfix "--phase all" activation.kimchiFiles.text
         && lib.hasInfix "--phase prune" activation.kimchiFilesPrune.text
-        && lib.hasPrefix "materialize/kimchi-files-" (hmConfigDocument evaluated).ledger
+        && lib.hasPrefix "materialize/kimchi-shared-" (hmConfigDocument evaluated).ledger
         && (hmConfigDocument evaluated).value == userConfigDefaults
-        && builtins.attrNames units == ["mcp.json" "permissions.json" "settings.json" "trust.json"]
+        && evaluated.config.ai.kimchi.files.".config/kimchi/config.json".facts.harnessWrites
+        && evaluated.config.ai.kimchi.files.".config/kimchi/config.json".mode == null
+        && evaluated.config.ai.kimchi.files.".config/kimchi/harness/settings.json".facts.harnessWrites
+        && evaluated.config.ai.kimchi.files.".config/kimchi/harness/settings.json".mode == null
+        && builtins.attrNames units == ["mcp.json" "permissions.json" "trust.json"]
         && hmHarnessSettings evaluated == userHarnessDefaults
         && fileValue ".config/kimchi/harness/mcp.json" evaluated == {}
         && fileValue ".config/kimchi/harness/permissions.json" evaluated == {}
-        # Every copy takes the reconciler's read-only default mode.
+        # Every remaining copy takes the reconciler's read-only default mode.
         && lib.all (unit: !(unit ? mode)) (builtins.attrValues units)
         && !(lib.any (lib.hasPrefix ".config/kimchi/harness/") (builtins.attrNames evaluated.config.home.file))
         && devenv.config.tasks ? "ai:kimchi:files"
@@ -343,7 +326,7 @@ in {
         lib.elem "ai.kimchi.native.settings.region is required with Home Manager; declare the account region (us or eu)." (failedAssertions missing)
     );
 
-    # The seeded settings are defaults: a declaration replaces each one, and
+    # The policy settings are defaults: a declaration replaces each one, and
     # the two Kimchi reads from its environment follow the declaration. They
     # live in the HM settings option TYPE, so a whole-attrset definition
     # competes per key too: at mkDefault it still replaces each default, and
@@ -361,7 +344,7 @@ in {
             ai.kimchi = {
               enable = true;
               native.settings = settings;
-              native.harnessSettings.quietStartup = false;
+              native.harnessSettings.hideThinkingBlock = false;
             };
           };
         evaluated = withSettings declared;
@@ -371,15 +354,13 @@ in {
         && (hmConfigDocument (withSettings (lib.mkDefault declared))).value == lib.recursiveUpdate userConfigDefaults declared
         && (hmConfigDocument (withSettings (lib.mkForce {region = "eu";}))).value
         == userConfigDefaults // {region = "eu";}
-        && (hmHarnessSettings evaluated).quietStartup == false
-        && (hmHarnessSettings evaluated).hideThinkingBlock
+        && (hmHarnessSettings evaluated).hideThinkingBlock == false
+        && !(hmHarnessSettings evaluated ? quietStartup)
     );
 
     # Upgrade contract: generations before project-path delivery keyed the HM
-    # config ledger by configDir, so changing it strands retired leaves in the
-    # user file. The settings copies take one directory ledger per directory:
-    # permissions.json is hard-coded to .config/kimchi/harness, so a custom
-    # configDir gives it a ledger of its own.
+    # config ledger by configDir. Shared documents key their ledgers by path;
+    # read-only copies retain one directory ledger per directory.
     module-kimchi-hm-ledger-identity = mkTest "kimchi-hm-ledger-identity" (
       let
         configDir = "custom/kimchi";
@@ -392,8 +373,10 @@ in {
         ledgerOf = dir: (dirTarget "kimchiFiles" dir evaluated).ledger;
       in
         (hmConfigDocument evaluated).ledger
-        == "materialize/kimchi-files-${builtins.hashString "sha256" configDir}.manifest"
-        && builtins.attrNames (hmFiles "custom/kimchi/harness" evaluated) == ["mcp.json" "settings.json" "trust.json"]
+        == "materialize/kimchi-shared-${builtins.hashString "sha256" "${configDir}/config.json"}.json"
+        && (ownedDocument "kimchi" "${configDir}/harness/settings.json" evaluated).ledger
+        == "materialize/kimchi-shared-${builtins.hashString "sha256" "${configDir}/harness/settings.json"}.json"
+        && builtins.attrNames (hmFiles "custom/kimchi/harness" evaluated) == ["mcp.json" "trust.json"]
         && builtins.attrNames (hmFiles ".config/kimchi/harness" evaluated) == ["permissions.json"]
         && ledgerOf "custom/kimchi/harness" == "materialize/kimchi-files-${builtins.hashString "sha256" "custom/kimchi/harness"}.manifest"
         && ledgerOf ".config/kimchi/harness" == "materialize/kimchi-files-${builtins.hashString "sha256" ".config/kimchi/harness"}.manifest"
@@ -425,7 +408,7 @@ in {
     # the module, so a model on another provider never pairs with
     # `kimchi-dev`; a weaker declaration loses to the default. The marker is
     # a plain mkDefault: at runtime null and false both re-arm Auto after
-    # every activation, which restores the read-only copy without a true
+    # every activation, which restores the declared leaf without a true
     # marker. Devenv cannot carry the user-scope
     # marker and adds no model default, so it must add nothing and must not
     # trip its own user-scope rejection.
@@ -972,6 +955,8 @@ in {
       in
         target.path
         == ".config/kimchi"
+        && hm.config.ai.kimchi.files.".config/kimchi/config.json".method == "copy-ro"
+        && hm.config.ai.kimchi.files.".config/kimchi/config.json".mode == "0400"
         && lib.hasInfix ''cat "/run/secrets/kimchi-github"'' target.units."config.json".run
         && lib.hasInfix ''"github.com": env.kimchi_git_token_0'' target.units."config.json".run
         && lib.elem "sops-nix" hm.config.home.activation.kimchiFiles.after
@@ -1039,14 +1024,14 @@ in {
         echo PASS > "$out"
       '';
 
-    # The settings copies, executed: the real Home Manager prune and write
-    # entries against a scratch HOME. A file an earlier generation reconciled
+    # The settings writers, executed against a scratch HOME. A file an earlier generation reconciled
     # (a declared server plus one Kimchi migrated in) is adopted: backed up
     # once and replaced by the declaration, 0444. A later in-app edit renames a
     # new file over the copy, as Kimchi's writers do; the next run backs it up
     # and restores the declaration. trust.json holds the declared decisions
-    # only. The config.json renderer reads a git token from its helper but
-    # never declares a device id. Devenv's project config.json is owner-only.
+    # only. Runtime-owned leaves survive in the two shared Home Manager
+    # documents, while declared leaves return to their Nix values. Devenv's
+    # project config.json remains owner-only.
     module-kimchi-files-runtime = let
       server = {
         package = pkgs.hello;
@@ -1058,11 +1043,6 @@ in {
           mcpServers.declared = server;
           kimchi = {
             enable = true;
-            gitTokens."github.com".helper = "${pkgs.writeShellScript "kimchi-git-token" ''
-              set -euETo pipefail
-              shopt -s inherit_errexit 2>/dev/null || :
-              echo token-from-helper
-            ''}";
             projectTrust."/srv/projects" = true;
           };
         };
@@ -1070,12 +1050,6 @@ in {
       hm = hmFilesWriter hmConfig;
       hmEvaluated = evalHm hmConfig;
       declaredMcp = (hmFiles ".config/kimchi/harness" hmEvaluated)."mcp.json".store;
-      config = pkgs.writeShellScript "kimchi-config" ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        ${harness.hmRunShim}
-        ${hmEvaluated.config.home.activation.kimchiFiles.text}
-      '';
       devenv = pkgs.writeShellScript "kimchi-files-devenv" ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
@@ -1117,15 +1091,22 @@ in {
         cmp ${declaredMcp} "$mcp" || fail 'the in-app edit was not replaced'
         [ "$(backups)" = 2 ] || fail 'the in-app edit was not backed up'
 
-        # The user config.json is adopted as a read-only owner-only copy.
-        printf '{"deviceId":"device"}\n' > "$TMPDIR/native-config.json"
-        mv -f "$TMPDIR/native-config.json" "$HOME/.config/kimchi/config.json"
-        ${config}
-        [ "$(stat -c %a "$HOME/.config/kimchi/config.json")" = 400 ] || fail 'user config.json is not owner-only'
-        jq -e '(has("deviceId") | not) and .gitTokens["github.com"] == "token-from-helper" and .region == "us"' \
-          "$HOME/.config/kimchi/config.json" >/dev/null \
-          || fail "config.json lost a leaf: $(cat "$HOME/.config/kimchi/config.json")"
-        for path in "$HOME/.config/kimchi/config.json" "$harness/settings.json" "$harness/mcp.json" "$harness/permissions.json" "$harness/trust.json"; do
+        config="$HOME/.config/kimchi/config.json"
+        settings="$harness/settings.json"
+        [ "$(stat -c %a "$config")" = 600 ] || fail 'new config.json is not owner-only'
+        [ "$(stat -c %a "$settings")" = 600 ] || fail 'new settings.json is not owner-only'
+        jq '.deviceId = "device" | .region = "eu"' "$config" > "$TMPDIR/native-config.json"
+        chmod 600 "$TMPDIR/native-config.json"
+        mv -f "$TMPDIR/native-config.json" "$config"
+        jq '.lastChangelogVersion = "runtime" | .theme = "dark"' "$settings" > "$TMPDIR/native-settings.json"
+        chmod 600 "$TMPDIR/native-settings.json"
+        mv -f "$TMPDIR/native-settings.json" "$settings"
+        ${hm}
+        jq -e '.deviceId == "device" and .region == "us"' "$config" >/dev/null \
+          || fail "config.json did not preserve runtime leaves and restore declared leaves: $(cat "$config")"
+        jq -e '.lastChangelogVersion == "runtime" and .theme == "kimchi-minimal"' "$settings" >/dev/null \
+          || fail "settings.json did not preserve runtime leaves and restore declared leaves: $(cat "$settings")"
+        for path in "$harness/mcp.json" "$harness/permissions.json" "$harness/trust.json"; do
           if printf 'edit\n' > "$path" 2>/dev/null; then
             fail "in-place write succeeded against $path"
           fi

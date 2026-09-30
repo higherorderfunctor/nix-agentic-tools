@@ -6,8 +6,8 @@
 #
 # Kimchi has distinct user and project config namespaces. Home Manager writes
 # ~/.config/kimchi/{config.json,harness/}; devenv writes only Kimchi's native
-# project paths under the repository root. Settings are Nix's: every JSON file
-# is a read-only copy. Runtime state stays in writable sibling directories.
+# project paths under the repository root. Home Manager shares Kimchi's two
+# writable settings documents and keeps the remaining JSON files read-only.
 {
   lib,
   pkgs,
@@ -23,14 +23,6 @@
     inherit lib pkgs;
     extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
   };
-  piPackageUrl = (builtins.fromJSON (builtins.readFile ../sources.json)).extraction.piPackage.url;
-  piVersion = let
-    match = builtins.match ".*/pi-coding-agent-([0-9]+[.][0-9]+[.][0-9]+)[.]tgz" piPackageUrl;
-  in
-    if match == null
-    then throw "kimchi: pi package URL does not identify a version"
-    else builtins.head match;
-
   # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
   # That fixed project namespace is independent of ai.kimchi.configDir, which
   # selects the Home Manager output root.
@@ -45,18 +37,9 @@
   # (1500), which a non-null value at the same priority would conflict with.
   autoModelPriority = 1200;
 
-  # Home Manager defaults the model to Kimchi's Auto router and owns the
-  # choice, instead of leaving it to Kimchi 1.1.37, which installs Auto as
-  # the saved default itself once per install: on a fresh main-session launch
-  # with no --model, on a `kimchi-dev` model that is not already Auto, when
-  # the catalog advertises `kimchi-dev/auto` and the user harness
-  # settings.json lacks `autoDefaultApplied: true`
-  # (src/extensions/auto-model/index.ts:253-291). It persists
-  # defaultProvider, defaultModel and the marker through writeJson
-  # (src/config.ts:831-842), which renames a temporary over the file
-  # (src/config/json.ts:154-159): that silently replaces a store symlink in a
-  # writable directory, and in a read-only one the temporary write throws, so
-  # the session stays on Auto and retries every launch.
+  # Home Manager owns the Auto model choice and marker. Kimchi otherwise
+  # installs that choice once when settings.json lacks
+  # `autoDefaultApplied: true` (src/extensions/auto-model/index.ts:253-291).
   #
   # A module of the option TYPE, not a definition of the option: an outer
   # definition would sit at normal priority, and the outer option's
@@ -82,23 +65,9 @@
   # such an account loses multi-model, and `multiModel = true` takes effect
   # only with `defaultModel = null`.
   #
-  # A saved Auto default is not a lock, but the read-only copy mostly makes
-  # it one. Kimchi tries to persist a startup `--model` given over a routed
-  # Auto default (auto-model/index.ts:215-229), as it does `/model`
-  # set-default, the set_model tool and ACP model changes, through pi's
-  # in-place settings write (dist/core/settings-manager.js:101), which fails
-  # on the copy and is caught, so the choice lasts the session. pi keeps the
-  # failed fields queued, though: once one of Kimchi's rename writers
-  # (src/config/json.ts:154-160) has replaced the copy mid-session, pi's next
-  # save lands the queued model in the replacement, and it holds until the
-  # next activation restores the declaration.
-  #
   # The marker stays declared, at `mkDefault`, for a consumer who declares a
-  # non-Auto `kimchi-dev` model or nulls the pair: without it Kimchi would
-  # replace that choice. null and false both re-arm the install after every
-  # activation: Kimchi reads only `=== true` and renames its own true over
-  # the copy, and activation restores a file that carries false or no marker
-  # at all.
+  # non-Auto `kimchi-dev` model or nulls the pair: Kimchi reads only `=== true`,
+  # so null or false re-arms its Auto installation after every activation.
   #
   # Home Manager only: Kimchi reads the marker from the user file alone
   # (src/config.ts:22,812-814), devenv rejects user-scope harness keys, and a
@@ -119,43 +88,17 @@
       defaultProjectTrust = lib.mkDefault "never";
       defaultProvider = autoDefault "kimchi-dev";
       enableInstallTelemetry = lib.mkDefault false;
-      # A read-only settings.json can no longer take the values Kimchi seeds
-      # at launch (src/cli.ts:522-551), and pi's own defaults for these two
-      # differ from Kimchi's.
-      hideThinkingBlock = lib.mkDefault true;
-      lastChangelogVersion = lib.mkDefault piVersion;
-      quietStartup = lib.mkDefault true;
-      retry = lib.mkDefault {
-        provider = {
-          maxRetries = 0;
-          timeoutMs = 600000;
-        };
-      };
-      shellProfileApiKeyMigrationDismissed = lib.mkDefault true;
       theme = lib.mkDefault "kimchi-minimal";
     };
   };
 
-  # Home Manager owns the user config.json's declared leaves, so it states
-  # what Kimchi would otherwise write there at first launch; each is a
-  # default the consumer overrides, and an in-app change is reset on every
-  # switch. A module of the option TYPE for the same reason as
+  # Home Manager owns these config.json policy and integration leaves. A
+  # module of the option TYPE for the same reason as
   # `hmHarnessDefaults`: a consumer's whole-attrset `settings =
   # lib.mkDefault {…}` or `lib.mkForce {…}` competes per key instead of
   # being dropped, or dropping every default, at the outer option.
   hmSettingsDefaults = {
     config = {
-      # A read-only copy cannot retain Kimchi's first-launch writes.
-      migrationState = lib.mkDefault "skip-forever";
-      onboarding = {
-        hideSessionModeDialog = lib.mkDefault true;
-        sessionModeWizardSeenAt = lib.mkDefault "1970-01-01T00:00:00.000Z";
-        studioOnboardingSeenAt = lib.mkDefault "1970-01-01T00:00:00.000Z";
-        teleportHelpSeenAt = lib.mkDefault "1970-01-01T00:00:00.000Z";
-      };
-      preferences.hideTips = lib.mkDefault true;
-      # INITIAL_SURVEY.id, src/extensions/surveys/survey.ts:17-18.
-      surveys."019e87cc-5033-0000-d9bd-5e6501640b6e".seenAt = lib.mkDefault "1970-01-01T00:00:00.000Z";
       telemetry.enabled = lib.mkDefault false;
       # DEFAULT_SKILL_PATHS (src/config.ts:45-49), which Kimchi writes when
       # the key is unset (src/cli.ts:398-406). It already covers where ai.*
@@ -180,8 +123,8 @@
       description =
         ''
           Kimchi `config.json`, typed from the keys the pinned Kimchi reads
-          (packages/kimchi/extracted.json). Home Manager owns the whole
-          <configDir>/config.json as a read-only copy. Devenv writes
+          (packages/kimchi/extracted.json). Home Manager owns declared leaves
+          in <configDir>/config.json. Devenv writes
           .kimchi/config.json as a read-only copy and rejects keys Kimchi reads
           only from the user file, except `region` and `telemetry.enabled`: the
           launcher passes those as KIMCHI_REGION and KIMCHI_TELEMETRY_ENABLED on
@@ -190,7 +133,7 @@
           `ai.kimchi.apiKey` and `ai.kimchi.gitTokens`.
         ''
         + lib.optionalString isHm ''
-          Home Manager owns the complete read-only file. Declare `region`
+          Home Manager preserves Kimchi-owned leaves. Declare `region`
           explicitly; it has no safe default. Telemetry defaults to disabled.
         '';
     };
@@ -201,12 +144,10 @@
       description =
         ''
           Kimchi and pi harness `settings.json`, typed from the keys the pinned
-          Kimchi and pi read (packages/kimchi/extracted.json), as a read-only
-          copy: <configDir>/harness/settings.json on Home Manager activation,
-          always, or .config/kimchi/harness/settings.json on devenv shell
-          entry when something is declared. In-app changes (`/model`,
-          `/settings`, `/multi-model`) do not persist: Kimchi's renames are
-          backed up and replaced at the next activation or shell entry.
+          Kimchi and pi read (packages/kimchi/extracted.json). Home Manager
+          owns declared leaves in <configDir>/harness/settings.json; devenv
+          writes a read-only .config/kimchi/harness/settings.json when
+          something is declared.
         ''
         + lib.optionalString isHm ''
           Home Manager defaults the model to Kimchi's Auto router,
@@ -217,14 +158,9 @@
           global `multiModel` default on a fresh launch whose model is not on
           `kimchi-dev`, so `multiModel = true` needs `defaultModel = null`; an
           account whose catalog lacks Auto gets the model Kimchi picks when
-          none is declared, with multi-model off. A `kimchi --model X` launch,
-          `/model` set-default or an ACP model change normally lasts only the
-          session, but lands in the file until the next activation if one of
-          Kimchi's rename writers replaced the copy first. Home Manager also
-          declares `autoDefaultApplied`, `hideThinkingBlock` and
-          `quietStartup` as true at `mkDefault`, the values Kimchi seeds at
-          launch, so Kimchi never installs Auto as the saved default over a
-          model declared here.
+          none is declared, with multi-model off. Home Manager also declares
+          `autoDefaultApplied` as true at `mkDefault`, so Kimchi does not
+          reinstall Auto over an explicit model choice.
         '';
     };
   };
@@ -467,6 +403,15 @@
           method = "copy-ro";
         }
         // fields));
+    sharedSettings = path: value:
+      helpers.mkReconciledDocument {
+        content.value = value;
+        format = "json";
+        ledger = "materialize/kimchi-shared-${builtins.hashString "sha256" path}.json";
+        inherit path;
+        runtime = "kimchi";
+        writer = "kimchiFiles";
+      };
     relativeTrustKeys = builtins.filter (key: !(lib.hasPrefix "/" key)) (builtins.attrNames cfg.projectTrust);
     # A semantic record's `tools` names Claude/Copilot tools (`Read`), while
     # Kimchi compares its own lowercase builtins exactly
@@ -579,10 +524,10 @@
           };
           pruneEntry = "kimchiAgentsPrune";
         };
-        # Every settings copy, one directory ledger per directory. Declared
-        # unconditionally: an empty ledger is how a retired copy is removed.
-        # The directories stay writable, because Kimchi keeps state and locks
-        # beside these files.
+        # Read-only settings copies keep one directory ledger per directory;
+        # shared documents add their own JSON ledgers. Empty directory ledgers
+        # retract retired copies. The directories stay writable for runtime
+        # state and locks.
         ai.kimchi.activation.kimchiFiles = {
           after = ["secrets"];
           entry = {
@@ -606,7 +551,7 @@
         ai.kimchi.native.harnessSettings.defaultThinkingLevel = lib.mkDefault resolvedSettings.reasoningEffort;
       })
 
-      # Every other JSON file is configuration and a read-only copy. Kimchi's
+      # Immutable JSON files remain read-only copies. Kimchi's
       # writers either rename a temporary over the path (MCP edits, the setup
       # wizard, `writeConfigSetting`: src/config/json.ts:154-160), which would
       # replace a store symlink, or write in place (pi's settings and trust
@@ -615,8 +560,8 @@
       # declaration, so in-app changes do not persist.
       {
         ai.kimchi.files = lib.listToAttrs (
-          [
-            (settingsCopy "${harness}/settings.json" {content.value = filteredHarnessSettings;})
+          lib.optional isDevenv (settingsCopy "${harness}/settings.json" {content.value = filteredHarnessSettings;})
+          ++ [
             (settingsCopy "${mcpAndSkillsDir}/mcp.json" {
               content.value = lib.optionalAttrs (mergedServers != {}) {
                 mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
@@ -624,7 +569,7 @@
             })
             (settingsCopy "${permissionsDir}/permissions.json" {content.value = filteredPermissions;})
           ]
-          ++ lib.optional (!isDevenv) (settingsCopy "${cfg.configDir}/config.json" {
+          ++ lib.optional (!isDevenv && gitTokens != {}) (settingsCopy "${cfg.configDir}/config.json" {
             content = userConfigContent;
             mode = "0400";
           })
@@ -654,6 +599,11 @@
           })
         );
       }
+
+      (lib.mkIf (!isDevenv) (lib.mkMerge [
+        (sharedSettings "${harness}/settings.json" filteredHarnessSettings)
+        (lib.mkIf (gitTokens == {}) (sharedSettings "${cfg.configDir}/config.json" filteredSettings))
+      ]))
 
       # User harness context stays runtime-owned. Project context joins the
       # shared repository AGENTS.md through the record's `sharedAgentsMd`.

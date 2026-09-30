@@ -13,24 +13,25 @@
 > copies of one `materialize-copilot-config` writer; its only reconciled
 > document is the HM `trustedFolders` leaf of its state file `config.json`.
 > Kiro's `cli.json` and `mcp.json` are read-only copies in one directory ledger.
-> Kimchi's settings files, including HM user `config.json`, are read-only copies
-> of one `kimchiFiles` writer. Codex's `config.toml` is a store symlink on both
-> backends and its daemon `settings.json` a read-only copy of
-> `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
-> pool. Native file settings live under `ai.<runtime>.native`. The builder
-> publishes each record's devenv shared AGENTS.md contribution, and its key in
-> `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`. Claude's
-> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
-> ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
-> declares the per-runtime `agents`, `environmentVariables` and `lspServers`
-> options and an opt-in `agentsDir`; a record's `poolOptions` carries only what
-> differs. `checkRecord.nix` rejects a `poolOptions` key the builder would not
-> read and a stray field in the `sharedAgentsMd` result. Every reconciled
-> document is one `helpers.mkReconciledDocument` call. A shared AGENTS.md
-> contribution may carry `index` entries: Codex renders a scoped rule that names
-> `references` as a path-scoped index entry instead of inlining its body. The
-> shared AGENTS.md map lowers through the router as `internal`, as a read-only
-> copy, and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
+> Kimchi shares its HM user `config.json` and `harness/settings.json`; its other
+> settings files are read-only copies of one `kimchiFiles` writer. Codex's
+> `config.toml` is a store symlink on both backends and its daemon
+> `settings.json` a read-only copy of `materialize-codex-daemon-settings`. Kiro
+> excludes the normalized `settings` pool. Native file settings live under
+> `ai.<runtime>.native`. The builder publishes each record's devenv shared
+> AGENTS.md contribution, and its key in `ai.internal.agentsMdTargets`, from the
+> record's `sharedAgentsMd`. Claude's `.claude.json` has an ungated
+> mode-narrowing command writer beside its unpin ledger. Codex's daemon
+> `settings.json` maps to no matrix cell. The builder declares the per-runtime
+> `agents`, `environmentVariables` and `lspServers` options and an opt-in
+> `agentsDir`; a record's `poolOptions` carries only what differs.
+> `checkRecord.nix` rejects a `poolOptions` key the builder would not read and a
+> stray field in the `sharedAgentsMd` result. Every reconciled document is one
+> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
+> `index` entries: Codex renders a scoped rule that names `references` as a
+> path-scoped index entry instead of inlining its body. The shared AGENTS.md map
+> lowers through the router as `internal`, as a read-only copy, and a
+> contribution's `defaultMaxBytes` supplies fallback bytes plus an
 > effective-limit resolver for the owner's notice under a raised `maxBytes`; its
 > built bytes are measured in the generated-file tree. The router builds one
 > tree per invocation for static Markdown, JSON, TOML and YAML, while
