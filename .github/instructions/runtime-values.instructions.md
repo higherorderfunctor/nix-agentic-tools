@@ -7,7 +7,7 @@ applyTo: "lib/runtime-values/**"
 
 # Runtime values
 
-> **Last verified:** 2026-09-30 — documented validation and map merging.
+> **Last verified:** 2026-09-30 — documented open string map auditing.
 
 `lib.runtimeValues` is the public library, and both module sets supply `rv`
 through `_module.args`. `file { path; }` and `helper { path; }` return a
@@ -39,8 +39,9 @@ Rules require current keys.
 
 `fromSchema` converts one flat field set into nullable options. `checkOptions`
 audits evaluated declarations. It understands runtime unions, guarded maps,
-`nullOr`, and declared submodules; `attrsOf` is descended, and an unguarded map
-at a secret path is a violation. Every other type fails when its option path is
+`nullOr`, and declared submodules. An `attrsOf str` after `nullOr` is always a
+violation because user-chosen keys require `runtimeValueMap`; every other
+`attrsOf` is descended. Every other type fails when its option path is
 classified secret. The pilot roots are glab, the shared and four runtime
 environment maps, the shared MCP server pool, Kimchi's `apiKey` and `gitTokens`,
 and the four migrated MCP credential schemas.

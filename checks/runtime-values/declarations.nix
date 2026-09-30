@@ -18,20 +18,12 @@
     ["glab"]
   ];
   audit = options: rv.checkOptions {inherit options roots;};
-  literalAdmitting = options:
-    options
-    // {
-      ai =
-        options.ai
-        // {
-          environmentVariables = options.ai.environmentVariables // {type = lib.types.attrsOf lib.types.str;};
-          kimchi =
-            options.ai.kimchi
-            // {
-              gitTokens = options.ai.kimchi.gitTokens // {type = lib.types.attrsOf lib.types.str;};
-            };
-        };
-    };
+  setOption = options: path: option:
+    if path == []
+    then option
+    else options // {${lib.head path} = setOption options.${lib.head path} (lib.tail path) option;};
+  withType = options: path: type:
+    setOption options path ((lib.getAttrFromPath path options) // {inherit type;});
   mcp = import ../../lib/mcp.nix {inherit lib;};
   servers = ["context7-mcp" "github-mcp" "gitlab-mcp" "kagi-mcp"];
   mcpViolations = lib.concatMap (name: let
@@ -47,8 +39,13 @@
 in {
   checks = {
     runtime-values-declarations = mkTest "runtime-values-declarations" (
-      lib.all (backend:
-        audit backend.options == [] && audit (literalAdmitting backend.options) != [])
+      lib.all (backend: let
+        inherit (backend) options;
+      in
+        audit options
+        == []
+        && audit (withType options ["ai" "environmentVariables"] (lib.types.attrsOf lib.types.str)) == ["ai.environmentVariables"]
+        && audit (withType options ["ai" "kimchi" "gitTokens"] (lib.types.attrsOf lib.types.str)) == ["ai.kimchi.gitTokens"])
       backends
       && mcpViolations == []
     );

@@ -103,7 +103,7 @@ in {
             description = "Allowlist of MCP tool names Codex exposes from this server.";
           };
           envHttpHeaders = lib.mkOption {
-            type = lib.types.attrsOf lib.types.str;
+            type = lib.types.attrsOf (lib.types.strMatching "[A-Za-z_][A-Za-z0-9_]*");
             default = {};
             description = "HTTP header names mapped to environment-variable names; secret values stay out of the Nix store.";
           };
@@ -118,9 +118,12 @@ in {
             description = "Experimental Codex execution environment for this MCP server.";
           };
           httpHeaders = lib.mkOption {
-            type = lib.types.attrsOf lib.types.str;
+            type = rv.keyAwareMap {
+              type = lib.types.str;
+              path = ["httpHeaders"];
+            };
             default = {};
-            description = "Non-secret literal HTTP headers. These values are written to the Nix store; use envHttpHeaders for secrets.";
+            description = "Literal HTTP headers written to the Codex config. A header whose name says it carries a credential (`Authorization`, `X-Api-Key`, …) refuses a literal; `rv.file` / `rv.helper` references for headers arrive with the HTTP delivery change and are refused by the renderer until then.";
           };
           oauthResource = lib.mkOption {
             type = lib.types.nullOr lib.types.str;

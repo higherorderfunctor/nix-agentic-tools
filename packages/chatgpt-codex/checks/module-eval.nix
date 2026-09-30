@@ -567,7 +567,9 @@ in {
               url = "https://example.test/mcp";
               codex = {
                 bearerTokenEnvVar = "MCP_TOKEN";
+                envHttpHeaders.Authorization = "MY_VAR";
                 envHttpHeaders.X-Tenant = "MCP_TENANT";
+                httpHeaders.X-Client = "nat";
                 toolTimeoutSec = 90;
               };
             };
@@ -588,7 +590,9 @@ in {
           };
           remote = {
             bearer_token_env_var = "MCP_TOKEN";
+            env_http_headers.Authorization = "MY_VAR";
             env_http_headers.X-Tenant = "MCP_TENANT";
+            http_headers.X-Client = "nat";
             tool_timeout_sec = 90;
             url = "https://example.test/mcp";
           };
@@ -597,6 +601,29 @@ in {
         (hmCodexSettings hm).mcp_servers
         == expected
         && devenv.config.files.".codex/config.toml".source.value.mcp_servers == expected
+    );
+
+    module-codex-mcp-header-contracts = mkTest "codex-mcp-header-contracts" (
+      let
+        rendered = codex: let
+          config.ai = {
+            codex.enable = true;
+            mcpServers.remote = {
+              inherit codex;
+              url = "https://example.test/mcp";
+            };
+          };
+        in [
+          (hmCodexSettings (evalHm config)).mcp_servers.remote
+          (evalDevenv config).config.files.".codex/config.toml".source.value.mcp_servers.remote
+        ];
+        succeeds = codex:
+          builtins.all (server: (builtins.tryEval (builtins.deepSeq server true)).success) (rendered codex);
+      in
+        !succeeds {httpHeaders.Authorization = "PLANTED_LITERAL";}
+        && !succeeds {httpHeaders.Authorization = rv.file {path = "/run/x";};}
+        && succeeds {envHttpHeaders.Authorization = "MY_VAR";}
+        && !succeeds {envHttpHeaders.Authorization = "not a name";}
     );
 
     module-codex-mcp-freeform-rejects-non-toml = mkTest "codex-mcp-freeform-rejects-non-toml" (
