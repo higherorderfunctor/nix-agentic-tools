@@ -20,13 +20,12 @@
   pkgs,
   ...
 }: let
-  credentials = import ../../credentials.nix {inherit lib;};
+  harnessNames = import ../runtimes.nix;
   moduleEnvironment = import ../module-environment.nix {inherit lib;};
   programFactory = import ../program.nix {inherit lib;};
-  harnessNames = import ../runtimes.nix;
+  rv = import ../../runtime-values {inherit lib;};
   specs = import ./git-options.nix {
     inherit lib;
-    inherit (credentials) mkCredentialsOptionWith;
     supportedRuntimes = harnessNames;
   };
   git = programFactory.mkProgram specs.git;
@@ -65,7 +64,7 @@
   # ignores a helper's exit status and moves on to askpass (`SSH_ASKPASS`, or a
   # `core.askPass` from the included user config) and then the terminal. Only
   # a `quit=1` answer ends the lookup, so any failure path prints it.
-  credentialHelper = secret:
+  credentialHelper = prefix: value:
     pkgs.writeShellApplication {
       name = "ai-git-credential-github";
       bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
@@ -74,7 +73,12 @@
 
         [ "''${1:-}" = get ] || exit 0
         trap '[ "$?" -eq 0 ] || printf "quit=1\n"' EXIT
-        ${credentials.mkSecretAssignment pkgs "ai_git_token" secret}
+        ${rv.assignment {
+          inherit pkgs value;
+          path = [prefix "git" "credentials"];
+          secret = true;
+          variable = "ai_git_token";
+        }}
         printf 'username=x-access-token\npassword=%s\n' "$ai_git_token"
       '';
     };
@@ -93,7 +97,7 @@
   # `tag.forceSignAnnotated` are ALWAYS written: left unset, a user config
   # that signs by default would sign the agent's commits, or its `git tag -m`
   # tags, with the user's key.
-  gitconfigBody = cfg: let
+  gitconfigBody = prefix: cfg: let
     inherit (cfg) signing;
     derived = lib.foldl' lib.recursiveUpdate {} [
       (lib.optionalAttrs (signing.key != null) {user.signingKey = signing.key;})
@@ -114,7 +118,7 @@
       # included user config set. Without it an agent push that this helper
       # cannot answer falls through to the user's own token.
       (lib.optionalAttrs (cfg.credentials != null) {
-        credential."https://github.com".helper = ["" (lib.getExe (credentialHelper cfg.credentials))];
+        credential."https://github.com".helper = ["" (lib.getExe (credentialHelper prefix cfg.credentials))];
       })
     ];
   in
@@ -134,12 +138,13 @@
     );
 
   states = lib.genAttrs harnessNames (runtime: let
+    prefix = "ai.${runtime}.programs";
     gitCfg = resolveGit runtime;
     ghCfg = gh.resolve config runtime;
     enabled = runtimeEnabled runtime;
-    body = gitconfigBody gitCfg;
+    body = gitconfigBody prefix gitCfg;
   in {
-    inherit body ghCfg gitCfg runtime;
+    inherit body ghCfg gitCfg prefix runtime;
     gitActive = enabled && gitCfg.enable;
     ghActive = enabled && ghCfg.enable;
     gitconfig = renderGitconfig runtime body;
@@ -192,14 +197,17 @@
   # through `settings` — in any key spelling — is held to the same rule and a
   # key supplied there counts.
   assertionsFor = state: let
-    prefix = "ai.${state.runtime}.programs";
+    inherit (state) prefix;
     read = gitValue state.body;
     signs = lib.any gitTrue [
       (read "commit" "gpgSign")
       (read "tag" "forceSignAnnotated")
       (read "tag" "gpgSign")
     ];
-    tokenFile = (state.gitCfg.credentials or {}).file or null;
+    tokenFile =
+      if state.gitCfg.credentials != null && state.gitCfg.credentials._runtime.source ? file
+      then state.gitCfg.credentials._runtime.source.file
+      else null;
   in
     lib.optionals state.gitActive [
       {
@@ -212,11 +220,11 @@
       }
       {
         assertion = tokenFile == null || lib.hasPrefix "/" tokenFile;
-        message = "${prefix}.git.credentials.file is not an absolute path. The credential helper reads it verbatim: nothing expands `~`, and a relative path resolves against the repository git is working in. Pass an absolute path.";
+        message = "${prefix}.git.credentials references a file that is not an absolute path. The credential helper reads it verbatim: nothing expands `~`, and a relative path resolves against the repository git is working in. Pass an absolute path.";
       }
       {
         assertion = !underStore tokenFile;
-        message = "${prefix}.git.credentials.file points into ${builtins.storeDir}, where the token is world-readable. Pass the path of a decrypted secret as a string.";
+        message = "${prefix}.git.credentials references a file in ${builtins.storeDir}, where the token is world-readable. Pass the path of a decrypted secret as a string.";
       }
     ]
     ++ lib.optionals state.ghActive [

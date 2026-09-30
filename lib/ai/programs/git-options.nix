@@ -5,17 +5,18 @@
 # signing key at the runtime.
 #
 # The leaf names are Home Manager's (`programs.git.settings`,
-# `programs.git.signing.*`), cut down to what an identity needs. The token uses
-# the repository's `credentials` type. This is not a mirror of Home Manager's
-# modules: devenv has neither, and vendoring them would break config parity.
+# `programs.git.signing.*`), cut down to what an identity needs. This is not a
+# mirror of Home Manager's modules: devenv has neither, and vendoring them
+# would break config parity.
 #
 # One file, imported by `git.nix`, which `sharedOptions.nix` imports on both
 # backends — so the two option trees cannot drift.
 {
   lib,
-  mkCredentialsOptionWith,
   supportedRuntimes,
 }: let
+  rv = import ../../runtime-values {inherit lib;};
+
   # Home Manager's `programs.git.settings` type, restated: devenv has no
   # Home Manager to borrow it from.
   gitIniType = let
@@ -63,7 +64,12 @@ in {
         applies to the agent's commits and pushes in that repository
       '';
 
-      credentials = mkCredentialsOptionWith {
+      credentials = lib.mkOption {
+        type = lib.types.nullOr (rv.withReferences {
+          type = lib.types.str;
+          secret = true;
+        });
+        default = null;
         description = ''
           The GitHub token git pushes and fetches with. Renders an empty
           `credential."https://github.com".helper` (dropping every helper
@@ -72,8 +78,8 @@ in {
           credential request and answers `username=x-access-token`; if the
           secret is missing or empty it tells git to stop rather than
           prompt. Only the path reaches the store, and the token is never
-          put in the environment. A `helper` executable runs on every
-          request, not once at start. Set exactly one of `file` or `helper`.
+          put in the environment. An `rv.helper` executable runs on every
+          request, not once at start. Set this with `rv.file` or `rv.helper`.
 
           Left null, nothing is reset: git uses whatever helper your own
           config sets for github.com, which may be your token.
@@ -82,17 +88,6 @@ in {
           `.git/config` or `config.worktree` is read after the reset, so it
           is not dropped. git sends `store` and `erase` to every helper, so
           it receives the agent's token and can save it.
-        '';
-        file = ''
-          Path to a file holding the raw GitHub token, read by the credential
-          helper on every request git makes for https://github.com. Only the
-          path reaches the store. Works with sops-nix, agenix, or any tool
-          that decrypts secrets to files.
-        '';
-        helper = ''
-          Path to an executable that prints the raw GitHub token on stdout.
-          The credential helper runs it on every request git makes for
-          https://github.com, not once at start.
         '';
       };
 

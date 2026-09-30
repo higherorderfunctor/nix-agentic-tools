@@ -54,7 +54,7 @@
       else resolveTree declaration portable.${name} override.${name})
     declarations;
 in {
-  mkProgram = spec @ {
+  mkProgram = {
     name,
     options,
     overrideDescriptions ? {},
@@ -68,7 +68,7 @@ in {
         inherit description;
       };
   in {
-    inherit name options spec supportedRuntimes;
+    inherit supportedRuntimes;
 
     module = {
       options.ai =
