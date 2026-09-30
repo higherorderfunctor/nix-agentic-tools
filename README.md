@@ -97,9 +97,9 @@ inputs:
 {inputs, ...}: {
   imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
-  # Required. The module does not apply the overlay itself, and the
-  # packages it installs for each enabled runtime (`pkgs.ai.*`) come from
-  # it, a separate flake output.
+  # The overlay is required when a runtime installs its default package
+  # (`pkgs.ai.*`) because the module does not apply it itself.
+  # `package = null` configures a runtime without installing one.
   overlays = [inputs.nix-agentic-tools.overlays.default];
 
   ai = {
@@ -849,8 +849,9 @@ garbage collection until its updater replaces the copy. Home Manager also
 defaults `features.daemon_auto_start` to false, because a daemon keeps the
 environment of whichever session started it. Devenv runs Codex with
 `--no-daemon`, so project sessions use the project shell and the project's Codex
-version. It rejects `pinDaemonToPackage = false` and
-`features.daemon_auto_start = true`, which would do nothing there.
+version. `ai.codex.pinDaemonToPackage` is Home Manager-only and has no devenv
+counterpart at all; devenv rejects `features.daemon_auto_start = true`, which
+would do nothing there.
 
 </details>
 

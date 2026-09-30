@@ -7,10 +7,11 @@
   checks.kiro-fhs-contract = let
     isLinux = pkgs.stdenv.hostPlatform.isLinux;
     kiroPackage = pkgs.ai.kiro-cli;
-    wrapKiroPackage = import ../lib/wrapPackage.nix {
-      inherit (pkgs) lib;
-      inherit pkgs;
-    };
+    wrapKiroPackage =
+      (import ../lib/wrapPackage.nix {
+        inherit (pkgs) lib;
+        inherit pkgs;
+      }).wrapPackage;
     trustedKiroPackage = wrapKiroPackage {
       package = kiroPackage;
       trustedMcpTools = ["fs_read"];

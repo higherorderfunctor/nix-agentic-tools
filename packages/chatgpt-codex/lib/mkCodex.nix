@@ -746,8 +746,13 @@
   daemonSettingsWriter = "materialize-codex-daemon-settings";
   # Only the layout the selector can release: a package whose complete Codex
   # package sits anywhere else would be pinned and then never unpinned.
-  hasDaemonLayout = cfg: (cfg.package.passthru.codexPackage.root or null) == packageLayout.root;
-  isDaemonPinned = cfg: cfg.enable && cfg.pinDaemonToPackage && hasDaemonLayout cfg;
+  hasDaemonLayout = cfg:
+    cfg.package
+    != null
+    && (cfg.package.passthru.codexPackage.root or null) == packageLayout.root;
+  # `pinDaemonToPackage` is Home Manager-only; `or false` keeps this callable
+  # from a devenv `cfg`, which has no such attribute at all.
+  isDaemonPinned = cfg: cfg.enable && (cfg.pinDaemonToPackage or false) && hasDaemonLayout cfg;
   codexDaemonWriterConfig = {
     backend,
     cfg,
@@ -1122,24 +1127,6 @@ in
           record trust itself, because user config.toml is Nix-owned.
         '';
       };
-      pinDaemonToPackage = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = ''
-          Run Codex's shared app-server daemon from `ai.codex.package`. Home
-          Manager points `packages/app-server-daemon/current` in the Codex
-          home at the package, defaults
-          `native.daemonSettings.updater.autoUpdateEnabled` to false, and on a
-          switch that changes the package stops the daemon so the next launch
-          starts the new one.
-          `false` releases the selection and restores upstream's copy and
-          hourly self-update. That copy is taken from this package, so its
-          patched `codex-resources/{voice,zsh}` point into store paths nothing
-          roots: they break after garbage collection until upstream's updater
-          replaces the copy. Home Manager only: devenv's launcher always runs
-          Codex with `--no-daemon` and rejects `false`.
-        '';
-      };
       # `profiles` was removed in 2026-09-19. It was locked out from the day
       # it landed and cannot restrict Codex skill or AGENTS.md discovery.
       projectDocMaxBytes = lib.mkOption {
@@ -1198,6 +1185,28 @@ in
       };
     };
 
+    # Home Manager only: devenv always runs Codex with `--no-daemon`, so there
+    # is no daemon for this to pin, and the option does not exist there at
+    # all — setting it under `ai.codex.*` on devenv is an unknown-option
+    # error rather than a rejected value.
+    hm.options.pinDaemonToPackage = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Run Codex's shared app-server daemon from `ai.codex.package`. Home
+        Manager points `packages/app-server-daemon/current` in the Codex
+        home at the package, defaults
+        `native.daemonSettings.updater.autoUpdateEnabled` to false, and on a
+        switch that changes the package stops the daemon so the next launch
+        starts the new one.
+        `false` releases the selection and restores upstream's copy and
+        hourly self-update. That copy is taken from this package, so its
+        patched `codex-resources/{voice,zsh}` point into store paths nothing
+        roots: they break after garbage collection until upstream's updater
+        replaces the copy. Home Manager only.
+      '';
+    };
+
     installPackage = codexInstallPackage;
     contentTargets = {
       backend,
@@ -1238,6 +1247,7 @@ in
       mergedRules,
       mergedServers,
       mergedSkills,
+      options,
       resolvedSettings,
       topHooks,
       ...
@@ -1335,6 +1345,17 @@ in
               project_doc_max_bytes = lib.mkDefault cfg.projectDocMaxBytes;
             })
           ];
+          # `pinDaemonToPackage` is Home Manager-only (see its option), so this
+          # must not force `options.ai.codex.pinDaemonToPackage` under devenv,
+          # where neither it nor `cfg.pinDaemonToPackage` exist — the `isHm`
+          # guard keeps the inner list a thunk devenv's branch never forces.
+          # Default priority (unset) stays silent; an explicit `true` with no
+          # package to pin warns once.
+          warnings = lib.optionals (options ? warnings) (lib.optionals isHm (
+            lib.optional
+            (cfg.package == null && cfg.pinDaemonToPackage && options.ai.codex.pinDaemonToPackage.highestPrio < 1500)
+            "ai.codex.package is null, so ai.codex.pinDaemonToPackage is inert: there is no package to pin the daemon to."
+          ));
           assertions =
             mkAgentAssertions mergedAgents
             ++ mkExecpolicyAssertions cfg.execpolicyRules
@@ -1359,8 +1380,10 @@ in
                 message = "ai.codex.execpolicyRules.default is reserved in Home Manager because Codex writes user allow-list decisions to rules/default.rules; choose another rule filename";
               }
               {
-                assertion = !cfg.pinDaemonToPackage || hasDaemonLayout cfg;
-                message = "ai.codex.pinDaemonToPackage needs a package carrying upstream's complete Codex package at ${packageLayout.root} (passthru.codexPackage.root), as this flake's chatgpt-codex does, and ai.codex.package does not. Set ai.codex.pinDaemonToPackage = false to leave the daemon to upstream's own copy and updater.";
+                # A null `package` is covered by the inert-setting warning
+                # below, not this assertion — it must not fire on null alone.
+                assertion = !cfg.pinDaemonToPackage || cfg.package == null || hasDaemonLayout cfg;
+                message = "ai.codex.pinDaemonToPackage needs ai.codex.package to carry upstream's complete Codex package at ${packageLayout.root} (passthru.codexPackage.root), as this flake's chatgpt-codex does. Set ai.codex.package to that package, or set ai.codex.pinDaemonToPackage = false to leave the daemon to upstream's own copy and updater.";
               }
             ]
             ++ lib.optionals (!isHm) [
@@ -1373,15 +1396,6 @@ in
                   effect under devenv: its Codex launcher always passes --no-daemon,
                   so tool calls run in the project shell's environment. Enable the
                   daemon in the Home Manager user-level configuration.
-                '';
-              }
-              {
-                assertion = cfg.pinDaemonToPackage;
-                message = ''
-                  ai.codex.pinDaemonToPackage is Home Manager-only: the daemon's
-                  package selection lives in the user's Codex home, which devenv
-                  never writes, and devenv's Codex launcher always passes
-                  --no-daemon. Move it to the Home Manager user-level configuration.
                 '';
               }
               {

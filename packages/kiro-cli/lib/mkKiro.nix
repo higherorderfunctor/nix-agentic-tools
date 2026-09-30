@@ -14,7 +14,9 @@
   # Launcher/chat wrapper: idempotent flag injection plus the HM env bake.
   # Lifted out of this file so it has a seam a check can drive directly.
   # See packages/kiro-cli/lib/wrapPackage.nix.
-  wrapKiroPackage = import ./wrapPackage.nix {inherit lib pkgs;};
+  kiroWrapper = import ./wrapPackage.nix {inherit lib pkgs;};
+  inherit (kiroWrapper) wrapperReasons;
+  wrapKiroPackage = kiroWrapper.wrapPackage;
 
   # Engine-bundle rewrites. Both reach INTO the KAS bundle, which is unpacked
   # from the binary at runtime and never lands in the nix store, so both are
@@ -543,11 +545,15 @@
     # Assertion evaluation must not call a missing custom-package rollout
     # function before the dedicated assertion below can report that shape.
     resolvedPackage =
-      if cfg.unlockedRolloutFeatures != [] && !(cfg.package ? withRolloutFeatures)
+      if cfg.package == null
+      then null
+      else if cfg.unlockedRolloutFeatures != [] && !(cfg.package ? withRolloutFeatures)
       then cfg.package
       else resolvePackage cfg;
     packageNeedsFhsPayload = package:
-      package.kiroFhsSandbox or (package ? unwrapped || package ? withFhsPayload);
+      package
+      != null
+      && (package.kiroFhsSandbox or (package ? unwrapped || package ? withFhsPayload));
     needsFhsPayloadComposition =
       cfg.useFhsSandbox
       && pkgs.stdenv.hostPlatform.isLinux
@@ -560,7 +566,10 @@
         message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
       }
       {
-        assertion = cfg.useFhsSandbox || resolvedPackage ? unwrapped;
+        # No resolved package at all (`package = null`) means no wrapper is
+        # built, so this constraint — which is about what the WRAPPER can
+        # select from — does not apply; it must not fire on null alone.
+        assertion = cfg.useFhsSandbox || cfg.package == null || resolvedPackage ? unwrapped;
         message = ''
           ai.kiro: `useFhsSandbox = false` needs the resolved `package` to
           expose `passthru.unwrapped`, which `pkgs.ai.kiro-cli` and its rollout
@@ -617,8 +626,10 @@
         # without this the failure is a bare "attribute 'withRolloutFeatures'
         # missing" pointing at factory internals rather than at the two
         # options the consumer actually set.
+        # A null `package` is covered by the inert-settings warning below, not
+        # this assertion — it must not fire on null alone.
         assertion =
-          cfg.unlockedRolloutFeatures == [] || cfg.package ? withRolloutFeatures;
+          cfg.unlockedRolloutFeatures == [] || cfg.package == null || cfg.package ? withRolloutFeatures;
         message = ''
           ai.kiro: `unlockedRolloutFeatures` needs a `package` exposing
           `passthru.withRolloutFeatures`, which `pkgs.ai.kiro-cli` from this
@@ -926,7 +937,7 @@
   # its text lives in the runtime-unpacked engine bundle, so it cannot be a
   # string known at eval time.
   workflowReminderHooks = cfg:
-    lib.optionalAttrs (workflowReminderEnabled cfg) {
+    lib.optionalAttrs (workflowReminderEnabled cfg && (!cfg.workflowReminder.includeVendorSteering || cfg.package != null)) {
       workflow-reminder =
         {
           trigger = "UserPromptSubmit";
@@ -1626,18 +1637,95 @@ in
     config = {
       backend,
       cfg,
+      mergedEnvironmentVariables,
       mergedServers,
       mergedSkills,
       mergedRules,
       mergedLspServers,
       mergedContext,
       hasMergedContext,
+      moduleEnvironmentVariables,
+      options,
+      resolvedShell,
       ...
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       isHm = backend == "hm";
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
+      # "Did the consumer actually write this" test, shared with
+      # lib/ai/delivery-warnings.nix and mkBackendTransform.nix's
+      # installedPackages guard: a definition below the option-default
+      # priority (1500) is someone's, not the bare default's. A root/runtime
+      # pair counts as explicit when EITHER side clears that bar.
+      explicitAt = paths: lib.any (path: (lib.attrByPath (path ++ ["highestPrio"]) 1500 options) < 1500) paths;
+      # Paths behind each `wrapperReasons` key, in the same order `wrapPackage`
+      # builds them. `environmentVariables` and `secrets` are backed by a
+      # root/per-runtime pool pair; the rest are Kiro-only options.
+      wrapperReasonPaths = {
+        environmentVariables = [["ai" "environmentVariables"] ["ai" "kiro" "environmentVariables"]];
+        extraPackages = [["ai" "kiro" "extraPackages"]];
+        identity = [["ai" "kiro" "identity" "enable"]];
+        secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];
+        trustedMcpTools = [["ai" "kiro" "trustedMcpTools"]];
+        v3 = [["ai" "kiro" "v3"]];
+      };
+      wrapperPackageReasons =
+        lib.mapAttrsToList (key: reason:
+          reason // {explicit = explicitAt wrapperReasonPaths.${key};})
+        (wrapperReasons {
+          environmentVariables = mergedEnvironmentVariables;
+          inherit (cfg) extraPackages trustedMcpTools v3;
+          # Presence marker only: the reason list asks whether identity is on,
+          # not for the materializer the wrapper itself receives.
+          identityMaterializer =
+            if cfg.identity.enable
+            then {}
+            else null;
+          inherit (kiroSecrets) secretEnv;
+        });
+      # Beside the wrapper's own reasons: package-dependent options the
+      # wrapper itself does not read, but that still need the managed
+      # package to do anything. `gitSshConfigWorkaround` defaults to `true`
+      # and rides a SEPARATE channel (`moduleEnvironmentVariables`) from the
+      # consumer-facing `environmentVariables` pool above, so it gets its own
+      # reason and its own explicitness test — gating on activity alone would
+      # warn on every default config, since the default itself is active.
+      packageDependentReasons =
+        wrapperPackageReasons
+        ++ [
+          {
+            active = moduleEnvironmentVariables != {};
+            explicit = explicitAt [["ai" "gitSshConfigWorkaround"]];
+            name = "ai.gitSshConfigWorkaround";
+          }
+          {
+            active = resolvedShell != null;
+            # The selected shell reaches Kiro only as SHELL in the managed launcher.
+            explicit = explicitAt [["ai" "shell"] ["ai" "kiro" "shell"]];
+            name = "ai.shell / ai.kiro.shell";
+          }
+          {
+            active = cfg.unlockedRolloutFeatures != [];
+            # Rollout features rebuild the selected package through withRolloutFeatures.
+            explicit = explicitAt [["ai" "kiro" "unlockedRolloutFeatures"]];
+            name = "ai.kiro.unlockedRolloutFeatures";
+          }
+          {
+            active = workflowReminderEnabled cfg && cfg.workflowReminder.includeVendorSteering;
+            # Vendor steering is read from the managed package's unpacked engine bundle.
+            explicit = explicitAt [["ai" "kiro" "workflowReminder" "includeVendorSteering"]];
+            name = "ai.kiro.workflowReminder.includeVendorSteering";
+          }
+        ];
+      # Defaults stay silent and nothing asserts on `package = null` alone —
+      # only a setting the consumer actually wrote warns, once, as a group.
+      inertPackageOptions =
+        map (reason: reason.name)
+        (lib.filter (reason: reason.active && reason.explicit) packageDependentReasons);
+      packageWarnings =
+        lib.optional (cfg.package == null && inertPackageOptions != [])
+        "ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ${lib.concatStringsSep ", " inertPackageOptions}. Unset them or set ai.kiro.package.";
       hasUrlSecret = kiroSecrets.urlSecretEnv != {};
       mcpRender = mkMcpJsonScript {
         # The task never changes cwd; only this renderer anchors relative
@@ -1660,6 +1748,7 @@ in
           {ai.kiro.hooks = workflowReminderHooks cfg;}
           (lib.mkIf isHm (workflowsSettingImplication cfg))
           {assertions = mkAssertions cfg ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);}
+          (lib.optionalAttrs (options ? warnings) {warnings = packageWarnings;})
           {
             # Writer identities survive empty declarations: N→0 must retract
             # earlier files, including when the final hook disappears.
