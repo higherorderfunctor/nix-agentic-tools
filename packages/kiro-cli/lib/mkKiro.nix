@@ -4,8 +4,10 @@
 # `lib.ai.app.hmTransform` and `lib.ai.app.devenvTransform` project it into
 # the Home Manager and devenv modules. One delivery description serves both
 # backends: read-only copies of settings/cli.json and settings/mcp.json,
-# settings/lsp.json, steering, skills, agents and hooks under `<configDir>`,
-# with environment variables baked into the launcher on both backends.
+# settings/lsp.json, steering, skills, agents and hooks under `<configDir>`.
+# Its wrapper renders environment variables with one `rv.environment` call: a
+# literal is exported, while an `rv.file` or `rv.helper` reference is read at
+# launch so its value never enters the store.
 {
   lib,
   pkgs,
@@ -1138,8 +1140,10 @@ in
     defaults = {
       package = pkgs.ai.kiro-cli;
     };
-    # The builder declares `environmentVariables` (baked into the launcher on
-    # both backends) and `lspServers`.
+    # The builder declares `environmentVariables`, rendered by the runtime's
+    # wrapper with one `rv.environment` call. A literal is exported by the
+    # launcher; an `rv.file` or `rv.helper` reference is read there at launch
+    # so its value never enters the store. It also declares `lspServers`.
     poolOptions.lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
     options = {
       # Dark-shipped upstream features, unlocked by patching the rollout

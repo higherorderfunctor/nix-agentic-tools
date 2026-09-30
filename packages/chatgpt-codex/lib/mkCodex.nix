@@ -1062,8 +1062,11 @@ in
       "skills"
     ];
     defaults.package = pkgs.ai.chatgpt-codex;
-    # The builder declares `environmentVariables` (baked into the launcher,
-    # never the project shell) and `agents`, typed here with the Codex extension.
+    # The builder declares `environmentVariables`, rendered by one
+    # `rv.environment` call in `lib/ai/launcher.nix`: a literal is exported by
+    # the launcher, while an `rv.file` or `rv.helper` reference is read there
+    # at launch so its value never enters the store. It also declares `agents`,
+    # typed here with the Codex extension.
     poolOptions.agents = {
       type = lib.types.attrsOf (lib.types.nullOr codexAgentType);
       description = ''
