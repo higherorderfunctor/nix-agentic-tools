@@ -245,9 +245,7 @@ in {
   imports = [git.module gh.module];
 
   config = lib.mkMerge [
-    (lib.optionalAttrs (options ? assertions) {
-      assertions = lib.concatMap assertionsFor (lib.attrValues states);
-    })
+    {assertions = lib.concatMap assertionsFor (lib.attrValues states);}
     (moduleEnvironment.publish options envFor)
   ];
 }

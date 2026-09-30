@@ -31,16 +31,7 @@
     // {
       default = null;
       type = nullableType;
-      description =
-        if (option.description or "") == ""
-        then description
-        else "${option.description}\n\n${description}";
-    }
-    // lib.optionalAttrs (option ? apply) {
-      apply = value:
-        if value == null
-        then null
-        else option.apply value;
+      description = "${option.description}\n\n${description}";
     };
 
   resolveTree = declarations: portable: override:
@@ -54,7 +45,7 @@
       else resolveTree declaration portable.${name} override.${name})
     declarations;
 in {
-  mkProgram = spec @ {
+  mkProgram = {
     name,
     options,
     overrideDescriptions ? {},
@@ -68,7 +59,7 @@ in {
         inherit description;
       };
   in {
-    inherit name options spec supportedRuntimes;
+    inherit supportedRuntimes;
 
     module = {
       options.ai =
