@@ -27,6 +27,7 @@
       evalModules = evalDevenvModules;
       files = config: config.files;
       mcpPath = claudeMcpPath "devenv";
+      packages = config: config.packages;
       upstreamEnable = ["claude" "code" "enable"];
     };
     hm = {
@@ -34,6 +35,7 @@
       evalModules = evalHmModules;
       files = config: config.home.file;
       mcpPath = claudeMcpPath "hm";
+      packages = config: config.home.packages;
       upstreamEnable = ["programs" "claude-code" "enable"];
     };
   };
@@ -68,6 +70,19 @@
       (perBackend "upstream-module-alone-passes" (arm:
         claudeAssertionsPass (evalWithUpstream arm false)
         && claudeAssertionsPass (arm.eval {ai.claude.enable = true;})))
+
+      (perBackend "package-null-skips-install-keeps-files" (arm: let
+        evaluated = arm.eval {
+          ai.claude = {
+            enable = true;
+            package = null;
+            native.settings.effortLevel = "medium";
+          };
+        };
+      in
+        arm.packages evaluated.config
+        == []
+        && (claudeSettings evaluated).effortLevel == "medium"))
 
       # Native settings reach the document, including nested permission leaves,
       # and the document names its JSON schema for editors.

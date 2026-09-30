@@ -73,6 +73,41 @@
   # subcommand). `--v3` is injected unconditionally and needs no such gate.
   chatValueFlags = ["--resume-id"];
 
+  wrapperReasons = {
+    environmentVariables ? {},
+    environmentVariablesName ? "ai.environmentVariables / ai.kiro.environmentVariables",
+    extraPackages ? [],
+    identityMaterializer ? null,
+    secretEnv ? {},
+    trustedMcpTools ? [],
+    v3 ? false,
+  }: {
+    environmentVariables = {
+      active = environmentVariables != {};
+      name = environmentVariablesName;
+    };
+    extraPackages = {
+      active = extraPackages != [];
+      name = "ai.kiro.extraPackages";
+    };
+    identity = {
+      active = identityMaterializer != null;
+      name = "ai.kiro.identity";
+    };
+    secrets = {
+      active = secretEnv != {};
+      name = "ai.mcpServers / ai.kiro.mcpServers credential headers";
+    };
+    trustedMcpTools = {
+      active = trustedMcpTools != [];
+      name = "ai.kiro.trustedMcpTools";
+    };
+    v3 = {
+      active = v3;
+      name = "ai.kiro.v3";
+    };
+  };
+
   # Build one ordinary wrapper layer around the package passed here. The
   # public function below decides whether that layer belongs outside the
   # upstream FHS package or on its unwrapped payload.
@@ -86,13 +121,16 @@
     secretOptionPaths ? {},
     identityMaterializer ? null,
   }: let
-    hasEnv = environmentVariables != {};
-    hasExtraPackages = extraPackages != [];
-    hasSecret = secretEnv != {};
-    hasV3 = v3;
-    hasTrust = trustedMcpTools != [];
-    hasIdentity = identityMaterializer != null;
-    needsWrapper = hasEnv || hasExtraPackages || hasSecret || hasTrust || hasV3 || hasIdentity;
+    reasons = wrapperReasons {
+      inherit environmentVariables extraPackages identityMaterializer secretEnv trustedMcpTools v3;
+    };
+    hasEnv = reasons.environmentVariables.active;
+    hasExtraPackages = reasons.extraPackages.active;
+    hasIdentity = reasons.identity.active;
+    hasSecret = reasons.secrets.active;
+    hasTrust = reasons.trustedMcpTools.active;
+    hasV3 = reasons.v3.active;
+    needsWrapper = lib.any (reason: reason.active) (lib.attrValues reasons);
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
     # env baked as `export`s (was makeWrapper `--set`), so the hand-written
     # wrapper can ALSO position the flags. makeWrapper only appends
@@ -319,8 +357,10 @@
           ''}
         '';
       };
-in
-  {
+in {
+  inherit wrapperReasons;
+
+  wrapPackage = {
     package,
     v3,
     trustedMcpTools,
@@ -368,4 +408,5 @@ in
         if placeTrustInsideFhs
         then []
         else trustedMcpTools;
-    }
+    };
+}

@@ -24,7 +24,11 @@
 # Exact option-tree parity is appropriate here even where runtime behavior
 # differs. Backend-specific boundaries are represented by assertions/defaults,
 # not by deleting the option from either backend; that keeps discovery and
-# diagnostics consistent.
+# diagnostics consistent. `ai.codex.pinDaemonToPackage` is the one deliberate
+# exception: devenv's Codex launcher always passes `--no-daemon`, so there is
+# no daemon at all to pin, which is a stronger statement than a value an
+# assertion rejects — the option is genuinely Home Manager-only and the parity
+# diff below excludes that one leaf rather than asserting it does not matter.
 {
   lib,
   pkgs,
@@ -189,11 +193,16 @@
         keys[]
         | select(startswith("ai."))
       ' "${devenvJson}" | "$sort" -u > devenv-ai-options
-      "$diff" -u hm-ai-options devenv-ai-options
+      # ai.codex.pinDaemonToPackage is Home Manager-only by design — see the
+      # header comment — so it is excluded from the HM side of this
+      # comparison rather than expected on devenv's.
+      "$grep" -v '^ai\.codex\.pinDaemonToPackage$' hm-ai-options > hm-ai-options-comparable
+      "$diff" -u hm-ai-options-comparable devenv-ai-options
 
       "$jq" -S '
         with_entries(select(.key | startswith("ai.")))
         | map_values({ type: .type })
+        | del(."ai.codex.pinDaemonToPackage")
       ' "${hmJson}" > hm-ai-types.json
       "$jq" -S '
         with_entries(select(.key | startswith("ai.")))

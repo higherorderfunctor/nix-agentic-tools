@@ -7,36 +7,36 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-29 — stacked-workflows' Git preset is `mkDefault`
+> **Last verified:** 2026-09-30 — stacked-workflows' Git preset is `mkDefault`
 > sugar over the shared `git.*` options. Claude delivers every surface as its
 > own file through `ai.claude.files` on both backends and fails evaluation
 > beside its upstream module, and every delivery method writes the file itself.
-> Every enabled runtime installs a package; `installPackage` has no `null`
-> opt-out. Codex's `config.toml` is a read-only store symlink on both backends,
-> its daemon `settings.json` a Home Manager copy of `native.daemonSettings`, and
-> Nix declares the trust of every hook it generates; Codex rejects a declared
-> MCP OAuth client secret. AGENTS.md puts the index and rules before the
-> context. The repository AGENTS.md, Copilot's devenv context and instruction
-> files, and Kiro's devenv steering land as read-only copies; Codex indexes
-> scoped rules that name `references`; a unit whose file is switched off or
-> replaced warns, and so does a devenv Codex AGENTS.md past 32 KiB under a
-> raised limit. Semble derives a Kiro agent-private MCP server from
-> `mcp.enable = false` plus an MCP-backed subagent. Every runtime describes
-> delivery once through `mkRuntime`'s record-level `config`, and both
-> `mkRuntime` and the backend transforms reject a backend spec carrying anything
-> but `installPackage`, `migrationConfig` and `options`, since an overridden or
-> hand-built record reaches a transform without the constructor. Kiro hook
-> commands resolve packages through the shared `commandType`. Launchers bake the
-> builder's one `launcherEnvironment`. Claude's and Codex's hook matcher groups
-> share `mkMatcherBlockType`, and Claude, Copilot and Kiro render rule files
-> through `aiCommon.mkRuleFiles`. Claude delivers `ai.agents` and
-> `ai.claude.agentsDir` to `.claude/agents/<name>.md`; every raw agent writer
-> (Claude, Copilot, Kimchi, Kiro) tests `agent.isPathLike`, through
-> `agent.fileContent` where it copies, so a store-path string is a file, never a
-> body naming its own path. File content at `mkDefault` enables its entry;
-> `content.enable = false` suppresses every content form. The builder entry
-> point is `lib.ai.app.mkRuntime`. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> Every enabled runtime installs a package by default; `package = null` keeps
+> configuration enabled without installing one. Codex's `config.toml` is a
+> read-only store symlink on both backends, its daemon `settings.json` a Home
+> Manager copy of `native.daemonSettings`, and Nix declares the trust of every
+> hook it generates; Codex rejects a declared MCP OAuth client secret. AGENTS.md
+> puts the index and rules before the context. The repository AGENTS.md,
+> Copilot's devenv context and instruction files, and Kiro's devenv steering
+> land as read-only copies; Codex indexes scoped rules that name `references`; a
+> unit whose file is switched off or replaced warns, and so does a devenv Codex
+> AGENTS.md past 32 KiB under a raised limit. Semble derives a Kiro
+> agent-private MCP server from `mcp.enable = false` plus an MCP-backed
+> subagent. Every runtime describes delivery once through `mkRuntime`'s
+> record-level `config`, and both `mkRuntime` and the backend transforms reject
+> a backend spec carrying anything but `installPackage`, `migrationConfig` and
+> `options`, since an overridden or hand-built record reaches a transform
+> without the constructor. Kiro hook commands resolve packages through the
+> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
+> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
+> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
+> Claude delivers `ai.agents` and `ai.claude.agentsDir` to
+> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
+> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
+> so a store-path string is a file, never a body naming its own path. File
+> content at `mkDefault` enables its entry; `content.enable = false` suppresses
+> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
+> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). A root request nothing per-runtime can withdraw
 > (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
 > owned read-only copies and portable hooks reach its project `hooks.json` on
@@ -128,14 +128,23 @@ upstream modules write the same files: `ai.claude.enable` beside Home Manager's
 `programs.claude-code.enable` or devenv's `claude.code.enable` fails evaluation.
 
 **Package installation is NOT per-factory work.**
-`lib/ai/app/mkBackendTransform.nix` installs a package for every enabled
-runtime, lowering it to `home.packages` on Home Manager and `packages` on devenv
-— the two option names being the whole reason it cannot live in a factory
-without being written twice per runtime. A backend spec that says nothing
-installs the plain `cfg.package`; one that wraps its binary supplies an
+`lib/ai/app/mkBackendTransform.nix` installs a package by default for every
+enabled runtime, lowering it to `home.packages` on Home Manager and `packages`
+on devenv — the two option names being the whole reason it cannot live in a
+factory without being written twice per runtime. A backend spec that says
+nothing installs the plain `cfg.package`; one that wraps its binary supplies an
 `installPackage` callback taking the same arguments as `config`, on the record
-or on one backend spec, which wins. There is no opt-out: every enabled runtime
-installs a package.
+or on one backend spec, which wins. Setting `ai.<runtime>.package = null`
+explicitly skips installation without disabling any generated configuration; the
+transform does not call `installPackage` in that case. A setting that needs the
+managed binary path or wrapper WARNS, not asserts, and only once the consumer
+actually wrote it — the test is that setting's own option priority landing below
+the bare declared default (1500), the same idiom `lib/ai/delivery-warnings.nix`
+uses. A default-on feature (Kiro's `gitSshConfigWorkaround`, Codex's Home
+Manager-only `pinDaemonToPackage`) stays silent at its default value and names
+itself only once explicitly set. Kiro folds every inert setting into one warning
+naming each option; Codex's `pinDaemonToPackage` gets the same treatment on its
+own.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and
@@ -144,7 +153,8 @@ per-factory `home.packages` / `packages` write with no shared requirement, and
 user-globally. Silence now means "install the plain package", so the same
 omission is inert rather than invisible. `checks/ai-fanout/module-eval.nix`'s
 `every-runtime-installs-package` asserts a non-empty package list for every
-runtime on both backends.
+runtime on both backends under the unchanged defaults. Explicit null is the
+consumer opt-out; it does not weaken the default-install invariant.
 
 The one bounded exception is an `activation` writer with
 `runWhenDisabled = true`, declared outside the product gate by
@@ -218,12 +228,12 @@ The ai module fans out TWO kinds of configuration:
 
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
   `ai.kimchi.package` / `ai.kiro.package` — package override. All five are
-  installed by the shared backend transform. Four supply an `installPackage`
-  callback that wraps the selected package when the runtime needs env or flag
-  injection and installs it bare otherwise — wrapping is conditional, not
-  automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's own wrappers, return
-  the bare package when there is nothing to bake in). The process environment
-  each one bakes in is the builder's `launcherEnvironment`.
+  installed by the shared backend transform unless set to `null`. Four supply an
+  `installPackage` callback that wraps the selected package when the runtime
+  needs env or flag injection and installs it bare otherwise — wrapping is
+  conditional, not automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's own
+  wrappers, return the bare package when there is nothing to bake in). The
+  process environment each one bakes in is the builder's `launcherEnvironment`.
 - `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an

@@ -137,6 +137,72 @@ in {
       && !(evalDevenv {}).config.ai.kiro.enable
     );
 
+    module-kiro-package-null-skips-install-keeps-files = mkTest "kiro-package-null-skips-install-keeps-files" (
+      let
+        config.ai.kiro = {
+          context.text = "PACKAGE-NULL-CONTEXT";
+          enable = true;
+          package = null;
+        };
+        devenv = evalDevenv config;
+        hm = evalHm config;
+      in
+        devenv.config.packages
+        == []
+        && hm.config.home.packages == []
+        && lib.hasInfix "PACKAGE-NULL-CONTEXT" (markdownInput devenv "AGENTS.md").text
+        && lib.hasInfix "PACKAGE-NULL-CONTEXT" (kiroSteeringContent hm)."AGENTS.md".text
+    );
+
+    module-kiro-package-null-v3-warns = mkTest "kiro-package-null-v3-warns" (
+      let
+        evaluated = evalDevenv {
+          ai.kiro = {
+            enable = true;
+            package = null;
+            v3 = true;
+          };
+        };
+      in
+        builtins.all (entry: entry.assertion) evaluated.config.assertions
+        && evaluated.config.warnings
+        == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.v3. Unset them or set ai.kiro.package."]
+    );
+
+    # Defaults (including the default-on `ai.gitSshConfigWorkaround`) stay
+    # silent: the SSH default not reaching a null-package launcher is not a
+    # consumer-actionable problem, so nothing warns about it.
+    module-kiro-package-null-defaults-silent = mkTest "kiro-package-null-defaults-silent" (
+      let
+        evaluated = evalDevenv {
+          ai.kiro = {
+            enable = true;
+            package = null;
+          };
+        };
+      in
+        builtins.all (entry: entry.assertion) evaluated.config.assertions
+        && evaluated.config.packages == []
+        && evaluated.config.warnings == []
+    );
+
+    module-kiro-package-null-explicit-ssh-workaround-warns = mkTest "kiro-package-null-explicit-ssh-workaround-warns" (
+      let
+        evaluated = evalDevenv {
+          ai = {
+            gitSshConfigWorkaround = true;
+            kiro = {
+              enable = true;
+              package = null;
+            };
+          };
+        };
+      in
+        builtins.all (entry: entry.assertion) evaluated.config.assertions
+        && evaluated.config.warnings
+        == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.gitSshConfigWorkaround. Unset them or set ai.kiro.package."]
+    );
+
     # Kiro persists effort only inside per-model `chat.modelDefaults` records,
     # so it has no lossless target for the normalized settings pool, and an
     # unsupported pool has no per-runtime option. Claude is the identical-shape

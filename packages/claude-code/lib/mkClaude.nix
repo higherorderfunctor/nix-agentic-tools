@@ -64,7 +64,10 @@
       allowed = cfg.allowUnrecognizedSettings;
       optionPath = "ai.claude.native.settings";
       allowOptionPath = "ai.claude.allowUnrecognizedSettings";
-      version = cfg.package.version or null;
+      version =
+        if cfg.package == null
+        then null
+        else cfg.package.version or null;
       # Keys THIS MODULE writes are reported against the option that writes
       # them, so a binary that drops one does not read as consumer error.
       # Deliberately not an exemption — an exemption would suppress exactly the

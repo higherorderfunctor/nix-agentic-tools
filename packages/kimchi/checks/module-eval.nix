@@ -258,6 +258,26 @@ in {
 
     module-kimchi-enable-toggles = mkTest "kimchi-enable-toggles" (evalHm {ai.kimchi.enable = true;}).config.ai.kimchi.enable;
 
+    module-kimchi-package-null-skips-install-keeps-files = mkTest "kimchi-package-null-skips-install-keeps-files" (
+      let
+        config.ai.kimchi = {
+          enable = true;
+          package = null;
+          native.settings.redaction.enabled = false;
+        };
+        devenv = evalDevenv config;
+        hm = evalHm config;
+      in
+        devenv.config.packages
+        == []
+        && hm.config.home.packages == []
+        && fileValue ".kimchi/config.json" devenv
+        == {
+          redaction.enabled = false;
+        }
+        && (hmConfigDocument hm).value.redaction.enabled == false
+    );
+
     # Regression lock for the flattenDotKeys bug: config.json must be NESTED
     # JSON, never Kiro-style flat dot keys ("redaction.enabled").
     module-kimchi-config-json-nested = mkTest "kimchi-config-json-nested" (

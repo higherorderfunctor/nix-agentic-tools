@@ -7,10 +7,14 @@ applyTo: "packages/chatgpt-codex/**"
 
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-09-28 — the selector's worst case is bounded to fit
+> **Last verified:** 2026-09-30 — the selector's worst case is bounded to fit
 > Home Manager's activation unit, its owned shape comes from
 > `lib/packageLayout.nix`, and its warn-and-continue paths are gated. The
 > daemon's `settings.json` is a read-only copy of `native.daemonSettings`.
+> `pinDaemonToPackage` is declared under `hm.options`, not the shared option
+> set, so devenv genuinely has no such option rather than rejecting it by
+> assertion; with `ai.codex.package = null` it stays silent at its default and
+> warns only if set explicitly.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -77,12 +81,14 @@ the next activation backs it up and restores the declaration.
 
 Its launcher always passes `--no-daemon`, the only flag that skips auto-start
 AND refuses to attach to a running daemon. Tools see the project shell, and the
-devenv-pinned version is what runs. `pinDaemonToPackage = false` or
-`daemon_auto_start = true` or any `native.daemonSettings` in devenv is an
-assertion, not a silent no-op. With the flag, `codex agents`, `codex queue` and
-`--remote` refuse to run; `codex remote-control` and `codex app-server daemon …`
-ignore it and still reach the user daemon. A VM or sandbox home is out of scope:
-the sandbox will own that home.
+devenv-pinned version is what runs. `daemon_auto_start = true` or any
+`native.daemonSettings` in devenv is an assertion, not a silent no-op;
+`pinDaemonToPackage` is Home Manager-only and does not exist under devenv at
+all, so declaring it there is an unknown-option evaluation error rather than a
+rejected value. With the flag, `codex agents`, `codex queue` and `--remote`
+refuse to run; `codex remote-control` and `codex app-server daemon …` ignore it
+and still reach the user daemon. A VM or sandbox home is out of scope: the
+sandbox will own that home.
 
 ## Gates
 

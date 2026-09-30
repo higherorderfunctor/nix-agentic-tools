@@ -73,7 +73,7 @@
     ln -s ${stubBin} "$out/bin/kiro-cli-chat"
   '';
   wrap = secretEnv:
-    (import ../../packages/kiro-cli/lib/wrapPackage.nix {inherit lib pkgs;}) {
+    (import ../../packages/kiro-cli/lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage {
       package = stub;
       v3 = false;
       trustedMcpTools = [];

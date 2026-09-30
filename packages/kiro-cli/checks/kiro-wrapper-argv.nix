@@ -17,7 +17,7 @@
   ...
 }: {
   checks.kiro-wrapper-argv = let
-    wrapKiroPackage = import ../lib/wrapPackage.nix {inherit lib pkgs;};
+    wrapKiroPackage = (import ../lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage;
 
     # Stand-in for the real kiro-cli: prints the argv it received (one ARG line
     # per token, so an empty or space-bearing argument stays unambiguous) plus one

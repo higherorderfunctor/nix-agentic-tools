@@ -287,7 +287,7 @@
   # explicit entry (`environmentVariables.SHELL` included) wins. Claude has
   # no launcher and lowers the parts into `settings.env` instead.
   callbackArgs = {
-    inherit backend cfg config moduleEnvironmentVariables;
+    inherit backend cfg config moduleEnvironmentVariables options;
     inherit (cfg) normalized;
     launcherEnvironment =
       moduleEnvironmentVariables
@@ -358,8 +358,9 @@
     else [];
   runtimeSinkFiles = builtins.removeAttrs cfg.files sharedAgentsMdTargets;
   # ── Package installation ───────────────────────────────────────────────
-  # Owned HERE, not by each factory. An enabled runtime always installs
-  # something.
+  # Owned HERE, not by each factory. An enabled runtime installs something by
+  # default; an explicit `package = null` keeps configuration enabled without
+  # installing a package.
   #
   # The default is load-bearing: a record that says nothing about packages
   # installs `cfg.package`. It used to be the reverse — installation
@@ -367,13 +368,15 @@
   # requirement — and `claude` shipped with that write missing from BOTH
   # backends, visible only as `claude` missing from the devenv profile while
   # every other runtime was fine. Silence now means "install the plain
-  # package", so the same omission is inert.
+  # package", so the same omission is inert. The explicit null opt-out does
+  # not call the factory callback, so package-wrapping factories never need to
+  # accept null.
   #
   # `installPackage` accepts the same callback args as `config`, so a factory
   # that wraps its binary derives the wrapper once and never repeats the
   # lowering.
   installPackageFn = backendSpec.installPackage or appRecord.installPackage or (_: cfg.package);
-  rawInstalledPackages = [(installPackageFn callbackArgs)];
+  rawInstalledPackages = lib.optional (cfg.package != null) (installPackageFn callbackArgs);
   installedPackages =
     if options ? warnings
     then rawInstalledPackages
@@ -470,9 +473,9 @@ in {
             '';
           })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools);
       package = lib.mkOption {
-        type = lib.types.package;
+        type = lib.types.nullOr lib.types.package;
         default = package;
-        description = "The ${appRecord.name} package.";
+        description = "The ${appRecord.name} package, or null to configure the runtime without installing it.";
       };
       internal = lib.mkOption {
         type = lib.types.submodule {

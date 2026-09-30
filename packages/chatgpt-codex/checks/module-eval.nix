@@ -117,6 +117,71 @@ in {
         )
     );
 
+    module-codex-package-null-hm-configures-unpinned = mkTest "codex-package-null-hm-configures-unpinned" (
+      let
+        evaluated = evalHm {
+          ai.codex = {
+            enable = true;
+            package = null;
+            pinDaemonToPackage = false;
+            native.settings.model = "gpt-package-null";
+          };
+        };
+      in
+        evaluated.config.home.packages
+        == []
+        && (hmCodexSettings evaluated).model == "gpt-package-null"
+        && lib.all (entry: entry.assertion) evaluated.config.assertions
+        # Explicit `false` is already the coherent "don't pin" state, so
+        # there is nothing inert to name.
+        && evaluated.config.warnings == []
+    );
+
+    # Default priority (unset) stays silent: `pinDaemonToPackage` defaults to
+    # `true`, but a default the consumer never wrote is not a setting they
+    # need to be told is inert.
+    module-codex-package-null-hm-default-silent = mkTest "codex-package-null-hm-default-silent" (
+      let
+        evaluated = evalHm {
+          ai.codex = {
+            enable = true;
+            package = null;
+          };
+        };
+      in
+        lib.all (entry: entry.assertion) evaluated.config.assertions
+        && evaluated.config.warnings == []
+    );
+
+    module-codex-package-null-hm-explicit-pin-warns = mkTest "codex-package-null-hm-explicit-pin-warns" (
+      let
+        evaluated = evalHm {
+          ai.codex = {
+            enable = true;
+            package = null;
+            pinDaemonToPackage = true;
+          };
+        };
+      in
+        lib.all (entry: entry.assertion) evaluated.config.assertions
+        && evaluated.config.warnings
+        == ["ai.codex.package is null, so ai.codex.pinDaemonToPackage is inert: there is no package to pin the daemon to."]
+    );
+
+    # `pinDaemonToPackage` is declared under `hm.options` only: devenv's
+    # backend option tree does not carry it at all, so setting it there is an
+    # unknown-option evaluation error, not a rejected value.
+    module-codex-pinDaemonToPackage-devenv-unknown-option = mkTest "codex-pinDaemonToPackage-devenv-unknown-option" (!(builtins.tryEval (builtins.deepSeq
+      (evalDevenv {
+        ai.codex = {
+          enable = true;
+          pinDaemonToPackage = false;
+        };
+      })
+          .config
+      true))
+      .success);
+
     module-codex-default-sandbox-roots = mkTest "codex-default-sandbox-roots" (
       let
         settings = {
@@ -1313,12 +1378,6 @@ in {
             native.settings.features.daemon_auto_start = true;
           };
         };
-        unpinned = failures {
-          ai.codex = {
-            enable = true;
-            pinDaemonToPackage = false;
-          };
-        };
         declared = failures {
           ai.codex = {
             enable = true;
@@ -1329,8 +1388,6 @@ in {
         builtins.length autoStart
         == 1
         && hasLiteral "daemon_auto_start = true has no" (lib.head autoStart)
-        && builtins.length unpinned == 1
-        && hasLiteral "pinDaemonToPackage is Home Manager-only" (lib.head unpinned)
         && builtins.length declared == 1
         && hasLiteral "native.daemonSettings is Home Manager-only" (lib.head declared)
         # Off is what --no-daemon already means, so it is accepted.
