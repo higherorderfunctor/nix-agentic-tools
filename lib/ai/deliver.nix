@@ -78,14 +78,8 @@ in
         inherit (cfg) methodFor;
       };
     treeEntries = lib.filterAttrs (path: entry: entry.content.run == null && resolvedMethod path entry != "shared") live;
-    treefmt =
-      (config.ai.internal.treefmtNix.lib.evalModule pkgs {
-        imports = [
-          ../treefmt-module.nix
-          config.ai.formatter
-          {settings.global.excludes = lib.mkForce [];}
-        ];
-      }).config;
+    treefmt = config.ai.internal.formatter;
+    guards = config.ai.guards;
     mkTree = kind: entries: processing:
       generated.mkTree ({
           name = "ai-${backend}-${runtime}-${kind}";
@@ -111,7 +105,7 @@ in
             })
           entries;
           maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
-          inherit treefmt;
+          inherit guards runtime treefmt;
         }
         // processing);
     tree =
@@ -119,7 +113,7 @@ in
       then null
       else
         mkTree "generated" treeEntries {
-          inherit (config.ai.generated) check formatter guards;
+          inherit (config.ai.generated) check formatter;
         };
     treeOf = path:
       if treeEntries ? ${path}

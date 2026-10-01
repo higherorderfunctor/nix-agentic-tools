@@ -718,13 +718,16 @@
 
     Guards check semantic and structural properties independently of the
     selected formatter and of `ai.generated.check`. They use this flake's
-    pinned tools. Each guard defaults to enabled and can be disabled by name.
+    pinned tools. Each guard can be disabled by name. `splitCodeSpans` and
+    `tableCells` default to enabled only when the mounted `ai.formatter` enables
+    Prettier; the other guards default to enabled.
 
     | Guard | What it catches | Disable |
     | ----- | --------------- | ------- |
-    | `tableCells` | Inconsistent input Markdown table cells; rumdl and markdownlint catch different forms | `ai.generated.guards.tableCells = false;` |
-    | `splitCodeSpans` | A newline inside a Markdown inline code span in the input | `ai.generated.guards.splitCodeSpans = false;` |
-    | `parseCompare` | Invalid or changed JSON, TOML or YAML data; changed frontmatter bytes on marked Markdown | `ai.generated.guards.parseCompare = false;` |
+    | `kiroFrontmatterFlow` | Multi-line YAML flow sequences in Markdown frontmatter after formatting; Kiro only | `ai.guards.kiroFrontmatterFlow = false;` |
+    | `parseCompare` | Invalid or changed JSON, TOML or YAML data; changed frontmatter bytes on marked Markdown, after formatting | `ai.guards.parseCompare = false;` |
+    | `splitCodeSpans` | A newline inside a Markdown inline code span in the input, before formatting | `ai.guards.splitCodeSpans = false;` |
+    | `tableCells` | Inconsistent input Markdown table cells before formatting; rumdl and markdownlint catch different forms | `ai.guards.tableCells = false;` |
 
     Generated frontmatter is marked by `lib/frontmatter.nix`. The builder formats
     only the body and restores the generator's exact fenced header bytes,
@@ -748,9 +751,11 @@
     | A formatter that changes JSON `true` to `false` | Bad | `parseCompare` detects changed data |
     | Input with an unescaped pipe inside a Markdown table cell | Bad | `tableCells` detects an extra input cell |
 
-    A guard error names what failed and why, then gives three choices: fix the
-    input or formatter; disable that named guard if its invariant is unsuitable;
-    or set the specific file's `format = "raw"` to opt out explicitly.
+    A format guard error names what failed and why, then gives three choices:
+    fix the input or formatter; disable that named guard if its invariant is
+    unsuitable; or set the specific file's `format = "raw"` to opt out
+    explicitly. The Kiro shape guard offers only fix or disable because a
+    runtime still reads a raw file.
 
     #### Using the guards on your own files
 
@@ -761,20 +766,25 @@
 
     | Attribute | Program | Arguments |
     | --------- | ------- | --------- |
-    | `tableCells` | `ai-guard-table-cells` | Markdown file paths |
-    | `splitCodeSpans` | `ai-guard-split-code-spans` | Markdown file paths |
+    | `kiroFrontmatterFlow` | `ai-guard-kiro-frontmatter-flow` | Markdown file paths |
     | `parseCompare` | `ai-guard-parse-compare` | `TYPE BEFORE AFTER`, where `TYPE` is `json`, `markdown`, `toml` or `yaml` |
-    | `check` | Both Markdown guards in one derivation | `{ src; guards ? {}; }` |
+    | `splitCodeSpans` | `ai-guard-split-code-spans` | Markdown file paths |
+    | `tableCells` | `ai-guard-table-cells` | Markdown file paths |
+    | `check` | Markdown shape guards in one derivation; `kiroFrontmatterFlow` is opt-in | `{ src; guards ? {}; }` |
 
     `check` is a build-time gate for `nix flake check` or CI. It returns a
-    derivation that runs both Markdown guards over every `*.md` under `src` and
-    fails the build on a finding. It checks the store copy of `src`, not the
-    files you staged, so it is not a pre-commit hook:
+    derivation that runs `splitCodeSpans` and `tableCells` over every `*.md`
+    under `src` and fails the build on a finding. `kiroFrontmatterFlow` is off
+    by default because a consumer source tree is not runtime-scoped and valid
+    non-Kiro frontmatter could otherwise be rejected; opt in by name for a
+    Kiro-only source tree. It checks the store copy of `src`, not the files you
+    staged, so it is not a pre-commit hook:
 
     ```nix
     checks.''${system}.markdown-guards =
       (inputs.nix-agentic-tools.lib.ai.guards pkgs).check {
         src = ./docs;
+        # guards.kiroFrontmatterFlow = true; # opt in for Kiro-only Markdown
         # guards.tableCells = false; # disable a guard by name
       };
     ```
@@ -784,7 +794,7 @@
 
     ```bash
     git diff --cached --name-only -z --diff-filter=d -- '*.md' \
-      | xargs -0 -r sh -c 'ai-guard-table-cells "$@" && ai-guard-split-code-spans "$@"' _
+      | xargs -0 -r sh -c 'ai-guard-kiro-frontmatter-flow "$@" && ai-guard-split-code-spans "$@" && ai-guard-table-cells "$@"' _
     ```
 
     `check` does not run `parseCompare`, because it needs two versions of the
@@ -801,11 +811,12 @@
     ai-guard-parse-compare yaml <(git show :config.yaml) config.yaml
     ```
 
-    A finding exits 1 and prints the same what, why and three options as a
-    generated-file guard, worded for your files: fix the file or the formatter;
-    disable that guard by name in `check`, or stop running its program; or
-    leave the file out of the guarded file set. Exit 2 means nothing was
-    checked, for example an unreadable file.
+    A finding exits 1 and names what failed and why. The format guards offer
+    three options, worded for your files: fix the file or formatter; disable the
+    guard by name in `check`, or stop running its program; or leave the file out
+    of the guarded set. `kiroFrontmatterFlow` offers only fix or disable because
+    Kiro still reads a raw file. Exit 2 means nothing was checked, for example
+    an unreadable file.
 
     <details>
     <summary><strong>Semble code search</strong></summary>

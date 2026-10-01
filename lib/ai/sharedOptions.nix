@@ -20,6 +20,15 @@
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
   generatedTypes = ["json" "markdown" "toml" "yaml"];
+  formatter =
+    (config.ai.internal.treefmtNix.lib.evalModule pkgs {
+      imports = [
+        ../treefmt-module.nix
+        config.ai.formatter
+        {settings.global.excludes = lib.mkForce [];}
+      ];
+    }).config;
+  guardTable = (import ../markdown/guards.nix {inherit lib;}).table pkgs formatter.programs.prettier.enable;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
@@ -144,7 +153,11 @@
       else path)
     (lib.filterAttrs (_path: runtimeFiles.isLive) files);
 in {
-  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
+  imports =
+    [./app/sharedAgentsMd.nix ./file-warnings.nix]
+    ++ map
+    (name: lib.mkRenamedOptionModule ["ai" "generated" "guards" name] ["ai" "guards" name])
+    ["parseCompare" "splitCodeSpans" "tableCells"];
 
   options.ai = {
     deliveredPaths = lib.mkOption {
@@ -173,6 +186,13 @@ in {
         directory sources are copied byte-identically and never reach treefmt.
       '';
     };
+
+    guards = lib.mapAttrs (_name: guard:
+      lib.mkOption {
+        type = lib.types.bool;
+        inherit (guard) default defaultText description;
+      })
+    guardTable;
 
     context = lib.mkOption {
       # An empty record is the unset value; explicit content auto-enables it.
@@ -217,12 +237,6 @@ in {
             Shell snippet checking the built ${type} files. A nonzero exit
             fails the store-tree build. Paths are target-relative.
           '';
-        });
-      guards = lib.genAttrs ["parseCompare" "splitCodeSpans" "tableCells"] (name:
-        lib.mkOption {
-          type = lib.types.bool;
-          default = true;
-          description = "Enable the named generated-file guard ${name}; see README.md: Generated-file guards.";
         });
     };
 
@@ -487,12 +501,22 @@ in {
       description = "Resolved sandbox-safe Git SSH command, delivered to harness wrappers. Set by `gitSshConfigWorkaround`; not for direct use.";
     };
 
-    internal.treefmtNix = lib.mkOption {
-      type = lib.types.raw;
-      default = throw "ai.internal.treefmtNix: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those, or set it to inputs.treefmt-nix";
-      internal = true;
-      visible = false;
-      description = "treefmt-nix flake input supplied by the flake-level module wrappers.";
+    internal = {
+      formatter = lib.mkOption {
+        type = lib.types.raw;
+        default = formatter;
+        internal = true;
+        readOnly = true;
+        visible = false;
+        description = "Evaluated generated-file treefmt configuration.";
+      };
+      treefmtNix = lib.mkOption {
+        type = lib.types.raw;
+        default = throw "ai.internal.treefmtNix: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those, or set it to inputs.treefmt-nix";
+        internal = true;
+        visible = false;
+        description = "treefmt-nix flake input supplied by the flake-level module wrappers.";
+      };
     };
 
     shell = lib.mkOption {

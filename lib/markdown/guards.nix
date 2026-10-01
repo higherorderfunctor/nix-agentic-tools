@@ -1,6 +1,5 @@
-# The three file guards, defined ONCE: tableCells, splitCodeSpans and
-# parseCompare. `lib/generated.nix` runs them over every generated tree with
-# the `ai.generated.guards` wording through `mkGuards`; `consumer` is the
+# The four file guards, defined ONCE. `lib/generated.nix` runs them over every
+# generated tree with the `ai.guards` wording through `mkGuards`; `consumer` is the
 # public `lib.ai.guards pkgs`: the same executables and a check builder for
 # files a consumer authors themselves.
 #
@@ -9,6 +8,7 @@
 # nixpkgs').
 {lib}: let
   reason = {
+    kiroFrontmatterFlow = "Kiro silently degrades a steering file with a multi-line YAML flow sequence to always-on context.";
     parseCompare = "Parsed JSON, TOML or YAML changed, or Markdown frontmatter bytes changed; a reader could see different configuration.";
     splitCodeSpans = "An inline code span crosses a newline; CommonMark inserts a space that can corrupt a path or identifier.";
     tableCells = "A Markdown table has inconsistent cell counts; an unescaped pipe can change or break its rendered columns.";
@@ -18,7 +18,7 @@
   # builder runs its split and attach actions; parseCompare runs `compare`.
   generatedGuard = pkgs: "${pkgs.python3.withPackages (ps: [ps.pyyaml])}/bin/python3 ${../generated-guard.py}";
 
-  # `mkGuards pkgs context`: the three executables. Each passes the tool's
+  # `mkGuards pkgs context`: the four executables. Each passes the tool's
   # exit code through and ends a finding (exit 1) with the standard
   # diagnostic — what failed, why, and three ways out — worded for the
   # caller that runs it.
@@ -26,6 +26,10 @@
     strictShellApplication = import ../strict-shell-application.nix pkgs;
     tableCells = import ./table-cells.nix {inherit pkgs;};
     program = {
+      kiroFrontmatterFlow = {
+        name = "ai-guard-kiro-frontmatter-flow";
+        run = ''${generatedGuard pkgs} kiro-frontmatter-flow "$@"'';
+      };
       parseCompare = {
         name = "ai-guard-parse-compare";
         run = ''${generatedGuard pkgs} compare "$@"'';
@@ -50,22 +54,68 @@
           rc=0
           ${run} || rc=$?
           if [ "$rc" -eq 1 ]; then
-            printf '%s\n' >&2 ${lib.escapeShellArgs [
-            "${context.title} ${guard} failed."
-            reason.${guard}
-            "Choose one of three options:"
-            "  1. ${context.fix}"
-            "  2. ${context.disable guard}"
-            "  3. ${context.optOut}"
-            context.see
-          ]}
+            printf '%s\n' >&2 ${lib.escapeShellArgs (
+            [
+              "${context.title} ${guard} failed."
+              reason.${guard}
+              "Choose one of ${
+                if guard == "kiroFrontmatterFlow"
+                then "two"
+                else "three"
+              } options:"
+              "  1. ${context.fix}"
+              "  2. ${context.disable guard}"
+            ]
+            ++ lib.optional (guard != "kiroFrontmatterFlow") "  3. ${context.optOut}"
+            ++ [context.see]
+          )}
           fi
           exit "$rc"
         '';
       })
     program;
 
-  # `consumer pkgs`, exported as `lib.ai.guards`: the three programs worded
+  table = pkgs: prettierEnabled: let
+    programs = mkGuards pkgs {
+      title = "Generated-file guard";
+      fix = "Fix the input or formatter.";
+      disable = name: "Disable ai.guards.${name}.";
+      optOut = "Set this file's format to raw.";
+      see = "See README.md: Generated-file guards.";
+    };
+  in {
+    kiroFrontmatterFlow = {
+      default = true;
+      defaultText = "true";
+      description = "Reject multi-line YAML flow sequences in Kiro Markdown frontmatter, which Kiro silently treats as always-on steering.";
+      phase = "after";
+      program = programs.kiroFrontmatterFlow;
+      runtime = "kiro";
+    };
+    parseCompare = {
+      default = true;
+      defaultText = "true";
+      description = "Reject invalid or changed structured data and changed bytes in marked Markdown frontmatter after formatting.";
+      phase = "after";
+      program = programs.parseCompare;
+    };
+    splitCodeSpans = {
+      default = prettierEnabled;
+      defaultText = "`ai.formatter` enables prettier";
+      description = "Reject input Markdown with an inline code span crossing a newline before formatting can launder it.";
+      phase = "before";
+      program = programs.splitCodeSpans;
+    };
+    tableCells = {
+      default = prettierEnabled;
+      defaultText = "`ai.formatter` enables prettier";
+      description = "Reject inconsistent input Markdown table cell counts before formatting can launder them.";
+      phase = "before";
+      program = programs.tableCells;
+    };
+  };
+
+  # `consumer pkgs`, exported as `lib.ai.guards`: the four programs worded
   # for files outside any generated tree, and `check`.
   consumer = pkgs: let
     programs = mkGuards pkgs {
@@ -80,23 +130,24 @@
       see = "See the nix-agentic-tools README: Using the guards on your own files.";
     };
   in {
-    inherit (programs) parseCompare splitCodeSpans tableCells;
+    inherit (programs) kiroFrontmatterFlow parseCompare splitCodeSpans tableCells;
 
-    # `check {src, guards ? {}}`: a derivation that runs splitCodeSpans and
-    # tableCells over every `*.md` under `src`. parseCompare is not offered
+    # `check {src, guards ? {}}`: a derivation that runs the three shape guards
+    # over every `*.md` under `src`. parseCompare is not offered
     # here: it compares two versions of one file, and a source tree holds one.
     check = {
       src,
       guards ? {},
     }: let
       enabled = {
+        kiroFrontmatterFlow = false;
         splitCodeSpans = true;
         tableCells = true;
       };
       selected = lib.filterAttrs (guard: on: guards.${guard} or on) enabled;
     in
       assert lib.assertMsg (lib.subtractLists (lib.attrNames enabled) (lib.attrNames guards) == [])
-      "lib.ai.guards check: guards may name splitCodeSpans or tableCells. parseCompare compares two versions of a file; run its program on BEFORE and AFTER instead.";
+      "lib.ai.guards check: guards may name kiroFrontmatterFlow, splitCodeSpans or tableCells. parseCompare compares two versions of a file; run its program on BEFORE and AFTER instead.";
         pkgs.runCommand "ai-guards" {} ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -111,5 +162,5 @@
         '';
   };
 in {
-  inherit consumer generatedGuard mkGuards;
+  inherit consumer generatedGuard mkGuards table;
 }

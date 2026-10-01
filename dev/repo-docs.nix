@@ -31,10 +31,11 @@
       };
       formatter.markdown = ai.treefmtFormatter treefmt;
       guards = {
-        tableCells = true;
-        splitCodeSpans = true;
         parseCompare = true;
+        splitCodeSpans = true;
+        tableCells = true;
       };
+      runtime = "repository";
     };
 in {
   repoContributing = doc "repo-contributing" "CONTRIBUTING.md" gen.contributingMd;

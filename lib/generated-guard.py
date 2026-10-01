@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # cspell:ignore keepends
-"""Protect generated frontmatter bytes and compare structured data.
+"""Protect generated frontmatter shape and data through formatting.
 
 `compare` is the parseCompare guard; lib/markdown/guards.nix wraps it for both
 generated trees and consumer files.
@@ -13,6 +13,7 @@ import sys
 import tomllib
 
 import yaml
+from yaml.tokens import FlowSequenceEndToken, FlowSequenceStartToken
 
 
 def frontmatter_parts(data):
@@ -113,10 +114,42 @@ def compare(kind, before, after):
     return 0
 
 
+def kiro_frontmatter_flow(paths):
+    """Reject flow sequences whose brackets occupy different header lines."""
+    failed = False
+    for path in paths:
+        try:
+            data = pathlib.Path(path).read_bytes()
+            if not data.startswith((b"---\n", b"---\r\n", b"\xef\xbb\xbf---\n", b"\xef\xbb\xbf---\r\n")):
+                continue
+            _, header, _ = frontmatter_parts(data)
+            starts = []
+            for token in yaml.scan(header.decode("utf-8")):
+                if isinstance(token, FlowSequenceStartToken):
+                    starts.append(token.start_mark.line)
+                elif isinstance(token, FlowSequenceEndToken) and starts:
+                    start = starts.pop()
+                    if token.end_mark.line > start:
+                        print(
+                            f"{path}: Kiro frontmatter flow sequence spans multiple lines; "
+                            "Kiro silently treats the steering file as always-on context",
+                            file=sys.stderr,
+                        )
+                        failed = True
+                        break
+        except (OSError, UnicodeDecodeError, ValueError, yaml.YAMLError):
+            # This guard owns one measured shape. Other frontmatter faults are
+            # outside its contract and remain parseCompare's responsibility.
+            continue
+    return int(failed)
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] in (["split"], ["attach"]) and len(sys.argv) == 4:
         sys.exit(partition(*sys.argv[1:]))
     if sys.argv[1:2] == ["compare"] and len(sys.argv) == 5:
         sys.exit(compare(*sys.argv[2:]))
+    if sys.argv[1:2] == ["kiro-frontmatter-flow"] and len(sys.argv) >= 2:
+        sys.exit(kiro_frontmatter_flow(sys.argv[2:]))
     print(USAGE, file=sys.stderr)
     sys.exit(2)

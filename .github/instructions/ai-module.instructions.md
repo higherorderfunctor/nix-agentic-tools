@@ -56,7 +56,10 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > require `extensions`, and Copilot constrains server names. `ai.formatter`
 > layers consumer configuration on the exported treefmt module for each
 > generated tree; devenv excludes every delivered path, using `<directory>/**`
-> for recursive entries, from its repository treefmt run.
+> for recursive entries, from its repository treefmt run. One guard table stamps
+> `ai.guards` and supplies each guard's phase, runtime, formatter-dependent
+> default and program to those trees; the old `ai.generated.guards` names are
+> temporary aliases.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -1360,7 +1363,7 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-09-30 — a record's `agentNativeType` +
+> **Last verified:** 2026-10-01 — a record's `agentNativeType` +
 > `agentTransformer` give it a typed `native.agents` layer below the normalized
 > agents pool; every agents runtime gets `agentsDir`, and a runtime extends the
 > builder's `agents` description only through `agentsDescriptionSuffix`. Rule
@@ -1400,15 +1403,16 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 > effective-limit resolver for the owner's notice under a raised `maxBytes`; its
 > built bytes are measured in the generated-file tree. The router puts every
 > live build-time whole file into one tree per invocation; raw files and
-> recursive directory sources pass through without formatting or guards, while
-> switch-time overlays, `content.run`, and shared document leaves stay outside
-> it. Generators mark their `content` with `_generated`, so a consumer's
-> replacement of a unit's file warns like a switch-off. Rule and semantic-agent
-> generators pass raw Nix data to `lib/frontmatter.nix`, which renders quoted
-> YAML, and mark the content. The router passes that marker to the
-> generated-file builder, which accepts BOM/CRLF, formats only the body and
-> restores the exact fenced frontmatter bytes with one blank separator.
-> `parseCompare` requires those fenced bytes in the installed file.
+> recursive directory sources pass through without formatting or format guards,
+> while runtime shape guards inspect installed copies. Switch-time overlays,
+> `content.run`, and shared document leaves stay outside the tree. Generators
+> mark their `content` with `_generated`, so a consumer's replacement of a
+> unit's file warns like a switch-off. Rule and semantic-agent generators pass
+> raw Nix data to `lib/frontmatter.nix`, which renders quoted YAML, and mark the
+> content. The router passes that marker to the generated-file builder, which
+> accepts BOM/CRLF, formats only the body and restores the exact fenced
+> frontmatter bytes with one blank separator. `parseCompare` requires those
+> fenced bytes in the installed file.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 

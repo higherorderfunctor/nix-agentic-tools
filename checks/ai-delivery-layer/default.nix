@@ -65,7 +65,10 @@
     devenv = evalDevenv generatedFixture;
     hm = evalHm generatedFixture;
   };
-  formatterFixture = {formatter ? null}:
+  formatterFixture = {
+    formatter ? null,
+    guards ? {},
+  }:
     evalDevenv {
       ai =
         {
@@ -75,7 +78,8 @@
             rules.heading.text = "#   Heading";
           };
         }
-        // lib.optionalAttrs (formatter != null) {inherit formatter;};
+        // lib.optionalAttrs (formatter != null) {inherit formatter;}
+        // lib.optionalAttrs (guards != {}) {inherit guards;};
     };
   formatterPath = ".claude/rules/heading.md";
   excludeFixture = treefmtEnable:
@@ -1371,6 +1375,28 @@ in {
           grep -q -F "no formatter for path: ${formatterPath}" ${failure}/testBuildFailure.log
           echo 'PASS: delivery-generated-tree-unmatched-is-fatal' > "$out"
         '';
+
+    module-guards-follow-prettier = mkTest "guards-follow-prettier" (
+      let
+        defaults = (formatterFixture {}).config.ai.guards;
+        disabled = (formatterFixture {formatter.programs.prettier.enable = lib.mkForce false;}).config.ai.guards;
+      in
+        defaults.splitCodeSpans
+        && defaults.tableCells
+        && !disabled.splitCodeSpans
+        && !disabled.tableCells
+    );
+
+    module-delivery-guard-selection-reaches-tree = mkTest "delivery-guard-selection-reaches-tree" (
+      let
+        defaultTree = deliveredTree (formatterFixture {}) formatterPath;
+        disabledTree = deliveredTree (formatterFixture {guards.tableCells = false;}) formatterPath;
+      in
+        lib.hasInfix "ai-guard-table-cells" defaultTree.buildPhase
+        && !lib.hasInfix "ai-guard-table-cells" disabledTree.buildPhase
+    );
+
+    module-generated-guard-alias = mkTest "generated-guard-alias" (!(evalDevenv {ai.generated.guards.tableCells = false;}).config.ai.guards.tableCells);
 
     module-delivery-devenv-excludes-delivered-paths-from-treefmt = mkTest "delivery-devenv-excludes-delivered-paths-from-treefmt" (
       let
