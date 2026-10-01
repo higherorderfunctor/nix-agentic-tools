@@ -875,43 +875,185 @@
       "blockedMarketplaces[]|0": {
         "type": "object"
       },
-      "blockedMarketplaces[]|0.headers": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|0.headers.*": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|0.headersHelper": {
-        "type": "string"
-      },
       "blockedMarketplaces[]|0.source": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|0.url": {
         "type": "string"
       },
       "blockedMarketplaces[]|1": {
         "type": "object"
       },
-      "blockedMarketplaces[]|1.path": {
+      "blockedMarketplaces[]|1.headers": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|1.headers.*": {
         "type": "string"
       },
-      "blockedMarketplaces[]|1.ref": {
+      "blockedMarketplaces[]|1.headersHelper": {
         "type": "string"
-      },
-      "blockedMarketplaces[]|1.repo": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|1.skipLfs": {
-        "type": "boolean"
       },
       "blockedMarketplaces[]|1.source": {
         "type": "string"
       },
-      "blockedMarketplaces[]|1.sparsePaths": {
+      "blockedMarketplaces[]|1.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.name": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.owner": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.owner.email": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.owner.name": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.owner.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins": {
         "type": "array"
       },
-      "blockedMarketplaces[]|1.sparsePaths[]": {
+      "blockedMarketplaces[]|10.plugins[]": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].description": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].headers": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].headers.*": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].headersHelper": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].name": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source": {
+        "type": "anyOf"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|0": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|1": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|1.package": {
+        "type": "anyOf"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|1.package|0": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|1.package|1": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|1.registry": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|1.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|1.version": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|2": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|2.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|2.sha": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|2.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|2.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|3": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|3.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|3.repo": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|3.sha": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|3.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|4": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|4.path": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|4.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|4.sha": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|4.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|4.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|5": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|5.sha256": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|5.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|5.url": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|6": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|6.command": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|6.mode": {
+        "enum": ["copy", "link"],
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|6.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|6.timeout": {
+        "type": "integer"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|7": {
+        "type": "object"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|7.error": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].source|7.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.plugins[].strict": {
+        "type": "boolean"
+      },
+      "blockedMarketplaces[]|10.plugins[].version": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|10.source": {
         "type": "string"
       },
       "blockedMarketplaces[]|2": {
@@ -921,6 +1063,9 @@
         "type": "string"
       },
       "blockedMarketplaces[]|2.ref": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|2.repo": {
         "type": "string"
       },
       "blockedMarketplaces[]|2.skipLfs": {
@@ -935,37 +1080,49 @@
       "blockedMarketplaces[]|2.sparsePaths[]": {
         "type": "string"
       },
-      "blockedMarketplaces[]|2.url": {
-        "type": "string"
-      },
       "blockedMarketplaces[]|3": {
         "type": "object"
       },
-      "blockedMarketplaces[]|3.package": {
-        "type": "anyOf"
-      },
-      "blockedMarketplaces[]|3.package|0": {
+      "blockedMarketplaces[]|3.path": {
         "type": "string"
       },
-      "blockedMarketplaces[]|3.package|1": {
+      "blockedMarketplaces[]|3.ref": {
         "type": "string"
       },
-      "blockedMarketplaces[]|3.registry": {
-        "type": "string"
+      "blockedMarketplaces[]|3.skipLfs": {
+        "type": "boolean"
       },
       "blockedMarketplaces[]|3.source": {
         "type": "string"
       },
-      "blockedMarketplaces[]|3.version": {
+      "blockedMarketplaces[]|3.sparsePaths": {
+        "type": "array"
+      },
+      "blockedMarketplaces[]|3.sparsePaths[]": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|3.url": {
         "type": "string"
       },
       "blockedMarketplaces[]|4": {
         "type": "object"
       },
-      "blockedMarketplaces[]|4.path": {
+      "blockedMarketplaces[]|4.package": {
+        "type": "anyOf"
+      },
+      "blockedMarketplaces[]|4.package|0": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|4.package|1": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|4.registry": {
         "type": "string"
       },
       "blockedMarketplaces[]|4.source": {
+        "type": "string"
+      },
+      "blockedMarketplaces[]|4.version": {
         "type": "string"
       },
       "blockedMarketplaces[]|5": {
@@ -980,14 +1137,14 @@
       "blockedMarketplaces[]|6": {
         "type": "object"
       },
+      "blockedMarketplaces[]|6.path": {
+        "type": "string"
+      },
       "blockedMarketplaces[]|6.source": {
         "type": "string"
       },
       "blockedMarketplaces[]|7": {
         "type": "object"
-      },
-      "blockedMarketplaces[]|7.hostPattern": {
-        "type": "string"
       },
       "blockedMarketplaces[]|7.source": {
         "type": "string"
@@ -995,7 +1152,7 @@
       "blockedMarketplaces[]|8": {
         "type": "object"
       },
-      "blockedMarketplaces[]|8.pathPattern": {
+      "blockedMarketplaces[]|8.hostPattern": {
         "type": "string"
       },
       "blockedMarketplaces[]|8.source": {
@@ -1004,158 +1161,7 @@
       "blockedMarketplaces[]|9": {
         "type": "object"
       },
-      "blockedMarketplaces[]|9.name": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.owner": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.owner.email": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.owner.name": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.owner.url": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins": {
-        "type": "array"
-      },
-      "blockedMarketplaces[]|9.plugins[]": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].description": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].headers": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].headers.*": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].headersHelper": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].name": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source": {
-        "type": "anyOf"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|0": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|1": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|1.package": {
-        "type": "anyOf"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|1.package|0": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|1.package|1": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|1.registry": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|1.source": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|1.version": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|2": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|2.ref": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|2.sha": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|2.source": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|2.url": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|3": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|3.ref": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|3.repo": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|3.sha": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|3.source": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|4": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|4.path": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|4.ref": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|4.sha": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|4.source": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|4.url": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|5": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|5.sha256": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|5.source": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|5.url": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|6": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|6.command": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|6.mode": {
-        "enum": ["copy", "link"],
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|6.source": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|6.timeout": {
-        "type": "integer"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|7": {
-        "type": "object"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|7.error": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].source|7.source": {
-        "type": "string"
-      },
-      "blockedMarketplaces[]|9.plugins[].strict": {
-        "type": "boolean"
-      },
-      "blockedMarketplaces[]|9.plugins[].version": {
+      "blockedMarketplaces[]|9.pathPattern": {
         "type": "string"
       },
       "blockedMarketplaces[]|9.source": {
