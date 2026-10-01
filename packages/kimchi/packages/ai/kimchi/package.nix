@@ -240,6 +240,21 @@ in
         substituteInPlace src/update/auto-update.ts \
           --replace-fail 'if (process.env.KIMCHI_NO_UPDATE_CHECK) return' 'if (true) return' \
           --replace-fail 'AbortSignal.any([opts.signal, sigint.signal])' 'AbortSignal.any([opts.signal!, sigint.signal])'
+
+        # The /update menu and the auto-update tip read the same patched gate,
+        # so they say updates are managed by Nix instead of offering an update
+        # that cannot happen. `--help` stops listing the now-inert variable.
+        substituteInPlace src/extensions/auto-update-settings.ts \
+          --replace-fail 'import { isHomebrewInstall } from "../update/paths.js"' $'import { isHomebrewInstall } from "../update/paths.js"\nimport { isUpdateCheckDisabled } from "../update/state.js"' \
+          --replace-fail 'if (process.env.KIMCHI_NO_UPDATE_CHECK) {' 'if (isUpdateCheckDisabled()) {' \
+          --replace-fail 'Updates are disabled by the KIMCHI_NO_UPDATE_CHECK environment variable.' 'Updates are managed by Nix.'
+
+        substituteInPlace src/extensions/auto-update/tips.ts \
+          --replace-fail 'import { isHomebrewInstall } from "../../update/paths.js"' $'import { isHomebrewInstall } from "../../update/paths.js"\nimport { isUpdateCheckDisabled } from "../../update/state.js"' \
+          --replace-fail 'if (process.env.KIMCHI_NO_UPDATE_CHECK) return []' 'if (isUpdateCheckDisabled()) return []'
+
+        substituteInPlace src/commands/help.ts \
+          --replace-fail $'\t{ name: "KIMCHI_NO_UPDATE_CHECK", description: "Disable the background self-update probe" },\n' ""
       ''
       + lib.optionalString ourPkgs.stdenv.hostPlatform.isDarwin ''
         substituteInPlace scripts/build-binary.js \
