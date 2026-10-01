@@ -281,6 +281,20 @@
           }
         },
         "project": false
+      },
+      "tui": {
+        "typeExpression": "TuiConfig",
+        "type": "object",
+        "properties": {
+          "wheelScrollLines": {
+            "typeExpression": "number",
+            "type": "number",
+            "optional": true,
+            "description": "Wheel-scroll step (lines) for fullscreen (alt-screen) mode. Min 1; floored by the pi-tui clamp."
+          }
+        },
+        "optional": true,
+        "project": true
       }
     },
     "projectTier": {
@@ -298,7 +312,8 @@
         "memoryExtraction",
         "migrationState",
         "redaction",
-        "skillPaths"
+        "skillPaths",
+        "tui"
       ]
     }
   },
@@ -338,6 +353,11 @@
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "controls": "automatic git initialization for ferment work"
+      },
+      "KIMCHI_BASE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "controls": "LLM gateway base URL; overrides configured and region-derived endpoints"
       },
       "KIMCHI_CLIPBOARD_FORCE": {
         "consumerOverridable": true,
@@ -551,6 +571,11 @@
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "controls": "Kimchi web application base URL"
+      },
+      "KIMCHI_WHEEL_SCROLL_LINES": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "controls": "mouse-wheel scroll lines in the TUI; overrides config.json tui.wheelScrollLines"
       },
       "LLAMA_BASE_URL": {
         "consumerOverridable": true,
@@ -1456,7 +1481,7 @@
   },
   "provenance": {
     "extractorSchema": 3,
-    "kimchiVersion": "1.1.39",
+    "kimchiVersion": "1.5.0",
     "piVersion": "0.85.1"
   }
 }
