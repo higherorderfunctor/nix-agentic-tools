@@ -1,14 +1,15 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-09-30 — a normalized agent's `tools` list is dropped
-> with a warning instead of failing evaluation. Kimchi 1.1.37 shares Home
-> Manager's user config.json and harness/settings.json with the runtime; the
-> remaining files and every devenv file stay read-only copies. Its rules use the
-> shared flat AGENTS.md renderer and repository aggregate. Region is required.
-> The pinned pi dependency is 0.85.1. Agents are read-only copies from the
-> runtime's generated Markdown tree; the opt-in docs skill uses the shared
-> frontmatter renderer and a guarded generated-file tree; a store-path string is
-> an input just as a path is. Full lineage:
+> **Last verified:** 2026-10-01 — the extractor binds patch-added source before
+> resolving environment aliases and replays Kimchi 1.3.0. A normalized agent's
+> `tools` list is dropped with a warning instead of failing evaluation. Kimchi
+> shares Home Manager's user config.json and harness/settings.json with the
+> runtime; the remaining files and every devenv file stay read-only copies. Its
+> rules use the shared flat AGENTS.md renderer and repository aggregate. Region
+> is required. The pinned pi dependency is 0.85.1. Agents are read-only copies
+> from the runtime's generated Markdown tree; the opt-in docs skill uses the
+> shared frontmatter renderer and a guarded generated-file tree; a store-path
+> string is an input just as a path is. Full lineage:
 > `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
@@ -140,21 +141,26 @@ which fails evaluation if the pinned Kimchi no longer reads it or starts
 overwriting it.
 
 Every resolved environment name is either published from an annotation (a
-`controls` description and nothing else) or listed, with a reason, under
-`environmentIgnored` in `extract/annotations.json`; pi's own names follow
-Kimchi's `piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_`
-default). The extractor uses the TypeScript compiler's checker for declared keys
-and types and syntax tree queries for environment access sites, while config
-queries cross-check compiler types against top-level, nested, and array-element
-runtime validation guards. A declaration is never taken by bare name when a
-reference can pick it: config.ts's functions and interfaces resolve in
-config.ts's own scope (Kimchi 1.1.37 has a second `loadConfig`), pi's `Settings`
-comes from `settings-manager.d.ts`'s exports, and the harness `definitions` are
-the interfaces `Settings` references, collected through the checker (pi also
-declares an all-required `CompactionSettings` in `compaction.d.ts`). The Kimchi
-harness schemas still looked up by name must match exactly one declaration among
-the modules reachable from `src/entry.ts`, so the dead
-`model-catalog/model-metadata.ts` is ignored, and a second live
+`controls` description and optional `introduced` release) or listed, with a
+reason, under `environmentIgnored` in `extract/annotations.json`. An
+`introduced` release lets preparation classify a newly discovered name before
+the package pin moves without making the pinned release's freshness check stale.
+Pi's own names follow Kimchi's `piConfig.name`
+(`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). The extractor uses
+the TypeScript compiler's checker for declared keys and types and syntax tree
+queries for environment access sites, while config queries cross-check compiler
+types against top-level, nested, and array-element runtime validation guards.
+Added lines from pi patch files are synthesized as source files and bound in
+isolated TypeScript programs before alias resolution; using the main program's
+checker on those foreign nodes can crash inside the compiler. A declaration is
+never taken by bare name when a reference can pick it: config.ts's functions and
+interfaces resolve in config.ts's own scope (Kimchi 1.1.37 has a second
+`loadConfig`), pi's `Settings` comes from `settings-manager.d.ts`'s exports, and
+the harness `definitions` are the interfaces `Settings` references, collected
+through the checker (pi also declares an all-required `CompactionSettings` in
+`compaction.d.ts`). The Kimchi harness schemas still looked up by name must
+match exactly one declaration among the modules reachable from `src/entry.ts`,
+so the dead `model-catalog/model-metadata.ts` is ignored, and a second live
 `ModelCustomMetadataSchema` stops the extraction instead of narrowing the
 option. Same-named constants back a constant only where the checker finds no
 initializer, and only when they all agree. Three additional hash-pinned pi

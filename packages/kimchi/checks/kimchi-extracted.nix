@@ -12,10 +12,10 @@
     committed = ../extracted.json;
     extractor = ../extract/extract.mjs;
 
-    runExtractor = source: output: pi: ''
+    runExtractorWithAnnotations = annotations: source: output: pi: ''
       ${pkgs.yq-go}/bin/yq -o=json '.' ${source}/pnpm-lock.yaml > "$TMPDIR/kimchi-lock.json"
       ${pkgs.nodejs}/bin/node ${extractor} \
-        --annotations ${../extract/annotations.json} \
+        --annotations ${annotations} \
         --kimchi-lock "$TMPDIR/kimchi-lock.json" \
         --kimchi-source ${source} \
         --kimchi-source-url ${pkgs.lib.escapeShellArg extractionSourceUrls.kimchi} \
@@ -27,6 +27,7 @@
         --pi-tui-package ${extractionSources.piTui} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
+    runExtractor = runExtractorWithAnnotations ../extract/annotations.json;
   in {
     kimchi-extracted = pkgs.runCommand "kimchi-extracted-drift" {} ''
       jq="${pkgs.jq}/bin/jq"
@@ -59,6 +60,14 @@
         }
         kimchi=${extractionSources.kimchi}
         pi=${extractionSources.pi}
+
+        jq=${pkgs.jq}/bin/jq
+        "$jq" '.environment.FUTURE_BAD = {introduced: "99.0.0"}' \
+          ${../extract/annotations.json} > "$TMPDIR/future-environment-missing-controls.json"
+        "$jq" '.environment.FUTURE_BAD = {controls: "future", introduced: "99.0.0", bogus: true}' \
+          ${../extract/annotations.json} > "$TMPDIR/future-environment-unknown-key.json"
+        "$jq" '.environmentIgnored.futureBad = {names: ["FUTURE_BAD"], reason: "future", introduced: "99.0.0", bogus: true}' \
+          ${../extract/annotations.json} > "$TMPDIR/future-ignored-unknown-key.json"
 
         mutant "$kimchi" collision src/config.ts \
           'const parsed = JSON.parse(raw)' $'const parsed = JSON.parse(raw)\n\t\tvoid parsed.harness'
@@ -106,6 +115,13 @@
           'const envOverride = process.env.OPENCODE_CONFIG' 'const envOverride = undefined'
         mutant "$kimchi" environment-unlisted src/extensions/skills-manager/skill-manager.ts \
           'process.env.SKILLS_DIR ??' 'process.env.SKILLS_DIR ?? process.env.UNLISTED_PROBE_DIR ??'
+        cp -r "$kimchi" "$TMPDIR/environment-patch-alias-source"
+        chmod -R u+w "$TMPDIR/environment-patch-alias-source"
+        printf '%s\n' \
+          '+++ b/dist/environment-probe.js' \
+          '+const environment = process.env' \
+          '+void environment.UNLISTED_PATCH_PROBE' \
+          > "$TMPDIR/environment-patch-alias-source/patches/environment-probe.patch"
         mutant "$kimchi" harness-auto-default src/config.ts \
           'return parsed.autoDefaultApplied === true' 'return parsed.autoDefaultApplied === "yes"'
         mutant "$kimchi" harness-shape src/extensions/orchestration/model-roles.ts \
@@ -133,9 +149,10 @@
           source="$2"
           expected="$3"
           pi_source="''${4:-$pi}"
+          annotations="''${5:-${../extract/annotations.json}}"
           if rejected_output=$(
             {
-              ${runExtractor "$source" ''"$TMPDIR/$label.json"'' ''"$pi_source"''}
+              ${runExtractorWithAnnotations ''"$annotations"'' "$source" ''"$TMPDIR/$label.json"'' ''"$pi_source"''}
             } 2>&1
           ); then
             echo "FAIL: extraction accepted the $label mutation" >&2
@@ -196,6 +213,17 @@
           'staleIgnored=["OPENCODE_CONFIG"]' >> "$TMPDIR/proof"
         expect_rejection environment-unlisted "$TMPDIR/environment-unlisted-source" \
           'environment census changed; new=["UNLISTED_PROBE_DIR"]' >> "$TMPDIR/proof"
+        expect_rejection environment-patch-alias "$TMPDIR/environment-patch-alias-source" \
+          'environment census changed; new=["UNLISTED_PATCH_PROBE"]' >> "$TMPDIR/proof"
+        expect_rejection future-environment-missing-controls "$kimchi" \
+          "environment.FUTURE_BAD needs a non-empty 'controls' description" "$pi" \
+          "$TMPDIR/future-environment-missing-controls.json" >> "$TMPDIR/proof"
+        expect_rejection future-environment-unknown-key "$kimchi" \
+          'environment.FUTURE_BAD has unknown keys: ["bogus"]' "$pi" \
+          "$TMPDIR/future-environment-unknown-key.json" >> "$TMPDIR/proof"
+        expect_rejection future-ignored-unknown-key "$kimchi" \
+          'environmentIgnored.futureBad has unknown keys: ["bogus"]' "$pi" \
+          "$TMPDIR/future-ignored-unknown-key.json" >> "$TMPDIR/proof"
         expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
         expect_rejection harness-auto-default "$TMPDIR/harness-auto-default-source" \

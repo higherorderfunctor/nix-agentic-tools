@@ -1956,6 +1956,51 @@ function patchAddedSource(text) {
     .join("\n");
 }
 
+// Patch additions are not part of the main TypeScript program. Bind each
+// synthesized source in a tiny program before asking a checker about aliases;
+// passing an unbound identifier to the main program's checker crashes inside
+// TypeScript instead of returning no symbol.
+function bindPatchSource(path, text, ts) {
+  const options = {
+    allowNonTsExtensions: true,
+    noEmit: true,
+    noLib: true,
+    target: ts.ScriptTarget.Latest,
+  };
+  const host = ts.createCompilerHost(options);
+  const parse = host.getSourceFile;
+  const sourceFile = ts.createSourceFile(
+    path,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  host.getSourceFile = (fileName, ...rest) =>
+    fileName === path ? sourceFile : parse.call(host, fileName, ...rest);
+  const program = ts.createProgram({ host, options, rootNames: [path] });
+  return {
+    checker: program.getTypeChecker(),
+    sourceFile: program.getSourceFile(path),
+  };
+}
+
+function releaseAtLeast(actual, introduced, label) {
+  if (introduced === undefined) return true;
+  const parse = (version) => {
+    if (!/^\d+\.\d+\.\d+$/.test(version))
+      fail(`${label} has invalid release ${JSON.stringify(version)}`);
+    return version.split(".").map(Number);
+  };
+  const actualParts = parse(actual);
+  const introducedParts = parse(introduced);
+  for (let index = 0; index < actualParts.length; index++) {
+    if (actualParts[index] !== introducedParts[index])
+      return actualParts[index] > introducedParts[index];
+  }
+  return true;
+}
+
 async function extractEnvironment(
   kimchiSourceFiles,
   piSourceFiles,
@@ -1963,6 +2008,7 @@ async function extractEnvironment(
   annotations,
   ignored,
   overwritten,
+  kimchiVersion,
   context,
 ) {
   const { ts } = context;
@@ -1976,30 +2022,88 @@ async function extractEnvironment(
       reads.pi.add(name);
   }
   for (const path of patchPaths) {
-    const sourceFile = ts.createSourceFile(
+    const patch = bindPatchSource(
       path,
       patchAddedSource(await readFile(path, "utf8")),
-      ts.ScriptTarget.Latest,
-      true,
+      ts,
     );
-    for (const name of environmentReads(sourceFile, context))
+    if (!patch.sourceFile)
+      fail(`TypeScript did not bind patch additions in ${path}`);
+    for (const name of environmentReads(patch.sourceFile, {
+      ...context,
+      checker: patch.checker,
+    }))
       reads.pi.add(name);
   }
   // The census runs over every resolved read, not a KIMCHI_/PI_ subset: a
   // name is either published (annotations) or ignored with a reason, and
   // both lists must match what the sources actually read.
   const discovered = new Set([...reads.kimchi, ...reads.pi]);
-  const expected = new Set(Object.keys(annotations));
+  const annotationEntries = Object.entries(annotations).map(
+    ([name, annotation]) => {
+      if (
+        !annotation ||
+        typeof annotation !== "object" ||
+        Array.isArray(annotation)
+      )
+        fail(`environment.${name} must be an object`);
+      const handKeys = Object.keys(annotation).filter(
+        (key) => key !== "controls" && key !== "introduced",
+      );
+      if (handKeys.length)
+        fail(
+          `environment.${name} has unknown keys: ${JSON.stringify(handKeys)}`,
+        );
+      if (typeof annotation.controls !== "string" || !annotation.controls)
+        fail(`environment.${name} needs a non-empty 'controls' description`);
+      return [
+        name,
+        annotation,
+        releaseAtLeast(
+          kimchiVersion,
+          annotation.introduced,
+          `environment.${name}.introduced`,
+        ),
+      ];
+    },
+  );
+  const activeAnnotations = Object.fromEntries(
+    annotationEntries
+      .filter(([, , active]) => active)
+      .map(([name, annotation]) => [name, annotation]),
+  );
+  const expected = new Set(Object.keys(activeAnnotations));
   // Ignored names are grouped under one shared reason, but each is an exact
   // name: a prefix or pattern would reopen the blind spot the census closes.
-  const ignoredList = Object.entries(ignored).flatMap(([group, entry]) => {
+  const ignoredEntries = Object.entries(ignored).map(([group, entry]) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry))
+      fail(`environmentIgnored.${group} must be an object`);
+    const handKeys = Object.keys(entry).filter(
+      (key) => key !== "introduced" && key !== "names" && key !== "reason",
+    );
+    if (handKeys.length)
+      fail(
+        `environmentIgnored.${group} has unknown keys: ${JSON.stringify(handKeys)}`,
+      );
     if (!entry.reason || !Array.isArray(entry.names))
       fail(`environmentIgnored.${group} needs a reason and a names list`);
-    return entry.names;
+    return [
+      group,
+      entry,
+      releaseAtLeast(
+        kimchiVersion,
+        entry.introduced,
+        `environmentIgnored.${group}.introduced`,
+      ),
+    ];
   });
-  const ignoredNames = new Set(ignoredList);
-  if (ignoredNames.size !== ignoredList.length)
+  const allIgnored = ignoredEntries.flatMap(([, entry]) => entry.names);
+  if (new Set(allIgnored).size !== allIgnored.length)
     fail("environmentIgnored lists a name in more than one group");
+  const ignoredList = ignoredEntries
+    .filter(([, , active]) => active)
+    .flatMap(([, entry]) => entry.names);
+  const ignoredNames = new Set(ignoredList);
   const unknown = [...discovered]
     .filter((name) => !expected.has(name) && !ignoredNames.has(name))
     .sort();
@@ -2013,14 +2117,7 @@ async function extractEnvironment(
       `environment census changed; new=${JSON.stringify(unknown)}, missing=${JSON.stringify(missing)}, staleIgnored=${JSON.stringify(staleIgnored)}, annotatedAndIgnored=${JSON.stringify(both)}`,
     );
   const variables = {};
-  for (const [name, annotation] of Object.entries(annotations)) {
-    const handKeys = Object.keys(annotation).filter(
-      (key) => key !== "controls",
-    );
-    if (!annotation.controls || handKeys.length)
-      fail(
-        `environment.${name} must carry only a 'controls' description; ${JSON.stringify(handKeys)} are derived from the sources`,
-      );
+  for (const [name, annotation] of Object.entries(activeAnnotations)) {
     const fixed = overwritten.has(name);
     variables[name] = {
       consumerOverridable: !fixed,
@@ -2028,7 +2125,7 @@ async function extractEnvironment(
         .filter(([, names]) => names.has(name))
         .map(([runtime]) => runtime)
         .sort(),
-      ...annotation,
+      controls: annotation.controls,
       ...(fixed
         ? {
             reason:
@@ -2234,6 +2331,7 @@ async function main() {
         program,
         environmentContext,
       ),
+      args["kimchi-version"],
       environmentContext,
     ),
     harness: extractHarness(
