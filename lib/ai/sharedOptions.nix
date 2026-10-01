@@ -153,11 +153,7 @@
       else path)
     (lib.filterAttrs (_path: runtimeFiles.isLive) files);
 in {
-  imports =
-    [./app/sharedAgentsMd.nix ./file-warnings.nix]
-    ++ map
-    (name: lib.mkRenamedOptionModule ["ai" "generated" "guards" name] ["ai" "guards" name])
-    ["parseCompare" "splitCodeSpans" "tableCells"];
+  imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
 
   options.ai = {
     deliveredPaths = lib.mkOption {

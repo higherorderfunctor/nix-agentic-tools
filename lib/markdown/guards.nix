@@ -81,7 +81,7 @@
       fix = "Fix the input or formatter.";
       disable = name: "Disable ai.guards.${name}.";
       optOut = "Set this file's format to raw.";
-      see = "See README.md: Generated-file guards.";
+      see = "See README.md: ai.guards.";
     };
   in {
     kiroFrontmatterFlow = {

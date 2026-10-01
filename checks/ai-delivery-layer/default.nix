@@ -1380,8 +1380,6 @@ in {
         && !lib.hasInfix "ai-guard-table-cells" disabledTree.buildPhase
     );
 
-    module-generated-guard-alias = mkTest "generated-guard-alias" (!(evalDevenv {ai.generated.guards.tableCells = false;}).config.ai.guards.tableCells);
-
     module-delivery-devenv-excludes-delivered-paths-from-treefmt = mkTest "delivery-devenv-excludes-delivered-paths-from-treefmt" (
       let
         enabled = excludeFixture true;

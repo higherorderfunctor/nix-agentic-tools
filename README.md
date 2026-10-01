@@ -566,7 +566,7 @@ corresponding option.
 
 </details>
 
-### Generated-file guards
+### `ai.guards`
 
 Guards check semantic and structural properties independently of the selected
 formatter and of `ai.checks`. They use this flake's pinned tools. Each guard can
