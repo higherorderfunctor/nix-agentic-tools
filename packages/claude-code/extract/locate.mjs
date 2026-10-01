@@ -335,7 +335,33 @@ export function locateBuilderByDescription(src) {
   const i = src.indexOf(ANCHORS.schemaKeyDescription);
   if (i === -1) return null;
   const span = enclosingFunction(src, i);
-  return span ? span.name : null;
+  if (!span) return null;
+
+  // The description used to sit in the whole-schema builder itself. In
+  // 2.1.286 it moved into a descriptor factory, and the public builder became
+  // a one-hop wrapper:
+  //
+  //   function FACTORY(e, n) { return { $schema: ... } }
+  //   function BUILD(e, n) {
+  //     let fields = FACTORY(e, n);
+  //     return new Schema(fields).whole();
+  //   }
+  //
+  // Follow only that complete shape. A generic caller of the factory is not
+  // evidence that it emits the schema the census needs.
+  const wrapperRe = new RegExp(
+    "function\\s+([A-Za-z0-9_$]+)\\([^)]*\\)\\{" +
+      "(?:let|var|const)\\s+([A-Za-z0-9_$]+)=" +
+      escId(span.name) +
+      "\\([^;]*\\);return new [A-Za-z0-9_$]+\\(\\2\\)\\.whole\\(\\)\\}",
+    "g",
+  );
+  const wrappers = [...src.matchAll(wrapperRe)].map((match) => match[1]);
+  if (wrappers.length > 1)
+    throw new Error(
+      `$schema descriptor factory ${span.name} has multiple whole-schema wrappers: ${wrappers.join(", ")}`,
+    );
+  return wrappers[0] ?? span.name;
 }
 
 // FALLBACK for the converter: the sole callee invoked with the
