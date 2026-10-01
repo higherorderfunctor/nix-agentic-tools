@@ -741,5 +741,113 @@ in {
         && markdownOf hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
         && markdownOf devenvKimchi.config "AGENTS.md" == "KIMCHI-REPLACEMENT"
     );
+
+    module-ai-checks-routes-files-by-surface = let
+      evaluated = evalDevenv {
+        ai = {
+          checks.context = "# comment-only check";
+          checks.rules = ''
+            test "$AI_RUNTIME" = claude
+            test "$#" = 1
+            case "$1" in
+              .claude/rules/*) ;;
+              *) exit 1 ;;
+            esac
+            touch .rules-check-ran
+          '';
+          claude = {
+            enable = true;
+            skills.probe = ../ai-delivery-layer/fixtures/probe-skill;
+          };
+          context.text = "probe";
+          rules.probe.text = "probe";
+        };
+      };
+      tree = evaluated.config.ai.claude._generatedTree;
+      internalTree =
+        (evalDevenv {
+          ai = {
+            checks.context = "x";
+            codex.enable = true;
+            context.text = "probe";
+          };
+        }).config.ai.internal._generatedTree;
+    in
+      assert lib.hasInfix "AGENTS.md" internalTree.installCheckPhase
+      && lib.any (lib.hasSuffix "-ai-internal-context-check.drv") (builtins.attrNames (builtins.getContext internalTree.installCheckPhase));
+        pkgs.runCommand "module-test-ai-checks-routes-files-by-surface" {} ''
+          test -e ${tree}/.rules-check-ran
+          touch "$out"
+        '';
+
+    module-ai-checks-failure-names-surface-and-runtime = let
+      evaluated = evalDevenv {
+        ai = {
+          checks.skills = "exit 7";
+          claude = {
+            enable = true;
+            skills.probe = ../ai-delivery-layer/fixtures/probe-skill;
+          };
+        };
+      };
+      expectedFailure = pkgs.testers.testBuildFailure evaluated.config.ai.claude._generatedTree;
+    in
+      pkgs.runCommand "module-test-ai-checks-failure-names-surface-and-runtime" {} ''
+        grep -q -F 'Generated-file check failed for surface skills in runtime claude (exit 7)' ${expectedFailure}/testBuildFailure.log
+        touch "$out"
+      '';
+
+    module-ai-checks-tier-replacement = let
+      replaced =
+        (evalDevenv {
+          ai = {
+            checks.all = "exit 1";
+            gitSshConfigWorkaround = false;
+            claude = {
+              checks.rules = "";
+              enable = true;
+            };
+            rules.probe.text = "probe";
+          };
+        }).config;
+      inherited =
+        (evalDevenv {
+          ai = {
+            checks.all = "exit 1";
+            gitSshConfigWorkaround = false;
+            claude.enable = true;
+            rules.probe.text = "probe";
+          };
+        }).config;
+      expectedFailure = pkgs.testers.testBuildFailure inherited.ai.claude._generatedTree;
+    in
+      assert replaced.ai.claude.checks.rules == "";
+      assert inherited.ai.claude.checks.rules == "exit 1";
+        pkgs.runCommand "module-test-ai-checks-tier-replacement" {} ''
+          test -e ${replaced.ai.claude._generatedTree}/.claude/rules/probe.md
+          grep -q -F 'Generated-file check failed for surface rules in runtime claude (exit 1)' ${expectedFailure}/testBuildFailure.log
+          touch "$out"
+        '';
+
+    module-ai-checks-stamp-coverage = mkTest "ai-checks-stamp-coverage" (
+      let
+        specimen = import ../ai-delivery/specimen.nix {inherit lib;};
+        missing = mode: runtime: let
+          evaluated =
+            if mode == "hm"
+            then evalHm (specimen.config mode runtime)
+            else evalDevenv (specimen.config mode runtime);
+        in
+          lib.mapAttrsToList
+          (path: _: "${runtime}/${mode}/${path}")
+          (lib.filterAttrs
+            (_: entry: entry.content._generated && entry.content._surface == null)
+            evaluated.config.ai.${runtime}.files);
+        failures = lib.concatMap (runtime: missing "devenv" runtime ++ missing "hm" runtime) harnessNames;
+      in
+        if failures == []
+        then true
+        else builtins.trace "ai-checks-stamp-coverage: missing ${lib.concatStringsSep ", " failures}" false
+    );
   };
 }

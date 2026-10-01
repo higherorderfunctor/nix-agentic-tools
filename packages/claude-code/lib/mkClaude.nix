@@ -255,6 +255,11 @@
     in
       lib.nameValuePair ".claude/${dir}/${name}.md" {
         content = lib.mkDefault ({
+            _generated = true;
+            _surface =
+              if dir == "agents"
+              then "agents"
+              else "context";
             enable = true;
           }
           // content);
@@ -718,7 +723,14 @@ in
       personalPluginEntries = lib.optionalAttrs (personalPluginFiles != {}) (
         lib.mapAttrs' (file: value:
           lib.nameValuePair ".claude/skills/${personalPlugin}/${file}" {
-            content.value = value;
+            content = {
+              _generated = true;
+              _surface =
+                if file == ".mcp.json"
+                then "mcpServers"
+                else "settings";
+              inherit value;
+            };
             format = "json";
           }) (personalPluginFiles // {".claude-plugin/plugin.json" = {name = personalPluginManifest;};})
       );
@@ -793,7 +805,11 @@ in
         # non-empty document so it never makes an empty declaration write one.
         (lib.mkIf (settingsDocument != {}) {
           ai.claude.files.".claude/settings.json" = {
-            content.value = {"$schema" = "https://json.schemastore.org/claude-code-settings.json";} // settingsDocument;
+            content = {
+              _generated = true;
+              _surface = "settings";
+              value = {"$schema" = "https://json.schemastore.org/claude-code-settings.json";} // settingsDocument;
+            };
             format = "json";
           };
         })
@@ -847,7 +863,11 @@ in
         {
           ai.claude.files = lib.mapAttrs' (name: body:
             lib.nameValuePair ".claude/hooks/${name}" {
-              content = lib.mkDefault {text = body;};
+              content = lib.mkDefault {
+                _generated = true;
+                _surface = "hooks";
+                text = body;
+              };
               executable = true;
             })
           cfg.hookScripts;
@@ -892,7 +912,11 @@ in
           # only the unpin leaves. This user-global operation never runs from
           # a project shell.
           (helpers.mkReconciledDocument {
-            content.value = cfg.unpinLaunchEffort;
+            content = {
+              _generated = true;
+              _surface = "settings";
+              value = cfg.unpinLaunchEffort;
+            };
             format = "json";
             ledger = unpinLedger;
             path = claudeJson;
@@ -912,7 +936,11 @@ in
         # The project's .mcp.json, as read-only as its settings.json.
         (lib.optionalAttrs (!isHm) (lib.mkIf (mergedServers != {}) {
           ai.claude.files.".mcp.json" = {
-            content.value.mcpServers = renderedServers;
+            content = {
+              _generated = true;
+              _surface = "mcpServers";
+              value.mcpServers = renderedServers;
+            };
             format = "json";
           };
         }))

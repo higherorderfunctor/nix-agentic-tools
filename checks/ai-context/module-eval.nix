@@ -95,6 +95,7 @@ in {
         && entryContent (aiCommon.contentFileEntry rule)
         == {
           _generated = true;
+          _surface = "context";
           enable = true;
           text = "Consumer rule.";
         }
@@ -215,6 +216,7 @@ in {
         && entryContent (aiCommon.contentFileEntry value)
         == {
           _generated = true;
+          _surface = "context";
           enable = true;
           text = "Consumer text.";
         }

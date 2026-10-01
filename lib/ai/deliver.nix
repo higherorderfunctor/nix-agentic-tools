@@ -97,6 +97,7 @@ in
               )
             )
             // {
+              surface = entry.content._surface;
               type =
                 if entry.recursive
                 then "raw"
@@ -113,7 +114,8 @@ in
       then null
       else
         mkTree "generated" treeEntries {
-          inherit (config.ai.generated) check formatter;
+          inherit (cfg) checks;
+          inherit (config.ai.generated) formatter;
         };
     treeOf = path:
       if treeEntries ? ${path}

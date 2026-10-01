@@ -344,7 +344,11 @@ in
             else "${cfg.projectDir}/lsp.json"
           } =
             {
-              content.value = aiCommon.mkCopilotLspFile mergedLspServers;
+              content = {
+                _generated = true;
+                _surface = "settings";
+                value = aiCommon.mkCopilotLspFile mergedLspServers;
+              };
               format = "json";
             }
             // lib.optionalAttrs isHm copyFields;
@@ -361,9 +365,15 @@ in
               else ".agent.md"
             }" {
               content = lib.mkDefault (
-                if lib.ai.agent.isSemantic content
-                then lib.ai.agent.renderFile false name content
-                else {text = lib.ai.agent.renderCopilot name content;}
+                {
+                  _generated = true;
+                  _surface = "agents";
+                }
+                // (
+                  if lib.ai.agent.isSemantic content
+                  then lib.ai.agent.renderFile false name content
+                  else {text = lib.ai.agent.renderCopilot name content;}
+                )
               );
               format = lib.mkDefault "markdown";
             })
@@ -378,7 +388,11 @@ in
         (lib.mkIf (isHm || mergedServers != {}) {
           ai.copilot.files."${cfg.configDir}/mcp-config.json" =
             {
-              content.value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+              content = {
+                _generated = true;
+                _surface = "mcpServers";
+                value.mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+              };
               format = "json";
             }
             // lib.optionalAttrs isHm copyFields;
@@ -432,13 +446,25 @@ in
         # repository file only when something is declared, so enabling
         # Copilot for MCP or skills alone leaves a committed team file intact.
         (lib.mkIf (isHm || settings != {}) {
-          ai.copilot.files.${settingsPath} = copyFields // {content.value = settings;};
+          ai.copilot.files.${settingsPath} =
+            copyFields
+            // {
+              content = {
+                _generated = true;
+                _surface = "settings";
+                value = settings;
+              };
+            };
         })
 
         # Folder trust, the one leaf Home Manager owns in Copilot's state file
         # (see `trustWriter`).
         (lib.optionalAttrs isHm (helpers.mkReconciledDocument {
-          content.value.trustedFolders = cfg.trustedFolders;
+          content = {
+            _generated = true;
+            _surface = "settings";
+            value.trustedFolders = cfg.trustedFolders;
+          };
           format = "json";
           ledger = trustLedger cfg;
           path = trustPath cfg;

@@ -335,7 +335,7 @@ instruction building.
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
 | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
-| Generated-file formatting | N/A | `ai.formatter` plus temporary `ai.generated.{formatter,check}.{json,markdown,toml,yaml}` overrides (Nix-owned static files, including settings; consumer-supplied skills and runtime-rendered files excluded) | Same; project-native static files included |
+| Generated files | N/A | `ai.formatter`, temporary `ai.generated.formatter.{json,markdown,toml,yaml}` overrides, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
 | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
 | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
 | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi + Kiro) | Same; project-native paths |
@@ -513,10 +513,30 @@ override. A non-null override formats that type in its own working directory
 instead of passing those files to `ai.formatter`; this compatibility option is
 going away.
 
-`ai.generated.check.<type>` is a `types.lines` shell snippet. Its default is
-empty because the built-in guards run separately. Checks run on the installed
-bytes. The named guards below are separate and remain on when a check is
-replaced or disabled.
+Generated-file checks form a three-tier default chain, all with `types.lines`:
+`ai.checks.all`, `ai.checks.<surface>`, then `ai.<runtime>.checks.<surface>`.
+The seven surfaces are `agents`, `context`, `hooks`, `mcpServers`, `rules`,
+`settings`, and `skills`. Only the resolved runtime-and-surface leaf runs;
+shared internal documents run the root surface tier with `AI_RUNTIME=internal`.
+Defining a lower tier replaces its inherited default; splice
+`${config.ai.checks.all}` or the surface tier into a lower definition when
+composition is wanted. There is no per-runtime `all` tier.
+
+A non-empty snippet runs once for each surface represented in the built runtime
+tree, with the tree root as its working directory, that surface's
+target-relative paths in `"$@"`, and `AI_RUNTIME` exported to the runtime name.
+Empty snippets and surfaces with no files do not run. Checks see only build-time
+whole files. Generated raw skill entries participate even though formatters skip
+their bytes; runtime-rendered files, shared reconciled documents, and unstamped
+raw `ai.<runtime>.files` entries do not. Checks run in the Nix build sandbox, so
+only store-provided tools are available and network access is unavailable.
+
+```nix
+ai.checks = {
+  all = "test -n \"$AI_RUNTIME\"";
+  rules = config.ai.checks.all + "\n${pkgs.ai.devTools.markdownlint-cli2}/bin/markdownlint-cli2 \"$@\"";
+};
+```
 
 Supply a treefmt-nix module to customize generated-file formatting:
 
@@ -555,10 +575,10 @@ corresponding option.
 ### Generated-file guards
 
 Guards check semantic and structural properties independently of the selected
-formatter and of `ai.generated.check`. They use this flake's pinned tools. Each
-guard can be disabled by name. `splitCodeSpans` and `tableCells` default to
-enabled only when the mounted `ai.formatter` enables Prettier; the other guards
-default to enabled.
+formatter and of `ai.checks`. They use this flake's pinned tools. Each guard can
+be disabled by name. `splitCodeSpans` and `tableCells` default to enabled only
+when the mounted `ai.formatter` enables Prettier; the other guards default to
+enabled.
 
 | Guard                 | What it catches                                                                                            | Disable                                  |
 | --------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------- |

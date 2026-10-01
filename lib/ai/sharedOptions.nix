@@ -17,6 +17,7 @@
   aiCommon = import ./ai-common.nix {inherit lib;};
   agent = import ./agent.nix {inherit lib;};
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
+  deliveryOptions = import ./delivery-options.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
   generatedTypes = ["json" "markdown" "toml" "yaml"];
@@ -229,16 +230,35 @@ in {
             generator's frontmatter bytes are restored afterward.
           '';
         });
-      check = lib.genAttrs generatedTypes (type:
-        lib.mkOption {
+    };
+
+    checks =
+      {
+        all = lib.mkOption {
           type = lib.types.lines;
           default = "";
           description = ''
-            Shell snippet checking the built ${type} files. A nonzero exit
-            fails the store-tree build. Paths are target-relative.
+            Default shell snippet for every generated-file surface. Runtime
+            and surface checks inherit this value unless replaced at a lower
+            tier. The snippet runs in the built runtime tree with
+            `AI_RUNTIME` set and the surface's target-relative paths in
+            `"$@"`.
+          '';
+        };
+      }
+      // lib.genAttrs deliveryOptions.surfaces (surface:
+        lib.mkOption {
+          type = lib.types.lines;
+          default = config.ai.checks.all;
+          defaultText = "config.ai.checks.all";
+          description = ''
+            Default shell snippet for generated ${surface} files in every
+            runtime. It replaces `ai.checks.all` when defined; splice
+            `''${config.ai.checks.all}` into this value to compose them.
+            Runtime leaves inherit this value unless replaced.
+            Shared internal documents run this root surface tier with `AI_RUNTIME=internal`.
           '';
         });
-    };
 
     mcpServers = lib.mkOption {
       type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {

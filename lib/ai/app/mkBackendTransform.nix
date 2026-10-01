@@ -484,6 +484,19 @@ in {
         '';
       };
       enable = lib.mkEnableOption appRecord.name;
+      checks = lib.genAttrs deliveryOptions.surfaces (surface:
+        lib.mkOption {
+          type = lib.types.lines;
+          default = config.ai.checks.${surface};
+          defaultText = "config.ai.checks.${surface}";
+          description = ''
+            Shell snippet checking ${surface} files in ${appRecord.name}'s
+            built runtime tree. It replaces `ai.checks.${surface}` when
+            defined; splice `''${config.ai.checks.${surface}}` into this value
+            to compose them. The snippet runs with `AI_RUNTIME` set to
+            `${appRecord.name}` and target-relative paths in `"$@"`.
+          '';
+        });
       files = lib.mkOption {
         type = deliveryOptions.fileMapType;
         default = {};
