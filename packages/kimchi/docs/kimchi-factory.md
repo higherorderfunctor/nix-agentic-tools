@@ -8,7 +8,8 @@
 > warning instead of failing evaluation. Kimchi shares Home Manager's user
 > config.json and harness/settings.json with the runtime; the remaining files
 > and every devenv file stay read-only copies. Its rules use the shared flat
-> AGENTS.md renderer and repository aggregate. Region is required. The pinned pi
+> AGENTS.md renderer and repository aggregate. Region is required; Home Manager
+> delivers it and telemetry through global config.json only. The pinned pi
 > dependency is 0.85.1. Agents are read-only copies from the runtime's generated
 > Markdown tree; the opt-in docs skill uses the shared frontmatter text renderer
 > and a guarded generated-file tree that formats whole files and compares parsed
@@ -251,9 +252,11 @@ them. It keeps the actual Nix policy: the Auto model pair and marker,
 `hmSettingsDefaults` keeps only `telemetry.enabled = false` and the
 `DEFAULT_SKILL_PATHS` integration list. Kimchi owns migration, onboarding, tips,
 survey, login, and device state. `region` has no default: Home Manager
-evaluation fails until the account region is declared. The launcher sets
-`KIMCHI_REGION` and `KIMCHI_TELEMETRY_ENABLED` from the declared values. Devenv
-emits either variable only when it is declared, and it never writes `$HOME`.
+evaluation fails until the region is declared. Home Manager supplies both
+settings through their leaves in the global `config.json` only. Devenv emits
+`KIMCHI_REGION` or `KIMCHI_TELEMETRY_ENABLED` when its corresponding setting is
+declared, because it never writes `$HOME` and Kimchi ignores those leaves in a
+project `config.json`.
 
 `ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
 `lib/credentials.nix` shape. Kimchi reads git tokens only from the user
@@ -311,8 +314,7 @@ The remote-run resource gates its extension plus every caller of
 `isRemoteRunEnabled()`: ferment and permissions therefore omit their "run in
 cloud" choices too. Resuming a persisted `remote_run:state` entry bypasses that
 function, and the early `--ssh-proxy` argv path bypasses normal extension
-startup and the teleport resource. The network policy remains responsible for
-those two paths.
+startup and the teleport resource.
 
 Everything else Kimchi delivers except the settings files (above) and agents
 (below) is immutable and symlink-readable, so it takes both defaults and states
@@ -504,12 +506,12 @@ also use reference-backed index entries.
 ## Shared prep
 
 `mkPrep` (top-level `let`) builds the wrapped launcher from the builder's
-`launcherEnvironment` plus Kimchi's typed variables, the credential export and,
-on devenv, the exact-cwd guard. The one `installPackage` callback calls it; the
-delivery function computes its own filtered settings and context entry, because
-it never installs the package. The wrapper stays a local `symlinkJoin` rather
-than `lib.ai.mkLauncher`: its `postBuild` uses a continued line, and moving it
-would change the wrapper's store path.
+`launcherEnvironment`, the credential export and, on devenv, Kimchi's typed
+global-only variables plus the exact-cwd guard. The one `installPackage`
+callback calls it; the delivery function computes its own filtered settings and
+context entry, because it never installs the package. The wrapper stays a local
+`symlinkJoin` rather than `lib.ai.mkLauncher`: its `postBuild` uses a continued
+line, and moving it would change the wrapper's store path.
 
 ## Source packaging
 
@@ -535,9 +537,9 @@ skip condition.
 The same source-edit phase makes both update gates unconditional. The launch
 auto-update path returns before probing, and `isUpdateCheckDisabled()` always
 disables the shared manual workflow used by the startup nag, `/update`, and
-`kimchi update`. Nix therefore exposes no `noUpdateCheck` option and its
-launcher does not need `KIMCHI_NO_UPDATE_CHECK`; the extractor still reads the
-unpatched source and records upstream's environment surface.
+`kimchi update`. Self-updates are managed by Nix rather than a launcher option.
+The extractor still reads the unpatched source and records upstream's
+`KIMCHI_NO_UPDATE_CHECK` environment variable.
 
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.
