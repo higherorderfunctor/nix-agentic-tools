@@ -253,13 +253,13 @@ them. It keeps the actual Nix policy: the Auto model pair and marker,
 `DEFAULT_SKILL_PATHS` integration list. Kimchi owns migration, onboarding, tips,
 survey, login, and device state. `region` has no default: Home Manager
 evaluation fails until the region is declared. Home Manager supplies both
-settings through their leaves in the global `config.json` only. The package
-drops the setup wizard's unconditional `telemetry.enabled = true` write, so that
-`false` survives a wizard run, including the one Kimchi starts by itself after a
-401 on a file-stored key. Devenv emits `KIMCHI_REGION` or
-`KIMCHI_TELEMETRY_ENABLED` when its corresponding setting is declared, because
-it never writes `$HOME` and Kimchi ignores those leaves in a project
-`config.json`.
+settings through their leaves in the global `config.json` only.
+`keep-telemetry-opt-out.patch` drops the setup wizard's unconditional
+`telemetry.enabled = true` write, so that `false` survives a wizard run,
+including the one Kimchi starts by itself after a 401 on a file-stored key.
+Devenv emits `KIMCHI_REGION` or `KIMCHI_TELEMETRY_ENABLED` when its
+corresponding setting is declared, because it never writes `$HOME` and Kimchi
+ignores those leaves in a project `config.json`.
 
 `ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
 `lib/credentials.nix` shape. Kimchi reads git tokens only from the user
@@ -304,10 +304,10 @@ one string (`orchestrator` and `compactor` in 1.1.37), come from the sidecar's
 rejects it at evaluation: an unknown role is an unknown option. Locked by
 `module-kimchi-model-roles-shape`.
 
-The packaged 1.5.0 source adds `extensions.remote-run` and `extensions.teleport`
-to Kimchi's resource registry. Both default to true, so the package retains
-upstream behavior until a consumer disables one. Home Manager can disable them
-declaratively, for example:
+`remote-feature-toggles.patch` adds `extensions.remote-run` and
+`extensions.teleport` to Kimchi's resource registry. Both default to true, so
+the package retains upstream behavior until a consumer disables one. Home
+Manager can disable them declaratively, for example:
 
 ```nix
 ai.kimchi.native.harnessSettings.resources."extensions.teleport" = false;
@@ -537,7 +537,7 @@ materializes `node_modules` and before Bun compiles the module graph. `fd` and
 `CI=1` does not meet the script's `CI === "true"` plus `KIMCHI_SKIP_TYPECHECK=1`
 skip condition.
 
-The same source-edit phase makes both update gates unconditional. The launch
+`disable-self-update.patch` makes both update gates unconditional. The launch
 auto-update path returns before probing, and `isUpdateCheckDisabled()` always
 disables the shared manual workflow used by the startup nag, `/update`, and
 `kimchi update`. Self-updates are managed by Nix rather than a launcher option.

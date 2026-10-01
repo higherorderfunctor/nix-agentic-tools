@@ -183,7 +183,16 @@ in
     inherit (sources) version;
     src = kimchiSource;
 
-    patches = [./store-skills.patch];
+    # Source changes, one concern per patch; each opens with its own rationale.
+    # They touch disjoint files, so order does not matter. `patch` finds a hunk
+    # at shifted lines and tolerates small edits at its edges (default fuzz); a
+    # hunk that still cannot apply fails the build.
+    patches = [
+      ./disable-self-update.patch
+      ./keep-telemetry-opt-out.patch
+      ./remote-feature-toggles.patch
+      ./store-skills.patch
+    ];
 
     preBuild = ''
       cp ${./store-skills.test.ts} src/shared/skill-discovery/store-skills.test.ts
@@ -219,51 +228,6 @@ in
       ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
-
-        substituteInPlace src/resources/definitions.ts \
-          --replace-fail $'\t{\n\t\tid: "plugins.mcp-apps",' $'\t{\n\t\tid: "extensions.remote-run",\n\t\tkind: "extensions",\n\t\tlabel: "Remote run",\n\t\tdescription: "Enable /remote-run, cloud dispatch, and run-in-cloud options.",\n\t\tdefaultEnabled: true,\n\t\trestartRequired: true,\n\t},\n\t{\n\t\tid: "extensions.teleport",\n\t\tkind: "extensions",\n\t\tlabel: "Teleport",\n\t\tdescription: "Enable /teleport, /terminal, /sync, /ssh-config, and /remote-sessions.",\n\t\tdefaultEnabled: true,\n\t\trestartRequired: true,\n\t},\n\t{\n\t\tid: "plugins.mcp-apps",'
-
-        substituteInPlace src/cli.ts \
-          --replace-fail $'\t\t\tteleportExtension,\n\t\t\tremoteRunExtension,' $'\t\t\t...enabledExtensionFactories([\n\t\t\t\t{ id: "extensions.remote-run", factory: remoteRunExtension },\n\t\t\t\t{ id: "extensions.teleport", factory: teleportExtension },\n\t\t\t] satisfies ManagedExtensionFactory[]),'
-
-        substituteInPlace src/extensions/remote-run/runner.ts \
-          --replace-fail $'import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"\nimport { isWindows }' $'import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"\nimport { isResourceEnabled } from "../../resources/store.js"\nimport { isWindows }' \
-          --replace-fail 'if (isInSandboxCluster() || isWindows()) return false' 'if (!isResourceEnabled("extensions.remote-run") || isInSandboxCluster() || isWindows()) return false'
-
-        substituteInPlace src/update/state.ts \
-          --replace-fail $'export function isUpdateCheckDisabled(): boolean {\n\tconst v = process.env.KIMCHI_NO_UPDATE_CHECK\n\treturn v !== undefined && v !== ""\n}' \
-            $'export function isUpdateCheckDisabled(): boolean {\n\treturn true\n}'
-
-        # The literal guard makes the body unreachable, which stops TypeScript
-        # narrowing opts.signal inside its own truthy ternary arm. The assertion
-        # restates that local invariant so the upstream typecheck still passes.
-        substituteInPlace src/update/auto-update.ts \
-          --replace-fail 'if (process.env.KIMCHI_NO_UPDATE_CHECK) return' 'if (true) return' \
-          --replace-fail 'AbortSignal.any([opts.signal, sigint.signal])' 'AbortSignal.any([opts.signal!, sigint.signal])'
-
-        # The /update menu and the auto-update tip read the same patched gate,
-        # so they say updates are managed by Nix instead of offering an update
-        # that cannot happen. `--help` stops listing the now-inert variable.
-        substituteInPlace src/extensions/auto-update-settings.ts \
-          --replace-fail 'import { isHomebrewInstall } from "../update/paths.js"' $'import { isHomebrewInstall } from "../update/paths.js"\nimport { isUpdateCheckDisabled } from "../update/state.js"' \
-          --replace-fail 'if (process.env.KIMCHI_NO_UPDATE_CHECK) {' 'if (isUpdateCheckDisabled()) {' \
-          --replace-fail 'Updates are disabled by the KIMCHI_NO_UPDATE_CHECK environment variable.' 'Updates are managed by Nix.'
-
-        substituteInPlace src/extensions/auto-update/tips.ts \
-          --replace-fail 'import { isHomebrewInstall } from "../../update/paths.js"' $'import { isHomebrewInstall } from "../../update/paths.js"\nimport { isUpdateCheckDisabled } from "../../update/state.js"' \
-          --replace-fail 'if (process.env.KIMCHI_NO_UPDATE_CHECK) return []' 'if (isUpdateCheckDisabled()) return []'
-
-        substituteInPlace src/commands/help.ts \
-          --replace-fail $'\t{ name: "KIMCHI_NO_UPDATE_CHECK", description: "Disable the background self-update probe" },\n' ""
-
-        # The setup wizard's telemetry step persisted `telemetry.enabled = true`
-        # unconditionally, and the wizard also runs on its own after a 401 on a
-        # file-stored key. Drop only that write so an explicit `false` (Home
-        # Manager's default) survives; an unset key still defaults to on, and
-        # `kimchi config telemetry` still writes it on request.
-        substituteInPlace src/setup-wizard/steps/telemetry.ts \
-          --replace-fail $'import { writeTelemetryEnabled } from "../../config.js"\n' "" \
-          --replace-fail $'\twriteTelemetryEnabled(true)\n' ""
       ''
       + lib.optionalString ourPkgs.stdenv.hostPlatform.isDarwin ''
         substituteInPlace scripts/build-binary.js \
