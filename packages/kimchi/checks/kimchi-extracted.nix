@@ -160,10 +160,23 @@
           'readConfigSetting("multiModel"' 'readConfigSetting(String(Date.now())'
         mutant "$kimchi" helper-unknown-key src/extensions/tags.ts \
           'readConfigSetting("hidePhaseChanges"' 'readConfigSetting("hidePhaseChangesProbe"'
-        # The pi snapshot's own pi-tui entry, the only one followed by photon-node.
+        # The pi snapshot's own pi-tui entry: the only one followed by
+        # photon-node. Read from the lockfile rather than spelled out, so a new
+        # Kimchi patch hash on pi-tui cannot break the fixture; exactly one match
+        # is required, so a layout change still fails loudly. Only the version
+        # drifts.
+        photon_line=$'      \x27@silvia-odwyer/photon-node\x27'
+        pi_tui_line=$(awk -v tui=$'      \x27@earendil-works/pi-tui\x27: ' -v photon="$photon_line" '
+          index(prev, tui) == 1 && index($0, photon) == 1 { print prev; n++ }
+          { prev = $0 }
+          END { if (n != 1) exit 1 }
+        ' "$kimchi/pnpm-lock.yaml")
+        pi_tui_version=''${pi_tui_line#*: }
+        pi_tui_version=''${pi_tui_version%%(*}
+        drifted_version="''${pi_tui_version%.*}.$((''${pi_tui_version##*.} + 1))"
         mutant "$kimchi" lockfile-drift pnpm-lock.yaml \
-          $'      \x27@earendil-works/pi-tui\x27: 0.85.1(patch_hash=1bc60a0766129acb8da6087526636e59a9ed127bf278e6adb2247b42b6e38c12)\n      \x27@silvia-odwyer/photon-node\x27' \
-          $'      \x27@earendil-works/pi-tui\x27: 0.85.2(patch_hash=1bc60a0766129acb8da6087526636e59a9ed127bf278e6adb2247b42b6e38c12)\n      \x27@silvia-odwyer/photon-node\x27'
+          "$pi_tui_line"$'\n'"$photon_line" \
+          "''${pi_tui_line/: $pi_tui_version/: $drifted_version}"$'\n'"$photon_line"
         mutant "$kimchi" inert-consumed src/config.ts \
           'export function getAgentConfigDir(): string {' $'export function getAgentConfigDir(): string {\n\tvoid loadConfig().maxToolResultChars'
         mutant "$kimchi" environment-app-name package.json \
@@ -260,7 +273,7 @@
         expect_rejection helper-unknown-key "$TMPDIR/helper-unknown-key-source" \
           'that are neither pi Settings nor Kimchi additions: ["hidePhaseChangesProbe"]' >> "$TMPDIR/proof"
         expect_rejection lockfile-drift "$TMPDIR/lockfile-drift-source" \
-          "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"0.85.2\"" >> "$TMPDIR/proof"
+          "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"$drifted_version\"" >> "$TMPDIR/proof"
         expect_rejection pi-scope-unread "$kimchi" \
           'pi reads Settings keys ["httpProxy"] in no way the extractor recognizes' "$TMPDIR/pi-scope-unread-source" >> "$TMPDIR/proof"
         expect_rejection entry-imported-read "$TMPDIR/entry-imported-read-source" \
