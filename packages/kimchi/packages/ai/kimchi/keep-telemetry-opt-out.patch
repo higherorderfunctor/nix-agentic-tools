@@ -1,0 +1,23 @@
+Keep an explicit telemetry opt-out through the setup wizard. Its telemetry step
+wrote `telemetry.enabled = true` unconditionally, and the wizard also runs on
+its own after a 401 on a file-stored key. Drop only that write: an unset key
+still defaults to on, and `kimchi config telemetry` still writes it.
+
+diff --git i/src/setup-wizard/steps/telemetry.ts w/src/setup-wizard/steps/telemetry.ts
+index a09eb84..d3bdfd3 100644
+--- i/src/setup-wizard/steps/telemetry.ts
++++ w/src/setup-wizard/steps/telemetry.ts
+@@ -1,5 +1,4 @@
+ import { note } from "@clack/prompts"
+-import { writeTelemetryEnabled } from "../../config.js"
+ import type { Outcome } from "../prompt.js"
+ import type { WizardState } from "../state.js"
+ 
+@@ -15,7 +14,6 @@ export async function promptTelemetry(_opts: { backable: boolean }): Promise<Out
+ 		"Usage telemetry",
+ 	)
+ 
+-	writeTelemetryEnabled(true)
+ 	return { kind: "next", value: true }
+ }
+ 

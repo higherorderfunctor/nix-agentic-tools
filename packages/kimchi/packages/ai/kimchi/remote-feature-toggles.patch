@@ -1,0 +1,71 @@
+Add `extensions.teleport` and `extensions.remote-run` to Kimchi's resource
+registry, both enabled by default, and route the two extensions through
+`enabledExtensionFactories`. `isRemoteRunEnabled()` also honours the
+remote-run resource, so every caller gated on it (ferment and permissions
+"run in cloud" choices) goes quiet when the resource is off.
+
+diff --git i/src/cli.ts w/src/cli.ts
+index 43f2bce..72ec5c2 100644
+--- i/src/cli.ts
++++ w/src/cli.ts
+@@ -786,8 +786,10 @@ try {
+ 			inputHistoryExtension,
+ 			reportBugExtension,
+ 			tagsExtension,
+-			teleportExtension,
+-			remoteRunExtension,
++			...enabledExtensionFactories([
++				{ id: "extensions.remote-run", factory: remoteRunExtension },
++				{ id: "extensions.teleport", factory: teleportExtension },
++			] satisfies ManagedExtensionFactory[]),
+ 			telemetryExtension(telemetryConfig),
+ 			sessionMetadataExtension(),
+ 			surveysExtension(),
+diff --git i/src/extensions/remote-run/runner.ts w/src/extensions/remote-run/runner.ts
+index 0e1930c..54da171 100644
+--- i/src/extensions/remote-run/runner.ts
++++ w/src/extensions/remote-run/runner.ts
+@@ -7,6 +7,7 @@
+  */
+ 
+ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"
++import { isResourceEnabled } from "../../resources/store.js"
+ import { isWindows } from "../../utils/os-metadata.js"
+ import { isInSandboxCluster } from "../../utils/sandbox.js"
+ import {
+@@ -36,7 +37,7 @@ const DISABLE_VALUES = new Set(["0", "false"])
+  *   it enabled (legacy opt-in values are harmless no-ops).
+  */
+ export function isRemoteRunEnabled(): boolean {
+-	if (isInSandboxCluster() || isWindows()) return false
++	if (!isResourceEnabled("extensions.remote-run") || isInSandboxCluster() || isWindows()) return false
+ 	const value = process.env.KIMCHI_REMOTE_RUN?.trim().toLowerCase()
+ 	if (value === undefined || value === "") return true
+ 	return !DISABLE_VALUES.has(value)
+diff --git i/src/resources/definitions.ts w/src/resources/definitions.ts
+index ceb5cc4..9d28df8 100644
+--- i/src/resources/definitions.ts
++++ w/src/resources/definitions.ts
+@@ -104,6 +104,22 @@ export const STATIC_RESOURCE_DEFINITIONS: readonly ResourceDefinition[] = [
+ 		defaultEnabled: false,
+ 		restartRequired: true,
+ 	},
++	{
++		id: "extensions.remote-run",
++		kind: "extensions",
++		label: "Remote run",
++		description: "Enable /remote-run, cloud dispatch, and run-in-cloud options.",
++		defaultEnabled: true,
++		restartRequired: true,
++	},
++	{
++		id: "extensions.teleport",
++		kind: "extensions",
++		label: "Teleport",
++		description: "Enable /teleport, /terminal, /sync, /ssh-config, and /remote-sessions.",
++		defaultEnabled: true,
++		restartRequired: true,
++	},
+ 	{
+ 		id: "plugins.mcp-apps",
+ 		kind: "plugins",

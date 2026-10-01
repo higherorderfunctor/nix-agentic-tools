@@ -1520,9 +1520,8 @@ in {
     # env via --set and reads the key from its file at runtime (cat), never
     # baking the secret literal into the store. The old backslash-newline
     # separator made this build fail with exit 127 once >=2 args were present.
-    # Region and telemetry are set from config.json's leaves, which Kimchi
-    # reads from its environment first: Home Manager always declares them,
-    # devenv only on request.
+    # Home Manager supplies region and telemetry through global config.json.
+    # Devenv has no global file and keeps exporting declared values.
     module-kimchi-wrapper-builds = let
       result = evalHm {
         ai.kimchi = {
@@ -1532,7 +1531,12 @@ in {
         };
       };
       wrapped = builtins.head result.config.home.packages;
-      devenvRegion = mkDevenvKimchiPackage {ai.kimchi.native.settings.region = "eu";};
+      devenvConfigured = mkDevenvKimchiPackage {
+        ai.kimchi.native.settings = {
+          region = "eu";
+          telemetry.enabled = false;
+        };
+      };
       devenvDefault = mkDevenvKimchiPackage {};
     in
       pkgs.runCommand "module-test-kimchi-wrapper-builds" {} ''
@@ -1540,7 +1544,6 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
 
         bin=${wrapped}/bin/kimchi
-        grep -q "KIMCHI_NO_UPDATE_CHECK" "$bin"
         grep -q "KIMCHI_EXTRA" "$bin"
         grep -q 'cat "/run/secrets/kimchi-test"' "$bin"
         # An empty credential file must abort the wrapper rather than let the
@@ -1548,16 +1551,15 @@ in {
         # wrapper, not only glab's, because the guard lives in the shared
         # lib/credentials.nix and every server inherits it.
         grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
-        grep -q "KIMCHI_REGION.*us" "$bin"
-        grep -q "KIMCHI_TELEMETRY_ENABLED.*0" "$bin"
-        grep -q "KIMCHI_REGION.*eu" ${devenvRegion}/bin/kimchi
+        grep -q "KIMCHI_REGION.*eu" ${devenvConfigured}/bin/kimchi
+        grep -q "KIMCHI_TELEMETRY_ENABLED.*0" ${devenvConfigured}/bin/kimchi
         # `! grep` never fails under errexit, so each absence is an explicit branch.
-        if grep -q "KIMCHI_TELEMETRY_ENABLED" ${devenvRegion}/bin/kimchi; then
-          echo "devenv set telemetry nobody declared" >&2
+        if grep -qE "KIMCHI_(REGION|TELEMETRY_ENABLED)" "$bin"; then
+          echo "Home Manager duplicated config.json settings in the launcher" >&2
           exit 1
         fi
-        if grep -q "KIMCHI_REGION" ${devenvDefault}/bin/kimchi; then
-          echo "devenv set a region nobody declared" >&2
+        if grep -qE "KIMCHI_(REGION|TELEMETRY_ENABLED)" ${devenvDefault}/bin/kimchi; then
+          echo "devenv set a global-only setting nobody declared" >&2
           exit 1
         fi
         echo PASS > "$out"

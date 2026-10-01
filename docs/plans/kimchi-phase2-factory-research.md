@@ -90,7 +90,6 @@ whole categories: `hooks.bash`, `hooks.rtk-rewrite`, `tools.web_search`,
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `KIMCHI_API_KEY`             | inject the key via env instead of writing plaintext to `config.json` (pairs with the repo's SOPS/cred-wrapper pattern) |
 | `KIMCHI_CODING_AGENT_DIR`    | relocate the harness tree (if managing it out-of-`$HOME`)                                                              |
-| `KIMCHI_NO_UPDATE_CHECK`     | disable the background self-update probe (set in the wrapper)                                                          |
 | `KIMCHI_TELEMETRY_ENABLED=0` | disable telemetry declaratively                                                                                        |
 | `KIMCHI_RTK_AUTO_INSTALL=0`  | suppress RTK auto-install network side-effect                                                                          |
 | `KIMCHI_TAGS`                | static per-request tags                                                                                                |
@@ -112,10 +111,9 @@ whole categories: `hooks.bash`, `hooks.rtk-rewrite`, `tools.web_search`,
    / writable copy, not a raw symlink. See [[project_claude_effort_pin_state]]
    and [[project_devenv_files_internals]] (devenv `files.*.source` can't
    recurse, silent no-op on dir-vs-symlink).
-4. **Network side-effects on first launch** — superpowers skill download + RTK
-   install + update probe. Wrapper should set `KIMCHI_NO_UPDATE_CHECK=1` and
-   consider `KIMCHI_RTK_AUTO_INSTALL=0`; vendor download still happens unless
-   pre-seeded.
+4. **Network side-effects on first launch** — superpowers skill download and RTK
+   install. The packaged source compiles out update checks; consider
+   `KIMCHI_RTK_AUTO_INSTALL=0`. Vendor download still happens unless pre-seeded.
 5. **No path-scoped steering** — Kimchi takes only flat always-injected
    AGENTS.md. The repo's scoped fragments (Claude `rules/`, Kiro `steering/`) do
    NOT translate; Kimchi gets orientation-only, same tier as AGENTS.md/Codex.
@@ -161,7 +159,7 @@ packages/kimchi/
 - `~/.config/kimchi/harness/skills/` ← reuse claude skills translator
 - `~/.config/kimchi/harness/agents/` ← new agents translator
 - `~/.config/kimchi/harness/hooks/bash/`← hooks translator
-- wrapper env: `KIMCHI_API_KEY`, `KIMCHI_NO_UPDATE_CHECK=1`, telemetry off
+- wrapper env: `KIMCHI_API_KEY`, telemetry off
 
 Effort: comparable to the kiro-cli factory work (multi-day), dominated by the
 mutable-state reconciliation (§5.3) and the new agents/permissions/settings

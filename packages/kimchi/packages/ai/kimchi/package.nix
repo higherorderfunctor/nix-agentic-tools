@@ -2,10 +2,12 @@
 # Keep upstream's bin/ + share/ layout: the compiled CLI resolves its assets
 # relative to the executable, including when the module wraps that executable.
 {
+  fd,
   inputs,
-  pkgs,
   packageLib,
+  pkgs,
   repoPath,
+  ripgrep,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
@@ -181,7 +183,16 @@ in
     inherit (sources) version;
     src = kimchiSource;
 
-    patches = [./store-skills.patch];
+    # Source changes, one concern per patch; each opens with its own rationale.
+    # They touch disjoint files, so order does not matter. `patch` finds a hunk
+    # at shifted lines and tolerates small edits at its edges (default fuzz); a
+    # hunk that still cannot apply fails the build.
+    patches = [
+      ./disable-self-update.patch
+      ./keep-telemetry-opt-out.patch
+      ./remote-feature-toggles.patch
+      ./store-skills.patch
+    ];
 
     preBuild = ''
       cp ${./store-skills.test.ts} src/shared/skill-discovery/store-skills.test.ts
@@ -213,13 +224,18 @@ in
     # Apple's `codesign`, so all three must be replaced. `--replace-fail` turns a
     # pattern that stops matching into a build error instead of a silent skip
     # that would ship an unusable signature.
-    postPatch = lib.optionalString ourPkgs.stdenv.hostPlatform.isDarwin ''
-      substituteInPlace scripts/build-binary.js \
-        --replace-fail 'run("codesign (strip)", `codesign --remove-signature ''${binaryPath}`)' \
-          'run("codesign (rcodesign linker-signed)", `rcodesign sign --code-signature-flags linker-signed ''${binaryPath}`)' \
-        --replace-fail 'run("codesign (ad-hoc)", `codesign -s - ''${binaryPath}`)' "" \
-        --replace-fail 'run("codesign (verify)", `codesign --verify -v ''${binaryPath}`)' ""
-    '';
+    postPatch =
+      ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+      ''
+      + lib.optionalString ourPkgs.stdenv.hostPlatform.isDarwin ''
+        substituteInPlace scripts/build-binary.js \
+          --replace-fail 'run("codesign (strip)", `codesign --remove-signature ''${binaryPath}`)' \
+            'run("codesign (rcodesign linker-signed)", `rcodesign sign --code-signature-flags linker-signed ''${binaryPath}`)' \
+          --replace-fail 'run("codesign (ad-hoc)", `codesign -s - ''${binaryPath}`)' "" \
+          --replace-fail 'run("codesign (verify)", `codesign --verify -v ''${binaryPath}`)' ""
+      '';
 
     # Bun's compiled module graph is part of the executable. Generic ELF
     # rewriting and stripping must not alter it after compilation.
@@ -231,6 +247,9 @@ in
       runHook preBuild
       node scripts/set-version.js v${finalAttrs.version}
       node scripts/patch-pi-ai-oauth.js
+      substituteInPlace node_modules/@earendil-works/pi-coding-agent/dist/utils/tools-manager.js \
+        --replace-fail $'export function getToolPath(tool) {\n    const config = TOOLS[tool];\n    if (!config)\n        return null;' \
+          $'export function getToolPath(tool) {\n    if (tool === "fd")\n        return "${fd}/bin/fd";\n    if (tool === "rg")\n        return "${ripgrep}/bin/rg";\n    const config = TOOLS[tool];\n    if (!config)\n        return null;'
       mkdir -p tools/proxy-helper/bin
       cp ${proxyHelper}/bin/proxy-helper tools/proxy-helper/bin/proxy-helper
       CI=1 node scripts/build-binary.js
@@ -257,7 +276,7 @@ in
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
-      export KIMCHI_NO_UPDATE_CHECK=1 KIMCHI_TELEMETRY_ENABLED=0
+      export KIMCHI_TELEMETRY_ENABLED=0
       version_output=$(timeout 30 "$out/bin/kimchi" --version)
       printf '%s\n' "$version_output"
       test "$version_output" = '${finalAttrs.version}'

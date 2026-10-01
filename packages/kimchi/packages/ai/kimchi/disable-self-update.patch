@@ -1,0 +1,94 @@
+Compile out Kimchi's self-update: Nix owns the binary, and the store copy is
+read-only. Both update gates are hardwired off, `/update` and the auto-update
+tip read the same gate so they say updates are managed by Nix, and `--help`
+stops listing the now-inert `KIMCHI_NO_UPDATE_CHECK`. The `opts.signal!`
+assertion keeps TypeScript's narrowing in the now-unreachable launch path.
+
+diff --git i/src/commands/help.ts w/src/commands/help.ts
+index 9070622..29c0675 100644
+--- i/src/commands/help.ts
++++ w/src/commands/help.ts
+@@ -39,7 +39,6 @@ const KIMCHI_ENV: FlagDoc[] = [
+ 		description: "Override telemetry (1/true to enable, 0/false to disable). On by default.",
+ 	},
+ 	{ name: "KIMCHI_TAGS", description: "Comma-separated `key:value` tags applied to every LLM request" },
+-	{ name: "KIMCHI_NO_UPDATE_CHECK", description: "Disable the background self-update probe" },
+ ]
+ 
+ function printSection(rows: FlagDoc[], pad: number): void {
+diff --git i/src/extensions/auto-update-settings.ts w/src/extensions/auto-update-settings.ts
+index 8e7c888..df1b1c8 100644
+--- i/src/extensions/auto-update-settings.ts
++++ w/src/extensions/auto-update-settings.ts
+@@ -13,6 +13,7 @@
+ 
+ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent"
+ import { isHomebrewInstall } from "../update/paths.js"
++import { isUpdateCheckDisabled } from "../update/state.js"
+ import { loadAutoUpdateSetting, saveAutoUpdateSetting } from "../update/settings.js"
+ import { applyUpdate, checkForUpdate, parseCanarySha7 } from "../update/workflow.js"
+ import { getVersion } from "../utils.js"
+@@ -136,8 +137,8 @@ export default function autoUpdateSettingsExtension(pi: ExtensionAPI) {
+ 			// `kimchi update` as their escape hatch.
+ 			if (ctx.mode !== "tui") return
+ 
+-			if (process.env.KIMCHI_NO_UPDATE_CHECK) {
+-				ctx.ui.notify("Updates are disabled by the KIMCHI_NO_UPDATE_CHECK environment variable.", "info")
++			if (isUpdateCheckDisabled()) {
++				ctx.ui.notify("Updates are managed by Nix.", "info")
+ 				return
+ 			}
+ 
+diff --git i/src/extensions/auto-update/tips.ts w/src/extensions/auto-update/tips.ts
+index 1410bba..9f6ac0c 100644
+--- i/src/extensions/auto-update/tips.ts
++++ w/src/extensions/auto-update/tips.ts
+@@ -1,4 +1,5 @@
+ import { isHomebrewInstall } from "../../update/paths.js"
++import { isUpdateCheckDisabled } from "../../update/state.js"
+ import { loadAutoUpdateSetting } from "../../update/settings.js"
+ import type { Tip, TipProvider } from "../tips/types.js"
+ 
+@@ -17,7 +18,7 @@ export function createAutoUpdateTipProvider(): TipProvider {
+ 	return {
+ 		source: "kimchi.auto-update",
+ 		getTips: () => {
+-			if (process.env.KIMCHI_NO_UPDATE_CHECK) return []
++			if (isUpdateCheckDisabled()) return []
+ 			if (isHomebrewInstall()) return []
+ 			if (loadAutoUpdateSetting()) return []
+ 			return [AUTO_UPDATE_TIP]
+diff --git i/src/update/auto-update.ts w/src/update/auto-update.ts
+index dbf8323..69e9bbe 100644
+--- i/src/update/auto-update.ts
++++ w/src/update/auto-update.ts
+@@ -274,7 +274,7 @@ export interface MaybeAutoUpdateOnLaunchOptions {
+  */
+ export async function maybeAutoUpdateOnLaunch(opts: MaybeAutoUpdateOnLaunchOptions = {}): Promise<void> {
+ 	try {
+-		if (process.env.KIMCHI_NO_UPDATE_CHECK) return
++		if (true) return
+ 		if (argvHasSkipTrigger(process.argv)) return
+ 		if (isNonInteractiveLaunch(process.argv)) return
+ 		if (isHomebrewInstall()) return
+@@ -310,7 +310,7 @@ export async function maybeAutoUpdateOnLaunch(opts: MaybeAutoUpdateOnLaunchOptio
+ 			// the slow-network users this exists for) instead of merely
+ 			// abandoning the promise while the download loiters in the
+ 			// background.
+-			const signal = opts.signal ? AbortSignal.any([opts.signal, sigint.signal]) : sigint.signal
++			const signal = opts.signal ? AbortSignal.any([opts.signal!, sigint.signal]) : sigint.signal
+ 
+ 			warn("checking for updates — press Ctrl+C to skip and launch the current version")
+ 
+diff --git i/src/update/state.ts w/src/update/state.ts
+index 1003207..2636dca 100644
+--- i/src/update/state.ts
++++ w/src/update/state.ts
+@@ -89,6 +89,5 @@ export function saveRepoState(owner: string, name: string, rs: RepoState): void
+ 
+ /** Honors $KIMCHI_NO_UPDATE_CHECK=<anything-truthy>. */
+ export function isUpdateCheckDisabled(): boolean {
+-	const v = process.env.KIMCHI_NO_UPDATE_CHECK
+-	return v !== undefined && v !== ""
++	return true
+ }
