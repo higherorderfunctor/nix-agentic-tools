@@ -23,7 +23,10 @@
     "skillPaths": {},
     "surveys": {},
     "telemetry": {},
-    "teleport": {}
+    "teleport": {},
+    "tui": {
+      "introduced": "1.5.0"
+    }
   },
   "environment": {
     "CASTAI_API_KEY": {
@@ -176,6 +179,10 @@
     },
     "KIMCHI_WEB_APP_URL": {
       "controls": "Kimchi web application base URL"
+    },
+    "KIMCHI_WHEEL_SCROLL_LINES": {
+      "controls": "mouse-wheel scroll lines in the TUI; overrides config.json tui.wheelScrollLines",
+      "introduced": "1.5.0"
     },
     "LLAMA_BASE_URL": {
       "controls": "default llama.cpp server URL offered by pi's llama provider login"

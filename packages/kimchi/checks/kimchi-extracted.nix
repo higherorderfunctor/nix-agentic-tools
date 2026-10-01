@@ -62,6 +62,8 @@
         pi=${extractionSources.pi}
 
         jq=${pkgs.jq}/bin/jq
+        "$jq" '.config.FUTURE_BAD = {introduced: "99.0.0", bogus: true}' \
+          ${../extract/annotations.json} > "$TMPDIR/future-config-unknown-key.json"
         "$jq" '.environment.FUTURE_BAD = {introduced: "99.0.0"}' \
           ${../extract/annotations.json} > "$TMPDIR/future-environment-missing-controls.json"
         "$jq" '.environment.FUTURE_BAD = {controls: "future", introduced: "99.0.0", bogus: true}' \
@@ -195,6 +197,9 @@
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection future-config-unknown-key "$kimchi" \
+          'config.FUTURE_BAD has unknown keys: ["bogus"]' "$pi" \
+          "$TMPDIR/future-config-unknown-key.json" >> "$TMPDIR/proof"
         # A dead copy of a schema is invisible; importing it makes two live
         # ones, which must stop the extraction rather than pick one.
         expect_rejection duplicate-live-schema "$TMPDIR/duplicate-live-schema-source" \
