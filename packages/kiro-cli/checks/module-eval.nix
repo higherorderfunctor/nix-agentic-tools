@@ -2403,6 +2403,99 @@ in {
         && hmJson == devenvJson
     );
 
+    # A native record can select KAS's Markdown profile format. Configuration
+    # stays in frontmatter, the prompt becomes the body, and no JSON sibling is
+    # delivered for the same agent.
+    module-kiro-native-agent-format-markdown = mkTest "kiro-native-agent-format-markdown" (
+      let
+        config = {
+          ai.kiro = {
+            enable = true;
+            native.agents.writer = {
+              description = "Writes release notes";
+              format = "markdown";
+              includeMcpJson = true;
+              prompt.text = "Write concise release notes.";
+            };
+          };
+        };
+        valid = evaluated: let
+          files = evaluated.config.ai.kiro.files;
+          entry = files.".kiro/agents/writer.md";
+          text = entry.content.text;
+        in
+          entry.format
+          == "markdown"
+          && lib.hasPrefix "---\n" text
+          && lib.hasInfix "name:" text
+          && lib.hasInfix "writer" text
+          && lib.hasInfix "description:" text
+          && lib.hasInfix "Writes release notes" text
+          && lib.hasInfix "includeMcpJson: true\n" text
+          && lib.hasSuffix "\n---\n\nWrite concise release notes." text
+          && !(lib.hasInfix "format:" text)
+          && !(lib.hasInfix "prompt:" text)
+          && !(files ? ".kiro/agents/writer.json");
+      in
+        valid (evalHm config) && valid (evalDevenv config)
+    );
+
+    # Leaving `format` unset preserves the exact JSON bytes emitted before the
+    # option existed, including the defaulted name and recursive pruning.
+    module-kiro-native-agent-format-default-json = mkTest "kiro-native-agent-format-default-json" (
+      let
+        config = {
+          ai.kiro = {
+            enable = true;
+            native.agents.reviewer = {
+              description = "Reviews diffs";
+              prompt.text = "You review diffs.";
+              tools = ["read" "shell"];
+            };
+          };
+        };
+        expected = ''{"description":"Reviews diffs","name":"reviewer","prompt":"You review diffs.","tools":["read","shell"]}'';
+        valid = evaluated: let
+          files = evaluated.config.ai.kiro.files;
+          entry = files.".kiro/agents/reviewer.json";
+        in
+          entry.format
+          == "json"
+          && entry.content.text == expected
+          && !(files ? ".kiro/agents/reviewer.md");
+      in
+        valid (evalHm config) && valid (evalDevenv config)
+    );
+
+    # The frontmatter emitter supports only scalars and lists of scalars. A
+    # nested field must fail loudly instead of producing a plausible but
+    # malformed Markdown profile.
+    module-kiro-native-agent-format-markdown-rejects-nested = mkTest "kiro-native-agent-format-markdown-rejects-nested" (
+      let
+        failed = evaluate:
+          map (assertion: assertion.message) (builtins.filter (assertion: !assertion.assertion)
+            (evaluate {
+              ai.kiro = {
+                enable = true;
+                native.agents.scoped = {
+                  format = "markdown";
+                  permissions.rules = [
+                    {
+                      capability = "filesystem";
+                      effect = "deny";
+                    }
+                  ];
+                };
+              };
+            }).config.assertions);
+        namesNestedField = message:
+          lib.hasInfix "ai.kiro.native.agents.scoped" message
+          && lib.hasInfix "nested field `permissions`" message
+          && lib.hasInfix "JSON carries it" message;
+      in
+        lib.all (evaluate: lib.any namesNestedField (failed evaluate)) [evalHm evalDevenv]
+    );
+
     # Pruning must reach INSIDE list elements. A permission rule declared without
     # `match`/`exclude` still carries their `[]` defaults, and a knowledge-base
     # resource its `include`/`exclude`. A pruner that only walks attrsets returns
