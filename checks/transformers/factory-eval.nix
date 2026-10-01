@@ -19,18 +19,18 @@ in {
 
     factory-transformer-claude-with-frontmatter = mkTest "transformer-claude-with-frontmatter" (
       let
-        out = ai.transformers.claude.render {
+        frontmatter = ai.transformers.claude.claudeTransformer.frontmatterData {
           description = "Test rule";
           paths = ["**/*.nix"];
           text = "body content";
         };
       in
-        lib.hasPrefix "---\n" out && lib.hasInfix "description: Test rule" out
+        frontmatter.description == "Test rule"
     );
 
     factory-transformer-copilot-applyto = mkTest "transformer-copilot-applyto" (
       let
-        out = ai.transformers.copilot.render {
+        frontmatter = ai.transformers.copilot.copilotTransformer.frontmatterData {
           description = "Nix rule";
           paths = [
             "**/*.nix"
@@ -39,24 +39,23 @@ in {
           text = "body";
         };
       in
-        out
-        == "---\napplyTo: \"**/*.nix,**/*.toml\"\n---\n\nbody"
+        frontmatter.applyTo == "**/*.nix,**/*.toml"
     );
 
     factory-transformer-kiro-always = mkTest "transformer-kiro-always" (
       let
-        out = ai.transformers.kiro.render {
+        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData {
           inclusion = "always";
           paths = ["**/*.nix"];
           text = "body";
         };
       in
-        lib.hasInfix "inclusion: always" out && !(lib.hasInfix "fileMatchPattern:" out)
+        frontmatter.inclusion == "always" && !(frontmatter ? fileMatchPattern)
     );
 
     factory-transformer-kiro-auto = mkTest "transformer-kiro-auto" (
       let
-        out = ai.transformers.kiro.render {
+        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData {
           description = "Semantic Kiro guidance";
           inclusion = "auto";
           name = "semantic-guidance";
@@ -64,21 +63,22 @@ in {
           text = "body";
         };
       in
-        lib.hasInfix "description: Semantic Kiro guidance" out
-        && lib.hasInfix "inclusion: auto" out
-        && lib.hasInfix "name: semantic-guidance" out
-        && !(lib.hasInfix "fileMatchPattern:" out)
+        frontmatter.description
+        == "Semantic Kiro guidance"
+        && frontmatter.inclusion == "auto"
+        && frontmatter.name == "semantic-guidance"
+        && !(frontmatter ? fileMatchPattern)
     );
 
     factory-transformer-kiro-fileMatch = mkTest "transformer-kiro-fileMatch" (
       let
-        out = ai.transformers.kiro.render {
+        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData {
           description = "Kiro rule";
           paths = ["**/*.nix"];
           text = "body";
         };
       in
-        lib.hasInfix "inclusion: fileMatch" out && lib.hasInfix "fileMatchPattern:" out
+        frontmatter.inclusion == "fileMatch" && frontmatter.fileMatchPattern == "**/*.nix"
     );
 
     # Several paths are a block sequence, one quoted glob per line. Prettier
@@ -93,31 +93,35 @@ in {
         ];
         text = "body";
       }
-      == "---\ndescription: Kiro rule\nfileMatchPattern:\n  - \"**/*.nix\"\n  - \"lib/**\"\ninclusion: fileMatch\n---\n\nbody"
+      == "---\ndescription: \"Kiro rule\"\nfileMatchPattern:\n  - \"**/*.nix\"\n  - \"lib/**\"\ninclusion: \"fileMatch\"\n---\n\nbody"
     );
 
     factory-transformer-kiro-manual = mkTest "transformer-kiro-manual" (
       let
-        out = ai.transformers.kiro.render {
+        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData {
           inclusion = "manual";
           name = "on-demand";
           text = "body";
         };
       in
-        lib.hasInfix "inclusion: manual" out
-        && lib.hasInfix "name: on-demand" out
-        && !(lib.hasInfix "fileMatchPattern:" out)
+        frontmatter.inclusion
+        == "manual"
+        && frontmatter.name == "on-demand"
+        && !(frontmatter ? fileMatchPattern)
     );
 
     factory-transformer-kiro-path-text = mkTest "transformer-kiro-path-text" (
       let
-        out = ai.transformers.kiro.render {
+        args = {
           inclusion = "manual";
           name = "path-backed";
           text = ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md;
         };
+        frontmatter = ai.transformers.kiro.kiroTransformer.frontmatterData args;
+        out = ai.transformers.kiro.render args;
       in
-        lib.hasInfix "inclusion: manual" out
+        frontmatter.inclusion
+        == "manual"
         && lib.hasInfix "Alpha steering body." out
     );
 

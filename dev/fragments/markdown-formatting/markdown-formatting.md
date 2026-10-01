@@ -18,7 +18,9 @@ devenv's `config.treefmt.config`. Authored docs and wiki pages need their own
 treefmt run. `tableCells` and `splitCodeSpans` check the input before
 formatting. The builder formats only marked Markdown bodies, restores
 generator-owned frontmatter bytes, and compares the installed prefix under
-`parseCompare`.
+`parseCompare`. Frontmatter producers pass raw Nix data to
+`lib/frontmatter.nix`; it JSON-quotes each supported scalar as valid YAML while
+retaining block sequences for lists.
 
 The three guards (`tableCells`, `splitCodeSpans`, `parseCompare`) are defined in
 `lib/markdown/guards.nix`. Generated trees run them with `ai.generated.guards`
@@ -29,9 +31,10 @@ consumer files. A finding exits 1; exit 2 means nothing was checked (for
 ### Never break a line mid-token
 
 > **Last verified:** 2026-10-01 — formatter programs live in the exported
-> treefmt module; generated and consumer Markdown share guards; tableCells pairs
-> rumdl and markdownlint for distinct MD056 cases, while raw files and recursive
-> sources traverse the complete generated tree unformatted.
+> treefmt module; generated frontmatter quotes scalar data centrally; generated
+> and consumer Markdown share guards; tableCells pairs rumdl and markdownlint
+> for distinct MD056 cases, while raw files and recursive sources traverse the
+> complete generated tree unformatted.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the

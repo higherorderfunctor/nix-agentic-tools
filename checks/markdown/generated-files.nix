@@ -24,6 +24,11 @@
     data = consumerData;
     body = "# Page\n";
   };
+  roundTripDescription = ''a "quoted" word: and \ slash'';
+  roundTripRendered = frontmatter.render {
+    data.description = roundTripDescription;
+    body = "# Body\n";
+  };
   consumerFiles = {"page.md" = {type = "markdown";} // frontmatter.treeFile consumerRendered;};
   # Inject one broken attach step to prove the byte guard catches it.
   guardScript = ../../lib/generated-guard.py;
@@ -273,10 +278,36 @@
     formatter.markdown = (import ../../lib/ai {inherit lib;}).treefmtFormatter treefmtConfig;
   };
 in {
-  checks.generated-files-treefmt-eval-module = pkgs.runCommandLocal "generated-files-treefmt-eval-module" {} ''
-    test "$(cat ${treefmtTree}/page.md)" = "# Heading"
-    touch "$out"
-  '';
+  checks = {
+    frontmatter-scalar-round-trip =
+      pkgs.runCommandLocal "frontmatter-scalar-round-trip" {
+        nativeBuildInputs = [
+          (pkgs.python3.withPackages (ps: [ps.pyyaml]))
+        ];
+      } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        printf '%s' ${lib.escapeShellArg roundTripRendered.text} > rendered.md
+        python3 - ${lib.escapeShellArg roundTripDescription} <<'PY'
+        import pathlib
+        import sys
+
+        import yaml
+
+        rendered = pathlib.Path("rendered.md").read_text()
+        header = rendered.removeprefix("---\n").split("\n---\n", 1)[0]
+        if yaml.safe_load(header)["description"] != sys.argv[1]:
+            raise SystemExit("rendered description did not round-trip through YAML")
+        PY
+        touch "$out"
+      '';
+
+    generated-files-treefmt-eval-module = pkgs.runCommandLocal "generated-files-treefmt-eval-module" {} ''
+      test "$(cat ${treefmtTree}/page.md)" = "# Heading"
+      touch "$out"
+    '';
+  };
   checks.generated-files = pkgs.runCommandLocal "generated-files-check" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :

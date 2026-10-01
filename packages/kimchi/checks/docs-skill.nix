@@ -72,7 +72,7 @@ in {
 
       require "SKILL.md is missing or empty" '[ -s "$skill/SKILL.md" ]'
       require "SKILL.md has lost its name: kimchi-docs frontmatter, so no runtime will match it" \
-        'grep -qx "name: kimchi-docs" "$skill/SKILL.md"'
+        "grep -qx 'name: \"kimchi-docs\"' \"\$skill/SKILL.md\""
       require "the snapshot link does not point at the packaged docs.kimchi-docs derivation (${pkgs.docs.kimchi-docs})" \
         '[ "$(readlink "$skill/snapshot")" = ${pkgs.docs.kimchi-docs} ]'
       for index in snapshot/llms.txt snapshot/docs/llms.txt; do

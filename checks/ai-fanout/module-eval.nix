@@ -411,8 +411,8 @@ in {
       in
         lib.hasInfix "paths:\n  - \"src/**\"" claude
         && lib.hasInfix ''applyTo: "src/**"'' copilot
-        && lib.hasInfix "inclusion: auto" kiro
-        && lib.hasInfix "description: Load when the task concerns source code" kiro
+        && lib.hasInfix ''inclusion: "auto"'' kiro
+        && lib.hasInfix ''description: "Load when the task concerns source code"'' kiro
         && !(lib.hasInfix "fileMatchPattern:" kiro)
     );
 
@@ -521,7 +521,7 @@ in {
         && lib.hasInfix "paths:\n  - \"src/**\"" claudeScoped
         && lib.hasInfix ''applyTo: "**"'' copilotAlways
         && lib.hasInfix ''applyTo: "src/**"'' copilotScoped
-        && lib.hasInfix "inclusion: fileMatch" kiroScoped
+        && lib.hasInfix ''inclusion: "fileMatch"'' kiroScoped
         && lib.hasInfix "fileMatchPattern: \"src/**\"" kiroScoped
         && lib.hasInfix "<!-- rule: always -->" agentsMd
         && lib.hasInfix "DEFAULT-ALWAYS." agentsMd

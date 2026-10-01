@@ -1179,8 +1179,8 @@ in {
         && lib.hasInfix "Use `semble search`" (markdownText hm ".codex/AGENTS.md")
         && hmKiroSteering ? "semble.md"
         && !(hmKiroSteering ? "instructions.md")
-        && lib.hasInfix "name: semble" hmKiroInstruction
-        && lib.hasInfix "inclusion: always" hmKiroInstruction
+        && lib.hasInfix ''name: "semble"'' hmKiroInstruction
+        && lib.hasInfix ''inclusion: "always"'' hmKiroInstruction
         && !(devenvKiroSteering ? "semble.md")
         && fromGeneratedTree "AGENTS.md" (deliveredFiles devenv)."AGENTS.md"
         && lib.hasInfix "Use `semble search`" (markdownText devenv "AGENTS.md")

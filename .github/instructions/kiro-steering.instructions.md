@@ -10,7 +10,8 @@ applyTo: "lib/ai/ai-common.nix,lib/ai/transformers/kiro.nix,packages/kiro-cli/**
 > **Last verified:** 2026-09-30 — portable rule triggers now resolve before the
 > Kiro transformer; `ai.kiro.rules.<name>.inclusion` remains its scalar native
 > override. `lib/ai/transformers/kiro.nix` emits a multi-path `fileMatchPattern`
-> as a block sequence. The engine findings are unchanged from the first revision
+> as a block sequence and passes scalar data unquoted to the shared frontmatter
+> emitter. The engine findings are unchanged from the first revision
 > (2026-09-03): measured against KAS **0.46.1** by reading the extracted
 > `acp-server.js`, cross-checked against a live `kiro-cli` 2.21.0 run that
 > reproduced each verdict. Byte offsets below are into that 0.46.1 bundle and

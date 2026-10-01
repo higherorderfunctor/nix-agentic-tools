@@ -394,25 +394,26 @@ enabled ecosystem whose native model preserves the option's semantics):
 
   Without the native layer (Claude, Copilot, Kimchi) the normalized pool keeps
   raw entries and the runtime renders the record directly: Claude/Copilot
-  frontmatter plus body, Kimchi Markdown without `name:`. `tools` uses Claude
-  and Copilot's tool names and renders a non-empty value as their frontmatter
-  allowlist; `null` and `[]` both omit it. Codex, Kimchi and Kiro drop it, and
-  `lib/ai/delivery-warnings.nix` warns at the path that set it, naming the
-  native remedy (Kimchi Markdown; `ai.kiro.native.agents.<name>.tools` and
-  `permissions`); a native `tools` on the same agent silences it. Claude writes
-  `.claude/agents/<name>.md` on both backends through `agent.renderFile`. A
-  path-like raw entry — a Nix path, a store-path string such as a flake input's
-  `"${src}/a.md"`, or a derivation, i.e. Home Manager's `isPathLike` — stays a
-  file `source` (`agent.fileContent`, which tests `agent.isPathLike`) for
-  Claude, Codex, Kimchi and Kiro, and is read into text by `renderCopilot` for
-  Copilot; an `agentsDir` given as a store-path string yields store-string
-  entries (any other absolute string becomes a path literal), so every writer
-  must test `isPathLike`, never `builtins.isPath`. Kiro keeps a raw `.md` path's
-  suffix and writes everything else as `.json`. Kimchi's agent files are the one
-  Markdown surface a harness rewrites (the `/agents` commands), so they state
-  `method = "copy-ro"` and take the reconciler's default `0444` mode. Edit,
-  Disable and Enable therefore fail for a declared agent instead of changing
-  Nix-owned content; Create and Eject can still add an unowned sibling.
+  frontmatter plus body, passing raw scalar data to the shared emitter; Kimchi
+  Markdown omits `name:`. `tools` uses Claude and Copilot's tool names and
+  renders a non-empty value as their frontmatter allowlist; `null` and `[]` both
+  omit it. Codex, Kimchi and Kiro drop it, and `lib/ai/delivery-warnings.nix`
+  warns at the path that set it, naming the native remedy (Kimchi Markdown;
+  `ai.kiro.native.agents.<name>.tools` and `permissions`); a native `tools` on
+  the same agent silences it. Claude writes `.claude/agents/<name>.md` on both
+  backends through `agent.renderFile`. A path-like raw entry — a Nix path, a
+  store-path string such as a flake input's `"${src}/a.md"`, or a derivation,
+  i.e. Home Manager's `isPathLike` — stays a file `source` (`agent.fileContent`,
+  which tests `agent.isPathLike`) for Claude, Codex, Kimchi and Kiro, and is
+  read into text by `renderCopilot` for Copilot; an `agentsDir` given as a
+  store-path string yields store-string entries (any other absolute string
+  becomes a path literal), so every writer must test `isPathLike`, never
+  `builtins.isPath`. Kiro keeps a raw `.md` path's suffix and writes everything
+  else as `.json`. Kimchi's agent files are the one Markdown surface a harness
+  rewrites (the `/agents` commands), so they state `method = "copy-ro"` and take
+  the reconciler's default `0444` mode. Edit, Disable and Enable therefore fail
+  for a declared agent instead of changing Nix-owned content; Create and Eject
+  can still add an unowned sibling.
 
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same

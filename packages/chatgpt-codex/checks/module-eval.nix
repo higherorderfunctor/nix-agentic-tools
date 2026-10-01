@@ -1596,14 +1596,14 @@ in {
         && lib.hasPrefix "---\n" claudeAgent
         && lib.hasInfix ''name: "reviewer"'' claudeAgent
         && lib.hasInfix ''description: "Review changes for correctness."'' claudeAgent
-        && lib.hasInfix "tools: Bash, Read" claudeAgent
+        && lib.hasInfix ''tools: "Bash, Read"'' claudeAgent
         && !(lib.hasInfix "tools:" emptyClaudeAgent)
         && !(lib.hasInfix "tools:" emptyCopilotAgent)
         && lib.hasPrefix "---\n" unrestrictedClaudeAgent
         && lib.hasInfix ''description: "Review without a portable tool restriction."'' unrestrictedClaudeAgent
         && !(lib.hasInfix "tools:" unrestrictedClaudeAgent)
         && lib.hasInfix "Read first, then report concrete findings." copilotAgent
-        && lib.hasInfix "tools: Bash, Read" copilotAgent
+        && lib.hasInfix ''tools: "Bash, Read"'' copilotAgent
         && !(lib.hasInfix "name:" copilotAgent)
     );
 
