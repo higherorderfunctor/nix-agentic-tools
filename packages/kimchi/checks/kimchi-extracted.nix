@@ -11,15 +11,33 @@
     inherit (package.passthru) extracted extractionSources extractionSourceUrls;
     committed = ../extracted.json;
     extractor = ../extract/extract.mjs;
+    configFixtureVersion =
+      if pkgs.lib.versionAtLeast package.version "1.5.0"
+      then package.version
+      else "1.5.0";
+    configFixtureAnnotationFilter = ''
+      def version: split(".") | map(tonumber);
+      def deactivate_after($pinned):
+        with_entries(
+          .value |= if .introduced and (.introduced | version) > ($pinned | version)
+                    then .introduced = "99.0.0"
+                    else .
+                    end
+        );
+      .environment |= deactivate_after("${package.version}") |
+      .environmentIgnored |= deactivate_after("${package.version}")
+    '';
 
-    runExtractorWithAnnotations = annotations: source: output: pi: ''
+    runExtractorForVersion = version: annotations: source: output: pi: let
+      sourceUrl = builtins.replaceStrings [package.version] [version] extractionSourceUrls.kimchi;
+    in ''
       ${pkgs.yq-go}/bin/yq -o=json '.' ${source}/pnpm-lock.yaml > "$TMPDIR/kimchi-lock.json"
       ${pkgs.nodejs}/bin/node ${extractor} \
         --annotations ${annotations} \
         --kimchi-lock "$TMPDIR/kimchi-lock.json" \
         --kimchi-source ${source} \
-        --kimchi-source-url ${pkgs.lib.escapeShellArg extractionSourceUrls.kimchi} \
-        --kimchi-version ${package.version} \
+        --kimchi-source-url ${pkgs.lib.escapeShellArg sourceUrl} \
+        --kimchi-version ${pkgs.lib.escapeShellArg version} \
         --out ${output} \
         --pi-agent-core-package ${extractionSources.piAgentCore} \
         --pi-ai-package ${extractionSources.piAi} \
@@ -27,6 +45,7 @@
         --pi-tui-package ${extractionSources.piTui} \
         --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
+    runExtractorWithAnnotations = runExtractorForVersion package.version;
     runExtractor = runExtractorWithAnnotations ../extract/annotations.json;
   in {
     kimchi-extracted = pkgs.runCommand "kimchi-extracted-drift" {} ''
@@ -62,6 +81,10 @@
         pi=${extractionSources.pi}
 
         jq=${pkgs.jq}/bin/jq
+        "$jq" '.config.FUTURE_BAD = {introduced: "99.0.0", bogus: true}' \
+          ${../extract/annotations.json} > "$TMPDIR/future-config-unknown-key.json"
+        "$jq" '${configFixtureAnnotationFilter}' \
+          ${../extract/annotations.json} > "$TMPDIR/config-introduced-annotations.json"
         "$jq" '.environment.FUTURE_BAD = {introduced: "99.0.0"}' \
           ${../extract/annotations.json} > "$TMPDIR/future-environment-missing-controls.json"
         "$jq" '.environment.FUTURE_BAD = {controls: "future", introduced: "99.0.0", bogus: true}' \
@@ -95,6 +118,30 @@
           'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
         mutant "$kimchi" config-second-shape src/config.ts \
           'typeof parsed.llmEndpoint === "string"' 'typeof parsed.llmEndpoint === "number"'
+        cp -r "$kimchi" "$TMPDIR/config-introduced-source"
+        chmod -R u+w "$TMPDIR/config-introduced-source"
+        config_introduced="$TMPDIR/config-introduced-source/src/config.ts"
+        if ! grep -qF $'\ttui?: TuiConfig' "$config_introduced"; then
+          substituteInPlace "$config_introduced" \
+          --replace-fail \
+            'export type MigrationState = "done" | "skip-forever"' \
+            $'export type MigrationState = "done" | "skip-forever"\n\nexport interface TuiConfig {\n\t/** Wheel-scroll step (lines) for fullscreen (alt-screen) mode. Min 1; floored by the pi-tui clamp. */\n\twheelScrollLines?: number\n}' \
+          --replace-fail \
+            $'\tmemoryExtraction?: { model?: string }' \
+            $'\tmemoryExtraction?: { model?: string }\n\ttui?: TuiConfig' \
+          --replace-fail \
+            $'\t\tconst mx = parsed.memoryExtraction\n\t\tif (mx && typeof mx === "object" && typeof mx.model === "string" && mx.model.length > 0) {\n\t\t\tmemoryExtraction = { model: mx.model }\n\t\t}\n\n\t\treturn {' \
+            $'\t\tconst mx = parsed.memoryExtraction\n\t\tif (mx && typeof mx === "object" && typeof mx.model === "string" && mx.model.length > 0) {\n\t\t\tmemoryExtraction = { model: mx.model }\n\t\t}\n\n\t\tlet tui: TuiConfig | undefined\n\t\tconst tc = parsed.tui\n\t\tif (tc && typeof tc === "object" && typeof tc.wheelScrollLines === "number") {\n\t\t\ttui = { wheelScrollLines: tc.wheelScrollLines }\n\t\t}\n\n\t\treturn {' \
+          --replace-fail \
+            $'\t\t\tmemoryExtraction,\n\t\t}' \
+            $'\t\t\tmemoryExtraction,\n\t\t\ttui,\n\t\t}' \
+          --replace-fail \
+            $'\t\tmemoryExtraction: projectExtras.memoryExtraction ?? globalExtras.memoryExtraction,\n\t}' \
+            $'\t\tmemoryExtraction: projectExtras.memoryExtraction ?? globalExtras.memoryExtraction,\n\t\ttui: projectExtras.tui ?? globalExtras.tui,\n\t}' \
+          --replace-fail \
+            $'\t\tmemoryExtraction: extras.memoryExtraction,\n\t}' \
+            $'\t\tmemoryExtraction: extras.memoryExtraction,\n\t\ttui: extras.tui,\n\t}'
+        fi
         mutant "$kimchi" duplicate-live-schema src/agent-discovery/agents/claude-code.ts \
           'import { homedir } from "node:os"' $'import "../../extensions/model-catalog/model-metadata.js"\nimport { homedir } from "node:os"'
         mutant "$kimchi" entry-imported-read src/auxiliary-files/resolver.ts \
@@ -195,6 +242,9 @@
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-second-shape "$TMPDIR/config-second-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
+        expect_rejection future-config-unknown-key "$kimchi" \
+          'config.FUTURE_BAD has unknown keys: ["bogus"]' "$pi" \
+          "$TMPDIR/future-config-unknown-key.json" >> "$TMPDIR/proof"
         # A dead copy of a schema is invisible; importing it makes two live
         # ones, which must stop the extraction rather than pick one.
         expect_rejection duplicate-live-schema "$TMPDIR/duplicate-live-schema-source" \
@@ -257,6 +307,30 @@
           'pi APP_NAME in' "$TMPDIR/pi-app-name-source" >> "$TMPDIR/proof"
 
         ${runExtractor ''"$kimchi"'' ''"$TMPDIR/real.json"'' ''"$pi"''}
+        ${runExtractorForVersion configFixtureVersion ''"$TMPDIR/config-introduced-annotations.json"'' ''"$TMPDIR/config-introduced-source"'' ''"$TMPDIR/config-introduced.json"'' ''"$pi"''}
+        if "$jq" -e \
+          '.config.keys.tui == {
+             typeExpression: "TuiConfig",
+             type: "object",
+             properties: {
+               wheelScrollLines: {
+                 typeExpression: "number",
+                 type: "number",
+                 optional: true,
+                 description: "Wheel-scroll step (lines) for fullscreen (alt-screen) mode. Min 1; floored by the pi-tui clamp."
+               }
+             },
+             optional: true,
+             project: true
+           } and
+           (.config.keys.tui | has("introduced") | not)' \
+          "$TMPDIR/config-introduced.json" > /dev/null; then
+          echo "config-introduced (exit 0): tui.wheelScrollLines activated without annotation metadata" >> "$TMPDIR/proof"
+        else
+          echo "FAIL: introduced config annotation did not emit the expected descriptor" >&2
+          "$jq" '.config.keys.tui' "$TMPDIR/config-introduced.json" >&2
+          exit 1
+        fi
         ${runExtractor ''"$TMPDIR/project-tier-source"'' ''"$TMPDIR/project-tier.json"'' ''"$pi"''}
         if ${pkgs.jq}/bin/jq -e \
           '(.config.projectTier.honoredKeys | index("apiKey") == null and index("api_key") == null) and
