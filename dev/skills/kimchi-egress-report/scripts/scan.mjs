@@ -211,7 +211,7 @@ function scanTsFile(path, root, text, ts, sites, literals) {
 }
 
 const GO_CALL_RE =
-  /\b(http\.(?:Get|Head|NewRequest|Post)|websocket\.(?:DefaultDialer|Dial)|net\.Dial|exec\.Command)\s*\(([^)]*)\)/g;
+  /\b(http\.(?:Get|Head|NewRequestWithContext|NewRequest|Post)|websocket\.(?:DefaultDialer|Dial)|net\.Dial|exec\.Command)\s*\(([^)]*)\)/g;
 const GO_STRING_RE = /"((?:[^"\\]|\\.)*)"/g;
 
 function scanGoFile(path, root, text, sites, literals) {
@@ -228,12 +228,15 @@ function scanGoFile(path, root, text, sites, literals) {
           ? "spawn"
           : "net";
     const argumentsText = match[2].split(",").map((value) => value.trim());
+    // NewRequestWithContext(ctx, method, url, body) carries the URL third.
     const targetIndex =
-      callee === "http.NewRequest" ||
-      callee === "net.Dial" ||
-      callee.startsWith("websocket.")
-        ? 1
-        : 0;
+      callee === "http.NewRequestWithContext"
+        ? 2
+        : callee === "http.NewRequest" ||
+            callee === "net.Dial" ||
+            callee.startsWith("websocket.")
+          ? 1
+          : 0;
     sites.push({
       callee,
       category,
