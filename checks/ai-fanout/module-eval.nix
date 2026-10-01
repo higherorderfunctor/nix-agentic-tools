@@ -43,7 +43,9 @@ in {
         # Every harness wraps on devenv because `gitSshConfigWorkaround` defaults
         # on and contributes `GIT_SSH_COMMAND`. Home Manager wraps only when a
         # launcher has something to inject, which a bare `enable = true` gives
-        # kimchi alone. `claude` has no wrapper anywhere (its env rides
+        # none of them: kimchi's `region` and `telemetry.enabled` reach its
+        # global config.json on Home Manager, not the launcher environment.
+        # `claude` has no wrapper anywhere (its env rides
         # `.claude/settings.json`, never process env), so it installs `cfg.package`
         # on both backends and MUST NOT gain a `-wrapped` suffix.
         shapes = {
@@ -58,7 +60,7 @@ in {
             claude = "bare";
             codex = "bare";
             copilot = "bare";
-            kimchi = "wrapped";
+            kimchi = "bare";
             kiro = "bare";
           };
         };
