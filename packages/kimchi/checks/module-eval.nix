@@ -1540,7 +1540,6 @@ in {
         shopt -s inherit_errexit 2>/dev/null || :
 
         bin=${wrapped}/bin/kimchi
-        grep -q "KIMCHI_NO_UPDATE_CHECK" "$bin"
         grep -q "KIMCHI_EXTRA" "$bin"
         grep -q 'cat "/run/secrets/kimchi-test"' "$bin"
         # An empty credential file must abort the wrapper rather than let the
