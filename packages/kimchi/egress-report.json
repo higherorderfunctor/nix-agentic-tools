@@ -37,11 +37,13 @@
       "permissions",
       "phase",
       "plugins",
+      "processes",
       "remote-run",
       "remote-sessions",
       "resources",
       "ssh-config",
       "stats",
+      "status",
       "strip-images",
       "sync",
       "tags",
@@ -141,8 +143,8 @@
     }
   },
   "header": {
-    "kimchiSourceHash": "sha256-0la7Rzz+mCEItNQwuHnjH7RWNOHGLIseTzkaZu6In8A=",
-    "kimchiVersion": "1.1.39",
+    "kimchiSourceHash": "sha256-DBRJWxJyECoKt/oc+10EVOvsKPUKwT0jA8YfLmil/cg=",
+    "kimchiVersion": "1.5.0",
     "piVersion": "0.85.1",
     "scannerVersion": "1.0.0"
   },
@@ -452,6 +454,10 @@
     {
       "files": ["pi/dist/bundle/chunks/chunk-U6ZMQKGD.js"],
       "value": "dummy.com"
+    },
+    {
+      "files": ["kimchi/src/extensions/remote-run/index.ts"],
+      "value": "e2e.fake"
     },
     {
       "files": ["pi/dist/bundle/chunks/chunk-JVUZSMYM.js"],
@@ -789,6 +795,18 @@
       "category": "spawn",
       "file": "kimchi/src/extensions/prompt-construction/prompt-enrichment.ts",
       "target": "\"git remote get-url origin\""
+    },
+    {
+      "callee": "exec",
+      "category": "spawn",
+      "file": "kimchi/src/extensions/remote-run/git-workflow.ts",
+      "target": "\"git\""
+    },
+    {
+      "callee": "exec",
+      "category": "spawn",
+      "file": "kimchi/src/extensions/remote-run/sandbox-git.ts",
+      "target": "\"git\""
     },
     {
       "callee": "WebSocket",
@@ -1243,6 +1261,10 @@
       "value": "/home/sandbox"
     },
     {
+      "files": ["kimchi/src/extensions/remote-run/index.ts"],
+      "value": "/home/sandbox/acp-e2e"
+    },
+    {
       "files": ["pi/dist/bundle/chunks/chunk-U6ZMQKGD.js"],
       "value": "/iap/verify/public_key"
     },
@@ -1520,6 +1542,10 @@
       "value": "/proc/version"
     },
     {
+      "files": ["kimchi/src/extensions/bash-background/bash-display.ts"],
+      "value": "/processes"
+    },
+    {
       "files": ["kimchi/tests/e2e/tui/support/kimchi-fixture.ts"],
       "value": "/quit"
     },
@@ -1670,6 +1696,10 @@
         "kimchi/src/utils/clipboard-read.ts"
       ],
       "value": "/usr/bin/osascript"
+    },
+    {
+      "files": ["kimchi/src/extensions/mcp/keyring-require-bridge.ts"],
+      "value": "/usr/bin/security"
     },
     {
       "files": ["kimchi/src/update/paths.ts"],
