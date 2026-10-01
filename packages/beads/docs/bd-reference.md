@@ -190,19 +190,19 @@ already current, so that pair exercised no destructive migration or
 post-migration bootstrap.
 
 The cross-version assertions were removed when both pins converged on 1.2.2. The
-repository now pins 1.3.0 while nixpkgs remains at 1.2.2, but the check does not
+repository now pins 1.3.1 while nixpkgs remains at 1.2.2, but the check does not
 exercise that pair. The older results remain dated observations about
 1.0.3/1.2.2. What the check asserts on a database the packaged client created
 itself is the recorded schema label and the `Schema already at v66` migration
 state. Both `migrate --inspect --json` and `migrate schema --json` still emit
-plain text in the packaged 1.3.0 binary, so those assertions use the flagless
+plain text in the packaged 1.3.1 binary, so those assertions use the flagless
 forms.
 
 The operational conclusion is unchanged and does not depend on the skew: one
 pinned `bd` package is authoritative, and rollback requires a pre-upgrade
 `bd backup` or recoverable remote ref plus the previous binary. Supporting an
 unattended upgrade or rollback remains gated by #995.
-`[measured contract @1.3.0/2.3.4]` for the self-created assertions;
+`[measured contract @1.3.1/2.4.0]` for the self-created assertions;
 `[historical @1.0.3/1.2.2]` for the skew observations.
 
 ## Config surface
@@ -410,9 +410,9 @@ stop. No write performed an automatic `bd dolt push`.
 ## Workspace resolution and isolation
 
 With no override, a source checkout and its linked worktree both resolve the
-main worktree's `.beads`. `bd where --json` reports `path` and `schema_version`.
-Outside Git with no state it exits nonzero with JSON
-`error: no_beads_directory`. `[measured contract @1.3.1/2.4.0]`
+main worktree's `.beads`. `bd where --json` reports the resolved `path`. Outside
+Git with no state it exits nonzero with JSON `error: no_beads_directory`.
+`[measured contract @1.3.1/2.4.0]`
 
 `BEADS_DIR` is authoritative when set. A missing or empty target fails with
 `error: no_beads_directory` instead of falling back to the source checkout. When
