@@ -2,8 +2,8 @@
 
 # bd (beads) — tool reference
 
-> **Last verified:** 2026-09-15 for the repository package and disposable
-> contracts at stable Beads v1.3.0 and Dolt 2.3.4. Historical session, server,
+> **Last verified:** 2026-10-01 for the repository package and disposable
+> contracts at stable Beads v1.3.1 and Dolt 2.4.0. Historical session, server,
 > recovery, and external-packager observations retain their version tags; they
 > were not all repeated for this update. See **Version-skew boundary** for the
 > limits of the fresh-database migration check. Companion documents:
@@ -33,7 +33,7 @@
 > binary; quarantine until probed. Claims can go stale in either direction;
 > re-verify against the pinned version before building on a load-bearing one.
 > Claim-local durable-probe tags naming 2.2.3 preserve the first measurement;
-> the current contract was requalified against Beads 1.3.0 / Dolt 2.3.4. Server
+> the current contract was requalified against Beads 1.3.1 / Dolt 2.4.0. Server
 > and recovery probes were last requalified against Beads 1.2.2 / Dolt 2.3.0.
 > Session and transaction-spike tags remain 2.2.3-only evidence.
 
@@ -65,8 +65,8 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
 
 ## Versions and packaging state
 
-- **Upstream**: the pinned stable release is **v1.3.0**, published 2026-09-15.
-  `[upstream release @1.3.0]`
+- **Upstream**: the pinned stable release is **v1.3.1**, published 2026-09-30.
+  `[upstream release @1.3.1]`
 - **nixpkgs**: `beads` **1.2.2** at the repository's nixpkgs pin
   (`pkgs/by-name/be/beads/`). It carried 1.0.3 until 2026-09, then temporarily
   matched the repository pin before this update to 1.3.0. `buildGoModule`,
@@ -76,7 +76,7 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   `TestInstallHooksBeads_WorktreeAccess`), a third on Darwin
   (`TestCleanupMergeArtifacts_CommandInjectionPrevention`), and the recipe sets
   `__darwinAllowLocalNetworking`. `[upstream]`
-- **This repository**: `pkgs.ai.devTools.beads` pins stable **v1.3.0** from a
+- **This repository**: `pkgs.ai.devTools.beads` pins stable **v1.3.1** from a
   source sidecar and thinly overrides the nixpkgs recipe through the
   repository's `ourPkgs` and derived-Go-floor machinery. The sidecar owns the
   source hash, vendor hash, and `go.mod` floor (**1.26.7**); the stable-release
@@ -85,7 +85,7 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   two independent child updaters run behind the one Beads update target, so
   either release moves on the same branch and PR. Darwin check inputs include
   `ps` and `lsof` for upstream's orphan-server cleanup test.
-  `[measured package @1.3.0]`
+  `[measured package @1.3.1]`
 - **Upstream flake (1.2.2 observation)**: pins `nixos-25.11`, requires
   `buildGo126Module`, exposes `beads-unwrapped` via `overlays.default` with a
   documented `vendorHash` override recipe. Its wrapper adds shell completions
@@ -190,19 +190,19 @@ already current, so that pair exercised no destructive migration or
 post-migration bootstrap.
 
 The cross-version assertions were removed when both pins converged on 1.2.2. The
-repository now pins 1.3.0 while nixpkgs remains at 1.2.2, but the check does not
+repository now pins 1.3.1 while nixpkgs remains at 1.2.2, but the check does not
 exercise that pair. The older results remain dated observations about
 1.0.3/1.2.2. What the check asserts on a database the packaged client created
 itself is the recorded schema label and the `Schema already at v66` migration
 state. Both `migrate --inspect --json` and `migrate schema --json` still emit
-plain text in the packaged 1.3.0 binary, so those assertions use the flagless
+plain text in the packaged 1.3.1 binary, so those assertions use the flagless
 forms.
 
 The operational conclusion is unchanged and does not depend on the skew: one
 pinned `bd` package is authoritative, and rollback requires a pre-upgrade
 `bd backup` or recoverable remote ref plus the previous binary. Supporting an
 unattended upgrade or rollback remains gated by #995.
-`[measured contract @1.3.0/2.3.4]` for the self-created assertions;
+`[measured contract @1.3.1/2.4.0]` for the self-created assertions;
 `[historical @1.0.3/1.2.2]` for the skew observations.
 
 ## Config surface
@@ -410,19 +410,18 @@ stop. No write performed an automatic `bd dolt push`.
 ## Workspace resolution and isolation
 
 With no override, a source checkout and its linked worktree both resolve the
-main worktree's `.beads`. `bd where --json` reports `path`, `database_path`,
-`prefix`, and `schema_version`. Outside Git with no state it exits nonzero with
-JSON `error: no_beads_directory`. `[measured contract @1.2.2/2.2.3]`
+main worktree's `.beads`. `bd where --json` reports the resolved `path`. Outside
+Git with no state it exits nonzero with JSON `error: no_beads_directory`.
+`[measured contract @1.3.1/2.4.0]`
 
-`BEADS_DIR` is not a fail-closed escape hatch. When it names a missing or empty
-directory, bd silently ignores it and falls back to the source checkout's
-`.beads`. When the variable is unset, the same source fallback applies.
-Therefore every managed invocation must set `BEADS_DIR` **and** assert that
-`bd where --json | .path` exactly equals the declared state path before a write.
-The state directory and config must be materialized before that assertion. A
-neutral non-Git cwd is additionally required for initialization because even a
-valid external workspace does not prevent bd from setting `beads.role` in the
-cwd repository. `[measured contract @1.2.2/2.2.3]`
+`BEADS_DIR` is authoritative when set. A missing or empty target fails with
+`error: no_beads_directory` instead of falling back to the source checkout. When
+the variable is unset, source discovery still applies. Managed invocations must
+set `BEADS_DIR`, materialize the state directory and config before use, and
+assert that `bd where --json | .path` exactly equals the declared state path
+before a write. A neutral non-Git cwd is additionally required for
+initialization because even a valid external workspace does not prevent bd from
+setting `beads.role` in the cwd repository. `[measured contract @1.3.1/2.4.0]`
 
 There is **no ACL or permission model**. Four mechanisms exist, all YAML
 path-lists — whatever is listed is reachable `[upstream]`:

@@ -332,8 +332,9 @@
         || fail "stealth exclude mutation changed"
 
       # Unset discovery follows the common Git directory into linked worktrees.
-      # A missing or empty BEADS_DIR does not fail closed: it is ignored and the
-      # source workspace wins, so consumers must assert `bd where` exactly.
+      # An explicit BEADS_DIR is authoritative, including when the target is
+      # missing or empty, so invalid targets fail instead of falling back to the
+      # source workspace.
       git -C "$source_init/repo" worktree add -q -b linked "$source_init/linked"
       main_where="$(
         cd "$source_init/repo"
@@ -346,14 +347,20 @@
       )"
       expect_eq "linked-worktree discovery" "$main_where" "$linked_where"
       mkdir -p "$source_init/empty-state"
-      fallback_where="$(run_bd "$source_init" "$source_init/repo" "$source_init/empty-state" \
-        where --json | jq -r .path)"
-      expect_eq "empty BEADS_DIR falls back" "$main_where" "$fallback_where"
-      fallback_where="$(run_bd "$source_init" "$source_init/repo" "$source_init/absent-state" \
-        where --json | jq -r .path)"
-      expect_eq "missing BEADS_DIR falls back" "$main_where" "$fallback_where"
+      if run_bd "$source_init" "$source_init/repo" "$source_init/empty-state" where --json \
+        > "$source_init/empty-state-where.out" 2>&1; then
+        fail "empty BEADS_DIR unexpectedly fell back to the source workspace"
+      fi
+      jq -e '.error == "no_beads_directory"' "$source_init/empty-state-where.out" > /dev/null \
+        || fail "empty BEADS_DIR error shape changed"
+      if run_bd "$source_init" "$source_init/repo" "$source_init/absent-state" where --json \
+        > "$source_init/absent-state-where.out" 2>&1; then
+        fail "missing BEADS_DIR unexpectedly fell back to the source workspace"
+      fi
+      jq -e '.error == "no_beads_directory"' "$source_init/absent-state-where.out" > /dev/null \
+        || fail "missing BEADS_DIR error shape changed"
       [ ! -e "$source_init/absent-state" ] \
-        || fail "missing BEADS_DIR fallback materialized the absent path"
+        || fail "missing BEADS_DIR failure materialized the absent path"
 
       # Independent writers launched from a checkout and its linked worktree can
       # share one external embedded workspace. The fallback is safe but slow;
