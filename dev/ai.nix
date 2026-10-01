@@ -338,6 +338,7 @@ in {
         # identically, 3/3 each, with an attribution control confirming
         # nothing else walks `dev/skills/`.
         index-repo-docs = ./skills/index-repo-docs;
+        kimchi-egress-report = ./skills/kimchi-egress-report;
         kimchi-surface-scan = ./skills/kimchi-surface-scan;
         pr-review-loop = ./skills/pr-review-loop;
         repo-review = ./skills/repo-review;
