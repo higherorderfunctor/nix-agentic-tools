@@ -13,6 +13,22 @@
   };
   documentation.aiCliDescriptions.kiro-cli = "Kiro CLI";
   fragments.categories = {
+    # kiro-agents: generated JSON and Markdown profiles reach different Kiro
+    # consumers, so the delivery choice and accepted frontmatter shape must
+    # stay beside the native record, renderer, and module checks.
+    kiro-agents = {
+      scopes = [
+        "packages/${facetOwner}/checks/module-eval.nix"
+        "packages/${facetOwner}/lib/mkKiro.nix"
+      ];
+      sources = [
+        {
+          location = "package";
+          name = "agents";
+          dir = facetOwner;
+        }
+      ];
+    };
     # kiro-settings: how nested `native.settings` lowers into kiro's FLAT
     # cli.json, and why the flatten boundary has to come from the binary rather
     # than from attrset shape. Scoped to the flattener, the extractor that

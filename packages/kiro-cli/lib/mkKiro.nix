@@ -26,6 +26,7 @@
   workflowReminder = import ./workflowReminder.nix {inherit lib pkgs;};
 
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
+  frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
 
   # Shared AI helpers (filterNulls, mkKiroLspFile, flattenDotKeysUntil, …). Hoisted to
   # the top-level `let` so option TYPES and renderers can reach it too — both
@@ -306,6 +307,16 @@
         default = null;
         description = "Human-facing guidance shown in `kiro-cli agent list`.";
       };
+      format = lib.mkOption {
+        type = lib.types.enum ["json" "markdown"];
+        default = "json";
+        description = ''
+          Generated file format. A JSON agent can be dispatched and is
+            available to Kiro's list, validation, and default-selection
+            commands; a Markdown agent can be dispatched but is absent from
+            those commands.
+        '';
+      };
       prompt = lib.mkOption {
         type = aiTypes.optionalTextSource {
           description = "the agent's system prompt";
@@ -402,14 +413,13 @@
       (lib.mapAttrs (_: pruneEmptyAgentFields) value)
     else value;
 
-  # Render one typed agent record → its JSON text. `attrName` supplies `name`
-  # unless the record overrides it — Kiro keys the agent on `name`, so the two
-  # must agree or the agent lists under an id that does not match its file.
-  # Null optionals and empty collections are dropped so the emitted file stays
-  # the minimal shape both parsers accept.
-  renderAgent = attrName: record: let
+  # Normalize one typed record for either renderer. `attrName` supplies `name`
+  # unless the record overrides it. The delivery-only `format` field never
+  # reaches either Kiro file format. Null optionals and empty collections are
+  # dropped so the emitted file stays minimal.
+  normalizeAgent = attrName: record: let
     named =
-      record
+      removeAttrs record ["format"]
       // {
         name = record.name or null;
         prompt = enabledTextOrNull record.prompt;
@@ -424,15 +434,62 @@
           else named.name;
       };
   in
-    builtins.toJSON (pruneEmptyAgentFields withName);
+    pruneEmptyAgentFields withName;
 
-  # A native record → its JSON file entry.
-  nativeAgentEntry = configDir: name: record:
-    lib.nameValuePair "${configDir}/agents/${name}.json" {
-      content = lib.mkDefault {text = renderAgent name record;};
-      format = lib.mkDefault "json";
-      executable = null;
+  renderJsonAgent = normalized:
+    builtins.toJSON normalized;
+
+  renderMarkdownAgent = normalized:
+    frontmatter.render {
+      data = removeAttrs normalized ["prompt"];
+      body = normalized.prompt or "";
     };
+
+  frontmatterScalar = value:
+    builtins.isBool value
+    || builtins.isString value;
+
+  markdownNestedFields = normalized:
+    builtins.attrNames (lib.filterAttrs (_field: value:
+      !(frontmatterScalar value || (lib.isList value && builtins.all frontmatterScalar value)))
+    (removeAttrs normalized ["prompt"]));
+
+  mkNativeAgentPlan = name: record: let
+    normalized = normalizeAgent name record;
+  in {
+    inherit normalized record;
+    nestedFields = markdownNestedFields normalized;
+  };
+
+  mkAgentFormatAssertions = plans:
+    lib.concatLists (lib.mapAttrsToList (name: plan:
+      lib.optionals (plan.record.format == "markdown") (map (field: {
+          assertion = false;
+          message = "ai.kiro.native.agents.${name}: Markdown cannot represent nested field `${field}`; JSON carries it. Set `format = \"json\"` or remove the field.";
+        })
+        plan.nestedFields))
+    plans);
+
+  validNativeAgentPlans = plans:
+    lib.filterAttrs (_name: plan:
+      plan.record.format != "markdown" || plan.nestedFields == [])
+    plans;
+
+  # A native record → the file entry selected by its delivery-only format.
+  nativeAgentEntry = configDir: name: plan:
+    if plan.record.format == "markdown"
+    then
+      lib.nameValuePair "${configDir}/agents/${name}.md" {
+        content = lib.mkDefault (frontmatter.content (renderMarkdownAgent plan.normalized));
+        format = lib.mkDefault "markdown";
+        executable = null;
+      }
+    else
+      lib.nameValuePair "${configDir}/agents/${name}.json" {
+        content = lib.mkDefault {text = renderJsonAgent plan.normalized;};
+        format = lib.mkDefault "json";
+        executable = null;
+      };
 
   # A raw entry → its file entry, the same `{source|text}` on BOTH backends
   # (they once disagreed, and devenv wrote a path's store-path STRING as the
@@ -1181,7 +1238,7 @@ in
     inherit pkgs;
     name = "kiro";
     # The native agent layer (see mkRuntime.nix): each normalized agent
-    # lowers into `ai.kiro.native.agents.<name>`, a typed JSON record.
+    # lowers into `ai.kiro.native.agents.<name>`, a typed agent record.
     # `tools` is not lowered — Kiro takes capability tags, not the
     # Claude/Copilot tool names a normalized record carries.
     agentNativeType = kiroAgentRecord;
@@ -1189,7 +1246,7 @@ in
     # `.md` agents serve the ACP/IDE path; kiro-cli-chat skips them (see the
     # `kiroAgentRecord` comment).
     agentsDirSuffixes = [".json" ".md"];
-    agentsDescriptionSuffix = "A normalized or native record is written as `<configDir>/agents/<name>.json`; a raw file is written as is, keeping a `.md` path's suffix.";
+    agentsDescriptionSuffix = "A normalized or native record is written as `<configDir>/agents/<name>.json` or `.md` according to its `format`; a raw file is written as is, keeping a `.md` path's suffix.";
     contextFilename = "AGENTS.md";
     ruleModule = aiCommon.kiroRuleModule;
     # No "settings": Kiro persists effort only inside per-model
@@ -1646,6 +1703,7 @@ in
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       isHm = backend == "hm";
+      nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
       # "Did the consumer actually write this" test, shared with
@@ -1742,7 +1800,12 @@ in
           # the user-global workflows setting.
           {ai.kiro.hooks = workflowReminderHooks cfg;}
           (lib.mkIf isHm (workflowsSettingImplication cfg))
-          {assertions = mkAssertions cfg ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);}
+          {
+            assertions =
+              mkAssertions cfg
+              ++ mkAgentFormatAssertions nativeAgentPlans
+              ++ lib.optionals (!isHm) (mkDevenvWorkspaceSettingsAssertions cfg);
+          }
           (lib.optionalAttrs (options ? warnings) {warnings = packageWarnings;})
           {
             # Writer identities survive empty declarations: N→0 must retract
@@ -1840,7 +1903,9 @@ in
               # and a native entry at one key (an assertion rejects that)
               # yield one file definition rather than a merge conflict that
               # would hide the assertion.
-              (lib.mapAttrs' (nativeAgentEntry cfg.configDir) nativeAgents
+              # Filter invalid Markdown records so the named format assertion
+              # remains the sole error before the frontmatter emitter runs.
+              (lib.mapAttrs' (nativeAgentEntry cfg.configDir) (validNativeAgentPlans nativeAgentPlans)
                 // lib.mapAttrs' (rawAgentEntry cfg.configDir) rawAgents)
               # Kiro v3's hook scan keeps only entry.isFile() (Kiro#9787), so
               # hooks need real copies. The ledger claims individual files;
