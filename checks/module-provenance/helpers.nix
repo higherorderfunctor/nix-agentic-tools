@@ -108,7 +108,7 @@
     # pool added to sharedOptions.nix is covered the day it is declared, which
     # the scan's hand-maintained alternation was not.
     #
-    # Only direct root options are scanned. Nested groups such as ai.generated
+    # Only direct root options are scanned. Nested groups such as ai.guards
     # are outside this guard.
     rootOptions =
       lib.mapAttrsToList lib.nameValuePair
