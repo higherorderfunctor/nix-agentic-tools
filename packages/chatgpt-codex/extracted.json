@@ -5899,6 +5899,11 @@
     {
       "default": false,
       "maturity": "under development",
+      "name": "guardian_conversation_history_tools"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
       "name": "guardian_enhanced_node_repl_transcripts"
     },
     {
@@ -5915,6 +5920,11 @@
       "default": true,
       "maturity": "stable",
       "name": "guardian_reuse_parent_compaction"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "guardian_root_handoff_context"
     },
     {
       "default": false,
@@ -6476,7 +6486,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.159.3",
+    "codexVersion": "0.160.0",
     "extractorSchema": 1
   }
 }
