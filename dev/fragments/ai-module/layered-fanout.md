@@ -45,11 +45,10 @@
 > `content.run`, and shared document leaves stay outside the tree. Generators
 > mark their `content` with `_generated`, so a consumer's replacement of a
 > unit's file warns like a switch-off. Rule and semantic-agent generators pass
-> raw Nix data to `lib/frontmatter.nix`, which renders quoted YAML, and mark the
-> content. The router passes that marker to the generated-file builder, which
-> accepts BOM/CRLF, formats only the body and restores the exact fenced
-> frontmatter bytes with one blank separator. `parseCompare` requires those
-> fenced bytes in the installed file.
+> raw Nix data to `lib/frontmatter.nix`, which renders quoted YAML as text. The
+> generated-file builder formats whole Markdown files, including headers.
+> `parseCompare` compares parsed YAML frontmatter values; files without a header
+> compare as `null`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 

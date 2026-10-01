@@ -11,18 +11,19 @@ is what created the defect below.
 Generated `ai.*` Markdown is formatted in its store tree alongside JSON, TOML
 and YAML. The exported `treefmtModules.default` is always the base, and the
 consumer's `ai.formatter` treefmt-nix module layers on top. One treefmt process
-receives every composed type without a non-null per-type override. Each path
-must carry the extension its formatter routes on; an unmatched file fails the
-build and names its target-relative path. Raw files and recursive directory
-sources are copied byte-identically, preserve source modes, and never reach a
-formatter or format guard. Runtime shape guards inspect the installed copies. On
-devenv, every delivered path is excluded from the repository treefmt run.
-Authored docs and wiki pages still need their own treefmt run. `tableCells` and
-`splitCodeSpans` check the input before formatting. The builder formats only
-marked Markdown bodies, restores generator-owned frontmatter bytes, and compares
-the installed prefix under `parseCompare`. Frontmatter producers pass raw Nix
-data to `lib/frontmatter.nix`; it JSON-quotes each supported scalar as valid
-YAML while retaining block sequences for lists.
+formats every composed file, including Markdown headers. Each path must carry
+the extension its formatter routes on; an unmatched file fails the build and
+names its target-relative path. Raw files and recursive directory sources are
+copied byte-identically, preserve source modes, and never reach a formatter or
+format guard. Runtime shape guards inspect the installed copies. On devenv,
+every delivered path is excluded from the repository treefmt run. Authored docs
+and wiki pages still need their own treefmt run. `tableCells` and
+`splitCodeSpans` check the input before formatting. The builder formats whole
+Markdown files and compares parsed YAML frontmatter values under `parseCompare`;
+presentation changes pass, value changes fail. A file without frontmatter has
+the value `null`. Frontmatter producers pass raw Nix data to
+`lib/frontmatter.nix`; it JSON-quotes each supported scalar as valid YAML while
+retaining block sequences for lists.
 
 The four guards and their one table are defined in `lib/markdown/guards.nix`;
 the table owns their phase, runtime, defaults, option prose and generated-tree
@@ -40,10 +41,11 @@ does not parse).
 
 > **Last verified:** 2026-10-01 — generated trees evaluate the exported treefmt
 > module with `ai.formatter` layered on top; one guard table stamps `ai.guards`
-> and carries phase and runtime selection; generated frontmatter quotes scalar
-> data centrally; tableCells pairs rumdl and markdownlint for distinct MD056
-> cases; raw copies bypass format guards, while the Kiro runtime-shape guard
-> inspects their delivered Markdown.
+> and carries phase and runtime selection; whole Markdown files are formatted
+> and parsed frontmatter values are compared; generated frontmatter quotes
+> scalar data centrally; tableCells pairs rumdl and markdownlint for distinct
+> MD056 cases; raw copies bypass format guards, while the Kiro runtime-shape
+> guard inspects their delivered Markdown.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the

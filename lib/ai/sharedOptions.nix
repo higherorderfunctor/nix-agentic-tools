@@ -1,5 +1,5 @@
 # Declares cross-app options (ai.context, ai.mcpServers,
-# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and ai.generated: how
+# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and formatting and guards: how
 # every runtime's generated files are formatted and checked.
 #
 # Imported by every mkRuntime module so per-app layers
@@ -20,7 +20,6 @@
   deliveryOptions = import ./delivery-options.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
-  generatedTypes = ["json" "markdown" "toml" "yaml"];
   formatter =
     (config.ai.internal.treefmtNix.lib.evalModule pkgs {
       imports = [
@@ -179,8 +178,8 @@ in {
       description = ''
         treefmt-nix module layered on this flake's exported
         `treefmtModules.default` to format composed generated files. One
-        treefmt invocation covers every composed type without a non-null
-        `ai.generated.formatter.<type>` override. Each formatted path must end
+        treefmt invocation formats every composed file, including Markdown headers.
+        `parseCompare` compares parsed frontmatter values. Each formatted path must end
         in the conventional extension for its declared format (`.json`, `.md`,
         `.toml`, `.yaml`, or `.yml`). An unmatched composed file fails the
         build and names its target-relative path. Raw files and recursive
@@ -212,24 +211,6 @@ in {
         native artifact.
       '';
       example = lib.literalExpression ''{ source = ./ai-context.md; }'';
-    };
-
-    generated = {
-      formatter = lib.genAttrs generatedTypes (type:
-        lib.mkOption {
-          type = lib.types.nullOr lib.types.str;
-          default = null;
-          description = ''
-            Optional shell snippet formatting generated ${type} files at
-            target-relative paths in a sandbox. A non-null value overrides
-            `ai.formatter` for this type, so those files are not passed to
-            treefmt. `null` no longer disables formatting: it means
-            `ai.formatter` formats this type. The per-type override is
-            retained temporarily for compatibility and will be removed.
-            For marked Markdown, only the body reaches this formatter; the
-            generator's frontmatter bytes are restored afterward.
-          '';
-        });
     };
 
     checks =

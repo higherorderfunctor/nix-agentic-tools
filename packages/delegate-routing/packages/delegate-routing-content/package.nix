@@ -34,14 +34,13 @@
   mkSkill = args:
     generated.mkTree {
       name = "delegate-routing-${args.runtime}-skill";
-      files."SKILL.md" =
-        {
-          type = "markdown";
-        }
-        // frontmatter.treeFile (frontmatter.render {
+      files."SKILL.md" = {
+        type = "markdown";
+        text = frontmatter.render {
           data = skillData;
           body = import ../../lib/render.nix ({inherit lib presets;} // args);
-        });
+        };
+      };
       guards.parseCompare = true;
       passthru.text = render args;
       inherit (args) runtime;

@@ -62,16 +62,5 @@ in {
       in
         evaluated.config.ai.mcpServers.test.type == "stdio"
     );
-
-    factory-generated-options-formatter-null = mkTest "generated-options-formatter-null" (
-      let
-        evaluated =
-          (lib.evalModules {
-            specialArgs = {inherit pkgs;};
-            modules = [ai.sharedOptions {ai.generated.formatter.markdown = null;}];
-          }).config;
-      in
-        evaluated.ai.generated.formatter.markdown == null
-    );
   };
 }

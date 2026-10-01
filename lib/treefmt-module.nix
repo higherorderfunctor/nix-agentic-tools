@@ -15,7 +15,10 @@
     # settings.formatter below so the two never format the same file.
     biome = {
       enable = true;
-      settings.formatter = lib.mapAttrsRecursive (_path: lib.mkDefault) (import ./generated-style.nix).biome;
+      settings.formatter = lib.mapAttrsRecursive (_path: lib.mkDefault) {
+        indentStyle = "space";
+        indentWidth = 2;
+      };
     };
     # Only the types biome can't format (markdown/yaml/scss/html/vue/json5) —
     # scoped via settings.formatter.prettier.excludes.
@@ -23,7 +26,7 @@
       enable = true;
       # The prose style (`proseWrap = "always"`) and why: one definition,
       # used by the default `ai.formatter` for generated Markdown and YAML.
-      settings = lib.mapAttrsRecursive (_path: lib.mkDefault) (import ./generated-style.nix).prettier;
+      settings = lib.mapAttrsRecursive (_path: lib.mkDefault) (import ./markdown/prose-style.nix);
     };
     # Shell: *.sh, *.bash
     shfmt.enable = true;

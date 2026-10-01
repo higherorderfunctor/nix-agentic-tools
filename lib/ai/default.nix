@@ -14,9 +14,6 @@ in {
   # `guards pkgs`: the generated-file guards as programs and a check builder
   # for a consumer's own files (lib/markdown/guards.nix).
   guards = (import ../markdown/guards.nix {inherit lib;}).consumer;
-  # Any treefmt-nix evalModule config (including devenv's config.treefmt.config)
-  # works here; only package and build.configFile are needed.
-  treefmtFormatter = treefmtConfig: "${lib.getExe treefmtConfig.package} --config-file ${treefmtConfig.build.configFile} --tree-root . --walk filesystem --no-cache";
   # `mkLauncher pkgs {package, name, exe, …}`: the shared launcher wrapper.
   mkLauncher = import ./launcher.nix;
   mcpServer = import ./mcpServer {inherit lib;};

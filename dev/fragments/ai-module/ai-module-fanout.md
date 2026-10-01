@@ -406,10 +406,12 @@ enabled ecosystem whose native model preserves the option's semantics):
   Without the native layer (Claude, Copilot, Kimchi) the normalized pool keeps
   raw entries and the runtime renders the record directly: Claude/Copilot
   frontmatter plus body, passing raw scalar data to the shared emitter; Kimchi
-  Markdown omits `name:`. `tools` uses Claude and Copilot's tool names and
-  renders a non-empty value as their frontmatter allowlist; `null` and `[]` both
-  omit it. Codex, Kimchi and Kiro drop it, and `lib/ai/delivery-warnings.nix`
-  warns at the path that set it, naming the native remedy (Kimchi Markdown;
+  Markdown omits `name:`. The shared renderer returns text, and treefmt formats
+  the complete file; `parseCompare` compares parsed frontmatter values. `tools`
+  uses Claude and Copilot's tool names and renders a non-empty value as their
+  frontmatter allowlist; `null` and `[]` both omit it. Codex, Kimchi and Kiro
+  drop it, and `lib/ai/delivery-warnings.nix` warns at the path that set it,
+  naming the native remedy (Kimchi Markdown;
   `ai.kiro.native.agents.<name>.tools` and `permissions`); a native `tools` on
   the same agent silences it. Claude writes `.claude/agents/<name>.md` on both
   backends through `agent.renderFile`. A path-like raw entry — a Nix path, a

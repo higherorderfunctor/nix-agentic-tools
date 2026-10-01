@@ -75,12 +75,6 @@
           internal = true;
           visible = false;
         };
-        _frontmatter = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          internal = true;
-          visible = false;
-        };
         run = lib.mkOption {
           type = lib.types.nullOr lib.types.lines;
           default = null;

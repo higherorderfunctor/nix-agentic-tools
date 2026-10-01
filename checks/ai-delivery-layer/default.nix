@@ -109,14 +109,6 @@
     then "yaml"
     else null;
   candidateCovered = entry: entry.format == candidateType entry.path;
-  frontmatterEntries = evaluated:
-    lib.filter (entry:
-      entry.format
-      == "markdown"
-      && entry.content ? text
-      && lib.hasPrefix "---\n" entry.content.text)
-    (generatedEntries evaluated);
-
   codexExtension = extended:
     evalHm {
       ai.codex = {
@@ -396,15 +388,6 @@ in {
           echo 'PASS: delivery-leaf-beside-recursive-directory-lands' > "$out"
         '';
 
-    module-delivery-generated-frontmatter-markers = mkTest "delivery-generated-frontmatter-markers" (
-      lib.all (backend: let
-        entries = frontmatterEntries generatedEvaluations.${backend};
-      in
-        builtins.length entries
-        >= 5
-        && lib.all (entry: entry.content._frontmatter) entries)
-      ["devenv" "hm"]
-    );
     # Every typed file in the same runtime points into the same tree, even
     # when its content came from different source/value renderers.
     module-delivery-generated-one-tree = mkTest "delivery-generated-one-tree" (
@@ -1349,8 +1332,9 @@ in {
       evaluated = formatterFixture {
         formatter = {
           programs.prettier.settings.proseWrap = "preserve";
-          # This would exclude the file if treefmt still saw the old
-          # `markdown/<target>` staging path.
+          # Excluding the old per-type staging prefix must not touch the file:
+          # treefmt sees the target-relative path, so this only bites if the
+          # `markdown/<target>` layout ever returns.
           settings.formatter.prettier.excludes = lib.mkForce ["markdown/**"];
         };
       };

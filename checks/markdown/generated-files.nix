@@ -1,8 +1,6 @@
-# cspell:ignore FEFF
 # Behavioral fixtures for the generated store-tree builder. Failure cases run
 # the builder's real phases in fresh shells: a check derivation cannot invoke
-# nested nix builds in its sandbox. The final case builds one failing mkTree
-# through nixpkgs' testBuildFailure to pin the stdenv install-check lifecycle.
+# nested nix builds in its sandbox.
 {
   inputs,
   lib,
@@ -14,49 +12,25 @@
   frontmatter = import ../../lib/frontmatter.nix {inherit lib;};
   mkFile = type: text: {inherit type text;};
   markdown = text: {"page.md" = mkFile "markdown" text;};
-  markedMarkdown = text: {"page.md" = mkFile "markdown" text // {frontmatter = true;};};
-  consumerData = {
-    description = "Generated Kiro steering description is long enough for the default Markdown formatter to demonstrate whether it reflows YAML frontmatter plain scalars across lines while preserving parsed content.";
-    fileMatchPattern = ["SCHEMA.md" "bin/**" "devenv.nix" "nix/kiro/agents/**" "nix/skills/**"];
-    inclusion = "fileMatch";
-    name = "f1-probe";
-  };
-  consumerRendered = frontmatter.render {
-    data = consumerData;
-    body = "# Page\n";
-  };
   roundTripDescription = ''a "quoted" word: and \ slash'';
   roundTripRendered = frontmatter.render {
     data.description = roundTripDescription;
     body = "# Body\n";
   };
-  consumerFiles = {"page.md" = {type = "markdown";} // frontmatter.treeFile consumerRendered;};
-  # Inject one broken attach step to prove the byte guard catches it.
-  guardScript = ../../lib/generated-guard.py;
-  bytesChanged = "Markdown frontmatter bytes differ from";
-  attachCommand = script: "${script} attach";
-  patchedGuard = name: replacement: let
-    source = builtins.readFile guardScript;
-    anchor = "prefix = header_file.read_bytes()";
-  in
-    assert lib.assertMsg (lib.hasInfix anchor source) "generated-files: the attach anchor moved in lib/generated-guard.py";
-      pkgs.writeText "generated-guard-${name}.py" (builtins.replaceStrings [anchor] [replacement] source);
-  brokenAttach = patchedGuard "truncated" ''prefix = re.sub(rb"[^\n]*\n(---\n)\Z", rb"\1", header_file.read_bytes())'';
-  withAttach = script: phase: let
-    replaced = builtins.replaceStrings [(attachCommand guardScript)] [(attachCommand script)] phase;
-  in
-    if script == null
-    then phase
-    else assert lib.assertMsg (replaced != phase) "generated-files: mkTree no longer calls the guard attach step"; replaced;
-  bom = builtins.fromJSON ''"\uFEFF"'';
-  crlf = builtins.replaceStrings ["\n"] ["\r\n"];
   dataFile = type: text: {"data.${type}" = mkFile type text;};
-  noFormat = {
-    json = null;
-    markdown = null;
-    toml = null;
-    yaml = null;
-  };
+  rewriteFormatter = type: text:
+    (inputs.treefmt-nix.lib.evalModule pkgs {
+      settings.formatter.rewrite = {
+        command = toString (pkgs.writeShellScript "rewrite-${type}" ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          for file in "$@"; do
+            printf '%s' ${lib.escapeShellArg text} > "$file"
+          done
+        '');
+        includes = ["*.${type}"];
+      };
+    }).config;
   goodTable = ''    | a | b |
     | --- | --- |
     | x | y |
@@ -67,59 +41,62 @@
   '';
   cases = [
     {
-      name = "format-json";
-      files = {"config.json" = mkFile "json" ''{"a":true}'';};
+      name = "frontmatter-whole-file-format";
+      files = markdown "---\nname: 'a'\n---\n\n#   Page\n";
       treefmt = treefmtConfig;
       guards = onlyGuards ["parseCompare"];
-      changed = "config.json";
-    }
-    {
-      name = "format-markdown";
-      files =
-        markdown ''          #   Heading
-        '';
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      changed = "page.md";
-    }
-    {
-      name = "format-toml";
-      files = {"config.toml" = mkFile "toml" "a=1\n";};
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      changed = "config.toml";
-    }
-    {
-      name = "format-yaml";
-      files =
-        dataFile "yaml" ''          a:    true
-        '';
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      changed = "data.yaml";
-    }
-    {
-      name = "formatter-replaces-default";
-      files =
-        markdown ''          # Original
-        '';
-      formatter = noFormat // {markdown = "printf '# Custom\\n' > page.md";};
-      expected = "# Custom\n";
+      expected = "---\nname: \"a\"\n---\n\n# Page\n";
       path = "page.md";
     }
     {
-      name = "null-disables-formatter";
-      files =
-        markdown ''          #   Original
-        '';
-      formatter = noFormat;
-      expected = "#   Original\n";
+      name = "frontmatter-value-change-bad";
+      files = markdown "---\nname: \"a\"\n---\n\n# Page\n";
+      treefmt = rewriteFormatter "md" "---\nname: \"b\"\n---\n\n# Page\n";
+      guards = onlyGuards ["parseCompare"];
+      fails = "parsed Markdown frontmatter values differ from";
+    }
+    {
+      name = "frontmatter-thematic-break-is-not-a-header";
+      files = markdown "---\n\n#   Title\n\nbody\n";
+      treefmt = treefmtConfig;
+      guards = onlyGuards ["parseCompare"];
+      expected = "---\n\n# Title\n\nbody\n";
       path = "page.md";
     }
+    {
+      name = "frontmatter-crlf-header-compares-values";
+      files = markdown "---\r\nname: a\r\n---\r\n\r\n# Page\r\n";
+      treefmt = treefmtConfig;
+      guards = onlyGuards ["parseCompare"];
+    }
+    {
+      name = "format-json-default";
+      files = dataFile "json" ''{"value":true}'';
+      treefmt = treefmtConfig;
+      guards = onlyGuards ["parseCompare"];
+      expected = "{ \"value\": true }\n";
+      path = "data.json";
+    }
+    {
+      name = "format-toml-default";
+      files = dataFile "toml" "value=true\n";
+      treefmt = treefmtConfig;
+      guards = onlyGuards ["parseCompare"];
+      expected = "value = true\n";
+      path = "data.toml";
+    }
+    {
+      name = "format-yaml-default";
+      files = dataFile "yaml" "value:   true\n";
+      treefmt = treefmtConfig;
+      guards = onlyGuards ["parseCompare"];
+      expected = "value: true\n";
+      path = "data.yaml";
+    }
+
     {
       name = "table-cells-good";
       files = markdown goodTable;
-      formatter = noFormat;
       guards = onlyGuards ["tableCells"];
     }
     {
@@ -134,7 +111,6 @@
       files = {
         "skill.json" = mkFile "json" ''{"value":true}'' // {surface = "skills";};
       };
-      formatter = noFormat;
       checks.skills = "exit 7";
       runtime = "claude";
       fails = "Generated-file check failed for surface skills in runtime claude (exit 7)";
@@ -144,7 +120,6 @@
       files =
         markdown ''          A `single span` is sound.
         '';
-      formatter = noFormat;
       guards = onlyGuards ["splitCodeSpans"];
     }
     {
@@ -159,13 +134,12 @@
     {
       name = "parse-json-good";
       files = dataFile "json" ''{"value":true}'';
-      formatter = noFormat;
       guards = onlyGuards ["parseCompare"];
     }
     {
       name = "parse-json-bad";
       files = dataFile "json" ''{"value":true}'';
-      formatter = noFormat // {json = "printf '{\"value\":false}' > data.json";};
+      treefmt = rewriteFormatter "json" ''{"value":false}'';
       guards = onlyGuards ["parseCompare"];
       fails = "parseCompare";
     }
@@ -174,7 +148,7 @@
       files =
         dataFile "toml" ''          value = true
         '';
-      formatter = noFormat // {toml = "printf 'value = false\\n' > data.toml";};
+      treefmt = rewriteFormatter "toml" "value = false\n";
       guards = onlyGuards ["parseCompare"];
       fails = "parseCompare";
     }
@@ -183,41 +157,11 @@
       files =
         dataFile "yaml" ''          value: true
         '';
-      formatter = noFormat // {yaml = "printf 'value: false\\n' > data.yaml";};
+      treefmt = rewriteFormatter "yaml" "value: false\n";
       guards = onlyGuards ["parseCompare"];
       fails = "parseCompare";
     }
-    {
-      name = "frontmatter-consumer-default-bytes";
-      files = consumerFiles;
-      treefmt = treefmtConfig;
-      guards = onlyGuards ["parseCompare"];
-      head = frontmatter.block consumerData + "\n";
-    }
-    {
-      name = "parse-frontmatter-bom-good";
-      files = markedMarkdown (bom + "---\nvalue: true\n---\n\n\n# Page\n");
-      formatter = noFormat;
-      guards = onlyGuards ["parseCompare"];
-      expected = bom + "---\nvalue: true\n---\n\n# Page\n";
-      path = "page.md";
-    }
-    {
-      name = "parse-frontmatter-crlf-good";
-      files = markedMarkdown (crlf "---\nvalue: true\n---\n# Page\n");
-      formatter = noFormat;
-      guards = onlyGuards ["parseCompare"];
-      expected = crlf "---\nvalue: true\n---\n\n# Page\n";
-      path = "page.md";
-    }
-    {
-      name = "frontmatter-reattach-truncated-bad";
-      files = consumerFiles;
-      treefmt = treefmtConfig;
-      attach = brokenAttach;
-      guards = onlyGuards ["parseCompare"];
-      fails = bytesChanged;
-    }
+
     {
       name = "kiro-frontmatter-flow-bad";
       files = markdown ''        ---
@@ -227,7 +171,6 @@
         ---
         # Page
       '';
-      formatter = noFormat;
       guards = onlyGuards ["kiroFrontmatterFlow"];
       runtime = "kiro";
       fails = "page.md: Kiro frontmatter flow sequence spans multiple lines";
@@ -241,7 +184,6 @@
         ---
         # Raw page
       '';
-      formatter = noFormat;
       guards = onlyGuards ["kiroFrontmatterFlow"];
       runtime = "kiro";
       fails = ".kiro/steering/raw.md: Kiro frontmatter flow sequence spans multiple lines";
@@ -254,7 +196,6 @@
         ---
         # Page
       '';
-      formatter = noFormat;
       guards = {};
       runtime = "kiro";
     }
@@ -266,19 +207,15 @@
         ---
         # Page
       '';
-      formatter = noFormat;
       guards = onlyGuards ["kiroFrontmatterFlow"];
       runtime = "claude";
     }
   ];
-  generatedSource = file: path:
-    file.source or (pkgs.writeText (lib.strings.sanitizeDerivationName (baseNameOf path)) file.text);
   makeTree = case:
     generated.mkTree {
       name = "generated-fixture-${case.name}";
       inherit (case) files;
       checks = case.checks or {};
-      formatter = case.formatter or {};
       guards = case.guards or {};
       runtime = case.runtime or "test";
       treefmt = case.treefmt or null;
@@ -291,22 +228,11 @@
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       runHook() { :; }
-      ${withAttach (case.attach or null) tree.buildPhase}
-      ${case.postBuild or ""}
+      ${tree.buildPhase}
       ${tree.installPhase}
       ${tree.installCheckPhase}
     '';
-  mutatedTree =
-    (generated.mkTree {
-      name = "generated-fixture-real-frontmatter-byte-failure";
-      files = consumerFiles;
-      guards = onlyGuards ["parseCompare"];
-      runtime = "test";
-      treefmt = treefmtConfig;
-    }).overrideAttrs (_: {
-      postBuild = "sed -i 's/  - \"SCHEMA.md\"/  - SCHEMA.md/' work/markdown/page.md";
-    });
-  expectedMutationFailure = pkgs.testers.testBuildFailure mutatedTree;
+  expectedMutationFailure = pkgs.testers.testBuildFailure (makeTree (lib.findFirst (case: case.name == "frontmatter-value-change-bad") (throw "generated-files: the value-change fixture is gone") cases));
   treefmtConfig = (inputs.treefmt-nix.lib.evalModule pkgs (import ../../treefmt.nix)).config;
   treefmtTree = generated.mkTree {
     name = "generated-fixture-treefmt-eval-module";
@@ -326,7 +252,7 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
 
-        printf '%s' ${lib.escapeShellArg roundTripRendered.text} > rendered.md
+        printf '%s' ${lib.escapeShellArg roundTripRendered} > rendered.md
         python3 - ${lib.escapeShellArg roundTripDescription} <<'PY'
         import pathlib
         import sys
@@ -383,14 +309,6 @@ in {
             fi
           ''
         }
-          ${lib.optionalString (case ? changed) ''
-          ! cmp -s ${lib.escapeShellArg (generatedSource case.files.${case.changed} case.changed)} "$out"/${lib.escapeShellArg case.changed} \
-            || { echo "FAIL: ${case.name} did not format" >&2; exit 1; }
-        ''}
-          ${lib.optionalString (case ? head) ''
-          printf '%s' ${lib.escapeShellArg case.head} | cmp -n ${toString (builtins.stringLength case.head)} - "$out"/page.md \
-            || { echo "FAIL: ${case.name} changed generator frontmatter bytes" >&2; exit 1; }
-        ''}
           ${lib.optionalString (case ? expected) ''
           printf '%s' ${lib.escapeShellArg case.expected} | cmp - "$out"/${lib.escapeShellArg case.path} \
             || { echo "FAIL: ${case.name} did not preserve its chosen formatter result" >&2; exit 1; }
@@ -400,10 +318,9 @@ in {
       '')
       cases}
 
-    grep -q -F ${lib.escapeShellArg bytesChanged} ${expectedMutationFailure}/testBuildFailure.log
+    grep -q -F 'parsed Markdown frontmatter values differ from' ${expectedMutationFailure}/testBuildFailure.log
     grep -q -F 'Generated-file guard parseCompare failed' ${expectedMutationFailure}/testBuildFailure.log
-    grep -q -F 'Choose one of three options:' ${expectedMutationFailure}/testBuildFailure.log
-    echo 'ok — actual mkTree byte guard fails from installCheckPhase'
+    echo 'ok — actual mkTree value guard fails from installCheckPhase'
     touch "$out"
   '';
 }

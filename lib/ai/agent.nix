@@ -70,18 +70,19 @@
     if !isSemantic value
     then value
     else
-      (frontmatter.render {
+      frontmatter.render {
         data = frontmatterFields includeName name value;
         body = value.instructions.text + "\n";
-      }).text;
+      };
 
   renderFile = includeName: name: value:
     if isSemantic value
-    then
-      frontmatter.content (frontmatter.render {
+    then {
+      text = frontmatter.render {
         data = frontmatterFields includeName name value;
         body = value.instructions.text + "\n";
-      })
+      };
+    }
     else fileContent value;
 
   # A text source that crossed the pool boundary carries one arm, so its

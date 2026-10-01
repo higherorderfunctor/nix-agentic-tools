@@ -1,4 +1,4 @@
-# One renderer for generated Markdown frontmatter and its guard metadata.
+# One renderer for generated Markdown frontmatter.
 {lib}: let
   scalar = key: value:
     if value == null || builtins.isBool value || builtins.isInt value || builtins.isString value
@@ -16,22 +16,11 @@
       else "${key}: ${scalar key value}")
     data)
     + "\n---\n";
-in rec {
+in {
   inherit block;
-  content = rendered: {
-    _frontmatter = rendered.frontmatter;
-    inherit (rendered) text;
-  };
-
   render = {
     data,
     body,
-  }: {
-    text = lib.optionalString (data != {}) (block data + "\n") + body;
-    frontmatter = data != {};
-  };
-
-  treeFile = rendered: {
-    inherit (rendered) frontmatter text;
-  };
+  }:
+    lib.optionalString (data != {}) (block data + "\n") + body;
 }
