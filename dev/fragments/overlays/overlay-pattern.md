@@ -1,9 +1,10 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-09-29 — recipes receive every `scopeArgs` entry in
-> `lib/facets/repository.nix`, `generatedLib` and `gitToolExtraction` included;
-> flake-input and rev-bumped packages regenerate their sidecars through
-> `passthru.regenerateExtracted`.
+> **Last verified:** 2026-10-01 — Bruno 4.2.1 retains the stale nested `qs` lock
+> entries repaired by the package recipe; recipes receive every `scopeArgs`
+> entry in `lib/facets/repository.nix`, `generatedLib` and `gitToolExtraction`
+> included; flake-input and rev-bumped packages regenerate their sidecars
+> through `passthru.regenerateExtracted`.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -243,13 +244,13 @@ proof that the base adaptation works. The threshold also keeps 4.0.0's builder
 inputs unchanged; the update script, not this compatibility shim, continues to
 derive both hashes.
 
-The same builder input also carries a 4.2.0-only lock repair. That release's
-three Bruno workspaces require `qs ^6.15.2`, but their nested lock entries still
-pin 6.14.1. Offline `npm ci` then asks for registry metadata despite the
-required 6.15.3 tarball being cached. `postPatch` checks the exact lock and
-manifest shape, then removes those stale nested entries so npm can use the root
-6.15.3 copy. `fetchNpmDeps` and the package build both consume this `postPatch`;
-changing the lock repair requires recalculating `npmDepsHash`.
+The same builder input also carries a lock repair for Bruno 4.2.0 and 4.2.1.
+Both releases' three Bruno workspaces require `qs ^6.15.2`, but their nested
+lock entries still pin 6.14.1. Offline `npm ci` then asks for registry metadata
+despite the required 6.15.3 tarball being cached. `postPatch` checks the exact
+lock and manifest shape, then removes those stale nested entries so npm can use
+the root 6.15.3 copy. `fetchNpmDeps` and the package build both consume this
+`postPatch`; changing the lock repair requires recalculating `npmDepsHash`.
 
 `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix` is a
 plain `overrideAttrs` and is CORRECT as one: it sets `cargoDeps` — an
