@@ -260,10 +260,13 @@ them. It keeps the actual Nix policy: the Auto model pair and marker,
 `DEFAULT_SKILL_PATHS` integration list. Kimchi owns migration, onboarding, tips,
 survey, login, and device state. `region` has no default: Home Manager
 evaluation fails until the region is declared. Home Manager supplies both
-settings through their leaves in the global `config.json` only. Devenv emits
-`KIMCHI_REGION` or `KIMCHI_TELEMETRY_ENABLED` when its corresponding setting is
-declared, because it never writes `$HOME` and Kimchi ignores those leaves in a
-project `config.json`.
+settings through their leaves in the global `config.json` only. The package
+drops the setup wizard's unconditional `telemetry.enabled = true` write, so that
+`false` survives a wizard run, including the one Kimchi starts by itself after a
+401 on a file-stored key. Devenv emits `KIMCHI_REGION` or
+`KIMCHI_TELEMETRY_ENABLED` when its corresponding setting is declared, because
+it never writes `$HOME` and Kimchi ignores those leaves in a project
+`config.json`.
 
 `ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
 `lib/credentials.nix` shape. Kimchi reads git tokens only from the user

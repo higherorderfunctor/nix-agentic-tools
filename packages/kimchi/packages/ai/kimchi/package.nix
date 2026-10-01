@@ -255,6 +255,15 @@ in
 
         substituteInPlace src/commands/help.ts \
           --replace-fail $'\t{ name: "KIMCHI_NO_UPDATE_CHECK", description: "Disable the background self-update probe" },\n' ""
+
+        # The setup wizard's telemetry step persisted `telemetry.enabled = true`
+        # unconditionally, and the wizard also runs on its own after a 401 on a
+        # file-stored key. Drop only that write so an explicit `false` (Home
+        # Manager's default) survives; an unset key still defaults to on, and
+        # `kimchi config telemetry` still writes it on request.
+        substituteInPlace src/setup-wizard/steps/telemetry.ts \
+          --replace-fail $'import { writeTelemetryEnabled } from "../../config.js"\n' "" \
+          --replace-fail $'\twriteTelemetryEnabled(true)\n' ""
       ''
       + lib.optionalString ourPkgs.stdenv.hostPlatform.isDarwin ''
         substituteInPlace scripts/build-binary.js \
