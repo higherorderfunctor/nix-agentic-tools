@@ -75,6 +75,7 @@
     "chat.enableCustomSpinnerVerbs",
     "chat.enableInfraSafetyEnforce",
     "chat.enableInfraSafetyMonitor",
+    "chat.enableMainAgentSubagentTool",
     "chat.enableNotifications",
     "chat.enableWorkflows",
     "chat.fullscreenWheelRows",
@@ -83,6 +84,7 @@
     "chat.historyMode",
     "chat.keybindings.cancelStream",
     "chat.keybindings.closeMenu",
+    "chat.keybindings.moveToBackground",
     "chat.keybindings.quit",
     "chat.keybindings.toggleInterruptBehavior",
     "chat.keybindings.toggleSessionDashboard",
@@ -125,7 +127,9 @@
     "chat.verbosity.lite",
     "chat.verbosity.tui",
     "chat.workflow.continueInterrupted",
-    "chat.workflowMonitor.mouseEnabled"
+    "chat.workflowMonitor.mouseEnabled",
+    "memory.mode",
+    "memory.reflection"
   ],
   "workspaceOverridableSettings": [
     "chat.defaultAgent",
