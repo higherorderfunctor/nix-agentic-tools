@@ -892,6 +892,7 @@ function extractConfig(
   kimchiSources,
   checker,
   analysisChecker,
+  kimchiVersion,
   ts,
 ) {
   // Every name below is resolved as config.ts itself sees it: Kimchi 1.1.37
@@ -1020,7 +1021,41 @@ function extractConfig(
       "config.json exposes a top-level 'harness' key; this collides with the reserved harness settings namespace",
     );
   }
-  const expected = new Set(Object.keys(annotations));
+  const annotationEntries = Object.entries(annotations).map(
+    ([name, annotation]) => {
+      if (
+        !annotation ||
+        typeof annotation !== "object" ||
+        Array.isArray(annotation)
+      )
+        fail(`config.${name} must be an object`);
+      const handKeys = Object.keys(annotation).filter(
+        (key) => key !== "aliasFor" && key !== "introduced",
+      );
+      if (handKeys.length)
+        fail(`config.${name} has unknown keys: ${JSON.stringify(handKeys)}`);
+      if (
+        annotation.aliasFor !== undefined &&
+        (typeof annotation.aliasFor !== "string" || !annotation.aliasFor.trim())
+      )
+        fail(`config.${name}.aliasFor must be a non-empty string`);
+      return [
+        name,
+        annotation,
+        releaseAtLeast(
+          kimchiVersion,
+          annotation.introduced,
+          `config.${name}.introduced`,
+        ),
+      ];
+    },
+  );
+  const activeAnnotations = Object.fromEntries(
+    annotationEntries
+      .filter(([, , active]) => active)
+      .map(([name, annotation]) => [name, annotation]),
+  );
+  const expected = new Set(Object.keys(activeAnnotations));
   const unknown = [...discovered].filter((key) => !expected.has(key)).sort();
   const missing = [...expected].filter((key) => !discovered.has(key)).sort();
   if (unknown.length || missing.length)
@@ -1029,7 +1064,7 @@ function extractConfig(
     );
   const projectKeys = discoverProjectConfigKeys(
     sourceFile,
-    annotations,
+    activeAnnotations,
     checker,
     ts,
   );
@@ -1041,19 +1076,12 @@ function extractConfig(
     analysisChecker,
     ts,
   );
-  for (const [name, annotation] of Object.entries(annotations)) {
+  for (const [name, annotation] of Object.entries(activeAnnotations)) {
     if (!keys[name])
       fail(`no compiler-derived type for config.json key ${name}`);
-    const handKeys = Object.keys(annotation).filter(
-      (key) => key !== "aliasFor",
-    );
-    if (handKeys.length)
-      fail(
-        `config.${name} annotations may name only an aliasFor; ${JSON.stringify(handKeys)} are derived from the sources`,
-      );
     keys[name] = {
       ...keys[name],
-      ...annotation,
+      ...(annotation.aliasFor ? { aliasFor: annotation.aliasFor } : {}),
       ...(inert.has(name) ? { deprecated: inert.get(name), inert: true } : {}),
       project: projectKeys.has(name),
     };
@@ -2319,6 +2347,7 @@ async function main() {
       ),
       checker,
       analysisChecker,
+      args["kimchi-version"],
       ts,
     ),
     environment: await extractEnvironment(

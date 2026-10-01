@@ -1,7 +1,8 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-01 — the extractor binds patch-added source before
-> resolving environment aliases and replays Kimchi 1.3.0. A normalized agent's
+> resolving environment aliases and classifies Kimchi 1.5.0's versioned config
+> and environment additions before the package pin moves. A normalized agent's
 > `tools` list is dropped with a warning instead of failing evaluation. Kimchi
 > shares Home Manager's user config.json and harness/settings.json with the
 > runtime; the remaining files and every devenv file stay read-only copies. Its
@@ -92,19 +93,20 @@ untyped elements unless they are scalars, because `filterNulls` does not recurse
 into lists. So a key upstream adds to pi's `Settings` or to config.ts's
 `readConfigExtras` becomes an option at the next re-extraction, and a key it
 removes fails its consumer as an unknown option instead of writing bytes nothing
-reads. Every option is `nullOr` with a null default. Alias keys (`aliasFor`, the
-only hand annotation left on config keys) and inert keys have no option. A key
-is inert when upstream tags its `KimchiConfig` member `@deprecated` and no
-Kimchi code consumes it: nothing reads the loaded member, and nothing outside
-`config.ts` reads the raw `readConfigExtras` member, while `config.ts` still
-parses it to warn that it is obsolete. A release that consumes it again clears
-the flag, and the key becomes an option. The option generator keeps three hand
-tables: two exclusions (`apiKey` and `gitTokens`, secrets delivered by
-`ai.kimchi.apiKey` and `ai.kimchi.gitTokens`), one refinement (`modelRoles`,
-whose role names and single-string roles come from the sidecar while the
-non-blank and non-empty checks do not), and one description note.
-`report.stale*` lists any row whose path the sidecar lost, and
-`checks/native-options.nix` fails on it.
+reads. Every option is `nullOr` with a null default. Config annotations may name
+an `aliasFor` or the exact `introduced` release. The extractor validates every
+annotation before release gating, then includes only active rows in its census
+and generated sidecar. Alias keys and inert keys have no option. A key is inert
+when upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
+consumes it: nothing reads the loaded member, and nothing outside `config.ts`
+reads the raw `readConfigExtras` member, while `config.ts` still parses it to
+warn that it is obsolete. A release that consumes it again clears the flag, and
+the key becomes an option. The option generator keeps three hand tables: two
+exclusions (`apiKey` and `gitTokens`, secrets delivered by `ai.kimchi.apiKey`
+and `ai.kimchi.gitTokens`), one refinement (`modelRoles`, whose role names and
+single-string roles come from the sidecar while the non-blank and non-empty
+checks do not), and one description note. `report.stale*` lists any row whose
+path the sidecar lost, and `checks/native-options.nix` fails on it.
 
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's harness additions (`autoDefaultApplied`, `fermentV2`,
