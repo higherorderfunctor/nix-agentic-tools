@@ -317,6 +317,10 @@ in {
               // {
                 content = {
                   _generated = true;
+                  _surface =
+                    if config.ai.internal.agentsMd.${_filename}.context != null
+                    then "context"
+                    else "rules";
                   enable = text != "";
                   inherit text;
                 };
@@ -338,6 +342,7 @@ in {
         (adapters.devenv {
           cfg = {
             inherit (config.ai.internal) _maxBytes activation files;
+            checks = lib.genAttrs deliveryOptions.surfaces (surface: config.ai.checks.${surface});
             methodFor = deliveryMethod.byRule;
           };
           inherit config options;

@@ -36,7 +36,11 @@ in {
         if (builtins.readFileType source) == "directory"
         then
           lib.nameValuePair "${configDir}/skills/${name}" {
-            content.source = source;
+            content = {
+              _generated = true;
+              _surface = "skills";
+              inherit source;
+            };
             executable = null;
             inherit recursive;
           }
@@ -49,7 +53,11 @@ in {
               # path, and routing that to `text` writes the PATH as the file's
               # body — the same bug the directory branch above avoids,
               # reached through the single-file branch instead.
-              content.source = source;
+              content = {
+                _generated = true;
+                _surface = "skills";
+                inherit source;
+              };
               executable = null;
             }
     )

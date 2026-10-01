@@ -795,9 +795,15 @@
         # string, so a directory or missing path typed as text fails eval
         # before mkExecpolicyAssertions can name what is wrong with it.
         content = lib.mkDefault (
-          if isExecpolicyPathLike content
-          then {source = content;}
-          else {text = content;}
+          {
+            _generated = true;
+            _surface = "settings";
+          }
+          // (
+            if isExecpolicyPathLike content
+            then {source = content;}
+            else {text = content;}
+          )
         );
         # Source files retain their mode; inline policy is non-executable.
         executable =
@@ -938,7 +944,11 @@
     dropUnset = lib.filterAttrs (field: value: !(builtins.elem field codexAgentRequiredFields && value == null));
     entry = name: content:
       lib.nameValuePair "${prefix}/agents/${name}.toml" {
-        content = lib.mkDefault content;
+        content = lib.mkDefault ({
+            _generated = true;
+            _surface = "agents";
+          }
+          // content);
         format = lib.mkDefault "toml";
         executable = null;
       };
@@ -1448,6 +1458,8 @@ in
             (lib.mkIf (effectiveHooks != {}) {
               "${nativeDir}/hooks.json" = {
                 content = lib.mkDefault {
+                  _generated = true;
+                  _surface = "hooks";
                   source = jsonFormat.generate (
                     if isHm
                     then "codex-hooks.json"
@@ -1511,7 +1523,11 @@ in
           # user file; devenv writes the project file only when something is
           # declared.
           ai.codex.files.${configFile} = lib.mkIf (isHm || settings != {}) {
-            content.value = settings;
+            content = {
+              _generated = true;
+              _surface = "settings";
+              value = settings;
+            };
             format = "toml";
           };
         }
@@ -1520,7 +1536,11 @@ in
           {
             # See `daemonSettingsWriter`.
             ai.codex.files.${daemonSettingsFile cfg} = {
-              content.value = cfg.native.daemonSettings;
+              content = {
+                _generated = true;
+                _surface = "settings";
+                value = cfg.native.daemonSettings;
+              };
               entry = daemonSettingsWriter;
               format = "json";
               ledger = daemonSettingsManifest;
@@ -1562,6 +1582,7 @@ in
               then {
                 content = {
                   _generated = true;
+                  _surface = "context";
                   enable = false;
                   text = agentsMd;
                 };
@@ -1570,6 +1591,7 @@ in
               else {
                 content = {
                   _generated = true;
+                  _surface = "context";
                   enable = true;
                   text = agentsMd;
                 };

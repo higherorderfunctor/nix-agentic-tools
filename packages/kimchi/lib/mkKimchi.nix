@@ -410,17 +410,27 @@
     # ledger of the directory it lands in. Home Manager owns every user-global
     # file whatever is declared; devenv claims a project file only when
     # something is declared.
-    settingsCopy = path: fields:
+    settingsCopy = surface: path: fields:
       lib.nameValuePair path (lib.mkIf (!isDevenv || (fields.content.value or {}) != {}) ({
+          content =
+            (fields.content or {})
+            // {
+              _generated = true;
+              _surface = surface;
+            };
           entry = "kimchiFiles";
           format = "json";
           ledger = filesLedger (dirOf path);
           method = "copy-ro";
         }
-        // fields));
+        // builtins.removeAttrs fields ["content"]));
     sharedSettings = path: value:
       helpers.mkReconciledDocument {
-        content.value = value;
+        content = {
+          _generated = true;
+          _surface = "settings";
+          inherit value;
+        };
         format = "json";
         ledger = "materialize/kimchi-shared-${builtins.hashString "sha256" path}.json";
         inherit path;
@@ -555,23 +565,23 @@
       # declaration, so in-app changes do not persist.
       {
         ai.kimchi.files = lib.listToAttrs (
-          lib.optional isDevenv (settingsCopy "${harness}/settings.json" {content.value = filteredHarnessSettings;})
+          lib.optional isDevenv (settingsCopy "settings" "${harness}/settings.json" {content.value = filteredHarnessSettings;})
           ++ [
-            (settingsCopy "${mcpAndSkillsDir}/mcp.json" {
+            (settingsCopy "mcpServers" "${mcpAndSkillsDir}/mcp.json" {
               content.value = lib.optionalAttrs (mergedServers != {}) {
                 mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
               };
             })
-            (settingsCopy "${permissionsDir}/permissions.json" {content.value = filteredPermissions;})
+            (settingsCopy "settings" "${permissionsDir}/permissions.json" {content.value = filteredPermissions;})
           ]
-          ++ lib.optional (!isDevenv && gitTokens != {}) (settingsCopy "${cfg.configDir}/config.json" {
+          ++ lib.optional (!isDevenv && gitTokens != {}) (settingsCopy "settings" "${cfg.configDir}/config.json" {
             content = userConfigContent;
             mode = "0400";
           })
           # Kimchi warns once per launch when a group or other can read a
           # config.json (src/config.ts:390-403,533), so the project copy is
           # owner-only.
-          ++ lib.optional isDevenv (settingsCopy "${projectDir}/config.json" {
+          ++ lib.optional isDevenv (settingsCopy "settings" "${projectDir}/config.json" {
             content.value = filteredProjectSettings;
             mode = "0400";
           })
@@ -585,7 +595,7 @@
           # key when the writer runs (see project-trust.py), which is why this
           # copy declares `run`. Home Manager only: devenv rejects the option
           # in the assertions above.
-          ++ lib.optional (!isDevenv) (settingsCopy "${harness}/trust.json" {
+          ++ lib.optional (!isDevenv) (settingsCopy "settings" "${harness}/trust.json" {
             content.run = ''
               set -euETo pipefail
               shopt -s inherit_errexit 2>/dev/null || :
@@ -607,6 +617,7 @@
         ai.kimchi.files.${userContextPath cfg} = lib.mkDefault {
           content = {
             _generated = true;
+            _surface = "context";
             enable = agentsMd != "";
             text = agentsMd;
           };
@@ -630,11 +641,15 @@
           lib.nameValuePair "${agentsDir}/${name}.md" {
             # A store-path string, as a flake input yields, is a source too;
             # `builtins.isPath` alone would write the path as the agent's text.
-            content = lib.mkDefault (lib.ai.agent.renderFile false name (
-              if lib.ai.agent.isSemantic value
-              then value // {tools = null;}
-              else value
-            ));
+            content = lib.mkDefault ({
+                _generated = true;
+                _surface = "agents";
+              }
+              // lib.ai.agent.renderFile false name (
+                if lib.ai.agent.isSemantic value
+                then value // {tools = null;}
+                else value
+              ));
             entry = "kimchiAgents";
             format = lib.mkDefault "markdown";
             ledger = agentsLedger;
@@ -654,7 +669,11 @@
       in
         lib.mkIf (isDevenv && hasHookHandlers projectHooks) {
           ai.kimchi.files.".kimchi/hooks.json" = {
-            content.value.hooks = sharedHooks.render projectHooks;
+            content = {
+              _generated = true;
+              _surface = "hooks";
+              value.hooks = sharedHooks.render projectHooks;
+            };
             format = "json";
           };
         })
@@ -694,7 +713,7 @@ in
     agentsDescriptionSuffix = lib.concatStringsSep " " [
       "Each lands as one `<name>.md`: Home Manager writes `<configDir>/harness/agents/`, devenv a trusted project's `.kimchi/agents/`."
       "A normalized record renders to Kimchi frontmatter plus body."
-      "Markdown here is Kimchi's own and is not translated, but it is built into the runtime's generated-file tree, where `ai.generated.formatter.markdown` and `ai.generated.check.markdown` process it;"
+      "Markdown here is Kimchi's own and is not translated, but it is built into the runtime's generated-file tree, where `ai.generated.formatter.markdown` formats it and `ai.checks.agents` checks it;"
       "set `ai.kimchi.files.\"<path>\".format = \"raw\"` to deliver one agent file as written."
       "A record's Claude/Copilot `tools` list has no Kimchi reading: it is dropped with a warning naming this option as the remedy."
       "Each file is a read-only copy: Kimchi's /agents commands cannot edit a declared agent, and an agent they create beside it is left alone."

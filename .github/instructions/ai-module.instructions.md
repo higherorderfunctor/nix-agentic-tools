@@ -7,11 +7,13 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-01 — agents are layered: root `ai.agents` takes
-> only the normalized record, `ai.<runtime>.agents` a normalized record or a raw
-> native file, and a runtime record's `agentNativeType` + `agentTransformer`
-> lower normalized records into typed `ai.<runtime>.native.agents` (Kiro and
-> Codex today); callbacks get `rawAgents` and `nativeAgents` apart. Root
+> **Last verified:** 2026-10-01 — shared internal trees run root surface checks;
+> all factory-generated entries carry surface stamps, including Codex permission
+> rules under `settings`. Agents are layered: root `ai.agents` takes only the
+> normalized record, `ai.<runtime>.agents` a normalized record or a raw native
+> file, and a runtime record's `agentNativeType` + `agentTransformer` lower
+> normalized records into typed `ai.<runtime>.native.agents` (Kiro and Codex
+> today); callbacks get `rawAgents` and `nativeAgents` apart. Root
 > `ai.agentsDir` is gone; every runtime's `ai.<runtime>.agentsDir` expands into
 > raw per-runtime entries. Rule inclusion is a priority-ordered portable list
 > resolved once per runtime; Kiro keeps its scalar per-runtime override.
@@ -59,7 +61,10 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > for recursive entries, from its repository treefmt run. One guard table stamps
 > `ai.guards` and supplies each guard's phase, runtime, formatter-dependent
 > default and program to those trees; the old `ai.generated.guards` names are
-> temporary aliases.
+> temporary aliases. Consumer checks resolve through `ai.checks.all`, one
+> per-surface default, and one per-runtime surface leaf; only the leaf runs over
+> that surface's stamped files in the built runtime tree, while the shared
+> internal tree runs the root surface tier with `AI_RUNTIME=internal`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -665,6 +670,25 @@ equal-priority definitions fail naming both paths. Delivery adds `value`
 (structured, rendered by `format`) and `run` (a body that writes the file when
 the writer runs) as explicit alternatives; validation permits at most one live
 form.
+
+Every factory-owned content definition also carries internal `_generated = true`
+and `_surface`. `_generated` distinguishes a surviving factory definition from a
+consumer replacement for delivery warnings. `_surface` is one of `agents`,
+`context`, `hooks`, `mcpServers`, `rules`, `settings`, or `skills`, and routes
+the built file to the matching consumer check. A raw `ai.<runtime>.files` entry
+written directly by a consumer carries neither stamp and reaches no surface
+check.
+
+Generated-file checks use replacing defaults between tiers; definitions at the
+same tier concatenate through `types.lines`: `ai.checks.all` defaults to empty,
+`ai.checks.<surface>` defaults to it, and `ai.<runtime>.checks.<surface>`
+defaults to that surface tier. Only the final runtime-by-surface value executes;
+shared internal documents run the root surface tier with `AI_RUNTIME=internal`.
+Codex execpolicy permission rules carry the `settings` surface. A consumer that
+wants composition explicitly splices the broader value into the narrower
+definition. The builder runs each non-empty represented surface once from the
+installed tree root, exports `AI_RUNTIME`, and passes target-relative paths in
+`"$@"`.
 
 A file record is built with `enableOnMkDefault`, so `text` or `source` defined
 at ANY priority, a leaf `mkDefault` included, enables it. Package prose records

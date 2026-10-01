@@ -15,6 +15,7 @@
   # leaves inside. `raw` is the default because most files carry their bytes
   # directly.
   formats = ["json" "markdown" "raw" "toml" "yaml"];
+  surfaces = ["agents" "context" "hooks" "mcpServers" "rules" "settings" "skills"];
 
   # A consumer fact usually holds on both backends. When it does not, the
   # exception is keyed by backend; `either` keeps the common case a bare bool
@@ -65,6 +66,12 @@
         _generated = lib.mkOption {
           type = lib.types.bool;
           default = false;
+          internal = true;
+          visible = false;
+        };
+        _surface = lib.mkOption {
+          type = lib.types.nullOr (lib.types.enum surfaces);
+          default = null;
           internal = true;
           visible = false;
         };
@@ -355,7 +362,7 @@
     };
   });
 in {
-  inherit formats;
+  inherit formats surfaces;
   fileMapType = lib.types.attrsOf fileEntry;
   writerMapType = lib.types.attrsOf writer;
 

@@ -480,13 +480,21 @@
     if plan.record.format == "markdown"
     then
       lib.nameValuePair "${configDir}/agents/${name}.md" {
-        content = lib.mkDefault (frontmatter.content (renderMarkdownAgent plan.normalized));
+        content = lib.mkDefault (frontmatter.content (renderMarkdownAgent plan.normalized)
+          // {
+            _generated = true;
+            _surface = "agents";
+          });
         format = lib.mkDefault "markdown";
         executable = null;
       }
     else
       lib.nameValuePair "${configDir}/agents/${name}.json" {
-        content = lib.mkDefault {text = renderJsonAgent plan.normalized;};
+        content = lib.mkDefault {
+          _generated = true;
+          _surface = "agents";
+          text = renderJsonAgent plan.normalized;
+        };
         format = lib.mkDefault "json";
         executable = null;
       };
@@ -506,7 +514,11 @@
       then "md"
       else "json"
     }" {
-      content = lib.mkDefault (agent.fileContent value);
+      content = lib.mkDefault ({
+          _generated = true;
+          _surface = "agents";
+        }
+        // agent.fileContent value);
       format = lib.mkDefault (
         if isMarkdown
         then "markdown"
@@ -1849,7 +1861,11 @@ in
                 # anyway and NOT asserted: `ai.lspServers` is a shared pool,
                 # and the devenv backend is the one that delivers per project.
                 "${settingsDir}/lsp.json" = lib.mkIf (mergedLspServers != {}) {
-                  content.value = aiCommon.mkKiroLspFile mergedLspServers;
+                  content = {
+                    _generated = true;
+                    _surface = "settings";
+                    value = aiCommon.mkKiroLspFile mergedLspServers;
+                  };
                   executable = null;
                   format = "json";
                 };
@@ -1863,7 +1879,11 @@ in
                 # always owns the user-global file; devenv takes the project
                 # file only when something is declared.
                 "${settingsDir}/cli.json" = lib.mkIf (isHm || flatSettings != {}) {
-                  content.value = flatSettings;
+                  content = {
+                    _generated = true;
+                    _surface = "settings";
+                    value = flatSettings;
+                  };
                   entry = "kiroMcpJson";
                   format = "json";
                   ledger = "materialize/kiro-settings.manifest";
@@ -1873,7 +1893,11 @@ in
                 # edits are its writers. Same ownership rule as cli.json. A URL
                 # secret keeps the file owner-only.
                 "${settingsDir}/mcp.json" = lib.mkIf (isHm || kiroSecrets.servers != {}) {
-                  content = lib.mkDefault {run = mcpRender;};
+                  content = lib.mkDefault {
+                    _generated = true;
+                    _surface = "mcpServers";
+                    run = mcpRender;
+                  };
                   entry = "kiroMcpJson";
                   format = "json";
                   ledger = "materialize/kiro-settings.manifest";
@@ -1890,6 +1914,8 @@ in
                 # session-scoped answer does not.
                 "${settingsDir}/permissions.yaml" = lib.mkIf (isHm && permissionRules != []) {
                   content = lib.mkDefault {
+                    _generated = true;
+                    _surface = "settings";
                     source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
                       rules = permissionRules;
                     };
@@ -1916,9 +1942,15 @@ in
                 lib.nameValuePair "${hookTargetDir cfg}/${name}" {
                   format = lib.mkDefault "json";
                   content = lib.mkDefault (
-                    if unit ? store
-                    then {source = unit.store;}
-                    else {inherit (unit) text;}
+                    {
+                      _generated = true;
+                      _surface = "hooks";
+                    }
+                    // (
+                      if unit ? store
+                      then {source = unit.store;}
+                      else {inherit (unit) text;}
+                    )
                   );
                   entry = "materialize-kiro-hooks-write";
                   facts.symlinkReadable = false;

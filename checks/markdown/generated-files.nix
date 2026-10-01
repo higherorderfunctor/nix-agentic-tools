@@ -130,11 +130,14 @@
       fails = "tableCells";
     }
     {
-      name = "user-check-fails";
-      files = dataFile "json" ''{"value":true}'';
+      name = "surface-check-fails";
+      files = {
+        "skill.json" = mkFile "json" ''{"value":true}'' // {surface = "skills";};
+      };
       formatter = noFormat;
-      check.json = "echo user-check-marker >&2; exit 19";
-      fails = "user-check-marker";
+      checks.skills = "exit 7";
+      runtime = "claude";
+      fails = "Generated-file check failed for surface skills in runtime claude (exit 7)";
     }
     {
       name = "split-code-spans-good";
@@ -274,8 +277,8 @@
     generated.mkTree {
       name = "generated-fixture-${case.name}";
       inherit (case) files formatter;
+      checks = case.checks or {};
       guards = case.guards or {};
-      check = case.check or {};
       runtime = case.runtime or "test";
     };
   makeScript = case: let

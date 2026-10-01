@@ -50,6 +50,7 @@
         "ai.codex.activation"
         "ai.codex.agents"
         "ai.codex.agentsDir"
+        "ai.codex.checks"
         "ai.codex.configDir"
         "ai.codex.context"
         "ai.codex.enable"

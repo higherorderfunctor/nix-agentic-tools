@@ -17,7 +17,7 @@ in rec {
     yaml = "find . -type f -print0 | xargs -0 -r ${prettier} --write --parser yaml --config ${prettierConfig}";
   };
   mkTree = {
-    check ? {},
+    checks ? {},
     files,
     formatter ? {},
     guards,
@@ -40,6 +40,20 @@ in rec {
     guardTable;
     guardsFor = phase: lib.filterAttrs (_name: guard: guard.phase == phase) selectedGuards;
     eachType = f: lib.concatStrings (map (type: lib.optionalString (selected type != {}) (f type)) types);
+    surfaceFiles = surface: lib.filterAttrs (_: file: (file.surface or null) == surface) files;
+    eachSurface = f: lib.concatStrings (map (surface: lib.optionalString (surfaceFiles surface != {}) (f surface)) (builtins.attrNames checks));
+    surfaceCheck = surface:
+      pkgs.writeShellScript "ai-${runtime}-${surface}-check" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        ai_surface_check() {
+          :
+          ${checks.${surface}}
+        }
+
+        ai_surface_check "$@"
+      '';
     treefmtFiles = lib.concatMap (type:
       lib.optionals ((formatter.${type} or null) == null)
       (map (path: {inherit path type;}) (lib.attrNames (selected type))))
@@ -100,13 +114,13 @@ in rec {
         dontConfigure = true;
         dontFixup = true;
         buildPhase = ''
-          runHook preBuild
-          export HOME="$TMPDIR"
-          ${pkgs.coreutils}/bin/mkdir -p frontmatter work
-          ${allFiles (path: file: installPath file.type (sourceOf path file) "work/${file.type}/${lib.escapeShellArg path}")}
-          ${runGuards "before"}
-          ${markedFrontmatter "split"}
-          ${eachType (type:
+            runHook preBuild
+            export HOME="$TMPDIR"
+            ${pkgs.coreutils}/bin/mkdir -p frontmatter work
+            ${allFiles (path: file: installPath file.type (sourceOf path file) "work/${file.type}/${lib.escapeShellArg path}")}
+            ${runGuards "before"}
+            ${markedFrontmatter "split"}
+            ${eachType (type:
             lib.optionalString ((formatter.${type} or null) != null) ''
               pushd work/${type} >/dev/null
               ${formatter.${type}}
@@ -138,13 +152,19 @@ in rec {
         installCheckPhase = ''
           runHook preInstallCheck
           ${runGuards "after"}
-          ${eachType (type:
-            lib.optionalString ((check.${type} or "") != "") ''
-              pushd work/${type} >/dev/null
-              ${check.${type}}
-              popd >/dev/null
-            '')}
           cd "$out"
+          ${eachSurface (surface:
+            lib.optionalString (checks.${surface} != "") ''
+              echo "Running generated-file check for ${surface} in ${runtime}" >&2
+              export AI_RUNTIME=${lib.escapeShellArg runtime}
+              if ${surfaceCheck surface} ${lib.escapeShellArgs (builtins.attrNames (surfaceFiles surface))}; then
+                :
+              else
+                status=$?
+                echo "Generated-file check failed for surface ${surface} in runtime ${runtime} (exit $status)" >&2
+                exit "$status"
+              fi
+            '')}
           ${lib.concatStrings (lib.mapAttrsToList (path: limit: ''
               ${lib.getExe byteLimitCheck} ${lib.escapeShellArgs [path (toString limit.bytes) name limit.hint]}
             '')

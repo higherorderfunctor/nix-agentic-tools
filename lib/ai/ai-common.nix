@@ -302,6 +302,7 @@ in {
     content = lib.mkDefault (aiTypes.textSourceFile value
       // {
         _generated = true;
+        _surface = "context";
         enable = true;
       });
     format = lib.mkDefault "markdown";
@@ -334,6 +335,7 @@ in {
       lib.nameValuePair (path name) ({
           content = lib.mkDefault ({
               _generated = true;
+              _surface = "rules";
               enable = true;
             }
             // frontmatter.content rendered);
