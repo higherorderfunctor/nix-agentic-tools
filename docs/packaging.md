@@ -20,23 +20,21 @@ composed registry and ninja DAG:
   `ghArchiveUpdateScript` in `lib/packaging.nix` — one `repo` derives both the
   archive URL and the release-tag version check, and prefetches with `--unpack`
   so the recorded hash is over the unpacked NAR. Recipes pass
-  `sourcesFile = repoPath ./relative/sources.json` explicitly. A Rust package on
-  this pattern must NOT keep an inline `cargoHash`: `ghArchiveUpdateScript`
-  refreshes only the src hash, so the vendor hash would go stale on every bump.
-  Override `cargoDeps` with
-  `rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }` instead
-  (IFD) so one hash covers both — see
-  `packages/fblog/packages/ai/generic/fblog/package.nix` and
-  `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix`.
+  `sourcesFile = repoPath ./relative/sources.json` explicitly.
+- **Rust release packages** (`fblog`, `rumdl`): inline release tags and source
+  hashes with
+  `cargoDeps = rustPlatform.fetchCargoVendor { inherit (finalAttrs) pname version src; hash = …; }`
+  (as oxlint does — `pname` and `version` name the output, so a stale hash
+  cannot reuse the previous release's vendor set). Owner `update.targets` use
+  nix-update to refresh both hashes. `agnix` and `git-absorb` use
+  `buildRustPackage`'s equivalent `cargoHash` shorthand; git-branchless instead
+  imports the lock from its flake input.
 - **Go packages with a sidecar `vendorHash`** (`beads`, its paired nested
   `dolt`, `gh`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui` — kimchi records
-  the hash for its nested `proxy-helper`, not for a top-level Go build): a Go
-  vendor set cannot be derived from a lockfile the way `importCargoLock` derives
-  one from `Cargo.lock`, so `vendorHash` has to be recorded — and it goes in the
-  sidecar, never inline, because `ghArchiveUpdateScript` would otherwise leave
-  it stale on every bump (the same transitive-hash gap as an inline
-  `cargoHash`). `mkUpdateScript` rebuilds the sidecar from scratch, destroying
-  any key it does not write itself, so each package passes
+  the hash for its nested `proxy-helper`, not for a top-level Go build): the
+  custom archive update script needs an explicit dependency-hash repair, so
+  `vendorHash` goes in the sidecar. `mkUpdateScript` rebuilds the sidecar from
+  scratch, destroying any key it does not write itself, so each package passes
   `extraExtract = "${fixVendorHash}"` and reads
   `sources.vendorHash or lib.fakeHash` to cover the window between the two
   writes. `vu.mkGoVendorFix` builds `<attr>.goModules` through the flake's own
