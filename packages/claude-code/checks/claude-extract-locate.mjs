@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// claude-extract-locate.mjs — fixture gate for the memoizer anchor in
+// claude-extract-locate.mjs — fixture gate for structural anchors in
 // packages/claude-code/extract/locate.mjs.
 //
 //   node claude-extract-locate.mjs <extract-dir> <fixture-dir>
@@ -64,6 +64,38 @@ const check = (name, ok, detail) => {
     `FAIL ${name}${detail === undefined ? "" : ` — ${JSON.stringify(detail)}`}`,
   );
 };
+
+// ── The schema description identifies the direct builder or its wrapper ──
+const schemaDescription = L.ANCHORS.schemaKeyDescription;
+check(
+  "schema description in direct builder: returns that builder",
+  L.locateBuilderByDescription(
+    `function B(){return {$schema:()=>z.describe(${JSON.stringify(schemaDescription)})}}`,
+  ) === "B",
+);
+check(
+  "schema description in descriptor factory: follows whole-schema wrapper",
+  L.locateBuilderByDescription(
+    `function F(e){return {$schema:()=>z.describe(${JSON.stringify(schemaDescription)})}}` +
+      "function B(e,n={}){let s=F(e,n);return new S(s).whole()}",
+  ) === "B",
+);
+let schemaAmbiguity;
+try {
+  L.locateBuilderByDescription(
+    `function F(e){return {$schema:()=>z.describe(${JSON.stringify(schemaDescription)})}}` +
+      "function B(e){let s=F(e);return new S(s).whole()}" +
+      "function C(e){let s=F(e);return new S(s).whole()}",
+  );
+} catch (error) {
+  schemaAmbiguity = error.message;
+}
+check(
+  "schema descriptor factory with two whole-schema wrappers: throws on ambiguity",
+  schemaAmbiguity ===
+    "$schema descriptor factory F has multiple whole-schema wrappers: B, C",
+  schemaAmbiguity,
+);
 
 // ── Every shape that has shipped confirms, with the right local and count ──
 const shipped = [
@@ -163,7 +195,7 @@ check(
 );
 
 if (failures) {
-  console.error(`${failures} memoizer-locator case(s) failed`);
+  console.error(`${failures} locator case(s) failed`);
   process.exit(1);
 }
-console.log("all memoizer-locator cases passed");
+console.log("all locator cases passed");
