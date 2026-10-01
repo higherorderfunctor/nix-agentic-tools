@@ -106,6 +106,13 @@
           'const envOverride = process.env.OPENCODE_CONFIG' 'const envOverride = undefined'
         mutant "$kimchi" environment-unlisted src/extensions/skills-manager/skill-manager.ts \
           'process.env.SKILLS_DIR ??' 'process.env.SKILLS_DIR ?? process.env.UNLISTED_PROBE_DIR ??'
+        cp -r "$kimchi" "$TMPDIR/environment-patch-alias-source"
+        chmod -R u+w "$TMPDIR/environment-patch-alias-source"
+        printf '%s\n' \
+          '+++ b/dist/environment-probe.js' \
+          '+const environment = process.env' \
+          '+void environment.UNLISTED_PATCH_PROBE' \
+          > "$TMPDIR/environment-patch-alias-source/patches/environment-probe.patch"
         mutant "$kimchi" harness-auto-default src/config.ts \
           'return parsed.autoDefaultApplied === true' 'return parsed.autoDefaultApplied === "yes"'
         mutant "$kimchi" harness-shape src/extensions/orchestration/model-roles.ts \
@@ -196,6 +203,8 @@
           'staleIgnored=["OPENCODE_CONFIG"]' >> "$TMPDIR/proof"
         expect_rejection environment-unlisted "$TMPDIR/environment-unlisted-source" \
           'environment census changed; new=["UNLISTED_PROBE_DIR"]' >> "$TMPDIR/proof"
+        expect_rejection environment-patch-alias "$TMPDIR/environment-patch-alias-source" \
+          'environment census changed; new=["UNLISTED_PATCH_PROBE"]' >> "$TMPDIR/proof"
         expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
         expect_rejection harness-auto-default "$TMPDIR/harness-auto-default-source" \

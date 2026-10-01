@@ -47,6 +47,10 @@
     "KIMCHI_AUTO_GIT_INIT": {
       "controls": "automatic git initialization for ferment work"
     },
+    "KIMCHI_BASE_URL": {
+      "controls": "LLM gateway base URL; overrides configured and region-derived endpoints",
+      "introduced": "1.3.0"
+    },
     "KIMCHI_CLIPBOARD_FORCE": {
       "controls": "clipboard backend override"
     },
@@ -313,6 +317,11 @@
         "google_cloud_project"
       ],
       "reason": "Google auth library project, credential and metadata-server detection in pi's bundled Vertex client; configured the Google Cloud way, not a Kimchi setting"
+    },
+    "kimchiTestSeams": {
+      "names": ["KIMCHI_TEST_HARNESS", "KIMCHI_TUI_E2E_CLIPBOARD_IMAGE"],
+      "reason": "Kimchi test/E2E guards; no user-facing behavior",
+      "introduced": "1.3.0"
     },
     "libraryInternals": {
       "names": [
