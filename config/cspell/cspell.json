@@ -21,6 +21,7 @@
     "packages/chatgpt-codex/extracted.json",
     "packages/claude-code/extracted.json",
     "packages/glab/extracted.json",
+    "packages/kimchi/egress-report.json",
     "packages/semble/extracted.json",
     "result"
   ],
@@ -29,49 +30,6 @@
     {
       "dictionaries": ["python", "node", "npm", "rust"],
       "filename": ["**/*.md", "**/*.mjs", "**/*.nix", "**/*.py", "**/*.sh"]
-    },
-    {
-      "dictionaries": ["node", "npm"],
-      "filename": "packages/kimchi/egress-report.json",
-      "ignoreRegExpList": [
-        "/%[0-9A-Fa-f]{2}/g",
-        "/-[A-Z0-9]{8}(?=\\.js)/g",
-        "/sha256-[A-Za-z0-9+/]{43}=?/g"
-      ],
-      "words": [
-        "agentclientprotocol",
-        "aiplatform",
-        "aliyuncs",
-        "amazonwebservices",
-        "baseten",
-        "behaviours",
-        "bigmodel",
-        "cerebras",
-        "chatkit",
-        "cloudresourcemanager",
-        "gaxios",
-        "generativelanguage",
-        "groq",
-        "gstatic",
-        "mariozechner",
-        "minimaxi",
-        "oauthtoken",
-        "openrouter",
-        "osascript",
-        "paas",
-        "partitionresult",
-        "sdkref",
-        "sgov",
-        "shiki",
-        "shikijs",
-        "tokeninfo",
-        "typebox",
-        "universedomain",
-        "userguide",
-        "wcwidth",
-        "webz",
-        "xiaomimimo"
-      ]
     },
     {
       "filename": "packages/stacked-workflows/checks/scenario-tests/**",
