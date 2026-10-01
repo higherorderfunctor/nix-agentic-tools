@@ -319,6 +319,7 @@ _: {
         "lib/generated-guard.py"
         "lib/generated-style.nix"
         "lib/markdown/**"
+        "lib/treefmt-module.nix"
         "treefmt.nix"
       ];
       sources = ["markdown-formatting"];

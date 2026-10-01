@@ -119,6 +119,8 @@
         ++ repository.moduleImports "homeManager";
     };
 
+    treefmtModules.default = ./lib/treefmt-module.nix;
+
     devenvModules.nix-agentic-tools = {
       imports =
         [./lib/ai/sharedOptions.nix]

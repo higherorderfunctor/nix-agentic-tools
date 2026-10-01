@@ -247,6 +247,7 @@ for it. When several entries match, their guidance composes.
     - `lib/generated-guard.py`
     - `lib/generated-style.nix`
     - `lib/markdown/**`
+    - `lib/treefmt-module.nix`
     - `treefmt.nix`
   - Read:
     - [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)
