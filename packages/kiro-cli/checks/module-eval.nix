@@ -1966,8 +1966,8 @@ in {
         steeringFile
         != null
         && lib.hasInfix "Use strict mode always" (steeringFile.text or "")
-        && lib.hasInfix "inclusion: fileMatch" (steeringFile.text or "")
-        && lib.hasInfix "name: my-steering" (steeringFile.text or "")
+        && lib.hasInfix ''inclusion: "fileMatch"'' (steeringFile.text or "")
+        && lib.hasInfix ''name: "my-steering"'' (steeringFile.text or "")
         # CRITICAL: fileMatchPattern MUST be a YAML list for multi-element
         # paths, not a comma-joined string, and a block sequence rather than
         # an inline array so a Markdown formatter cannot reflow it.
@@ -2006,9 +2006,9 @@ in {
         hmSteering."on-demand.md".text
         == devenvSteering."on-demand.md".text
         && hmSteering."semantic.md".text == devenvSteering."semantic.md".text
-        && lib.hasInfix "inclusion: manual" manual
-        && lib.hasInfix "inclusion: auto" auto
-        && lib.hasInfix "description: Semantic project guidance" auto
+        && lib.hasInfix ''inclusion: "manual"'' manual
+        && lib.hasInfix ''inclusion: "auto"'' auto
+        && lib.hasInfix ''description: "Semantic project guidance"'' auto
         && !(lib.hasInfix "fileMatchPattern:" manual)
         && !(lib.hasInfix "fileMatchPattern:" auto)
     );
@@ -2038,7 +2038,7 @@ in {
         kiro = ((kiroSteeringContent native)."semantic.md" or {}).text or "";
       in
         !portableAttempt.success
-        && lib.hasInfix "inclusion: auto" kiro
+        && lib.hasInfix ''inclusion: "auto"'' kiro
         && !(lib.hasInfix "fileMatchPattern:" kiro)
     );
 
@@ -3634,7 +3634,7 @@ in {
         ruleFile
         != null
         && lib.hasInfix "Write tests for all new features" (ruleFile.text or "")
-        && lib.hasInfix "inclusion: fileMatch" (ruleFile.text or "")
+        && lib.hasInfix ''inclusion: "fileMatch"'' (ruleFile.text or "")
     );
 
     # Root and per-runtime rule entries are keyed pools; the runtime entry

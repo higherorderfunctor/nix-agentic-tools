@@ -8,7 +8,9 @@
 > `registry.nix`, merged by `lib/facets/registry.nix`. The orchestration layer
 > produces content; `ai.*` renders and writes it, with AGENTS.md's index and
 > rules ahead of the context. Kiro's multi-path `fileMatchPattern` is a block
-> sequence, emitted by the shared `lib/frontmatter.nix` renderer.
+> sequence, emitted by the shared `lib/frontmatter.nix` renderer. Callers pass
+> raw Nix values; the renderer JSON-quotes every supported scalar into valid
+> YAML.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -91,9 +93,9 @@ them.
 
 - `claude { package }` — emits a YAML header with `description:` and `paths:`.
   Handles three `paths` shapes: null (no paths key), list (YAML list with quoted
-  entries), string (verbatim). Description has a smart default: "Instructions
-  for the ${package} package" when paths are set and description is null,
-  otherwise omitted or passed through.
+  entries), string (a quoted scalar). Description has a smart default:
+  "Instructions for the ${package} package" when paths are set and description
+  is null, otherwise omitted or passed through.
 - `copilot` — emits `applyTo:` as a quoted string. List input is joined with
   commas (Copilot's native multi-glob syntax). Null input defaults to
   `applyTo: "**"` (global fallback).
@@ -103,10 +105,10 @@ them.
   `manual`; its runtime-local scalar `inclusion` overrides the portable list.
   The resolver requires a description for `auto` and a matcher for `fileMatch`;
   the transformer still requires a name for `auto` and paths for `fileMatch`.
-  The pattern uses a quoted string for single-element lists and a block YAML
-  sequence for multi-element lists. Kiro requires a list for multi-pattern
-  matching; a previous comma-joined string was silently read as one literal
-  pattern and matched nothing.
+  The emitter quotes the single string from a single-element list and uses a
+  block YAML sequence for multi-element lists. Kiro requires a list for
+  multi-pattern matching; a previous comma-joined string was silently read as
+  one literal pattern and matched nothing.
 - `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
   AGENTS.md is a flat file, so it cannot enforce native trigger metadata. Its
   `renderKeyed` writes a compact path-scoped index for `fileMatch` rules with

@@ -3,7 +3,7 @@
 # Behavior preserved from packages/fragments-ai/default.nix transforms.claude:
 # - paths: null     → omit `paths:` line
 # - paths: list     → emit YAML list (one per line, two-space indent)
-# - paths: string   → emit `paths: <string>` (pre-quoted glob)
+# - paths: string   → emit the string as a quoted YAML scalar
 # - description: null + paths set + package supplied → default to
 #     "Instructions for the ${package} package"
 # - description: ""     → always omit

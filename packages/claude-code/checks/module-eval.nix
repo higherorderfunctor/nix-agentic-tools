@@ -422,7 +422,7 @@ in {
         in
           fromGeneratedTree ".claude/rules/search.md" evaluated.config.home.file.".claude/rules/search.md"
           && lib.hasInfix "Always use rg instead of grep." rule
-          && lib.hasInfix "description: Grep replacement" rule
+          && lib.hasInfix ''description: "Grep replacement"'' rule
       );
 
       module-claude-no-guidance-no-file = mkTest "claude-no-guidance-no-file" (

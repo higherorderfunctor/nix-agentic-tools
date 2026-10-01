@@ -7,7 +7,7 @@
 # - inclusion: "always" | "auto" | "manual" → omit fileMatchPattern
 # - inclusion: "fileMatch" → emit fileMatchPattern (the shared resolver
 #     requires paths before this transformer runs)
-# - paths: list of 1 → fileMatchPattern = "<one>"
+# - paths: list of 1 → fileMatchPattern is the one raw string
 # - paths: list of >1 → fileMatchPattern as a YAML block sequence
 #     (`- "<glob>"` per line). Kiro needs a YAML list, not a comma-joined
 #     string (kiro.dev/docs), and the block form is the one list shape a
@@ -57,7 +57,7 @@ in rec {
         if effectiveInclusion != "fileMatch"
         then null
         else if builtins.isList paths && builtins.length paths == 1
-        then ''"${builtins.head paths}"''
+        then builtins.head paths
         else paths;
       descStr =
         if description != null && description != ""

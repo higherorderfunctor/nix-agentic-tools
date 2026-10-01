@@ -3,7 +3,7 @@
 # Behavior preserved from packages/fragments-ai/default.nix transforms.copilot:
 # - paths: null   → applyTo = "**" (always-loaded)
 # - paths: list   → applyTo = comma-joined glob string
-# - paths: string → applyTo = raw string (pre-quoted)
+# - paths: string → applyTo = raw string data
 # - description is retained in the normalized record but intentionally omitted
 #   from Copilot frontmatter to preserve the existing devenv output bytes.
 {lib}: let
@@ -20,9 +20,9 @@ in rec {
     frontmatterData = {paths ? null, ...}: let
       applyTo =
         if paths == null
-        then ''"**"''
+        then "**"
         else if builtins.isList paths
-        then ''"${lib.concatStringsSep "," paths}"''
+        then lib.concatStringsSep "," paths
         else paths;
     in {inherit applyTo;};
   };

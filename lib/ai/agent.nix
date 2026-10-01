@@ -56,8 +56,8 @@
     else {text = rendered;};
 
   frontmatterFields = includeName: name: value:
-    lib.optionalAttrs includeName {name = builtins.toJSON name;}
-    // {description = builtins.toJSON value.description;}
+    lib.optionalAttrs includeName {inherit name;}
+    // {inherit (value) description;}
     // lib.optionalAttrs ((value.tools or null) != null && value.tools != []) {
       tools = lib.concatStringsSep ", " value.tools;
     };

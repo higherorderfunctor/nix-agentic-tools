@@ -44,11 +44,11 @@
 > switch-time overlays, `content.run`, and shared document leaves stay outside
 > it. Generators mark their `content` with `_generated`, so a consumer's
 > replacement of a unit's file warns like a switch-off. Rule and semantic-agent
-> generators use `lib/frontmatter.nix` to render YAML and mark the content. The
-> router passes that marker to the generated-file builder, which accepts
-> BOM/CRLF, formats only the body and restores the exact fenced frontmatter
-> bytes with one blank separator. `parseCompare` requires those fenced bytes in
-> the installed file.
+> generators pass raw Nix data to `lib/frontmatter.nix`, which renders quoted
+> YAML, and mark the content. The router passes that marker to the
+> generated-file builder, which accepts BOM/CRLF, formats only the body and
+> restores the exact fenced frontmatter bytes with one blank separator.
+> `parseCompare` requires those fenced bytes in the installed file.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
