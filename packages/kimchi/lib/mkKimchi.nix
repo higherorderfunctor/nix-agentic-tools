@@ -248,8 +248,7 @@
     # Non-secret env vars — baked into the wrapper via `--set`.
     shadowed = envShadowedSettings cfg.native.settings;
     kimchiEnvVars =
-      lib.optionalAttrs cfg.noUpdateCheck {${sidecar.environmentName "KIMCHI_NO_UPDATE_CHECK"} = "1";}
-      // lib.optionalAttrs (shadowed.region != null) {${sidecar.environmentName "KIMCHI_REGION"} = shadowed.region;}
+      lib.optionalAttrs (shadowed.region != null) {${sidecar.environmentName "KIMCHI_REGION"} = shadowed.region;}
       # Any value but `0` or `false` turns telemetry on.
       // lib.optionalAttrs (shadowed.telemetryEnabled != null) {
         ${sidecar.environmentName "KIMCHI_TELEMETRY_ENABLED"} =
@@ -854,12 +853,6 @@ in
           file; the store holds only the path. Devenv rejects this option:
           without Home Manager the file is Kimchi's own.
         '';
-      };
-
-      noUpdateCheck = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Disable background self-update probe via KIMCHI_NO_UPDATE_CHECK.";
       };
     };
 

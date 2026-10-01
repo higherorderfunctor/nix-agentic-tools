@@ -55,7 +55,7 @@
     config.keys.mcpSearchLimit.inert = false;
   });
   withoutOwnVariable = surfaceFor (lib.recursiveUpdate committed {
-    environment.variables.KIMCHI_NO_UPDATE_CHECK.consumerOverridable = false;
+    environment.variables.KIMCHI_REGION.consumerOverridable = false;
   });
 
   # Does `value` type-check against a closed submodule of `options`?
@@ -217,9 +217,9 @@
       && fixedVariable {kimchi.environmentVariables.KIMCHI_EXTRA = "yes";} == [];
 
     own-environment-names-are-extracted =
-      real.environmentName "KIMCHI_NO_UPDATE_CHECK"
-      == "KIMCHI_NO_UPDATE_CHECK"
-      && !(forced (withoutOwnVariable.environmentName "KIMCHI_NO_UPDATE_CHECK"));
+      real.environmentName "KIMCHI_REGION"
+      == "KIMCHI_REGION"
+      && !(forced (withoutOwnVariable.environmentName "KIMCHI_REGION"));
   };
   failed = builtins.attrNames (lib.filterAttrs (_: passed: !passed) cases);
 in {

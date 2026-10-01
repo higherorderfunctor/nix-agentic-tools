@@ -139,10 +139,9 @@ every path and no earlier statement reads it, counting what a callee handed
 preserved first, so it stays settable. The analysis fails instead of guessing
 when a module entry.ts statically imports reads the same name, or when an
 assignment follows entry.ts's first `await` or `import()`. Every variable the
-factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_NO_UPDATE_CHECK`,
-`KIMCHI_REGION`, `KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`,
-which fails evaluation if the pinned Kimchi no longer reads it or starts
-overwriting it.
+factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_REGION`,
+`KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
+evaluation if the pinned Kimchi no longer reads it or starts overwriting it.
 
 Every resolved environment name is either published from an annotation (a
 `controls` description and optional `introduced` release) or listed, with a
@@ -532,6 +531,13 @@ materializes `node_modules` and before Bun compiles the module graph. `fd` and
 `PATH`, offline, and download branches. The build keeps Kimchi's typecheck:
 `CI=1` does not meet the script's `CI === "true"` plus `KIMCHI_SKIP_TYPECHECK=1`
 skip condition.
+
+The same source-edit phase makes both update gates unconditional. The launch
+auto-update path returns before probing, and `isUpdateCheckDisabled()` always
+disables the shared manual workflow used by the startup nag, `/update`, and
+`kimchi update`. Nix therefore exposes no `noUpdateCheck` option and its
+launcher does not need `KIMCHI_NO_UPDATE_CHECK`; the extractor still reads the
+unpatched source and records upstream's environment surface.
 
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.

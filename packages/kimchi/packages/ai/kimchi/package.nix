@@ -229,6 +229,17 @@ in
         substituteInPlace src/extensions/remote-run/runner.ts \
           --replace-fail $'import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"\nimport { isWindows }' $'import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"\nimport { isResourceEnabled } from "../../resources/store.js"\nimport { isWindows }' \
           --replace-fail 'if (isInSandboxCluster() || isWindows()) return false' 'if (!isResourceEnabled("extensions.remote-run") || isInSandboxCluster() || isWindows()) return false'
+
+        substituteInPlace src/update/state.ts \
+          --replace-fail $'export function isUpdateCheckDisabled(): boolean {\n\tconst v = process.env.KIMCHI_NO_UPDATE_CHECK\n\treturn v !== undefined && v !== ""\n}' \
+            $'export function isUpdateCheckDisabled(): boolean {\n\treturn true\n}'
+
+        # The literal guard makes the body unreachable, which stops TypeScript
+        # narrowing opts.signal inside its own truthy ternary arm. The assertion
+        # restates that local invariant so the upstream typecheck still passes.
+        substituteInPlace src/update/auto-update.ts \
+          --replace-fail 'if (process.env.KIMCHI_NO_UPDATE_CHECK) return' 'if (true) return' \
+          --replace-fail 'AbortSignal.any([opts.signal, sigint.signal])' 'AbortSignal.any([opts.signal!, sigint.signal])'
       ''
       + lib.optionalString ourPkgs.stdenv.hostPlatform.isDarwin ''
         substituteInPlace scripts/build-binary.js \
@@ -277,7 +288,7 @@ in
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
-      export KIMCHI_NO_UPDATE_CHECK=1 KIMCHI_TELEMETRY_ENABLED=0
+      export KIMCHI_TELEMETRY_ENABLED=0
       version_output=$(timeout 30 "$out/bin/kimchi" --version)
       printf '%s\n' "$version_output"
       test "$version_output" = '${finalAttrs.version}'
