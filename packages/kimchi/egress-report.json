@@ -855,6 +855,12 @@
       "category": "websocket",
       "file": "kimchi/tools/proxy-helper/cmd/proxy/proxy.go",
       "target": "wsURL"
+    },
+    {
+      "callee": "http.NewRequestWithContext",
+      "category": "http",
+      "file": "kimchi/tools/proxy-helper/pkg/cast/cast.go",
+      "target": "u"
     }
   ],
   "urlPathLiterals": [
