@@ -1,10 +1,12 @@
 ### Markdown Formatting
 
 `treefmt` owns markdown wrapping. Prettier runs with `proseWrap = "always"`,
-defined once in `lib/markdown/prose-style.nix` and read by `treefmt.nix`, so it
-reflows every paragraph to 80 columns on format. **Do not hand-wrap prose** —
-the line breaks you author are discarded, and hand-wrapping is what created the
-defect below.
+defined once in `lib/markdown/prose-style.nix` and read by the exported treefmt
+module in `lib/treefmt-module.nix` (`treefmtModules.default`). The repository's
+`treefmt.nix` imports that module and adds only repository-specific roots and
+exclusions. Prettier reflows every paragraph to 80 columns on format. **Do not
+hand-wrap prose** — the line breaks you author are discarded, and hand-wrapping
+is what created the defect below.
 
 Generated `ai.*` Markdown is formatted in its store tree alongside static JSON,
 TOML and YAML. The default formatter shares this repository's prose style;
@@ -23,8 +25,9 @@ consumer files. A finding exits 1; exit 2 means nothing was checked (for
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-09-29 — generated and consumer Markdown share guards;
-> tableCells pairs rumdl and markdownlint for distinct MD056 cases.
+> **Last verified:** 2026-09-30 — formatter programs live in the exported
+> treefmt module; generated and consumer Markdown share guards; tableCells pairs
+> rumdl and markdownlint for distinct MD056 cases.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the
