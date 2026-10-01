@@ -495,7 +495,7 @@
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
-    | Generated files | N/A | `ai.formatter`, temporary `ai.generated.formatter.{json,markdown,toml,yaml}` overrides, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
+    | Generated files | N/A | `ai.formatter`, `ai.guards.<name>`, and `ai.checks` (Nix-owned build-time files; formatters exclude supplied skill trees, checks include their generated entries; runtime-rendered files excluded) | Same; project-native static files included |
     | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi + Kiro) | Same; project-native paths |
@@ -670,10 +670,9 @@
     repository's own treefmt run. Other module consumers can use the read-only
     `ai.deliveredPaths` list for the same purpose.
 
-    `ai.generated.formatter.<type>` remains temporarily as a per-type shell
-    snippet override. A non-null override formats that type in its own working
-    directory instead of passing those files to `ai.formatter`; this compatibility
-    option is going away.
+    The per-type `ai.generated.formatter.<type>` override remains temporarily
+    for compatibility and is going away; use `ai.formatter` for new
+    configuration.
 
     Generated-file checks form a three-tier default chain, all with
     `types.lines`: `ai.checks.all`, `ai.checks.<surface>`, then

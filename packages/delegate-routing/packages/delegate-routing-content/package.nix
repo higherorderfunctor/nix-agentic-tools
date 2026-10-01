@@ -1,13 +1,15 @@
 {
-  pkgs,
   fragmentsLib,
   generatedLib,
+  inputs,
+  pkgs,
   repoPath,
   ...
 }: let
   inherit (pkgs) lib;
   generated = generatedLib pkgs;
   frontmatter = import ../../../../lib/frontmatter.nix {inherit lib;};
+  treefmt = (inputs.treefmt-nix.lib.evalModule pkgs ../../../../lib/treefmt-module.nix).config;
   skillData = {
     description = "Before calling a subagent, spawning a delegate, or building a workflow, size the model and effort for the task and available runtime pools.";
     name = "delegate-routing";
@@ -40,10 +42,10 @@
           data = skillData;
           body = import ../../lib/render.nix ({inherit lib presets;} // args);
         });
-      formatter.markdown = generated.defaultFormatter.markdown;
       guards.parseCompare = true;
       passthru.text = render args;
       inherit (args) runtime;
+      inherit treefmt;
     };
   skills = lib.genAttrs ["claude" "codex" "kiro"] (runtime: mkSkill {inherit runtime;});
 in

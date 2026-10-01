@@ -69,7 +69,7 @@
     {
       name = "format-json";
       files = {"config.json" = mkFile "json" ''{"a":true}'';};
-      formatter = generated.defaultFormatter;
+      treefmt = treefmtConfig;
       guards = onlyGuards ["parseCompare"];
       changed = "config.json";
     }
@@ -78,14 +78,14 @@
       files =
         markdown ''          #   Heading
         '';
-      formatter = generated.defaultFormatter;
+      treefmt = treefmtConfig;
       guards = onlyGuards ["parseCompare"];
       changed = "page.md";
     }
     {
       name = "format-toml";
       files = {"config.toml" = mkFile "toml" "a=1\n";};
-      formatter = generated.defaultFormatter;
+      treefmt = treefmtConfig;
       guards = onlyGuards ["parseCompare"];
       changed = "config.toml";
     }
@@ -94,7 +94,7 @@
       files =
         dataFile "yaml" ''          a:    true
         '';
-      formatter = generated.defaultFormatter;
+      treefmt = treefmtConfig;
       guards = onlyGuards ["parseCompare"];
       changed = "data.yaml";
     }
@@ -125,7 +125,7 @@
     {
       name = "table-cells-header-before-format";
       files = markdown badHeader;
-      formatter = generated.defaultFormatter;
+      treefmt = treefmtConfig;
       guards = onlyGuards ["tableCells"];
       fails = "tableCells";
     }
@@ -152,7 +152,7 @@
       files = markdown ''        A `split
         span` is broken.
       '';
-      formatter = generated.defaultFormatter;
+      treefmt = treefmtConfig;
       guards = onlyGuards ["splitCodeSpans"];
       fails = "splitCodeSpans";
     }
@@ -190,7 +190,7 @@
     {
       name = "frontmatter-consumer-default-bytes";
       files = consumerFiles;
-      formatter = generated.defaultFormatter;
+      treefmt = treefmtConfig;
       guards = onlyGuards ["parseCompare"];
       head = frontmatter.block consumerData + "\n";
     }
@@ -213,7 +213,7 @@
     {
       name = "frontmatter-reattach-truncated-bad";
       files = consumerFiles;
-      formatter = generated.defaultFormatter;
+      treefmt = treefmtConfig;
       attach = brokenAttach;
       guards = onlyGuards ["parseCompare"];
       fails = bytesChanged;
@@ -276,10 +276,12 @@
   makeTree = case:
     generated.mkTree {
       name = "generated-fixture-${case.name}";
-      inherit (case) files formatter;
+      inherit (case) files;
       checks = case.checks or {};
+      formatter = case.formatter or {};
       guards = case.guards or {};
       runtime = case.runtime or "test";
+      treefmt = case.treefmt or null;
     };
   makeScript = case: let
     tree = makeTree case;
@@ -298,9 +300,9 @@
     (generated.mkTree {
       name = "generated-fixture-real-frontmatter-byte-failure";
       files = consumerFiles;
-      formatter = generated.defaultFormatter;
       guards = onlyGuards ["parseCompare"];
       runtime = "test";
+      treefmt = treefmtConfig;
     }).overrideAttrs (_: {
       postBuild = "sed -i 's/  - \"SCHEMA.md\"/  - SCHEMA.md/' work/markdown/page.md";
     });
@@ -309,9 +311,9 @@
   treefmtTree = generated.mkTree {
     name = "generated-fixture-treefmt-eval-module";
     files = markdown "#   Heading\n";
-    formatter.markdown = (import ../../lib/ai {inherit lib;}).treefmtFormatter treefmtConfig;
     guards = {};
     runtime = "test";
+    treefmt = treefmtConfig;
   };
 in {
   checks = {

@@ -29,13 +29,13 @@
         inherit text;
         type = "markdown";
       };
-      formatter.markdown = ai.treefmtFormatter treefmt;
       guards = {
         parseCompare = true;
         splitCodeSpans = true;
         tableCells = true;
       };
       runtime = "repository";
+      inherit treefmt;
     };
 in {
   repoContributing = doc "repo-contributing" "CONTRIBUTING.md" gen.contributingMd;

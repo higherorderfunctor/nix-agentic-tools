@@ -26,7 +26,6 @@
 # path filter to fall through.
 {
   harness,
-  inputs,
   lib,
   pkgs,
   self,
@@ -41,10 +40,7 @@
     # values are evaluated and their instruction plans must agree.
     evalRepo = isCI:
       harness.evalDevenvModules [
-        (import ../../dev/ai.nix {
-          inherit isCI;
-          inherit (inputs) treefmt-nix;
-        })
+        (import ../../dev/ai.nix {inherit isCI;})
       ];
     repo = evalRepo false;
     repoCI = evalRepo true;

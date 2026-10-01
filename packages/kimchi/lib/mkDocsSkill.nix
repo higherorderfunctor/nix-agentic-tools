@@ -30,9 +30,11 @@
   lib,
   pkgs,
   search,
+  treefmt-nix,
 }: let
   frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
   generated = import ../../../lib/generated.nix {inherit lib;} pkgs;
+  treefmt = (treefmt-nix.lib.evalModule pkgs ../../../lib/treefmt-module.nix).config;
   searchBlocks = {
     cli = ''
       Semble is wired into this session's shell. Prefer it over `grep` for
@@ -119,9 +121,9 @@
   skillFiles = {"SKILL.md" = {type = "markdown";} // frontmatter.treeFile rendered;};
   skill = generated.mkTree ({
       name = "kimchi-docs-markdown-${search}";
-      formatter.markdown = generated.defaultFormatter.markdown;
       guards.parseCompare = true;
       runtime = "kimchi";
+      inherit treefmt;
     }
     // {files = skillFiles;});
   inherit (rendered) text;
