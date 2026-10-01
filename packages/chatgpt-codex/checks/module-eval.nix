@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiBase aiStubs claudeSettings deliveredFiles evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownPlan tomlFormat windowNoticeLines;
+  inherit (harness) aiStubs claudeSettings deliveredFiles deliveredTree evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownPlan tomlFormat windowNoticeLines;
   # The daemon's settings.json is a read-only copy in the one directory target
   # of Home Manager's daemon-settings writer. `ownPlan` throws on an absent
   # writer, so a renamed entry fails the check.
@@ -18,54 +18,6 @@
     if evaluated.config.ai.codex.files ? ${path}
     then evaluated.config.ai.codex.files.${path}.content.value
     else null;
-  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
-  formats = import ../../../lib/ai/formats.nix {inherit lib pkgs;};
-  runtimeFiles = import ../../../lib/ai/runtime-files.nix {inherit lib;};
-  # Reconstruct the router's complete static tree as a derivation. Negative
-  # build tests need `overrideAttrs`, which a delivered `${tree}/${path}`
-  # string no longer exposes. Keeping every live static entry here also makes
-  # the equality assertion catch a new sibling such as main's config.toml.
-  codexGeneratedTree = evaluated: let
-    cfg = evaluated.config.ai.codex;
-    live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
-    limits = cfg._maxBytes;
-    generatedEntries = lib.filterAttrs (_path: entry:
-      entry.content.run
-      == null
-      && lib.elem entry.format ["json" "markdown" "toml" "yaml"]
-      && !entry.recursive
-      && entry.method != "shared")
-    live;
-    limitedEntries = lib.filterAttrs (path: entry:
-      entry.content.run
-      == null
-      && entry.content.value == null
-      && !(generatedEntries ? ${path})
-      && limits ? ${path})
-    live;
-    entries = generatedEntries // limitedEntries;
-  in
-    (aiBase.generated pkgs).mkTree {
-      name = "ai-hm-codex-generated";
-      files = lib.mapAttrs (path: entry:
-        (aiTypes.textSourceFile (
-          if entry.content.value != null
-          then
-            formats.render {
-              inherit path;
-              inherit (entry) format;
-              inherit (entry.content) value;
-            }
-          else entry.content
-        ))
-        // {
-          type = entry.format;
-          frontmatter = entry.content._frontmatter;
-        })
-      entries;
-      maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
-      inherit (evaluated.config.ai.generated) check formatter guards;
-    };
   # Execpolicy rules are read-only copies on both backends, so their bytes are
   # in the copy writer's plan, keyed by file name, not in home.file / files.
   execpolicyTarget = evaluated:
@@ -2226,7 +2178,7 @@ in {
             files.${path}.content.text = lib.concatStrings (lib.replicate (size - 1) "x") + "\n";
           };
         };
-      treeFor = codexGeneratedTree;
+      treeFor = evaluated: deliveredTree evaluated path;
       exact = replaced 32768;
       above = replaced 32769;
       failure = pkgs.testers.testBuildFailure (treeFor above);
@@ -2314,8 +2266,6 @@ in {
             inherit projectDocMaxBytes;
           };
         };
-      # The tree the router must deliver each from: the text and processing
-      # options, under the evaluation's own limit.
       cases = {
         hm = evaluated: {
           delivered = evaluated.config.home.file.".codex/AGENTS.md".source;
@@ -2323,26 +2273,12 @@ in {
         };
         devenv = evaluated: {
           delivered = (deliveredFiles evaluated.config)."AGENTS.md".source;
-          inherit (evaluated.config.ai.generated) check formatter guards;
-          maxBytes = evaluated.config.ai.internal._maxBytes;
-          name = "ai-devenv-internal-generated";
           path = "AGENTS.md";
         };
       };
       checked = backend: evaluated: let
         case = cases.${backend} evaluated;
-        tree =
-          if backend == "hm"
-          then codexGeneratedTree evaluated
-          else
-            (aiBase.generated pkgs).mkTree {
-              inherit (case) maxBytes name;
-              inherit (case) check formatter guards;
-              files.${case.path} = {
-                inherit text;
-                type = "raw";
-              };
-            };
+        tree = deliveredTree evaluated case.path;
       in
         assert lib.assertMsg (case.delivered == "${tree}/${case.path}")
         "codex-raw-agents-md-is-measured-not-formatted: ${backend} ${case.path} is not delivered from the generated tree built from its text"; tree;
@@ -2389,17 +2325,12 @@ in {
         };
       };
       empty = evalDevenv {ai.codex.enable = true;};
-      tree = (aiBase.generated pkgs).mkTree {
-        name = "ai-devenv-internal-generated";
-        files."AGENTS.md" = markdownInput oversized "AGENTS.md" // {type = oversized.config.ai.internal.files."AGENTS.md".format;};
-        inherit (oversized.config.ai.generated) check formatter guards;
-        maxBytes = limit;
-      };
+      tree = deliveredTree oversized "AGENTS.md";
       failure = pkgs.testers.testBuildFailure tree;
     in
       assert lib.assertMsg (oversized.config.ai.internal._maxBytes == limit)
       "codex-shared-byte-limit-covers-kiro-only-content: ai.internal._maxBytes is not Codex's limit on AGENTS.md";
-      assert lib.assertMsg ((deliveredFiles oversized.config)."AGENTS.md".source == "${tree}/AGENTS.md")
+      assert lib.assertMsg (fromGeneratedTree "AGENTS.md" (deliveredFiles oversized.config)."AGENTS.md")
       "codex-shared-byte-limit-covers-kiro-only-content: AGENTS.md is not delivered from a tree carrying its limit";
       assert lib.assertMsg (!((deliveredFiles empty.config) ? "AGENTS.md"))
       "codex-shared-byte-limit-covers-kiro-only-content: a limit alone delivered an AGENTS.md";

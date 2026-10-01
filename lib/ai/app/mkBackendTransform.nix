@@ -466,6 +466,7 @@
 in {
   options.ai.${appRecord.name} =
     {
+      _generatedTree = deliveryOptions.generatedTreeOption;
       _maxBytes = deliveryOptions.maxBytesOption;
       _ownPlans = deliveryOptions.ownPlansOption;
       activation = lib.mkOption {

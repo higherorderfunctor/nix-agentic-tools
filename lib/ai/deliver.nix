@@ -78,6 +78,14 @@ in
         inherit (cfg) methodFor;
       };
     treeEntries = lib.filterAttrs (path: entry: entry.content.run == null && resolvedMethod path entry != "shared") live;
+    treefmt =
+      (config.ai.internal.treefmtNix.lib.evalModule pkgs {
+        imports = [
+          ../treefmt-module.nix
+          config.ai.formatter
+          {settings.global.excludes = lib.mkForce [];}
+        ];
+      }).config;
     mkTree = kind: entries: processing:
       generated.mkTree ({
           name = "ai-${backend}-${runtime}-${kind}";
@@ -103,11 +111,16 @@ in
             })
           entries;
           maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
+          inherit treefmt;
         }
         // processing);
-    tree = mkTree "generated" treeEntries {
-      inherit (config.ai.generated) check formatter guards;
-    };
+    tree =
+      if treeEntries == {}
+      then null
+      else
+        mkTree "generated" treeEntries {
+          inherit (config.ai.generated) check formatter guards;
+        };
     treeOf = path:
       if treeEntries ? ${path}
       then tree
@@ -296,7 +309,7 @@ in
     # reading `config.files` is a genuine cycle.
     hasFiles = (config.files or {}) != {};
 
-    inherit nameFor;
+    inherit nameFor tree treefmt;
 
     # The backend's own store-symlink primitive, in the shape both file sinks
     # take. Home Manager recurses a directory source itself; devenv has no such

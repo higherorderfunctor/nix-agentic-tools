@@ -96,7 +96,7 @@ in {
         // {
           inherit gitToolExtraction inputs lib;
           harness = import ../testing/module-harness.nix {
-            inherit lib;
+            inherit inputs lib;
             inherit (context) pkgs;
             inherit (world) testing;
             moduleImports = backend: facets.moduleImports {inherit backend index;};

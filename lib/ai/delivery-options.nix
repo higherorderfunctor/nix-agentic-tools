@@ -359,6 +359,14 @@ in {
   fileMapType = lib.types.attrsOf fileEntry;
   writerMapType = lib.types.attrsOf writer;
 
+  generatedTreeOption = lib.mkOption {
+    type = lib.types.nullOr lib.types.raw;
+    readOnly = true;
+    internal = true;
+    visible = false;
+    description = "The generated-tree derivation this runtime delivers, exposed for module checks.";
+  };
+
   # The byte limits a runtime's reader imposes, keyed by file path, declared
   # for each runtime and for the shared AGENTS.md owner (`ai.internal`). Keyed
   # by PATH rather than carried on the entry, so a consumer's replacement of

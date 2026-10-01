@@ -1,5 +1,6 @@
-# Build one store tree per delivery-router invocation. Each formatter sees only
-# its own type at the target-relative paths the runtime will receive.
+# Build one store tree per delivery-router invocation. Per-type formatter
+# overrides see only their own type at the target-relative paths the runtime
+# will receive; treefmt sees every remaining composed file in one invocation.
 {lib}: pkgs: let
   types = ["json" "markdown" "toml" "yaml"];
   style = import ./generated-style.nix;
@@ -30,6 +31,7 @@ in rec {
     maxBytes ? {},
     name,
     passthru ? {},
+    treefmt ? null,
   }: let
     sourceOf = path: file:
       file.source or (pkgs.writeText (lib.strings.sanitizeDerivationName (baseNameOf path)) file.text);
@@ -38,6 +40,11 @@ in rec {
     allFiles = f: lib.concatStrings (lib.mapAttrsToList f files);
     guardOn = guard: guards.${guard} or false;
     eachType = f: lib.concatStrings (map (type: lib.optionalString (selected type != {}) (f type)) types);
+    treefmtFiles = lib.concatMap (type:
+      lib.optionals ((formatter.${type} or null) == null)
+      (map (path: {inherit path type;}) (lib.attrNames (selected type))))
+    types;
+    treefmtPaths = map (file: file.path) treefmtFiles;
     # Unmarked Markdown carries no generator-owned data to compare.
     parseGuard = lib.optionalString (guardOn "parseCompare") (lib.concatStrings (map (type:
       withFiles type (path: file:
@@ -93,6 +100,18 @@ in rec {
             ${formatter.${type}}
             popd >/dev/null
           '')}
+        ${lib.optionalString (treefmt != null && treefmtPaths != []) ''
+          ${pkgs.coreutils}/bin/mkdir -p work/treefmt
+          ${lib.concatMapStrings (file:
+            installPath file.type "work/${file.type}/${lib.escapeShellArg file.path}" "work/treefmt/${lib.escapeShellArg file.path}")
+          treefmtFiles}
+          pushd work/treefmt >/dev/null
+          ${lib.getExe treefmt.package} --config-file ${treefmt.build.configFile} --tree-root . --walk filesystem --no-cache --on-unmatched=fatal ${lib.escapeShellArgs treefmtPaths}
+          popd >/dev/null
+          ${lib.concatMapStrings (file:
+            installPath file.type "work/treefmt/${lib.escapeShellArg file.path}" "work/${file.type}/${lib.escapeShellArg file.path}")
+          treefmtFiles}
+        ''}
         ${markedFrontmatter "attach"}
         runHook postBuild
       '';
