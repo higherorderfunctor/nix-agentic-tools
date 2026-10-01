@@ -480,11 +480,11 @@
     if plan.record.format == "markdown"
     then
       lib.nameValuePair "${configDir}/agents/${name}.md" {
-        content = lib.mkDefault (frontmatter.content (renderMarkdownAgent plan.normalized)
-          // {
-            _generated = true;
-            _surface = "agents";
-          });
+        content = lib.mkDefault {
+          _generated = true;
+          _surface = "agents";
+          text = renderMarkdownAgent plan.normalized;
+        };
         format = lib.mkDefault "markdown";
         executable = null;
       }

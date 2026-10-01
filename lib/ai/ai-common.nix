@@ -6,7 +6,6 @@
 {lib}: let
   aiTypes = import ./types.nix {inherit lib;};
   fragments = import ../fragments.nix {inherit lib;};
-  frontmatter = import ../frontmatter.nix {inherit lib;};
   contentType = enableDefault:
     aiTypes.optionalTextSource {
       description = "Markdown content";
@@ -322,7 +321,7 @@ in {
   }:
     lib.mapAttrs' (name: rule: let
       inclusion = resolveInclusion {inherit name rule runtime;};
-      rendered = fragments.mkRendered transformer (context name) (rule
+      rendered = fragments.mkRenderer transformer (context name) (rule
         // {
           inherit inclusion name;
           paths =
@@ -333,12 +332,12 @@ in {
         });
     in
       lib.nameValuePair (path name) ({
-          content = lib.mkDefault ({
-              _generated = true;
-              _surface = "rules";
-              enable = true;
-            }
-            // frontmatter.content rendered);
+          content = lib.mkDefault {
+            _generated = true;
+            _surface = "rules";
+            enable = true;
+            text = rendered;
+          };
           format = lib.mkDefault "markdown";
         }
         // fields))

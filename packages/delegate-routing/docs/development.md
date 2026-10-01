@@ -1,10 +1,10 @@
 # Delegate routing package
 
-> **Last verified:** 2026-09-29 — generated skills use the shared frontmatter
-> renderer, generated-file builder, house Markdown formatter, and byte-identity
-> parseCompare guard; a formatter sees only the skill body; Kiro's default
-> launch uses `--model auto`, and its manual-only purpose line renders only with
-> the launch block.
+> **Last verified:** 2026-10-01 — generated skills use the shared frontmatter
+> renderer, generated-file builder, house Markdown formatter, and parsed-value
+> parseCompare guard; a formatter sees the whole skill including its header;
+> Kiro's default launch uses `--model auto`, and its manual-only purpose line
+> renders only with the launch block.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,

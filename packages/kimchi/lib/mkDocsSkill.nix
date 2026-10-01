@@ -118,7 +118,12 @@
     inherit body;
   };
   # This is input to the generated build tree, not a native HM/devenv sink.
-  skillFiles = {"SKILL.md" = {type = "markdown";} // frontmatter.treeFile rendered;};
+  skillFiles = {
+    "SKILL.md" = {
+      type = "markdown";
+      text = rendered;
+    };
+  };
   skill = generated.mkTree ({
       name = "kimchi-docs-markdown-${search}";
       guards.parseCompare = true;
@@ -126,7 +131,7 @@
       inherit treefmt;
     }
     // {files = skillFiles;});
-  inherit (rendered) text;
+  text = rendered;
 in
   pkgs.runCommand "kimchi-docs-skill-${search}" {
     passthru = {inherit docs search text;};

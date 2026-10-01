@@ -57,7 +57,6 @@ for it. When several entries match, their guidance composes.
     - `lib/ai/sharedOptions.nix`
     - `lib/generated.nix`
     - `lib/generated-guard.py`
-    - `lib/generated-style.nix`
     - `lib/markdown/**`
     - `lib/testing/module-harness.nix`
     - `packages/*/checks/module-eval.nix`
@@ -251,7 +250,6 @@ for it. When several entries match, their guidance composes.
     - `checks/markdown/split-code-spans.nix`
     - `lib/generated.nix`
     - `lib/generated-guard.py`
-    - `lib/generated-style.nix`
     - `lib/markdown/**`
     - `lib/treefmt-module.nix`
     - `treefmt.nix`

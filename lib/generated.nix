@@ -1,25 +1,13 @@
-# Build one store tree per delivery-router invocation. Per-type formatter
-# overrides see only their own type at the target-relative paths the runtime
-# will receive; treefmt sees every remaining composed file in one invocation.
+# Build one store tree per delivery-router invocation. Treefmt formats whole
+# composed files at target-relative paths; raw copies share the staging root.
 {lib}: pkgs: let
   types = ["json" "markdown" "toml" "yaml"];
-  style = import ./generated-style.nix;
-  prettierConfig = (pkgs.formats.json {}).generate "generated-prettier.json" style.prettier;
-  prettier = lib.getExe' pkgs.prettier "prettier";
   inherit (import ./markdown/byte-limit.nix pkgs) byteLimitCheck;
   guardDefinitions = import ./markdown/guards.nix {inherit lib;};
-  generatedGuard = guardDefinitions.generatedGuard pkgs;
-in rec {
-  defaultFormatter = {
-    json = "find . -type f -print0 | xargs -0 -r ${lib.getExe pkgs.biome} format --write --indent-style=${style.biome.indentStyle} --indent-width=${toString style.biome.indentWidth}";
-    markdown = "find . -type f -print0 | xargs -0 -r ${prettier} --write --parser markdown --config ${prettierConfig}";
-    toml = "find . -type f -print0 | xargs -0 -r ${lib.getExe pkgs.taplo} fmt --no-auto-config";
-    yaml = "find . -type f -print0 | xargs -0 -r ${prettier} --write --parser yaml --config ${prettierConfig}";
-  };
+in {
   mkTree = {
     checks ? {},
     files,
-    formatter ? {},
     guards,
     maxBytes ? {},
     name,
@@ -39,7 +27,6 @@ in rec {
       && ((guard.runtime or null) == null || guard.runtime == runtime))
     guardTable;
     guardsFor = phase: lib.filterAttrs (_name: guard: guard.phase == phase) selectedGuards;
-    eachType = f: lib.concatStrings (map (type: lib.optionalString (selected type != {}) (f type)) types);
     surfaceFiles = surface: lib.filterAttrs (_: file: (file.surface or null) == surface) files;
     eachSurface = f: lib.concatStrings (map (surface: lib.optionalString (surfaceFiles surface != {}) (f surface)) (builtins.attrNames checks));
     surfaceCheck = surface:
@@ -54,24 +41,13 @@ in rec {
 
         ai_surface_check "$@"
       '';
-    treefmtFiles = lib.concatMap (type:
-      lib.optionals ((formatter.${type} or null) == null)
-      (map (path: {inherit path type;}) (lib.attrNames (selected type))))
-    types;
-    treefmtPaths = map (file: file.path) treefmtFiles;
-    # Unmarked Markdown carries no generator-owned data to compare.
+    treefmtPaths = lib.attrNames (lib.filterAttrs (_: file: builtins.elem file.type types) files);
     parseGuard = guard:
       lib.concatStrings (map (type:
-        withFiles type (path: file:
-          lib.optionalString (type != "markdown" || file.frontmatter or false) ''
-            ${lib.getExe guard.program} ${lib.escapeShellArgs [file.type (sourceOf path file)]} "$out"/${lib.escapeShellArg path}
-          ''))
+        withFiles type (path: file: ''
+          ${lib.getExe guard.program} ${lib.escapeShellArgs [file.type (sourceOf path file)]} "$out"/${lib.escapeShellArg path}
+        ''))
       types);
-    markedFrontmatter = action:
-      withFiles "markdown" (path: file:
-        lib.optionalString (file.frontmatter or false) ''
-          ${generatedGuard} ${action} work/markdown/${lib.escapeShellArg path} frontmatter/${lib.escapeShellArg path} || exit 1
-        '');
     installPath = type: source: target:
       if type == "raw"
       then ''
@@ -91,7 +67,7 @@ in rec {
       '';
     markdownGuard = guard:
       lib.optionalString (selected "markdown" != {}) ''
-        pushd work/markdown >/dev/null
+        pushd work >/dev/null
         ${lib.getExe guard.program} ${lib.escapeShellArgs (lib.attrNames (selected "markdown"))}
         popd >/dev/null
       '';
@@ -114,38 +90,25 @@ in rec {
         dontConfigure = true;
         dontFixup = true;
         buildPhase = ''
-            runHook preBuild
-            export HOME="$TMPDIR"
-            ${pkgs.coreutils}/bin/mkdir -p frontmatter work
-            ${allFiles (path: file: installPath file.type (sourceOf path file) "work/${file.type}/${lib.escapeShellArg path}")}
-            ${runGuards "before"}
-            ${markedFrontmatter "split"}
-            ${eachType (type:
-            lib.optionalString ((formatter.${type} or null) != null) ''
-              pushd work/${type} >/dev/null
-              ${formatter.${type}}
-              popd >/dev/null
-            '')}
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          runHook preBuild
+          export HOME="$TMPDIR"
+          ${pkgs.coreutils}/bin/mkdir -p work
+          ${allFiles (path: file: installPath file.type (sourceOf path file) "work/${lib.escapeShellArg path}")}
+          ${runGuards "before"}
           ${lib.optionalString (treefmt != null && treefmtPaths != []) ''
-            ${pkgs.coreutils}/bin/mkdir -p work/treefmt
-            ${lib.concatMapStrings (file:
-              installPath file.type "work/${file.type}/${lib.escapeShellArg file.path}" "work/treefmt/${lib.escapeShellArg file.path}")
-            treefmtFiles}
-            pushd work/treefmt >/dev/null
+            pushd work >/dev/null
             ${lib.getExe treefmt.package} --config-file ${treefmt.build.configFile} --tree-root . --walk filesystem --no-cache --on-unmatched=fatal ${lib.escapeShellArgs treefmtPaths}
             popd >/dev/null
-            ${lib.concatMapStrings (file:
-              installPath file.type "work/treefmt/${lib.escapeShellArg file.path}" "work/${file.type}/${lib.escapeShellArg file.path}")
-            treefmtFiles}
           ''}
-          ${markedFrontmatter "attach"}
           runHook postBuild
         '';
         # Copy only declared paths.
         installPhase = ''
           runHook preInstall
           ${pkgs.coreutils}/bin/mkdir -p "$out"
-          ${allFiles (path: file: installPath file.type "work/${file.type}/${path}" ''"$out"/${lib.escapeShellArg path}'')}
+          ${allFiles (path: file: installPath file.type "work/${path}" ''"$out"/${lib.escapeShellArg path}'')}
           runHook postInstall
         '';
         doInstallCheck = true;

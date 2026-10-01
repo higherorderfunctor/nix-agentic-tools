@@ -124,7 +124,6 @@ _: {
         # The store tree the router delivers generated static files from.
         "lib/generated.nix"
         "lib/generated-guard.py"
-        "lib/generated-style.nix"
         "lib/markdown/**"
         "lib/testing/module-harness.nix"
         "packages/*/checks/module-eval.nix"
@@ -317,7 +316,6 @@ _: {
         "checks/markdown/split-code-spans.nix"
         "lib/generated.nix"
         "lib/generated-guard.py"
-        "lib/generated-style.nix"
         "lib/markdown/**"
         "lib/treefmt-module.nix"
         "treefmt.nix"

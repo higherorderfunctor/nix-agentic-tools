@@ -12,8 +12,7 @@
 {lib}: let
   frontmatter = import ./frontmatter.nix {inherit lib;};
   # -- Builders ----------------------------------------------------------------
-  # Frontmatter bytes and marker metadata are built together in
-  # lib/frontmatter.nix. This module supplies the fragment body to it.
+  # The shared renderer supplies the header; this module supplies the body.
   mkFrontmatter = frontmatter.block;
 
   # Canonical fragment constructor.
@@ -145,24 +144,22 @@
   # ── Renderer ─────────────────────────────────────────────────────
   # Build a render function from a transformer record + extra context.
   #
-  # Returns a function `fragment -> { text, frontmatter, keys }` that:
+  # Returns a function `fragment -> text` that:
   #   1. Normalizes fragment.text to a node list (bare strings get
   #      wrapped as `[ (mkRaw text) ]` for backward compatibility)
   #   2. Walks the node list, dispatching each node through
   #      transformer.handlers.${kind} with the closed-over ctx
-  #   3. Passes frontmatter data and body to the shared renderer, which also
-  #      returns the file's guard marker and keys.
+  #   3. Passes frontmatter data and body to the shared text renderer.
   #
   # The fixed-point on `self` lets handlers recurse into nested
   # nodes via ctx.render — used by `block`, `include`, and any
   # downstream handler that needs to render sub-fragments.
-  mkRendered = transformer: ctxExtras: let
+  mkRenderer = transformer: ctxExtras: let
     self =
       ctxExtras
       // {
         inherit (transformer) handlers;
-        render = fragment: (self.renderRecord fragment).text;
-        renderRecord = fragment: let
+        render = fragment: let
           fragmentText = fragment.text or "";
           rawText =
             if builtins.isPath fragmentText
@@ -189,17 +186,14 @@
               paths = fragment.paths or null;
             }
             // ctxExtras;
-          rendered = frontmatter.render {
+        in
+          frontmatter.render {
             data = transformer.frontmatterData frontmatterArgs;
             inherit body;
           };
-        in
-          rendered;
       };
   in
-    self.renderRecord;
-  mkRenderer = transformer: ctxExtras: fragment:
-    (mkRendered transformer ctxExtras fragment).text;
+    self.render;
 in {
   inherit
     compose
@@ -210,7 +204,6 @@ in {
     mkInclude
     mkLink
     mkRaw
-    mkRendered
     mkRenderer
     render
     ;

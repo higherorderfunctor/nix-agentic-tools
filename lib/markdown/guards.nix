@@ -9,7 +9,7 @@
 {lib}: let
   reason = {
     kiroFrontmatterFlow = "Kiro silently degrades a steering file with a multi-line YAML flow sequence to always-on context.";
-    parseCompare = "Parsed JSON, TOML or YAML changed, or Markdown frontmatter bytes changed; a reader could see different configuration.";
+    parseCompare = "Parsed JSON, TOML or YAML changed, or parsed Markdown frontmatter values changed; a reader could see different configuration.";
     splitCodeSpans = "An inline code span crosses a newline; CommonMark inserts a space that can corrupt a path or identifier.";
     tableCells = "A Markdown table has inconsistent cell counts; an unescaped pipe can change or break its rendered columns.";
   };
@@ -95,7 +95,7 @@
     parseCompare = {
       default = true;
       defaultText = "true";
-      description = "Reject invalid or changed structured data and changed bytes in marked Markdown frontmatter after formatting.";
+      description = "Reject invalid or changed structured data and changed parsed Markdown frontmatter values after formatting.";
       phase = "after";
       program = programs.parseCompare;
     };

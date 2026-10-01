@@ -102,7 +102,6 @@ in
                 if entry.recursive
                 then "raw"
                 else entry.format;
-              frontmatter = entry.content._frontmatter;
             })
           entries;
           maxBytes = lib.filterAttrs (path: _limit: entries ? ${path}) limits;
@@ -115,7 +114,6 @@ in
       else
         mkTree "generated" treeEntries {
           inherit (cfg) checks;
-          inherit (config.ai.generated) formatter;
         };
     treeOf = path:
       if treeEntries ? ${path}

@@ -1,16 +1,16 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-09-30 — normalized rules default their
-> priority-ordered trigger list from matcher presence before each runtime
-> resolves support. Fragment locations are limited to the dev and package trees;
-> category declaration is SPLIT: shared categories in
-> `config/fragment-categories.nix`, owner-specific ones in the owning package's
-> `registry.nix`, merged by `lib/facets/registry.nix`. The orchestration layer
-> produces content; `ai.*` renders and writes it, with AGENTS.md's index and
-> rules ahead of the context. Kiro's multi-path `fileMatchPattern` is a block
-> sequence, emitted by the shared `lib/frontmatter.nix` renderer. Callers pass
-> raw Nix values; the renderer JSON-quotes every supported scalar into valid
-> YAML.
+> **Last verified:** 2026-10-01 — `render` returns text (no frontmatter marker
+> metadata); normalized rules default their priority-ordered trigger list from
+> matcher presence before each runtime resolves support. Fragment locations are
+> limited to the dev and package trees; category declaration is SPLIT: shared
+> categories in `config/fragment-categories.nix`, owner-specific ones in the
+> owning package's `registry.nix`, merged by `lib/facets/registry.nix`. The
+> orchestration layer produces content; `ai.*` renders and writes it, with
+> AGENTS.md's index and rules ahead of the context. Kiro's multi-path
+> `fileMatchPattern` is a block sequence, emitted by the shared
+> `lib/frontmatter.nix` renderer. Callers pass raw Nix values; the renderer
+> JSON-quotes every supported scalar into valid YAML.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -27,11 +27,10 @@ fan out to many different consumers without duplication:
 
 1. **Primitives (`lib/fragments.nix`)** — pure, target-agnostic. Defines
    `mkFragment { text, description, inclusion, paths, priority }`,
-   `compose { fragments, ... }` (priority sort + SHA256 dedup + concat),
-   `mkRendered` (fragment → text plus frontmatter marker metadata), and `render`
-   (applies a transform to a composed fragment). `lib/frontmatter.nix` owns YAML
-   header generation for all producers. No file I/O, no ecosystem knowledge, no
-   hardcoded paths.
+   `compose { fragments, ... }` (priority sort + SHA256 dedup + concat), and
+   `render` (applies a transform to a composed fragment and returns its text).
+   `lib/frontmatter.nix` owns YAML header generation for all producers. No file
+   I/O, no ecosystem knowledge, no hardcoded paths.
 
 2. **Transforms (`lib/ai/transformers/`)** — pure per-ecosystem renderers over
    the shared fragment AST. `lib/ai/default.nix` exposes them as

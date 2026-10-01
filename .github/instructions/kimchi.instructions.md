@@ -15,8 +15,9 @@ applyTo: "packages/kimchi/**"
 > rules use the shared flat AGENTS.md renderer and repository aggregate. Region
 > is required. The pinned pi dependency is 0.85.1. Agents are read-only copies
 > from the runtime's generated Markdown tree; the opt-in docs skill uses the
-> shared frontmatter renderer and a guarded generated-file tree; a store-path
-> string is an input just as a path is. Full lineage:
+> shared frontmatter text renderer and a guarded generated-file tree that
+> formats whole files and compares parsed header values; a store-path string is
+> an input just as a path is. Full lineage:
 > `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
