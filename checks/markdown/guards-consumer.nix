@@ -30,6 +30,7 @@
       shopt -s inherit_errexit 2>/dev/null || :
       ${pkgs.coreutils}/bin/mkdir -p "$out"
       ${lib.concatStrings (lib.mapAttrsToList (path: source: ''
+          ${pkgs.coreutils}/bin/mkdir -p "$out"/${lib.escapeShellArg (builtins.dirOf path)}
           ${pkgs.coreutils}/bin/cp ${source} "$out"/${lib.escapeShellArg path}
         '')
         files)}
@@ -51,11 +52,27 @@
     };
     guards.tableCells = false;
   };
-  kiroTree = tree "kiro-only" {"kiro-flow.md" = fixtures."kiro-flow.md";};
-  kiroDefaultOff = guards.check {src = kiroTree;};
-  badKiroOptIn = failure {
+  kiroTree = tree "kiro-only" {".kiro/steering/bad.md" = fixtures."kiro-flow.md";};
+  badKiroDefault = failure {src = kiroTree;};
+  kiroOutsideLayout = guards.check {
+    src = tree "kiro-outside-layout" {"docs/bad.md" = fixtures."kiro-flow.md";};
+  };
+  badKiroCustom = failure {
+    src = tree "kiro-custom" {"custom/steering/bad.md" = fixtures."kiro-flow.md";};
+    kiroDir = "custom";
+  };
+  # A glob metacharacter in the directory name matches literally.
+  badKiroMeta = failure {
+    src = tree "kiro-meta" {"kiro[1]/steering/bad.md" = fixtures."kiro-flow.md";};
+    kiroDir = "kiro[1]";
+  };
+  kiroMetaUnrelated = guards.check {
+    src = tree "kiro-meta-unrelated" {"kiro1/steering/bad.md" = fixtures."kiro-flow.md";};
+    kiroDir = "kiro[1]";
+  };
+  kiroDisabled = guards.check {
     src = kiroTree;
-    guards.kiroFrontmatterFlow = true;
+    guards.kiroFrontmatterFlow = false;
   };
   # A configuration file in the checked tree cannot silence either half.
   badConfigured = lib.mapAttrs (name: files: failure {src = tree name files;}) {
@@ -110,13 +127,17 @@ in {
       found() { ${pkgs.gnugrep}/bin/grep -q -F "$1" "$2"; }
       found "Guard splitCodeSpans failed." ${badDefault}/testBuildFailure.log
       found "Guard tableCells failed." ${badTableOnly}/testBuildFailure.log
-      found "kiro-flow.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroOptIn}/testBuildFailure.log
+      found ".kiro/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroDefault}/testBuildFailure.log
+      found "custom/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroCustom}/testBuildFailure.log
+      found "kiro[1]/steering/bad.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroMeta}/testBuildFailure.log
       if found "Guard splitCodeSpans failed." ${badTableOnly}/testBuildFailure.log; then
         echo "FAIL: splitCodeSpans ran when disabled" >&2
         exit 1
       fi
       test -e ${tableDisabled}
-      test -e ${kiroDefaultOff}
+      test -e ${kiroOutsideLayout}
+      test -e ${kiroDisabled}
+      test -e ${kiroMetaUnrelated}
       ${lib.concatMapStrings (drv: ''
         found "Guard tableCells failed." ${drv}/testBuildFailure.log
       '') (lib.attrValues badConfigured)}

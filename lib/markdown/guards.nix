@@ -132,19 +132,24 @@
   in {
     inherit (programs) kiroFrontmatterFlow parseCompare splitCodeSpans tableCells;
 
-    # `check {src, guards ? {}}`: a derivation that runs the three shape guards
-    # over every `*.md` under `src`. parseCompare is not offered
+    # `check {src, guards ? {}, kiroDir ? ".kiro"}`: Markdown guards run
+    # over every `*.md` under `src`; the Kiro guard only checks steering
+    # and top-level Markdown agents under `kiroDir`. parseCompare is not offered
     # here: it compares two versions of one file, and a source tree holds one.
     check = {
       src,
       guards ? {},
+      kiroDir ? ".kiro",
     }: let
       enabled = {
-        kiroFrontmatterFlow = false;
+        kiroFrontmatterFlow = true;
         splitCodeSpans = true;
         tableCells = true;
       };
       selected = lib.filterAttrs (guard: on: guards.${guard} or on) enabled;
+      # `find -path` matches a glob, so a directory name carrying `*`, `?` or
+      # `[` must be escaped to match literally.
+      kiroGlob = lib.escape ["*" "?" "["] kiroDir;
     in
       assert lib.assertMsg (lib.subtractLists (lib.attrNames enabled) (lib.attrNames guards) == [])
       "lib.ai.guards check: guards may name kiroFrontmatterFlow, splitCodeSpans or tableCells. parseCompare compares two versions of a file; run its program on BEFORE and AFTER instead.";
@@ -155,9 +160,23 @@
           ${pkgs.findutils}/bin/find . -type f -name '*.md' -print0 \
             | ${pkgs.coreutils}/bin/sort -z > "$TMPDIR/files"
           mapfile -d "" -t files < "$TMPDIR/files"
-          ${lib.concatMapStrings (guard: ''
-            ${lib.getExe programs.${guard}} "''${files[@]}"
-          '') (lib.attrNames selected)}
+          ${lib.concatMapStrings (guard:
+            if guard == "kiroFrontmatterFlow"
+            then ''
+              ${pkgs.findutils}/bin/find . -type f \( \
+                -path ${lib.escapeShellArg "*/${kiroGlob}/steering/*.md"} -o \( \
+                  -path ${lib.escapeShellArg "*/${kiroGlob}/agents/*.md"} \
+                  ! -path ${lib.escapeShellArg "*/${kiroGlob}/agents/*/*.md"} \
+                \) \
+              \) -print0 | ${pkgs.coreutils}/bin/sort -z > "$TMPDIR/kiro-files"
+              mapfile -d "" -t kiroFiles < "$TMPDIR/kiro-files"
+              if [ "''${#kiroFiles[@]}" -gt 0 ]; then
+                ${lib.getExe programs.${guard}} "''${kiroFiles[@]}"
+              fi
+            ''
+            else ''
+              ${lib.getExe programs.${guard}} "''${files[@]}"
+            '') (lib.attrNames selected)}
           ${pkgs.coreutils}/bin/touch "$out"
         '';
   };

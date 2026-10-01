@@ -33,9 +33,13 @@ enables Prettier. `parseCompare` runs after formatting. The Kiro-only
 `kiroFrontmatterFlow` runs after formatting over every delivered Markdown file,
 including raw copies, and rejects a flow sequence spanning lines because Kiro
 silently degrades it to always-on steering. `lib.ai.guards pkgs` exports all
-four programs and a consumer `check` builder. A finding exits 1; exit 2 means
-nothing was checked (for `parseCompare`, an unreadable file or a BEFORE that
-does not parse).
+four programs and a consumer `check { src; guards ? {}; kiroDir ? ".kiro"; }`
+builder. Its Kiro guard defaults on for Markdown under `<kiroDir>/steering/`
+recursively and directly under `<kiroDir>/agents/`, wherever that layout occurs
+in `src`; an empty Kiro selection passes. `guards.kiroFrontmatterFlow = false`
+disables it. The two Markdown guards still check every `*.md`. A finding exits
+1; exit 2 means nothing was checked (for `parseCompare`, an unreadable file or a
+BEFORE that does not parse).
 
 ### Never break a line mid-token
 
@@ -45,7 +49,8 @@ does not parse).
 > and parsed frontmatter values are compared; generated frontmatter quotes
 > scalar data centrally; tableCells pairs rumdl and markdownlint for distinct
 > MD056 cases; raw copies bypass format guards, while the Kiro runtime-shape
-> guard inspects their delivered Markdown.
+> guard inspects their delivered Markdown; consumer checks default the Kiro
+> guard on for Kiro steering and Markdown agent paths only.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the

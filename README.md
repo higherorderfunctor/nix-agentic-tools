@@ -607,27 +607,27 @@ The same guards are exported as `lib.ai.guards pkgs` for files you author.
 `tableCells` reports MD056 only. Configuration files in the checked tree cannot
 change it; inline lint suppression comments still apply.
 
-| Attribute             | Program                                                                  | Arguments                                                                 |
-| --------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `kiroFrontmatterFlow` | `ai-guard-kiro-frontmatter-flow`                                         | Markdown file paths                                                       |
-| `parseCompare`        | `ai-guard-parse-compare`                                                 | `TYPE BEFORE AFTER`, where `TYPE` is `json`, `markdown`, `toml` or `yaml` |
-| `splitCodeSpans`      | `ai-guard-split-code-spans`                                              | Markdown file paths                                                       |
-| `tableCells`          | `ai-guard-table-cells`                                                   | Markdown file paths                                                       |
-| `check`               | Markdown shape guards in one derivation; `kiroFrontmatterFlow` is opt-in | `{ src; guards ? {}; }`                                                   |
+| Attribute             | Program                                                                                                                                       | Arguments                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `kiroFrontmatterFlow` | `ai-guard-kiro-frontmatter-flow`                                                                                                              | Markdown file paths                                                       |
+| `parseCompare`        | `ai-guard-parse-compare`                                                                                                                      | `TYPE BEFORE AFTER`, where `TYPE` is `json`, `markdown`, `toml` or `yaml` |
+| `splitCodeSpans`      | `ai-guard-split-code-spans`                                                                                                                   | Markdown file paths                                                       |
+| `tableCells`          | `ai-guard-table-cells`                                                                                                                        | Markdown file paths                                                       |
+| `check`               | Markdown shape guards in one derivation; `kiroFrontmatterFlow` is on by default for files under `<kiroDir>/steering/` and `<kiroDir>/agents/` | `{ src; guards ? {}; kiroDir ? ".kiro"; }`                                |
 
 `check` is a build-time gate for `nix flake check` or CI. It returns a
 derivation that runs `splitCodeSpans` and `tableCells` over every `*.md` under
-`src` and fails the build on a finding. `kiroFrontmatterFlow` is off by default
-because a consumer source tree is not runtime-scoped and valid non-Kiro
-frontmatter could otherwise be rejected; opt in by name for a Kiro-only source
-tree. It checks the store copy of `src`, not the files you staged, so it is not
-a pre-commit hook:
+`src` and fails the build on a finding. `kiroFrontmatterFlow` is on by default
+for Markdown in `<kiroDir>/steering/` recursively and directly in
+`<kiroDir>/agents/`, wherever that layout occurs under `src`. `kiroDir` defaults
+to `.kiro`; an empty Kiro selection passes. It checks the store copy of `src`,
+not the files you staged, so it is not a pre-commit hook:
 
 ```nix
 checks.${system}.markdown-guards =
   (inputs.nix-agentic-tools.lib.ai.guards pkgs).check {
     src = ./docs;
-    # guards.kiroFrontmatterFlow = true; # opt in for Kiro-only Markdown
+    # kiroDir = "custom"; # select a custom Kiro layout
     # guards.tableCells = false; # disable a guard by name
   };
 ```
