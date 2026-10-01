@@ -55,7 +55,8 @@
     "claude-opus-5-5",
     "claude-sonnet-4-5",
     "claude-sonnet-4-6",
-    "claude-sonnet-5"
+    "claude-sonnet-5",
+    "claude-sonnet-5-5"
   ],
   "settings": {
     "internalKeys": [
@@ -733,6 +734,22 @@
         "type": "string"
       },
       "allowedMcpServers[].serverUrl": {
+        "type": "string"
+      },
+      "allowedProviders": {
+        "type": "array"
+      },
+      "allowedProviders[]": {
+        "enum": [
+          "anthropic",
+          "anthropicAws",
+          "bedrock",
+          "customEndpoint",
+          "foundry",
+          "gateway",
+          "mantle",
+          "vertex"
+        ],
         "type": "string"
       },
       "alwaysThinkingEnabled": {
@@ -3322,6 +3339,7 @@
       "allowedHttpHookUrls",
       "allowedMarketplaces",
       "allowedMcpServers",
+      "allowedProviders",
       "alwaysThinkingEnabled",
       "apiKeyHelper",
       "appendPlugins",
