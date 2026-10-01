@@ -1,9 +1,11 @@
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-09-28 — `ai.*` delivers Claude's plugins itself: the
-> MCP/LSP personal plugin as per-file links under `home-manager/`, consumer
-> plugins as one directory link each. `$out/bin/claude` is the unwrapped binary.
-> Enabling the backend's own Claude module beside `ai.claude` fails evaluation.
+> **Last verified:** 2026-10-01 — the settings extractor follows Claude
+> 2.1.286's one-hop whole-schema wrapper when the `$schema` description lives in
+> its descriptor factory. `ai.*` delivers Claude's plugins itself: the MCP/LSP
+> personal plugin as per-file links under `home-manager/`, consumer plugins as
+> one directory link each. `$out/bin/claude` is the unwrapped binary. Enabling
+> the backend's own Claude module beside `ai.claude` fails evaluation.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -67,6 +69,12 @@ are tracked in `packages/claude-code/sources.json`, managed by the package's
 input is `finalAttrs.finalPackage`, that made every PR and every local
 `nix flake check` realize the ~390 MB binary to produce a ~90 KB JSON. Swapping
 it changes the drv hash once; do not swap it back.
+
+The extractor confirms the settings builder through independent schema-emitter
+and `$schema`-description anchors. The description may sit in the builder
+itself, or in a descriptor factory called by exactly one wrapper that constructs
+the schema and returns `.whole()`. More than one matching wrapper is ambiguous
+and stops extraction.
 
 ### The `native.settings` option surface is GENERATED
 
