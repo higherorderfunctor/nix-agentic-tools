@@ -1,6 +1,6 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-01 — the 1.1.39 source build adds resource controls
+> **Last verified:** 2026-10-01 — the 1.5.0 source build adds resource controls
 > for teleport and remote-run and anchors pi's fd/rg lookup to Nix packages. The
 > extractor binds patch-added source before resolving environment aliases and
 > classifies Kimchi 1.5.0's versioned config and environment additions before
@@ -301,10 +301,10 @@ one string (`orchestrator` and `compactor` in 1.1.37), come from the sidecar's
 rejects it at evaluation: an unknown role is an unknown option. Locked by
 `module-kimchi-model-roles-shape`.
 
-The packaged 1.1.39 source adds `extensions.remote-run` and
-`extensions.teleport` to Kimchi's resource registry. Both default to true, so
-the package retains upstream behavior until a consumer disables one. Home
-Manager can disable them declaratively, for example:
+The packaged 1.5.0 source adds `extensions.remote-run` and `extensions.teleport`
+to Kimchi's resource registry. Both default to true, so the package retains
+upstream behavior until a consumer disables one. Home Manager can disable them
+declaratively, for example:
 
 ```nix
 ai.kimchi.native.harnessSettings.resources."extensions.teleport" = false;
@@ -538,8 +538,11 @@ The same source-edit phase makes both update gates unconditional. The launch
 auto-update path returns before probing, and `isUpdateCheckDisabled()` always
 disables the shared manual workflow used by the startup nag, `/update`, and
 `kimchi update`. Self-updates are managed by Nix rather than a launcher option.
-The extractor still reads the unpatched source and records upstream's
-`KIMCHI_NO_UPDATE_CHECK` environment variable.
+The `/update` menu and the auto-update tip read the same function, so `/update`
+reports that updates are managed by Nix, no tip suggests enabling auto-update,
+and `kimchi --help` no longer lists the variable. The extractor still reads the
+unpatched source and records upstream's `KIMCHI_NO_UPDATE_CHECK` environment
+variable.
 
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.

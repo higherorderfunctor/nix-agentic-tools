@@ -184,7 +184,7 @@
     };
   };
 
-  # Kimchi 1.1.39 honors the `region` and `telemetry.enabled` config.json leaves
+  # Kimchi 1.5.0 honors the `region` and `telemetry.enabled` config.json leaves
   # only at global scope. A project config.json cannot supply either leaf, so
   # devenv delivers its accepted exceptions through the launcher environment.
   # Home Manager writes the global leaves and needs no duplicate environment.
