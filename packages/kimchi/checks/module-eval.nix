@@ -891,7 +891,8 @@ in {
         mentions = needle: lib.any (lib.hasInfix needle);
         hmHookPaths = lib.filter (lib.hasInfix "hooks") (builtins.attrNames hm.config.home.file);
       in
-        builtins.fromJSON (builtins.readFile devenv.config.files.".kimchi/hooks.json".source)
+        fromGeneratedTree ".kimchi/hooks.json" devenv.config.files.".kimchi/hooks.json"
+        && fileValue ".kimchi/hooks.json" devenv
         == {
           hooks = {
             PreToolUse = [

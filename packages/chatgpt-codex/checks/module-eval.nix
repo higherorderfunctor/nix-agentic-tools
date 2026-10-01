@@ -78,6 +78,7 @@
       evaluated)
     .targets;
   execpolicyUnits = evaluated: (execpolicyTarget evaluated).units;
+  execpolicyInput = evaluated: name: markdownInput evaluated ".codex/rules/${name}";
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) codexExtracted hmCodexSettings withHmDaemonDefault;
 in {
   checks = {
@@ -444,16 +445,16 @@ in {
         hm = evalHm config;
         devenv = evalDevenv config;
       in
-        hm.config.home.file.".agents/skills/local".source
-        == ../../claude-code/checks/fixtures/claude-skills/skill-b
+        fromGeneratedTree ".agents/skills/local" hm.config.home.file.".agents/skills/local"
+        && (markdownInput hm ".agents/skills/local").source == ../../claude-code/checks/fixtures/claude-skills/skill-b
         && !(hm.config.home.file.".agents/skills/local" ? recursive)
-        && hm.config.home.file.".agents/skills/shared".source
-        == ../../claude-code/checks/fixtures/claude-skills/skill-a
+        && fromGeneratedTree ".agents/skills/shared" hm.config.home.file.".agents/skills/shared"
+        && (markdownInput hm ".agents/skills/shared").source == ../../claude-code/checks/fixtures/claude-skills/skill-a
         && !(hm.config.home.file.".agents/skills/shared" ? recursive)
-        && devenv.config.files.".agents/skills/local".source
-        == ../../claude-code/checks/fixtures/claude-skills/skill-b
-        && devenv.config.files.".agents/skills/shared".source
-        == ../../claude-code/checks/fixtures/claude-skills/skill-a
+        && fromGeneratedTree ".agents/skills/local" devenv.config.files.".agents/skills/local"
+        && (markdownInput devenv ".agents/skills/local").source == ../../claude-code/checks/fixtures/claude-skills/skill-b
+        && fromGeneratedTree ".agents/skills/shared" devenv.config.files.".agents/skills/shared"
+        && (markdownInput devenv ".agents/skills/shared").source == ../../claude-code/checks/fixtures/claude-skills/skill-a
         && hm.config.home.activation ? codexMigrateSkillLinks
         # It moves user directories, so under DRY_RUN it must only echo.
         && lib.hasInfix "run /nix/store/" hm.config.home.activation.codexMigrateSkillLinks.text
@@ -486,14 +487,15 @@ in {
           skills.single = ../../claude-code/checks/fixtures/claude-skills/skill-a/SKILL.md;
         };
       };
-      source = evaluated.config.home.file.".agents/skills/single".source;
+      source = (deliveredFiles evaluated.config).".agents/skills/single".source;
     in
-      pkgs.runCommand "module-test-codex-single-file-skill-wraps-directory" {} ''
-        test -d ${source}
-        test -f ${source}/SKILL.md
-        cmp ${../../claude-code/checks/fixtures/claude-skills/skill-a/SKILL.md} ${source}/SKILL.md
-        touch "$out"
-      '';
+      assert fromGeneratedTree ".agents/skills/single" evaluated.config.home.file.".agents/skills/single";
+        pkgs.runCommand "module-test-codex-single-file-skill-wraps-directory" {} ''
+          test -d ${source}
+          test -f ${source}/SKILL.md
+          cmp ${../../claude-code/checks/fixtures/claude-skills/skill-a/SKILL.md} ${source}/SKILL.md
+          touch "$out"
+        '';
 
     module-codex-unsafe-skill-name-fails = mkTest "codex-unsafe-skill-name-fails" (
       let
@@ -523,8 +525,8 @@ in {
           };
         };
       in
-        evaluated.config.home.file.".agents/skills/duplicate".source
-        == ../../claude-code/checks/fixtures/claude-skills/skill-b
+        fromGeneratedTree ".agents/skills/duplicate" evaluated.config.home.file.".agents/skills/duplicate"
+        && (markdownInput evaluated ".agents/skills/duplicate").source == ../../claude-code/checks/fixtures/claude-skills/skill-b
     );
 
     module-codex-default-model-effort-parity = mkTest "codex-default-model-effort-parity" (
@@ -1095,10 +1097,14 @@ in {
             )
           '';
         };
-        hmRule = (execpolicyUnits (evalHm config))."git-read.rules".text;
-        devenvRule = (execpolicyUnits (evalDevenv config))."git-read.rules".text;
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        hmRule = (execpolicyInput hm "git-read.rules").text;
+        devenvRule = (execpolicyInput devenv "git-read.rules").text;
       in
-        hmRule
+        fromGeneratedTree ".codex/rules/git-read.rules" {source = (execpolicyUnits hm)."git-read.rules".store;}
+        && fromGeneratedTree ".codex/rules/git-read.rules" {source = (execpolicyUnits devenv)."git-read.rules".store;}
+        && hmRule
         == devenvRule
         && lib.hasInfix ''decision = "allow"'' hmRule
     );
@@ -1117,7 +1123,7 @@ in {
           '';
         };
       };
-      rule = pkgs.writeText "git-read.rules" (execpolicyUnits evaluated)."git-read.rules".text;
+      rule = pkgs.writeText "git-read.rules" (execpolicyInput evaluated "git-read.rules").text;
     in
       pkgs.runCommand "module-test-codex-execpolicy-runs-native-checker" {} ''
         ${pkgs.ai.chatgpt-codex}/bin/codex execpolicy check --pretty \
@@ -1137,7 +1143,7 @@ in {
           };
         };
         agentsMd = (markdownInput evaluated ".codex/AGENTS.md").text;
-        execpolicy = (execpolicyUnits evaluated)."command-policy.rules".text;
+        execpolicy = (execpolicyInput evaluated "command-policy.rules").text;
       in
         lib.hasInfix "Explain every command" agentsMd
         && !lib.hasInfix "prefix_rule" agentsMd
@@ -1151,10 +1157,14 @@ in {
           enable = true;
           execpolicyRules.string-source = "${rule}";
         };
-        hmSource = (execpolicyUnits (evalHm config))."string-source.rules".store;
-        devenvSource = (execpolicyUnits (evalDevenv config))."string-source.rules".store;
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        hmSource = (execpolicyInput hm "string-source.rules").source;
+        devenvSource = (execpolicyInput devenv "string-source.rules").source;
       in
-        hmSource
+        fromGeneratedTree ".codex/rules/string-source.rules" {source = (execpolicyUnits hm)."string-source.rules".store;}
+        && fromGeneratedTree ".codex/rules/string-source.rules" {source = (execpolicyUnits devenv)."string-source.rules".store;}
+        && hmSource
         == "${rule}"
         && devenvSource == "${rule}"
     );
@@ -1169,10 +1179,14 @@ in {
           enable = true;
           execpolicyRules.symlink-source = "${symlink}";
         };
-        hmSource = (execpolicyUnits (evalHm config))."symlink-source.rules".store;
-        devenvSource = (execpolicyUnits (evalDevenv config))."symlink-source.rules".store;
+        hm = evalHm config;
+        devenv = evalDevenv config;
+        hmSource = (execpolicyInput hm "symlink-source.rules").source;
+        devenvSource = (execpolicyInput devenv "symlink-source.rules").source;
       in
-        hmSource
+        fromGeneratedTree ".codex/rules/symlink-source.rules" {source = (execpolicyUnits hm)."symlink-source.rules".store;}
+        && fromGeneratedTree ".codex/rules/symlink-source.rules" {source = (execpolicyUnits devenv)."symlink-source.rules".store;}
+        && hmSource
         == "${symlink}"
         && devenvSource == "${symlink}"
     );
@@ -1191,7 +1205,7 @@ in {
         != null
         && lib.hasInfix "rules/default.rules" hmFailure.message
         && builtins.all (assertion: assertion.assertion) devenv.config.assertions
-        && (execpolicyUnits devenv)."default.rules".text != ""
+        && (execpolicyInput devenv "default.rules").text != ""
     );
 
     # Codex keeps a rules/*.rules entry only when DirEntry::file_type() says
@@ -1607,14 +1621,15 @@ in {
           };
         };
       };
-      source = evaluated.config.home.file.".codex/agents/reviewer.toml".source;
+      source = (deliveredFiles evaluated.config).".codex/agents/reviewer.toml".source;
     in
-      pkgs.runCommand "module-test-codex-agent-toml-syntax" {} ''
-        ${pkgs.gnugrep}/bin/grep -Fqx 'name = "reviewer"' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx 'model = "review-model"' ${source}
-        ${pkgs.gnugrep}/bin/grep -Fqx 'sandbox_mode = "read-only"' ${source}
-        touch "$out"
-      '';
+      assert fromGeneratedTree ".codex/agents/reviewer.toml" evaluated.config.home.file.".codex/agents/reviewer.toml";
+        pkgs.runCommand "module-test-codex-agent-toml-syntax" {} ''
+          ${pkgs.gnugrep}/bin/grep -Fqx 'name = "reviewer"' ${source}
+          ${pkgs.gnugrep}/bin/grep -Fqx 'model = "review-model"' ${source}
+          ${pkgs.gnugrep}/bin/grep -Fqx 'sandbox_mode = "read-only"' ${source}
+          touch "$out"
+        '';
 
     module-codex-agent-runtime-replaces-root = mkTest "codex-agent-runtime-replaces-root" (
       let
@@ -2017,13 +2032,14 @@ in {
           hooks.Stop = [{hooks = [{command = "validate";}];}];
         };
       };
-      source = evaluated.config.files.".codex/hooks.json".source;
+      source = (deliveredFiles evaluated.config).".codex/hooks.json".source;
     in
-      pkgs.runCommand "module-test-codex-hooks-json-syntax" {} ''
-        ${pkgs.jq}/bin/jq -e '.hooks.Stop[0].hooks[0]
-          | .type == "command" and .command == "validate"' ${source} >/dev/null
-        touch "$out"
-      '';
+      assert fromGeneratedTree ".codex/hooks.json" evaluated.config.files.".codex/hooks.json";
+        pkgs.runCommand "module-test-codex-hooks-json-syntax" {} ''
+          ${pkgs.jq}/bin/jq -e '.hooks.Stop[0].hooks[0]
+            | .type == "command" and .command == "validate"' ${source} >/dev/null
+          touch "$out"
+        '';
 
     module-codex-agentsmd-fanout = mkTest "codex-agentsmd-fanout" (
       let

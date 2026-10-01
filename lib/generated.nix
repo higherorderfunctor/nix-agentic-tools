@@ -50,6 +50,23 @@ in rec {
         lib.optionalString (file.frontmatter or false) ''
           ${generatedGuard} ${action} work/markdown/${lib.escapeShellArg path} frontmatter/${lib.escapeShellArg path} || exit 1
         '');
+    installPath = type: source: target:
+      if type == "raw"
+      then ''
+        if [ -d ${lib.escapeShellArg source} ]; then
+          ${pkgs.coreutils}/bin/mkdir -p ${target}
+          ${pkgs.coreutils}/bin/cp -R --preserve=mode ${lib.escapeShellArg source}/. ${target}/
+        else
+          ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname ${target})"
+          ${pkgs.coreutils}/bin/cp --preserve=mode ${lib.escapeShellArg source} ${target}
+        fi
+        if [ -d ${target} ]; then
+          ${pkgs.coreutils}/bin/chmod -R u+w ${target}
+        fi
+      ''
+      else ''
+        install -D -m 644 ${lib.escapeShellArg source} ${target}
+      '';
     markdownGuard = guard:
       lib.optionalString (guardOn guard && selected "markdown" != {}) ''
         pushd work/markdown >/dev/null
@@ -66,9 +83,7 @@ in rec {
         runHook preBuild
         export HOME="$TMPDIR"
         ${pkgs.coreutils}/bin/mkdir -p frontmatter work
-        ${allFiles (path: file: ''
-          install -D -m 644 ${lib.escapeShellArg (sourceOf path file)} work/${file.type}/${lib.escapeShellArg path}
-        '')}
+        ${allFiles (path: file: installPath file.type (sourceOf path file) "work/${file.type}/${lib.escapeShellArg path}")}
         ${markdownGuard "tableCells"}
         ${markdownGuard "splitCodeSpans"}
         ${markedFrontmatter "split"}
@@ -85,9 +100,7 @@ in rec {
       installPhase = ''
         runHook preInstall
         ${pkgs.coreutils}/bin/mkdir -p "$out"
-        ${allFiles (path: file: ''
-          install -D -m 644 work/${file.type}/${lib.escapeShellArg path} "$out"/${lib.escapeShellArg path}
-        '')}
+        ${allFiles (path: file: installPath file.type "work/${file.type}/${path}" ''"$out"/${lib.escapeShellArg path}'')}
         runHook postInstall
       '';
       doInstallCheck = true;

@@ -68,30 +68,16 @@ in
     # Disabled records are not files; everything below sees live entries only.
     live = lib.filterAttrs (_path: runtimeFiles.isLive) cfg.files;
 
-    # Static, Nix-owned files are formatted in one store tree per invocation.
-    # Runtime-rendered `run` files and shared reconciliation overlays are
-    # excluded: their final bytes do not exist in this build sandbox.
+    # Every build-time whole file enters one store tree per invocation.
+    # Runtime-rendered `run` files have no bytes in this build sandbox, and
+    # shared entries are reconciled leaves rather than whole files.
     limits = cfg._maxBytes;
-    builtWithTree = entry: entry.content.run == null;
-    generatedTypes = ["json" "markdown" "toml" "yaml"];
     resolvedMethod = path: entry:
       deliveryMethod.resolve {
         inherit backend entry path;
         inherit (cfg) methodFor;
       };
-    generatedEntries = lib.filterAttrs (path: entry:
-      builtWithTree entry
-      && lib.elem entry.format generatedTypes
-      && !entry.recursive
-      && resolvedMethod path entry != "shared")
-    live;
-    limitedEntries = lib.filterAttrs (path: entry:
-      builtWithTree entry
-      && entry.content.value == null
-      && !(generatedEntries ? ${path})
-      && limits ? ${path})
-    live;
-    treeEntries = generatedEntries // limitedEntries;
+    treeEntries = lib.filterAttrs (path: entry: entry.content.run == null && resolvedMethod path entry != "shared") live;
     mkTree = kind: entries: processing:
       generated.mkTree ({
           name = "ai-${backend}-${runtime}-${kind}";
@@ -109,7 +95,10 @@ in
               )
             )
             // {
-              type = entry.format;
+              type =
+                if entry.recursive
+                then "raw"
+                else entry.format;
               frontmatter = entry.content._frontmatter;
             })
           entries;
@@ -319,13 +308,13 @@ in
           if entry.recursive && backend == "devenv"
           then
             lib.mapAttrs (
-              _leaf: source:
+              leaf: _source:
                 runtimeFiles.sinkEntry (entry
                   // {
-                    content = {inherit source;};
+                    content.source = "${entry.rendered.source}/${lib.removePrefix "${path}/" leaf}";
                     recursive = false;
                   })
-            ) (formats.walk path entry.rendered.source)
+            ) (formats.walk path entry.content.source)
           else {${path} = runtimeFiles.sinkEntry (entry // {content = entry.rendered;});}
       )
       (bucket "symlink");

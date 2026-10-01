@@ -7,6 +7,7 @@
   mcpLib = import ../mcp.nix {inherit lib;};
   aiBase = import ../ai {inherit lib;};
   aiTypes = import ../ai/types.nix {inherit lib;};
+  deliveryMethod = import ../ai/deliveryMethod.nix {inherit lib;};
   # The runtime registry, shared with lib/ai/sharedOptions.nix and
   # checks/modules/options-doc.nix. Importing it rather than restating the five names
   # is what makes the tests below GROW when a sixth runtime lands: a hardcoded
@@ -383,16 +384,15 @@
     (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) (harnessNames ++ ["internal"]));
   in
     builtins.listToAttrs copies // (config.files or config.home.file);
-  # The `{text}` or `{source}` a Markdown file goes into its runtime's
+  # The `{text}` or `{source}` a live build-time file goes into its runtime's
   # generated tree as. What is delivered is a store path into that tree, and
-  # reading it back would be import-from-derivation, so a check about a
-  # Markdown file's content reads it here and a check about where the file
-  # lands reads `deliveredFiles` / `home.file`. Found by the final entry: the
-  # shared AGENTS.md owner (`ai.internal`) wins, because on devenv it is the
-  # one that delivers a shared key; otherwise exactly one enabled runtime must
-  # carry the path. A path with a byte limit is in a tree whatever its
-  # format, as the router builds one tree per invocation. Takes the evaluated module (`evalHm …`,
-  # `evalDevenv …`).
+  # reading it back would be import-from-derivation, so a check about the input
+  # content reads it here and a check about where the file lands reads
+  # `deliveredFiles` / `home.file`. Found by the final entry: the shared
+  # AGENTS.md owner (`ai.internal`) wins; otherwise exactly one enabled runtime
+  # must carry the path. Every live build-time entry is in the tree, whatever
+  # its format; `run` content and `shared` document leaves are not. Takes the
+  # evaluated module (`evalHm …`, `evalDevenv …`).
   markdownInput = evaluated: path: let
     inherit (evaluated) config;
     owners =
@@ -404,11 +404,24 @@
       else if lib.length owners == 1
       then lib.head owners
       else throw "module-test: expected exactly one ai.* entry for \"${path}\", found ${toString (lib.length owners)}";
+    backend =
+      if config ? home
+      then "hm"
+      else "devenv";
+    cfg = config.ai.${owner};
     entry = config.ai.${owner}.files.${path};
+    method = deliveryMethod.resolve {
+      inherit backend entry path;
+      methodFor = cfg.methodFor or deliveryMethod.byRule;
+    };
   in
-    if (entry.format == "markdown" || config.ai.${owner}._maxBytes ? ${path}) && entry.content.enable
-    then aiTypes.textSourceFile entry.content
-    else throw "module-test: \"${path}\" is not a live generated tree entry (format `${entry.format}`, no byte limit)";
+    if !entry.content.enable
+    then throw "module-test: \"${path}\" is not a live generated tree entry (disabled)"
+    else if entry.content.run != null
+    then throw "module-test: \"${path}\" is not a live generated tree entry (`run` content)"
+    else if method == "shared"
+    then throw "module-test: \"${path}\" is not a generated tree entry (delivery method is `shared`)"
+    else aiTypes.textSourceFile entry.content;
   # Whether a delivered file record (`home.file.<p>`, `files.<p>`, a
   # `deliveredFiles` entry) is `path` inside its runtime's generated tree.
   fromTree = kind: path: file: lib.hasSuffix "-${kind}/${path}" (toString (file.source or ""));
@@ -432,10 +445,7 @@
   # `fromJSON` refuses a string carrying store-path context, which a
   # `package`-resolved command adds.
   lspEntryOf = envelope: file: server: let
-    content =
-      if file ? text && file.text != null
-      then file.text
-      else builtins.readFile file.source;
+    content = builtins.readFile file.source;
     json = builtins.fromJSON (builtins.unsafeDiscardStringContext content);
   in
     if file != null && lib.attrNames json == [envelope]

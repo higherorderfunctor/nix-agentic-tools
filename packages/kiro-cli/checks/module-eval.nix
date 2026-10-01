@@ -2369,8 +2369,8 @@ in {
     # to the minimal shape both parsers accept.
     module-kiro-typed-agent-defaults-name = mkTest "kiro-typed-agent-defaults-name" (
       let
-        emitted = backend:
-          builtins.fromJSON (backend {
+        evaluated = backend:
+          backend {
             ai.kiro = {
               enable = true;
               native.agents.reviewer = {
@@ -2379,9 +2379,11 @@ in {
                 tools = ["read" "shell"];
               };
             };
-          });
-        hmJson = emitted (cfg: builtins.readFile (evalHm cfg).config.home.file.".kiro/agents/reviewer.json".source);
-        devenvJson = emitted (cfg: builtins.readFile (evalDevenv cfg).config.files.".kiro/agents/reviewer.json".source);
+          };
+        hm = evaluated evalHm;
+        devenv = evaluated evalDevenv;
+        hmJson = builtins.fromJSON (markdownInput hm ".kiro/agents/reviewer.json").text;
+        devenvJson = builtins.fromJSON (markdownInput devenv ".kiro/agents/reviewer.json").text;
         wellFormed = j:
           j.name
           == "reviewer"
@@ -2394,7 +2396,11 @@ in {
           && !(j ? resources)
           && !(j ? permissions);
       in
-        wellFormed hmJson && wellFormed devenvJson && hmJson == devenvJson
+        fromGeneratedTree ".kiro/agents/reviewer.json" hm.config.home.file.".kiro/agents/reviewer.json"
+        && fromGeneratedTree ".kiro/agents/reviewer.json" devenv.config.files.".kiro/agents/reviewer.json"
+        && wellFormed hmJson
+        && wellFormed devenvJson
+        && hmJson == devenvJson
     );
 
     # Pruning must reach INSIDE list elements. A permission rule declared without
@@ -2472,18 +2478,18 @@ in {
     # `name`, not on the filename, so this has to be reachable.
     module-kiro-typed-agent-explicit-name = mkTest "kiro-typed-agent-explicit-name" (
       let
-        cfg =
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              native.agents.file-stem = {
-                name = "explicit-id";
-                description = "d";
-              };
+        evaluated = evalHm {
+          ai.kiro = {
+            enable = true;
+            native.agents.file-stem = {
+              name = "explicit-id";
+              description = "d";
             };
-          }).config;
+          };
+        };
       in
-        (builtins.fromJSON (builtins.readFile cfg.home.file.".kiro/agents/file-stem.json".source)).name
+        fromGeneratedTree ".kiro/agents/file-stem.json" evaluated.config.home.file.".kiro/agents/file-stem.json"
+        && (builtins.fromJSON (markdownInput evaluated ".kiro/agents/file-stem.json").text).name
         == "explicit-id"
     );
 

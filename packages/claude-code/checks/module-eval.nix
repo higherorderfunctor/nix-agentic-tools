@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) claudeMcpPath claudeMcpServers claudeSettings evalDevenv evalDevenvModules evalHm evalHmModules fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
+  inherit (harness) claudeMcpPath claudeMcpServers claudeSettings deliveredMarkdown evalDevenv evalDevenvModules evalHm evalHmModules fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
   inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasClampHook hasGuardHook;
   delegationClampMitigationDefaultProse = ''
     Standing request from me, the user: you have my permission to use subagents
@@ -280,7 +280,7 @@
         };
         file = (arm.files result.config).".claude/hooks/my-hook" or {};
       in
-        (file.text or null)
+        deliveredMarkdown result ".claude/hooks/my-hook"
         == "#!/usr/bin/env bash\nexit 0\n"
         && file.executable
         && (claudeSettings result).hooks ? from-settings))
@@ -606,14 +606,15 @@ in {
       module-claude-hm-skills-land-as-files = mkTest "claude-hm-skills-land-as-files" (
         let
           src = ../../stacked-workflows/skills/stack-fix;
-          file =
-            (evalHm {
-              ai.claude.enable = true;
-              ai.skills.stack-fix = src;
-            }).config.home.file.".claude/skills/stack-fix" or {
-            };
+          result = evalHm {
+            ai.claude.enable = true;
+            ai.skills.stack-fix = src;
+          };
+          file = result.config.home.file.".claude/skills/stack-fix" or {};
         in
-          (file.source or null) == src && (file.recursive or false)
+          fromGeneratedTree ".claude/skills/stack-fix" file
+          && (markdownInput result ".claude/skills/stack-fix").source == src
+          && (file.recursive or false)
       );
 
       # Every Claude surface lands as its own file: the Markdown and script
@@ -936,8 +937,8 @@ in {
           };
           file = result.config.home.file.".claude/skills/my-plugin" or {};
         in
-          lib.isDerivation (file.source or null)
-          && file.source.name == "claude-code-plugin-my-plugin"
+          fromGeneratedTree ".claude/skills/my-plugin" file
+          && (markdownInput result ".claude/skills/my-plugin").source.name == "claude-code-plugin-my-plugin"
           && !(file.recursive or false)
       );
 
@@ -1444,7 +1445,8 @@ in {
             };
           };
         in
-          result.config.home.file.".claude/skills/skill-a".source == ./fixtures/claude-skills/skill-a
+          fromGeneratedTree ".claude/skills/skill-a" result.config.home.file.".claude/skills/skill-a"
+          && (markdownInput result ".claude/skills/skill-a").source == ./fixtures/claude-skills/skill-a
       );
 
       # ── ai.claude.agentsDir Dir helper ─────────────────────────
@@ -1632,7 +1634,7 @@ in {
             };
           };
         in
-          result.config.home.file.".claude/hooks/pre-edit".text == "explicit override"
+          deliveredMarkdown result ".claude/hooks/pre-edit" == "explicit override"
       );
 
       # Devenv parity — hookScriptsDir feeds the same .claude/hooks/<name> files.

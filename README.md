@@ -493,12 +493,14 @@ remains an explicit consumer root.
 <details>
 <summary><strong>Generated-file formatting</strong></summary>
 
-Static, Nix-owned Markdown, JSON, TOML and YAML files are built into one store
-tree per delivery-router invocation. The builder formats each type in its own
-working directory, installs only the declared target paths, then checks the
-installed bytes. A failed check fails the build. Formatter-created caches and
-state stay out of the output. File paths in snippets are relative to the target
-root, such as `.claude/rules/example.md`.
+Every live, Nix-owned whole file whose bytes exist at build time is built into
+one store tree per delivery-router invocation. The builder formats Markdown,
+JSON, TOML and YAML in separate working directories, installs only the declared
+target paths, then checks the installed bytes. Raw files and recursive directory
+sources pass through without formatting or guards; directory leaves retain their
+bytes and source modes. A failed check fails the build. Formatter-created caches
+and state stay out of the output. File paths in snippets are relative to the
+target root, such as `.claude/rules/example.md`.
 
 `ai.generated.formatter.<type>` is a shell snippet that replaces the default for
 that type in trees Nix generates from `ai.*` inputs; repository content you
@@ -543,9 +545,11 @@ detection of a devenv treefmt config.
 Generated context, rules, AGENTS.md and agent Markdown participate on both Home
 Manager and devenv, including Claude's direct Home Manager files. Static JSON,
 TOML and YAML entries participate when their file entry names the corresponding
-`format`. Switch-time overlays and private documents rendered by `content.run`
-are excluded because their final bytes do not exist at build time. Supplied
-skills and directory sources are delivered as written.
+`format`; raw files and supplied directory trees participate without a
+formatter. Switch-time overlays and private documents rendered by `content.run`
+are excluded because their final bytes do not exist at build time. Shared
+document entries are excluded because they own reconciled leaves rather than a
+whole file.
 
 | Runtime | Static JSON/TOML/YAML in scope                                                                                  | Outside the build tree                             |
 | ------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -555,8 +559,9 @@ skills and directory sources are delivered as written.
 | Kimchi  | Static config, harness settings, MCP, permissions and devenv hooks                                              | `trust.json` and credential-rendered `config.json` |
 | Kiro    | `cli.json`, `lsp.json`, Home Manager `permissions.yaml`, agent and hook JSON files                              | Runtime-rendered `mcp.json`                        |
 
-A single file can opt out with `ai.<runtime>.files."<path>".format = "raw"`.
-Byte limits still apply to opted-out paths. A `content.run` replacement of a
+A single file can opt out of formatting and guards with
+`ai.<runtime>.files."<path>".format = "raw"`; it remains in the store tree. Byte
+limits still apply to opted-out paths. A `content.run` replacement of a
 generated entry requires `format = "raw"`; replacing an entire AGENTS.md entry
 may state `format = "markdown"` to retain formatting.
 
