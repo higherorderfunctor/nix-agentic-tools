@@ -22,30 +22,38 @@ receives every composed type without a non-null per-type override. Each path
 must carry the extension its formatter routes on; an unmatched file fails the
 build and names its target-relative path. Raw files and recursive directory
 sources are copied byte-identically, preserve source modes, and never reach a
-formatter or guard. On devenv, every delivered path is excluded from the
-repository treefmt run. `ai.generated.formatter.<type>` is a temporary per-type
-override: a non-null snippet handles that type instead of `ai.formatter`, and
-the option is going away. Authored docs and wiki pages still need their own
-treefmt run. `tableCells` and `splitCodeSpans` check the input before
-formatting. The builder formats only marked Markdown bodies, restores
-generator-owned frontmatter bytes, and compares the installed prefix under
-`parseCompare`. Frontmatter producers pass raw Nix data to
-`lib/frontmatter.nix`; it JSON-quotes each supported scalar as valid YAML while
-retaining block sequences for lists.
+formatter or format guard. Runtime shape guards inspect the installed copies. On
+devenv, every delivered path is excluded from the repository treefmt run.
+`ai.generated.formatter.<type>` is a temporary per-type override: a non-null
+snippet handles that type instead of `ai.formatter`, and the option is going
+away. Authored docs and wiki pages still need their own treefmt run.
+`tableCells` and `splitCodeSpans` check the input before formatting. The builder
+formats only marked Markdown bodies, restores generator-owned frontmatter bytes,
+and compares the installed prefix under `parseCompare`. Frontmatter producers
+pass raw Nix data to `lib/frontmatter.nix`; it JSON-quotes each supported scalar
+as valid YAML while retaining block sequences for lists.
 
-The three guards (`tableCells`, `splitCodeSpans`, `parseCompare`) are defined in
-`lib/markdown/guards.nix`. Generated trees run them with `ai.generated.guards`
-wording; `lib.ai.guards pkgs` exports the programs and a `check` builder for
-consumer files. A finding exits 1; exit 2 means nothing was checked (for
-`parseCompare`, an unreadable file or a BEFORE that does not parse).
+The four guards and their one table are defined in `lib/markdown/guards.nix`;
+the table owns their phase, runtime, defaults, option prose and generated-tree
+programs. `ai.guards` is stamped from that table, while the three
+`ai.generated.guards` names remain temporary aliases. `tableCells` and
+`splitCodeSpans` run before formatting and default on only when `ai.formatter`
+enables Prettier. `parseCompare` runs after formatting. The Kiro-only
+`kiroFrontmatterFlow` runs after formatting over every delivered Markdown file,
+including raw copies, and rejects a flow sequence spanning lines because Kiro
+silently degrades it to always-on steering. `lib.ai.guards pkgs` exports all
+four programs and a consumer `check` builder. A finding exits 1; exit 2 means
+nothing was checked (for `parseCompare`, an unreadable file or a BEFORE that
+does not parse).
 
 ### Never break a line mid-token
 
 > **Last verified:** 2026-10-01 — generated trees evaluate the exported treefmt
-> module with `ai.formatter` layered on top; generated frontmatter quotes scalar
-> data centrally; generated and consumer Markdown share guards; tableCells pairs
-> rumdl and markdownlint for distinct MD056 cases, while raw files and recursive
-> sources traverse the complete tree unformatted.
+> module with `ai.formatter` layered on top; one guard table stamps `ai.guards`
+> and carries phase and runtime selection; generated frontmatter quotes scalar
+> data centrally; tableCells pairs rumdl and markdownlint for distinct MD056
+> cases; raw copies bypass format guards, while the Kiro runtime-shape guard
+> inspects their delivered Markdown.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the

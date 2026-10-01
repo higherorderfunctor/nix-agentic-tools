@@ -10,6 +10,7 @@
   ...
 }: let
   generated = import ../../lib/generated.nix {inherit lib;} pkgs;
+  onlyGuards = names: lib.genAttrs names (_: true);
   frontmatter = import ../../lib/frontmatter.nix {inherit lib;};
   mkFile = type: text: {inherit type text;};
   markdown = text: {"page.md" = mkFile "markdown" text;};
@@ -56,10 +57,6 @@
     toml = null;
     yaml = null;
   };
-  badTable = ''    | a | b |
-    | --- | --- |
-    | x | y | z |
-  '';
   goodTable = ''    | a | b |
     | --- | --- |
     | x | y |
@@ -73,7 +70,7 @@
       name = "format-json";
       files = {"config.json" = mkFile "json" ''{"a":true}'';};
       formatter = generated.defaultFormatter;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       changed = "config.json";
     }
     {
@@ -82,14 +79,14 @@
         markdown ''          #   Heading
         '';
       formatter = generated.defaultFormatter;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       changed = "page.md";
     }
     {
       name = "format-toml";
       files = {"config.toml" = mkFile "toml" "a=1\n";};
       formatter = generated.defaultFormatter;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       changed = "config.toml";
     }
     {
@@ -98,7 +95,7 @@
         dataFile "yaml" ''          a:    true
         '';
       formatter = generated.defaultFormatter;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       changed = "data.yaml";
     }
     {
@@ -123,20 +120,14 @@
       name = "table-cells-good";
       files = markdown goodTable;
       formatter = noFormat;
-      guards.tableCells = true;
+      guards = onlyGuards ["tableCells"];
     }
     {
       name = "table-cells-header-before-format";
       files = markdown badHeader;
       formatter = generated.defaultFormatter;
-      guards.tableCells = true;
+      guards = onlyGuards ["tableCells"];
       fails = "tableCells";
-    }
-    {
-      name = "table-cells-disabled";
-      files = markdown badTable;
-      formatter = noFormat;
-      guards.tableCells = false;
     }
     {
       name = "user-check-fails";
@@ -151,7 +142,7 @@
         markdown ''          A `single span` is sound.
         '';
       formatter = noFormat;
-      guards.splitCodeSpans = true;
+      guards = onlyGuards ["splitCodeSpans"];
     }
     {
       name = "split-code-spans-bad";
@@ -159,35 +150,21 @@
         span` is broken.
       '';
       formatter = generated.defaultFormatter;
-      guards.splitCodeSpans = true;
+      guards = onlyGuards ["splitCodeSpans"];
       fails = "splitCodeSpans";
-    }
-    {
-      name = "split-code-spans-disabled";
-      files = markdown ''        A `split
-        span` is broken.
-      '';
-      formatter = noFormat;
-      guards.splitCodeSpans = false;
     }
     {
       name = "parse-json-good";
       files = dataFile "json" ''{"value":true}'';
       formatter = noFormat;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
     }
     {
       name = "parse-json-bad";
       files = dataFile "json" ''{"value":true}'';
       formatter = noFormat // {json = "printf '{\"value\":false}' > data.json";};
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       fails = "parseCompare";
-    }
-    {
-      name = "parse-json-disabled";
-      files = dataFile "json" ''{"value":true}'';
-      formatter = noFormat // {json = "printf '{\"value\":false}' > data.json";};
-      guards.parseCompare = false;
     }
     {
       name = "parse-toml-bad";
@@ -195,7 +172,7 @@
         dataFile "toml" ''          value = true
         '';
       formatter = noFormat // {toml = "printf 'value = false\\n' > data.toml";};
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       fails = "parseCompare";
     }
     {
@@ -204,21 +181,21 @@
         dataFile "yaml" ''          value: true
         '';
       formatter = noFormat // {yaml = "printf 'value: false\\n' > data.yaml";};
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       fails = "parseCompare";
     }
     {
       name = "frontmatter-consumer-default-bytes";
       files = consumerFiles;
       formatter = generated.defaultFormatter;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       head = frontmatter.block consumerData + "\n";
     }
     {
       name = "parse-frontmatter-bom-good";
       files = markedMarkdown (bom + "---\nvalue: true\n---\n\n\n# Page\n");
       formatter = noFormat;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       expected = bom + "---\nvalue: true\n---\n\n# Page\n";
       path = "page.md";
     }
@@ -226,7 +203,7 @@
       name = "parse-frontmatter-crlf-good";
       files = markedMarkdown (crlf "---\nvalue: true\n---\n# Page\n");
       formatter = noFormat;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       expected = crlf "---\nvalue: true\n---\n\n# Page\n";
       path = "page.md";
     }
@@ -235,8 +212,60 @@
       files = consumerFiles;
       formatter = generated.defaultFormatter;
       attach = brokenAttach;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
       fails = bytesChanged;
+    }
+    {
+      name = "kiro-frontmatter-flow-bad";
+      files = markdown ''        ---
+        inclusion: fileMatch
+        fileMatchPattern: ["one/**",
+          "two/**"]
+        ---
+        # Page
+      '';
+      formatter = noFormat;
+      guards = onlyGuards ["kiroFrontmatterFlow"];
+      runtime = "kiro";
+      fails = "page.md: Kiro frontmatter flow sequence spans multiple lines";
+    }
+    {
+      name = "kiro-frontmatter-flow-raw-bad";
+      files.".kiro/steering/raw.md" = mkFile "raw" ''
+        ---
+        fileMatchPattern: ["one/**",
+          "two/**"]
+        ---
+        # Raw page
+      '';
+      formatter = noFormat;
+      guards = onlyGuards ["kiroFrontmatterFlow"];
+      runtime = "kiro";
+      fails = ".kiro/steering/raw.md: Kiro frontmatter flow sequence spans multiple lines";
+    }
+    {
+      name = "kiro-frontmatter-flow-disabled";
+      files = markdown ''        ---
+        fileMatchPattern: ["one/**",
+          "two/**"]
+        ---
+        # Page
+      '';
+      formatter = noFormat;
+      guards = {};
+      runtime = "kiro";
+    }
+    {
+      name = "kiro-frontmatter-flow-skips-claude";
+      files = markdown ''        ---
+        fileMatchPattern: ["one/**",
+          "two/**"]
+        ---
+        # Page
+      '';
+      formatter = noFormat;
+      guards = onlyGuards ["kiroFrontmatterFlow"];
+      runtime = "claude";
     }
   ];
   generatedSource = file: path:
@@ -247,6 +276,7 @@
       inherit (case) files formatter;
       guards = case.guards or {};
       check = case.check or {};
+      runtime = case.runtime or "test";
     };
   makeScript = case: let
     tree = makeTree case;
@@ -266,7 +296,8 @@
       name = "generated-fixture-real-frontmatter-byte-failure";
       files = consumerFiles;
       formatter = generated.defaultFormatter;
-      guards.parseCompare = true;
+      guards = onlyGuards ["parseCompare"];
+      runtime = "test";
     }).overrideAttrs (_: {
       postBuild = "sed -i 's/  - \"SCHEMA.md\"/  - SCHEMA.md/' work/markdown/page.md";
     });
@@ -276,6 +307,8 @@
     name = "generated-fixture-treefmt-eval-module";
     files = markdown "#   Heading\n";
     formatter.markdown = (import ../../lib/ai {inherit lib;}).treefmtFormatter treefmtConfig;
+    guards = {};
+    runtime = "test";
   };
 in {
   checks = {

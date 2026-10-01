@@ -49,7 +49,10 @@
 > require `extensions`, and Copilot constrains server names. `ai.formatter`
 > layers consumer configuration on the exported treefmt module for each
 > generated tree; devenv excludes every delivered path, using `<directory>/**`
-> for recursive entries, from its repository treefmt run.
+> for recursive entries, from its repository treefmt run. One guard table stamps
+> `ai.guards` and supplies each guard's phase, runtime, formatter-dependent
+> default and program to those trees; the old `ai.generated.guards` names are
+> temporary aliases.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived

@@ -43,6 +43,7 @@
       formatter.markdown = generated.defaultFormatter.markdown;
       guards.parseCompare = true;
       passthru.text = render args;
+      inherit (args) runtime;
     };
   skills = lib.genAttrs ["claude" "codex" "kiro"] (runtime: mkSkill {inherit runtime;});
 in

@@ -121,6 +121,7 @@
       name = "kimchi-docs-markdown-${search}";
       formatter.markdown = generated.defaultFormatter.markdown;
       guards.parseCompare = true;
+      runtime = "kimchi";
     }
     // {files = skillFiles;});
   inherit (rendered) text;

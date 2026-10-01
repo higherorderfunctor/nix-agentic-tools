@@ -13,6 +13,13 @@
     "clean.md" = ./fixtures/guards-consumer/clean.md.fixture;
     "inline-disable.md" = pkgs.writeText "inline-disable.md" ("<!-- markdownlint-disable MD056 -->\n\n" + builtins.readFile "${tables}/cause-excess-body-cell.md.fixture");
     "inline-widen.md" = ./fixtures/guards-consumer/inline-widen.md.fixture;
+    "kiro-flow.md" = pkgs.writeText "kiro-flow.md" ''
+      ---
+      fileMatchPattern: ["one/**",
+        "two/**"]
+      ---
+      # Kiro flow
+    '';
     "split-span.md" = ./fixtures/guards-consumer/split-span.md.fixture;
     "table-break.md" = "${tables}/break-header-delimiter-disagree.md.fixture";
     "table-pipe.md" = "${tables}/cause-excess-body-cell.md.fixture";
@@ -44,6 +51,12 @@
     };
     guards.tableCells = false;
   };
+  kiroTree = tree "kiro-only" {"kiro-flow.md" = fixtures."kiro-flow.md";};
+  kiroDefaultOff = guards.check {src = kiroTree;};
+  badKiroOptIn = failure {
+    src = kiroTree;
+    guards.kiroFrontmatterFlow = true;
+  };
   # A configuration file in the checked tree cannot silence either half.
   badConfigured = lib.mapAttrs (name: files: failure {src = tree name files;}) {
     markdownlint = {
@@ -61,7 +74,9 @@
   json = text: pkgs.writeText "data.json" text;
   rejected = value: !(builtins.tryEval (builtins.seq value true)).success;
 in {
-  checks.guards-consumer = assert lib.assertMsg (rejected (guards.check {
+  checks.guards-consumer = assert lib.assertMsg (guards ? kiroFrontmatterFlow)
+  "guards-consumer: lib.ai.guards does not export kiroFrontmatterFlow";
+  assert lib.assertMsg (rejected (guards.check {
     src = fixtureTree;
     guards.parseCompare = true;
   })) "guards-consumer: parseCompare was accepted by check";
@@ -95,11 +110,13 @@ in {
       found() { ${pkgs.gnugrep}/bin/grep -q -F "$1" "$2"; }
       found "Guard splitCodeSpans failed." ${badDefault}/testBuildFailure.log
       found "Guard tableCells failed." ${badTableOnly}/testBuildFailure.log
+      found "kiro-flow.md: Kiro frontmatter flow sequence spans multiple lines" ${badKiroOptIn}/testBuildFailure.log
       if found "Guard splitCodeSpans failed." ${badTableOnly}/testBuildFailure.log; then
         echo "FAIL: splitCodeSpans ran when disabled" >&2
         exit 1
       fi
       test -e ${tableDisabled}
+      test -e ${kiroDefaultOff}
       ${lib.concatMapStrings (drv: ''
         found "Guard tableCells failed." ${drv}/testBuildFailure.log
       '') (lib.attrValues badConfigured)}
