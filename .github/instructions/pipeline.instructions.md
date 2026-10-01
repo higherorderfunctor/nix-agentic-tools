@@ -444,12 +444,14 @@ them.
 
 ## Generation Architecture
 
-> **Last verified:** 2026-09-30 — generated scoped rules rely on the normalized
-> matcher-derived `fileMatch` trigger default. `generate:all` writes every
-> generated file, committed and gitignored; the generator produces content only;
-> `dev/ai.nix` hands it to `ai.*`, which writes every agent instruction file
-> from its generated-file tree, formatted there with this repository's treefmt;
-> the drift check compares the built files.
+> **Last verified:** 2026-10-01 — repo documents and agent files are built by
+> `mkTree` with the evaluated `ai.formatter` treefmt config and the named
+> guards; scoped rules rely on the normalized matcher-derived `fileMatch`
+> trigger default. `generate:all` writes every generated file, committed and
+> gitignored; the generator produces content only; `dev/ai.nix` hands it to
+> `ai.*`, which writes every agent instruction file from its generated-file
+> tree, formatted there with this repository's treefmt; the drift check compares
+> the built files.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -475,7 +477,7 @@ Two kinds of generated content, two owners:
 - **Human documents** — README.md and CONTRIBUTING.md are not agent steering.
   `dev/repo-docs.nix` renders them from `dev/generate.nix` and builds each with
   the same builder as the agent files (`lib/generated.nix`'s `mkTree`, the
-  `lib.ai.treefmtFormatter` helper and the generated-file guards);
+  evaluated treefmt config, and the same named guards `ai.guards` selects);
   `generate:repo:*` copies them out.
 
 `ai.*` genuinely cannot express the human documents: they are not context or
@@ -492,10 +494,9 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
 - `dev/generate.nix` — fragment composition into content, plus the two human
   documents.
 - `dev/ai.nix` — this repository's `ai.*` configuration, imported by
-  `devenv.nix` and evaluated by the drift check. It sets each
-  `ai.generated.formatter.<type>` with `lib.ai.treefmtFormatter`: treefmt with
-  `treefmt.nix`, run in each type's staging tree, so a committed file is already
-  what `nix fmt` produces.
+  `devenv.nix` and evaluated by the drift check. Its generated trees use the
+  default `ai.formatter`, which is this flake's exported treefmt module, so a
+  committed file is already in the same house style as `nix fmt` produces.
 - `packages/coding-standards/fragments/` — published coding standards, part of
   the orientation.
 - `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the

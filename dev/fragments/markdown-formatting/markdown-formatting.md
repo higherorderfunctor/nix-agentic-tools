@@ -17,19 +17,16 @@ build and names its target-relative path. Raw files and recursive directory
 sources are copied byte-identically, preserve source modes, and never reach a
 formatter or format guard. Runtime shape guards inspect the installed copies. On
 devenv, every delivered path is excluded from the repository treefmt run.
-`ai.generated.formatter.<type>` is a temporary per-type override: a non-null
-snippet handles that type instead of `ai.formatter`, and the option is going
-away. Authored docs and wiki pages still need their own treefmt run.
-`tableCells` and `splitCodeSpans` check the input before formatting. The builder
-formats only marked Markdown bodies, restores generator-owned frontmatter bytes,
-and compares the installed prefix under `parseCompare`. Frontmatter producers
-pass raw Nix data to `lib/frontmatter.nix`; it JSON-quotes each supported scalar
-as valid YAML while retaining block sequences for lists.
+Authored docs and wiki pages still need their own treefmt run. `tableCells` and
+`splitCodeSpans` check the input before formatting. The builder formats only
+marked Markdown bodies, restores generator-owned frontmatter bytes, and compares
+the installed prefix under `parseCompare`. Frontmatter producers pass raw Nix
+data to `lib/frontmatter.nix`; it JSON-quotes each supported scalar as valid
+YAML while retaining block sequences for lists.
 
 The four guards and their one table are defined in `lib/markdown/guards.nix`;
 the table owns their phase, runtime, defaults, option prose and generated-tree
-programs. `ai.guards` is stamped from that table, while the three
-`ai.generated.guards` names remain temporary aliases. `tableCells` and
+programs. Configure them through `ai.guards.<name>`. `tableCells` and
 `splitCodeSpans` run before formatting and default on only when `ai.formatter`
 enables Prettier. `parseCompare` runs after formatting. The Kiro-only
 `kiroFrontmatterFlow` runs after formatting over every delivered Markdown file,

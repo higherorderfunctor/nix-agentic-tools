@@ -65,6 +65,7 @@ in {
           inherit lib pkgs;
           docs = pkgs.docs.kimchi-docs;
           search = searchFor runtime;
+          treefmt-nix = config.ai.internal.treefmtNix;
         }}";
       };
     })

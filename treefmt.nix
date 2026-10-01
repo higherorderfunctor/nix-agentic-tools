@@ -1,8 +1,8 @@
 # Repository treefmt config. It imports the exported treefmt module, then adds the
 # repository root and path-specific exclusions. Consumers: devenv.nix's treefmt
-# module, the flake `formatter`, checks/repository/formatting.nix, and
-# `lib.ai.treefmtFormatter` as configured in dev/ai.nix, which formats the static
-# files `ai.*` generates for this repository inside its delivery tree.
+# module, the flake `formatter`, and checks/repository/formatting.nix. The
+# exported module is also the default `ai.formatter`, so generated files use the
+# same formatter programs and style without the repository-only exclusions.
 {
   imports = [./lib/treefmt-module.nix];
 

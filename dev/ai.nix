@@ -10,19 +10,13 @@
 # files with what this module delivers. `isCI` is a parameter rather than a
 # `getEnv` read here so the check stays pure. It gates package installation
 # only: the committed bytes must not depend on the environment that evaluates
-# them, which that check proves by evaluating both values. `treefmt-nix` is
-# a parameter for the same reason: the check evaluates this module alone, and
-# the house generated-file formatter is built from it.
-{
-  isCI,
-  treefmt-nix,
-}: {
+# them, which that check proves by evaluating both values.
+{isCI}: {
   config,
   lib,
   pkgs,
   ...
 }: let
-  aiLib = import ../lib/ai/default.nix {inherit lib;};
   gen = import ./generate.nix {inherit lib pkgs;};
   # The stacked-workflows program is not imported (see devenv.nix), but its
   # always-on routing rule is wanted: deliver it from the program's source.
@@ -57,12 +51,6 @@ in {
     # path-scoped rule per architecture-fragment category.
     context.text = gen.context;
     rules = gen.rules // swsRouter;
-
-    # Generated files use the same treefmt config as tracked files.
-    generated.formatter = let
-      treefmt = (treefmt-nix.lib.evalModule pkgs (import ../treefmt.nix)).config;
-    in
-      lib.genAttrs ["json" "markdown" "toml" "yaml"] (_: aiLib.treefmtFormatter treefmt);
 
     # Every harness executes its commands under nix bash rather than the
     # login shell. zsh's glob engine is superlinear in candidate entries

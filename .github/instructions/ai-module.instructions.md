@@ -60,8 +60,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > generated tree; devenv excludes every delivered path, using `<directory>/**`
 > for recursive entries, from its repository treefmt run. One guard table stamps
 > `ai.guards` and supplies each guard's phase, runtime, formatter-dependent
-> default and program to those trees; the old `ai.generated.guards` names are
-> temporary aliases. Consumer checks resolve through `ai.checks.all`, one
+> default and program to those trees; consumers configure them through
+> `ai.guards.<name>`. Consumer checks resolve through `ai.checks.all`, one
 > per-surface default, and one per-runtime surface leaf; only the leaf runs over
 > that surface's stamped files in the built runtime tree, while the shared
 > internal tree runs the root surface tier with `AI_RUNTIME=internal`.
