@@ -1,6 +1,6 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-09-29 — git-branchless joins the source-measured
+> **Last verified:** 2026-10-01 — git-branchless joins the source-measured
 > sidecars. `fix_sidecar_hashes` also re-derives `pnpmDepsHash`, but only when
 > the stale output is not substitutable; kimchi versions its pnpm-deps and src
 > FOD names; Kiro settings extraction validates its materialized TUI registry
@@ -139,16 +139,11 @@ The cachix daemon pushes fetched sources so subsequent evaluations (PR CI) can
 substitute them. The `--apply` expression is the load-bearing detail — keep the
 composite and this fragment in sync.
 
-**It forces `drvPath` and not `version`, deliberately.** `version` only reaches
-an IFD when the version is itself `readFile`-derived FROM the source; a package
-versioned from a `-sources.json` sidecar resolves it out of the sidecar and
-short-circuits, leaving IFD elsewhere on its path — `cargoLock.lockFile` on
-`fblog` and `git-branchless` — never forced, and so never warmed. Measured on
-`fblog` under `--option allow-import-from-derivation false`: `.version`
-evaluates clean while `.drvPath` fails with
-`cannot build '…-source.drv^out' during evaluation`, and the same split holds
-for the two `--apply` expressions scoped to that one package. `drvPath` subsumes
-`version` (the derivation name embeds it), so the narrower form buys nothing.
+**It forces `drvPath` and not `version`, deliberately.** A sidecar version can
+resolve without touching build inputs, so it is insufficient to warm those
+inputs. `drvPath` subsumes `version` (the derivation name embeds it). Rust
+release packages use `fetchCargoVendor`, without reading fetched locks at
+evaluation; git-branchless reads its flake-input lock.
 
 The cost is real and was measured before adopting it: eval cache disabled, warm
 store, 2026-07-25 — `version` 1.2s / 0.9 GB RSS versus `drvPath` 19.2s / 3.0 GB

@@ -811,22 +811,22 @@ to any versioned attribute family:
   so a version check pointed at the platform package would pin the attribute
   backwards.
 
-Rust packages on this pattern have one extra constraint. `ghArchiveUpdateScript`
-refreshes only the src hash in the sidecar, so an inline `cargoHash` would go
-stale on every bump — the known transitive-hash gap. Override `cargoDeps` with
-`rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }` against the
-PINNED src instead, so one hash covers both and the vendor set self-updates.
+Rust releases (`fblog`, `rumdl`) instead pin a `fetchFromGitHub` tag and source
+hash inline, with
+`cargoDeps = rustPlatform.fetchCargoVendor { inherit src; hash = …; }`. Their
+owner update targets use nix-update for both hashes. `buildRustPackage`'s inline
+`cargoHash` is the equivalent shorthand used by agnix and git-absorb.
+Git-branchless retains `importCargoLock` against its flake input, which is
+readable without realizing a derivation.
 
 ### Go packages: the vendorHash goes in the SIDECAR
 
-Go has the same transitive-hash problem and no `importCargoLock` equivalent —
-`go.sum` records module hashes, not a Nix-fetchable vendor tree — so
-`vendorHash` must be recorded somewhere. It goes in the sidecar (`beads`, its
-nested paired Dolt, `gh`, `glab`, `gluetun`, `kimchi`, `oh-my-posh`,
-`otel-tui`), never inline, and the mechanism is worth understanding before
-touching it. Kimchi is the odd row: the recorded hash covers its nested
-`proxy-helper` rather than a top-level Go build, and everything below still
-applies to it unchanged.
+Go archive updates need an explicit vendor-hash repair; `go.sum` does not supply
+a Nix vendor-tree hash. It goes in the sidecar (`beads`, its nested paired Dolt,
+`gh`, `glab`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui`), never inline, and
+the mechanism is worth understanding before touching it. Kimchi is the odd row:
+the recorded hash covers its nested `proxy-helper` rather than a top-level Go
+build, and everything below still applies to it unchanged.
 
 - `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
   (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not itself
@@ -1072,17 +1072,11 @@ STALE SIDECAR: add the missing `{url, hash}` entry and the matching
 package through `derivationStrict` and so forces every IFD on its path,
 `cargoLock.lockFile` included.
 
-It used to force `p.version` instead, and that left this exact shape uncovered:
-a package versioned from a `-sources.json` sidecar resolves `.version` out of
-the sidecar and short-circuits before `drvPath` (and therefore `cargoDeps`) is
-ever forced. Measured on `fblog` with
-`--option allow-import-from-derivation false`: `.version` evaluates clean,
-`.drvPath` fails with `cannot build '…-source.drv^out' during evaluation`. That
-was never a build break — the later eval simply fetched the source itself, just
-without the warm step's retry/backoff — but it meant a sidecar-versioned package
-was NOT warmed merely by being in `packages`. See the ifd-patterns fragment for
-the measured cost of the wider forcing and for why the `or` chain does not
-swallow a throw.
+A sidecar version alone need not force every build input, so `drvPath` remains
+the forcing boundary. Rust release packages use `fetchCargoVendor` and do not
+read fetched locks at evaluation; git-branchless reads its flake-input lock. See
+the ifd-patterns fragment for the measured cost of the wider forcing and why the
+`or` chain does not swallow a throw.
 
 ## Recipe and overlay signatures
 

@@ -60,7 +60,7 @@
     #     form dies with `cannot build '…-source.drv^out' during
     #     evaluation`; the two-name form evaluates clean. The offender is
     #     the `importCargoLock { lockFile = "${src}/Cargo.lock"; }` pattern
-    #     used by fblog and git-branchless. So the intensional form turns a
+    #     used by git-branchless. So the intensional form turns a
     #     structural check into one that must fetch sources over the
     #     network at eval time when built on its own
     #     (`nix build .#checks.<sys>.pnpm-fetcher-parity`).

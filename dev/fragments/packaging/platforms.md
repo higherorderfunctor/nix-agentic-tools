@@ -28,8 +28,8 @@ Examples:
   tarballs
 
 A platform-independent artifact collapses the per-platform mapping to a single
-`src` key — `dns-root-hints`, `btop`, `fblog` and the `pnpm_<N>` attributes all
-use that one-key shape.
+`src` key — `dns-root-hints`, `btop` and the `pnpm_<N>` attributes all use that
+one-key shape.
 
 ### Version-independent URLs need `alwaysPrefetch`
 

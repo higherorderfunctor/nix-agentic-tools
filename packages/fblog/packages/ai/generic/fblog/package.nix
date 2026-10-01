@@ -1,72 +1,18 @@
-# fblog — the command-line JSON log viewer, re-pinned onto this repo's
-# update cadence. An `overrideAttrs` over nixpkgs' own
-# `rustPlatform.buildRustPackage` derivation: `version`, `src` and
-# `cargoDeps` move, everything else (hooks, versionCheckHook, meta)
-# stays whatever nixpkgs ships.
-#
-# ONE hash, on purpose. nixpkgs carries an inline `cargoHash` alongside
-# the src hash, and `ghArchiveUpdateScript` refreshes only the src hash
-# in the sidecar — so a version bump would land a stale vendor hash
-# every single time, which is the transitive-hash gap this repo already
-# tracks as an open defect. Reading `Cargo.lock` straight out of the
-# PINNED source (IFD) instead means there is nothing to keep in sync:
-# the vendor set is derived from the same pin the sidecar names, and it
-# self-updates with it. The `cargoHash` in the nixpkgs args is left
-# alone; nothing forces the `fetchCargoVendor` it feeds once
-# `cargoDeps` is overridden.
-#
-# `overrideAttrs` + `importCargoLock` rather than a `.override` that
-# swaps out `buildRustPackage` wholesale: same result, one seam instead
-# of two, and it is the shape packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix
-# already uses for exactly this job.
-#
-# Supporting package; its public role is encoded by the native recipe tree.
-# earmarked repo split can lift the subtree whole.
-#
-# Free (WTFPL). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
-{
-  pkgs,
-  packageLib,
-  repoPath,
-  ...
-}: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchzip;
-  vu = packageLib;
-
-  sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
-
-  # Bound once: `cargoDeps` reads the lock file out of this exact
-  # derivation, so src and vendor set can never point at two revisions.
-  # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
-  # why the updateScript below prefetches with --unpack.
-  src = fetchzip {inherit (sources.src) url hash;};
+# fblog: nixpkgs build recipe with release source and Cargo vendor pins.
+# nix-update refreshes both hashes through the owner's update target.
+{pkgs, ...}: let
+  version = "4.17.0";
+  src = pkgs.fetchFromGitHub {
+    owner = "brocode";
+    repo = "fblog";
+    tag = "v${version}";
+    hash = "sha256-SDOYW9CpC7E62nVnZL04Kx9ckVEZyvcMolJCfKDqdMk=";
+  };
 in
-  ourPkgs.fblog.overrideAttrs (prev: {
-    inherit (sources) version;
-    inherit src;
-
-    cargoDeps = ourPkgs.rustPlatform.importCargoLock {
-      lockFile = "${src}/Cargo.lock";
-      allowBuiltinFetchGit = true;
+  pkgs.fblog.overrideAttrs (_: {
+    inherit src version;
+    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+      inherit src;
+      hash = "sha256-Pn8HsBz+5OHz4jF6xmORLQSLYClTHpaJXWiS5sPyV2w=";
     };
-
-    # Merge, never replace: buildRustPackage attaches helpers here and
-    # dropping them triggers eval warnings. See the nix-standards
-    # fragment.
-    passthru =
-      (prev.passthru or {})
-      // {
-        updateScript = vu.ghArchiveUpdateScript {
-          pkgs = ourPkgs;
-          pname = "fblog";
-          repo = "brocode/fblog";
-          sourcesFile = repoPath ../../../../sources.json;
-        };
-      };
   })
