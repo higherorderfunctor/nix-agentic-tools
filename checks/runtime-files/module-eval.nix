@@ -39,18 +39,21 @@ in {
               };
             };
           };
-          hm = (evalHm config).config;
-          devenv = (evalDevenv config).config;
+          hm = evalHm config;
+          devenv = evalDevenv config;
         in
-          hm.home.file.${textTarget}.text
-          == hm.ai.${runtime}.files.${textTarget}.content.text
-          && devenv.files.${textTarget}.text == devenv.ai.${runtime}.files.${textTarget}.content.text
-          && hm.home.file.${textTarget}.executable
-          && devenv.files.${textTarget}.executable
-          && hm.home.file.${sourceTarget}.source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
-          && devenv.files.${sourceTarget}.source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
-          && !(hm.home.file.${sourceTarget} ? text)
-          && !(devenv.files.${sourceTarget} ? text);
+          fromGeneratedTree textTarget (deliveredFiles hm.config).${textTarget}
+          && fromGeneratedTree textTarget (deliveredFiles devenv.config).${textTarget}
+          && fromGeneratedTree sourceTarget (deliveredFiles hm.config).${sourceTarget}
+          && fromGeneratedTree sourceTarget (deliveredFiles devenv.config).${sourceTarget}
+          && (markdownInput hm textTarget).text == "${runtime}-TEXT"
+          && (markdownInput devenv textTarget).text == "${runtime}-TEXT"
+          && (markdownInput hm sourceTarget).source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
+          && (markdownInput devenv sourceTarget).source == ../../packages/kiro-cli/checks/fixtures/kiro-steering/alpha.md
+          && (deliveredFiles hm.config).${textTarget}.executable
+          && (deliveredFiles devenv.config).${textTarget}.executable
+          && !((deliveredFiles hm.config).${sourceTarget} ? text)
+          && !((deliveredFiles devenv.config).${sourceTarget} ? text);
       in
         lib.all checkRuntime harnessNames
     );
@@ -314,12 +317,9 @@ in {
         && markdownOf deduplicated.config "AGENTS.md" == "SHARED-CONSUMER"
         && !divergent.success
         && markdownOf consumerOnly.config "AGENTS.md" == "CONSUMER-ONLY"
-        # No shared owner registers this key, so Kimchi delivers the consumer's
-        # own entry, which states no Markdown format: inline, as written.
-        && (deliveredFiles kimchiConsumerOnly.config)."AGENTS.md".text or null == "KIMCHI-CONSUMER-ONLY"
+        && markdownOf kimchiConsumerOnly.config "AGENTS.md" == "KIMCHI-CONSUMER-ONLY"
         && !((deliveredFiles kimchiConsumerOnly.config) ? "custom.md")
-        # The override states no `format` and Codex is off, so no limit: inline.
-        && (deliveredFiles kimchiContextOverride.config)."AGENTS.md".text or null == "KIMCHI-CONTEXT-OVERRIDE"
+        && markdownOf kimchiContextOverride.config "AGENTS.md" == "KIMCHI-CONTEXT-OVERRIDE"
         && lib.all (assertion: assertion.assertion) kimchiContextOverride.config.assertions
         && !((deliveredFiles consumerOnlySuppressed.config) ? "AGENTS.md")
         && !((deliveredFiles consumerOnlySuppressed.config) ? "custom.md")
@@ -559,15 +559,14 @@ in {
             "literal/default-text.md".content.text = lib.mkDefault "DEFAULT-TEXT";
           };
         };
-        delivered = sink: let
-          field = target: name: (sink.${target} or {}).${name} or null;
-        in
-          field "literal/default-text.md" "text"
-          == "DEFAULT-TEXT"
-          && field "literal/default-source.md" "source" == source;
+        delivered = evaluated:
+          fromGeneratedTree "literal/default-source.md" (deliveredFiles evaluated.config)."literal/default-source.md"
+          && fromGeneratedTree "literal/default-text.md" (deliveredFiles evaluated.config)."literal/default-text.md"
+          && (markdownInput evaluated "literal/default-source.md").source == source
+          && (markdownInput evaluated "literal/default-text.md").text == "DEFAULT-TEXT";
       in
-        delivered (evalHm config).config.home.file
-        && delivered (evalDevenv config).config.files
+        delivered (evalHm config)
+        && delivered (evalDevenv config)
     );
 
     # Empty inline text is not content. An entry left with nothing else is
@@ -739,13 +738,8 @@ in {
         == "CLAUDE-REPLACEMENT"
         && markdownOf devenvClaude.config ".claude/CLAUDE.md" == "CLAUDE-REPLACEMENT"
         && markdownOf devenvCopilot.config ".github/copilot-instructions.md" == "COPILOT-REPLACEMENT"
-        # Kimchi has no byte limit. A consumer replacement also replaces the
-        # generated Markdown format, so Home Manager lowers it inline.
-        && (deliveredFiles hmKimchi.config).".config/kimchi/harness/AGENTS.md".text or null
-        == "KIMCHI-REPLACEMENT"
-        # No `format` and no limit on the shared AGENTS.md, so `raw`: inline,
-        # as written.
-        && (deliveredFiles devenvKimchi.config)."AGENTS.md".text or null == "KIMCHI-REPLACEMENT"
+        && markdownOf hmKimchi.config ".config/kimchi/harness/AGENTS.md" == "KIMCHI-REPLACEMENT"
+        && markdownOf devenvKimchi.config "AGENTS.md" == "KIMCHI-REPLACEMENT"
     );
   };
 }

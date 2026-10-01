@@ -209,11 +209,10 @@ in {
             ai.programs.semble.subagent.enable = true;
             ai.kiro.enable = true;
           }).config;
-        emitted =
-          builtins.fromJSON
-          (builtins.readFile cfg.home.file.".kiro/agents/semble-search.json".source);
+        emitted = builtins.fromJSON (builtins.unsafeDiscardStringContext (markdownInput {config = cfg;} ".kiro/agents/semble-search.json").text);
       in
-        emitted.name
+        fromGeneratedTree ".kiro/agents/semble-search.json" cfg.home.file.".kiro/agents/semble-search.json"
+        && emitted.name
         == "semble-search"
         && emitted.tools == ["shell" "read"]
         && emitted ? description
@@ -247,11 +246,10 @@ in {
             };
           }).config;
         claudeAgent = cfg.ai.claude.agents.semble-search;
-        emitted =
-          builtins.fromJSON
-          (builtins.unsafeDiscardStringContext (builtins.readFile cfg.home.file.".kiro/agents/semble-search.json".source));
+        emitted = builtins.fromJSON (builtins.unsafeDiscardStringContext (markdownInput {config = cfg;} ".kiro/agents/semble-search.json").text);
       in
-        claudeAgent.description
+        fromGeneratedTree ".kiro/agents/semble-search.json" cfg.home.file.".kiro/agents/semble-search.json"
+        && claudeAgent.description
         != "Root agent."
         && emitted.description == claudeAgent.description
         && emitted.prompt == builtins.readFile ../mcp-agent-instructions.md
@@ -973,11 +971,10 @@ in {
         mcpPrompt = ../mcp-agent-instructions.md;
         rootAgent = rootVisible.ai.kiro.native.agents.semble-search;
         isolatedAgent = isolated.ai.kiro.native.agents.semble-search;
-        emitted =
-          builtins.fromJSON
-          (builtins.unsafeDiscardStringContext (builtins.readFile isolated.home.file.".kiro/agents/semble-search.json".source));
+        emitted = builtins.fromJSON (builtins.unsafeDiscardStringContext (markdownInput {config = isolated;} ".kiro/agents/semble-search.json").text);
       in
-        builtins.attrNames rootVisible.ai.kiro.mcpServers
+        fromGeneratedTree ".kiro/agents/semble-search.json" isolated.home.file.".kiro/agents/semble-search.json"
+        && builtins.attrNames rootVisible.ai.kiro.mcpServers
         == ["semble"]
         && rootAgent.tools == ["@semble"]
         && rootAgent.includeMcpJson == false
@@ -1015,7 +1012,7 @@ in {
           };
         };
       };
-      agentFile = evaluated.config.home.file.".kiro/agents/semble-search.json".source;
+      agentFile = (deliveredFiles evaluated.config).".kiro/agents/semble-search.json".source;
       controlFile = pkgs.writeText "control-search.json" (builtins.toJSON {
         name = "control-search";
         description = "Negative control without an MCP server.";
@@ -1024,74 +1021,75 @@ in {
       });
       invalidFile = pkgs.writeText "invalid-search.json" "{}";
     in
-      pkgs.runCommandLocal "module-test-semble-kiro-acp" {nativeBuildInputs = [pkgs.python3];} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
+      assert fromGeneratedTree ".kiro/agents/semble-search.json" evaluated.config.home.file.".kiro/agents/semble-search.json";
+        pkgs.runCommandLocal "module-test-semble-kiro-acp" {nativeBuildInputs = [pkgs.python3];} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
 
-        export HOME="$TMPDIR/home"
-        export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-        export XDG_CACHE_HOME="$TMPDIR/cache"
-        export XDG_CONFIG_HOME="$TMPDIR/config"
-        export XDG_DATA_HOME="$TMPDIR/data"
-        export XDG_STATE_HOME="$TMPDIR/state"
-        mkdir -p "$HOME/.kiro/agents" "$TMPDIR/workspace"
-        cp ${agentFile} "$HOME/.kiro/agents/semble-search.json"
-        cp ${controlFile} "$HOME/.kiro/agents/control-search.json"
-        cp ${invalidFile} "$HOME/.kiro/agents/invalid-search.json"
+          export HOME="$TMPDIR/home"
+          export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+          export XDG_CACHE_HOME="$TMPDIR/cache"
+          export XDG_CONFIG_HOME="$TMPDIR/config"
+          export XDG_DATA_HOME="$TMPDIR/data"
+          export XDG_STATE_HOME="$TMPDIR/state"
+          mkdir -p "$HOME/.kiro/agents" "$TMPDIR/workspace"
+          cp ${agentFile} "$HOME/.kiro/agents/semble-search.json"
+          cp ${controlFile} "$HOME/.kiro/agents/control-search.json"
+          cp ${invalidFile} "$HOME/.kiro/agents/invalid-search.json"
 
-        validate_status=0
-        # Drive the unwrapped chat binary that implements `kiro-cli agent
-        # validate` directly. The exported Linux package is a buildFHSEnv
-        # bubblewrap launcher, and nested user namespaces are not portable across
-        # Nix build sandboxes; validation itself needs neither the FHS root nor a
-        # login.
-        ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
-          --path "$HOME/.kiro/agents/semble-search.json" \
-          >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
-          || validate_status=$?
-        test "$validate_status" -eq 0 || {
-          cat "$TMPDIR/validate.stderr" >&2
-          exit 1
-        }
-        test ! -s "$TMPDIR/validate.stderr" || {
-          cat "$TMPDIR/validate.stderr" >&2
-          exit 1
-        }
+          validate_status=0
+          # Drive the unwrapped chat binary that implements `kiro-cli agent
+          # validate` directly. The exported Linux package is a buildFHSEnv
+          # bubblewrap launcher, and nested user namespaces are not portable across
+          # Nix build sandboxes; validation itself needs neither the FHS root nor a
+          # login.
+          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
+            --path "$HOME/.kiro/agents/semble-search.json" \
+            >"$TMPDIR/validate.stdout" 2>"$TMPDIR/validate.stderr" \
+            || validate_status=$?
+          test "$validate_status" -eq 0 || {
+            cat "$TMPDIR/validate.stderr" >&2
+            exit 1
+          }
+          test ! -s "$TMPDIR/validate.stderr" || {
+            cat "$TMPDIR/validate.stderr" >&2
+            exit 1
+          }
 
-        invalid_status=0
-        ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
-          --path "$HOME/.kiro/agents/invalid-search.json" \
-          >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
-          || invalid_status=$?
-        # Kiro currently exits zero for an invalid file. The stderr assertion is
-        # the real validation signal; the status check pins the trap so a future
-        # behavior change cannot make this negative control vacuous.
-        test "$invalid_status" -eq 0 || {
-          cat "$TMPDIR/invalid.stderr" >&2
-          exit 1
-        }
-        grep -Fq 'is invalid: missing field `name`' "$TMPDIR/invalid.stderr" || {
-          cat "$TMPDIR/invalid.stderr" >&2
-          exit 1
-        }
+          invalid_status=0
+          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat agent validate \
+            --path "$HOME/.kiro/agents/invalid-search.json" \
+            >"$TMPDIR/invalid.stdout" 2>"$TMPDIR/invalid.stderr" \
+            || invalid_status=$?
+          # Kiro currently exits zero for an invalid file. The stderr assertion is
+          # the real validation signal; the status check pins the trap so a future
+          # behavior change cannot make this negative control vacuous.
+          test "$invalid_status" -eq 0 || {
+            cat "$TMPDIR/invalid.stderr" >&2
+            exit 1
+          }
+          grep -Fq 'is invalid: missing field `name`' "$TMPDIR/invalid.stderr" || {
+            cat "$TMPDIR/invalid.stderr" >&2
+            exit 1
+          }
 
-        # Invoke the chat binary directly and omit --agent-engine: this is Kiro's
-        # v2 ACP path. The driver sends only initialize and session/new, never a
-        # model-bearing session/prompt request.
-        python3 ${./semble-kiro-acp.py} \
-          ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat \
-          semble-search \
-          control-search \
-          "$TMPDIR/workspace" \
-          >"$TMPDIR/acp.json"
-        # Keep the driver's record, do not discard it. Each agent's result
-        # carries a `teardown` object saying whether the harness had to SIGKILL
-        # the child and how long it waited. Nix prints no log for a build that
-        # SUCCEEDS, so a child that quietly stops exiting cleanly would leave no
-        # trace anyone reads -- the teardown branch is a pass by design, and a
-        # pass with an unread log is indistinguishable from a healthy one.
-        cp "$TMPDIR/acp.json" "$out"
-      '';
+          # Invoke the chat binary directly and omit --agent-engine: this is Kiro's
+          # v2 ACP path. The driver sends only initialize and session/new, never a
+          # model-bearing session/prompt request.
+          python3 ${./semble-kiro-acp.py} \
+            ${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli-chat \
+            semble-search \
+            control-search \
+            "$TMPDIR/workspace" \
+            >"$TMPDIR/acp.json"
+          # Keep the driver's record, do not discard it. Each agent's result
+          # carries a `teardown` object saying whether the harness had to SIGKILL
+          # the child and how long it waited. Nix prints no log for a build that
+          # SUCCEEDS, so a child that quietly stops exiting cleanly would leave no
+          # trace anyone reads -- the teardown branch is a pass by design, and a
+          # pass with an unread log is indistinguishable from a healthy one.
+          cp "$TMPDIR/acp.json" "$out"
+        '';
 
     # The check above SIGKILLs a child that outlives its post-stdin-EOF budget
     # and then reads its exit status. Nothing exercised those branches, so a

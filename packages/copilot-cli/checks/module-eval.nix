@@ -71,8 +71,8 @@ in {
         (markdownInput devenv ".custom-github/instructions/security.instructions.md").text
         && lib.hasInfix "Review the change."
         (markdownInput devenv ".custom-github/agents/reviewer.agent.md").text
-        && (deliveredFiles devenv.config).".custom-github/skills/example/SKILL.md".source
-        == "${config.ai.copilot.skills.example}/SKILL.md"
+        && fromGeneratedTree ".custom-github/skills/example/SKILL.md" (deliveredFiles devenv.config).".custom-github/skills/example/SKILL.md"
+        && (markdownInput devenv ".custom-github/skills/example").source == config.ai.copilot.skills.example
         && !((deliveredFiles devenv.config) ? ".github/instructions/security.instructions.md")
     );
 

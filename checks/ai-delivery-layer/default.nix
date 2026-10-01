@@ -13,11 +13,13 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles evalDevenv fromGeneratedTree harnessNames hasLiteral mkTest ownPlan;
+  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv fromGeneratedTree harnessNames hasLiteral markdownInput mkTest ownPlan;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
+  formats = import ../../lib/ai/formats.nix {inherit lib pkgs;};
   runtimeFiles = import ../../lib/ai/runtime-files.nix {inherit lib;};
   ownedControls = import ../ai-delivery/owned-fixtures.nix {inherit harness lib;};
+  rawSource = ../../dev/scripts/update-report.sh;
 
   # A file that states no fact at all takes both defaults, which is the shape
   # the rule answers `symlink` for.
@@ -38,8 +40,16 @@
           matcher = ["*.nix"];
           text = "rule";
         };
+        skills.probe = ./fixtures/probe-skill;
       }
-      // lib.genAttrs harnessNames (_: {enable = true;})
+      // lib.genAttrs harnessNames (runtime:
+        {enable = true;}
+        // lib.optionalAttrs (runtime == "claude") {
+          files.".claude/hooks/raw-probe" = {
+            content.source = rawSource;
+            executable = null;
+          };
+        })
       // {
         kiro = {
           enable = true;
@@ -259,25 +269,10 @@
     && !lib.any usesExit (lib.splitString "\n" body);
 in {
   checks = {
-    # Independently inventory static file targets by extension. Starting from
-    # format tags would miss a producer that forgot to tag its own file.
-    module-delivery-generated-static-scope = mkTest "delivery-generated-static-scope" (
-      lib.all (backend: let
+    module-delivery-generated-tree-routing = let
+      routed = lib.all (backend: let
         evaluated = generatedEvaluations.${backend};
         files = deliveredFiles evaluated.config;
-        typed = ["json" "markdown" "toml" "yaml"];
-        eligible = entry: let
-          cfg = evaluated.config.ai.${entry.runtime};
-          method = deliveryMethod.resolve {
-            inherit backend entry;
-            inherit (entry) path;
-            methodFor = cfg.methodFor or deliveryMethod.byRule;
-          };
-        in
-          lib.elem entry.format typed
-          && entry.content.run == null
-          && !entry.recursive
-          && method != "shared";
         entries = lib.filter (entry: entry.path != "AGENTS.md" || entry.runtime == "internal") (generatedEntries evaluated);
         verifies = entry: let
           cfg = evaluated.config.ai.${entry.runtime};
@@ -286,18 +281,92 @@ in {
             inherit (entry) path;
             methodFor = cfg.methodFor or deliveryMethod.byRule;
           };
-          candidate = candidateType entry.path;
+          treeMember = entry.content.run == null && method != "shared";
+          deliveredFromTree = path: files ? ${path} && fromGeneratedTree path files.${path};
+          recursiveLeaves = lib.attrNames (formats.walk entry.path entry.content.source);
         in
-          if candidate != null && entry.content.run == null && !entry.recursive && method != "shared"
-          then candidateCovered entry && files ? ${entry.path} && fromGeneratedTree entry.path files.${entry.path}
-          else if eligible entry
-          then files ? ${entry.path} && fromGeneratedTree entry.path files.${entry.path}
-          else if entry.content.run != null || entry.method == "shared"
-          then !(files ? ${entry.path} && fromGeneratedTree entry.path files.${entry.path})
-          else true;
+          if treeMember && entry.recursive && backend == "devenv"
+          then lib.all deliveredFromTree recursiveLeaves
+          else if treeMember && !entry.recursive
+          then
+            (candidateType entry.path == null || candidateCovered entry)
+            && deliveredFromTree entry.path
+          else if treeMember
+          then deliveredFromTree entry.path
+          else !(files ? ${entry.path} && fromGeneratedTree entry.path files.${entry.path});
       in
-        lib.all verifies entries) ["devenv" "hm"]
-    );
+        lib.all verifies entries) ["devenv" "hm"];
+      rawFiles = map (backend: (deliveredFiles generatedEvaluations.${backend}.config).".claude/hooks/raw-probe") ["devenv" "hm"];
+      recursiveExecutable = ./fixtures/probe-skill/scripts/executable-probe;
+      recursiveExecutableFiles = [
+        "${(deliveredFiles generatedEvaluations.hm.config).".claude/skills/probe".source}/scripts/executable-probe"
+        (deliveredFiles generatedEvaluations.devenv.config).".claude/skills/probe/scripts/executable-probe".source
+      ];
+      recursiveLeaf = ./fixtures/probe-skill/SKILL.md;
+      recursiveFiles = [
+        "${(deliveredFiles generatedEvaluations.hm.config).".claude/skills/probe".source}/SKILL.md"
+        (deliveredFiles generatedEvaluations.devenv.config).".claude/skills/probe/SKILL.md".source
+      ];
+    in
+      assert lib.assertMsg routed "delivery-generated-tree-routing: run and shared entries must stay out of the tree, and every other live entry must come from it";
+        pkgs.runCommand "module-test-delivery-generated-tree-routing" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          for delivered in ${lib.escapeShellArgs (map (file: file.source) rawFiles)}; do
+            cmp ${rawSource} "$delivered"
+            test "$(stat -c '%a' "$delivered")" = 555
+          done
+          for delivered in ${lib.escapeShellArgs recursiveFiles}; do
+            cmp ${recursiveLeaf} "$delivered"
+          done
+          for delivered in ${lib.escapeShellArgs recursiveExecutableFiles}; do
+            cmp ${recursiveExecutable} "$delivered"
+            test "$(stat -c '%a' "$delivered")" = 555
+          done
+          echo 'PASS: delivery-generated-tree-routing' > "$out"
+        '';
+
+    module-delivery-leaf-beside-recursive-directory-lands = let
+      fixtureSource = ./fixtures/probe-skill/SKILL.md;
+      leafSource = pkgs.writeText "delivery-recursive-neighbor.md" "extra\n";
+      config = {
+        ai.kiro = {
+          enable = true;
+          files = {
+            ".kiro/tree" = {
+              content.source = ./fixtures/probe-skill;
+              executable = null;
+              recursive = true;
+            };
+            ".kiro/tree/extra.md".content.text = builtins.readFile leafSource;
+          };
+        };
+      };
+      hmFiles = deliveredFiles (evalHm config).config;
+      devenvFiles = deliveredFiles (evalDevenv config).config;
+      routed =
+        fromGeneratedTree ".kiro/tree" hmFiles.".kiro/tree"
+        && fromGeneratedTree ".kiro/tree/extra.md" hmFiles.".kiro/tree/extra.md"
+        && fromGeneratedTree ".kiro/tree/SKILL.md" devenvFiles.".kiro/tree/SKILL.md"
+        && fromGeneratedTree ".kiro/tree/extra.md" devenvFiles.".kiro/tree/extra.md";
+      fixtureFiles = [
+        "${hmFiles.".kiro/tree".source}/SKILL.md"
+        devenvFiles.".kiro/tree/SKILL.md".source
+      ];
+      leafFiles = map (files: files.".kiro/tree/extra.md".source) [hmFiles devenvFiles];
+    in
+      assert lib.assertMsg routed "delivery-leaf-beside-recursive-directory-lands: both entries must come from the generated tree";
+        pkgs.runCommand "module-test-delivery-leaf-beside-recursive-directory-lands" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          for delivered in ${lib.escapeShellArgs fixtureFiles}; do
+            cmp ${fixtureSource} "$delivered"
+          done
+          for delivered in ${lib.escapeShellArgs leafFiles}; do
+            cmp ${leafSource} "$delivered"
+          done
+          echo 'PASS: delivery-leaf-beside-recursive-directory-lands' > "$out"
+        '';
 
     module-delivery-generated-frontmatter-markers = mkTest "delivery-generated-frontmatter-markers" (
       lib.all (backend: let
@@ -538,6 +607,8 @@ in {
     in
       assert extended.config.ai.kimchi.files.".config/kimchi/config.json".content.value.probe == "extended";
         pkgs.runCommand "module-test-delivery-shared-content-extension-runtime" {nativeBuildInputs = [pkgs.jq];} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           export HOME="$PWD/home"
           export XDG_STATE_HOME="$PWD/state"
           config="$HOME/.config/kimchi/config.json"
@@ -902,8 +973,9 @@ in {
         && (retired dv).units == {}
         && enabled.config.home.activation ? ordinary
         && enabled.config.home.activation ? ordinaryOwned
-        && enabled.config.home.file.".probe/plain".text == "plain"
-        && (retired enabled).units.owned.text == "owned"
+        && deliveredMarkdown enabled ".probe/plain" == "plain"
+        && (markdownInput enabled ".probe/retired/owned").text == "owned"
+        && fromGeneratedTree ".probe/retired/owned" {source = (retired enabled).units.owned.store;}
     );
 
     module-delivery-method-rule = mkTest "delivery-method-rule" (
@@ -1204,13 +1276,9 @@ in {
 
     # One walk, two backends: Home Manager expands a directory source itself,
     # while the router expands it for devenv. Devenv's leaf targets remain
-    # beneath the same store root as Home Manager's tree, while their added
-    # per-file contexts retain the input granularity needed by direnv.
+    # beneath the same store root as Home Manager's tree.
     module-delivery-recursive-entry-walks-for-devenv = mkTest "delivery-recursive-entry-walks-for-devenv" (
       let
-        sourceRoot = "${./fixtures/probe-skill}";
-        standaloneSkill = "${./fixtures/probe-skill/SKILL.md}";
-        standaloneNested = "${./fixtures/probe-skill/references/nested.md}";
         tree = {
           content.source = ./fixtures/probe-skill;
           # A tree of source files keeps its own modes; stating one here would
@@ -1226,8 +1294,6 @@ in {
         };
         hm = (evalHm config).config;
         devenv = (evalDevenv config).config;
-        skillSource = devenv.files.".kiro/tree/SKILL.md".source;
-        nestedSource = devenv.files.".kiro/tree/references/nested.md".source;
         notADirectory = builtins.tryEval (builtins.deepSeq
           (evalDevenv {
             ai.kiro = {
@@ -1241,22 +1307,36 @@ in {
           .files
           true);
       in
-        hm.home.file.".kiro/tree"
-        == {
-          recursive = true;
-          source = ./fixtures/probe-skill;
-        }
-        && skillSource == "${sourceRoot}/SKILL.md"
-        && nestedSource == "${sourceRoot}/references/nested.md"
-        && standaloneSkill != "${sourceRoot}/SKILL.md"
-        && standaloneNested != "${sourceRoot}/references/nested.md"
-        && builtins.hasAttr (builtins.unsafeDiscardStringContext standaloneSkill) (builtins.getContext skillSource)
-        && builtins.hasAttr (builtins.unsafeDiscardStringContext standaloneNested) (builtins.getContext nestedSource)
+        hm.home.file.".kiro/tree".recursive
+        && fromGeneratedTree ".kiro/tree" hm.home.file.".kiro/tree"
+        && fromGeneratedTree ".kiro/tree/SKILL.md" devenv.files.".kiro/tree/SKILL.md"
+        && fromGeneratedTree ".kiro/tree/references/nested.md" devenv.files.".kiro/tree/references/nested.md"
         && !(devenv.files ? ".kiro/tree")
         # `recursive` with a file source is a declaration error, not a file
         # whose leaves silently never appear.
         && !notADirectory.success
     );
+
+    module-delivery-single-file-skill-copies-source-bytes = let
+      source = "${./fixtures/probe-skill}/SKILL.md";
+      config = {
+        ai.kiro = {
+          enable = true;
+          skills.probe-file = source;
+        };
+      };
+      delivered =
+        map (evaluate:
+          (deliveredFiles (evaluate config).config).".kiro/skills/probe-file/SKILL.md".source) [evalDevenv evalHm];
+    in
+      pkgs.runCommand "module-test-delivery-single-file-skill-copies-source-bytes" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        for delivered in ${lib.escapeShellArgs delivered}; do
+          cmp ${source} "$delivered"
+        done
+        echo 'PASS: delivery-single-file-skill-copies-source-bytes' > "$out"
+      '';
 
     # The router builds the reconciler's input and never its behavior: one
     # bundle per writer, one TARGET per declared ledger — not per file that
@@ -1322,18 +1402,17 @@ in {
         devenv = evalDevenv config;
         plan = ownPlan "kiro" "probeMaterialize" hm;
         targetOf = ledger: lib.head (lib.filter (target: target.ledger == ledger) plan.targets);
+        inherit (targetOf "materialize/probe.manifest") units;
         task = devenv.config.tasks."ai:probe:materialize";
       in
         lib.length plan.targets
         == 3
-        && (targetOf "materialize/probe.manifest").units
-        == {
-          "alpha.json" = {
-            mode = "0400";
-            text = "{}";
-          };
-          "beta.json".store = ./fixtures/probe-skill/SKILL.md;
-        }
+        && lib.attrNames units == ["alpha.json" "beta.json"]
+        && units."alpha.json".mode == "0400"
+        && (markdownInput hm ".kiro/probe/alpha.json").text == "{}"
+        && (markdownInput hm ".kiro/probe/beta.json").source == ./fixtures/probe-skill/SKILL.md
+        && fromGeneratedTree ".kiro/probe/alpha.json" {source = units."alpha.json".store;}
+        && fromGeneratedTree ".kiro/probe/beta.json" {source = units."beta.json".store;}
         && (targetOf "json-settings/probe-doc.json").units
         == {text = builtins.toJSON {probe = true;};}
         # The release: a declared ledger nothing claims lowers to an EMPTY
@@ -1613,29 +1692,6 @@ in {
 
         echo "PASS: zero factory library files write a native sink directly" > "$out"
       '';
-
-    # A single-file skill whose source is a package-interpolated STRING. Both
-    # backends must deliver the file's CONTENTS; routing it to `content.text`
-    # writes the store PATH as the body of SKILL.md instead, reached through
-    # the single-file branch. Modelled on
-    # `module-kiro-path-agent-both-backends`, which pins the same property for
-    # a path-valued agent.
-    module-delivery-single-file-skill-is-a-source = mkTest "delivery-single-file-skill-is-a-source" (
-      let
-        source = "${./fixtures/probe-skill}/SKILL.md";
-        config = {
-          ai.kiro = {
-            enable = true;
-            skills.probe-file = source;
-          };
-        };
-        path = ".kiro/skills/probe-file/SKILL.md";
-        hm = (evalHm config).config.home.file.${path};
-        devenv = (evalDevenv config).config.files.${path};
-        delivers = entry: entry.source == source && !(entry ? text);
-      in
-        delivers hm && delivers devenv
-    );
 
     module-delivery-writers-reach-every-runtime = mkTest "delivery-writers-reach-every-runtime" (
       lib.all (runtime: let

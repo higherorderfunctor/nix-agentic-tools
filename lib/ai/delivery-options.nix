@@ -178,16 +178,17 @@
           leaves are reconciled it also names the on-disk container, which is
           why only `json` can carry one.
 
-          `markdown` marks a whole Markdown file from `content.text` or
-          `content.source`: it is built into this runtime's Markdown store
-          tree at its target path and delivered from there. The factories set
-          it on the Markdown files they generate, beside the content, so a
-          replacement of the content alone stays Markdown. AGENTS.md is the
-          exception (Codex's on Home Manager, the shared one on devenv): its
-          generated entry is one whole-entry default that a replacement
-          discards, `format` with it, so the replacement is `raw` unless it
-          states `markdown`. A `raw` file is delivered as written, and a byte
-          limit on its path is still checked.
+          Every build-time whole file is built into this runtime's store tree
+          at its target path and delivered from there. `markdown` selects the
+          Markdown formatter and guards for `content.text` or `content.source`.
+          The factories set it on the Markdown files they generate, beside the
+          content, so a replacement of the content alone stays Markdown.
+          AGENTS.md is the exception (Codex's on Home Manager, the shared one
+          on devenv): its generated entry is one whole-entry default that a
+          replacement discards, `format` with it, so the replacement is `raw`
+          unless it states `markdown`. A `raw` file or recursive directory is
+          copied through the tree without formatting or guards, and a byte
+          limit on a file path is still checked.
         '';
       };
       ledger = lib.mkOption {
@@ -362,10 +363,8 @@ in {
   # for each runtime and for the shared AGENTS.md owner (`ai.internal`). Keyed
   # by PATH rather than carried on the entry, so a consumer's replacement of
   # the file, which discards the generated entry and every field on it, is
-  # measured all the same. The router builds a limited file into a tree
-  # whatever its format (a non-Markdown one into a tree that neither formats
-  # nor checks it), and the tree's install check fails the build past the
-  # limit.
+  # measured all the same. Every build-time whole file is already in the tree,
+  # and the tree's install check fails the build past the limit.
   maxBytesOption = lib.mkOption {
     type = lib.types.attrsOf (lib.types.submodule {
       options = {

@@ -38,15 +38,17 @@
 > AGENTS.md map lowers through the router as `internal`, as a read-only copy,
 > and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
 > effective-limit resolver for the owner's notice under a raised `maxBytes`; its
-> built bytes are measured in the generated-file tree. The router builds one
-> tree per invocation for static Markdown, JSON, TOML and YAML, while
-> switch-time overlays and `content.run` stay outside it. Generators mark their
-> `content` with `_generated`, so a consumer's replacement of a unit's file
-> warns like a switch-off. Rule and semantic-agent generators use
-> `lib/frontmatter.nix` to render YAML and mark the content. The router passes
-> that marker to the generated-file builder, which accepts BOM/CRLF, formats
-> only the body and restores the exact fenced frontmatter bytes with one blank
-> separator. `parseCompare` requires those fenced bytes in the installed file.
+> built bytes are measured in the generated-file tree. The router puts every
+> live build-time whole file into one tree per invocation; raw files and
+> recursive directory sources pass through without formatting or guards, while
+> switch-time overlays, `content.run`, and shared document leaves stay outside
+> it. Generators mark their `content` with `_generated`, so a consumer's
+> replacement of a unit's file warns like a switch-off. Rule and semantic-agent
+> generators use `lib/frontmatter.nix` to render YAML and mark the content. The
+> router passes that marker to the generated-file builder, which accepts
+> BOM/CRLF, formats only the body and restores the exact fenced frontmatter
+> bytes with one blank separator. `parseCompare` requires those fenced bytes in
+> the installed file.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
