@@ -465,11 +465,13 @@ to any versioned attribute family:
 
 Rust releases (`fblog`, `rumdl`) instead pin a `fetchFromGitHub` tag and source
 hash inline, with
-`cargoDeps = rustPlatform.fetchCargoVendor { inherit src; hash = …; }`. Their
-owner update targets use nix-update for both hashes. `buildRustPackage`'s inline
-`cargoHash` is the equivalent shorthand used by agnix and git-absorb.
-Git-branchless retains `importCargoLock` against its flake input, which is
-readable without realizing a derivation.
+`cargoDeps = rustPlatform.fetchCargoVendor { inherit (finalAttrs) pname version src; hash = …; }`,
+as oxlint does; `pname` and `version` name the output so a stale hash cannot
+reuse the previous release's vendor set. Their owner update targets use
+nix-update for both hashes. `buildRustPackage`'s inline `cargoHash` is the
+equivalent shorthand used by agnix and git-absorb. Git-branchless retains
+`importCargoLock` against its flake input, which is readable without realizing a
+derivation.
 
 ### Go packages: the vendorHash goes in the SIDECAR
 

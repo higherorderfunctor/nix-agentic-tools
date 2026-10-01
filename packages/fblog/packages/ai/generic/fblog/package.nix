@@ -9,10 +9,12 @@
     hash = "sha256-SDOYW9CpC7E62nVnZL04Kx9ckVEZyvcMolJCfKDqdMk=";
   };
 in
-  pkgs.fblog.overrideAttrs (_: {
+  pkgs.fblog.overrideAttrs (finalAttrs: _: {
     inherit src version;
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-      inherit src;
+      # pname and version name the output, so a stale hash cannot reuse the
+      # previous release's cached vendor set after a bump.
+      inherit (finalAttrs) pname version src;
       hash = "sha256-Pn8HsBz+5OHz4jF6xmORLQSLYClTHpaJXWiS5sPyV2w=";
     };
   })

@@ -26,10 +26,12 @@
     hash = "sha256-Sr2CL1tCYrDYEQm3zcDY/3yzIjMCH1xg9tKpLovEK98=";
   };
 in
-  pkgs.rumdl.overrideAttrs (_: {
+  pkgs.rumdl.overrideAttrs (finalAttrs: _: {
     inherit src version;
     cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-      inherit src;
+      # pname and version name the output, so a stale hash cannot reuse the
+      # previous release's cached vendor set after a bump.
+      inherit (finalAttrs) pname version src;
       hash = "sha256-RJ1+G7xdbcXXLdkrV4xyFKsLtxwkRAJiFu16QSXQqUc=";
     };
   })

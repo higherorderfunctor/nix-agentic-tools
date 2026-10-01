@@ -23,10 +23,12 @@ composed registry and ninja DAG:
   `sourcesFile = repoPath ./relative/sources.json` explicitly.
 - **Rust release packages** (`fblog`, `rumdl`): inline release tags and source
   hashes with
-  `cargoDeps = rustPlatform.fetchCargoVendor { inherit src; hash = …; }`. Owner
-  `update.targets` use nix-update to refresh both hashes. `agnix` and
-  `git-absorb` use `buildRustPackage`'s equivalent `cargoHash` shorthand;
-  git-branchless instead imports the lock from its flake input.
+  `cargoDeps = rustPlatform.fetchCargoVendor { inherit (finalAttrs) pname version src; hash = …; }`
+  (as oxlint does — `pname` and `version` name the output, so a stale hash
+  cannot reuse the previous release's vendor set). Owner `update.targets` use
+  nix-update to refresh both hashes. `agnix` and `git-absorb` use
+  `buildRustPackage`'s equivalent `cargoHash` shorthand; git-branchless instead
+  imports the lock from its flake input.
 - **Go packages with a sidecar `vendorHash`** (`beads`, its paired nested
   `dolt`, `gh`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui` — kimchi records
   the hash for its nested `proxy-helper`, not for a top-level Go build): the
