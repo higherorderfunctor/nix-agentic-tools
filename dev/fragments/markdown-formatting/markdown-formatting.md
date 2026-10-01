@@ -9,12 +9,16 @@ hand-wrap prose** — the line breaks you author are discarded, and hand-wrappin
 is what created the defect below.
 
 Generated `ai.*` Markdown is formatted in its store tree alongside JSON, TOML
-and YAML. Every other build-time whole file enters the same per-runtime tree:
-raw files and recursive directory sources are copied byte-identically with each
-directory leaf's source mode preserved, and receive no formatter or guard. The
-default formatter shares this repository's prose style;
-`lib.ai.treefmtFormatter` accepts a treefmt-nix `evalModule` config, including
-devenv's `config.treefmt.config`. Authored docs and wiki pages need their own
+and YAML. The exported `treefmtModules.default` is always the base, and the
+consumer's `ai.formatter` treefmt-nix module layers on top. One treefmt process
+receives every composed type without a non-null per-type override. Each path
+must carry the extension its formatter routes on; an unmatched file fails the
+build and names its target-relative path. Raw files and recursive directory
+sources are copied byte-identically, preserve source modes, and never reach a
+formatter or guard. On devenv, every delivered path is excluded from the
+repository treefmt run. `ai.generated.formatter.<type>` is a temporary per-type
+override: a non-null snippet handles that type instead of `ai.formatter`, and
+the option is going away. Authored docs and wiki pages still need their own
 treefmt run. `tableCells` and `splitCodeSpans` check the input before
 formatting. The builder formats only marked Markdown bodies, restores
 generator-owned frontmatter bytes, and compares the installed prefix under
@@ -30,11 +34,11 @@ consumer files. A finding exits 1; exit 2 means nothing was checked (for
 
 ### Never break a line mid-token
 
-> **Last verified:** 2026-10-01 — formatter programs live in the exported
-> treefmt module; generated frontmatter quotes scalar data centrally; generated
-> and consumer Markdown share guards; tableCells pairs rumdl and markdownlint
-> for distinct MD056 cases, while raw files and recursive sources traverse the
-> complete generated tree unformatted.
+> **Last verified:** 2026-10-01 — generated trees evaluate the exported treefmt
+> module with `ai.formatter` layered on top; generated frontmatter quotes scalar
+> data centrally; generated and consumer Markdown share guards; tableCells pairs
+> rumdl and markdownlint for distinct MD056 cases, while raw files and recursive
+> sources traverse the complete tree unformatted.
 
 A break landing MID-TOKEN is the one markdown defect in this repo that **no
 check can catch**, so it has to be prevented at authoring time. Read the

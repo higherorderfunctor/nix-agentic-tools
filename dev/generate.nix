@@ -495,7 +495,7 @@
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
     | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths. Files a repository commits (AGENTS.md, `.github/` instructions) and Kiro steering are read-only copies, not store links |
-    | Generated-file formatting | N/A | `ai.generated.{formatter,check}.{json,markdown,toml,yaml}` (Nix-owned static files, including settings; consumer-supplied skills and runtime-rendered files excluded) | Same; project-native static files included |
+    | Generated-file formatting | N/A | `ai.formatter` plus temporary `ai.generated.{formatter,check}.{json,markdown,toml,yaml}` overrides (Nix-owned static files, including settings; consumer-supplied skills and runtime-rendered files excluded) | Same; project-native static files included |
     | Skills | Copy native directories | `ai.skills.*` (all five CLIs) | Same; project-native paths |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex + Copilot + Kimchi) | Same; Copilot's lands in `.github/copilot/settings.json`, which only its interactive session reads, Kimchi's in its project harness settings (see below). Kiro has only per-model native effort |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot + Kimchi + Kiro) | Same; project-native paths |
@@ -656,56 +656,35 @@
     <summary><strong>Generated-file formatting</strong></summary>
 
     Every live, Nix-owned whole file whose bytes exist at build time is built
-    into one store tree per delivery-router invocation. The builder formats
-    Markdown, JSON, TOML and YAML in separate working directories, installs only
-    the declared target paths, then checks the installed bytes. Raw files and
-    recursive directory sources pass through without formatting or guards;
-    directory leaves retain their bytes and source modes. A failed check fails
-    the build.
-    Formatter-created caches and state stay out of the output. File paths in
-    snippets are relative to the target root, such as
-    `.claude/rules/example.md`.
+    into one store tree per delivery-router invocation. The flake's exported
+    `treefmtModules.default` is always the base; the consumer's `ai.formatter`
+    treefmt-nix module is layered on top. One treefmt run formats every composed
+    type without a non-null per-type override. Each formatted path must use the
+    conventional extension for its declared format (`.json`, `.md`, `.toml`,
+    `.yaml`, or `.yml`). An unmatched composed file fails the build and names
+    its target-relative path. Raw files and recursive directory sources are
+    copied byte-identically and never passed to treefmt. A failed formatter or
+    check fails the build.
 
-    `ai.generated.formatter.<type>` is a shell snippet that replaces the default
-    for that type in trees Nix generates from `ai.*` inputs; repository content
-    you author yourself, such as docs and wiki pages, needs your own treefmt
-    run. `null` disables formatting. The defaults use the same house style as
-    this repository: Biome for JSON, prettier with
-    `proseWrap = "always"` for Markdown and YAML, and Taplo for TOML. The
-    settings are defined once in `lib/generated-style.nix`. A formatter must
-    preserve the declared files; removing one fails the build.
+    On devenv, every delivered path is automatically excluded from the
+    repository's own treefmt run. Other module consumers can use the read-only
+    `ai.deliveredPaths` list for the same purpose.
+
+    `ai.generated.formatter.<type>` remains temporarily as a per-type shell
+    snippet override. A non-null override formats that type in its own working
+    directory instead of passing those files to `ai.formatter`; this compatibility
+    option is going away.
 
     `ai.generated.check.<type>` is a `types.lines` shell snippet. Its default is
     empty because the built-in guards run separately. Checks run on the
     installed bytes. The named guards below are separate and remain on when a
     check is replaced or disabled.
 
-    To use your own treefmt config, pass the `config` of any treefmt-nix
-    `evalModule` result to the helper:
+    Supply a treefmt-nix module to customize generated-file formatting:
 
     ```nix
-    ai.generated.formatter.markdown =
-      lib.ai.treefmtFormatter (inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix).config;
+    ai.formatter = ./treefmt.nix;
     ```
-
-    Take `treefmt-nix` as your own root input that follows this flake's pin:
-    `inputs.treefmt-nix.follows = "nix-agentic-tools/treefmt-nix";` in a
-    flake, or `follows: nix-agentic-tools/treefmt-nix` under
-    `inputs.treefmt-nix` in `devenv.yaml`. You get the same version this flake
-    uses with no extra lock node, and a root input also works with devenv's
-    treefmt integration. This is the opposite direction from the `follows`
-    warned against in "Do not make this flake follow your nixpkgs": this
-    flake's inputs stay unchanged, so nothing rehashes and the binary cache
-    still applies. Avoid `inputs.nix-agentic-tools.inputs.treefmt-nix`, which
-    depends on this flake's internal wiring.
-
-    Devenv's `config.treefmt.config` also works. The helper reads only
-    `.package` and `.build.configFile` from either config. Set another type's
-    formatter in the same way if your treefmt config covers it. The helper uses
-    the raw treefmt package with `--config-file`,
-    `--tree-root .`, `--walk filesystem` and `--no-cache` so it runs against the
-    build sandbox. Devenv's treefmt wrapper points at the project tree and does
-    not work here. There is no automatic detection of a devenv treefmt config.
 
     Generated context, rules, AGENTS.md and agent Markdown participate on both
     Home Manager and devenv, including Claude's direct Home Manager files.

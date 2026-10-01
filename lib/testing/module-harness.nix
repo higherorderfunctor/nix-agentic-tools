@@ -1,4 +1,5 @@
 {
+  inputs,
   lib,
   pkgs,
   moduleImports,
@@ -161,9 +162,15 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
-      treefmt.enable = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
+      treefmt = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+        };
+        config.settings.global.excludes = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+        };
       };
     };
   };
@@ -184,6 +191,7 @@
         [../ai/sharedOptions.nix]
         ++ moduleImports "homeManager"
         ++ [hmStubs]
+        ++ [{ai.internal.treefmtNix = inputs.treefmt-nix;}]
         ++ modules;
     };
   evalHmWithSpecialArgs = extraSpecialArgs: config: evalHmModulesWithSpecialArgs extraSpecialArgs [{inherit config;}];
@@ -205,6 +213,7 @@
         [../ai/sharedOptions.nix]
         ++ moduleImports "devenv"
         ++ [devenvStubs]
+        ++ [{ai.internal.treefmtNix = inputs.treefmt-nix;}]
         ++ modules;
     };
   evalDevenvWithSpecialArgs = extraSpecialArgs: config: evalDevenvModulesWithSpecialArgs extraSpecialArgs [{inherit config;}];
@@ -384,6 +393,21 @@
     (map (runtime: lib.attrByPath ["ai" runtime "_ownPlans"] {} config) (harnessNames ++ ["internal"]));
   in
     builtins.listToAttrs copies // (config.files or config.home.file);
+  # The actual generated-tree derivation that supplies a delivered file. The
+  # source equality keeps this tied to the sink rather than merely selecting a
+  # same-runtime tree with a copied build recipe.
+  deliveredTree = evaluated: path: let
+    inherit (evaluated) config;
+    file = (deliveredFiles config).${path};
+    trees = lib.filter (tree:
+      tree
+      != null
+      && (file.source or null) == "${tree}/${path}")
+    (map (runtime: config.ai.${runtime}._generatedTree or null) (harnessNames ++ ["internal"]));
+  in
+    if lib.length trees == 1
+    then lib.head trees
+    else throw "module-test: expected exactly one generated tree delivering \"${path}\", found ${toString (lib.length trees)}";
   # The `{text}` or `{source}` a live build-time file goes into its runtime's
   # generated tree as. What is delivered is a store path into that tree, and
   # reading it back would be import-from-derivation, so a check about the input
@@ -452,6 +476,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
   inherit testing;
 }

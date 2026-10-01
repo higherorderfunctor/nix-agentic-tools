@@ -8,7 +8,11 @@
 }: let
   deliver = import ../deliver.nix {inherit lib pkgs;};
 in
-  args @ {options, ...}: let
+  args @ {
+    manageTreefmt ? false,
+    options,
+    ...
+  }: let
     delivery = deliver {
       inherit (args) cfg config runtime;
       backend = "devenv";
@@ -34,7 +38,10 @@ in
         inherit (delivery) assertions;
         # See adapters/hm.nix: the plan is the only eval-visible record of what a
         # writer will do.
-        ai.${args.runtime}._ownPlans = delivery.owned.plans;
+        ai.${args.runtime} = {
+          _generatedTree = delivery.tree;
+          _ownPlans = delivery.owned.plans;
+        };
         files = delivery.symlinkEntries;
       }
       # A failed writer only warns at shell entry, so every bundle also
@@ -56,6 +63,12 @@ in
       (lib.optionalAttrs (options ? tasks) {inherit tasks;})
       (lib.optionalAttrs (options ? enterTest) {
         enterTest = lib.mkIf (delivery.owned.enterTest != "") delivery.owned.enterTest;
+      })
+      # This is the one devenv option the delivery adapter writes outside the
+      # four file/task sink paths. The shared `internal` adapter call owns the
+      # append so the same complete delivered-path list is contributed once.
+      (lib.optionalAttrs (manageTreefmt && options ? treefmt) {
+        treefmt.config.settings.global.excludes = lib.mkIf args.config.treefmt.enable (lib.mkAfter args.config.ai.deliveredPaths);
       })
       {
         assertions = lib.optional (!(options ? tasks) && tasks != {}) {

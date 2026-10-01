@@ -114,6 +114,7 @@
     cacheHitParityTargets = repository.cacheHitParity;
 
     homeManagerModules.default = {
+      ai.internal.treefmtNix = inputs.treefmt-nix;
       imports =
         [./lib/ai/sharedOptions.nix]
         ++ repository.moduleImports "homeManager";
@@ -122,6 +123,7 @@
     treefmtModules.default = ./lib/treefmt-module.nix;
 
     devenvModules.nix-agentic-tools = {
+      ai.internal.treefmtNix = inputs.treefmt-nix;
       imports =
         [./lib/ai/sharedOptions.nix]
         ++ repository.moduleImports "devenv";

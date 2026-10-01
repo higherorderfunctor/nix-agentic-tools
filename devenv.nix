@@ -158,6 +158,10 @@ in {
     # invocable.
   ];
 
+  # This repository assembles the modules directly instead of consuming the
+  # published devenv wrapper, so provide the same internal treefmt-nix value.
+  ai.internal.treefmtNix = inputs.treefmt-nix;
+
   # ── Overlays ──────────────────────────────────────────────────────────
   # devenv applies these to pkgs, so pkgs.ai.* and
   # pkgs.stacked-workflows-content are available everywhere. No manual

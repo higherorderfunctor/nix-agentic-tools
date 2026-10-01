@@ -19,9 +19,9 @@
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = import ./runtimes.nix;
-  generated = import ../generated.nix {inherit lib;} pkgs;
   generatedTypes = ["json" "markdown" "toml" "yaml"];
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
+  runtimeFiles = import ./runtime-files.nix {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasAssertions = options ? assertions;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
@@ -136,10 +136,44 @@
     '';
   };
   sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
+  livePaths = files:
+    lib.mapAttrsToList
+    (path: entry:
+      if entry.recursive
+      then "${path}/**"
+      else path)
+    (lib.filterAttrs (_path: runtimeFiles.isLive) files);
 in {
   imports = [./app/sharedAgentsMd.nix ./file-warnings.nix];
 
   options.ai = {
+    deliveredPaths = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      readOnly = true;
+      description = ''
+        Target-relative paths delivered by every enabled runtime, with
+        recursive directory entries represented as `<directory>/**`. Devenv
+        adds these paths to its repository treefmt excludes automatically;
+        other module consumers can reference this read-only list from their
+        own formatter configuration.
+      '';
+    };
+
+    formatter = lib.mkOption {
+      type = lib.types.deferredModule;
+      default = {};
+      description = ''
+        treefmt-nix module layered on this flake's exported
+        `treefmtModules.default` to format composed generated files. One
+        treefmt invocation covers every composed type without a non-null
+        `ai.generated.formatter.<type>` override. Each formatted path must end
+        in the conventional extension for its declared format (`.json`, `.md`,
+        `.toml`, `.yaml`, or `.yml`). An unmatched composed file fails the
+        build and names its target-relative path. Raw files and recursive
+        directory sources are copied byte-identically and never reach treefmt.
+      '';
+    };
+
     context = lib.mkOption {
       # An empty record is the unset value; explicit content auto-enables it.
       type = aiCommon.optionalContentModule;
@@ -163,13 +197,14 @@ in {
       formatter = lib.genAttrs generatedTypes (type:
         lib.mkOption {
           type = lib.types.nullOr lib.types.str;
-          default = generated.defaultFormatter.${type};
-          defaultText = lib.literalExpression "(lib.ai.generated pkgs).defaultFormatter.${type}";
+          default = null;
           description = ''
-            Shell snippet formatting generated ${type} files at target-relative
-            paths in a sandbox. Replaces the house default; null disables it.
-            Use `lib.ai.treefmtFormatter` with any treefmt-nix evalModule
-            result's config, including devenv's config.treefmt.config.
+            Optional shell snippet formatting generated ${type} files at
+            target-relative paths in a sandbox. A non-null value overrides
+            `ai.formatter` for this type, so those files are not passed to
+            treefmt. `null` no longer disables formatting: it means
+            `ai.formatter` formats this type. The per-type override is
+            retained temporarily for compatibility and will be removed.
             For marked Markdown, only the body reaches this formatter; the
             generator's frontmatter bytes are restored afterward.
           '';
@@ -452,6 +487,14 @@ in {
       description = "Resolved sandbox-safe Git SSH command, delivered to harness wrappers. Set by `gitSshConfigWorkaround`; not for direct use.";
     };
 
+    internal.treefmtNix = lib.mkOption {
+      type = lib.types.raw;
+      default = throw "ai.internal.treefmtNix: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those, or set it to inputs.treefmt-nix";
+      internal = true;
+      visible = false;
+      description = "treefmt-nix flake input supplied by the flake-level module wrappers.";
+    };
+
     shell = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
       default = null;
@@ -545,6 +588,14 @@ in {
       # declares those options, so it is the one place with nowhere else to
       # expand to.
       ai = {
+        deliveredPaths = lib.unique (
+          lib.concatMap
+          (name:
+            lib.optionals (lib.attrByPath ["ai" name "enable"] false config)
+            (livePaths (lib.attrByPath ["ai" name "files"] {} config)))
+          harnessNames
+          ++ livePaths (config.ai.internal.files or {})
+        );
         rules = lib.mkIf (config.ai.rulesDir != null) (
           lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)
         );

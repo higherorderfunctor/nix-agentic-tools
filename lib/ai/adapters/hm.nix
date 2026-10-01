@@ -18,7 +18,10 @@ in
     # Every writer's reconciliation plan, as data a module-eval check can read:
     # the emitted body names neither the document it reconciles nor the bytes
     # it writes, and the plan file itself cannot be read back at evaluation.
-    ai.${args.runtime}._ownPlans = delivery.owned.plans;
+    ai.${args.runtime} = {
+      _generatedTree = delivery.tree;
+      _ownPlans = delivery.owned.plans;
+    };
     # Home Manager recurses a directory source natively, so a symlinked entry
     # lowers one-to-one.
     home.file = delivery.symlinkEntries;

@@ -254,6 +254,7 @@
   runtimeNames;
 in {
   options.ai.internal = {
+    _generatedTree = deliveryOptions.generatedTreeOption;
     agentsMd = lib.mkOption {
       type = lib.types.attrsOf fileType;
       default = {};
@@ -340,6 +341,7 @@ in {
             methodFor = deliveryMethod.byRule;
           };
           inherit config options;
+          manageTreefmt = true;
           runtime = "internal";
         })
       ]

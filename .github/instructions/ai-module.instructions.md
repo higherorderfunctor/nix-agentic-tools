@@ -7,7 +7,7 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-09-30 — agents are layered: root `ai.agents` takes
+> **Last verified:** 2026-10-01 — agents are layered: root `ai.agents` takes
 > only the normalized record, `ai.<runtime>.agents` a normalized record or a raw
 > native file, and a runtime record's `agentNativeType` + `agentTransformer`
 > lower normalized records into typed `ai.<runtime>.native.agents` (Kiro and
@@ -53,7 +53,10 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 > one priority-aware text-source record with enable semantics. Ledger-owned
 > copies whose files nothing else retracts opt into `runWhenDisabled`.
 > `ai.lspServers` renders whole files with each runtime's envelope, Copilot/Kiro
-> require `extensions`, and Copilot constrains server names.
+> require `extensions`, and Copilot constrains server names. `ai.formatter`
+> layers consumer configuration on the exported treefmt module for each
+> generated tree; devenv excludes every delivered path, using `<directory>/**`
+> for recursive entries, from its repository treefmt run.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -693,26 +696,30 @@ The graph is one-way: normalized pools compose, runtime routing chooses a
 target, the target renderer emits final bytes into `ai.<runtime>.files`, and the
 delivery router (`lib/ai/deliver.nix`) plus one adapter per backend
 (`lib/ai/adapters/`) lower surviving entries — the only code allowed to write
-`home.file`, `home.activation`, devenv `files`, `tasks` or `enterTest`. Claude
-context/rules, Codex user AGENTS.md, Copilot's repository context/instructions,
-Kimchi harness AGENTS.md, and Kiro Home Manager context/steering all use the
-runtime maps. Repository-local Codex/Kimchi/Kiro AGENTS.md retains one
-divergence-checking owner and enters the same architecture through hidden
-`ai.internal.files`, never through competing runtime writers. Public
-Codex/Kimchi/Kiro entries for a shared target arbitrate inside that owner before
-its single writer: equal entries deduplicate, divergence fails, an ordinary
-entry replaces the generated default, and `content.enable = false` suppresses
-it. That owner goes through the same router as a runtime, named `internal`, with
-the `ai:agents-md:materialize` writer and a directory ledger at the project
-root: the file is a read-only copy, because a committed AGENTS.md that is a
-store symlink dangles everywhere else. Every definition of a shared entry,
-generated or projected, carries that writer, ledger and fact, so whichever wins
-still lands as the copy; an explicit `method = "symlink"` keeps the link.
-Copilot's devenv context and instruction files are copies for the same reason
-(github.com reads the committed tree), and Kiro's devenv steering is a copy so a
-developer's own steering beside it survives: each directory ledger claims only
-the files its writer wrote. `own` adopts a file whose bytes already match
-without a backup, so a `git pull` of a committed copy is silent.
+`home.file`, `home.activation`, devenv `files`, `tasks` or `enterTest`. The
+devenv adapter has one explicit non-sink write: when treefmt is enabled, it
+appends the read-only `ai.deliveredPaths` inventory to
+`treefmt.config.settings.global.excludes`. Home Manager has no repository
+treefmt surface and writes no equivalent. Claude context/rules, Codex user
+AGENTS.md, Copilot's repository context/instructions, Kimchi harness AGENTS.md,
+and Kiro Home Manager context/steering all use the runtime maps.
+Repository-local Codex/Kimchi/Kiro AGENTS.md retains one divergence-checking
+owner and enters the same architecture through hidden `ai.internal.files`, never
+through competing runtime writers. Public Codex/Kimchi/Kiro entries for a shared
+target arbitrate inside that owner before its single writer: equal entries
+deduplicate, divergence fails, an ordinary entry replaces the generated default,
+and `content.enable = false` suppresses it. That owner goes through the same
+router as a runtime, named `internal`, with the `ai:agents-md:materialize`
+writer and a directory ledger at the project root: the file is a read-only copy,
+because a committed AGENTS.md that is a store symlink dangles everywhere else.
+Every definition of a shared entry, generated or projected, carries that writer,
+ledger and fact, so whichever wins still lands as the copy; an explicit
+`method = "symlink"` keeps the link. Copilot's devenv context and instruction
+files are copies for the same reason (github.com reads the committed tree), and
+Kiro's devenv steering is a copy so a developer's own steering beside it
+survives: each directory ledger claims only the files its writer wrote. `own`
+adopts a file whose bytes already match without a backup, so a `git pull` of a
+committed copy is silent.
 
 It is a delivery description, not a universal file abstraction. Secret-bearing
 files use `content.run` in an owned writer, and runtime state keeps its typed

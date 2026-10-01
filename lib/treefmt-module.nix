@@ -3,6 +3,10 @@
 # which a consumer can import into its own treefmt config. Repository-only
 # settings (root marker, path exclusions) live in the root treefmt.nix.
 {
+  config,
+  lib,
+  ...
+}: {
   programs = {
     # Nix: *.nix
     alejandra.enable = true;
@@ -11,15 +15,15 @@
     # settings.formatter below so the two never format the same file.
     biome = {
       enable = true;
-      settings.formatter = (import ./generated-style.nix).biome;
+      settings.formatter = lib.mapAttrsRecursive (_path: lib.mkDefault) (import ./generated-style.nix).biome;
     };
     # Only the types biome can't format (markdown/yaml/scss/html/vue/json5) —
     # scoped via settings.formatter.prettier.excludes.
     prettier = {
       enable = true;
       # The prose style (`proseWrap = "always"`) and why: one definition,
-      # shared with the default `ai.generated.formatter.markdown` and `.yaml`.
-      settings = (import ./generated-style.nix).prettier;
+      # used by the default `ai.formatter` for generated Markdown and YAML.
+      settings = lib.mapAttrsRecursive (_path: lib.mkDefault) (import ./generated-style.nix).prettier;
     };
     # Shell: *.sh, *.bash
     shfmt.enable = true;
@@ -27,7 +31,7 @@
     taplo.enable = true;
   };
 
-  settings.formatter = {
+  settings.formatter = lib.mkIf config.programs.prettier.enable {
     # Prefer biome: it owns JS/TS/JSX/JSON/CSS via its default globs. Exclude
     # those from prettier so the two never format the same file — they disagree
     # on constructs like a `new (x) => {…}` ctor type, which makes

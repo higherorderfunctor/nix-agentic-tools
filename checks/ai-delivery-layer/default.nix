@@ -13,7 +13,7 @@
   pkgs,
   ...
 }: let
-  inherit (harness) deliveredFiles deliveredMarkdown evalDevenv fromGeneratedTree harnessNames hasLiteral markdownInput mkTest ownPlan;
+  inherit (harness) deliveredFiles deliveredMarkdown deliveredTree evalDevenv fromGeneratedTree harnessNames hasLiteral markdownInput mkTest ownPlan;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   deliveryMethod = import ../../lib/ai/deliveryMethod.nix {inherit lib;};
   formats = import ../../lib/ai/formats.nix {inherit lib pkgs;};
@@ -65,6 +65,30 @@
     devenv = evalDevenv generatedFixture;
     hm = evalHm generatedFixture;
   };
+  formatterFixture = {formatter ? null}:
+    evalDevenv {
+      ai =
+        {
+          claude = {
+            enable = true;
+            files.".claude/settings.json".content.enable = false;
+            rules.heading.text = "#   Heading";
+          };
+        }
+        // lib.optionalAttrs (formatter != null) {inherit formatter;};
+    };
+  formatterPath = ".claude/rules/heading.md";
+  excludeFixture = treefmtEnable:
+    evalDevenv {
+      ai.claude = {
+        enable = true;
+        files.".claude/hooks/raw-probe".content.source = rawSource;
+        files.".claude/settings.json".content.enable = false;
+        rules.probe.text = "probe";
+        skills.probe = ./fixtures/probe-skill;
+      };
+      treefmt.enable = treefmtEnable;
+    };
   generatedEntries = evaluated:
     lib.concatMap (runtime:
       lib.mapAttrsToList (path: entry: entry // {inherit path runtime;})
@@ -1317,26 +1341,85 @@ in {
         && !notADirectory.success
     );
 
+    module-delivery-generated-tree-uses-ai-formatter = let
+      evaluated = formatterFixture {
+        formatter = {
+          programs.prettier.settings.proseWrap = "preserve";
+          # This would exclude the file if treefmt still saw the old
+          # `markdown/<target>` staging path.
+          settings.formatter.prettier.excludes = lib.mkForce ["markdown/**"];
+        };
+      };
+      file = (deliveredFiles evaluated.config).${formatterPath};
+    in
+      assert lib.assertMsg (fromGeneratedTree formatterPath file)
+      "delivery-generated-tree-uses-ai-formatter: ${formatterPath} is not delivered from its generated tree";
+        pkgs.runCommand "module-test-delivery-generated-tree-uses-ai-formatter" {} ''
+          test "$(cat ${file.source})" = "# Heading"
+          echo 'PASS: delivery-generated-tree-uses-ai-formatter' > "$out"
+        '';
+
+    module-delivery-generated-tree-unmatched-is-fatal = let
+      evaluated = formatterFixture {formatter.programs.prettier.enable = lib.mkForce false;};
+      file = (deliveredFiles evaluated.config).${formatterPath};
+      tree = deliveredTree evaluated formatterPath;
+      failure = pkgs.testers.testBuildFailure tree;
+    in
+      assert lib.assertMsg (fromGeneratedTree formatterPath file)
+      "delivery-generated-tree-unmatched-is-fatal: ${formatterPath} is not delivered from its generated tree";
+        pkgs.runCommand "module-test-delivery-generated-tree-unmatched-is-fatal" {} ''
+          grep -q -F "no formatter for path: ${formatterPath}" ${failure}/testBuildFailure.log
+          echo 'PASS: delivery-generated-tree-unmatched-is-fatal' > "$out"
+        '';
+
+    module-delivery-devenv-excludes-delivered-paths-from-treefmt = mkTest "delivery-devenv-excludes-delivered-paths-from-treefmt" (
+      let
+        enabled = excludeFixture true;
+        disabled = excludeFixture false;
+        hm = evalHm {
+          ai.claude = {
+            enable = true;
+            files.".claude/hooks/raw-probe".content.source = rawSource;
+            files.".claude/settings.json".content.enable = false;
+            rules.probe.text = "probe";
+            skills.probe = ./fixtures/probe-skill;
+          };
+        };
+        expected = [
+          ".claude/hooks/raw-probe"
+          ".claude/rules/probe.md"
+          ".claude/skills/probe/**"
+        ];
+        excludes = enabled.config.treefmt.config.settings.global.excludes;
+      in
+        enabled.config.ai.deliveredPaths
+        == expected
+        && excludes == expected
+        && disabled.config.treefmt.config.settings.global.excludes == []
+        && !(hm.config ? treefmt)
+    );
+
     module-delivery-single-file-skill-copies-source-bytes = let
-      source = "${./fixtures/probe-skill}/SKILL.md";
+      path = ".kiro/skills/probe-file/SKILL.md";
+      source = pkgs.writeText "raw-rewrite-probe.md" "#   Heading\n";
       config = {
         ai.kiro = {
           enable = true;
           skills.probe-file = source;
         };
       };
-      delivered =
-        map (evaluate:
-          (deliveredFiles (evaluate config).config).".kiro/skills/probe-file/SKILL.md".source) [evalDevenv evalHm];
+      delivered = map (evaluate: (deliveredFiles (evaluate config).config).${path}) [evalDevenv evalHm];
     in
-      pkgs.runCommand "module-test-delivery-single-file-skill-copies-source-bytes" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        for delivered in ${lib.escapeShellArgs delivered}; do
-          cmp ${source} "$delivered"
-        done
-        echo 'PASS: delivery-single-file-skill-copies-source-bytes' > "$out"
-      '';
+      assert lib.assertMsg (lib.all (fromGeneratedTree path) delivered)
+      "delivery-single-file-skill-copies-source-bytes: raw file is not delivered from a generated tree";
+        pkgs.runCommand "module-test-delivery-single-file-skill-copies-source-bytes" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          for delivered in ${lib.escapeShellArgs (map (file: file.source) delivered)}; do
+            cmp ${source} "$delivered"
+          done
+          echo 'PASS: delivery-single-file-skill-copies-source-bytes' > "$out"
+        '';
 
     # The router builds the reconciler's input and never its behavior: one
     # bundle per writer, one TARGET per declared ledger — not per file that
