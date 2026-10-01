@@ -7,19 +7,20 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-01 — the extractor binds patch-added source before
-> resolving environment aliases and classifies Kimchi 1.5.0's versioned config
-> and environment additions before the package pin moves. A normalized agent's
-> `tools` list is dropped with a warning instead of failing evaluation. Kimchi
-> shares Home Manager's user config.json and harness/settings.json with the
-> runtime; the remaining files and every devenv file stay read-only copies. Its
-> rules use the shared flat AGENTS.md renderer and repository aggregate. Region
-> is required. The pinned pi dependency is 0.85.1. Agents are read-only copies
-> from the runtime's generated Markdown tree; the opt-in docs skill uses the
-> shared frontmatter text renderer and a guarded generated-file tree that
-> formats whole files and compares parsed header values; a store-path string is
-> an input just as a path is. Full lineage:
-> `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-10-01 — the 1.1.39 source build adds resource controls
+> for teleport and remote-run and anchors pi's fd/rg lookup to Nix packages. The
+> extractor binds patch-added source before resolving environment aliases and
+> classifies Kimchi 1.5.0's versioned config and environment additions before
+> the package pin moves. A normalized agent's `tools` list is dropped with a
+> warning instead of failing evaluation. Kimchi shares Home Manager's user
+> config.json and harness/settings.json with the runtime; the remaining files
+> and every devenv file stay read-only copies. Its rules use the shared flat
+> AGENTS.md renderer and repository aggregate. Region is required. The pinned pi
+> dependency is 0.85.1. Agents are read-only copies from the runtime's generated
+> Markdown tree; the opt-in docs skill uses the shared frontmatter text renderer
+> and a guarded generated-file tree that formats whole files and compares parsed
+> header values; a store-path string is an input just as a path is. Full
+> lineage: `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -305,6 +306,22 @@ one string (`orchestrator` and `compactor` in 1.1.37), come from the sidecar's
 rejects it at evaluation: an unknown role is an unknown option. Locked by
 `module-kimchi-model-roles-shape`.
 
+The packaged 1.1.39 source adds `extensions.remote-run` and
+`extensions.teleport` to Kimchi's resource registry. Both default to true, so
+the package retains upstream behavior until a consumer disables one. Home
+Manager can disable them declaratively, for example:
+
+```nix
+ai.kimchi.native.harnessSettings.resources."extensions.teleport" = false;
+```
+
+The remote-run resource gates its extension plus every caller of
+`isRemoteRunEnabled()`: ferment and permissions therefore omit their "run in
+cloud" choices too. Resuming a persisted `remote_run:state` entry bypasses that
+function, and the early `--ssh-proxy` argv path bypasses normal extension
+startup and the teleport resource. The network policy remains responsible for
+those two paths.
+
 Everything else Kimchi delivers except the settings files (above) and agents
 (below) is immutable and symlink-readable, so it takes both defaults and states
 no fact at all. Normalized context and rules render into one `ai.kimchi.files`
@@ -515,6 +532,13 @@ rebuilding the helper vendor hash and runs the shared pnpm hash fixer. The
 standalone dependency fixers also participate in input-bump repairs. The source
 checkout reports version `0.0.0`, so upstream's `set-version.js` runs before
 compiling and staging the resources.
+
+The build rewrites pi 0.85.1's shared `getToolPath()` choke point after pnpm
+materializes `node_modules` and before Bun compiles the module graph. `fd` and
+`rg` then resolve directly to the package inputs, ahead of pi's managed-bin,
+`PATH`, offline, and download branches. The build keeps Kimchi's typecheck:
+`CI=1` does not meet the script's `CI === "true"` plus `KIMCHI_SKIP_TYPECHECK=1`
+skip condition.
 
 Upstream's `bin/` and `share/kimchi/` layout remains intact. Generic ELF
 rewriting and stripping are disabled to preserve Bun's compiled module graph.
