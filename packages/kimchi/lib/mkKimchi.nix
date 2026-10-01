@@ -140,15 +140,20 @@
           (packages/kimchi/extracted.json). Home Manager owns declared leaves
           in <configDir>/config.json. Devenv writes
           .kimchi/config.json as a read-only copy and rejects keys Kimchi reads
-          only from the user file, except `region` and `telemetry.enabled`: the
-          launcher passes those as KIMCHI_REGION and KIMCHI_TELEMETRY_ENABLED on
-          both backends, which Kimchi reads ahead of the file. `apiKey` and
-          `gitTokens` have no option here: they are secrets, delivered by
-          `ai.kimchi.apiKey` and `ai.kimchi.gitTokens`.
+          only from the user file. `apiKey` and `gitTokens` have no option here:
+          they are secrets, delivered by `ai.kimchi.apiKey` and
+          `ai.kimchi.gitTokens`.
         ''
         + lib.optionalString isHm ''
           Home Manager preserves Kimchi-owned leaves. Declare `region`
           explicitly; it has no safe default. Telemetry defaults to disabled.
+          Kimchi reads both leaves from the user config.json.
+        ''
+        + lib.optionalString (!isHm) ''
+          Devenv accepts `region` and `telemetry.enabled` as exceptions to the
+          user-scope rejection and passes them as KIMCHI_REGION and
+          KIMCHI_TELEMETRY_ENABLED, because a project config.json cannot supply
+          either value.
         '';
     };
 
@@ -179,12 +184,10 @@
     };
   };
 
-  # Kimchi 1.1.37 reads `region` and `telemetry.enabled` from its environment
-  # ahead of config.json (KIMCHI_REGION, src/config.ts:193;
-  # KIMCHI_TELEMETRY_ENABLED, :504-506). The launcher sets both from these
-  # leaves, so the Nix value wins at read time even after Kimchi rewrites the
-  # file, and devenv delivers them this way alone: a project config.json does
-  # not honor either key.
+  # Kimchi 1.1.39 honors the `region` and `telemetry.enabled` config.json leaves
+  # only at global scope. A project config.json cannot supply either leaf, so
+  # devenv delivers its accepted exceptions through the launcher environment.
+  # Home Manager writes the global leaves and needs no duplicate environment.
   envShadowedSettings = settings: {
     inherit (settings) region;
     telemetryEnabled =
@@ -238,16 +241,17 @@
     (sharedHooks.merge topHooks cfg.hooks);
   hasHookHandlers = hooks: lib.any (lib.any (block: block.hooks != [])) (builtins.attrValues hooks);
 
-  # The launcher both install hooks share: the merged environment, the
-  # runtime secret export and, on devenv, the exact-cwd guard.
+  # The launcher both install hooks share: the merged environment, the runtime
+  # secret export and, on devenv, global-only settings plus the exact-cwd guard.
   mkPrep = {
+    backend,
     cfg,
     launcherEnvironment,
     requiredProjectRoot ? null,
   }: let
     # Non-secret env vars — baked into the wrapper via `--set`.
     shadowed = envShadowedSettings cfg.native.settings;
-    kimchiEnvVars =
+    kimchiEnvVars = lib.optionalAttrs (backend == "devenv") (
       lib.optionalAttrs (shadowed.region != null) {${sidecar.environmentName "KIMCHI_REGION"} = shadowed.region;}
       # Any value but `0` or `false` turns telemetry on.
       // lib.optionalAttrs (shadowed.telemetryEnabled != null) {
@@ -255,7 +259,8 @@
           if shadowed.telemetryEnabled
           then "1"
           else "0";
-      };
+      }
+    );
     # The builder's `launcherEnvironment` keeps module defaults (e.g. the
     # sandbox-safe GIT_SSH_COMMAND) under the consumer's pool, as for every
     # harness. `kimchiEnvVars` stays last: those are derived from typed
@@ -332,7 +337,7 @@
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
-      inherit cfg launcherEnvironment;
+      inherit backend cfg launcherEnvironment;
       requiredProjectRoot =
         if backend == "devenv" && hasExactCwdProjectFiles
         then config.devenv.root
