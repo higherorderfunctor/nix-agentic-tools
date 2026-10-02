@@ -277,6 +277,7 @@ Temporarily unclassified supporting packages live in the split-ready
 | `gluetun` | VPN client for multiple providers (Linux only) |
 | `oh-my-posh` | Prompt theme engine for any shell |
 | `otel-tui` | Terminal OpenTelemetry viewer |
+| `pipelock` | Agent egress firewall: forward proxy with hostname, SSRF and DLP checks |
 | `pnpm_10` | Fast, disk-space-efficient JavaScript package manager (10.x) |
 | `pnpm_11` | Fast, disk-space-efficient JavaScript package manager (11.x) |
 | `pnpm_12` | Fast, disk-space-efficient JavaScript package manager (12.x) |
