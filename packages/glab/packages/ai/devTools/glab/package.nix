@@ -39,20 +39,17 @@
 #
 #   the Go TOOLCHAIN -> INPUT. It is a builder argument, not an attr, so
 #   `overrideAttrs` cannot reach it at all; only `.override` can. That is
-#   why the expression below opens with `.override { buildGoModule = …; }`
+#   why the expression below opens with `goToolchain.overridePackage`
 #   and THEN composes `overrideAttrs` on the result.
 #
 # `packages/gh/packages/ai/devTools/gh/package.nix` carries the identical pair.
 #
-# The toolchain is DERIVED FROM THE go.mod FLOOR, not pinned and not
-# inherited from nixpkgs. This header previously said "No Go toolchain
-# override … nixpkgs ships a `go` that satisfies gitlab-org/cli's go.mod",
-# and predicted that a floor bump would "fail loudly". It did — but only
-# for consumers whose nixpkgs is older than ours, because our own pin
-# happened to keep pace. gitlab-org/cli has required Go >= 1.26.5 since
-# v1.109.0; a consumer following a nixpkgs shipping 1.26.2 got
-# `go.mod requires go >= 1.26.5 (running go 1.26.2)` with nothing in this
-# repo red. `vu.mkGoBuilder` removes that asymmetry.
+# The toolchain comes from the locked go-overlay (`vu.mkGoToolchain`), never
+# from nixpkgs, and the go.mod floor is validated against it. gitlab-org/cli
+# has required Go >= 1.26.5 since v1.109.0; a consumer following a nixpkgs
+# shipping 1.26.2 used to get `go.mod requires go >= 1.26.5 (running go
+# 1.26.2)` with nothing in this repo red. Because the compiler no longer
+# depends on nixpkgs, that asymmetry is gone.
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
@@ -60,7 +57,6 @@
 # Free (MIT). ensureUnfreeCheck in default.nix passes free packages
 # through unwrapped.
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
@@ -70,14 +66,7 @@
   # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
   # is the only thing read from the consumer — see
   # dev/fragments/overlays/overlay-pattern.md.
-  # go-overlay is applied INSIDE this import so `go-bin` resolves against
-  # our own pin; it is purely additive (`pkgs.go` is byte-identical with
-  # and without it), so it moves no derivation.
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.go-overlay.overlays.default];
-  };
-  inherit (ourPkgs) lib runCommand writeText;
+  inherit (pkgs) lib runCommand writeText;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
@@ -89,16 +78,13 @@
   goFloor = sources.goFloor or vu.goFloorUnknown;
 
   # Bound once and shared: the package builder AND the schema-dump extract
-  # below both compile this module's Go, so both need the toolchain the
-  # floor selects. Giving the extract plain `ourPkgs.go` would leave it
-  # failing with go's own "go.mod requires go >= X" precisely when the
-  # floor mechanism is doing its job.
-  goToolchain = vu.goToolchainForFloor {
+  # below both compile this module's Go, so both need the locked go-overlay
+  # toolchain. Giving the extract plain `pkgs.go` would compile it with
+  # nixpkgs' Go instead of the builder's.
+  goToolchain = vu.mkGoToolchain {
     floor = goFloor;
-    goBin = ourPkgs.go-bin;
-    ourGo = ourPkgs.go;
+    inherit pkgs;
     pname = "glab";
-    inherit lib;
   };
 
   # Bound once: passed to BOTH the hash fixer and the update script, and
@@ -110,19 +96,19 @@
   # mkUpdateScript (see below): nixpkgs' fetcher carries a `postFetch`,
   # so the prefetch path cannot produce a usable src hash and a fixer has
   # to. That is exactly the case whose correct order — src, THEN floor,
-  # THEN vendor — the old welded `mkGoSrcVendorFix` could not express.
+  # THEN vendor — is what `vu.mkGoUpdateExtract` emits.
   #
   # `extraAfter` carries the config-key schema dump, which COMPILES this
   # module's Go against the vendor tree and therefore has to follow both
-  # the floor (for the toolchain) and the vendor fix (for `.goModules`).
+  # the floor and the vendor fix (for `.goModules`).
   goUpdate = vu.mkGoUpdateExtract {
     attr = "glab";
     extraAfter = vu.mkExtractRegen {
       attr = "glab";
       dest = repoPath ../../../../extracted.json;
-      pkgs = ourPkgs;
+      inherit pkgs;
     };
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "glab";
     srcFromSidecar = true;
     inherit sourcesFile;
@@ -135,14 +121,11 @@
   # derivation that refers back to it. `passthru` is not a derivation
   # input, so the second `overrideAttrs` does not move the store path.
   #
-  # `vu.mkGoBuilder` is the one-call sugar the other six Go packages use.
-  # glab reaches the primitive instead because it needs the TOOLCHAIN
-  # itself a second time, for the schema-dump extract below — running the
-  # sugar as well would derive the same value by a second path.
+  # Other Go packages call `vu.mkGoToolchain` inline. glab binds the result
+  # once because it needs the toolchain's `go` a second time, for the
+  # schema-dump extract below.
   glabBase =
-    (ourPkgs.glab.override {
-      buildGoModule = ourPkgs.buildGoModule.override {go = goToolchain;};
-    })
+    (goToolchain.overridePackage pkgs.glab)
   .overrideAttrs (prev: {
       inherit version;
 
@@ -169,17 +152,13 @@
             # above says which axes glab sits on.
             #
             # The order it emits is src -> floor -> vendor -> extract.
-            # The version this file used to hand-write was
-            # src+vendor -> floor -> extract, which put the Go-compiling
-            # vendor build BEFORE the floor that selects its toolchain
-            # and held glab back on every sweep from 1.116.0 onward.
             extraExtract = "${goUpdate.extract}";
-            pkgs = ourPkgs;
+            inherit pkgs;
             platforms = {};
             pname = "glab";
             inherit sourcesFile;
             versionCheck.cmd = vu.glLatestVersionCmd {
-              pkgs = ourPkgs;
+              inherit pkgs;
               # URL-encoded project path — the `/` MUST be `%2F`.
               project = "gitlab-org%2Fcli";
             };
@@ -286,12 +265,8 @@
   # satisfies it.
   extracted =
     runCommand "glab-extracted.json" {
-      # `goToolchain`, NOT `ourPkgs.go`. This dump compiles against
-      # upstream's own `internal/config`, so it is subject to the same
-      # go.mod floor the package is — with plain `ourPkgs.go` it would
-      # fail on "go.mod requires go >= X" exactly when the floor seam is
-      # earning its keep.
-      nativeBuildInputs = [goToolchain ourPkgs.jq];
+      # The dump must use the package's locked compiler (`goToolchain.go`).
+      nativeBuildInputs = [goToolchain.go pkgs.jq];
     } ''
       export HOME="$TMPDIR"
       export GOCACHE="$TMPDIR/go-cache"

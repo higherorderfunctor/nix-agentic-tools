@@ -184,8 +184,8 @@
             ${drifts}
             DRIFT
             echo "" >&2
-            echo "Each affected package must use 'ourPkgs = import inputs.nixpkgs { ... }'" >&2
-            echo "instead of routing build inputs through the consumer-provided 'final'/'prev'." >&2
+            echo "Each affected package must take build inputs from the injected 'pkgs' (the" >&2
+            echo "repository composer's pinned instance), never the consumer-provided 'final'/'prev'." >&2
             echo "See .claude/rules/overlays.md 'Overlay Cache-Hit Parity' section for the full pattern." >&2
           '')
           + lib.optionalString (!followsDrifts) ''

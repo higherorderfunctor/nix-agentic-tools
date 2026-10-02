@@ -13,6 +13,7 @@
   ...
 }: let
   ourPkgs = pkgs;
+  rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
@@ -56,9 +57,12 @@
     inherit rev;
   };
 in
-  (ourPkgs.oxlint.override {inherit tsgolint;}).overrideAttrs (finalAttrs: prev: {
+  (ourPkgs.oxlint.override {
+    inherit rustPlatform tsgolint;
+    inherit (rustPlatform.rust) cargo rustc;
+  }).overrideAttrs (finalAttrs: prev: {
     inherit version src;
-    cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
+    cargoDeps = rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
       hash = "sha256-BFVbX5wOTJculA0w5sCOHryufW326WceIcR3w/EAJVs=";
     };

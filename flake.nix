@@ -24,10 +24,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Prebuilt Go toolchains (go.dev manifests) as `pkgs.go-bin`. Applied
-    # INSIDE a package's `ourPkgs`, the same way rust-overlay is, so the
-    # toolchain still comes from this repo's pin and cache-hit parity
-    # holds. Only reached when a package's declared go.mod floor outruns
-    # `ourPkgs.go` — see `goToolchainForFloor` in lib/packaging.nix.
+    # with rust-overlay to the repository package world
+    # (lib/facets/repository.nix), so every owned Go package compiles with the
+    # newest stable release locked here — see `mkGoToolchain` in
+    # lib/packaging.nix. nixpkgs' own Go is never selected.
     go-overlay = {
       url = "github:purpleclay/go-overlay";
       inputs = {
@@ -55,10 +55,10 @@
     # `checks.cache-hit-parity` regression gate to simulate a
     # consumer whose own nixpkgs diverges from ours. NO follows —
     # the whole point is that this pin drifts from `nixpkgs`. If
-    # every overlay package uses `ourPkgs = import inputs.nixpkgs
-    # { ... }` for build inputs (not `final`/`prev`), the store
-    # paths stay byte-identical across the two pins and cachix
-    # hits work for consumers regardless of their own pin.
+    # every overlay package takes its build inputs from the injected
+    # repository-pinned `pkgs` (not the consumer's `final`/`prev`),
+    # the store paths stay byte-identical across the two pins and
+    # cachix hits work for consumers regardless of their own pin.
     nixpkgs-test.url = "github:NixOS/nixpkgs/nixos-25.05";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";

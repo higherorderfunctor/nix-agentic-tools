@@ -12,16 +12,16 @@
 # be recorded. It lives in the SIDECAR rather than inline because
 # `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
 # (`jq -n --arg v "$latest" '{version: $v}'`), which destroys any key the
-# writer does not itself produce. `vu.mkGoVendorFix` runs as
-# `extraExtract` immediately after that write and puts the correct value
-# back, which is why the read below is `sources.vendorHash or fakeHash`:
-# the `or` covers exactly the window between the two.
+# writer does not itself produce. The vendor fixer from
+# `vu.mkGoUpdateExtract` runs as `extraExtract` immediately after that write
+# and puts the correct value back, which is why the read below is
+# `sources.vendorHash or fakeHash`: the `or` covers exactly the window
+# between the two.
 #
-# The Go TOOLCHAIN is derived from the go.mod floor, via `vu.mkGoBuilder`.
-# The upstream recipe now chooses a versioned Go builder on some nixpkgs
-# pins. Use its actual override argument and preserve that builder's Go as
-# the floor selector's baseline; passing `buildGoModule` blindly either
-# fails evaluation or silently downgrades a versioned builder.
+# The Go TOOLCHAIN comes from the locked go-overlay via `vu.mkGoToolchain`,
+# which validates `goFloor` against it. The upstream recipe chooses a
+# versioned Go builder on some nixpkgs pins; `overridePackage` replaces that
+# builder's compiler whichever argument name it uses.
 #
 # This header used to say "No Go toolchain override", on the reasoning
 # that threading one through "would perturb the byte-identical-to-nixpkgs
@@ -48,7 +48,6 @@
 # Free (MIT). ensureUnfreeCheck in default.nix passes free packages
 # through unwrapped.
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
@@ -57,15 +56,8 @@
   # Cache-hit parity: every build input comes from THIS repo's nixpkgs
   # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
   # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md. go-overlay is applied
-  # INSIDE this import so `go-bin` resolves against our own pin; it is
-  # purely additive (`pkgs.go` is byte-identical with and without it), so
-  # it moves no derivation.
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.go-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchzip lib;
+  # dev/fragments/overlays/overlay-pattern.md.
+  inherit (pkgs) fetchzip lib;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
@@ -75,7 +67,7 @@
 
   goUpdate = vu.mkGoUpdateExtract {
     attr = "gh";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "gh";
     inherit sourcesFile;
   };
@@ -92,16 +84,12 @@ in
   # reads off `finalAttrs`, so they compose on the output with
   # `overrideAttrs`. See the overlays fragment's `.override`-vs-
   # -`overrideAttrs` rule.
-  (ourPkgs.gh.override (ghArgs: let
-    builderName = vu.goBuilderArgName ghArgs;
-  in {
-    ${builderName} = vu.mkGoBuilder {
-      builder = ghArgs.${builderName};
+  ((vu.mkGoToolchain {
       floor = goFloor;
-      pkgs = ourPkgs;
+      inherit pkgs;
       pname = "gh";
-    };
-  }))
+    }).overridePackage
+    pkgs.gh)
   .overrideAttrs (prev: {
     inherit (sources) version;
     # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
@@ -123,7 +111,7 @@ in
           # here. It was restated here, and it was wrong: the vendor
           # fixer compiles Go and so must follow the floor fixer.
           extraExtract = "${goUpdate.extract}";
-          pkgs = ourPkgs;
+          inherit pkgs;
           pname = "gh";
           repo = "cli/cli";
           inherit sourcesFile;

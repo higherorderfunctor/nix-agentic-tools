@@ -3,19 +3,14 @@
 # relative to the executable, including when the module wraps that executable.
 {
   fd,
-  inputs,
   packageLib,
   pkgs,
   repoPath,
   ripgrep,
   ...
 }: let
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.go-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchzip lib;
-  pnpm = ourPkgs.pnpm_10;
+  inherit (pkgs) fetchzip lib;
+  pnpm = pkgs.pnpm_10;
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   sourcesFile = repoPath ../../../sources.json;
   extraction = sources.extraction or (throw "kimchi: missing extraction source pins");
@@ -48,11 +43,11 @@
   piTuiPackage = fetchExtraction extraction.piTuiPackage;
 
   extracted =
-    ourPkgs.runCommand "kimchi-extracted.json" {
-      nativeBuildInputs = [ourPkgs.nodejs ourPkgs.typescript_5];
+    pkgs.runCommand "kimchi-extracted.json" {
+      nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
     } ''
-      ${ourPkgs.yq-go}/bin/yq -o=json '.' ${kimchiSource}/pnpm-lock.yaml > kimchi-lock.json
-      ${ourPkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
+      ${pkgs.yq-go}/bin/yq -o=json '.' ${kimchiSource}/pnpm-lock.yaml > kimchi-lock.json
+      ${pkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
         --annotations ${../../../extract/annotations.json} \
         --kimchi-lock kimchi-lock.json \
         --kimchi-source ${kimchiSource} \
@@ -63,7 +58,7 @@
         --pi-ai-package ${piAiPackage} \
         --pi-package ${piPackage} \
         --pi-tui-package ${piTuiPackage} \
-        --typescript ${ourPkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
+        --typescript ${pkgs.typescript_5}/lib/node_modules/typescript/lib/typescript.js
     '';
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this
@@ -72,21 +67,21 @@
   # The dependency fixers that follow it build against that source pin.
   refreshExtraction = ''
     kimchi_source_url="https://github.com/getkimchi/kimchi/archive/refs/tags/v$latest.tar.gz"
-    kimchi_source_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$kimchi_source_url")
-    kimchi_source_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$kimchi_source_json")
-    kimchi_source_path=$(${ourPkgs.jq}/bin/jq -er '.storePath' <<< "$kimchi_source_json")
+    kimchi_source_json=$(${pkgs.nix}/bin/nix store prefetch-file --json --unpack "$kimchi_source_url")
+    kimchi_source_hash=$(${pkgs.jq}/bin/jq -er '.hash' <<< "$kimchi_source_json")
+    kimchi_source_path=$(${pkgs.jq}/bin/jq -er '.storePath' <<< "$kimchi_source_json")
 
-    pi_version=$(${ourPkgs.jq}/bin/jq -er \
+    pi_version=$(${pkgs.jq}/bin/jq -er \
       '.dependencies["@earendil-works/pi-coding-agent"] | strings | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
       "$kimchi_source_path/package.json")
     pi_package_url="https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-$pi_version.tgz"
-    pi_package_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$pi_package_url")
-    pi_package_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$pi_package_json")
+    pi_package_json=$(${pkgs.nix}/bin/nix store prefetch-file --json --unpack "$pi_package_url")
+    pi_package_hash=$(${pkgs.jq}/bin/jq -er '.hash' <<< "$pi_package_json")
 
     # pi's declaration packages at the versions Kimchi's lockfile resolves
     # pi's dependencies to, which is what the source build installs.
-    kimchi_lock_json=$(${ourPkgs.yq-go}/bin/yq -o=json '.' "$kimchi_source_path/pnpm-lock.yaml")
-    pi_reference=$(${ourPkgs.jq}/bin/jq -er \
+    kimchi_lock_json=$(${pkgs.yq-go}/bin/yq -o=json '.' "$kimchi_source_path/pnpm-lock.yaml")
+    pi_reference=$(${pkgs.jq}/bin/jq -er \
       '.importers["."].dependencies["@earendil-works/pi-coding-agent"].version | strings' \
       <<< "$kimchi_lock_json")
 
@@ -97,14 +92,14 @@
       local dependency_url
       local dependency_json
       local dependency_hash
-      dependency_version=$(${ourPkgs.jq}/bin/jq -er \
+      dependency_version=$(${pkgs.jq}/bin/jq -er \
         --arg reference "@earendil-works/pi-coding-agent@$pi_reference" \
         --arg name "@earendil-works/$dependency_name" \
         '.snapshots[$reference].dependencies[$name] | strings | sub("\\(.*$"; "") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
         <<< "$kimchi_lock_json")
       dependency_url="https://registry.npmjs.org/@earendil-works/$dependency_name/-/$dependency_name-$dependency_version.tgz"
-      dependency_json=$(${ourPkgs.nix}/bin/nix store prefetch-file --json --unpack "$dependency_url")
-      dependency_hash=$(${ourPkgs.jq}/bin/jq -er '.hash' <<< "$dependency_json")
+      dependency_json=$(${pkgs.nix}/bin/nix store prefetch-file --json --unpack "$dependency_url")
+      dependency_hash=$(${pkgs.jq}/bin/jq -er '.hash' <<< "$dependency_json")
       printf -v "''${variable_prefix}_hash" '%s' "$dependency_hash"
       printf -v "''${variable_prefix}_url" '%s' "$dependency_url"
       printf -v "''${variable_prefix}_version" '%s' "$dependency_version"
@@ -113,8 +108,8 @@
     prefetch_pi_dependency pi-ai pi_ai
     prefetch_pi_dependency pi-tui pi_tui
 
-    extraction_tmp=$(${ourPkgs.coreutils}/bin/mktemp)
-    ${ourPkgs.jq}/bin/jq \
+    extraction_tmp=$(${pkgs.coreutils}/bin/mktemp)
+    ${pkgs.jq}/bin/jq \
       --arg kh "$kimchi_source_hash" \
       --arg ku "$kimchi_source_url" \
       --arg pi_agent_core_hash "$pi_agent_core_hash" \
@@ -137,20 +132,20 @@
         piTuiPackage: {hash: $pth, url: $ptu, version: $ptv}
       }}' \
       ${sourcesFile} > "$extraction_tmp"
-    ${ourPkgs.coreutils}/bin/mv "$extraction_tmp" ${sourcesFile}
-    ${ourPkgs.nix}/bin/nix fmt -- ${sourcesFile}
+    ${pkgs.coreutils}/bin/mv "$extraction_tmp" ${sourcesFile}
+    ${pkgs.nix}/bin/nix fmt -- ${sourcesFile}
 
     ${packageLib.mkExtractRegen {
       attr = "kimchi";
       dest = repoPath ../../../extracted.json;
-      pkgs = ourPkgs;
+      inherit pkgs;
     }}
   '';
 
   fixPnpmDepsHash = packageLib.mkHashFix {
     attr = "kimchi";
     name = "pnpm-deps";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "kimchi";
     inherit sourcesFile;
     targets = [packageLib.hashFixTargets.pnpmDeps];
@@ -159,17 +154,17 @@
     attr = "kimchi.proxyHelper";
     extraAfter = "${fixPnpmDepsHash}";
     inherit goModPath sourcesFile;
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "kimchi";
   };
 in
-  ourPkgs.stdenv.mkDerivation (finalAttrs: let
+  pkgs.stdenv.mkDerivation (finalAttrs: let
     proxyHelper =
-      (packageLib.mkGoBuilder {
+      (packageLib.mkGoToolchain {
         floor = goFloor;
-        pkgs = ourPkgs;
+        inherit pkgs;
         pname = "kimchi-proxy-helper";
-      }) {
+      }).buildGoModule {
         pname = "kimchi-proxy-helper";
         inherit (finalAttrs) src version;
         modRoot = "tools/proxy-helper";
@@ -198,7 +193,7 @@ in
       cp ${./store-skills.test.ts} src/shared/skill-discovery/store-skills.test.ts
     '';
 
-    pnpmDeps = ourPkgs.fetchPnpmDeps {
+    pnpmDeps = pkgs.fetchPnpmDeps {
       # fetchPnpmDeps derives its name from pname alone; see versionedName.
       pname = versionedName;
       inherit (finalAttrs) src version;
@@ -208,12 +203,12 @@ in
     };
     nativeBuildInputs =
       [
-        ourPkgs.bun
-        ourPkgs.nodejs
+        pkgs.bun
+        pkgs.nodejs
         pnpm
-        ourPkgs.pnpmConfigHook
+        pkgs.pnpmConfigHook
       ]
-      ++ lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [ourPkgs.rcodesign];
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [pkgs.rcodesign];
 
     # macOS codesign is not available in Nix's build sandbox. Use the same
     # ad-hoc signature repair as nixpkgs' Bun package.
@@ -229,7 +224,7 @@ in
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
       ''
-      + lib.optionalString ourPkgs.stdenv.hostPlatform.isDarwin ''
+      + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
         substituteInPlace scripts/build-binary.js \
           --replace-fail 'run("codesign (strip)", `codesign --remove-signature ''${binaryPath}`)' \
             'run("codesign (rcodesign linker-signed)", `rcodesign sign --code-signature-flags linker-signed ''${binaryPath}`)' \
@@ -306,12 +301,12 @@ in
           ${refreshExtraction}
           ${goUpdate.extract}
         '';
-        pkgs = ourPkgs;
+        inherit pkgs;
         platforms = {};
         pname = "kimchi";
         inherit sourcesFile;
         versionCheck.cmd = packageLib.ghLatestVersionCmd {
-          pkgs = ourPkgs;
+          inherit pkgs;
           repo = "getkimchi/kimchi";
         };
       };

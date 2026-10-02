@@ -35,26 +35,23 @@
 # test sweep, and the tun-device removal it used to need, are gone with
 # it.
 #
-# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and so is the floor it derives
-# from — do not "clean up" either. A pinned toolchain cannot tell "still
-# filling a real gap" from "nixpkgs caught up and this is now a
-# downgrade", and a hand-written floor is just a slower-rotting pin: the
-# 4x/day sweep bumps this package and would never touch it.
+# THE GO TOOLCHAIN IS NEVER PINNED HERE, and the floor is derived — do not
+# "clean up" either. The compiler is the newest stable locked go-overlay
+# release, and a hand-written floor is a slower-rotting pin: the 4x/day
+# sweep bumps this package and would never touch it.
 #
 # So `goFloor` is EXTRACTED from the pinned source's go.mod into the
-# sidecar by `vu.mkGoFloorFix`, and `vu.mkGoBuilder` turns it into a
-# builder. No version literals here on purpose — the sidecar holds the
+# sidecar by `vu.mkGoFloorFix`, and `vu.mkGoToolchain` validates it against the locked
+# go-overlay. No version literals here on purpose — the sidecar holds the
 # current value and `checks/packaging/go-floor-drift.nix` asserts it still matches
-# source. `goToolchainForFloor` returns `ourPkgs.go` whenever our pin
-# satisfies the floor, reaching for a prebuilt `go-bin` only when upstream
-# outruns nixpkgs-unstable, and self-clearing the moment nixpkgs catches
-# up. See lib/packaging.nix, and checks/packaging/go-toolchain-floor.nix for the
-# selector's branch coverage.
+# source. See lib/packaging.nix, and checks/packaging/go-toolchain-floor.nix for
+# the selector's contract coverage.
 #
 # vendorHash lives in the SIDECAR rather than inline: `mkUpdateScript`
 # rebuilds the sidecar from scratch on every write, so any key it does not
-# itself produce is destroyed. `vu.mkGoVendorFix` runs as `extraExtract`
-# right after and restores it; the `or fakeHash` read covers that window.
+# itself produce is destroyed. The vendor fixer from `vu.mkGoUpdateExtract`
+# runs as `extraExtract` right after and restores it; the `or fakeHash` read
+# covers that window.
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
@@ -62,7 +59,6 @@
 # Free (MIT). ensureUnfreeCheck in default.nix passes free packages
 # through unwrapped.
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
@@ -71,14 +67,8 @@
   # Cache-hit parity: every build input comes from THIS repo's nixpkgs
   # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
   # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md. go-overlay is applied
-  # INSIDE this import, the same way packages/agnix/packages/ai/agnix/package.nix applies
-  # rust-overlay, so `go-bin` is still resolved against our own pin.
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.go-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchzip lib;
+  # dev/fragments/overlays/overlay-pattern.md.
+  inherit (pkgs) fetchzip lib;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
@@ -88,7 +78,7 @@
 
   goUpdate = vu.mkGoUpdateExtract {
     attr = "gluetun";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "gluetun";
     inherit sourcesFile;
   };
@@ -102,11 +92,14 @@
   # `checks/packaging/go-floor-drift.nix` for the loud half.
   goFloor = sources.goFloor or vu.goFloorUnknown;
 
-  buildGoModule = vu.mkGoBuilder {
-    floor = goFloor;
-    pkgs = ourPkgs;
-    pname = "gluetun";
-  };
+  inherit
+    (vu.mkGoToolchain {
+      floor = goFloor;
+      inherit pkgs;
+      pname = "gluetun";
+    })
+    buildGoModule
+    ;
 in
   buildGoModule {
     pname = "gluetun";
@@ -126,7 +119,7 @@ in
         # here. It was restated here, and it was wrong: the vendor
         # fixer compiles Go and so must follow the floor fixer.
         extraExtract = "${goUpdate.extract}";
-        pkgs = ourPkgs;
+        inherit pkgs;
         pname = "gluetun";
         repo = "passteque/gluetun";
         inherit sourcesFile;

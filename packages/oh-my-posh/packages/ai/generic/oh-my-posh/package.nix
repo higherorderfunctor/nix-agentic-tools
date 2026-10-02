@@ -1,5 +1,5 @@
 # oh-my-posh — the prompt theme engine, re-pinned onto this repo's update
-# cadence. An `.override` (to swap in a floor-derived Go toolchain) plus a
+# cadence. An `.override` (to swap in the locked go-overlay Go toolchain) plus a
 # thin `.overrideAttrs` (version, src, vendorHash, passthru) over nixpkgs'
 # own `buildGoModule` derivation.
 #
@@ -67,25 +67,23 @@
 # Note that `overrideAttrs` REPLACES `postPatch` rather than appending, so
 # this restates the whole list rather than adding to nixpkgs'.
 #
-# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and so is the floor it derives
-# from — do not "clean up" either. The sibling repo pinned
-# `go-bin.versions."1.26.0"` here; that was a gap-filler when written and
-# is a DOWNGRADE now that our nixpkgs pin ships go 1.26.5, with nothing
-# announcing the transition. A hand-written FLOOR is only a slower-rotting
-# version of the same mistake, so `goFloor` is EXTRACTED from the pinned
-# source's `src/go.mod` into the sidecar by `vu.mkGoFloorFix`, and
-# `vu.mkGoBuilder` turns it into a builder.
+# THE GO TOOLCHAIN IS NEVER PINNED HERE, and the floor is derived — do not
+# "clean up" either. The compiler is the newest stable locked go-overlay
+# release. A hand-written FLOOR is a slower-rotting pin, so `goFloor` is
+# EXTRACTED from the pinned source's `src/go.mod` into the sidecar by
+# `vu.mkGoFloorFix`, and `vu.mkGoToolchain` validates it.
 #
 # This project keeps its module under `src/`, so it is the one package
 # passing a non-default `goModPath`. No version literals here on purpose —
 # the sidecar holds the current floor and `checks/packaging/go-floor-drift.nix`
 # asserts it still matches source. See lib/packaging.nix, and
-# checks/packaging/go-toolchain-floor.nix for the selector's branch coverage.
+# checks/packaging/go-toolchain-floor.nix for the selector's contract coverage.
 #
 # vendorHash lives in the SIDECAR rather than inline: `mkUpdateScript`
 # rebuilds the sidecar from scratch on every write, so any key it does not
-# itself produce is destroyed. `vu.mkGoVendorFix` runs as `extraExtract`
-# right after and restores it; the `or fakeHash` read covers that window.
+# itself produce is destroyed. The vendor fixer from `vu.mkGoUpdateExtract`
+# runs as `extraExtract` right after and restores it; the `or fakeHash` read
+# covers that window.
 #
 # AND `postPatch` IS AN INPUT TO IT. buildGoModule threads `postPatch`
 # into the `goModules` derivation (build-support/go/module.nix), so which
@@ -109,7 +107,6 @@
 # Free (MIT). ensureUnfreeCheck in default.nix passes free packages
 # through unwrapped.
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
@@ -118,14 +115,8 @@
   # Cache-hit parity: every build input comes from THIS repo's nixpkgs
   # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
   # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md. go-overlay is applied
-  # INSIDE this import, the same way packages/agnix/packages/ai/agnix/package.nix applies
-  # rust-overlay, so `go-bin` is still resolved against our own pin.
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.go-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchzip lib;
+  # dev/fragments/overlays/overlay-pattern.md.
+  inherit (pkgs) fetchzip lib;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
@@ -136,7 +127,7 @@
   goUpdate = vu.mkGoUpdateExtract {
     attr = "oh-my-posh";
     inherit goModPath sourcesFile;
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "oh-my-posh";
   };
   inherit (goUpdate) fixGoFloor fixVendorHash;
@@ -153,13 +144,12 @@
   # `vu.goFloorUnknown` for why the missing-key fallback is silent.
   goFloor = sources.goFloor or vu.goFloorUnknown;
 in
-  (ourPkgs.oh-my-posh.override {
-    buildGoModule = vu.mkGoBuilder {
+  ((vu.mkGoToolchain {
       floor = goFloor;
-      pkgs = ourPkgs;
+      inherit pkgs;
       pname = "oh-my-posh";
-    };
-  })
+    }).overridePackage
+    pkgs.oh-my-posh)
   .overrideAttrs (prev: {
     inherit (sources) version;
     # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
@@ -199,7 +189,7 @@ in
           # compiles Go and so must follow the floor fixer, not precede
           # it. See that helper's header.
           extraExtract = "${goUpdate.extract}";
-          pkgs = ourPkgs;
+          inherit pkgs;
           pname = "oh-my-posh";
           repo = "JanDeDobbeleer/oh-my-posh";
           inherit sourcesFile;

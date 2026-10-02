@@ -1007,7 +1007,18 @@ if args[:1] in (['build'], ['eval']) and 'regenerateExtracted' in ' '.join(args)
     raise SystemExit(0)
 if args[:1] == ['eval']:
     joined = ' '.join(args)
-    if 'builtins.currentSystem' in joined: print('x86_64-linux')
+    if 'fixGoFloor' in joined:
+        print('true' if mode.startswith('floor') else 'false', end='')
+    elif 'drvAttrs' in joined:
+        git_spec = {'mode': 'git', 'url': 'https://example.test/demo.git', 'name': 'source', 'args': ['--fetch-submodules'], 'unsupported': []}
+        specs = {
+            'floor-sparse': dict(git_spec, args=['--sparse-checkout', 'src\\ndocs']),
+            'floor-submodules': git_spec,
+            'git-failed': git_spec,
+            'git-unsupported': dict(git_spec, unsupported=['postFetch']),
+        }
+        print(json.dumps(specs.get(mode, {'mode': 'archive'})))
+    elif 'builtins.currentSystem' in joined: print('x86_64-linux')
     elif 'builtins.attrNames' in joined:
         print(json.dumps(['alpha', 'beta'] if mode == 'input-partial' else ['oxlint'] if mode.startswith('input-') else ['demo']))
     elif 'updateTargets.demo.file' in joined: print('packages/demo/package.nix')
@@ -1031,6 +1042,10 @@ if args[:2] == ['flake', 'prefetch']:
     else:
         print(values.get(mode, ''), end='')
     raise SystemExit(9 if mode == 'failed' else 0)
+if args[:1] == ['run'] and 'nixpkgs#nix-prefetch-git' in args:
+    if mode == 'git-failed': raise SystemExit(9)
+    print(json.dumps({'hash': 'sha256-' + 'C' * 43 + '=', 'path': os.environ['UPSTREAM_SOURCE']}))
+    raise SystemExit(0)
 if args[:1] == ['run']:
     if mode.startswith('floor'):
         with open(os.environ['CALL_ORDER'], 'a') as f: f.write('nix-update\\n')
@@ -1069,14 +1084,22 @@ if args[:1] == ['run']:
     raise SystemExit(0)
 if args[:1] == ['fmt']: raise SystemExit(0)
 if args[:1] == ['build']:
-    if 'fixGoFloor' in ' '.join(args) and mode.startswith('floor'):
-        # Model the refresh capability at the mocked Nix boundary. The native
+    if args[-1:] == ['.#demo.fixGoFloor'] and mode.startswith('floor'):
+        # Model the refresh capability at the mocked Nix boundary: the build
+        # prints an executable standing in for the fixer. The native
         # go-floor-fixer check owns generated-script execution; this fixture
         # verifies worker ordering and rollback without requiring /nix/store.
-        with open(os.environ['CALL_ORDER'], 'a') as f: f.write('floor-fixer\\n')
-        if mode == 'floor-fail': raise SystemExit(17)
-        recipe = Path('packages/demo/package.nix')
-        recipe.write_text(recipe.read_text().replace('goFloor = "1.25.12";', 'goFloor = "1.26.8";'))
+        fixer = Path(os.environ['CALL_ORDER']).with_name('fix-go-floor')
+        fixer.write_text('''#!/usr/bin/env python3
+import os
+from pathlib import Path
+with open(os.environ['CALL_ORDER'], 'a') as f: f.write('floor-fixer\\\\n')
+if os.environ['NIX_MODE'] == 'floor-fail': raise SystemExit(17)
+recipe = Path('packages/demo/package.nix')
+recipe.write_text(recipe.read_text().replace('goFloor = "1.25.12";', 'goFloor = "1.26.8";'))
+''')
+        fixer.chmod(0o755)
+        print(fixer)
         raise SystemExit(0)
     raise SystemExit(23 if mode == 'package-red' else 0)
 raise SystemExit(f'unhandled nix fixture arguments: {args}')
@@ -1112,6 +1135,47 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         updated = self.git("show", "update/demo:packages/demo/package.nix")
         self.assertIn('goFloor = "1.26.8";', updated)
         self.assertEqual(self.git("rev-list", "--count", f"{self.base}..update/demo"), "1")
+
+    def test_git_source_prefetches_with_the_fetchers_own_flags(self):
+        result = self.run_package("floor-submodules", floor=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = list(map(json.loads, (self.root / "nix-calls").read_text().splitlines()))
+        self.assertFalse(any(call[:2] == ["flake", "prefetch"] for call in calls))
+        prefetch = next(call for call in calls if "nixpkgs#nix-prefetch-git" in call)
+        self.assertEqual(
+            prefetch[prefetch.index("--") + 1:],
+            ["--quiet", "--url", "https://example.test/demo.git", "--rev", "1" * 40, "--name", "source", "--fetch-submodules"],
+        )
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["floor-fixer", "nix-update"])
+        updated = self.git("show", "update/demo:packages/demo/package.nix")
+        self.assertIn(f'hash = "sha256-{"C" * 43}=";', updated)
+        self.assertIn('goFloor = "1.26.8";', updated)
+
+    def test_git_source_prefetch_keeps_a_multi_line_argument_whole(self):
+        # fetchgit/builder.sh passes the newline-joined sparseCheckoutText as
+        # ONE argument; a line-split read would hand nix-prefetch-git two.
+        result = self.run_package("floor-sparse", floor=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = list(map(json.loads, (self.root / "nix-calls").read_text().splitlines()))
+        prefetch = next(call for call in calls if "nixpkgs#nix-prefetch-git" in call)
+        self.assertEqual(prefetch[prefetch.index("--name") + 2:], ["--sparse-checkout", "src\ndocs"])
+
+    def test_git_source_prefetch_failures_hold_the_target_back(self):
+        for mode, reason in (
+            ("git-failed", "source prefetch did not produce a valid hash"),
+            ("git-unsupported", "source fetcher cannot be prefetched"),
+        ):
+            with self.subTest(mode=mode):
+                result = self.run_package(mode)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                report = (self.repo / ".update-report.txt").read_text()
+                self.assertIn("HELD BACK: demo", report)
+                self.assertIn(reason, report)
+                self.assertEqual(self.git("rev-parse", "update/demo"), self.base)
+                self.assertFalse(any(call[:1] == ["run"] and "nixpkgs#nix-prefetch-git" not in call
+                                     for call in map(json.loads, (self.root / "nix-calls").read_text().splitlines())))
+                (self.repo / ".update-report.txt").unlink()
+                (self.root / "nix-calls").unlink()
 
     def test_go_floor_fixer_failure_holds_back_and_resets_rev_bump(self):
         result = self.run_package("floor-fail", floor=True)

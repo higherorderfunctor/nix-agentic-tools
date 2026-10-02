@@ -1,7 +1,9 @@
 ## Overlay Cache-Hit Parity
 
 > **Last verified:** 2026-10-02 — all owner recipes receive pinned packages from
-> the shared composer; both supported-system output baselines match.
+> the shared composer, which applies the Go and Rust overlays once; compilers
+> come from `mkGoToolchain` / `mkRustPlatform`; both supported-system output
+> baselines match.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show db6df0dd:dev/fragments/overlays/cache-hit-parity.md`.
@@ -14,9 +16,12 @@
 
 **Every compiled package must use this flake's `inputs.nixpkgs` pin for its base
 derivation and build inputs.** Owner recipes receive that instance as `pkgs`
-from repository assembly, with shared helpers injected as `packageLib`. Recipes
-needing additional toolchain overlays may instantiate that same pin with those
-overlays. Consumer `final` / `prev` must not supply build inputs.
+from repository assembly, with shared helpers injected as `packageLib`. That
+instance already carries the go-overlay and rust-overlay, so a Go or Rust recipe
+never instantiates nixpkgs itself; it takes compilers from `mkGoToolchain` /
+`mkRustPlatform`. `bun` and `pnpm_12` still import `inputs.nixpkgs` directly as
+plain-pin exceptions; they carry no compiler. Consumer `final` / `prev` must not
+supply build inputs.
 
 If you use `final` or `prev` for build inputs, the derivation binds to the
 **consumer's** nixpkgs pin. CI builds against this repo's own nixpkgs pin.
@@ -24,24 +29,18 @@ Different pins → different store paths → `nix-agentic-tools.cachix.org` does
 serve the consumer because the hash they're asking for was never computed. Cache
 miss on every consumer rebuild.
 
-### A recipe with a toolchain overlay
+### A recipe with a Rust toolchain
 
 ```nix
 # packages/git-absorb/packages/ai/gitTools/git-absorb/package.nix — CORRECT
-{inputs, pkgs, packageLib, ...}: let
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.rust-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchFromGitHub;
+{pkgs, packageLib, ...}: let
+  inherit (pkgs) fetchFromGitHub;
 
   vu = packageLib;
 
-  rust = ourPkgs.rust-bin.stable.latest.default;
-  rustPlatform = ourPkgs.makeRustPlatform {
-    cargo = rust;
-    rustc = rust;
-  };
+  # rust-overlay is already applied to `pkgs`; the helper picks
+  # rust-bin.stable.latest.default and wraps it in makeRustPlatform.
+  rustPlatform = vu.mkRustPlatform {inherit pkgs;};
 
   rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
   src = fetchFromGitHub {
@@ -51,10 +50,10 @@ miss on every consumer rebuild.
     hash = "sha256-...";
   };
 in
-  ourPkgs.git-absorb.override (_: {
+  pkgs.git-absorb.override (_: {
     rustPlatform.buildRustPackage = args:
       rustPlatform.buildRustPackage (finalAttrs: let
-        a = (ourPkgs.lib.toFunction args) finalAttrs;
+        a = (pkgs.lib.toFunction args) finalAttrs;
       in
         a
         // {
@@ -65,12 +64,15 @@ in
   })
 ```
 
-- The composer chooses the consumer system while injecting this repo's pin.
-- `ourPkgs` is built from THIS repo's `inputs.nixpkgs` plus any sub-overlays the
-  package needs (rust-overlay here).
-- Every downstream reference (`ourPkgs.git-absorb`, `ourPkgs.rust-bin`,
-  `ourPkgs.makeRustPlatform`, `ourPkgs.lib`) routes through `ourPkgs`, not
-  `final`/`prev`.
+- The composer chooses the consumer system while injecting this repo's pin, with
+  go-overlay and rust-overlay applied to it.
+- Compiler versions come only from the locked overlays: `vu.mkRustPlatform` for
+  Rust, `vu.mkGoToolchain` for Go. nixpkgs' own `go` / `rustc` / `cargo` is
+  never selected. `checks/packaging/toolchain-provenance.nix` inspects the real
+  build inputs of every Go and Rust package and fails on either a missing locked
+  compiler or a nixpkgs one.
+- Every downstream reference (`pkgs.git-absorb`, `pkgs.lib`) routes through the
+  injected `pkgs`, not `final`/`prev`.
 - Version is computed at eval time via `mkVersion`, producing `"x.y.z+debdcd2"`
   (upstream version + short rev).
 - The native scope discovers the recipe and its named arguments; no explicit
@@ -80,11 +82,11 @@ in
 `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix` for a
 long time after that file stopped having this shape — it now takes its `src`
 from the `inputs.git-branchless` flake input rather than a pinned rev+hash,
-needs no sub-overlay in `ourPkgs`, and reaches its base with `overrideAttrs`.
-`git-absorb` is the vehicle because composing a sub-overlay into `ourPkgs` is
-part of the lesson, and `git-branchless` cannot teach it. Keep the two in sync
-or move the example again — do not re-point the heading at a file that does not
-match the body.
+needs no Rust toolchain override, and reaches its base with `overrideAttrs`.
+`git-absorb` is the vehicle because replacing `rustPlatform` through the
+`.override` seam is part of the lesson, and `git-branchless` cannot teach it.
+Keep the two in sync or move the example again — do not re-point the heading at
+a file that does not match the body.
 
 Note that the `.override`-on-the-builder seam above is a SEPARATE question from
 cache-hit parity. Parity only cares that the base derivation and every build
@@ -119,17 +121,15 @@ exactly this scenario and asserts the output **drifts**. The check fails if
 **The cost is worse than the cache miss this fragment used to describe.**
 Measured 2026-08-05 against a real consumer following an April 2026 nixpkgs
 (`01fbdeef`, Go 1.26.2): `glab` did not merely rebuild from source, it failed
-outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
-no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
-`gh` was silently one bump behind the same fate.
+outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`, because it
+inherited whatever `go` the followed nixpkgs ships.
 
-The Go floor seam (overlay-pattern fragment) now covers all nine exported Go
-packages plus Beads' nested paired Dolt runtime, so that specific class is
-handled — a followed older nixpkgs gets a `go-bin` toolchain instead of a
-failure. It does NOT make `follows` supported: the consumer still gets zero
-cache hits, and the next toolchain-shaped dependency that lacks a floor seam
-will break the same way. The README carries the consumer-facing version of this
-warning.
+Owned Go and Rust packages now take their compiler from the locked overlays
+(`mkGoToolchain`, `mkRustPlatform`), so that specific class is handled — a
+followed older nixpkgs still builds with the locked compiler. It does NOT make
+`follows` supported: the consumer still gets zero cache hits, and the next
+toolchain-shaped dependency that does not come from a locked overlay will break
+the same way. The README carries the consumer-facing version of this warning.
 
 ### The trade-off (accepted in commit e5406977)
 
@@ -152,11 +152,12 @@ every rebuild.
 
 1. Accept named native arguments such as `{pkgs, packageLib, repoPath, ...}`.
    The composer supplies pinned packages; the recipe tree determines exports.
-2. When a custom toolchain overlay is needed, instantiate `inputs.nixpkgs` with
-   that overlay and the injected `pkgs.stdenv.hostPlatform.system`.
-3. Use `ourPkgs.X` for every build input.
-4. Base the derivation on `ourPkgs.<package>`, never `prev.<package>`. Whether
-   you reach it with `.override` or `overrideAttrs` is a separate decision
+2. Take compilers from `packageLib.mkGoToolchain` or `packageLib.mkRustPlatform`
+   (the composer applies the overlays); never instantiate `inputs.nixpkgs` in a
+   Go or Rust recipe.
+3. Use `pkgs.X` for every build input.
+4. Base the derivation on `pkgs.<package>`, never `prev.<package>`. Whether you
+   reach it with `.override` or `overrideAttrs` is a separate decision
    (overlay-pattern fragment) — parity only cares where the base and the build
    inputs come from.
 5. Verify: `nix eval --raw .#<package>` from this repo, then eval the same

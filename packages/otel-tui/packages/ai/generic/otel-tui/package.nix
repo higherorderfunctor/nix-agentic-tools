@@ -16,11 +16,11 @@
 #
 # vendorHash lives in the SIDECAR for the reason spelled out in
 # the gh owner recipe: `mkUpdateScript` rebuilds the sidecar from scratch on
-# every write, so `vu.mkGoVendorFix` runs as `extraExtract` right after
-# and the read is `sources.vendorHash or fakeHash` to cover the window
-# between the two.
+# every write. The vendor fixer from `vu.mkGoUpdateExtract` runs as
+# `extraExtract` right after, and the read is `sources.vendorHash or
+# fakeHash` to cover the window between the two.
 #
-# The Go TOOLCHAIN is derived from the go.mod floor, via `vu.mkGoBuilder`
+# The Go TOOLCHAIN comes from the locked go-overlay via `vu.mkGoToolchain`
 # — same shape as the gh owner recipe, and reached with `.override` because a
 # toolchain is a builder argument that `overrideAttrs` cannot touch. This
 # header used to say "No Go toolchain override"; see the gh owner recipe for why that
@@ -40,7 +40,6 @@
 # Free (Apache-2.0). ensureUnfreeCheck in default.nix passes free packages
 # through unwrapped.
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
@@ -50,14 +49,7 @@
   # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
   # is the only thing read from the consumer — see
   # dev/fragments/overlays/overlay-pattern.md.
-  # go-overlay is applied INSIDE this import so `go-bin` resolves against
-  # our own pin; it is purely additive (`pkgs.go` is byte-identical with
-  # and without it), so it moves no derivation.
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.go-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchzip lib;
+  inherit (pkgs) fetchzip lib;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
@@ -67,7 +59,7 @@
 
   goUpdate = vu.mkGoUpdateExtract {
     attr = "otel-tui";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "otel-tui";
     inherit sourcesFile;
   };
@@ -81,13 +73,12 @@ in
   # TWO override seams — the toolchain is a BUILDER argument reachable
   # only via `.override`, while version/src/vendorHash are ordinary attrs
   # composed on the output. See the gh owner recipe and the overlays fragment.
-  (ourPkgs.otel-tui.override {
-    buildGoModule = vu.mkGoBuilder {
+  ((vu.mkGoToolchain {
       floor = goFloor;
-      pkgs = ourPkgs;
+      inherit pkgs;
       pname = "otel-tui";
-    };
-  })
+    }).overridePackage
+    pkgs.otel-tui)
   .overrideAttrs (prev: {
     inherit (sources) version;
     # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
@@ -109,7 +100,7 @@ in
           # here. It was restated here, and it was wrong: the vendor
           # fixer compiles Go and so must follow the floor fixer.
           extraExtract = "${goUpdate.extract}";
-          pkgs = ourPkgs;
+          inherit pkgs;
           pname = "otel-tui";
           repo = "ymtdzzz/otel-tui";
           inherit sourcesFile;

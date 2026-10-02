@@ -628,36 +628,20 @@ fix_sidecar_hashes() {
 # Refresh a rev-tracked package's recipe-owned Go floor before nix-update
 # evaluates dependency derivations. Release packages use --use-update-script,
 # whose mkGoUpdateExtract chain owns the corresponding sidecar write and order.
-# The empty-list result is the opt-out: packages advertise this capability by
-# exposing passthru.fixGoFloor, so the worker carries no package-name registry.
+# A package opts in by exposing passthru.fixGoFloor, so the worker carries no
+# package-name registry.
 refresh_package_go_floor() {
-  local name="$1" expr paths p
-  expr='let
-      flake = builtins.getFlake (toString ./.);
-      ps = builtins.getAttr builtins.currentSystem flake.packages;
-      p = builtins.getAttr (builtins.getEnv "NAT_GO_FLOOR_PACKAGE") ps;
-    in if p ? fixGoFloor then [p.fixGoFloor] else []'
-
-  if ! paths=$(NAT_GO_FLOOR_PACKAGE="$name" nix build --impure --no-link --print-out-paths --expr "$expr"); then
-    log_failure "could not resolve $name Go-floor fixer (nix error above)"
+  local name="$1" has_fixer fixer
+  if ! has_fixer=$(nix eval --raw ".#$name" --apply 'p: builtins.toJSON (p ? fixGoFloor)'); then
+    log_failure "could not evaluate $name for a Go-floor fixer (nix error above)"
     return 1
   fi
-
-  while IFS= read -r p; do
-    [ -n "$p" ] || continue
-    case "$p" in
-    /nix/store/*) ;;
-    *)
-      log_failure "$name Go-floor fixer resolved to a non-store path: $p"
-      return 1
-      ;;
-    esac
-    if [ ! -x "$p" ]; then
-      log_failure "$name Go-floor fixer is not executable: $p"
-      return 1
-    fi
-    "$p" || return 1
-  done <<<"$paths"
+  [ "$has_fixer" = true ] || return 0
+  if ! fixer=$(nix build --no-link --print-out-paths ".#$name.fixGoFloor"); then
+    log_failure "could not build $name Go-floor fixer (nix error above)"
+    return 1
+  fi
+  "$fixer"
 }
 
 # ── Sidecar regeneration ─────────────────────────────────────────────────────

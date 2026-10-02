@@ -16,7 +16,7 @@ Per-platform binary packages store versions and hashes in a
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-09-28 — source paths and ownership guidance follow
+> **Last verified:** 2026-10-02 — source paths and ownership guidance follow
 > native package assembly; generated Markdown, JSON, TOML and YAML are formatted
 > and checked in `lib/generated.nix`'s `mkTree`; standalone scripts use
 > `lib/strict-shell-application.nix`.
@@ -123,13 +123,12 @@ Because the scan is per-line and the wrapper-versus-build-phase distinction is a
 property of the CALLER, a legitimately bare command in build-context code inside
 a scanned file is suppressed with a `# bare-commands: ok` comment **on that same
 line** — never by rewriting correct code. `lib/packaging.nix` is the mixed case:
-`mkUpdateScript` / `mkGitRevUpdateScript` emit real wrappers, while
-`mkClaudeExtract` / `mkKiroExtract` / `mkMcpSmokeTest` emit build-script bodies,
-which run inside stdenv with a full PATH from the derivation's own
-`nativeBuildInputs`. That is why `mkClaudeExtract`'s bare `python3` and `node`
-are correct: the marker documents the intent even though neither name is in the
-check's word lists today, so widening those lists later cannot turn a correct
-line into a failure.
+`mkUpdateScript` emits real wrappers, while `mkClaudeExtract` / `mkKiroExtract`
+/ `mkMcpSmokeTest` emit build-script bodies, which run inside stdenv with a full
+PATH from the derivation's own `nativeBuildInputs`. That is why
+`mkClaudeExtract`'s bare `python3` and `node` are correct: the marker documents
+the intent even though neither name is in the check's word lists today, so
+widening those lists later cannot turn a correct line into a failure.
 
 Being per-line also means comments are scanned, so the filters strip rg's
 `path:lineno:` prefix before testing for a leading `#`. An anchored `^\s*#`

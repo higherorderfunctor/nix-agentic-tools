@@ -1,6 +1,7 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-09-26 — chatgpt-codex installs upstream's complete
+> **Last verified:** 2026-10-02 — main-tracking rev bumps are done by
+> `update-pkg.sh`; chatgpt-codex installs upstream's complete
 > `codex-package-<target>` layout.
 
 ### Overview
@@ -79,15 +80,14 @@ Each uses an update strategy managed by `config.update.targets` (see owner
   refreshes pnpm dependencies
 - `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   version from AWS manifest endpoint
-- `kiro-gateway` — inline `rev` + `hash` with `mkGitRevUpdateScript` for
-  main-branch tracking; version via `mkVersion`
+- `kiro-gateway` — inline `rev` + `hash`; `update-pkg.sh` tracks the main branch
+  from the `git` URL in its `registry.nix` target; version via `mkVersion`
 
-The `lib/packaging.nix` file provides `ghLatestVersionCmd`,
-`mkGitRevUpdateScript`, `mkUpdateScript`, and `mkVersion` helpers consumed by
-each owner recipe. `ghLatestVersionCmd` reads the `releases/latest` redirect
-rather than the GitHub API, so it needs no token and cannot be rate-limited;
-prefer it over a hand-rolled `curl … api.github.com | jq -r .tag_name` version
-check.
+The `lib/packaging.nix` file provides `ghLatestVersionCmd`, `mkUpdateScript`,
+and `mkVersion` helpers consumed by each owner recipe. `ghLatestVersionCmd`
+reads the `releases/latest` redirect rather than the GitHub API, so it needs no
+token and cannot be rate-limited; prefer it over a hand-rolled
+`curl … api.github.com | jq -r .tag_name` version check.
 
 ### Patched Kiro variants stay local — TWO credentialed paths, not one
 

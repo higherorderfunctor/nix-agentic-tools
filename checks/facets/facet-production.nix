@@ -1,4 +1,8 @@
-{pkgs, ...}: {
+{
+  inputs,
+  pkgs,
+  ...
+}: {
   checks.facet-owner-relocation = let
     system = pkgs.stdenv.hostPlatform.system;
     probe = pkgs.writeText "facet-owner-relocation.nix" ''
@@ -6,7 +10,13 @@
         pkgs = import ${pkgs.path} {system = ${builtins.toJSON system};};
         inherit (pkgs) lib;
         repository = import ${../..}/lib/facets/repository.nix {
-          inputs.nixpkgs = {outPath = ${pkgs.path}; inherit lib;};
+          # Both overlay flakes define `overlays.default = import ./.`; import
+          # the same locked sources so the probe builds with the real toolchains.
+          inputs = {
+            go-overlay.overlays.default = import ${inputs.go-overlay};
+            nixpkgs = {outPath = ${pkgs.path}; inherit lib;};
+            rust-overlay.overlays.default = import ${inputs.rust-overlay};
+          };
           registryModules = [];
           root = builtins.toPath root;
           systems = [${builtins.toJSON system}];

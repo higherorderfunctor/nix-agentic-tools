@@ -4,9 +4,9 @@
 # This is the loud half of the floor mechanism. Reading the floor is
 # silent by construction: a Go overlay reads `sources.goFloor or
 # vu.goFloorUnknown`, and `goFloorUnknown` ("0") is satisfied by every
-# toolchain, so a missing or stale-LOW floor makes `goToolchainForFloor`
-# return `ourGo` and quietly apply no override. That is the exact failure
-# this whole mechanism exists to remove, and it cannot be caught at eval
+# toolchain, so a missing or stale-LOW floor makes `mkGoToolchain`'s
+# validation pass vacuously. That is the exact failure this whole
+# mechanism exists to remove, and it cannot be caught at eval
 # — `mkGoFloorFix` has to evaluate the package to build its `.src`, so a
 # `throw` on the missing key would deadlock the fixer that repairs it.
 #
@@ -96,7 +96,7 @@
     # change what "the floor" means.
     #
     # The ordering case is the one worth having: a string compare puts
-    # "1.9" ABOVE "1.26", which is the identical trap `goToolchainForFloor`
+    # "1.9" ABOVE "1.26", which is the identical trap `mkGoToolchain`
     # avoids with `lib.versionAtLeast`. `sort -V` is what makes it correct
     # here, and this asserts that rather than trusting it.
     mkParserTest = {

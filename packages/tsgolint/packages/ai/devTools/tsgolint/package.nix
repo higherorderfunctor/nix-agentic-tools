@@ -5,10 +5,19 @@
 {
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   ourPkgs = pkgs;
   vu = packageLib;
+
+  goFloor = "1.26";
+  toolchain = vu.mkGoToolchain {
+    floor = goFloor;
+    pkgs = ourPkgs;
+    pname = "tsgolint";
+    recipeFile = repoPath ./package.nix;
+  };
 
   rev = "f69fe736c07178de4ca43abff1ec86599acab672";
   src = ourPkgs.fetchFromGitHub {
@@ -19,11 +28,12 @@
     fetchSubmodules = true;
   };
 in
-  ourPkgs.tsgolint.overrideAttrs (_finalAttrs: _prev: {
+  (toolchain.overridePackage ourPkgs.tsgolint).overrideAttrs (_finalAttrs: prev: {
     version = vu.mkVersion {
       upstream = "0.25.0-unstable"; # newest tag base from Step 1
       inherit rev;
     };
     inherit src;
+    passthru = (prev.passthru or {}) // toolchain.passthru;
     vendorHash = "sha256-X+JPv4SLJXyF938H34ldDgK2XsuORbDxbWhJ0svYTAs=";
   })

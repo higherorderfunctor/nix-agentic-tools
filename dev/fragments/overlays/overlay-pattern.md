@@ -1,9 +1,10 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-02 — rev-tracked Go packages derive recipe-owned
-> floor literals before nix-update; release packages retain the ordered sidecar
-> extraction chain; rev-bumped packages regenerate committed sidecars through
-> `passthru.regenerateExtracted`.
+> **Last verified:** 2026-10-02 — Go and Rust compilers come only from the
+> locked overlays (`mkGoToolchain`, `mkRustPlatform`); rev-tracked Go packages
+> derive recipe-owned floor literals before nix-update; release packages retain
+> the ordered sidecar extraction chain; rev-bumped packages regenerate committed
+> sidecars through `passthru.regenerateExtracted`.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -220,7 +221,7 @@ Two worked examples in this tree, both moving an INPUT hash — cite either:
 
 - `packages/git-absorb/packages/ai/gitTools/git-absorb/package.nix` —
   `cargoHash`, via
-  `ourPkgs.git-absorb.override (_: { rustPlatform.buildRustPackage = … })`. It
+  `pkgs.git-absorb.override (_: { rustPlatform.buildRustPackage = … })`. It
   PREDATES bruno.
 - `packages/bruno/packages/ai/generic/bruno/package.nix` — `npmDepsHash`, via
   `ourPkgs.bruno.override (_: { buildNpmPackage = … })`.
@@ -253,9 +254,9 @@ the root 6.15.3 copy. `fetchNpmDeps` and the package build both consume this
 
 `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix` is a
 plain `overrideAttrs` and is CORRECT as one: it sets `cargoDeps` — an
-`ourPkgs.rustPlatform.importCargoLock` over the pinned src, i.e. the derived
-OUTPUT — and never `cargoHash`. Do not cite it as a builder-wrap example, and do
-not "fix" it into one.
+`rustPlatform.importCargoLock` (from `vu.mkRustPlatform`) over the pinned src,
+i.e. the derived OUTPUT — and never `cargoHash`. Do not cite it as a
+builder-wrap example, and do not "fix" it into one.
 
 One trap in the git-absorb spelling:
 `.override (_: { rustPlatform.buildRustPackage = … })` REPLACES the whole
@@ -462,8 +463,9 @@ to any versioned attribute family:
   so a version check pointed at the platform package would pin the attribute
   backwards.
 
-Rust releases (`fblog`, `rumdl`) instead pin a `fetchFromGitHub` tag and source
-hash inline, with
+Rust packages take `rustPlatform` from `vu.mkRustPlatform`; the recipe passes it
+through `.override` so the locked compiler builds them. Rust releases (`fblog`,
+`rumdl`) instead pin a `fetchFromGitHub` tag and source hash inline, with
 `cargoDeps = rustPlatform.fetchCargoVendor { inherit (finalAttrs) pname version src; hash = …; }`,
 as oxlint does; `pname` and `version` name the output so a stale hash cannot
 reuse the previous release's vendor set. Their owner update targets use
@@ -486,10 +488,11 @@ top-level Go build, and everything below still applies to it unchanged.
   produce is DESTROYED. `vendorHash` is exactly such a key.
 - Therefore each Go overlay reads `sources.vendorHash or lib.fakeHash` — the
   `or` covers the window between the sidecar write and the fix — and threads
-  `extraExtract = "${fixVendorHash}"` so `vu.mkGoVendorFix` runs immediately
-  after. The fixer builds `<attr>.goModules` through the flake's own `packages`
-  output (this repo has NO `legacyPackages`) and writes back the `got:` hash
-  from a `-go-modules` mismatch only.
+  `extraExtract = "${goUpdate.extract}"` so the vendor fixer built by
+  `vu.mkGoUpdateExtract` runs immediately after. The fixer builds
+  `<attr>.goModules` through the flake's own `packages` output (this repo has NO
+  `legacyPackages`) and writes back the `got:` hash from a `-go-modules`
+  mismatch only.
 - It is also `passthru.fixVendorHash`, because a nixpkgs or Go-toolchain bump
   can invalidate a vendor hash with no version bump at all — and `extraExtract`
   fires only on a VERSION bump, so nothing else would re-derive it.
@@ -518,25 +521,19 @@ which is the exact dependency nixpkgs' inherited Beads wrapper puts on `PATH`.
 `vu.mkGoUpdateExtract` emits the whole `extraExtract` chain in the one legal
 order, and every Go overlay calls it instead of composing fixers by hand:
 
-    [src fixer] -> floor fixer -> guard -> vendor fixer -> [extraAfter]
+    [src fixer] -> floor fixer -> vendor fixer -> [extraAfter]
 
-**Both edges are real, and the second one is the one that was missing.** The
-vendor fixer builds `goModules`, which COMPILES Go under the toolchain
-`goToolchainForFloor` picks from the sidecar's `goFloor` — and the floor fixer
-is what writes that key. `mkUpdateScript`'s `buildCandidate` rebuilds the
-sidecar from scratch (`jq -n '{version: $v}'`), so during `extraExtract` the
-floor is not stale, it is **absent**; it reads as `goFloorUnknown` ("0"), which
-every toolchain satisfies, so the selector returns `ourGo`. Until 2026-09-01 all
-seven chains hand-wrote `fixVendorHash` then `fixGoFloor`, so a release raising
-its go.mod floor past our pin died inside the vendor fixer with
-`go.mod requires go >= X` before the floor fixer that would have fixed it ever
-ran. glab 1.116.0 and oh-my-posh 31.1.x (both `go 1.27.0`, against `pkgs.go`
-1.26.7) were held back on every sweep for it.
-
-Note what is NOT a fix: preserving `goFloor` across the sidecar rewrite. The
-committed floors were 1.26.5 and 1.26.0 and **both still select 1.26.7**. Only
-deriving the floor from the fresh source before the vendor build changes the
-outcome. `checks/packaging/go-floor-extract-order.nix` gates the order, with a
+The floor fixer precedes the vendor fixer because `mkUpdateScript`'s
+`buildCandidate` rebuilds the sidecar from scratch (`jq -n '{version: $v}'`), so
+during `extraExtract` the floor is not stale, it is **absent**; it reads as
+`goFloorUnknown` ("0"), which `mkGoToolchain` accepts vacuously. The compiler no
+longer depends on the floor, so the order does not pick a toolchain; it makes a
+release whose go.mod outruns the locked Go stop at `mkGoToolchain`'s named throw
+instead of inside the vendor build with `go.mod requires go >= X`. Until
+2026-09-01 the hand-written vendor-before-floor order held glab and oh-my-posh
+back on every sweep, because the toolchain was then selected from the floor. It
+stayed floor-selected until `mkGoToolchain` switched to the newest locked
+release. `checks/packaging/go-floor-extract-order.nix` gates the order, with a
 positive control, and fails a package that carries `fixGoFloor` but no
 `goUpdateExtract` — i.e. one that went back to hand-rolling the chain.
 
@@ -547,8 +544,7 @@ keeps bruno off the plain prefetch path: nixpkgs' `glab` fetches with
 `COMMIT` and then strips `.git`, so the recorded hash is over the
 POST-`postFetch` tree and `nix-prefetch-url --unpack` cannot reproduce it. It
 pairs `platforms = {}` with a chain that restores `srcHash`, derives the floor,
-then restores `vendorHash` — all three edges forced, which is precisely what the
-old welded `mkGoSrcVendorFix` (src+vendor in ONE script) could not express.
+then restores `vendorHash`.
 
 `glab` also carries a `passthru.extracted` sidecar, so the SAME `extraExtract`
 runs `vu.mkExtractRegen` after the hash fixer. Its extract BUILDS `src` and
@@ -576,9 +572,9 @@ Semble's targets are its drift checks' `passthru.extracted`, which keeps the
 package byte-identical to upstream; git-branchless's is its own
 `passthru.extracted`.
 
-The hash fixers (`mkGoVendorFix`, `mkNpmDepsFix`, and the src-only fixer
-`mkGoUpdateExtract` builds internally) are one body — `vu.mkHashFix` —
-parameterized by an ordered list of `hashFixTargets` entries, each a
+The hash fixers (the vendor and src fixers `mkGoUpdateExtract` builds
+internally, and `mkNpmDepsFix`) are one body — `vu.mkHashFix` — parameterized by
+an ordered list of `hashFixTargets` entries, each a
 `(attrPath, drvPattern, key)` triple. Add a target to that attrset rather than
 open-coding a fourth `writeShellScript`; the derivation-name patterns are
 load-bearing (see `fodHashFixFn`) and a copy is how they drift.
@@ -607,60 +603,69 @@ Two traps, both measured on `oh-my-posh` while landing it:
   prefetch-and-write path, run the update script, and confirm the regenerated
   file is byte-identical.
 
-### Go toolchains are DERIVED from a floor, never pinned
+### Go and Rust toolchains come only from the locked overlays
 
-`vu.goToolchainForFloor` takes the package's own go.mod `go` directive (or a
-higher `toolchain` directive) as a FLOOR and returns the selected builder's Go
-whenever it satisfies the floor, otherwise the lowest `go-bin` RELEASE that does
-(`purpleclay/go-overlay`, applied inside `ourPkgs` the way `rust-overlay`
-already is), otherwise a throw naming package, floor and newest available.
+`lib/facets/repository.nix` applies `go-overlay` and `rust-overlay` once to the
+nixpkgs instance every owner recipe receives as `pkgs`. Recipes never
+instantiate nixpkgs themselves.
 
-Do not "clean up" a floor that currently resolves to our own `go` — it is the
-mechanism, not a leftover. And do not replace it with a pinned toolchain
-version: a pin cannot distinguish "still filling a real gap" from "nixpkgs
-caught up and this is now a DOWNGRADE". The sibling repo demonstrates the
-failure — it pins oh-my-posh to Go 1.26.0, a gap-filler when written and a
-downgrade against our pin's 1.26.5. Prereleases are filtered out of the
-candidate set on purpose: `go-bin.latest` is currently a prerelease, and Nix
-sorts `1.27rc1` ABOVE `1.27.0`. `checks/packaging/go-toolchain-floor.nix`
-exercises all three branches plus two positive controls, which is also what
-keeps the input from shipping dormant.
+`vu.mkGoToolchain {floor, pkgs, pname, recipeFile ? null}` returns
+`{go, buildGoModule, overridePackage, passthru}`. `go` is the newest STABLE
+release in the locked `go-bin.versions`; the floor only VALIDATES it (a throw
+names package, floor and the locked version when the locked overlay is too old,
+and another when it holds no stable release). It never falls back to nixpkgs'
+`go`, and no per-package version is chosen. Fix a throw with
+`nix flake update go-overlay`, not by pinning. Prereleases are filtered out on
+purpose: Nix sorts `1.27rc1` ABOVE `1.27.0`. `vu.mkRustPlatform {pkgs}` does the
+same for Rust (`rust-bin.stable.latest.default`). These two helpers are a
+recipe's only compiler source: never nixpkgs' own `go`, `rustc` or `cargo`.
+`checks/packaging/toolchain-provenance.nix` fails when a Go or Rust package
+lacks the locked compiler or carries a nixpkgs one.
 
-**ALL NINE exported Go packages carry the seam**, not just the two that once
-needed it — `beads`, `gh`, `glab`, `github-mcp`, `gluetun`,
-`mcp-language-server`, `oh-my-posh`, `otel-tui`, `pipelock`. Beads' nested
-paired Dolt derivation carries it too; its floor is checked by the Beads
-contract because the top-level discovery check intentionally enumerates exported
-packages. Scoping it to "whatever broke most recently" is how the same defect
-gets rediscovered per package: when `glab` broke, `gh` had ALREADY silently
-required Go >= 1.26.5 and would have been next.
+Do not "clean up" a recorded floor that the locked Go already satisfies: it is
+the validation input, and a stale-LOW floor weakens the check silently. Do not
+replace the helper with a pinned toolchain version either; a pin cannot tell
+"still filling a real gap" from "this is now a downgrade".
 
-Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain -> the
-selected builder's `.override` in one call. Its callback reads the builder's
-original `go` argument, so a versioned builder newer than `pkgs.go` is not
-downgraded. Do not re-expand that chain per package; that three-line repeat
-across three sites is what the helper replaced. `glab` is the one legitimate
-exception — it needs the TOOLCHAIN itself a second time, for its schema-dump
-extract (which compiles upstream's `internal/config` and is subject to the same
-floor), so it calls `goToolchainForFloor` directly and binds the result once.
+**EVERY owned Go package carries the seam** — `beads`, `gh`, `github-mcp`,
+`glab`, `gluetun`, `mcp-language-server`, `oh-my-posh`, `otel-tui`, `pipelock`,
+`tsgolint` — and so do Beads' nested paired Dolt derivation and kimchi's
+`proxy-helper`. Scoping it to "whatever broke most recently" is how the same
+defect gets rediscovered per package: when `glab` broke, `gh` had ALREADY
+silently required Go >= 1.26.5.
+
+Three ways to apply it:
+
+- `toolchain.overridePackage nixpkgsPackage` for a recipe that overrides a
+  nixpkgs Go package (`beads`, `gh`, `github-mcp`, `glab`,
+  `mcp-language-server`, `oh-my-posh`, `otel-tui`, `tsgolint`). It finds the
+  single `buildGo<N>Module` argument in the package's `.override` callback, so a
+  versioned constructor and its package-specific defaults survive while its
+  compiler changes. Zero or several builder arguments throw.
+- `toolchain.buildGoModule` when the recipe calls the builder directly
+  (`gluetun`, `kimchi`, `pipelock`).
+- `toolchain.go` when a derivation needs the compiler itself (`glab`'s
+  schema-dump extract, which compiles upstream's `internal/config`).
 
 **The toolchain is a BUILDER argument, so `.override` is the only seam that
 reaches it.** `overrideAttrs` cannot: `version`/`src`/`vendorHash` are attrs
 `buildGoModule` reads off `finalAttrs`, but `go` is consumed when the builder is
-called. Packages needing both do
-`(pkgs.<name>.override { buildGoModule = …; }).overrideAttrs (…)`, in that
-order. For `gh`, nixpkgs may pass `buildGoModule` or a versioned builder such as
-`buildGo127Module`; `vu.goBuilderArgName` selects the actual recipe argument
-from the `.override` callback. Passing the old name to a changed constructor
-fails evaluation and holds back the nixpkgs update. `gh`, `glab` and `otel-tui`
-all gained the `.override` layer for exactly this reason.
+called. Packages needing both apply `overridePackage` first, then
+`.overrideAttrs (…)`.
+
+`checks/packaging/go-toolchain-floor.nix` covers the selection, the throws and
+the builder contracts. `checks/packaging/toolchain-provenance.nix` walks every
+Go and Rust package (including nested Go helpers) and fails when its
+`nativeBuildInputs` do not hold the locked compiler. It also scans every
+derivation-valued `passthru` attr of every package, such as glab's `extracted`
+schema extractor, and fails when one carries a nixpkgs compiler.
 
 #### The floor itself is DERIVED, never hand-written
 
 A hand-maintained floor literal is still a pin. A stale-LOW floor is the
-dangerous direction: `versionAtLeast ourGo floor` returns `ourGo` and the seam
-**silently does nothing**. Both storage modes below are therefore written by
-automation from the pinned source.
+dangerous direction: validation passes vacuously and a source that outran the
+locked Go fails inside the Go build instead of at the named throw. Both storage
+modes below are therefore written by automation from the pinned source.
 
 So the floor is extracted from the pinned source's go.mod, by mechanism:
 
@@ -672,24 +677,26 @@ So the floor is extracted from the pinned source's go.mod, by mechanism:
   version bump and therefore also needs a standalone `passthru` escape hatch.
   Kimchi chains its pnpm dependency fixer after the Go stages; input-bump repair
   also discovers its `passthru.fixPnpmDepsHash`.
-- **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`)** —
-  `vu.mkGoFloorFix` writes the literal in the recipe. Each package exposes the
-  fixer through `passthru.fixGoFloor`; `update-pkg.sh` runs it after the rev and
+- **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`, `tsgolint`)** —
+  `vu.mkGoFloorFix` writes the literal in the recipe. Each package passes
+  `recipeFile` to `mkGoToolchain` and merges its `passthru`, which carries
+  `goFloor` and `fixGoFloor`; `update-pkg.sh` runs the fixer after the rev and
   source hash move, before nix-update derives `vendorHash`. It also runs when
   the rev is unchanged, so a stale literal self-heals on the next sweep.
 
 **ORDER: hash fixers first, then the floor.** `mkGoFloorFix` builds `.src`, so a
 package whose `srcHash` also lives in the sidecar (`glab`) must have that
-restored first. For `glab` the floor then precedes `mkExtractRegen`, because the
-schema dump compiles the module and needs the toolchain the fresh floor selects.
+restored first. For `glab` the vendor fixer then precedes `mkExtractRegen`,
+because the schema dump compiles the module against `.goModules`.
 
 Reading the floor is **silent by construction** — overlays read
-`sources.goFloor or vu.goFloorUnknown`, and `goFloorUnknown` (`"0"`) is
-satisfied by everything. That is deliberate and not a hole: `mkGoFloorFix` must
-evaluate the package to build its `.src`, so a `throw` on the missing key would
-deadlock the fixer that repairs it. `checks/packaging/go-floor-drift.nix` is the
-loud half — it compares every recorded floor against the real go.mod and names
-the package, actual requirement and automated fixer when it fails.
+`sources.goFloor or vu.goFloorUnknown`, and `goFloorUnknown` (`"0"`) passes
+`mkGoToolchain`'s validation vacuously. That is deliberate and not a hole:
+`mkGoFloorFix` must evaluate the package to build its `.src`, so a `throw` on
+the missing key would deadlock the fixer that repairs it.
+`checks/packaging/go-floor-drift.nix` is the loud half — it compares every
+recorded floor against the real go.mod and names the package, actual requirement
+and automated fixer when it fails.
 
 That check takes **NO REGISTRY**: it filters `self.packages.<system>` for
 `passthru.goFloor`. A list of Go packages would be a second source of truth a

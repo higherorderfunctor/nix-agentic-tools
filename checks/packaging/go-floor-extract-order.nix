@@ -5,29 +5,28 @@
 # 4x/day sweep from 2026-08-30 to 2026-09-01, and that was latent in five
 # more packages.
 #
-# THE BUG, in one paragraph. `mkUpdateScript`'s `buildCandidate` rebuilds
-# the sidecar from scratch (`jq -n '{version: $v}'`), so at the moment
-# `extraExtract` starts, `goFloor` is not stale — it is ABSENT. Every
-# overlay reads `sources.goFloor or vu.goFloorUnknown`, and
-# `goFloorUnknown` ("0") is satisfied by every toolchain, so
-# `goToolchainForFloor` returns `ourGo`. The vendor-hash fixer builds
-# `.goModules`, which COMPILES Go. So a release whose go.mod floor rose
-# past our pin died with `go: go.mod requires go >= 1.27.0 (running go
-# 1.26.7)` inside the vendor fixer — before the floor fixer that would
-# have selected go 1.27.0 ever ran. All seven overlays had hand-written
-# `extraExtract = "''${fixVendorHash}\n''${fixGoFloor}"`, and all seven
-# had it backwards.
+# THE ORDER. `mkUpdateScript`'s `buildCandidate` rebuilds the sidecar from
+# scratch (`jq -n '{version: $v}'`), so at the moment `extraExtract` starts,
+# `goFloor` is ABSENT and reads as `vu.goFloorUnknown` ("0"), which
+# `mkGoToolchain` accepts vacuously. The compiler no longer depends on the
+# floor (it is always the newest stable locked go-overlay release), but the
+# floor fixer must still run before the Go-compiling vendor fixer: a release
+# whose go.mod outruns the locked Go then stops at `mkGoToolchain`'s named
+# throw instead of dying inside the vendor build with `go.mod requires go >=
+# X`. Until 2026-09-01 the wrong vendor-before-floor order held glab and
+# oh-my-posh back on every sweep, because the toolchain was then selected from
+# the floor (it stayed floor-selected until mkGoToolchain picked the newest
+# locked release); the order stays gated because the chain is still generated
+# by `mkGoUpdateExtract`.
 #
 # WHY A STRUCTURAL CHECK AND NOT AN EXISTING ONE. Neither sibling can
 # catch this, and neither can be extended to:
 #
 #   - `checks/packaging/go-floor-drift.nix` compares the COMMITTED floor against the
-#     COMMITTED src's go.mod. Both failing packages were still pinned at
-#     their OLD versions precisely because the sweep held them back, so
-#     recorded == actual and it was legitimately green throughout. It
-#     gates the resulting STATE, never the order that produces it.
-#   - `checks/packaging/go-toolchain-floor.nix` is eval-only branch coverage of the
-#     selector with the gap SIMULATED. It never touches an updateScript.
+#     COMMITTED src's go.mod. It gates the resulting STATE, never the
+#     order that produces it.
+#   - `checks/packaging/go-toolchain-floor.nix` is eval-only coverage of the
+#     `mkGoToolchain` contract. It never touches an updateScript.
 #
 # WHAT IT READS. `passthru.goUpdateExtract` — the single flat script
 # `vu.mkGoUpdateExtract` emits. Reading that rather than
@@ -140,9 +139,9 @@
           echo "FAIL: $label: floor fixer (line $floor) does not precede the vendor fixer (line $vendor)." >&2
           echo "" >&2
           echo "The vendor fixer builds .goModules, which compiles Go. With the floor" >&2
-          echo "still unwritten the sidecar reads goFloorUnknown, goToolchainForFloor" >&2
-          echo "returns ourGo, and any release whose go.mod floor exceeds our pin fails" >&2
-          echo "with 'go.mod requires go >= X' before the floor fixer runs." >&2
+          echo "still unwritten the sidecar reads goFloorUnknown, so a release whose" >&2
+          echo "go.mod floor exceeds the locked Go fails with 'go.mod requires go >= X'" >&2
+          echo "instead of mkGoToolchain's named throw." >&2
           cat "$chain" >&2
           return 1
         fi

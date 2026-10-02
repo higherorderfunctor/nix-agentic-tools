@@ -22,6 +22,7 @@
       pkgs = import inputs.nixpkgs {
         inherit system;
         config.allowUnfree = true;
+        overlays = [inputs.go-overlay.overlays.default inputs.rust-overlay.overlays.default];
       };
       scopeArgs = {
         inherit gitToolExtraction repoPath;

@@ -41,6 +41,7 @@
   ...
 }: let
   ourPkgs = pkgs;
+  rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
   gbSrc = inputs.git-branchless;
   extraction = gitToolExtraction {pkgs = ourPkgs;};
 
@@ -62,10 +63,10 @@
     extractDir = ../../../../extract;
   };
 
-  package = ourPkgs.git-branchless.overrideAttrs (prev: {
+  package = (ourPkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev: {
     name = "git-branchless";
     src = gbSrc;
-    cargoDeps = ourPkgs.rustPlatform.importCargoLock {
+    cargoDeps = rustPlatform.importCargoLock {
       lockFile = gbSrc + "/Cargo.lock";
     };
     patches =

@@ -1,30 +1,28 @@
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.go-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchzip lib;
+  inherit (pkgs) fetchzip lib;
   vu = packageLib;
   pname = "pipelock";
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
   sourcesFile = repoPath ../../../../sources.json;
   goUpdate = vu.mkGoUpdateExtract {
     attr = pname;
-    pkgs = ourPkgs;
+    inherit pkgs;
     inherit pname sourcesFile;
   };
   goFloor = sources.goFloor or vu.goFloorUnknown;
-  buildGoModule = vu.mkGoBuilder {
-    floor = goFloor;
-    pkgs = ourPkgs;
-    inherit pname;
-  };
+  inherit
+    (vu.mkGoToolchain {
+      floor = goFloor;
+      inherit pkgs;
+      inherit pname;
+    })
+    buildGoModule
+    ;
 in
   buildGoModule {
     inherit pname;
@@ -54,7 +52,7 @@ in
       goUpdateExtract = goUpdate.extract;
       updateScript = vu.ghArchiveUpdateScript {
         extraExtract = "${goUpdate.extract}";
-        pkgs = ourPkgs;
+        inherit pkgs;
         inherit pname sourcesFile;
         repo = "luckyPipewrench/pipelock";
       };

@@ -86,7 +86,7 @@ the template — Go, sidecar, grouped subtree), not a fresh derivation:
 - `overlays/dev-tools/beads.nix` — `{inputs, final, ...}`, `ourPkgs`
   instantiated from `inputs.nixpkgs` (cache-hit parity: all build inputs from
   `ourPkgs`, never `final`/`prev`), `vu = import ../lib.nix`. Two seams:
-  `.override { buildGoModule = vu.mkGoBuilder …; }` for the Go toolchain floor
+  `(vu.mkGoToolchain { … }).overridePackage` for the locked Go toolchain
   (mandatory — beads becomes the eighth Go package), then `.overrideAttrs` for
   `version`/`src`/`vendorHash`, merging `passthru` (never replacing — Go
   builders hang `goModules`/`overrideModAttrs` there) and exposing
