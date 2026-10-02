@@ -126,8 +126,7 @@
   # never the consumer's `final`. `pkgs.stdenv.hostPlatform.system` is the
   # only thing read from the consumer — see
   # dev/fragments/overlays/overlay-pattern.md.
-  ourPkgs = pkgs;
-  inherit (ourPkgs) lib;
+  inherit (pkgs) lib;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
@@ -139,14 +138,14 @@
 
   fixNpmDepsHash = vu.mkNpmDepsFix {
     attr = "bruno";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "bruno";
     inherit sourcesFile;
   };
 in
-  ourPkgs.bruno.override (_: {
+  pkgs.bruno.override (_: {
     buildNpmPackage = args:
-      ourPkgs.buildNpmPackage (finalAttrs: let
+      pkgs.buildNpmPackage (finalAttrs: let
         upstream = (lib.toFunction args) finalAttrs;
         needsBrunoSqliteLifecycleShim =
           lib.versionAtLeast version "4.1.0"
@@ -169,7 +168,7 @@ in
             [version]
             upstream.postPatch
             + lib.optionalString (lib.elem version ["4.2.0" "4.2.1"]) ''
-              if ! ${ourPkgs.jq}/bin/jq -e '
+              if ! ${pkgs.jq}/bin/jq -e '
                 . as $lock
                 | .packages["node_modules/qs"].version == "6.15.3"
                   and (["bruno-app", "bruno-cli", "bruno-electron"]
@@ -181,16 +180,16 @@ in
                 exit 1
               fi
               for workspace in bruno-app bruno-cli bruno-electron; do
-                if ! ${ourPkgs.jq}/bin/jq -e '.dependencies.qs == "^6.15.2"' "packages/$workspace/package.json" >/dev/null; then
+                if ! ${pkgs.jq}/bin/jq -e '.dependencies.qs == "^6.15.2"' "packages/$workspace/package.json" >/dev/null; then
                   echo "bruno ${version}: unexpected qs requirement in $workspace" >&2
                   exit 1
                 fi
               done
-              ${ourPkgs.jq}/bin/jq 'del(
+              ${pkgs.jq}/bin/jq 'del(
                 .packages["packages/bruno-app/node_modules/qs"],
                 .packages["packages/bruno-cli/node_modules/qs"],
                 .packages["packages/bruno-electron/node_modules/qs"]
-              )' package-lock.json | ${ourPkgs.moreutils}/bin/sponge package-lock.json
+              )' package-lock.json | ${pkgs.moreutils}/bin/sponge package-lock.json
             ''
             + lib.optionalString needsBrunoSqliteLifecycleShim ''
               substituteInPlace packages/bruno-sqlite/package.json \
@@ -217,12 +216,12 @@ in
               inherit fixNpmDepsHash;
               updateScript = vu.mkUpdateScript {
                 extraExtract = "${fixNpmDepsHash}";
-                pkgs = ourPkgs;
+                inherit pkgs;
                 platforms = {};
                 pname = "bruno";
                 inherit sourcesFile;
                 versionCheck.cmd = vu.ghLatestVersionCmd {
-                  pkgs = ourPkgs;
+                  inherit pkgs;
                   repo = "usebruno/bruno";
                 };
               };

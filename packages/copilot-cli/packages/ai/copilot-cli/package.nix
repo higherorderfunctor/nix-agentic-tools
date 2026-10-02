@@ -27,15 +27,14 @@
   repoPath,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl lib makeWrapper autoPatchelfHook stdenv;
-  inherit (ourPkgs.stdenv.hostPlatform) system;
+  inherit (pkgs) fetchurl lib makeWrapper autoPatchelfHook stdenv;
+  inherit (pkgs.stdenv.hostPlatform) system;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   platformSrc = sources.${system} or (throw "copilot-cli: unsupported system ${system}");
 in
-  ourPkgs.stdenv.mkDerivation {
+  pkgs.stdenv.mkDerivation {
     pname = "copilot-cli";
     inherit (sources) version;
     src = fetchurl {inherit (platformSrc) url hash;};
@@ -72,14 +71,14 @@ in
 
         pname = "copilot-cli";
         versionCheck.cmd = vu.ghLatestVersionCmd {
-          pkgs = ourPkgs;
+          inherit pkgs;
           repo = "github/copilot-cli";
         };
         platforms = {
           "x86_64-linux" = ver: "https://github.com/github/copilot-cli/releases/download/v${ver}/copilot-linux-x64.tar.gz";
           "aarch64-darwin" = ver: "https://github.com/github/copilot-cli/releases/download/v${ver}/copilot-darwin-arm64.tar.gz";
         };
-        pkgs = ourPkgs;
+        inherit pkgs;
       };
     };
 

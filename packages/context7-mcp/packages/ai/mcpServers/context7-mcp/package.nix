@@ -4,25 +4,24 @@
 # finalAttrs.{pname, version, src}. We override version + src +
 # pnpmDeps hash; the fixed-point re-derives the rest.
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
+# Uses the injected, overlay-applied `pkgs` for cache-hit parity
 # (see dev/fragments/overlays/overlay-pattern.md).
 {
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
   vu = packageLib;
 
   rev = "bfa02ea67b5707fe0e0a673faa49d0f50b28c80b";
-  src = ourPkgs.fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "upstash";
     repo = "context7";
     inherit rev;
     hash = "sha256-5gckAd+rfGafB9KZPCS1jJqXjA2vF0VXoGHJngDFtUQ=";
   };
 in
-  ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: let
+  pkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: let
     # upstream: readPackageJsonVersion @ packages/mcp/package.json
     upstreamVersion = "4.1.1";
   in {
@@ -45,9 +44,9 @@ in
     preVersionCheck = ''
       version="${upstreamVersion}"
     '';
-    pnpmDeps = ourPkgs.fetchPnpmDeps {
+    pnpmDeps = pkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
-      pnpm = ourPkgs.pnpm_10;
+      pnpm = pkgs.pnpm_10;
       fetcherVersion = 3;
       hash = "sha256-eRGHc8s4rrXt793U+gBjJ0Orf78INvZ87S5GU6f1iWE=";
     };

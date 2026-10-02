@@ -53,7 +53,7 @@
 
     # Simulate a consumer rewriting this flake's nixpkgs input with `follows`.
     # Unlike consumerPkgs above, the overlay itself sees nixpkgs-test as its own
-    # pin, so its deliberately isolated `ourPkgs` builds move with the consumer.
+    # pin, so its recipes' injected `pkgs` (built from that pin) move with the consumer.
     followedOverlay =
       (import ../../lib/facets/repository.nix {
         inputs = inputs // {nixpkgs = inputs.nixpkgs-test;};
@@ -79,7 +79,7 @@
     # The symlinkJoin is built by whichever pkgs set is doing the eval, so
     # its outPath naturally differs between our pin and the consumer pin.
     # But that wrapper is a small symlink farm — the heavy real build lives
-    # at `drv.paths[0]`, which IS built from `ourPkgs` and must stay
+    # at `drv.paths[0]`, which IS built from the injected `pkgs` and must stay
     # byte-identical for cachix to serve consumers. Cache-hit parity
     # applies to the INNER path for wrapped derivations.
     realOutPath = drv:

@@ -1,6 +1,6 @@
 # cspell:ignore andrewbranch Funtar
 # oxlint — HEAD-tracked JS/TS linter with type-aware (tsgo) support, pinned
-# against `ourPkgs` for cache-hit parity. Thin override of nixpkgs' oxlint:
+# against `pkgs` for cache-hit parity. Thin override of nixpkgs' oxlint:
 # inject our sibling tsgolint via .override (so --type-aware uses our HEAD
 # backend, kept in lockstep), then overrideAttrs to swap src + the three
 # hashes (src, cargoDeps, pnpmDeps). The pnpm/JS-plugin build, OXC_VERSION,
@@ -12,13 +12,12 @@
   repoPath,
   ...
 }: let
-  ourPkgs = pkgs;
   rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
   vu = packageLib;
   tsgolint = import ../../../../../tsgolint/packages/ai/devTools/tsgolint/package.nix {inherit inputs packageLib pkgs repoPath;};
 
   rev = "7f65b757df7c3225320d8f7e051e64873f80f988";
-  unpatchedSrc = ourPkgs.fetchFromGitHub {
+  unpatchedSrc = pkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
@@ -33,7 +32,7 @@
   verifyNapiPatch = ''
     node ${../../../../src/verify-napi-patch.mjs} node_modules/.pnpm
   '';
-  src = ourPkgs.applyPatches {
+  src = pkgs.applyPatches {
     src = unpatchedSrc;
     postPatch = ''
       if [ -e ${napiPatchPath} ]; then
@@ -57,7 +56,7 @@
     inherit rev;
   };
 in
-  (ourPkgs.oxlint.override {
+  (pkgs.oxlint.override {
     inherit rustPlatform tsgolint;
     inherit (rustPlatform.rust) cargo rustc;
   }).overrideAttrs (finalAttrs: prev: {
@@ -66,9 +65,9 @@ in
       inherit (finalAttrs) pname version src;
       hash = "sha256-BFVbX5wOTJculA0w5sCOHryufW326WceIcR3w/EAJVs=";
     };
-    pnpmDeps = ourPkgs.fetchPnpmDeps {
+    pnpmDeps = pkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
-      pnpm = ourPkgs.pnpm_11;
+      pnpm = pkgs.pnpm_11;
       fetcherVersion = 4;
       postInstall = verifyNapiPatch;
       hash = "sha256-1uzmAVPYHBG4KLvTibBgeGgvixwO79fwD+IzahL3Xuo=";
@@ -95,7 +94,7 @@ in
       map
       (input:
         if (input.pname or "") == "pnpm"
-        then ourPkgs.pnpm_11
+        then pkgs.pnpm_11
         else input)
       (prev.nativeBuildInputs or []);
     # Strip versionCheckHook: `oxlint --version` prints the bare upstream

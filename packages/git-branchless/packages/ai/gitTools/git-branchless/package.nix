@@ -1,12 +1,12 @@
 # git-branchless — HEAD source + importCargoLock, pinned against
-# `ourPkgs` (this repo's nixpkgs) for cache-hit parity.
+# `pkgs` (this repo's nixpkgs) for cache-hit parity.
 #
 # The upstream flake (github:arxanas/git-branchless) provides an
 # overlay that does the `overrideAttrs` + `importCargoLock` dance
 # against `final` — the consumer's pkgs. That binds build inputs
 # to the consumer's nixpkgs pin, so consumers with a different
 # pin cache-miss against `nix-agentic-tools.cachix.org`. We
-# re-implement the same overrides here against `ourPkgs` so the
+# re-implement the same overrides here against `pkgs` so the
 # derivation hash only depends on this repo's pin.
 #
 # Local adjustments preserved from the previous thin-wrapper
@@ -40,10 +40,9 @@
   repoPath,
   ...
 }: let
-  ourPkgs = pkgs;
   rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
   gbSrc = inputs.git-branchless;
-  extraction = gitToolExtraction {pkgs = ourPkgs;};
+  extraction = gitToolExtraction {inherit pkgs;};
 
   # Unpack + patch of the package's own `src` and `patches`: the
   # checked-out-branch patch adds a key
@@ -63,7 +62,7 @@
     extractDir = ../../../../extract;
   };
 
-  package = (ourPkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev: {
+  package = (pkgs.git-branchless.override {inherit rustPlatform;}).overrideAttrs (prev: {
     name = "git-branchless";
     src = gbSrc;
     cargoDeps = rustPlatform.importCargoLock {
@@ -89,7 +88,7 @@
         # refreshed sidecar.
         regenerateExtracted = packageLib.mkRegenerateExtracted {
           name = "git-branchless";
-          pkgs = ourPkgs;
+          inherit pkgs;
           targets = [
             {
               attr = "git-branchless";

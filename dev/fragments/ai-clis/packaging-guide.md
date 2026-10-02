@@ -204,7 +204,7 @@ derivation from scratch. This inherits upstream build logic (install phases,
 meta, dependencies) while pinning to inline versions and per-platform sources:
 
 ```nix
-ourPkgs.<package>.overrideAttrs (_: {
+pkgs.<package>.overrideAttrs (_: {
   inherit (sources) version;
   src = fetchurl { inherit (platformSrc) url hash; };
 })
@@ -221,15 +221,15 @@ of three environments, now one shared environment); the public derivation has no
 `src`, and its `buildCommand` never reaches the unwrapped package's
 `fixupPhase`, so the pin AND the `postFixup` both evaporated while the build
 stayed green. `packages/kiro-cli/packages/ai/kiro-cli/package.nix` therefore
-feature-detects `ourPkgs ? kiro-cli-unwrapped`, overrides the unwrapped
-derivation, and hands the result back to upstream's wrapper via `.override`. Its
-public passthru also exposes `withFhsPayload` so module configuration that must
-be visible inside the FHS root can use that same upstream expression. The public
-package-selection contract is topology-stable: `unwrapped` always names the
-direct payload, and `kiroFhsSandbox` says whether selecting it actually removes
-an FHS layer (`false` on darwin and pre-split nixpkgs). `useFhsSandbox = false`
-selects that payload explicitly instead of changing the public package's default
-meaning.
+feature-detects `pkgs ? kiro-cli-unwrapped` on the injected `pkgs`, overrides
+the unwrapped derivation, and hands the result back to upstream's wrapper via
+`.override`. Its public passthru also exposes `withFhsPayload` so module
+configuration that must be visible inside the FHS root can use that same
+upstream expression. The public package-selection contract is topology-stable:
+`unwrapped` always names the direct payload, and `kiroFhsSandbox` says whether
+selecting it actually removes an FHS layer (`false` on darwin and pre-split
+nixpkgs). `useFhsSandbox = false` selects that payload explicitly instead of
+changing the public package's default meaning.
 
 Read the "When the attribute stops being the derivation" section of the
 overlay-pattern fragment before adding another `overrideAttrs` package — it

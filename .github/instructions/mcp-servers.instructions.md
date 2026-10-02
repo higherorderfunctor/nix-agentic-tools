@@ -154,7 +154,7 @@ No sidecar files or generated sources — everything is visible in one place:
 ```nix
 # packages/context7-mcp/packages/ai/mcpServers/context7-mcp/package.nix
 rev = "c31528d...";
-src = ourPkgs.fetchFromGitHub {
+src = pkgs.fetchFromGitHub {
   owner = "upstash";
   repo = "context7";
   inherit rev;

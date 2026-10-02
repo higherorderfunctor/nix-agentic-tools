@@ -82,9 +82,9 @@ for majors of one package; this is the general form.
 Semble is the external pinned-package exception to the local-build patterns
 below. `packages/semble/packages/ai/semble/package.nix` returns
 `inputs.llm-agents.packages.${system}.semble` directly. It does not apply the
-input's `overlays.shared-nixpkgs`, rebuild with this repository's `ourPkgs`, or
-call `overrideAttrs`; any of those would replace the upstream cache identity
-that this export promises to preserve. A plain attrset extension adds
+input's `overlays.shared-nixpkgs`, rebuild against this repository's injected
+`pkgs`, or call `overrideAttrs`; any of those would replace the upstream cache
+identity that this export promises to preserve. A plain attrset extension adds
 `passthru.updateFlakeInput = "llm-agents"`; the reverse update-target check
 validates that named input exists and treats its normal input bump as Semble's
 update path without changing the upstream `drvPath` or `outPath`.
@@ -119,16 +119,16 @@ repository-local `kiro-memory-distiller`, was removed on 2026-09-01, so
 
 Most supporting entries (`btop`, `bun`, `fblog`, `gh`, `glab`, `oh-my-posh`,
 `otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations but
-`ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only `version`,
-`src`, `passthru.updateScript` and — for the Go ones — `vendorHash`. `gluetun`
-and `pipelock` are the exceptions, and only because nixpkgs does not carry
-either; `bruno` is deliberately absent from that list because `overrideAttrs`
-cannot express its override at all (see the `.override` section below). `glab`
-IS on the list and belongs there — `buildGoModule` reads `vendorHash` and `src`
-off `finalAttrs`, so composing on the output works — even though it shares
-bruno's SIDECAR contract, because that contract is about where the hash comes
-from, not about which override seam is correct. Two rules that are not obvious
-from reading such a file:
+`pkgs.<name>.overrideAttrs` over the nixpkgs one, moving only `version`, `src`,
+`passthru.updateScript` and — for the Go ones — `vendorHash`. `gluetun` and
+`pipelock` are the exceptions, and only because nixpkgs does not carry either;
+`bruno` is deliberately absent from that list because `overrideAttrs` cannot
+express its override at all (see the `.override` section below). `glab` IS on
+the list and belongs there — `buildGoModule` reads `vendorHash` and `src` off
+`finalAttrs`, so composing on the output works — even though it shares bruno's
+SIDECAR contract, because that contract is about where the hash comes from, not
+about which override seam is correct. Two rules that are not obvious from
+reading such a file:
 
 - **Namespaced-only.** The overlay writes `pkgs.ai.<group>.<name>` and NEVER a
   top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would turn this from an
@@ -224,7 +224,7 @@ Two worked examples in this tree, both moving an INPUT hash — cite either:
   `pkgs.git-absorb.override (_: { rustPlatform.buildRustPackage = … })`. It
   PREDATES bruno.
 - `packages/bruno/packages/ai/generic/bruno/package.nix` — `npmDepsHash`, via
-  `ourPkgs.bruno.override (_: { buildNpmPackage = … })`.
+  `pkgs.bruno.override (_: { buildNpmPackage = … })`.
 
 Bruno 4.1.0 adds a second builder-ordering constraint to that same wrapper. Its
 new `packages/bruno-sqlite` workspace declares `prepare = "npm run generate"`;
@@ -277,7 +277,7 @@ nixpkgs f13ff45a (2026-08) did exactly that to `kiro-cli`. The real
 extracting a generic-glibc `bun` at runtime). nixpkgs 9ddfd8a later consolidated
 those into one shared FHS environment behind three thin command wrappers. Both
 topologies leave the source-owning derivation under `kiro-cli-unwrapped`. Our
-overlay kept calling `ourPkgs.kiro-cli.overrideAttrs`, and **everything it set
+overlay kept calling `pkgs.kiro-cli.overrideAttrs`, and **everything it set
 became a no-op**:
 
 - `src` / `version` — a `symlinkJoin` has neither attr, so the nightly pin was
@@ -294,17 +294,17 @@ nothing we wanted to change. The fix is to re-point the BASE:
 
 ```nix
 # packages/kiro-cli/packages/ai/kiro-cli/package.nix
-hasUnwrapped = ourPkgs ? kiro-cli-unwrapped;
+hasUnwrapped = pkgs ? kiro-cli-unwrapped;
 basePackage =
-  if hasUnwrapped then ourPkgs.kiro-cli-unwrapped else ourPkgs.kiro-cli;
+  if hasUnwrapped then pkgs.kiro-cli-unwrapped else pkgs.kiro-cli;
 # … pinned = basePackage.overrideAttrs (…) …
 # then hand it back to upstream's wrapper, preserving the FHS sandbox and the
 # route in both directions (metadata/name handling omitted here):
 rewrap = payload:
-  (ourPkgs.kiro-cli.override {kiro-cli-unwrapped = payload;}).overrideAttrs
+  (pkgs.kiro-cli.override {kiro-cli-unwrapped = payload;}).overrideAttrs
   (attrs: {
     passthru = (attrs.passthru or {}) // pinned.passthru // {
-      kiroFhsSandbox = ourPkgs.stdenv.hostPlatform.isLinux;
+      kiroFhsSandbox = pkgs.stdenv.hostPlatform.isLinux;
       unwrapped = pinned;
       withFhsPayload = rewrap;
     };

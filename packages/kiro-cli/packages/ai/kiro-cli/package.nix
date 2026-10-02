@@ -9,9 +9,8 @@
   repoPath,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl makeWrapper;
-  inherit (ourPkgs.stdenv.hostPlatform) system;
+  inherit (pkgs) fetchurl makeWrapper;
+  inherit (pkgs.stdenv.hostPlatform) system;
   vu = packageLib // import ../../../lib/packaging.nix;
 
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
@@ -20,22 +19,22 @@
   # Models can ship without a CLI release. Run this on every update sweep,
   # outside mkUpdateScript's version-equality early exit. Only the update job
   # accesses the network; build-time extraction consumes the committed snapshot.
-  refreshModels = ourPkgs.writeShellScript "refresh-kiro-models" ''
+  refreshModels = pkgs.writeShellScript "refresh-kiro-models" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    modelTmp=$(${ourPkgs.coreutils}/bin/mktemp -d)
-    trap '${ourPkgs.coreutils}/bin/rm -rf "$modelTmp"' EXIT
-    modelSource=$(${ourPkgs.jq}/bin/jq -er '.source' ${repoPath ../../../model-catalog.json})
-    ${ourPkgs.curl}/bin/curl --fail --silent --show-error --location \
+    modelTmp=$(${pkgs.coreutils}/bin/mktemp -d)
+    trap '${pkgs.coreutils}/bin/rm -rf "$modelTmp"' EXIT
+    modelSource=$(${pkgs.jq}/bin/jq -er '.source' ${repoPath ../../../model-catalog.json})
+    ${pkgs.curl}/bin/curl --fail --silent --show-error --location \
       --retry 2 --max-time 60 "$modelSource" -o "$modelTmp/models.md"
-    ${ourPkgs.python3}/bin/python3 ${../../../extract/models.py} capture \
+    ${pkgs.python3}/bin/python3 ${../../../extract/models.py} capture \
       "$modelTmp/models.md" > "$modelTmp/catalog.json"
-    ${ourPkgs.coreutils}/bin/cp "$modelTmp/catalog.json" ${repoPath ../../../model-catalog.json}
-    ${ourPkgs.nix}/bin/nix fmt -- ${repoPath ../../../model-catalog.json}
+    ${pkgs.coreutils}/bin/cp "$modelTmp/catalog.json" ${repoPath ../../../model-catalog.json}
+    ${pkgs.nix}/bin/nix fmt -- ${repoPath ../../../model-catalog.json}
     ${vu.mkExtractRegen {
       attr = "kiro-cli";
       dest = repoPath ../../../extracted.json;
-      pkgs = ourPkgs;
+      inherit pkgs;
     }}
   '';
 
@@ -43,7 +42,7 @@
   # third platform picks up whichever archive form it publishes instead of
   # silently inheriting the linux suffix.
   srcExt =
-    if ourPkgs.lib.hasSuffix ".dmg" platformSrc.url
+    if pkgs.lib.hasSuffix ".dmg" platformSrc.url
     then "dmg"
     else "tar.gz";
   # Parameterized on the rollout features to unlock, and self-referential via
@@ -61,7 +60,7 @@
   # for a semantically identical set — two redundant ~556 MB builds. Doing it
   # here covers every caller of `withRolloutFeatures`, not just the module.
   # `[]` sorts to `[]`, so the default derivation is untouched.
-  canonFeatures = fs: ourPkgs.lib.sort (a: b: a < b) (ourPkgs.lib.unique fs);
+  canonFeatures = fs: pkgs.lib.sort (a: b: a < b) (pkgs.lib.unique fs);
 
   # nixpkgs SPLIT this package (f13ff45a, 2026-08): the real `mkDerivation`
   # moved to `kiro-cli-unwrapped`, and `kiro-cli` became a public FHS wrapper
@@ -96,11 +95,11 @@
   # Feature-detected on the ATTRIBUTE, never gated on a nixpkgs version, so one
   # expression is correct on both sides of the split and the branch retires
   # itself when the floor moves past it.
-  hasUnwrapped = ourPkgs ? kiro-cli-unwrapped;
+  hasUnwrapped = pkgs ? kiro-cli-unwrapped;
   basePackage =
     if hasUnwrapped
-    then ourPkgs.kiro-cli-unwrapped
-    else ourPkgs.kiro-cli;
+    then pkgs.kiro-cli-unwrapped
+    else pkgs.kiro-cli;
 
   mkKiroCliWithPayload = rawFeatures: fhsPayload: let
     rolloutFeatures = canonFeatures rawFeatures;
@@ -115,7 +114,7 @@
     # Consumed only inside `optionalAttrs (rolloutFeatures != [])` blocks:
     # renaming the DEFAULT derivation would fork its drvPath for every
     # consumer and cost the cache hit the `[]` path exists to preserve.
-    rolloutSuffix = "rollout-" + ourPkgs.lib.concatStringsSep "-" rolloutFeatures;
+    rolloutSuffix = "rollout-" + pkgs.lib.concatStringsSep "-" rolloutFeatures;
 
     pinned = basePackage.overrideAttrs (finalAttrs: attrs:
       {
@@ -157,7 +156,7 @@
           # path ever moves, the wrapper would build fine and discovery would
           # silently regress to the DMG fallback again.
           + (
-            if ourPkgs.stdenv.hostPlatform.isDarwin
+            if pkgs.stdenv.hostPlatform.isDarwin
             then ''
               test -e "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli" || {
                 echo "kiro-cli: .app bundle layout moved; darwin argv0 fix needs updating" >&2
@@ -177,10 +176,10 @@
           # content, so it is indifferent to how many times wrappers have renamed
           # it, and running last means it sees the final layout instead of
           # guessing at it.
-          + ourPkgs.lib.optionalString (rolloutFeatures != [])
+          + pkgs.lib.optionalString (rolloutFeatures != [])
           (vu.mkKiroRolloutPatch {
             features = rolloutFeatures;
-            pkgs = ourPkgs;
+            inherit pkgs;
           });
 
         # Preserve nixpkgs' upstream passthru (repo convention — nix-standards.md) and
@@ -194,15 +193,15 @@
                 sourcesFile = repoPath ../../../sources.json;
 
                 pname = "kiro-cli";
-                versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | ${ourPkgs.jq}/bin/jq -r '.version'";
+                versionCheck.cmd = "${pkgs.curl}/bin/curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | ${pkgs.jq}/bin/jq -r '.version'";
                 platforms = {
                   "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
                   "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/Kiro%20CLI.dmg";
                 };
-                pkgs = ourPkgs;
+                inherit pkgs;
               };
             in
-              ourPkgs.writeShellScript "update-kiro-cli" ''
+              pkgs.writeShellScript "update-kiro-cli" ''
                 set -euETo pipefail
                 shopt -s inherit_errexit 2>/dev/null || :
                 ${updateBinary}
@@ -220,10 +219,10 @@
             # It is a package ROOT, not a file: the chat binary is resolved
             # under it by CONTENT inside the builder, so no wrapper name appears
             # anywhere on this path and the eval-time IFD profile is unchanged.
-            extracted = ourPkgs.runCommandLocal "kiro-cli-extracted.json" {} (
+            extracted = pkgs.runCommandLocal "kiro-cli-extracted.json" {} (
               vu.mkKiroExtract {
                 dest = "$out";
-                pkgs = ourPkgs;
+                inherit pkgs;
                 root = "${finalAttrs.finalPackage}";
               }
             );
@@ -257,7 +256,7 @@
       # because both compare two evaluations that each already contain the
       # change. Diffing `.#kiro-cli.drvPath` against origin/main is what caught
       # it, and is the check to re-run when touching this attrset.
-      // ourPkgs.lib.optionalAttrs (rolloutFeatures != []) {
+      // pkgs.lib.optionalAttrs (rolloutFeatures != []) {
         # This is the 621 MiB proprietary ELF — the derivation the rollout
         # patch actually rewrites, and the one whose leak prompted this. It
         # is also the ONLY layer the rename reaches on linux: upstream's
@@ -284,7 +283,7 @@
       # than replacing it: the join carries `unwrapped` and `tests`, and
       # dropping `unwrapped` would take away the only supported route from the
       # public attribute back to the real binaries.
-      (ourPkgs.kiro-cli.override {
+      (pkgs.kiro-cli.override {
         kiro-cli-unwrapped =
           if fhsPayload == null
           then pinned
@@ -312,7 +311,7 @@
               # `unwrapped` without the marker is treated conservatively as an
               # FHS wrapper and must also expose `withFhsPayload` before
               # chat-only configuration is accepted.
-              kiroFhsSandbox = ourPkgs.stdenv.hostPlatform.isLinux;
+              kiroFhsSandbox = pkgs.stdenv.hostPlatform.isLinux;
               unwrapped = pinned;
             };
         }
@@ -334,7 +333,7 @@
         # "overridden with `version` but not `src`" lint — twice per eval, on
         # the REQUIRED `build (aarch64-darwin, macos-latest)` leg, the moment
         # the nixpkgs bump lands.
-        // ourPkgs.lib.optionalAttrs (!(joinAttrs ? version)) {
+        // pkgs.lib.optionalAttrs (!(joinAttrs ? version)) {
           inherit (sources) version;
         }
         # Rename the EXPORTED package too, so a patched build is identifiable
@@ -350,8 +349,8 @@
         # hardcoded `pname` would otherwise CLOBBER the rename applied to
         # `pinned` above, leaving darwin's 1.22 GiB output indistinguishable.
         # Ours runs last, so it wins.
-        // ourPkgs.lib.optionalAttrs (rolloutFeatures != []) (
-          if ourPkgs.stdenv.hostPlatform.isDarwin
+        // pkgs.lib.optionalAttrs (rolloutFeatures != []) (
+          if pkgs.stdenv.hostPlatform.isDarwin
           then {pname = "kiro-cli-${rolloutSuffix}";}
           else {name = "kiro-cli-${rolloutSuffix}-${sources.version}";}
         ))
