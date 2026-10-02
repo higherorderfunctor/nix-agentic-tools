@@ -10,6 +10,7 @@
   inputs,
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   # go-overlay is applied INSIDE this import so `go-bin` resolves against
@@ -29,11 +30,16 @@
     hash = "sha256-INyzT/8UyJfg1PW5+PqZkIy/MZrDYykql0rD2Sl97Gg=";
   };
 
-  # TRUNK-TRACKED — literal rather than a sidecar key, for the same
-  # reason github-mcp.nix carries one: no sidecar, and `nix-update` owns
-  # the rev bump, so there is no repo-owned script to hook a rewrite
-  # into. `checks/packaging/go-floor-drift.nix` verifies it against this `src`.
+  # TRUNK-TRACKED, so the floor is a recipe literal rather than a sidecar key.
+  # The rev-bump worker runs fixGoFloor after replacing rev + src hash and before
+  # nix-update derives vendorHash, keeping the builder synchronized with go.mod.
   goFloor = "1.24.0";
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "mcp-language-server";
+    pkgs = ourPkgs;
+    pname = "mcp-language-server";
+    recipeFile = repoPath ./package.nix;
+  };
 in
   # The toolchain is a BUILDER argument, so `.override` is the only seam
   # that reaches it; the attrs below still compose with `overrideAttrs`.
@@ -56,5 +62,5 @@ in
 
     # Merge, never replace: buildGoModule hangs `goModules` and
     # `overrideModAttrs` here. See the nix-standards fragment.
-    passthru = (old.passthru or {}) // {inherit goFloor;};
+    passthru = (old.passthru or {}) // {inherit fixGoFloor goFloor;};
   })

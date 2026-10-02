@@ -144,6 +144,36 @@
       && !(lib.elem "--use-update-script" (updateTargets.${name}.flags or [])))
     targetPackageNames;
 
+    # Every update target participating in Go-floor drift detection must expose
+    # the writer for its recorded floor. Release targets invoke it through
+    # mkGoUpdateExtract; rev-tracked targets are refreshed by update-pkg.sh
+    # before nix-update evaluates their dependency derivations.
+    missingGoFloorWriters = builtins.filter (name: let
+      passthru = packages.${name}.passthru or {};
+    in
+      passthru ? goFloor && !(passthru ? fixGoFloor))
+    targetPackageNames;
+
+    # The updater invokes recipe writers directly for rev-tracked targets and
+    # leaves sidecar writers inside --use-update-script. Keep the helper mode
+    # aligned with that routing so neither path silently writes at the wrong
+    # point in the update sequence.
+    incorrectGoFloorDestinations = builtins.filter (name: let
+      target = updateTargets.${name};
+      passthru = packages.${name}.passthru or {};
+      expectedDestination =
+        if lib.elem "--use-update-script" (target.flags or [])
+        then "sidecar"
+        else if target.git or null != null
+        then "recipe"
+        else null;
+      actualDestination = (passthru.fixGoFloor or {}).goFloorDestination or null;
+    in
+      passthru ? goFloor
+      && expectedDestination != null
+      && actualDestination != expectedDestination)
+    targetPackageNames;
+
     # Every sidecar a package's `regenerateExtracted` writes must be a
     # committed file: the update scripts stage exactly these paths, and a
     # wrong one aborts the whole `git add`.
@@ -171,6 +201,18 @@
       if [ -n "${toString staleCensusTargets}" ]; then
         echo "ERROR: update targets with passthru.extracted but no sidecar regeneration: ${toString staleCensusTargets}" >&2
         echo "Give each passthru.regenerateExtracted (packageLib.mkRegenerateExtracted)." >&2
+        exit 1
+      fi
+
+      if [ -n "${toString missingGoFloorWriters}" ]; then
+        echo "ERROR: update targets with passthru.goFloor but no passthru.fixGoFloor: ${toString missingGoFloorWriters}" >&2
+        echo "Give each package a packageLib.mkGoFloorFix writer." >&2
+        exit 1
+      fi
+
+      if [ -n "${toString incorrectGoFloorDestinations}" ]; then
+        echo "ERROR: Go-floor fixer destination disagrees with update routing: ${toString incorrectGoFloorDestinations}" >&2
+        echo "Use sidecar for --use-update-script targets and recipe for rev-tracked targets." >&2
         exit 1
       fi
 

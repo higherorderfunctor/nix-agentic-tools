@@ -10,6 +10,7 @@
   inputs,
   pkgs,
   packageLib,
+  repoPath,
   ...
 }: let
   # go-overlay is applied INSIDE this import so `go-bin` resolves against
@@ -29,17 +30,16 @@
     hash = "sha256-MhLMbLe6fM1dd+acRxJW5ZXIuwxl8WYl9xZ2DUWZMec=";
   };
 
-  # TRUNK-TRACKED, so the floor is a LITERAL here rather than a sidecar
-  # key — this package has no sidecar, and it is bumped by `nix-update`
-  # (a `git` target in the owner registry.nix), not by a repo-owned
-  # update script there would be anywhere to hook a rewrite into.
-  #
-  # Hand-written but NOT hand-trusted: `checks/packaging/go-floor-drift.nix` reads
-  # `passthru.goFloor` back, compares it against this exact `src`'s
-  # go.mod, and fails naming the value to write. A rev bump that raises
-  # the floor turns that check red instead of silently building against
-  # whatever toolchain happens to be in scope.
+  # TRUNK-TRACKED, so the floor is a recipe literal rather than a sidecar key.
+  # The rev-bump worker runs fixGoFloor after replacing rev + src hash and before
+  # nix-update derives vendorHash, keeping the builder synchronized with go.mod.
   goFloor = "1.25.12";
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "github-mcp";
+    pkgs = ourPkgs;
+    pname = "github-mcp";
+    recipeFile = repoPath ./package.nix;
+  };
 in
   # The toolchain is a BUILDER argument, so `.override` is the only seam
   # that reaches it; the attrs below still compose with `overrideAttrs`.
@@ -61,7 +61,7 @@ in
     passthru =
       (old.passthru or {})
       // {
-        inherit goFloor;
+        inherit fixGoFloor goFloor;
         mcpName = "github-mcp";
       };
   })

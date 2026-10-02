@@ -421,23 +421,18 @@ rec {
     }
   '';
 
-  # Floor fixer for a Go package pinned via a sidecar. Derives the floor
-  # from the FRESHLY PINNED source's go.mod and writes it back as
-  # `goFloor`. Wired as `extraExtract`, the same seam the hash fixers use.
+  # Floor fixer for a Go package. Derives the floor from the FRESHLY PINNED
+  # source's go.mod and writes it to exactly one package-owned destination:
+  # a release package's JSON sidecar or a trunk package's recipe literal.
   #
-  # WHY DERIVED AND NOT DECLARED. A hand-maintained floor literal is a
-  # pin, and `goToolchainForFloor`'s own header explains at length why a
-  # pinned toolchain rots silently. Moving the pin from toolchain-version
-  # to floor-version made it rot more slowly, not never: the update
-  # pipeline bumps these packages 4x/day and would never touch the
-  # literal. A stale-LOW floor is the dangerous direction — the seam then
-  # returns `ourGo` and quietly does nothing.
+  # WHY DERIVED AND NOT DECLARED. A hand-maintained floor literal is a pin,
+  # and a stale-LOW floor makes the toolchain seam quietly return `ourGo`.
+  # Both destination modes therefore derive their value from pinned source;
+  # recipe literals are updater-owned storage, not maintainer-owned data.
   #
-  # The floor is a function of the pinned source, so it changes only when
-  # the version changes — which is exactly when this runs. That is what
-  # makes `extraExtract` (a version-bump-only seam) the correct home for
-  # it, unlike `vendorHash`, which can be invalidated with no version
-  # bump and therefore also needs a standalone `passthru` escape hatch.
+  # Release packages run this through `extraExtract`; rev-tracked packages
+  # expose it to update-pkg.sh, which invokes it before nix-update and also on
+  # an unchanged-rev sweep.
   #
   # ORDER: AFTER the SRC hash fixer, and BEFORE the vendor fixer. Both
   # halves are load-bearing and the second one was missing until
@@ -488,22 +483,64 @@ rec {
     goModPath ? "go.mod",
     pkgs,
     pname,
-    sourcesFile,
+    recipeFile ? null,
+    sourcesFile ? null,
   }:
-    pkgs.writeShellScript "fix-go-floor-${pname}" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
+    assert pkgs.lib.assertMsg ((recipeFile == null) != (sourcesFile == null))
+    "mkGoFloorFix requires exactly one of recipeFile or sourcesFile";
+      (pkgs.writeShellScript "fix-go-floor-${pname}" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
 
-      ${goModFloorFn {inherit pkgs;}}
+        ${goModFloorFn {inherit pkgs;}}
 
-      src=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths ".#${attr}.src")
-      floor=$(go_floor_of "$src/${goModPath}")
+        src=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths ".#${attr}.src")
+        floor=$(go_floor_of "$src/${goModPath}")
 
-      ${pkgs.jq}/bin/jq --arg f "$floor" '. + {goFloor: $f}' "${sourcesFile}" \
-        > "${sourcesFile}.new"
-      ${pkgs.coreutils}/bin/mv "${sourcesFile}.new" "${sourcesFile}"
-      echo "${pname}: goFloor = $floor"
-    '';
+        ${
+          if sourcesFile != null
+          then ''
+            ${pkgs.jq}/bin/jq --arg f "$floor" '. + {goFloor: $f}' "${sourcesFile}" \
+              > "${sourcesFile}.new"
+            ${pkgs.coreutils}/bin/mv "${sourcesFile}.new" "${sourcesFile}"
+          ''
+          else ''
+            ${pkgs.python3}/bin/python3 - "$floor" "${recipeFile}" <<'PY'
+            import os
+            import re
+            import sys
+            from pathlib import Path
+
+            floor, raw_path = sys.argv[1:]
+            path = Path(raw_path)
+            text = path.read_text()
+            pattern = re.compile(r'^(\s*goFloor\s*=\s*)"[^"]*"(\s*;\s*)$', re.MULTILINE)
+            matches = list(pattern.finditer(text))
+            if len(matches) != 1:
+                print(
+                    f"{path}: expected exactly one goFloor literal, found {len(matches)}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+            updated = pattern.sub(rf'\g<1>"{floor}"\g<2>', text, count=1)
+            temporary = path.with_name(f"{path.name}.new")
+            temporary.write_text(updated)
+            os.replace(temporary, path)
+            PY
+          ''
+        }
+        echo "${pname}: goFloor = $floor"
+      '')
+    .overrideAttrs (prev: {
+        passthru =
+          (prev.passthru or {})
+          // {
+            goFloorDestination =
+              if sourcesFile != null
+              then "sidecar"
+              else "recipe";
+          };
+      });
 
   # Pick the builder argument actually supplied to a nixpkgs Go recipe.
   # Versioned builders (e.g. buildGo127Module) cannot be replaced by

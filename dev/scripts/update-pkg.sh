@@ -29,6 +29,25 @@ trap 'teardown_worktree "$wt"' EXIT
 version_file="$wt/.update-version"
 base_head=$(git rev-parse "$BRANCH")
 
+commit_pending_update() {
+  if git_diff_quiet -C "$wt" diff && git_diff_quiet -C "$wt" diff --staged; then
+    return 0
+  fi
+  if ! git -C "$wt" add -A; then
+    log_failure "git add failed"
+    return 1
+  fi
+  if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
+    if ! git -C "$wt" commit --amend --no-edit; then
+      log_failure "git commit --amend failed"
+      return 1
+    fi
+  elif ! git -C "$wt" commit -m "chore(packages): update $name"; then
+    log_failure "git commit failed"
+    return 1
+  fi
+}
+
 # Phase 0: Bump rev to latest default branch commit (main-tracking packages)
 if [ -n "$git_url" ]; then
   log_info "Fetching latest rev from $git_url..."
@@ -252,6 +271,21 @@ set +e
 
   cd "$wt"
 
+  # A rev-tracked Go package can carry its floor as a recipe literal. Refresh
+  # that opt-in value from the newly pinned source before nix-update evaluates
+  # goModules. Run even when Phase 0 found no new rev so a previously stale
+  # literal self-heals on the next sweep. Release packages own this ordering in
+  # their --use-update-script extraExtract chain and are excluded here.
+  if [ -n "$git_url" ] && [[ " $extra_flags " != *" --use-update-script "* ]]; then
+    if ! refresh_package_go_floor "$name"; then
+      log_failure "Go-floor refresh failed"
+      exit 1
+    fi
+    if ! commit_pending_update; then
+      exit 1
+    fi
+  fi
+
   # Prime the src derivation file in the store. `nix flake prefetch`
   # (Phase 0) populates the source output but does NOT create a .drv
   # for the fetchFromGitHub derivation — .drv files are machine-local
@@ -328,30 +362,15 @@ set +e
     fi
   fi
 
-  # Commit dep hash changes (amend if update commit exists, new commit
+  # Commit generated changes (amend if update commit exists, new commit
   # otherwise). This is the failure-becomes-a-commit shape git_diff_quiet
   # closes: with the tree genuinely clean and `git diff` merely erroring, the
   # bare form reached `commit --amend`, which succeeds on an unchanged tree and
   # rewrote the update commit for no reason.
-  if ! git_diff_quiet -C "$wt" diff || ! git_diff_quiet -C "$wt" diff --staged; then
-    # Same explicit-exit rule as the formatter gate above: a failure to
-    # stage or commit means the PR cannot be written, which is a
-    # hold-back, and errexit will not deliver it for us.
-    if ! git -C "$wt" add -A; then
-      log_failure "git add failed"
-      exit 1
-    fi
-    if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
-      git -C "$wt" commit --amend --no-edit || {
-        log_failure "git commit --amend failed"
-        exit 1
-      }
-    else
-      git -C "$wt" commit -m "chore(packages): update $name" || {
-        log_failure "git commit failed"
-        exit 1
-      }
-    fi
+  if ! commit_pending_update; then
+    # Explicit exit: this call is tested by `if !`, so errexit is disabled in
+    # the function body. A failure means the PR cannot be written.
+    exit 1
   fi
 
   # Nothing changed from base
@@ -394,7 +413,7 @@ if [ "$target_rc" -ne 0 ]; then
   # resetting here is what makes held-back packages skip their PR.
   # Successful targets keep their commit and open their PR as before.
   git -C "$wt" reset --hard "$base_head"
-  report_held_back "$name" "nix-update, sidecar regeneration, formatter or commit failed" "$version_detail"
+  report_held_back "$name" "Go-floor refresh, nix-update, sidecar regeneration, formatter or commit failed" "$version_detail"
   exit 0
 fi
 

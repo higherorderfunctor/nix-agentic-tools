@@ -348,11 +348,10 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-02 — Bruno 4.2.1 retains the stale nested `qs` lock
-> entries repaired by the package recipe; recipes receive every `scopeArgs`
-> entry in `lib/facets/repository.nix`, `generatedLib` and `gitToolExtraction`
-> included; flake-input and rev-bumped packages regenerate their sidecars
-> through `passthru.regenerateExtracted`.
+> **Last verified:** 2026-10-02 — rev-tracked Go packages derive recipe-owned
+> floor literals before nix-update; release packages retain the ordered sidecar
+> extraction chain; rev-bumped packages regenerate committed sidecars through
+> `passthru.regenerateExtracted`.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -1006,10 +1005,10 @@ all gained the `.override` layer for exactly this reason.
 
 #### The floor itself is DERIVED, never hand-written
 
-A hand-maintained floor literal is still a pin — it just rots more slowly. The
-update pipeline bumps these packages 4x/day and would never touch it, and a
-stale-LOW floor is the dangerous direction: `versionAtLeast ourGo floor` then
-returns `ourGo` and the seam **silently does nothing**.
+A hand-maintained floor literal is still a pin. A stale-LOW floor is the
+dangerous direction: `versionAtLeast ourGo floor` returns `ourGo` and the seam
+**silently does nothing**. Both storage modes below are therefore written by
+automation from the pinned source.
 
 So the floor is extracted from the pinned source's go.mod, by mechanism:
 
@@ -1021,10 +1020,11 @@ So the floor is extracted from the pinned source's go.mod, by mechanism:
   version bump and therefore also needs a standalone `passthru` escape hatch.
   Kimchi chains its pnpm dependency fixer after the Go stages; input-bump repair
   also discovers its `passthru.fixPnpmDepsHash`.
-- **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`)** — a literal
-  in the overlay. These have no sidecar and are bumped by `nix-update` (`git`
-  targets in owner `registry.nix`), so there is no repo-owned update script to
-  hook a rewrite into.
+- **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`)** —
+  `vu.mkGoFloorFix` writes the literal in the recipe. Each package exposes the
+  fixer through `passthru.fixGoFloor`; `update-pkg.sh` runs it after the rev and
+  source hash move, before nix-update derives `vendorHash`. It also runs when
+  the rev is unchanged, so a stale literal self-heals on the next sweep.
 
 **ORDER: hash fixers first, then the floor.** `mkGoFloorFix` builds `.src`, so a
 package whose `srcHash` also lives in the sidecar (`glab`) must have that
@@ -1036,8 +1036,8 @@ Reading the floor is **silent by construction** — overlays read
 satisfied by everything. That is deliberate and not a hole: `mkGoFloorFix` must
 evaluate the package to build its `.src`, so a `throw` on the missing key would
 deadlock the fixer that repairs it. `checks/packaging/go-floor-drift.nix` is the
-loud half — it compares every recorded floor against the real go.mod and fails
-naming the package, the actual requirement, and the remedy (fixer vs. literal).
+loud half — it compares every recorded floor against the real go.mod and names
+the package, actual requirement and automated fixer when it fails.
 
 That check takes **NO REGISTRY**: it filters `self.packages.<system>` for
 `passthru.goFloor`. A list of Go packages would be a second source of truth a

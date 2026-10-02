@@ -1,6 +1,7 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-09-29 — both update paths regenerate committed
+> **Last verified:** 2026-10-02 — rev-tracked Go packages refresh recipe-owned
+> floor literals before nix-update; both update paths regenerate committed
 > sidecars through `passthru.regenerateExtracted`: an input bump for every
 > package that input owns, a package target (rev bump or nix-update) for the
 > package itself; the hardcoded Semble block is gone. `--use-update-script` rows
@@ -70,7 +71,9 @@ Targets fall into three categories:
   not rewritten, so a changed template reaches the update PR but fails its
   coverage check until the local derivative is reviewed.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
-  a worktree, optionally preceded by a rev bump for main-tracking packages, then
+  a worktree, optionally preceded by a rev bump for main-tracking packages.
+  Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
+  nix-update, including on an unchanged-rev sweep. The worker then runs
   `regenerate_sidecars package <name>`: a package exposing
   `passthru.regenerateExtracted` (git-absorb and git-revise, whose
   `--version skip` bumps never run an `extraExtract`) gets its sidecar refreshed
@@ -134,11 +137,15 @@ receives the repo URL as a trailing argument:
    returned source tree; every marker is resolved from that same prefetch.
 4. `sed` replaces the old `hash` in the overlay `.nix` file.
 5. `git commit` creates a commit with the rev + src hash change.
-6. `nix-update --version skip` runs to update dependency hashes (cargo, pnpm,
+6. A package exposing `passthru.fixGoFloor` derives its recipe literal from the
+   freshly pinned source and amends it into that commit. This step also runs
+   when the rev is unchanged, repairing a stale floor on the next sweep.
+7. `nix-update --version skip` runs to update dependency hashes (cargo, pnpm,
    vendor, etc.). If changes occur, they amend into the existing commit.
 
-If the rev is unchanged (already at latest), steps 1-6 are skipped entirely and
-the target reports NO UPDATES.
+If the rev is unchanged, source/hash replacement is skipped but the Go-floor
+fixer and nix-update still run. The target reports NO UPDATES only when neither
+finds drift.
 
 **Why the resolver is deterministic.** Step 2 replaced an earlier
 `grep -rl "<repo-basename>" | head -1`, which matched any overlay merely naming

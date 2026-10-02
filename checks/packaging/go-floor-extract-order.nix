@@ -40,9 +40,10 @@
 # NO REGISTRY, for the reason `go-floor-drift.nix` gives at length: a
 # list a new Go package could be added without touching is precisely how
 # a package ends up unprotected. Subjects are discovered by filtering for
-# `passthru.fixGoFloor`, which is what marks a package as sidecar-managed
-# — and a package carrying that but NO `goUpdateExtract` FAILS, because
-# that is exactly the shape of hand-rolling the chain again.
+# `passthru.fixGoFloor.goFloorDestination == "sidecar"`, which distinguishes
+# this release-update contract from recipe-owned trunk floors. A sidecar fixer
+# with NO `goUpdateExtract` FAILS, because that is exactly the shape of
+# hand-rolling the chain again.
 #
 # `beads.dolt` is walked EXPLICITLY. It is a ninth Go package, and it is
 # NOT A TOP-LEVEL ENTRY of `self.packages.<system>` — it is reachable
@@ -82,7 +83,9 @@
 
     discovered =
       lib.filterAttrs
-      (_: p: (p.passthru or {}) ? fixGoFloor)
+      (_: p:
+        (p.passthru or {}) ? fixGoFloor
+        && (p.passthru.fixGoFloor.goFloorDestination or null) == "sidecar")
       pkgSet;
 
     # Not in `self.packages` — see the header.
@@ -164,6 +167,9 @@
       if !((p.passthru or {}) ? goUpdateExtract)
       then
         pkgs.runCommand (drvName name) {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
           echo "FAIL: ${name} carries passthru.fixGoFloor but no passthru.goUpdateExtract." >&2
           echo "" >&2
           echo "That means its extraExtract chain is hand-written rather than emitted by" >&2
@@ -187,6 +193,9 @@
           // lib.optionalAttrs ((p.passthru or {}) ? updateScript) {
             exportReferencesGraph = ["updateClosure" p.passthru.updateScript];
           }) ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
           ${orderAssertFn}
 
           assert_chain_order "$extract" "${name}"

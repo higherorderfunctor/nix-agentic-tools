@@ -919,6 +919,9 @@ class PreparationTest(unittest.TestCase):
         (self.repo / "devenv.yaml").write_text("inputs: {}\n")
         (self.repo / "packages" / "semble" / "extracted.json").write_text("{}\n")
         (self.repo / "packages" / "semble" / "upstream-templates.json").write_text("{}\n")
+        self.upstream = self.root / "upstream"
+        self.upstream.mkdir()
+        (self.upstream / "go.mod").write_text("module example.test/demo\n\ngo 1.26.8\n")
         self.write_recipe(False)
         subprocess.run(["git", "init", "-b", "main"], cwd=self.repo, check=True, capture_output=True)
         self.git("config", "core.hooksPath", "/dev/null")
@@ -945,13 +948,14 @@ class PreparationTest(unittest.TestCase):
             stderr=subprocess.DEVNULL,
         ).strip()
 
-    def write_recipe(self, marker):
+    def write_recipe(self, marker, floor=False):
         marker_lines = ""
         if marker:
             marker_lines = '  # upstream: readPackageJsonVersion @ package.json\n  upstream = "1.0.0";\n'
+        floor_line = '  goFloor = "1.25.12";\n' if floor else ""
         (self.repo / "packages" / "demo" / "package.nix").write_text(
             '{fetchFromGitHub}:\nfetchFromGitHub {\n'
-            f'{marker_lines}  rev = "{"0" * 40}";\n'
+            f'{marker_lines}{floor_line}  rev = "{"0" * 40}";\n'
             f'  hash = "sha256-{"A" * 43}=";\n'
             '}\n'
         )
@@ -1022,9 +1026,15 @@ if args[:2] == ['flake', 'prefetch']:
         'malformed': '{',
         'no-store': json.dumps({'hash': 'sha256-' + 'B' * 43 + '='}),
     }
-    print(values.get(mode, ''), end='')
+    if mode.startswith('floor'):
+        print(json.dumps({'hash': 'sha256-' + 'B' * 43 + '=', 'storePath': os.environ['UPSTREAM_SOURCE']}), end='')
+    else:
+        print(values.get(mode, ''), end='')
     raise SystemExit(9 if mode == 'failed' else 0)
 if args[:1] == ['run']:
+    if mode.startswith('floor'):
+        with open(os.environ['CALL_ORDER'], 'a') as f: f.write('nix-update\\n')
+        raise SystemExit(0)
     if mode == 'package-red':
         with open('packages/demo/package.nix', 'a') as f: f.write('# dependency hash refreshed\\n')
         print('Update 1.0.0 -> 2.0.0')
@@ -1058,24 +1068,64 @@ if args[:1] == ['run']:
     ]}))
     raise SystemExit(0)
 if args[:1] == ['fmt']: raise SystemExit(0)
-if args[:1] == ['build']: raise SystemExit(23 if mode == 'package-red' else 0)
+if args[:1] == ['build']:
+    if 'fixGoFloor' in ' '.join(args) and mode.startswith('floor'):
+        # Model the refresh capability at the mocked Nix boundary. The native
+        # go-floor-fixer check owns generated-script execution; this fixture
+        # verifies worker ordering and rollback without requiring /nix/store.
+        with open(os.environ['CALL_ORDER'], 'a') as f: f.write('floor-fixer\\n')
+        if mode == 'floor-fail': raise SystemExit(17)
+        recipe = Path('packages/demo/package.nix')
+        recipe.write_text(recipe.read_text().replace('goFloor = "1.25.12";', 'goFloor = "1.26.8";'))
+        raise SystemExit(0)
+    raise SystemExit(23 if mode == 'package-red' else 0)
 raise SystemExit(f'unhandled nix fixture arguments: {args}')
 """,
         )
 
-    def run_package(self, mode, marker=False):
-        if marker:
-            self.write_recipe(True)
+    def run_package(self, mode, marker=False, floor=False, new_rev=None):
+        if marker or floor:
+            self.write_recipe(marker, floor)
             self.git("add", "packages/demo/package.nix")
-            self.git("commit", "-m", "marker recipe")
+            self.git("commit", "-m", "specialized recipe")
             self.base = self.git("rev-parse", "HEAD")
+        env = dict(
+            self.env,
+            CALL_ORDER=str(self.root / "call-order"),
+            NIX_MODE=mode,
+            UPSTREAM_SOURCE=str(self.upstream),
+        )
+        if new_rev is not None:
+            env["NEW_REV"] = new_rev
         return subprocess.run(
             ["bash", str(SCRIPTS / "update-pkg.sh"), "demo", "--version", "skip", "https://github.com/example/demo.git"],
             cwd=self.repo,
-            env=dict(self.env, NIX_MODE=mode),
+            env=env,
             capture_output=True,
             text=True,
         )
+
+    def test_go_floor_fixer_runs_before_nix_update_and_amends_rev_bump(self):
+        result = self.run_package("floor", floor=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["floor-fixer", "nix-update"])
+        updated = self.git("show", "update/demo:packages/demo/package.nix")
+        self.assertIn('goFloor = "1.26.8";', updated)
+        self.assertEqual(self.git("rev-list", "--count", f"{self.base}..update/demo"), "1")
+
+    def test_go_floor_fixer_failure_holds_back_and_resets_rev_bump(self):
+        result = self.run_package("floor-fail", floor=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git("rev-parse", "update/demo"), self.base)
+        self.assertIn("HELD BACK: demo", (self.repo / ".update-report.txt").read_text())
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["floor-fixer"])
+
+    def test_go_floor_fixer_repairs_unchanged_rev(self):
+        result = self.run_package("floor-unchanged", floor=True, new_rev="0" * 40)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "call-order").read_text().splitlines(), ["floor-fixer", "nix-update"])
+        updated = self.git("show", "update/demo:packages/demo/package.nix")
+        self.assertIn('goFloor = "1.26.8";', updated)
 
     def test_main_tracking_prefetch_failures_hold_the_target_back(self):
         for mode in ("empty", "failed", "missing_hash", "malformed"):

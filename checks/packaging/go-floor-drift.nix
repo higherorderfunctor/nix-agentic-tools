@@ -45,19 +45,17 @@
       goModPath = p.passthru.goModPath or "go.mod";
       recorded = p.passthru.goFloor;
 
-      # Sidecar-managed packages carry a fixer; trunk-tracked ones (no
-      # sidecar, bumped by nix-update) carry a literal. The remedy differs,
-      # so name the right one rather than making the reader work it out.
-      remedy =
-        if (p.passthru or {}) ? fixGoFloor
-        then "nix run .#${name}.fixGoFloor   # rewrites the sidecar's goFloor"
-        else "edit the `goFloor` literal in this package's overlay .nix";
+      # Both storage modes expose the same repair command.
+      remedy = ''"$(nix build --no-link --print-out-paths .#${name}.fixGoFloor)"'';
     in
       pkgs.runCommand "go-floor-drift-${name}" {
         # Deliberately an input: the check must read the go.mod of the
         # source this package is ACTUALLY pinned to, not re-fetch upstream.
         inherit (p) src;
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
         ${vu.goModFloorFn {inherit pkgs;}}
 
         actual=$(go_floor_of "$src/${goModPath}")
@@ -66,10 +64,10 @@
         if [ "$recorded" = "${vu.goFloorUnknown}" ]; then
           echo "FAIL: ${name} has no recorded Go floor." >&2
           echo "  its go.mod requires: $actual" >&2
-          echo "  the placeholder '${vu.goFloorUnknown}' means the sidecar key" >&2
-          echo "  was destroyed by an update and never restored — the toolchain" >&2
+          echo "  the placeholder '${vu.goFloorUnknown}' means the recorded floor" >&2
+          echo "  was lost or never refreshed — the toolchain" >&2
           echo "  seam is silently doing nothing for this package." >&2
-          echo "  fix: ${remedy}" >&2
+          printf '  fix: %s\n' ${lib.escapeShellArg remedy} >&2
           exit 1
         fi
 
@@ -77,7 +75,7 @@
           echo "FAIL: ${name} records a stale Go floor." >&2
           echo "  recorded:      $recorded" >&2
           echo "  its go.mod says: $actual" >&2
-          echo "  fix: ${remedy}" >&2
+          printf '  fix: %s\n' ${lib.escapeShellArg remedy} >&2
           exit 1
         fi
 
@@ -109,6 +107,9 @@
       pkgs.runCommand "go-floor-parse-${name}" {
         goModFile = pkgs.writeText "go.mod-${name}" goMod;
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
         ${vu.goModFloorFn {inherit pkgs;}}
 
         actual=$(go_floor_of "$goModFile")
@@ -132,6 +133,9 @@
           require github.com/foo/bar v1.2.3
         '';
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
         ${vu.goModFloorFn {inherit pkgs;}}
 
         if go_floor_of "$goModFile" 2>/dev/null; then
