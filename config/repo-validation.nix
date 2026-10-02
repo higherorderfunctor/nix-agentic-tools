@@ -59,6 +59,7 @@
           "^fixtures/kiro-primitives/records/"
           "^packages/chatgpt-codex/extracted\\.json$"
           "^packages/claude-code/extracted\\.json$"
+          "^packages/kimchi/egress-report\\.json$"
           # Patch files are verbatim third-party code plus Git blob hashes.
           ".*\\.patch$"
         ];
