@@ -7,7 +7,7 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,packages/*/lib/packagin
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-09-12 — all owner recipes receive pinned packages from
+> **Last verified:** 2026-10-02 — all owner recipes receive pinned packages from
 > the shared composer; both supported-system output baselines match.
 >
 > **Settled — do not relitigate.** Full lineage:
@@ -130,7 +130,7 @@ outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
 no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
 `gh` was silently one bump behind the same fate.
 
-The Go floor seam (overlay-pattern fragment) now covers all eight exported Go
+The Go floor seam (overlay-pattern fragment) now covers all nine exported Go
 packages plus Beads' nested paired Dolt runtime, so that specific class is
 handled — a followed older nixpkgs gets a `go-bin` toolchain instead of a
 failure. It does NOT make `follows` supported: the consumer still gets zero
@@ -348,7 +348,7 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-01 — Bruno 4.2.1 retains the stale nested `qs` lock
+> **Last verified:** 2026-10-02 — Bruno 4.2.1 retains the stale nested `qs` lock
 > entries repaired by the package recipe; recipes receive every `scopeArgs`
 > entry in `lib/facets/repository.nix`, `generatedLib` and `gitToolExtraction`
 > included; flake-input and rev-bumped packages regenerate their sidecars
@@ -469,14 +469,14 @@ Most supporting entries (`btop`, `bun`, `fblog`, `gh`, `glab`, `oh-my-posh`,
 `otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations but
 `ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only `version`,
 `src`, `passthru.updateScript` and — for the Go ones — `vendorHash`. `gluetun`
-is the exception, and only because nixpkgs does not carry it at all; `bruno` is
-deliberately absent from that list because `overrideAttrs` cannot express its
-override at all (see the `.override` section below). `glab` IS on the list and
-belongs there — `buildGoModule` reads `vendorHash` and `src` off `finalAttrs`,
-so composing on the output works — even though it shares bruno's SIDECAR
-contract, because that contract is about where the hash comes from, not about
-which override seam is correct. Two rules that are not obvious from reading such
-a file:
+and `pipelock` are the exceptions, and only because nixpkgs does not carry
+either; `bruno` is deliberately absent from that list because `overrideAttrs`
+cannot express its override at all (see the `.override` section below). `glab`
+IS on the list and belongs there — `buildGoModule` reads `vendorHash` and `src`
+off `finalAttrs`, so composing on the output works — even though it shares
+bruno's SIDECAR contract, because that contract is about where the hash comes
+from, not about which override seam is correct. Two rules that are not obvious
+from reading such a file:
 
 - **Namespaced-only.** The overlay writes `pkgs.ai.<group>.<name>` and NEVER a
   top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would turn this from an
@@ -825,10 +825,10 @@ derivation.
 
 Go archive updates need an explicit vendor-hash repair; `go.sum` does not supply
 a Nix vendor-tree hash. It goes in the sidecar (`beads`, its nested paired Dolt,
-`gh`, `glab`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui`), never inline, and
-the mechanism is worth understanding before touching it. Kimchi is the odd row:
-the recorded hash covers its nested `proxy-helper` rather than a top-level Go
-build, and everything below still applies to it unchanged.
+`gh`, `glab`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui`, `pipelock`), never
+inline, and the mechanism is worth understanding before touching it. Kimchi is
+the odd row: the recorded hash covers its nested `proxy-helper` rather than a
+top-level Go build, and everything below still applies to it unchanged.
 
 - `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
   (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not itself
@@ -975,14 +975,14 @@ sorts `1.27rc1` ABOVE `1.27.0`. `checks/packaging/go-toolchain-floor.nix`
 exercises all three branches plus two positive controls, which is also what
 keeps the input from shipping dormant.
 
-**ALL EIGHT exported Go packages carry the seam**, not just the two that once
+**ALL NINE exported Go packages carry the seam**, not just the two that once
 needed it — `beads`, `gh`, `glab`, `github-mcp`, `gluetun`,
-`mcp-language-server`, `oh-my-posh`, `otel-tui`. Beads' nested paired Dolt
-derivation carries it too; its floor is checked by the Beads contract because
-the top-level discovery check intentionally enumerates exported packages.
-Scoping it to "whatever broke most recently" is how the same defect gets
-rediscovered per package: when `glab` broke, `gh` had ALREADY silently required
-Go >= 1.26.5 and would have been next.
+`mcp-language-server`, `oh-my-posh`, `otel-tui`, `pipelock`. Beads' nested
+paired Dolt derivation carries it too; its floor is checked by the Beads
+contract because the top-level discovery check intentionally enumerates exported
+packages. Scoping it to "whatever broke most recently" is how the same defect
+gets rediscovered per package: when `glab` broke, `gh` had ALREADY silently
+required Go >= 1.26.5 and would have been next.
 
 Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain -> the
 selected builder's `.override` in one call. Its callback reads the builder's
@@ -1014,13 +1014,13 @@ returns `ourGo` and the seam **silently does nothing**.
 So the floor is extracted from the pinned source's go.mod, by mechanism:
 
 - **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `kimchi`,
-  `oh-my-posh`, `otel-tui`)** — `vu.mkGoFloorFix` runs as `extraExtract` and
-  writes a `goFloor` key into the sidecar. Correct home for it because the floor
-  is a function of the pinned version, so it changes only when the version does
-  — unlike `vendorHash`, which can be invalidated with no version bump and
-  therefore also needs a standalone `passthru` escape hatch. Kimchi chains its
-  pnpm dependency fixer after the Go stages; input-bump repair also discovers
-  its `passthru.fixPnpmDepsHash`.
+  `oh-my-posh`, `otel-tui`, `pipelock`)** — `vu.mkGoFloorFix` runs as
+  `extraExtract` and writes a `goFloor` key into the sidecar. Correct home for
+  it because the floor is a function of the pinned version, so it changes only
+  when the version does — unlike `vendorHash`, which can be invalidated with no
+  version bump and therefore also needs a standalone `passthru` escape hatch.
+  Kimchi chains its pnpm dependency fixer after the Go stages; input-bump repair
+  also discovers its `passthru.fixPnpmDepsHash`.
 - **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`)** — a literal
   in the overlay. These have no sidecar and are bumped by `nix-update` (`git`
   targets in owner `registry.nix`), so there is no repo-owned update script to

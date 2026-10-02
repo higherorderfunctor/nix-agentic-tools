@@ -67,6 +67,7 @@ chonk
 clearenv
 clicolor
 clis
+cliutil
 CLOUDSDK
 cmdbuilder
 codemod
@@ -354,6 +355,8 @@ pdsolve
 peaceiris
 pgvector
 pinnable
+pipelock
+pipewrench
 pkgs
 pkill
 pname

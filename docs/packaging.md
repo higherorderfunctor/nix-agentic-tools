@@ -30,21 +30,23 @@ composed registry and ninja DAG:
   `buildRustPackage`'s equivalent `cargoHash` shorthand; git-branchless instead
   imports the lock from its flake input.
 - **Go packages with a sidecar `vendorHash`** (`beads`, its paired nested
-  `dolt`, `gh`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui` — kimchi records
-  the hash for its nested `proxy-helper`, not for a top-level Go build): the
-  custom archive update script needs an explicit dependency-hash repair, so
-  `vendorHash` goes in the sidecar. `mkUpdateScript` rebuilds the sidecar from
-  scratch, destroying any key it does not write itself, so each package passes
-  `extraExtract = "${fixVendorHash}"` and reads
-  `sources.vendorHash or lib.fakeHash` to cover the window between the two
-  writes. `vu.mkGoVendorFix` builds `<attr>.goModules` through the flake's own
-  `packages` output and scrapes the `got:` hash out of a `-go-modules` mismatch;
-  it is also exposed standalone as `passthru.fixVendorHash`, because a nixpkgs
-  or toolchain bump can invalidate a vendor hash with no version bump at all.
-  `passthru` must be MERGED — `buildGoModule` hangs `goModules` and
-  `overrideModAttrs` there and warns loudly if an overlay drops them. Two traps:
-  `postPatch` is an INPUT to `goModules`, so changing which test files are
-  removed changes the vendor hash; and a vendorHash is NOT validated by "it
+  `dolt`, `gh`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui`, `pipelock` —
+  kimchi records the hash for its nested `proxy-helper`, not for a top-level Go
+  build): the custom archive update script needs an explicit dependency-hash
+  repair, so `vendorHash` goes in the sidecar. `mkUpdateScript` rebuilds the
+  sidecar from scratch, destroying any key it does not write itself, so each
+  package passes `extraExtract = "${goUpdate.extract}"` from
+  `vu.mkGoUpdateExtract`, which restores `goFloor` before repairing
+  `vendorHash`, and reads `sources.vendorHash or lib.fakeHash` to cover the
+  window between the two writes. `vu.mkGoVendorFix` builds `<attr>.goModules`
+  through the flake's own `packages` output and scrapes the `got:` hash out of a
+  `-go-modules` mismatch; it is also exposed standalone as
+  `passthru.fixVendorHash`, because a nixpkgs or toolchain bump can invalidate a
+  vendor hash with no version bump at all. In a recipe that overrides the
+  nixpkgs package, `passthru` must be MERGED — `buildGoModule` hangs `goModules`
+  and `overrideModAttrs` there and warns loudly if an overlay drops them. Two
+  traps: `postPatch` is an INPUT to `goModules`, so changing which test files
+  are removed changes the vendor hash; and a vendorHash is NOT validated by "it
   built", because an identically-named fixed-output path already in the local
   store is accepted without building. Force the real computation by perturbing
   the sidecar's version and running the update script. Beads composes two of
@@ -271,6 +273,7 @@ Fetching itself is nixpkgs' to test.
 | gluetun              | generic    | GitHub archive          | go (linux only)           | —                     | — (subPkg)    | starts + exits      |
 | oh-my-posh           | generic    | GitHub archive          | go (nixpkgs override)     | `oh-my-posh`          | go test       | --version           |
 | otel-tui             | generic    | GitHub archive          | go (nixpkgs override)     | `otel-tui`            | go test       | --version           |
+| pipelock             | generic    | GitHub archive          | go (source)               | —                     | — (subPkg)    | --version           |
 | pnpm_10              | generic    | npm `latest-10` tag     | files only (nixpkgs ovr)  | `pnpm_10`             | —             | --version           |
 | pnpm_11              | generic    | npm `latest-11` tag     | files only (nixpkgs ovr)  | `pnpm_11`             | —             | --version           |
 | pnpm_12              | generic    | npm `latest-12` tag     | pre-built binary          | — (no `pnpm_12`)      | —             | --version           |

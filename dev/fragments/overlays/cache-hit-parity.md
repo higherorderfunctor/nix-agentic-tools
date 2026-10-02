@@ -1,6 +1,6 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-09-12 — all owner recipes receive pinned packages from
+> **Last verified:** 2026-10-02 — all owner recipes receive pinned packages from
 > the shared composer; both supported-system output baselines match.
 >
 > **Settled — do not relitigate.** Full lineage:
@@ -123,7 +123,7 @@ outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
 no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
 `gh` was silently one bump behind the same fate.
 
-The Go floor seam (overlay-pattern fragment) now covers all eight exported Go
+The Go floor seam (overlay-pattern fragment) now covers all nine exported Go
 packages plus Beads' nested paired Dolt runtime, so that specific class is
 handled — a followed older nixpkgs gets a `go-bin` toolchain instead of a
 failure. It does NOT make `follows` supported: the consumer still gets zero
