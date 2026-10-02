@@ -35,16 +35,18 @@ composed registry and ninja DAG:
   build): the custom archive update script needs an explicit dependency-hash
   repair, so `vendorHash` goes in the sidecar. `mkUpdateScript` rebuilds the
   sidecar from scratch, destroying any key it does not write itself, so each
-  package passes `extraExtract = "${fixVendorHash}"` and reads
-  `sources.vendorHash or lib.fakeHash` to cover the window between the two
-  writes. `vu.mkGoVendorFix` builds `<attr>.goModules` through the flake's own
-  `packages` output and scrapes the `got:` hash out of a `-go-modules` mismatch;
-  it is also exposed standalone as `passthru.fixVendorHash`, because a nixpkgs
-  or toolchain bump can invalidate a vendor hash with no version bump at all.
-  `passthru` must be MERGED — `buildGoModule` hangs `goModules` and
-  `overrideModAttrs` there and warns loudly if an overlay drops them. Two traps:
-  `postPatch` is an INPUT to `goModules`, so changing which test files are
-  removed changes the vendor hash; and a vendorHash is NOT validated by "it
+  package passes `extraExtract = "${goUpdate.extract}"` from
+  `vu.mkGoUpdateExtract`, which restores `goFloor` before repairing
+  `vendorHash`, and reads `sources.vendorHash or lib.fakeHash` to cover the
+  window between the two writes. `vu.mkGoVendorFix` builds `<attr>.goModules`
+  through the flake's own `packages` output and scrapes the `got:` hash out of a
+  `-go-modules` mismatch; it is also exposed standalone as
+  `passthru.fixVendorHash`, because a nixpkgs or toolchain bump can invalidate a
+  vendor hash with no version bump at all. In a recipe that overrides the
+  nixpkgs package, `passthru` must be MERGED — `buildGoModule` hangs `goModules`
+  and `overrideModAttrs` there and warns loudly if an overlay drops them. Two
+  traps: `postPatch` is an INPUT to `goModules`, so changing which test files
+  are removed changes the vendor hash; and a vendorHash is NOT validated by "it
   built", because an identically-named fixed-output path already in the local
   store is accepted without building. Force the real computation by perturbing
   the sidecar's version and running the update script. Beads composes two of

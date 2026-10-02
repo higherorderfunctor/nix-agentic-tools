@@ -7,7 +7,7 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,packages/*/lib/packagin
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-09-12 — all owner recipes receive pinned packages from
+> **Last verified:** 2026-10-02 — all owner recipes receive pinned packages from
 > the shared composer; both supported-system output baselines match.
 >
 > **Settled — do not relitigate.** Full lineage:
