@@ -13,22 +13,22 @@
   inherit (ourPkgs) buildNpmPackage bun fetchgit makeWrapper;
   vu = packageLib;
 
-  rev = "9c0bfebacf4ace75a74cb1c77d1e5c0bc3d705d4";
+  rev = "1b375eb0252065d14e8b2853a905b0ddbaa4f1ff";
   src = fetchgit {
     url = "https://github.com/zereight/gitlab-mcp.git";
     inherit rev;
-    hash = "sha256-8STCL+BYTeWLJPwTrSIzYP0v0trGzgrZ0QHgkpcFYcE=";
+    hash = "sha256-oniKrfR1NxXvNR4msfBSGLdzze6AO5Ee0CfP/Cdu9zU=";
   };
 in
   buildNpmPackage {
     pname = "gitlab-mcp";
     version = vu.mkVersion {
       # upstream: readPackageJsonVersion @ package.json
-      upstream = "2.1.67";
+      upstream = "2.1.68";
       inherit rev;
     };
     inherit src;
-    npmDepsHash = "sha256-4MSoV87oIpvQlPbcwPCgs4NmttBffmkSx+V+BUYkDVM=";
+    npmDepsHash = "sha256-C3XAHGO0KwkBzYmr1NdSsc/yMSbHpY2QYBqmlpauskE=";
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall
