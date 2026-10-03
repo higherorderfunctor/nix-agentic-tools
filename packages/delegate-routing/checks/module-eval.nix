@@ -468,9 +468,7 @@
       && !(lib.hasInfix "`invoke_sub_agent`" claude)
       && lib.hasInfix "kiro-cli chat --no-interactive --model <id> --effort <effort>" claude
       && lib.hasInfix "always pass `thinking` explicitly" (techniqueRow kimchi "Agent")
-      && techniqueCells kimchi "Agent" == ["`Agent`" "subagent" "true" "true" "headless"]
-      && lib.hasInfix "`extensions.workflows` resource" (techniqueRow kimchi "/workflow")
-      && techniqueCells kimchi "/workflow" == ["`/workflow`" "workflow" "true" "false" "headless"]
+      && techniqueCells kimchi "Agent" == ["`Agent`" "subagent" "true" "true" "acp+headless+interactive"]
       && lib.hasInfix "**models (introspect):** `kimchi --list-models`" kimchi
       && !(lib.hasInfix "(usage)" kimchi)
       && lib.hasInfix "### kimchi techniques" claude

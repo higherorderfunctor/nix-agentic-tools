@@ -8,7 +8,9 @@ applyTo: "packages/delegate-routing/**"
 # Delegate routing package
 
 > **Last verified:** 2026-10-03 — Kimchi is a supported runtime with no package
-> families or default selection; its techniques come from Kimchi 1.5.1 probes.
+> families or default selection; its techniques come from Kimchi 1.5.1 probes
+> and source, with no `/workflow` node; under devenv its skill loads only in a
+> trusted project.
 
 `ai.programs.delegate-routing.families` is the portable decision table, keyed by
 vendor and family. Each family has a capability tier, task and effort guidance,
@@ -47,15 +49,15 @@ ACP. Assertions require both pin fields to be non-null exactly for delegate
 kinds, and a command for every external node. Each package field uses
 `mkDefault`; consumers can replace fields, add nodes or disable individual
 nodes. External and manual runtime sections include only external, introspect
-and usage nodes. Codex has no workflow node; Kimchi has no usage node because no
-command reads usage without a model turn.
+and usage nodes. Codex and Kimchi have no workflow node; Kimchi has no usage
+node because no command reads usage without a model turn.
 
-Kimchi's nodes record Kimchi 1.5.1 probes, and `modes` lists only measured
-modes. Its Agent tool pins model and thinking, but an omitted `thinking` falls
-back to the persona default rather than the parent's level, so the notes say to
-pass it. `/workflow` is a slash command that exists only with the
-`extensions.workflows` resource; per-node `model` pins, thinking does not.
-Shared table rendering escapes cells once for families and techniques.
+Kimchi's nodes record Kimchi 1.5.1 probes and source. Its Agent tool pins model
+and thinking, but an omitted `thinking` falls back to the persona default rather
+than the parent's level, so the notes say to pass it. Kimchi's `/workflow` is a
+slash command with no model tool, so no delegate can call it and it has no node;
+`dev/ai.nix` still enables the `extensions.workflows` resource for interactive
+use. Shared table rendering escapes cells once for families and techniques.
 
 Portable `rules` and `procedure` use `lib.ai.types.optionalTextSource` with
 enabled package `defaultContent`. Set `text` or `source` to replace either, or
@@ -65,13 +67,16 @@ to review for subtraction.
 
 Both Home Manager and devenv import `modules/common.nix`, which declares this
 option surface and imports `mkSkillPackageModule` once for Claude, Codex, Kimchi
-and Kiro. The Kimchi skill lands in Kimchi's own skill roots (devenv
-`.kimchi/skills`, Home Manager `harness/skills`), which shadow a same-named
-`.claude/skills` copy: measured for the harness root, source order for the
-project root. Per-runtime program enable inherits portable enable through the
-same null-as-inherit rule as the factory. Skills and router rules contribute to
-per-runtime pools, never the portable pools. Runtime-only controls are not
-declared at the portable scope.
+and Kiro. The Kimchi skill lands in Kimchi's own skill roots: devenv
+`.kimchi/skills`, Home Manager `harness/skills`. Kimchi's precedence is project
+(`.kimchi/skills`) over config paths over harness. The config paths include the
+cwd `.claude/skills` from the default `skillPaths`. Both project-scoped roots
+load only when Kimchi trusts the project. So under devenv the skill loads only
+in a trusted project, and under Home Manager a trusted project with its own
+`.claude/skills/delegate-routing` overrides the harness copy. Per-runtime
+program enable inherits portable enable through the same null-as-inherit rule as
+the factory. Skills and router rules contribute to per-runtime pools, never the
+portable pools. Runtime-only controls are not declared at the portable scope.
 
 The portable `whenToDelegate` entries are unchanged. Attribute names become
 headings in the always-on router rule. Entries use `optionalTextSource`:
@@ -92,8 +97,9 @@ to the stub. This repository enables the guidance and consumes it through
 Kimchi selects the consumer-declared Kimchi-served families. Both are
 manual-only external delegates for Claude. Copilot is excluded from this
 program. The router is delivered in `.claude/rules/delegate-routing-router.md`
-and inline in AGENTS.md for Codex and Kiro; byte-identical contributions
-deduplicate. Keep model tables and harness details in the generated skill.
+and inline in AGENTS.md for Codex, Kimchi and Kiro; under Home Manager, Kimchi's
+copy is in its user harness AGENTS.md. Byte-identical contributions deduplicate.
+Keep model tables and harness details in the generated skill.
 
 The content package injects packaged usage helper paths into technique defaults.
 The Claude helper carries curl and jq; the Codex helper carries timeout, jq and
@@ -112,6 +118,5 @@ launching delegates.
 nix eval --raw .#delegate-routing-content.skills.claude.text
 nix eval --raw .#delegate-routing-content.skills.codex.text
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
-nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kimchi"; models.kimchi = [{vendors = ["anthropic"];}]; }'
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```

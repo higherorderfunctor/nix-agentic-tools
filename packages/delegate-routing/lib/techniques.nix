@@ -65,23 +65,16 @@
   kimchi = {
     Agent = {
       kind = "subagent";
-      modes = ["headless"];
-      notes = "always pass `thinking` explicitly: an omitted one falls back to the persona default, not the parent's level; an omitted `model` inherits the session's";
+      modes = ["acp" "headless" "interactive"];
+      notes = "always pass `thinking` explicitly: an omitted one falls back to the persona default, not the parent's level; an omitted `model` uses the session's, or the role model when multi-model is on; with multi-model on, an explicit `model` must be in the allowed pool; runs in the background by default when a UI is attached";
       pinsEffort = true;
-      pinsModel = true;
-    };
-    "/workflow" = {
-      kind = "workflow";
-      modes = ["headless"];
-      notes = "slash command, not a model tool; needs the `extensions.workflows` resource (off by default). `createAgentStep({model})` per node, falling back to `createWorkflow({defaultModel})` then the session; no thinking field, so foreground steps inherit the session's and background steps take settings defaults. Under `-p --mode json` it runs but prints nothing";
-      pinsEffort = false;
       pinsModel = true;
     };
     "kimchi -p" = {
       command = ''kimchi -p --mode json --no-session --model <id> --thinking <level> "<prompt>"'';
       kind = "external";
       modes = ["headless"];
-      notes = "thinking levels: off, minimal, low, medium, high, xhigh, max. An unknown model exits 1, but an invalid --thinking only warns and runs, so validate it yourself; loads the project AGENTS.md, so no prompt is small";
+      notes = "thinking levels: off, minimal, low, medium, high, xhigh, max. An unknown model exits 1, but an invalid --thinking only warns and runs, so validate it yourself; loads the project AGENTS.md, so no prompt is small; the answer is the last assistant message in the `agent_end` event's `messages`";
       pinsEffort = true;
       pinsModel = true;
     };
