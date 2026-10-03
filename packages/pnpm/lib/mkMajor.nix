@@ -5,15 +5,9 @@
 # its own sidecar beside it. Everything except the major itself is here:
 # two files that differ only in a version number are a smell.
 #
-# `pnpm_12/package.nix` IS NOT A CALLER, and that is not an oversight to tidy up.
-# pnpm 12 moved the implementation out of the npm package and into
-# per-platform native binaries (`@pnpm/exe.<platform>`), leaving
-# `package/pnpm` a placeholder text file — so overriding the JavaScript
-# bundle does not fit it (nixpkgs had no `pnpm_12` at all when it landed),
-# and nixpkgs' own generic expression cannot build a 12.x tarball either. It is a standalone prebuilt-binary
-# derivation instead; its header carries the measurements. The guard
-# below still matters for 10 and 11 and must not be relaxed on its
-# account.
+# pnpm_12 uses nixpkgs' separate Rust expression through .override, with
+# our source/cargo pins and locked compiler. The JavaScript builder here
+# remains shared by 10 and 11; see ../packages/ai/generic/pnpm_12/package.nix.
 #
 # A thin `overrideAttrs` over nixpkgs' own `pnpm_<N>` derivation:
 # `version`, `src` and `passthru.updateScript` move, plus a pnpm 11

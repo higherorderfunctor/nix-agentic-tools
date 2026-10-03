@@ -1,11 +1,5 @@
 {
   "version": "12.9.1",
-  "aarch64-darwin": {
-    "url": "https://registry.npmjs.org/@pnpm/exe.darwin-arm64/-/exe.darwin-arm64-12.9.1.tgz",
-    "hash": "sha256-RWMW1M+otQuGIkYT9/TspZHZcLB6svO21HlyRGCEXZQ="
-  },
-  "x86_64-linux": {
-    "url": "https://registry.npmjs.org/@pnpm/exe.linux-x64/-/exe.linux-x64-12.9.1.tgz",
-    "hash": "sha256-lYHJslcUkfngDIQcsphkzDv5bmb4LVXvW61w+PBtGAg="
-  }
+  "srcHash": "sha256-inKhKFbI0M1exWL3jDhBmd+VnSwnGdxYOM4LTvs2Vuw=",
+  "cargoHash": "sha256-NGefDu4dGMC2RGrTPeYBuRrG+Gb8jnx9+SbyK8WPd9E="
 }

@@ -7,9 +7,11 @@
 > decided by the receiver's own nixpkgs through `checkedBy`, which also
 > re-checks every override function and reports the receiver's `meta.available`;
 > a free leaf's dependencies are judged in CI by a no-config set. Recipes still
-> take bun and pnpm from `pkgs.ai.generic`.
+> take bun and pnpm from `pkgs.ai.generic`. pnpm_12 overrides nixpkgs'
+> source-built Rust package with sidecar pins and the locked toolchain.
 >
-> **Settled — do not relitigate.** Full lineage:
+> **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
+> the shared builder:
 > `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 >
 > - **Do not build the exported overlay on the consumer's `final` again.** #2197
@@ -596,10 +598,11 @@ build.
 `pkgs.ai.generic.pnpm_11`, `pkgs.ai.generic.pnpm_12`) and the shape generalizes
 to any versioned attribute family:
 
-- One shared builder (`packages/pnpm/lib/mkMajor.nix`) takes the major as an
-  argument; the per-major files are two-line delegations. They exist because
-  each major needs its own path for `--override-filename` in owner
-  `registry.nix` and its own sidecar beside it — not because the logic differs.
+- For the JavaScript majors 10 and 11, one shared builder
+  (`packages/pnpm/lib/mkMajor.nix`) takes the major as an argument; the
+  per-major files are two-line delegations. They exist because each major needs
+  its own path for `--override-filename` in owner `registry.nix` and its own
+  sidecar beside it — not because the logic differs.
 - The version check reads the registry's PER-MAJOR channel (npm's `latest-<N>`
   dist-tag), not the global latest, so a major never bumps itself out of its own
   attribute.
@@ -612,37 +615,20 @@ to any versioned attribute family:
 - Expect exactly one of the majors to sit at nixpkgs parity and the others to
   carry a delta; which one is which rotates as channels move. Parity is not
   evidence that a major should be dropped.
-- **A shared builder is only correct while every major is the SAME KIND of
-  artifact.** The moment upstream changes its distribution model, the newest
-  major stops being expressible as an override of the old one and has to leave
-  the family. `pnpm_12` is that case and is deliberately not a `pnpm-major.nix`
-  caller: through pnpm 11 the npm `pnpm` package WAS pnpm (a JavaScript bundle
-  at `dist/pnpm.cjs`, then `dist/pnpm.mjs`), and in 12 the published tarball's
-  `package/pnpm` is a placeholder TEXT FILE whose contents say the native binary
-  replaces it at install time. The implementation now ships as eight
-  per-platform npm packages (`@pnpm/exe.linux-x64`, `@pnpm/exe.darwin-arm64`, …)
-  pinned in `optionalDependencies`, so `pnpm_12` is a standalone prebuilt-binary
-  derivation on the
-  `packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix` shape with a
-  per-platform sidecar like
-  `packages/bun/packages/ai/generic/bun/package.nix`'s.
-- **Two signals say the family has to split, and the second one is the trap.**
-  The first is that nixpkgs has no attribute for the new major to override —
-  easy to spot, since the overlay simply fails to evaluate. The second is that
-  nixpkgs' own generic expression cannot build the new major EITHER, so reaching
-  past the missing attribute and calling that expression directly looks like the
-  escape hatch and is not one. For pnpm 12 its `postUnpack` runs
-  `rm -r package/dist/reflink.*node package/dist/vendor` against a tarball that
-  ships neither path, and its `installPhase` would then symlink the Corepack
-  entry `bin/pnpm.mjs`, which only SPAWNS a native binary that is not in the
-  closure. Check the second signal before writing a `callPackage` against a
-  nixpkgs-internal path.
-- **Version lockstep across the split artifacts is the wrapper's to declare.**
-  Read the version from the package the release actually tracks, not from the
-  per-platform ones. `@pnpm/exe.linux-x64`'s own `dist-tags.latest` reads 12.0.0
-  while 12.2.1 is published and pinned by the wrapper's `optionalDependencies`,
-  so a version check pointed at the platform package would pin the attribute
-  backwards.
+- **Share a builder only across matching upstream expressions.** pnpm_12
+  overrides nixpkgs' separate `generic-rust.nix` now that nixpkgs supplies a
+  source-built pnpm_12 and the operator prefers compiling. `.override` moves the
+  argument version, source/cargo hashes and locked Rust platform;
+  `overrideAttrs` only merges our install checks and update passthru. The
+  argument version controls the GitHub tag and major selector, so an attrs-only
+  bump would retain the old source tag. The vendor FOD name includes the
+  version.
+- pnpm_12 keeps a version/source/cargo sidecar and `mkUpdateScript`'s cheap
+  no-op exit. A `mkHashFix` restores source then cargo hashes after a bump and
+  is exposed as `fixVendorHash` for input-update repair. Read npm's wrapper
+  `latest-12` tag; the platform exe tags can lag releases. Earlier binary and
+  JavaScript-placeholder measurements are historical:
+  `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
 
 Rust packages take `rustPlatform` from `vu.mkRustPlatform`; the recipe passes it
 through `.override` so the locked compiler builds them. Rust releases (`fblog`,
