@@ -18,7 +18,7 @@
     hash = "sha256-5gckAd+rfGafB9KZPCS1jJqXjA2vF0VXoGHJngDFtUQ=";
   };
 in
-  pkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: let
+  (pkgs.context7-mcp.override {pnpm_10 = pkgs.ai.generic.pnpm_10;}).overrideAttrs (finalAttrs: _prev: let
     # upstream: readPackageJsonVersion @ packages/mcp/package.json
     upstreamVersion = "4.1.1";
   in {
@@ -43,7 +43,7 @@ in
     '';
     pnpmDeps = pkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
-      pnpm = pkgs.pnpm_10;
+      pnpm = pkgs.ai.generic.pnpm_10;
       fetcherVersion = 3;
       hash = "sha256-eRGHc8s4rrXt793U+gBjJ0Orf78INvZ87S5GU6f1iWE=";
     };

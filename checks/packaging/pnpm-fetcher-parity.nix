@@ -148,7 +148,7 @@
           ${report}
           DRIFT
           echo "" >&2
-          echo "Fix: pass 'pnpm = pkgs.pnpm_<N>;' explicitly to fetchPnpmDeps so the" >&2
+          echo "Fix: pass 'pnpm = pkgs.ai.generic.pnpm_<N>;' explicitly to fetchPnpmDeps so the" >&2
           echo "fetcher's offline-store layout matches the pnpm that buildPhase will read." >&2
           echo "See docs/update-pipeline-transitive-hash-gap.md § Mode D and Gap 4." >&2
           exit 1

@@ -25,12 +25,15 @@
 #
 # So there are three consequences, and each one closes a door:
 #
-#   1. THERE IS NO `pkgs.pnpm_12` TO OVERRIDE. nixpkgs' own
-#      pkgs/development/tools/pnpm/default.nix carries `variants` for
-#      10_29_2, 10_34_0, 10 and 11 and stops — checked against nixpkgs
+#   1. AT LANDING THERE WAS NO `pkgs.pnpm_12` TO OVERRIDE. nixpkgs' own
+#      pkgs/development/tools/pnpm/default.nix carried `variants` for
+#      10_29_2, 10_34_0, 10 and 11 and stopped — checked against nixpkgs
 #      MASTER, not just this repo's pin. ../../../../lib/mkMajor.nix is a thin
-#      `pkgs.pnpm_${major}.overrideAttrs`, so for major 12 it does not
-#      merely produce a wrong package, it fails to evaluate.
+#      `pkgs.pnpm_${major}.overrideAttrs`, so for major 12 it did not
+#      merely produce a wrong package, it failed to evaluate. nixpkgs has
+#      since added `pnpm_12` (12.3.4 at this repo's pin on 2026-10-03), and
+#      bare `pnpm` now aliases it; this file has not been re-assessed
+#      against that attribute.
 #
 #   2. NIXPKGS' `generic.nix` CANNOT BUILD 12 EITHER, so calling it
 #      directly with a 12.x version+hash is not the escape hatch it looks

@@ -4,7 +4,8 @@
   packageLib,
   ...
 }: let
-  inherit (pkgs) buildNpmPackage bun fetchgit git makeWrapper;
+  inherit (pkgs) buildNpmPackage fetchgit git makeWrapper;
+  bun = pkgs.ai.generic.bun;
   vu = packageLib;
 
   rev = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";

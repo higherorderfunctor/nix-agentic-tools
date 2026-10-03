@@ -5,12 +5,13 @@
   packageLib,
   ...
 }: let
-  inherit (pkgs) bun fetchPnpmDeps makeWrapper nodejs pnpmConfigHook;
+  inherit (pkgs) fetchPnpmDeps makeWrapper nodejs pnpmConfigHook;
+  bun = pkgs.ai.generic.bun;
   # New nixpkgs makes the default `pnpm` be pnpm_11, which dropped
   # fetchPnpmDeps `fetcherVersion = 3`. Pin pnpm_10 for BOTH the deps
   # fetch and the build so they stay in lockstep
   # (see checks/packaging/pnpm-fetcher-parity.nix). Mirrors the context7-mcp owner recipe.
-  pnpm = pkgs.pnpm_10;
+  pnpm = pkgs.ai.generic.pnpm_10;
   vu = packageLib;
 
   rev = "83a768303839b9e125f6c286369a5d9cc26c666e";

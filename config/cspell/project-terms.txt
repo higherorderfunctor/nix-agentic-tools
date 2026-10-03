@@ -423,6 +423,7 @@ WINDIR
 worktree
 worktrees
 WSLENV
+wslpath
 xhigh
 xyzzy
 ymtdzzz

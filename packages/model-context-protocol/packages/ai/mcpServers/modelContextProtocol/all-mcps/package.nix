@@ -7,7 +7,8 @@
   packageLib,
   ...
 }: let
-  inherit (pkgs) buildNpmPackage bun fetchFromGitHub makeWrapper python314Packages;
+  inherit (pkgs) buildNpmPackage fetchFromGitHub makeWrapper python314Packages;
+  bun = pkgs.ai.generic.bun;
   vu = packageLib;
 
   rev = "f46d9578190b476b3501923ea8977d899e8db2cb";

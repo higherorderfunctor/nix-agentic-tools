@@ -11,7 +11,7 @@ in {
   # without compiling Rust. This catches a probe scheduled before pnpm installs.
   checks.oxlint-napi-materialization = package.overrideAttrs (_: {
     name = "oxlint-napi-materialization";
-    nativeBuildInputs = [pkgs.nodejs_24 pkgs.pnpm_11 pkgs.pnpmConfigHook];
+    nativeBuildInputs = [pkgs.nodejs_24 package.pnpmDeps.pnpm pkgs.pnpmConfigHook];
     buildInputs = [];
     buildPhase = "runHook preBuild";
     installPhase = "touch $out";

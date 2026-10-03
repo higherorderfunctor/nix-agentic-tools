@@ -10,7 +10,7 @@
   ...
 }: let
   inherit (pkgs) fetchzip lib;
-  pnpm = pkgs.pnpm_10;
+  pnpm = pkgs.ai.generic.pnpm_10;
   sources = builtins.fromJSON (builtins.readFile ../../../sources.json);
   sourcesFile = repoPath ../../../sources.json;
   extraction = sources.extraction or (throw "kimchi: missing extraction source pins");
@@ -203,7 +203,7 @@ in
     };
     nativeBuildInputs =
       [
-        pkgs.bun
+        pkgs.ai.generic.bun
         pkgs.nodejs
         pnpm
         pkgs.pnpmConfigHook
