@@ -33,7 +33,8 @@ defaults:
 
 jobs:
   discover:
-    runs-on: ubuntu-latest
+    # Every update job uses this runner; the aliases below follow it.
+    runs-on: &runner ubuntu-26.04
     timeout-minutes: 15
     outputs:
       base: ${{ steps.base.outputs.sha }}
@@ -70,7 +71,7 @@ jobs:
   update:
     needs: discover
     name: update (${{ matrix.name }})
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -202,7 +203,7 @@ jobs:
     if:
       ${{ !cancelled() && needs.discover.result == 'success' && !inputs.targets
       }}
-    runs-on: ubuntu-latest
+    runs-on: *runner
     # Reading the PREVIOUS sweep's receipt artifact is what makes a repeated
     # hold-back distinguishable from a first one. A job-level block REPLACES the
     # workflow default rather than extending it, so contents is restated.
@@ -265,7 +266,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" escalate
   annotations:
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: *runner
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
