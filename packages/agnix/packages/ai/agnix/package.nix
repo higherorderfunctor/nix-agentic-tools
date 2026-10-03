@@ -7,33 +7,25 @@
 # tool (linter + LSP + MCP server) that doesn't fit cleanly into
 # git-tools or mcp-servers groupings.
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (rust toolchain, makeRustPlatform, pkg-config, darwin SDK) routes
-# through this repo's pinned nixpkgs instead of the consumer's.
+# Receives `pkgs` as this repo's pinned nixpkgs (with the Go and Rust
+# overlays applied by the repository composer), so every build input
+# (pkg-config, darwin SDK) routes through it instead of the consumer's;
+# the Rust toolchain comes from `vu.mkRustPlatform`.
 # This is what gives the store path cache-hit parity against CI's
 # standalone build — see dev/fragments/overlays/overlay-pattern.md.
 #
 # Argument shape adapted from legacy 2-layer curried pattern during Milestone 6 port.
 {
-  inputs,
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.rust-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchFromGitHub;
+  inherit (pkgs) fetchFromGitHub;
 
   vu = packageLib;
 
   # agnix requires Rust edition 2024 (>= 1.91)
-  rust = ourPkgs.rust-bin.stable.latest.default;
-  rustPlatform = ourPkgs.makeRustPlatform {
-    cargo = rust;
-    rustc = rust;
-  };
+  rustPlatform = vu.mkRustPlatform {inherit pkgs;};
 
   rev = "9071cb8af88fc0946774c203667301fb7b8f5cf4";
   src = fetchFromGitHub {
@@ -53,9 +45,9 @@ in
     inherit src;
     cargoHash = "sha256-08Fbf+dYO2C9N7cZdN7f0XmcpCdJPemLHZNmFyVK/k4=";
 
-    nativeBuildInputs = [ourPkgs.pkg-config];
-    buildInputs = ourPkgs.lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [
-      ourPkgs.apple-sdk_15
+    nativeBuildInputs = [pkgs.pkg-config];
+    buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+      pkgs.apple-sdk_15
     ];
 
     # Build all binary crates: agnix (CLI), agnix-lsp, agnix-mcp
@@ -79,7 +71,7 @@ in
     meta = {
       description = "Linter, LSP, and MCP server for AI coding assistant config files";
       homepage = "https://github.com/agent-sh/agnix";
-      license = ourPkgs.lib.licenses.mit;
+      license = pkgs.lib.licenses.mit;
       mainProgram = "agnix";
     };
   }

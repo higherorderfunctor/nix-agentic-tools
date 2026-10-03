@@ -38,21 +38,21 @@ composed registry and ninja DAG:
   package passes `extraExtract = "${goUpdate.extract}"` from
   `vu.mkGoUpdateExtract`, which restores `goFloor` before repairing
   `vendorHash`, and reads `sources.vendorHash or lib.fakeHash` to cover the
-  window between the two writes. `vu.mkGoVendorFix` builds `<attr>.goModules`
-  through the flake's own `packages` output and scrapes the `got:` hash out of a
-  `-go-modules` mismatch; it is also exposed standalone as
-  `passthru.fixVendorHash`, because a nixpkgs or toolchain bump can invalidate a
-  vendor hash with no version bump at all. In a recipe that overrides the
-  nixpkgs package, `passthru` must be MERGED — `buildGoModule` hangs `goModules`
-  and `overrideModAttrs` there and warns loudly if an overlay drops them. Two
-  traps: `postPatch` is an INPUT to `goModules`, so changing which test files
-  are removed changes the vendor hash; and a vendorHash is NOT validated by "it
-  built", because an identically-named fixed-output path already in the local
-  store is accepted without building. Force the real computation by perturbing
-  the sidecar's version and running the update script. Beads composes two of
-  these standard scripts: each independently checks its upstream, while one
-  public update script keeps Beads and its exact Dolt runtime on the same update
-  branch and PR.
+  window between the two writes. The vendor fixer built by
+  `vu.mkGoUpdateExtract` builds `<attr>.goModules` through the flake's own
+  `packages` output and scrapes the `got:` hash out of a `-go-modules` mismatch;
+  it is also exposed standalone as `passthru.fixVendorHash`, because a nixpkgs
+  or toolchain bump can invalidate a vendor hash with no version bump at all. In
+  a recipe that overrides the nixpkgs package, `passthru` must be MERGED —
+  `buildGoModule` hangs `goModules` and `overrideModAttrs` there and warns
+  loudly if an overlay drops them. Two traps: `postPatch` is an INPUT to
+  `goModules`, so changing which test files are removed changes the vendor hash;
+  and a vendorHash is NOT validated by "it built", because an identically-named
+  fixed-output path already in the local store is accepted without building.
+  Force the real computation by perturbing the sidecar's version and running the
+  update script. Beads composes two of these standard scripts: each
+  independently checks its upstream, while one public update script keeps Beads
+  and its exact Dolt runtime on the same update branch and PR.
 - **npm packages with a sidecar `npmDepsHash`** (`bruno`): override the BUILDER
   (`pkg.override { buildNpmPackage = …; }`), never `overrideAttrs`.
   `buildNpmPackage` is a `lib.extendMkDerivation` whose `extendDrvArgs` computes
@@ -86,12 +86,15 @@ composed registry and ninja DAG:
   `docs/update-pipeline-transitive-hash-gap.md`. Its `pnpmDeps` and `src` FODs
   carry the version in their names, so a bump that forgets a hash fails the
   fetch instead of substituting the previous release's cached output.
-- **Go toolchain gaps** (`gluetun`, `oh-my-posh`): declare the package's go.mod
-  floor and let `vu.goToolchainForFloor` DERIVE the toolchain — `ourPkgs.go`
-  while our pin satisfies the floor, otherwise the lowest `go-bin`
-  (purpleclay/go-overlay) release that does, and a throw if nothing does. Never
-  pin a toolchain version; a pin cannot tell a live gap from a rotted downgrade.
-  `checks/packaging/go-toolchain-floor.nix` covers all three branches.
+- **Go and Rust toolchains** (every owned Go and Rust package): compilers come
+  only from the locked overlays. `vu.mkGoToolchain` returns the newest stable
+  `go-bin` (purpleclay/go-overlay) release and throws if the package's recorded
+  go.mod floor outruns it; `vu.mkRustPlatform` uses
+  `rust-bin.stable.latest.default`. nixpkgs' own `go` / `rustc` is never
+  selected, and a toolchain version is never pinned per package.
+  `checks/packaging/go-toolchain-floor.nix` covers the selection and builder
+  contracts; `checks/packaging/toolchain-provenance.nix` checks the compilers
+  the built packages actually use.
 - **Version-independent URLs** (`dns-root-hints`): the version-equality early
   exit is not a valid change signal, so pass `alwaysPrefetch = true` to
   `mkUpdateScript`. It prefetches every run and decides whether to write by

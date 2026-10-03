@@ -5,17 +5,12 @@
 # controls; it never wraps the already-wrapped result again.
 # cspell:ignore dolthub gastownhall
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.go-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchzip lib;
+  inherit (pkgs) fetchzip lib;
   vu = packageLib;
 
   beadsSources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
@@ -25,7 +20,7 @@
 
   beadsGoUpdate = vu.mkGoUpdateExtract {
     attr = "beads";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "beads";
     sourcesFile = beadsSourcesFile;
   };
@@ -37,7 +32,7 @@
   doltGoUpdate = vu.mkGoUpdateExtract {
     attr = "beads.dolt";
     goModPath = "go/go.mod";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "beads-dolt";
     sourcesFile = doltSourcesFile;
   };
@@ -51,47 +46,45 @@
     # restated here, and it was wrong: the vendor fixer compiles Go and
     # so must follow the floor fixer.
     extraExtract = "${doltGoUpdate.extract}";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "beads-dolt";
     repo = "dolthub/dolt";
     sourcesFile = doltSourcesFile;
   };
 
-  dolt =
-    (ourPkgs.dolt.override {
-      buildGoModule = vu.mkGoBuilder {
-        floor = doltGoFloor;
-        pkgs = ourPkgs;
-        pname = "beads-dolt";
-      };
-    })
+  dolt = ((vu.mkGoToolchain {
+      floor = doltGoFloor;
+      inherit pkgs;
+      pname = "beads-dolt";
+    }).overridePackage
+    pkgs.dolt)
     .overrideAttrs (prev: {
-      inherit (doltSources) version;
-      src = fetchzip {inherit (doltSources.src) url hash;};
-      vendorHash = doltSources.vendorHash or lib.fakeHash;
-      passthru =
-        (prev.passthru or {})
-        // {
-          fixGoFloor = doltFixGoFloor;
-          fixVendorHash = doltFixVendorHash;
-          goUpdateExtract = doltGoUpdate.extract;
-          goFloor = doltGoFloor;
-          updateScript = doltUpdateScript;
-        };
-    });
+    inherit (doltSources) version;
+    src = fetchzip {inherit (doltSources.src) url hash;};
+    vendorHash = doltSources.vendorHash or lib.fakeHash;
+    passthru =
+      (prev.passthru or {})
+      // {
+        fixGoFloor = doltFixGoFloor;
+        fixVendorHash = doltFixVendorHash;
+        goUpdateExtract = doltGoUpdate.extract;
+        goFloor = doltGoFloor;
+        updateScript = doltUpdateScript;
+      };
+  });
 
   beadsUpdateScript = vu.ghArchiveUpdateScript {
     # ORDER is owned by `vu.mkGoUpdateExtract`, not restated here. It was
     # restated here, and it was wrong: the vendor fixer compiles Go and
     # so must follow the floor fixer.
     extraExtract = "${beadsGoUpdate.extract}";
-    pkgs = ourPkgs;
+    inherit pkgs;
     pname = "beads";
     repo = "gastownhall/beads";
     sourcesFile = beadsSourcesFile;
   };
 
-  fixVendorHash = ourPkgs.writeShellScript "fix-vendor-beads-pair" ''
+  fixVendorHash = pkgs.writeShellScript "fix-vendor-beads-pair" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
 
@@ -99,7 +92,7 @@
     ${doltFixVendorHash}
   '';
 
-  updateScript = ourPkgs.writeShellScript "update-beads-pair" ''
+  updateScript = pkgs.writeShellScript "update-beads-pair" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
 
@@ -107,14 +100,12 @@
     ${doltUpdateScript}
   '';
 in
-  (ourPkgs.beads.override {
-    buildGoModule = vu.mkGoBuilder {
+  (((vu.mkGoToolchain {
       floor = beadsGoFloor;
-      pkgs = ourPkgs;
+      inherit pkgs;
       pname = "beads";
-    };
-    inherit dolt;
-  })
+    }).overridePackage
+    pkgs.beads).override {inherit dolt;})
   .overrideAttrs (prev: let
     wrapperAnchor = "wrapProgram $out/bin/bd";
     wrapperWithTelemetry = ''
@@ -131,9 +122,9 @@ in
     # resolves their working directories with lsof; neither is in stdenv PATH.
     nativeCheckInputs =
       (prev.nativeCheckInputs or [])
-      ++ lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [
-        ourPkgs.darwin.ps
-        ourPkgs.lsof
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+        pkgs.darwin.ps
+        pkgs.lsof
       ];
 
     # This test installs `#!/usr/bin/env sh` hooks and then asks git to execute
@@ -176,14 +167,14 @@ in
 
       test -x "$out/bin/bd"
       test -x "$out/bin/.bd-wrapped"
-      test "$(${ourPkgs.findutils}/bin/find "$out/bin" -maxdepth 1 -name '.bd-wrapped*' -print | ${ourPkgs.coreutils}/bin/wc -l)" -eq 1
-      ${ourPkgs.gnugrep}/bin/grep -aF 'BD_DISABLE_EVENT_FLUSH=1' "$out/bin/bd"
-      ${ourPkgs.gnugrep}/bin/grep -aF 'BD_DISABLE_METRICS=1' "$out/bin/bd"
-      ${ourPkgs.gnugrep}/bin/grep -aF 'DOLT_DISABLE_EVENT_FLUSH=1' "$out/bin/bd"
-      ${ourPkgs.gnugrep}/bin/grep -aF '${lib.makeBinPath [dolt]}' "$out/bin/bd"
-      ${ourPkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" --version | ${ourPkgs.gnugrep}/bin/grep -F "${beadsSources.version}"
-      ${ourPkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" metrics | ${ourPkgs.gnugrep}/bin/grep -F 'Anonymous usage metrics: OFF'
-      ${ourPkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" dolt --help > /dev/null
+      test "$(${pkgs.findutils}/bin/find "$out/bin" -maxdepth 1 -name '.bd-wrapped*' -print | ${pkgs.coreutils}/bin/wc -l)" -eq 1
+      ${pkgs.gnugrep}/bin/grep -aF 'BD_DISABLE_EVENT_FLUSH=1' "$out/bin/bd"
+      ${pkgs.gnugrep}/bin/grep -aF 'BD_DISABLE_METRICS=1' "$out/bin/bd"
+      ${pkgs.gnugrep}/bin/grep -aF 'DOLT_DISABLE_EVENT_FLUSH=1' "$out/bin/bd"
+      ${pkgs.gnugrep}/bin/grep -aF '${lib.makeBinPath [dolt]}' "$out/bin/bd"
+      ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" --version | ${pkgs.gnugrep}/bin/grep -F "${beadsSources.version}"
+      ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" metrics | ${pkgs.gnugrep}/bin/grep -F 'Anonymous usage metrics: OFF'
+      ${pkgs.coreutils}/bin/env -i HOME="$TMPDIR" "$out/bin/bd" dolt --help > /dev/null
 
       runHook postInstallCheck
     '';

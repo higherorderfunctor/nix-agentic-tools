@@ -114,8 +114,9 @@ If a JS MCP server fails with `Cannot find module 'X'`:
 
 ## MCP Server Packages
 
-> **Last verified:** 2026-09-20 — vendored npm lock locations follow their
-> manual or automatic updater.
+> **Last verified:** 2026-10-02 — main-tracking rev bumps are done by
+> `update-pkg.sh`; vendored npm lock locations follow their manual or automatic
+> updater.
 >
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
 
@@ -153,7 +154,7 @@ No sidecar files or generated sources — everything is visible in one place:
 ```nix
 # packages/context7-mcp/packages/ai/mcpServers/context7-mcp/package.nix
 rev = "c31528d...";
-src = ourPkgs.fetchFromGitHub {
+src = pkgs.fetchFromGitHub {
   owner = "upstash";
   repo = "context7";
   inherit rev;
@@ -317,8 +318,9 @@ nix flake check                 # Verify evaluation
 
 Updates use two mechanisms depending on package type:
 
-- **Main-tracking packages**: `mkGitRevUpdateScript` fetches the latest commit
-  via `git ls-remote`, then `nix-update --version skip` refreshes all hashes
+- **Main-tracking packages**: `update-pkg.sh` fetches the latest commit via
+  `git ls-remote` (target declared in the owner `registry.nix`), prefetches the
+  source, then `nix-update --version skip` refreshes all hashes
 - **Per-platform binaries**: `mkUpdateScript` fetches the latest release
   version, prefetches each platform's binary, and writes to `sources.json`. For
   a GitHub-released upstream, pair it with `ghLatestVersionCmd` (reads the

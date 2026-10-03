@@ -625,6 +625,25 @@ fix_sidecar_hashes() {
   return "$rc"
 }
 
+# Refresh a rev-tracked package's recipe-owned Go floor before nix-update
+# evaluates dependency derivations. Release packages use --use-update-script,
+# whose mkGoUpdateExtract chain owns the corresponding sidecar write and order.
+# A package opts in by exposing passthru.fixGoFloor, so the worker carries no
+# package-name registry.
+refresh_package_go_floor() {
+  local name="$1" has_fixer fixer
+  if ! has_fixer=$(nix eval --raw ".#$name" --apply 'p: builtins.toJSON (p ? fixGoFloor)'); then
+    log_failure "could not evaluate $name for a Go-floor fixer (nix error above)"
+    return 1
+  fi
+  [ "$has_fixer" = true ] || return 0
+  if ! fixer=$(nix build --no-link --print-out-paths ".#$name.fixGoFloor"); then
+    log_failure "could not build $name Go-floor fixer (nix error above)"
+    return 1
+  fi
+  "$fixer"
+}
+
 # ── Sidecar regeneration ─────────────────────────────────────────────────────
 #
 # A package whose update never runs mkUpdateScript's `extraExtract` would

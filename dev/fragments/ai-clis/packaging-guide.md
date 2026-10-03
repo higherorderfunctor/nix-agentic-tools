@@ -1,6 +1,7 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-09-26 — chatgpt-codex installs upstream's complete
+> **Last verified:** 2026-10-02 — main-tracking rev bumps are done by
+> `update-pkg.sh`; chatgpt-codex installs upstream's complete
 > `codex-package-<target>` layout.
 
 ### Overview
@@ -79,15 +80,14 @@ Each uses an update strategy managed by `config.update.targets` (see owner
   refreshes pnpm dependencies
 - `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   version from AWS manifest endpoint
-- `kiro-gateway` — inline `rev` + `hash` with `mkGitRevUpdateScript` for
-  main-branch tracking; version via `mkVersion`
+- `kiro-gateway` — inline `rev` + `hash`; `update-pkg.sh` tracks the main branch
+  from the `git` URL in its `registry.nix` target; version via `mkVersion`
 
-The `lib/packaging.nix` file provides `ghLatestVersionCmd`,
-`mkGitRevUpdateScript`, `mkUpdateScript`, and `mkVersion` helpers consumed by
-each owner recipe. `ghLatestVersionCmd` reads the `releases/latest` redirect
-rather than the GitHub API, so it needs no token and cannot be rate-limited;
-prefer it over a hand-rolled `curl … api.github.com | jq -r .tag_name` version
-check.
+The `lib/packaging.nix` file provides `ghLatestVersionCmd`, `mkUpdateScript`,
+and `mkVersion` helpers consumed by each owner recipe. `ghLatestVersionCmd`
+reads the `releases/latest` redirect rather than the GitHub API, so it needs no
+token and cannot be rate-limited; prefer it over a hand-rolled
+`curl … api.github.com | jq -r .tag_name` version check.
 
 ### Patched Kiro variants stay local — TWO credentialed paths, not one
 
@@ -204,7 +204,7 @@ derivation from scratch. This inherits upstream build logic (install phases,
 meta, dependencies) while pinning to inline versions and per-platform sources:
 
 ```nix
-ourPkgs.<package>.overrideAttrs (_: {
+pkgs.<package>.overrideAttrs (_: {
   inherit (sources) version;
   src = fetchurl { inherit (platformSrc) url hash; };
 })
@@ -221,15 +221,15 @@ of three environments, now one shared environment); the public derivation has no
 `src`, and its `buildCommand` never reaches the unwrapped package's
 `fixupPhase`, so the pin AND the `postFixup` both evaporated while the build
 stayed green. `packages/kiro-cli/packages/ai/kiro-cli/package.nix` therefore
-feature-detects `ourPkgs ? kiro-cli-unwrapped`, overrides the unwrapped
-derivation, and hands the result back to upstream's wrapper via `.override`. Its
-public passthru also exposes `withFhsPayload` so module configuration that must
-be visible inside the FHS root can use that same upstream expression. The public
-package-selection contract is topology-stable: `unwrapped` always names the
-direct payload, and `kiroFhsSandbox` says whether selecting it actually removes
-an FHS layer (`false` on darwin and pre-split nixpkgs). `useFhsSandbox = false`
-selects that payload explicitly instead of changing the public package's default
-meaning.
+feature-detects `pkgs ? kiro-cli-unwrapped` on the injected `pkgs`, overrides
+the unwrapped derivation, and hands the result back to upstream's wrapper via
+`.override`. Its public passthru also exposes `withFhsPayload` so module
+configuration that must be visible inside the FHS root can use that same
+upstream expression. The public package-selection contract is topology-stable:
+`unwrapped` always names the direct payload, and `kiroFhsSandbox` says whether
+selecting it actually removes an FHS layer (`false` on darwin and pre-split
+nixpkgs). `useFhsSandbox = false` selects that payload explicitly instead of
+changing the public package's default meaning.
 
 Read the "When the attribute stops being the derivation" section of the
 overlay-pattern fragment before adding another `overrideAttrs` package — it

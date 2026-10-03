@@ -1,22 +1,27 @@
 ## Overlay Cache-Hit Parity
 
 > **Last verified:** 2026-10-02 — all owner recipes receive pinned packages from
-> the shared composer; both supported-system output baselines match.
+> the shared composer, which applies the Go and Rust overlays once; compilers
+> come from `mkGoToolchain` / `mkRustPlatform`; both supported-system output
+> baselines match.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show db6df0dd:dev/fragments/overlays/cache-hit-parity.md`.
 >
 > - Oxlint's `@napi-rs/cli` dependency is patched in its pnpm-fetched source,
 >   not fixed by admitting Darwin's `/bin/ps` into the sandbox. Both fetch and
->   build use pnpm 11 from pinned `ourPkgs`, matching upstream's major.
+>   build use pnpm 11 from the injected `pkgs`, matching upstream's major.
 
 ### The rule
 
 **Every compiled package must use this flake's `inputs.nixpkgs` pin for its base
 derivation and build inputs.** Owner recipes receive that instance as `pkgs`
-from repository assembly, with shared helpers injected as `packageLib`. Recipes
-needing additional toolchain overlays may instantiate that same pin with those
-overlays. Consumer `final` / `prev` must not supply build inputs.
+from repository assembly, with shared helpers injected as `packageLib`. That
+instance already carries the go-overlay and rust-overlay, so a Go or Rust recipe
+never instantiates nixpkgs itself; it takes compilers from `mkGoToolchain` /
+`mkRustPlatform`. `bun` and `pnpm_12` still import `inputs.nixpkgs` directly as
+plain-pin exceptions; they carry no compiler. Consumer `final` / `prev` must not
+supply build inputs.
 
 If you use `final` or `prev` for build inputs, the derivation binds to the
 **consumer's** nixpkgs pin. CI builds against this repo's own nixpkgs pin.
@@ -24,24 +29,18 @@ Different pins → different store paths → `nix-agentic-tools.cachix.org` does
 serve the consumer because the hash they're asking for was never computed. Cache
 miss on every consumer rebuild.
 
-### A recipe with a toolchain overlay
+### A recipe with a Rust toolchain
 
 ```nix
 # packages/git-absorb/packages/ai/gitTools/git-absorb/package.nix — CORRECT
-{inputs, pkgs, packageLib, ...}: let
-  ourPkgs = import inputs.nixpkgs {
-    inherit (pkgs.stdenv.hostPlatform) system;
-    overlays = [inputs.rust-overlay.overlays.default];
-  };
-  inherit (ourPkgs) fetchFromGitHub;
+{pkgs, packageLib, ...}: let
+  inherit (pkgs) fetchFromGitHub;
 
   vu = packageLib;
 
-  rust = ourPkgs.rust-bin.stable.latest.default;
-  rustPlatform = ourPkgs.makeRustPlatform {
-    cargo = rust;
-    rustc = rust;
-  };
+  # rust-overlay is already applied to `pkgs`; the helper picks
+  # rust-bin.stable.latest.default and wraps it in makeRustPlatform.
+  rustPlatform = vu.mkRustPlatform {inherit pkgs;};
 
   rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
   src = fetchFromGitHub {
@@ -51,10 +50,10 @@ miss on every consumer rebuild.
     hash = "sha256-...";
   };
 in
-  ourPkgs.git-absorb.override (_: {
+  pkgs.git-absorb.override (_: {
     rustPlatform.buildRustPackage = args:
       rustPlatform.buildRustPackage (finalAttrs: let
-        a = (ourPkgs.lib.toFunction args) finalAttrs;
+        a = (pkgs.lib.toFunction args) finalAttrs;
       in
         a
         // {
@@ -65,12 +64,15 @@ in
   })
 ```
 
-- The composer chooses the consumer system while injecting this repo's pin.
-- `ourPkgs` is built from THIS repo's `inputs.nixpkgs` plus any sub-overlays the
-  package needs (rust-overlay here).
-- Every downstream reference (`ourPkgs.git-absorb`, `ourPkgs.rust-bin`,
-  `ourPkgs.makeRustPlatform`, `ourPkgs.lib`) routes through `ourPkgs`, not
-  `final`/`prev`.
+- The composer chooses the consumer system while injecting this repo's pin, with
+  go-overlay and rust-overlay applied to it.
+- Compiler versions come only from the locked overlays: `vu.mkRustPlatform` for
+  Rust, `vu.mkGoToolchain` for Go. nixpkgs' own `go` / `rustc` / `cargo` is
+  never selected. `checks/packaging/toolchain-provenance.nix` inspects the real
+  build inputs of every Go and Rust package and fails on either a missing locked
+  compiler or a nixpkgs one.
+- Every downstream reference (`pkgs.git-absorb`, `pkgs.lib`) routes through the
+  injected `pkgs`, not `final`/`prev`.
 - Version is computed at eval time via `mkVersion`, producing `"x.y.z+debdcd2"`
   (upstream version + short rev).
 - The native scope discovers the recipe and its named arguments; no explicit
@@ -80,21 +82,22 @@ in
 `packages/git-branchless/packages/ai/gitTools/git-branchless/package.nix` for a
 long time after that file stopped having this shape — it now takes its `src`
 from the `inputs.git-branchless` flake input rather than a pinned rev+hash,
-needs no sub-overlay in `ourPkgs`, and reaches its base with `overrideAttrs`.
-`git-absorb` is the vehicle because composing a sub-overlay into `ourPkgs` is
-part of the lesson, and `git-branchless` cannot teach it. Keep the two in sync
-or move the example again — do not re-point the heading at a file that does not
-match the body.
+needs no Rust toolchain override, and reaches its base with `overrideAttrs`.
+`git-absorb` is the vehicle because replacing `rustPlatform` through the
+`.override` seam is part of the lesson, and `git-branchless` cannot teach it.
+Keep the two in sync or move the example again — do not re-point the heading at
+a file that does not match the body.
 
 Note that the `.override`-on-the-builder seam above is a SEPARATE question from
 cache-hit parity. Parity only cares that the base derivation and every build
-input come from `ourPkgs`; which override seam is correct depends on how the
-upstream builder is written. See the overlay-pattern fragment for that decision.
+input come from the injected `pkgs`; which override seam is correct depends on
+how the upstream builder is written. See the overlay-pattern fragment for that
+decision.
 
 ### `follows` defeats this by construction — and can HARD-FAIL, not just miss
 
-`ourPkgs` guards the overlay ARGUMENT (`final` / `prev`). It cannot guard the
-flake INPUT. A consumer writing
+The injected `pkgs` guards the overlay ARGUMENT (`final` / `prev`). It cannot
+guard the flake INPUT. A consumer writing
 
 ```nix
 nix-agentic-tools = {
@@ -104,10 +107,10 @@ nix-agentic-tools = {
 ```
 
 rewrites THIS flake's `nixpkgs` input at lock time, before any of our code
-evaluates, so `ourPkgs = import inputs.nixpkgs { … }` faithfully imports
-**theirs**. No Nix expression can reference "my nixpkgs input, ignoring the
-consumer's follows" — there is nothing `ourPkgs` could have done differently. It
-is visible in the consumer's lock as
+evaluates, so the `pkgs` the composer injects into recipes is built from
+**their** nixpkgs. No Nix expression can reference "my nixpkgs input, ignoring
+the consumer's follows" — there is nothing a recipe could have done differently.
+It is visible in the consumer's lock as
 `nodes["nix-agentic-tools"].inputs.nixpkgs = ["nixpkgs"]`, a follows pointer
 where our own locked node would otherwise be.
 
@@ -119,17 +122,15 @@ exactly this scenario and asserts the output **drifts**. The check fails if
 **The cost is worse than the cache miss this fragment used to describe.**
 Measured 2026-08-05 against a real consumer following an April 2026 nixpkgs
 (`01fbdeef`, Go 1.26.2): `glab` did not merely rebuild from source, it failed
-outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
-no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
-`gh` was silently one bump behind the same fate.
+outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`, because it
+inherited whatever `go` the followed nixpkgs ships.
 
-The Go floor seam (overlay-pattern fragment) now covers all nine exported Go
-packages plus Beads' nested paired Dolt runtime, so that specific class is
-handled — a followed older nixpkgs gets a `go-bin` toolchain instead of a
-failure. It does NOT make `follows` supported: the consumer still gets zero
-cache hits, and the next toolchain-shaped dependency that lacks a floor seam
-will break the same way. The README carries the consumer-facing version of this
-warning.
+Owned Go and Rust packages now take their compiler from the locked overlays
+(`mkGoToolchain`, `mkRustPlatform`), so that specific class is handled — a
+followed older nixpkgs still builds with the locked compiler. It does NOT make
+`follows` supported: the consumer still gets zero cache hits, and the next
+toolchain-shaped dependency that does not come from a locked overlay will break
+the same way. The README carries the consumer-facing version of this warning.
 
 ### The trade-off (accepted in commit e5406977)
 
@@ -152,11 +153,12 @@ every rebuild.
 
 1. Accept named native arguments such as `{pkgs, packageLib, repoPath, ...}`.
    The composer supplies pinned packages; the recipe tree determines exports.
-2. When a custom toolchain overlay is needed, instantiate `inputs.nixpkgs` with
-   that overlay and the injected `pkgs.stdenv.hostPlatform.system`.
-3. Use `ourPkgs.X` for every build input.
-4. Base the derivation on `ourPkgs.<package>`, never `prev.<package>`. Whether
-   you reach it with `.override` or `overrideAttrs` is a separate decision
+2. Take compilers from `packageLib.mkGoToolchain` or `packageLib.mkRustPlatform`
+   (the composer applies the overlays); never instantiate `inputs.nixpkgs` in a
+   Go or Rust recipe.
+3. Use `pkgs.X` for every build input.
+4. Base the derivation on `pkgs.<package>`, never `prev.<package>`. Whether you
+   reach it with `.override` or `overrideAttrs` is a separate decision
    (overlay-pattern fragment) — parity only cares where the base and the build
    inputs come from.
 5. Verify: `nix eval --raw .#<package>` from this repo, then eval the same
@@ -255,10 +257,11 @@ curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
 
 **Pinned external derivations preserve the upstream identity.** Semble is
 selected directly from `inputs.llm-agents.packages.${system}.semble`, with no
-nixpkgs follow, `overlays.shared-nixpkgs`, local `ourPkgs` rebuild, or
-`overrideAttrs`. Its cache identity belongs to the upstream flake rather than to
-this repository's nixpkgs pin. Both the standalone output and a deliberately
-divergent consumer must match that upstream `drvPath` and `outPath` exactly.
+nixpkgs follow, `overlays.shared-nixpkgs`, local rebuild against the injected
+`pkgs`, or `overrideAttrs`. Its cache identity belongs to the upstream flake
+rather than to this repository's nixpkgs pin. Both the standalone output and a
+deliberately divergent consumer must match that upstream `drvPath` and `outPath`
+exactly.
 
 The `semble-mcp` role uses the same plain attr/meta overlay pattern as the agnix
 role variants, selecting `meta.mainProgram = "semble-mcp"` without re-running
@@ -274,16 +277,16 @@ flake-input bump owns this versioned package. The MCP role inherits the property
 with the rest of Semble's attrset.
 
 The same metadata rule applies when an overlay rebuilds around a flake input:
-`git-branchless` keeps its locally pinned `ourPkgs` build but declares
-`passthru.updateFlakeInput = "git-branchless"`, because that input supplies both
-its source and Cargo lock. Adding passthru through `overrideAttrs` is
-derivation-neutral; the cache-hit parity gate remains the authority on the
+`git-branchless` keeps its locally pinned build from the injected `pkgs` but
+declares `passthru.updateFlakeInput = "git-branchless"`, because that input
+supplies both its source and Cargo lock. Adding passthru through `overrideAttrs`
+is derivation-neutral; the cache-hit parity gate remains the authority on the
 resulting path.
 
 **Content-only packages don't need this.** Packages that just ship markdown
 files (coding-standards, stacked-workflows-content, fragments-ai) have no
 compiled inputs, so their store paths are already byte-identical regardless of
-which nixpkgs evaluates them. Skip the ourPkgs pattern for these.
+which nixpkgs evaluates them. Skip the injected-`pkgs` pattern for these.
 
 "Content-only" means **no build inputs at all**. It does NOT mean "ships data
 files rather than binaries" — a distinction worth being precise about, because
@@ -293,26 +296,26 @@ fetcher (`fetchzip` / `fetchurl`) inside an stdenv derivation, and both of those
 bind to whichever pkgs set supplies them. They are registered in
 `config.checks.cacheHitParity` for exactly that reason. The test is not what a
 package installs but whether it needs a `pkgs` set to evaluate; if it does, it
-needs `ourPkgs`.
+needs the injected `pkgs`.
 
 **Pure binary-fetch packages** (no build, just an `overrideAttrs` that swaps
-`src`/`version`) still route through `ourPkgs` to keep the starting derivation
-tied to this repo's nixpkgs pin. `copilot-cli` and `kiro-gateway` also ship
-prebuilt binaries, but they are standalone `mkDerivation`s rather than
+`src`/`version`) still route through the injected `pkgs` to keep the starting
+derivation tied to this repo's nixpkgs pin. `copilot-cli` and `kiro-gateway`
+also ship prebuilt binaries, but they are standalone `mkDerivation`s rather than
 `overrideAttrs` — that is the next paragraph, not this one.
 
 `packages/kiro-cli/packages/ai/kiro-cli/package.nix` used to head that list and
 no longer matches it: since nixpkgs split the package, it overrides
-`ourPkgs.kiro-cli-unwrapped` and then re-composes upstream's FHS wrapper with
-`ourPkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}` (overlay-pattern
+`pkgs.kiro-cli-unwrapped` and then re-composes upstream's FHS wrapper with
+`pkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}` (overlay-pattern
 fragment, "When the attribute stops being the derivation"). **Parity is
 unchanged and it is worth knowing why the extra branch cannot break it:** the
-`ourPkgs ? kiro-cli-unwrapped` feature-detection reads `inputs.nixpkgs`, which
+`pkgs ? kiro-cli-unwrapped` feature-detection reads the injected `pkgs`, which
 is the same pkgs set on BOTH sides of the parity check, so the two evaluations
 always take the same branch. A detection keyed on `final`/`prev` would not have
 that property — it would resolve against the consumer's pin and could take
 different branches on the two sides, which is drift by construction. Keep
-feature-detection on `ourPkgs`. The package remains covered by
+feature-detection on the injected `pkgs`. The package remains covered by
 `checks.cache-hit-parity`. The `withFhsPayload` function is passthru only and
 therefore does not move the default derivation; calling it deliberately creates
 a configuration-specific FHS derivation. Selecting `passthru.unwrapped` through
@@ -324,9 +327,9 @@ derivation's inputs.
 **Standalone variant.** When upstream's attrs become incompatible with the
 artifact we want to ship (different `sourceRoot`, `installPhase`, `buildInputs`,
 wrapper shape, etc.), a per-platform overlay can instead be a standalone
-`ourPkgs.stdenv.mkDerivation { ... }` rather than an `overrideAttrs`. The
-cache-hit parity rule is unchanged — all build inputs still route through
-`ourPkgs` — but no upstream attrs are inherited.
+`pkgs.stdenv.mkDerivation { ... }` rather than an `overrideAttrs`. The cache-hit
+parity rule is unchanged — all build inputs still route through the injected
+`pkgs` — but no upstream attrs are inherited.
 `packages/copilot-cli/packages/ai/copilot-cli/package.nix` is the current
 example: upstream rewrote `github-copilot-cli` from the per-platform SEA tarball
 to a universal Node tarball, which would have required overriding ~every

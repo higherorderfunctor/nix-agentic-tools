@@ -17,7 +17,12 @@
 #
 # Carried despite nixpkgs having it because nixpkgs' version is not an
 # input to this repo's update cadence.
-{pkgs, ...}: let
+{
+  pkgs,
+  packageLib,
+  ...
+}: let
+  rustPlatform = packageLib.mkRustPlatform {inherit pkgs;};
   version = "0.2.78";
   src = pkgs.fetchFromGitHub {
     owner = "rvben";
@@ -26,9 +31,9 @@
     hash = "sha256-Sr2CL1tCYrDYEQm3zcDY/3yzIjMCH1xg9tKpLovEK98=";
   };
 in
-  pkgs.rumdl.overrideAttrs (finalAttrs: _: {
+  (pkgs.rumdl.override {inherit rustPlatform;}).overrideAttrs (finalAttrs: _: {
     inherit src version;
-    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+    cargoDeps = rustPlatform.fetchCargoVendor {
       # pname and version name the output, so a stale hash cannot reuse the
       # previous release's cached vendor set after a bump.
       inherit (finalAttrs) pname version src;

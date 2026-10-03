@@ -1,11 +1,13 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-09-29 — both update paths regenerate committed
-> sidecars through `passthru.regenerateExtracted`: an input bump for every
-> package that input owns, a package target (rev bump or nix-update) for the
-> package itself; the hardcoded Semble block is gone. `--use-update-script` rows
-> must resolve `updateScript` to an executable file, gated by
-> `checks.update-script-executable`.
+> **Last verified:** 2026-10-02 — rev bumps prefetch with the package's own
+> fetcher mode (archive or fetchgit, read from the evaluated `src`); rev-tracked
+> Go packages refresh recipe-owned floor literals before nix-update; both update
+> paths regenerate committed sidecars through `passthru.regenerateExtracted`: an
+> input bump for every package that input owns, a package target (rev bump or
+> nix-update) for the package itself; the hardcoded Semble block is gone.
+> `--use-update-script` rows must resolve `updateScript` to an executable file,
+> gated by `checks.update-script-executable`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -70,7 +72,9 @@ Targets fall into three categories:
   not rewritten, so a changed template reaches the update PR but fails its
   coverage check until the local derivative is reviewed.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
-  a worktree, optionally preceded by a rev bump for main-tracking packages, then
+  a worktree, optionally preceded by a rev bump for main-tracking packages.
+  Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
+  nix-update, including on an unchanged-rev sweep. The worker then runs
   `regenerate_sidecars package <name>`: a package exposing
   `passthru.regenerateExtracted` (git-absorb and git-revise, whose
   `--version skip` bumps never run an `extraExtract`) gets its sidecar refreshed
@@ -127,18 +131,31 @@ receives the repo URL as a trailing argument:
    `checks.update-targets-parity` asserts the declared `file` is byte-identical
    to what the resolver would print, so the two paths can never diverge. `sed`
    then replaces the old `rev` in that resolved file.
-3. `nix flake prefetch github:<owner>/<repo>/<new-rev>` fetches the new source
-   hash. A failed, empty, malformed response or one without a hash holds the
-   target back before `nix-update` can mistake a source mismatch for a
-   dependency hash. Recipes with source-version markers also require the
-   returned source tree; every marker is resolved from that same prefetch.
+3. The new source hash comes from the package's own fetcher, read from the
+   evaluated `src` by `source_fetch_spec`, never from recipe text or a package
+   list. An archive fetcher (`fetchFromGitHub` default) uses
+   `nix flake prefetch github:<owner>/<repo>/<new-rev>`. A `fetchgit`-based src
+   (submodules, deepClone, leaveDotGit, LFS, …) runs nixpkgs' `nix-prefetch-git`
+   with flags mirrored from `fetchgit`'s builder, so the NAR is the fetcher's
+   own. A src with hooks the prefetch cannot replay (`preFetch`, `postFetch`,
+   `postCheckout`, a checkout hook, `gitConfigFile`), or one that cannot be
+   inspected, holds the target back with the tree untouched.
+   `NAT_UPDATE_PREFETCH_TIMEOUT` (default 600 s) bounds the prefetch. A failed,
+   empty, malformed response or one without a hash holds the target back before
+   `nix-update` can mistake a source mismatch for a dependency hash. Recipes
+   with source-version markers also require the returned source tree; every
+   marker is resolved from that same prefetch.
 4. `sed` replaces the old `hash` in the overlay `.nix` file.
 5. `git commit` creates a commit with the rev + src hash change.
-6. `nix-update --version skip` runs to update dependency hashes (cargo, pnpm,
+6. A package exposing `passthru.fixGoFloor` derives its recipe literal from the
+   freshly pinned source and amends it into that commit. This step also runs
+   when the rev is unchanged, repairing a stale floor on the next sweep.
+7. `nix-update --version skip` runs to update dependency hashes (cargo, pnpm,
    vendor, etc.). If changes occur, they amend into the existing commit.
 
-If the rev is unchanged (already at latest), steps 1-6 are skipped entirely and
-the target reports NO UPDATES.
+If the rev is unchanged, source/hash replacement is skipped but the Go-floor
+fixer and nix-update still run. The target reports NO UPDATES only when neither
+finds drift.
 
 **Why the resolver is deterministic.** Step 2 replaced an earlier
 `grep -rl "<repo-basename>" | head -1`, which matched any overlay merely naming

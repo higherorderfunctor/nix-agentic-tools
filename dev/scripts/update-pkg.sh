@@ -29,6 +29,100 @@ trap 'teardown_worktree "$wt"' EXIT
 version_file="$wt/.update-version"
 base_head=$(git rev-parse "$BRANCH")
 
+commit_pending_update() {
+  if git_diff_quiet -C "$wt" diff && git_diff_quiet -C "$wt" diff --staged; then
+    return 0
+  fi
+  if ! git -C "$wt" add -A; then
+    log_failure "git add failed"
+    return 1
+  fi
+  if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
+    if ! git -C "$wt" commit --amend --no-edit; then
+      log_failure "git commit --amend failed"
+      return 1
+    fi
+  elif ! git -C "$wt" commit -m "chore(packages): update $name"; then
+    log_failure "git commit failed"
+    return 1
+  fi
+}
+
+# ── Source prefetch ──────────────────────────────────────────────────────────
+#
+# A rev bump must write the hash the package's OWN fetcher will produce, so
+# the fetch mode is read from the evaluated `src`, never from recipe text or a
+# package-name list:
+#
+#   archive   fetchFromGitHub's default fetchzip of the GitHub tarball, which
+#             `nix flake prefetch github:` reproduces.
+#   git       any fetchgit-based src (fetchFromGitHub with fetchSubmodules,
+#             deepClone, leaveDotGit, fetchLFS, ...). Its builder runs
+#             nixpkgs' nix-prefetch-git with flags derived from the src's
+#             attrs; `args` below mirrors fetchgit/builder.sh flag for flag and
+#             prefetch_source runs the same script from the same nixpkgs, so
+#             the NAR is the fetcher's own: a shallow `--depth 1` fetch of the
+#             rev plus `--depth 1` submodules unless deepClone/leaveDotGit ask
+#             for more. Hooks the prefetch cannot replay (preFetch, postFetch,
+#             postCheckout, a checkout hook, gitConfigFile) are listed in
+#             `unsupported`, and the caller holds such a package back.
+#
+# Prints {mode, url, name, args, unsupported} as JSON.
+source_fetch_spec() {
+  nix eval --json ".#$1.src" --apply '
+    src: let
+      a = src.drvAttrs or {};
+      # fetchgit leaves an unused attr null, false, "" or [] (structured attrs).
+      set = n: builtins.hasAttr n a && !(builtins.elem (builtins.getAttr n a) [null false "" []]);
+      flag = n: f: if set n then [f] else [];
+      option = n: f: if set n then [f (builtins.getAttr n a)] else [];
+      hooks = ["NIX_PREFETCH_GIT_CHECKOUT_HOOK" "gitConfigFile" "postCheckout" "postFetch" "preFetch"];
+    in
+      if a ? fetcher
+      then {
+        mode = "git";
+        inherit (a) name url;
+        args =
+          flag "leaveDotGit" "--leave-dotGit"
+          ++ flag "fetchLFS" "--fetch-lfs"
+          ++ flag "deepClone" "--deepClone"
+          ++ flag "fetchSubmodules" "--fetch-submodules"
+          ++ flag "fetchTags" "--fetch-tags"
+          ++ option "sparseCheckoutText" "--sparse-checkout"
+          ++ flag "nonConeMode" "--non-cone-mode"
+          ++ option "branchName" "--branch-name"
+          ++ option "rootDir" "--root-dir";
+        unsupported = builtins.filter set hooks;
+      }
+      else {mode = "archive";}'
+}
+
+# Prefetch <rev> as <spec> describes and print {hash, storePath}, the one
+# record shape the rest of Phase 0 validates and consumes. Bounded by
+# NAT_UPDATE_PREFETCH_TIMEOUT seconds: nix-prefetch-git falls back to a full
+# fetch when a shallow one fails, and a hang must hold the target back rather
+# than stall the sweep.
+prefetch_source() {
+  local spec="$1" git_url="$2" rev="$3" limit="${NAT_UPDATE_PREFETCH_TIMEOUT:-600}"
+  local repo="${git_url%.git}"
+  local -a args
+  case "$(jq -r .mode <<<"$spec")" in
+  archive)
+    timeout "$limit" nix flake prefetch --json \
+      "github:${repo#*github.com/}/$rev" |
+      jq '{hash, storePath}'
+    ;;
+  git)
+    mapfile -d '' -t args < <(jq -j '.args[] | (., "\u0000")' <<<"$spec")
+    timeout "$limit" nix run --inputs-from . nixpkgs#nix-prefetch-git -- --quiet \
+      --url "$(jq -r .url <<<"$spec")" --rev "$rev" --name "$(jq -r .name <<<"$spec")" \
+      "${args[@]}" |
+      jq '{hash, storePath: .path}'
+    ;;
+  *) return 1 ;;
+  esac
+}
+
 # Phase 0: Bump rev to latest default branch commit (main-tracking packages)
 if [ -n "$git_url" ]; then
   log_info "Fetching latest rev from $git_url..."
@@ -63,15 +157,27 @@ if [ -n "$git_url" ]; then
     if [ -n "$target_file" ]; then
       old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" | head -1 || true)
       if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
+        # Read how the package fetches its source before changing source pins:
+        # the record is rev-independent, and a package it cannot describe is
+        # held back with the tree untouched.
+        if ! fetch_spec=$(source_fetch_spec "$name"); then
+          report_held_back "$name" "could not inspect source fetcher"
+          exit 0
+        fi
+        if ! jq -e '(.mode == "archive") or (.mode == "git" and (.unsupported | length) == 0)' \
+          <<<"$fetch_spec" >/dev/null; then
+          report_held_back "$name" "source fetcher cannot be prefetched" \
+            "$(jq -c '{mode, unsupported}' <<<"$fetch_spec")"
+          exit 0
+        fi
         sed -i "s|$old_rev|$new_rev|g" "$target_file"
         # Prefetch new source hash + storePath (used below for upstream
         # version re-derivation; one prefetch, two uses)
         old_hash=$(grep -oP 'hash = "\Ksha256-[^"]+' "$target_file" | head -1 || true)
         storePath=""
         if [ -n "$old_hash" ]; then
-          flake_ref="github:$(echo "$git_url" | sed 's|\.git$||' | grep -oP 'github\.com/\K.*')/$new_rev"
           prefetch_rc=0
-          prefetch_json=$(nix flake prefetch --json "$flake_ref" 2>/dev/null) || prefetch_rc=$?
+          prefetch_json=$(prefetch_source "$fetch_spec" "$git_url" "$new_rev") || prefetch_rc=$?
           if [ "$prefetch_rc" -ne 0 ] ||
             ! jq -e 'type == "object" and (.hash | type == "string" and test("^sha256-[A-Za-z0-9+/]{43}=$"))' \
               <<<"$prefetch_json" >/dev/null 2>&1; then
@@ -252,10 +358,25 @@ set +e
 
   cd "$wt"
 
-  # Prime the src derivation file in the store. `nix flake prefetch`
-  # (Phase 0) populates the source output but does NOT create a .drv
-  # for the fetchFromGitHub derivation — .drv files are machine-local
-  # and not produced by the flake-prefetch builtin. nix-update's
+  # A rev-tracked Go package can carry its floor as a recipe literal. Refresh
+  # that opt-in value from the newly pinned source before nix-update evaluates
+  # goModules. Run even when Phase 0 found no new rev so a previously stale
+  # literal self-heals on the next sweep. Release packages own this ordering in
+  # their --use-update-script extraExtract chain and are excluded here.
+  if [ -n "$git_url" ] && [[ " $extra_flags " != *" --use-update-script "* ]]; then
+    if ! refresh_package_go_floor "$name"; then
+      log_failure "Go-floor refresh failed"
+      exit 1
+    fi
+    if ! commit_pending_update; then
+      exit 1
+    fi
+  fi
+
+  # Prime the src derivation file in the store. The Phase 0 prefetch
+  # (prefetch_source) populates the source output but does NOT create a
+  # .drv for the fetchFromGitHub derivation — .drv files are machine-local
+  # and neither prefetch path produces one. nix-update's
   # internal nix-instantiate then fails at `readFile "${src}/..."`
   # with "path '...source.drv' is not valid" because readFile's
   # context-realization needs the drv registered. A single
@@ -328,30 +449,15 @@ set +e
     fi
   fi
 
-  # Commit dep hash changes (amend if update commit exists, new commit
+  # Commit generated changes (amend if update commit exists, new commit
   # otherwise). This is the failure-becomes-a-commit shape git_diff_quiet
   # closes: with the tree genuinely clean and `git diff` merely erroring, the
   # bare form reached `commit --amend`, which succeeds on an unchanged tree and
   # rewrote the update commit for no reason.
-  if ! git_diff_quiet -C "$wt" diff || ! git_diff_quiet -C "$wt" diff --staged; then
-    # Same explicit-exit rule as the formatter gate above: a failure to
-    # stage or commit means the PR cannot be written, which is a
-    # hold-back, and errexit will not deliver it for us.
-    if ! git -C "$wt" add -A; then
-      log_failure "git add failed"
-      exit 1
-    fi
-    if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
-      git -C "$wt" commit --amend --no-edit || {
-        log_failure "git commit --amend failed"
-        exit 1
-      }
-    else
-      git -C "$wt" commit -m "chore(packages): update $name" || {
-        log_failure "git commit failed"
-        exit 1
-      }
-    fi
+  if ! commit_pending_update; then
+    # Explicit exit: this call is tested by `if !`, so errexit is disabled in
+    # the function body. A failure means the PR cannot be written.
+    exit 1
   fi
 
   # Nothing changed from base
@@ -394,7 +500,7 @@ if [ "$target_rc" -ne 0 ]; then
   # resetting here is what makes held-back packages skip their PR.
   # Successful targets keep their commit and open their PR as before.
   git -C "$wt" reset --hard "$base_head"
-  report_held_back "$name" "nix-update, sidecar regeneration, formatter or commit failed" "$version_detail"
+  report_held_back "$name" "Go-floor refresh, nix-update, sidecar regeneration, formatter or commit failed" "$version_detail"
   exit 0
 fi
 
