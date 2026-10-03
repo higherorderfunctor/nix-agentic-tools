@@ -121,6 +121,8 @@
       };
     });
     customizedClaude = readSkill customized "claude";
+    kiroWithFable = renderKiro ["claude-fable-5.1"];
+    kiroWithoutFable = renderKiro [];
     kiroWithOpus = renderKiro ["claude-opus-5.5"];
     kiroWithoutOpus = renderKiro [];
     kiroWithLagging = renderKiro ["claude-sonnet-5" "gpt-5.6-luna" "gpt-5.6-sol"];
@@ -128,6 +130,8 @@
     (
       lib.hasInfix opusRow kiroWithOpus
       && !(lib.hasInfix opusRow kiroWithoutOpus)
+      && lib.hasInfix "Fable 5.1 (anthropic)" kiroWithFable
+      && !(lib.hasInfix "Fable 5.1 (anthropic)" kiroWithoutFable)
       && !(lib.hasInfix "Sonnet 5.5 (anthropic)" kiroWithLagging)
       && !(lib.hasInfix "Luna (GPT-6) (openai)" kiroWithLagging)
       && !(lib.hasInfix "Sol (GPT-6.1) (openai)" kiroWithLagging)
@@ -140,6 +144,20 @@
       && lib.hasInfix "Default delegate: Sol/medium." claude
     )
     "delegate-routing-${name}: default delegate guidance must render only when Sol is reachable"; true;
+    hasFullWriterOrder = text:
+      lib.hasInfix "OpenAI writer order: Sol/medium, then Luna/high, then Terra/medium."
+      (lib.replaceStrings ["\n"] [" "] text);
+    writerOrderChecked = assert lib.assertMsg
+    (
+      lib.hasInfix "OpenAI writer order: Terra/medium." kiro
+      && !(lib.hasInfix "Sol/medium" kiro)
+      && !(lib.hasInfix "Luna/high" kiro)
+      && !(lib.hasInfix "OpenAI writer order" (render {runtime = "claude";}))
+      && !(lib.hasInfix "OpenAI writer order" (readSkill manualDisabled "claude"))
+      && hasFullWriterOrder claude
+      && hasFullWriterOrder renderedAllRuntimes.claude
+    )
+    "delegate-routing-${name}: OpenAI writer order must follow reachable models"; true;
     nativeDelegateToolsChecked = assert lib.assertMsg
     (lib.all
       (runtime:
@@ -350,6 +368,7 @@
       && !(lib.hasInfix "## manual-only" kiro)
       && !(lib.hasInfix "via `" kiro)
       && catalogIntersectionChecked
+      && writerOrderChecked
       && defaultDelegateChecked
       && nativeDelegateToolsChecked
       && settingsDefaultsChecked
