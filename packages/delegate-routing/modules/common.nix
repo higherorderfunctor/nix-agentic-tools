@@ -11,8 +11,12 @@ args @ {
   supportedRuntimes = ["claude" "codex" "kiro"];
   defaults = pkgs.delegate-routing-content;
   portable = config.ai.programs.delegate-routing;
-  tiers = ["frontier" "strong" "mid" "small"];
-  select = import ../lib/select-families.nix {inherit lib;};
+  vocabulary = import ../lib/vocabulary.nix;
+  inherit (vocabulary) delegateKinds;
+  tierNames = vocabulary.tiers;
+  techniqueType = import ../lib/technique-type.nix {inherit lib;};
+  familyFunctions = import ../lib/select-families.nix {inherit lib;};
+  inherit (familyFunctions) select;
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   enabled = runtime:
     config.ai.${runtime}.programs.delegate-routing.enable
@@ -23,9 +27,12 @@ args @ {
     then config.ai.programs.delegate-routing.enable
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
-  present = builtins.filter (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options) supportedRuntimes;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-routing.models);
   techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-routing.techniques);
+  flattenedFamilies = familyFunctions.flatten portable.families;
+  vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
+  names = lib.unique (map (family: family.name) flattenedFamilies);
+  tiers = lib.unique (map (family: family.tier) flattenedFamilies);
   whenToDelegateOptions = import ../lib/when-to-delegate.nix {
     inherit lib;
     renames = delegateRoutingRenames;
@@ -57,7 +64,7 @@ args @ {
             description = "Family names to select.";
           };
           tiers = lib.mkOption {
-            type = lib.types.listOf (lib.types.enum tiers);
+            type = lib.types.listOf (lib.types.enum tierNames);
             default = [];
             description = "Capability tiers to select.";
           };
@@ -72,44 +79,7 @@ args @ {
       description = "Alternative family selectors. Each non-empty field must match; an empty selector is invalid. Kiro requires an explicit selection when its skill is enabled.";
     };
     techniques = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.submodule {
-        options = {
-          command = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            description = "Launch or inspection command; required for external delegates.";
-          };
-          enable = lib.mkOption {
-            type = lib.types.bool;
-            default = true;
-            description = "Whether to render this technique.";
-          };
-          kind = lib.mkOption {
-            type = lib.types.enum ["workflow" "subagent" "external" "introspect" "usage"];
-            description = "The technique's role.";
-          };
-          modes = lib.mkOption {
-            type = lib.types.listOf (lib.types.enum ["interactive" "headless" "acp"]);
-            default = [];
-            description = "Session modes exposing this technique.";
-          };
-          notes = lib.mkOption {
-            type = lib.types.str;
-            default = "";
-            description = "Runtime-specific controls and constraints.";
-          };
-          pinsEffort = lib.mkOption {
-            type = lib.types.nullOr lib.types.bool;
-            default = null;
-            description = "Whether a delegate technique pins effort; null for inspection and usage.";
-          };
-          pinsModel = lib.mkOption {
-            type = lib.types.nullOr lib.types.bool;
-            default = null;
-            description = "Whether a delegate technique pins the model; null for inspection and usage.";
-          };
-        };
-      });
+      type = lib.types.attrsOf techniqueType;
       default = {};
       description = "Structured delegation, model inspection and usage techniques.";
     };
@@ -143,7 +113,7 @@ in {
                 description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
               };
               tier = lib.mkOption {
-                type = lib.types.enum tiers;
+                type = lib.types.enum tierNames;
                 description = "Capability tier.";
               };
               useFor = lib.mkOption {
@@ -158,7 +128,7 @@ in {
         };
         procedure = lib.mkOption {
           type = aiTypes.optionalTextSource {
-            defaultContent.text = defaults.procedure.text;
+            defaultContent.text = defaults.procedure;
             description = "delegate routing procedure";
             enableDefault = true;
           };
@@ -167,7 +137,7 @@ in {
         };
         rules = lib.mkOption {
           type = aiTypes.optionalTextSource {
-            defaultContent.text = defaults.rules.text;
+            defaultContent.text = defaults.rules;
             description = "delegate sizing rules";
             enableDefault = true;
           };
@@ -197,8 +167,8 @@ in {
         delegate-routing = "${pkgs.delegate-routing-content.passthru.mkSkill {
           inherit runtime models techniques;
           inherit (portable) families;
-          rules = {inherit (portable.rules) enable text;};
-          procedure = {inherit (portable.procedure) enable text;};
+          rules = lib.optionalString portable.rules.enable portable.rules.text;
+          procedure = lib.optionalString portable.procedure.enable portable.procedure.text;
           inherit (config.ai.${runtime}.programs.delegate-routing) extraRuntimes manualExternalDelegates;
         }}";
       };
@@ -215,7 +185,7 @@ in {
       ai = lib.mkMerge [
         {
           programs.delegate-routing = {
-            families = lib.mapAttrs (_: lib.mapAttrs (_: lib.mapAttrs (_: lib.mkDefault))) defaults.families;
+            families = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.families;
             whenToDelegate = {
               "Launch independent work together" = mkPreset {source = ../fragments/launch-independent-work-together.md;};
               "Orchestrator session" = mkPreset {source = ../fragments/orchestrator-session.md;};
@@ -225,7 +195,7 @@ in {
           };
         }
         (lib.genAttrs supportedRuntimes (runtime: {
-          programs.delegate-routing.techniques = lib.mapAttrs (_: lib.mapAttrs (_: lib.mkDefault)) defaults.techniques.${runtime};
+          programs.delegate-routing.techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
         }))
       ];
       assertions =
@@ -235,60 +205,54 @@ in {
           else emitWarnings
         )
         (
-          # Reject automatic external delegates whose runtime is disabled.
-          lib.concatMap (runtime:
-            map (target: {
-              assertion = !(programEnabled runtime && runtimeEnabled runtime) || runtimeEnabled target;
-              message = "ai.${runtime}.programs.delegate-routing.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
-            })
-            (lib.subtractLists
-              config.ai.${runtime}.programs.delegate-routing.manualExternalDelegates
-              config.ai.${runtime}.programs.delegate-routing.extraRuntimes))
-          present
-          ++ lib.concatMap (runtime: let
+          # Static validation is ungated on purpose; runtime-dependent checks apply only when the source runtime and program are enabled.
+          lib.concatMap (runtime: let
             path = "ai.${runtime}.programs.delegate-routing";
-          in [
-            {
-              assertion = !(programEnabled runtime && runtimeEnabled runtime) || select portable.families models.${runtime} != [];
-              message = "${path}.models must select at least one configured family when the program and runtime are enabled.";
-            }
-          ])
-          present
-          ++ lib.concatMap (
-            runtime: let
-              path = "ai.${runtime}.programs.delegate-routing";
-              vendors = builtins.attrNames portable.families;
-              names = lib.unique (lib.concatMap (vendor: builtins.attrNames portable.families.${vendor}) vendors);
-              configuredTiers = lib.unique (lib.concatMap (vendor: map (family: family.tier) (builtins.attrValues portable.families.${vendor})) vendors);
-            in
-              lib.concatMap (selector: [
+            sourceEnabled = programEnabled runtime && runtimeEnabled runtime;
+            extraRuntimes = config.ai.${runtime}.programs.delegate-routing.extraRuntimes;
+            manualExternalDelegates = config.ai.${runtime}.programs.delegate-routing.manualExternalDelegates;
+            requiredTargets = lib.unique ([runtime] ++ extraRuntimes ++ manualExternalDelegates);
+          in
+            map (target: {
+              assertion = !sourceEnabled || runtimeEnabled target;
+              message = "${path}.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
+            })
+            (lib.subtractLists manualExternalDelegates extraRuntimes)
+            ++ map (target: {
+              assertion = !sourceEnabled || select portable.families models.${target} != [];
+              message = "ai.${target}.programs.delegate-routing.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
+            })
+            requiredTargets
+            ++ lib.concatMap (selector: let
+              unknown =
+                lib.subtractLists vendors selector.vendors
+                ++ lib.subtractLists tiers selector.tiers
+                ++ lib.subtractLists names selector.families;
+            in [
+              {
+                assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
+                message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
+              }
+              {
+                assertion = unknown == [];
+                message = "${path}.models references unknown values ${builtins.toJSON unknown} absent from ai.programs.delegate-routing.families.";
+              }
+            ])
+            models.${runtime}
+            ++ lib.concatLists (lib.mapAttrsToList (name: node: let
+                delegate = builtins.elem node.kind delegateKinds;
+                techniquePath = "${path}.techniques.${lib.strings.escapeNixIdentifier name}";
+              in [
                 {
-                  assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
-                  message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
+                  assertion = (node.pinsModel != null) == delegate && (node.pinsEffort != null) == delegate;
+                  message = "${techniquePath}: pinsModel and pinsEffort must be non-null exactly for workflow, subagent and external techniques.";
                 }
                 {
-                  assertion =
-                    lib.all (vendor: builtins.elem vendor vendors) selector.vendors
-                    && lib.all (tier: builtins.elem tier configuredTiers) selector.tiers
-                    && lib.all (family: builtins.elem family names) selector.families;
-                  message = "${path}.models references a vendor, tier or family absent from ai.programs.delegate-routing.families.";
+                  assertion = node.kind != "external" || node.command != null;
+                  message = "${techniquePath}.command is required for an external technique.";
                 }
               ])
-              models.${runtime}
-              ++ lib.concatLists (lib.mapAttrsToList (name: node: let
-                  delegate = builtins.elem node.kind ["workflow" "subagent" "external"];
-                in [
-                  {
-                    assertion = (node.pinsModel != null) == delegate && (node.pinsEffort != null) == delegate;
-                    message = "${path}.techniques.${name}: pinsModel and pinsEffort must be non-null exactly for workflow, subagent and external techniques.";
-                  }
-                  {
-                    assertion = node.kind != "external" || node.command != null;
-                    message = "${path}.techniques.${name}.command is required for an external technique.";
-                  }
-                ])
-                techniques.${runtime})
-          )
+              techniques.${runtime}))
           supportedRuntimes
         );
     }

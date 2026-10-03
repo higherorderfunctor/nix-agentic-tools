@@ -79,27 +79,64 @@
       };
       kiro.enable = lib.mkForce false;
     };
-    manualDisabled = evaluate manualScenario;
+    manualMissingModels = evaluate manualScenario;
+    manualDisabled = evaluate (lib.recursiveUpdate manualScenario {
+      ai.kiro.programs.delegate-routing.models = [{vendors = ["anthropic"];}];
+    });
     manualOverlap = evaluate (lib.recursiveUpdate manualScenario {
       ai.claude.programs.delegate-routing.extraRuntimes = ["kiro"];
+      ai.kiro.programs.delegate-routing.models = [{vendors = ["anthropic"];}];
     });
     invalid = evaluate (lib.recursiveUpdate manualScenario {
-      ai.claude.programs.delegate-routing = {
-        extraRuntimes = ["kiro"];
-        manualExternalDelegates = [];
+      ai = {
+        claude.programs.delegate-routing = {
+          extraRuntimes = ["kiro"];
+          manualExternalDelegates = [];
+        };
+        kiro.programs.delegate-routing.models = [{vendors = ["anthropic"];}];
       };
     });
     emptyKiro = change {ai.kiro.programs.delegate-routing.models = [];};
     inactiveKiro = change {
-      ai.kiro = {
-        enable = lib.mkForce false;
-        programs.delegate-routing.models = [];
+      ai = {
+        claude.programs.delegate-routing.manualExternalDelegates = [];
+        kiro = {
+          enable = lib.mkForce false;
+          programs.delegate-routing.models = [];
+        };
       };
     };
     programDisabledKiro = change {
-      ai.kiro.programs.delegate-routing = {
-        enable = false;
-        models = [];
+      ai = {
+        claude.programs.delegate-routing.manualExternalDelegates = [];
+        kiro.programs.delegate-routing = {
+          enable = false;
+          models = [];
+        };
+      };
+    };
+    extraProgramDisabledKiroMissingModels = change {
+      ai = {
+        claude.programs.delegate-routing = {
+          extraRuntimes = ["kiro"];
+          manualExternalDelegates = [];
+        };
+        kiro.programs.delegate-routing = {
+          enable = false;
+          models = [];
+        };
+      };
+    };
+    extraProgramDisabledKiro = change {
+      ai = {
+        claude.programs.delegate-routing = {
+          extraRuntimes = ["kiro"];
+          manualExternalDelegates = [];
+        };
+        kiro.programs.delegate-routing = {
+          enable = false;
+          models = [{vendors = ["anthropic"];}];
+        };
       };
     };
     selector = value: change {ai.claude.programs.delegate-routing.models = [value];};
@@ -322,14 +359,14 @@
       && !(lib.hasInfix "(openai)" kiro)
     );
     "module-delegate-routing-${name}-selectors" = mkTest "delegate-routing-${name}-selectors" (
-      failsWith (selector {vendors = ["unknown"];}) "ai.claude.programs.delegate-routing.models references"
-      && failsWith (selector {families = ["unknown"];}) "ai.claude.programs.delegate-routing.models references"
+      failsWith (selector {vendors = ["unknown"];}) ''ai.claude.programs.delegate-routing.models references unknown values ["unknown"]''
+      && failsWith (selector {families = ["unknown"];}) ''ai.claude.programs.delegate-routing.models references unknown values ["unknown"]''
       && failsWith (change {
         ai = {
           programs.delegate-routing.families = lib.mapAttrs (_: lib.mapAttrs (_: _: {tier = "small";})) (import ../lib/families.nix);
           claude.programs.delegate-routing.models = [{tiers = ["frontier"];}];
         };
-      }) "ai.claude.programs.delegate-routing.models references"
+      }) ''ai.claude.programs.delegate-routing.models references unknown values ["frontier"]''
       && failsWith (selector {}) "ai.claude.programs.delegate-routing.models contains an empty selector"
       && failsWith (selector {
         vendors = ["openai"];
@@ -397,10 +434,9 @@
       && lib.hasInfix "CUSTOM CODEX COMMAND" modifiedNode
       && !(lib.hasInfix "| workflow" codex)
       && lib.hasInfix "headless+acp" kiroInvoke
-      && lib.hasInfix "false" kiroInvoke
       && lib.hasInfix "/bin/claude-usage`" claude
       && lib.hasInfix "/bin/codex-usage`" codex
-      && !(lib.hasInfix "usage (usage)" kiro)
+      && !(lib.hasInfix "(usage)" kiro)
       && !(lib.hasInfix "`spawn_agent`" claude)
       && !(lib.hasInfix "`invoke_sub_agent`" claude)
       && lib.hasInfix "kiro-cli chat --no-interactive --model <id> --effort <effort>" claude
@@ -423,10 +459,14 @@
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (
       failsWith invalid "ai.claude.programs.delegate-routing.extraRuntimes includes `kiro`, but ai.kiro.enable is false"
+      && failsWith manualMissingModels "ai.kiro.programs.delegate-routing.models must select at least one"
       && passes manualDisabled
+      && lib.hasInfix "## manual-only external delegates\n\n### kiro\n\n-" (readSkill manualDisabled "claude")
       && lib.hasInfix "### kiro techniques" (readSkill manualDisabled "claude")
       && passes manualOverlap
       && readSkill manualOverlap "claude" == readSkill manualDisabled "claude"
+      && failsWith extraProgramDisabledKiroMissingModels "ai.kiro.programs.delegate-routing.models must select at least one"
+      && passes extraProgramDisabledKiro
     );
     "module-delegate-routing-${name}-options" = mkTest "delegate-routing-${name}-options" (
       let

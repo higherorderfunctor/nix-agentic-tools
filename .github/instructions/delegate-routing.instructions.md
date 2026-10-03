@@ -24,14 +24,13 @@ within a selector every non-empty field must match the vendor, tier and family
 name. Claude defaults to Anthropic, Codex to OpenAI, and Kiro to no selection.
 Empty selectors, and selectors naming a vendor, tier or family that is not
 configured, fail assertions. An enabled program on an enabled runtime must
-select at least one family, so Kiro requires an explicit choice. A disabled
-runtime or program does not need a selection, including manual-only Kiro
-delegates.
+select at least one family. That program's `extraRuntimes` and
+`manualExternalDelegates` targets also need a family selection, even when a
+target runtime or program is disabled.
 
 Resolve a concrete model at launch time: introspect the runtime's live list,
 choose its newest model matching the family's pattern, and use that runtime's
-spelling. Claude's interactive tools take aliases such as `opus`. No build-time
-catalog determines availability.
+spelling. Claude's interactive tools take aliases such as `opus`.
 
 `extraRuntimes` adds automatic external candidates and requires the target
 runtime to be enabled. `manualExternalDelegates` adds instructions for explicit
@@ -68,16 +67,22 @@ headings in the always-on router rule. Entries use `optionalTextSource`:
 consumer content auto-enables an entry, while an explicit `enable = false` wins.
 Package defaults use `lib/when-to-delegate.nix`'s `mkPreset` with exactly one
 source or text; default-priority content stays dormant until enabled or
-overridden. Attribute renames merge under the new key and warn. Home Manager
-exposes warnings through its module option; devenv uses `lib.warn` during
-assertion evaluation.
+overridden. Consumer entries must NOT use `mkPreset`: normal-priority content is
+what triggers auto-enable. Attribute renames merge under the new key and warn.
+An empty consumer `text` value does not auto-enable a default-disabled entry.
+Required entries and optional entries enabled explicitly or by default must
+resolve to non-empty `text` or a `source` path. Home Manager exposes warnings
+through its module option; devenv uses `lib.warn` during assertion evaluation.
 
 `fragments/skill-routing.md` is the short always-on stub. `router.nix` appends
 enabled `whenToDelegate` entries. With no enabled entries it is byte-identical
 to the stub. This repository enables the guidance and consumes it through
-`dev/ai.nix`. Kiro's CLI is enabled there but its delegate-routing program is
-disabled: it is manual-only for Claude. Copilot and Kimchi are excluded from
-this program.
+`dev/ai.nix`. Kiro is enabled with its own skill selecting Anthropic families,
+and is also a manual-only external delegate for Claude. Copilot and Kimchi are
+excluded from this program. The router is delivered in
+`.claude/rules/delegate-routing-router.md` and inline in AGENTS.md for Codex and
+Kiro; byte-identical contributions deduplicate. Keep model tables and harness
+details in the generated skill.
 
 The content package injects packaged usage helper paths into technique defaults.
 The Claude helper carries curl and jq; the Codex helper carries timeout, jq and
@@ -90,13 +95,11 @@ and the module checks.
 ## Preview skills
 
 Run from the repository root. These commands print generated skills without
-launching delegates. Package Kiro previews have no selected families until
-`models.kiro` is supplied; module assertions enforce selection only for
-installed, enabled runtime skills.
+launching delegates.
 
 ```bash
 nix eval --raw .#delegate-routing-content.skills.claude.text
 nix eval --raw .#delegate-routing-content.skills.codex.text
-nix eval --raw .#delegate-routing-content.skills.kiro.text
-nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; }'
+nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
+nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```

@@ -9,7 +9,8 @@
   extraRuntimes ? [],
   manualExternalDelegates ? [],
 }: let
-  select = import ./select-families.nix {inherit lib;};
+  inherit (import ./select-families.nix {inherit lib;}) select;
+  inherit (import ./vocabulary.nix) delegateKinds tiers;
   extras = lib.subtractLists manualExternalDelegates (lib.unique extraRuntimes);
   runtimes = [runtime] ++ extras;
   selected = target: select families models.${target};
@@ -44,13 +45,13 @@
     '';
   techniqueBlock = target: externalOnly: let
     nodes = lib.filterAttrs (_: node:
-      (node.enable or true)
+      node.enable
       && (!externalOnly || builtins.elem node.kind ["external" "introspect" "usage"]))
     techniques.${target};
-    delegates = lib.filterAttrs (_: node: builtins.elem node.kind ["workflow" "subagent" "external"]) nodes;
+    delegates = lib.filterAttrs (_: node: builtins.elem node.kind delegateKinds) nodes;
     info = lib.filterAttrs (_: node: builtins.elem node.kind ["introspect" "usage"]) nodes;
-    hasCommand = lib.any (node: (node.command or null) != null) (builtins.attrValues delegates);
-    command = node: lib.optionalString ((node.command or null) != null) "`${node.command}`";
+    hasCommand = lib.any (node: node.command != null) (builtins.attrValues delegates);
+    command = node: lib.optionalString (node.command != null) "`${node.command}`";
   in
     lib.optionalString (nodes != {}) ''
       ### ${target} techniques
@@ -64,21 +65,23 @@
             (builtins.toJSON node.pinsModel)
             (builtins.toJSON node.pinsEffort)
             (lib.concatStringsSep "+" node.modes)
-            (node.notes or "")
+            node.notes
           ]
           ++ lib.optional hasCommand (command node))
         delegates))}
 
-      ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList (name: node: "**${name} (${node.kind}):** ${command node} ${node.notes or ""}") info)}
+      ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList (name: node: "**${name} (${node.kind}):** ${lib.concatStringsSep "; " (lib.filter (value: value != "") [(command node) node.notes])}") info)}
     '';
   manual = target: ''
+    ### ${target}
+
     ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}") (selected target)}
 
     ${techniqueBlock target true}
     Not a candidate for auto-selection; use only when the user names it.
   '';
 in ''
-  ${lib.optionalString rules.enable rules.text}
+  ${rules}
 
   Use this skill for delegates and workflow nodes. Size each stage separately. If a model has no effort control, record effort as not applicable.
 
@@ -96,10 +99,10 @@ in ''
 
   ${lib.optionalString (builtins.length (lib.unique (map (family: family.vendor) candidates)) > 1) "Rows span more than one vendor, so a reviewer may come from a different vendor than the writer."}
 
-  ${lib.concatMapStringsSep "\n" tier ["frontier" "strong" "mid" "small"]}
+  ${lib.concatMapStringsSep "\n" tier tiers}
   ${techniqueBlock runtime false}
   ${lib.concatMapStringsSep "\n" (target: techniqueBlock target true) extras}
-  ${lib.optionalString procedure.enable procedure.text}
+  ${procedure}
 
   ${lib.optionalString (manualExternalDelegates != [])
     ("## manual-only external delegates\n\n" + lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates))}

@@ -235,7 +235,7 @@ in {
     kimchi.enable = true;
     kiro = {
       enable = true;
-      # Kiro has no default families; GPT models cost more there, so select Anthropic only.
+      # Operator choice: GPT models cost more credits on Kiro, so select Anthropic only.
       programs.delegate-routing.models = [{vendors = ["anthropic"];}];
       mcpServers.agnix = agnixMcp;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,

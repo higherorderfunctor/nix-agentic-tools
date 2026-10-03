@@ -40,13 +40,14 @@
       command = ''codex exec --model <slug> --config 'model_reasoning_effort="<level>"' --json --output-last-message <out>.md - < <prompt-file>'';
       kind = "external";
       modes = ["headless"];
-      notes = "launch from cwd with a full brief and a fresh output path; use no -C, --worktree, bypass or trust flags. The terminal `-` already closes stdin; check the exit code and `turn.failed`/`error` events, then verify the output";
+      notes = "launch from cwd with a full brief and a fresh output path; use no -C, --worktree, bypass or trust flags. The terminal `-` already closes stdin, so do not add `</dev/null` (it wins the redirect and sends an empty prompt); check the exit code and `turn.failed`/`error` events, then verify the output";
       pinsEffort = true;
       pinsModel = true;
     };
     models = {
+      command = ''jq -r '.models[] | select(.visibility=="list") | .slug' "''${CODEX_HOME:-$HOME/.codex}/models_cache.json"'';
       kind = "introspect";
-      notes = "start `codex app-server`: send `initialize`, `initialized`, then `model/list` with `limit: 100`, `includeHidden: false`; follow `nextCursor` and read `model`, `supportedReasoningEfforts` and `defaultReasoningEffort`";
+      notes = "read efforts from `.supported_reasoning_levels`; if the client-side cache is stale or missing, fall back to `codex app-server` `model/list`";
     };
     spawn_agent = {
       kind = "subagent";
@@ -80,7 +81,7 @@
     models = {
       command = "kiro-cli chat --list-models -f json | jq -r '.models[].model_id'";
       kind = "introspect";
-      notes = "effort choices: query `_kiro/config/template` over ACP for the session";
+      notes = "effort choices: run `kiro-cli acp --agent-engine v3 --auth-method cli` and query `_kiro/config/template` over ACP for the session";
     };
     orchestrate_subagent = {
       kind = "subagent";

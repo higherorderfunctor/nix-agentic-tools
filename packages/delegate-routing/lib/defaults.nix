@@ -16,13 +16,7 @@
     ];
     kiro = [];
   };
-  procedure = {
-    enable = true;
-    text = builtins.readFile ./procedure.md;
-  };
-  rules = {
-    enable = true;
-    text = builtins.readFile ./rules.md;
-  };
+  procedure = builtins.readFile ./procedure.md;
+  rules = builtins.readFile ./rules.md;
   techniques = import ./techniques.nix {inherit claudeUsageScript codexUsageScript;};
 }

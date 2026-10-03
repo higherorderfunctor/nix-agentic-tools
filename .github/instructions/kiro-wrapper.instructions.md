@@ -258,8 +258,10 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-03 — removed an obsolete delegate-routing export
-> reference; the wrapper evidence below remains from kiro-cli 2.24.1.
+> **Last verified:** 2026-09-29 — v3 trust-flag conflicts re-measured on
+> kiro-cli 2.24.1: `chat` now accepts `--trust-all-tools`; `acp` still rejects
+> the five options it had on 2.15.2 and adds `--auth-method`, which works only
+> under v3.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
