@@ -301,6 +301,17 @@ in {
       description = "Regex pattern matching tool names to deny. Mapped to GITLAB_DENIED_TOOLS_REGEX.";
     };
 
+    disableVersionCheck = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Disable the upstream npm version check at startup. A Nix-pinned
+        package cannot self-update, so the check is unnecessary and causes
+        DNS and HTTPS egress before any tool call. Sets
+        GITLAB_DISABLE_VERSION_CHECK=true; false omits the variable.
+      '';
+    };
+
     useWiki = mkOption {
       type = types.bool;
       default = false;
@@ -349,6 +360,7 @@ in {
     // optionalAttrs (s.deniedToolsRegex != null) {
       GITLAB_DENIED_TOOLS_REGEX = s.deniedToolsRegex;
     }
+    // optionalAttrs s.disableVersionCheck {GITLAB_DISABLE_VERSION_CHECK = "true";}
     // optionalAttrs s.useWiki {USE_GITLAB_WIKI = "true";}
     // optionalAttrs s.useMilestone {USE_MILESTONE = "true";}
     // optionalAttrs s.usePipeline {USE_PIPELINE = "true";};
