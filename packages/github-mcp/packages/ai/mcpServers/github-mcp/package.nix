@@ -11,15 +11,15 @@
 }: let
   vu = packageLib;
 
-  rev = "85b0399bf214f24f5028d9cedecdd020f646c822";
+  rev = "f10e4e1f923d46b86f2e80e849aa74084c847184";
   src = pkgs.fetchFromGitHub {
     owner = "github";
     repo = "github-mcp-server";
     inherit rev;
-    hash = "sha256-MhLMbLe6fM1dd+acRxJW5ZXIuwxl8WYl9xZ2DUWZMec=";
+    hash = "sha256-94aSs+DjimLLamaR9oRLVK24KMmMzvCIUwBno6E4g1Y=";
   };
 
-  goFloor = "1.25.12";
+  goFloor = "1.26.8";
   toolchain = vu.mkGoToolchain {
     floor = goFloor;
     inherit pkgs;
@@ -36,7 +36,7 @@ in
       inherit rev;
     };
     inherit src;
-    vendorHash = "sha256-dqn9W2gOb3ZCfppzfSczDO2bvpwsGyPe4I/h6y3JL9A=";
+    vendorHash = "sha256-kyQH4kOV93RGuY7gCD2YVCVt4403Zwqyb/wzW/1awXM=";
     installCheckPhase = vu.mkMcpSmokeTest {bin = "github-mcp-server";};
     passthru =
       (old.passthru or {})
