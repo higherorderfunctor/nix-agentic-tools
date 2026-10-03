@@ -217,6 +217,8 @@ memsize
 Menlo
 mergetool
 metacharacter
+microvm
+microvms
 minishlab
 misordered
 mkfifo
