@@ -63,6 +63,7 @@ cavira
 cclsp
 cctools
 chafa
+chardev
 chonk
 clearenv
 clicolor
@@ -312,6 +313,7 @@ nixvim
 nodev
 nohup
 nomic
+NOPASSWD
 northstar
 nosuid
 NOSYSTEM
@@ -364,6 +366,7 @@ pkill
 pname
 posh
 posttooluse
+poweroff
 prefilter
 preinitialized
 prek

@@ -36,10 +36,21 @@ _: {
     hostName = "kimchi-login-vm";
     useDHCP = true;
   };
+  # The runner's stdio chardev has no QEMU mux, so Ctrl-a x never reaches
+  # QEMU. Upstream runs QEMU with -no-reboot because it hangs after a guest
+  # poweroff, so a guest reboot is the in-band way to stop the runner.
+  security.sudo.extraRules = [
+    {
+      users = ["tester"];
+      commands = [
+        {
+          command = "/run/current-system/sw/bin/reboot";
+          options = ["NOPASSWD"];
+        }
+      ];
+    }
+  ];
   services.getty.autologinUser = "tester";
   system.stateVersion = "26.05";
-  users.users.tester = {
-    isNormalUser = true;
-    password = "";
-  };
+  users.users.tester.isNormalUser = true;
 }

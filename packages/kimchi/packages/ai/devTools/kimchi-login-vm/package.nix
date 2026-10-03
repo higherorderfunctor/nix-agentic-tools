@@ -21,9 +21,4 @@ in
         description = "Throwaway headless NixOS guest for Kimchi browser login testing";
         platforms = import ./platforms.nix;
       };
-    passthru =
-      (old.passthru or {})
-      // {
-        updateFlakeInput = "microvm";
-      };
   })
