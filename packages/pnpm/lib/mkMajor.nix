@@ -21,8 +21,9 @@
 #
 # NAMESPACED ONLY. This writes `pkgs.ai.generic.pnpm_10` /
 # `pkgs.ai.generic.pnpm_11` and never a top-level `pkgs.pnpm_10`. The bare
-# nixpkgs attributes stay untouched, so packages can use `pkgs.pnpm_10`
-# without selecting this repository's namespaced variant.
+# nixpkgs attributes stay untouched, so a consumer's own packages keep
+# nixpkgs' pnpm. This repository's recipes are the opposite case: they
+# take `pkgs.ai.generic.pnpm_<N>` explicitly (overlay-pattern fragment).
 #
 # WHY `src` MUST BE OVERRIDDEN, not just `version`. nixpkgs' generic.nix
 # is finalAttrs-style and builds the tarball URL from
