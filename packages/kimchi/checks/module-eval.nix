@@ -790,8 +790,9 @@ in {
     # Harness `resources` is user scope, but KIMCHI_ENABLE_RESOURCES can
     # enable a resource. Devenv accepts true values, delivers them through the
     # launcher alone and keeps them out of the project harness settings.json;
-    # a false value or a second source for the variable fails by name, and
-    # Home Manager still writes the toggles into the user file.
+    # a false value fails by name, and Home Manager still writes the toggles
+    # into the user file. module-kimchi-wrapper-builds proves the launcher
+    # merges the ids with a value the caller already set.
     module-kimchi-devenv-env-shadowed-resources = mkTest "kimchi-devenv-env-shadowed-resources" (
       let
         withKimchi = kimchi:
@@ -812,10 +813,6 @@ in {
         withFalse = failedAssertions (withKimchi {
           native.harnessSettings.resources = enabled // {"extensions.memory" = false;};
         });
-        withEnvironment = failedAssertions (withKimchi {
-          environmentVariables.KIMCHI_ENABLE_RESOURCES = "extensions.memory";
-          native.harnessSettings.resources = enabled;
-        });
         hmResources =
           (hmHarnessSettings (evalHm {
             ai.kimchi = {
@@ -831,8 +828,6 @@ in {
         && !((devenvFiles ".config/kimchi/harness" resourcesOnly) ? "settings.json")
         && builtins.length withFalse == 1
         && lib.hasInfix "sets extensions.memory to false" (builtins.head withFalse)
-        && builtins.length withEnvironment == 1
-        && lib.hasInfix "both set KIMCHI_ENABLE_RESOURCES" (builtins.head withEnvironment)
         && hmResources == enabled // {"extensions.memory" = false;}
     );
 
@@ -1497,9 +1492,13 @@ in {
       ];
       # Nothing exact-cwd is declared, so nothing is missed from a
       # subdirectory and the wrapper must not refuse the launch. Region and
-      # telemetry reach Kimchi through its environment, not a project file.
+      # telemetry reach Kimchi through its environment, not a project file,
+      # and so do harness resources.
       unguardedPackages = [
         (mkDevenvKimchiPackage {})
+        (mkDevenvKimchiPackage {
+          ai.kimchi.native.harnessSettings.resources."extensions.workflows" = true;
+        })
         (mkDevenvKimchiPackage {
           ai.kimchi.native.settings = {
             region = "eu";
@@ -1551,7 +1550,10 @@ in {
     # separator made this build fail with exit 127 once >=2 args were present.
     # Home Manager supplies region and telemetry through global config.json,
     # and resources through the user harness settings.json. Devenv has no
-    # global file and keeps exporting declared values.
+    # global file and keeps exporting declared values. Its resource ids are
+    # appended to KIMCHI_ENABLE_RESOURCES, so a caller's value and an
+    # ai.kimchi environment value both survive; the env-printing stub proves
+    # the merge by running the wrapper.
     module-kimchi-wrapper-builds = let
       result = evalHm {
         ai.kimchi = {
@@ -1575,6 +1577,27 @@ in {
         };
       };
       devenvDefault = mkDevenvKimchiPackage {};
+      resourcesStub = pkgs.writeShellScriptBin "kimchi" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf '%s\n' "''${KIMCHI_ENABLE_RESOURCES-unset}"
+      '';
+      devenvResources = extraKimchi:
+        mkDevenvKimchiPackage {
+          ai.kimchi =
+            {
+              package = resourcesStub;
+              native.harnessSettings.resources = {
+                "extensions.ferment-v2" = true;
+                "extensions.workflows" = true;
+              };
+            }
+            // extraKimchi;
+        };
+      devenvResourcesOnly = devenvResources {};
+      devenvResourcesWithEnvironment = devenvResources {
+        environmentVariables.KIMCHI_ENABLE_RESOURCES = "extensions.teleport";
+      };
     in
       pkgs.runCommand "module-test-kimchi-wrapper-builds" {} ''
         set -euETo pipefail
@@ -1590,7 +1613,29 @@ in {
         grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
         grep -q "KIMCHI_REGION.*eu" ${devenvConfigured}/bin/kimchi
         grep -q "KIMCHI_TELEMETRY_ENABLED.*0" ${devenvConfigured}/bin/kimchi
-        grep -q "KIMCHI_ENABLE_RESOURCES.*extensions.ferment-v2,extensions.workflows" ${devenvConfigured}/bin/kimchi
+        # makeWrapper's `--suffix` appends each comma-separated id in turn; a
+        # `--set` would render as one `export VAR=...` and replace the caller's.
+        grep -q 'KIMCHI_ENABLE_RESOURCES.*extensions.ferment-v2' ${devenvConfigured}/bin/kimchi
+        grep -q 'KIMCHI_ENABLE_RESOURCES.*extensions.workflows' ${devenvConfigured}/bin/kimchi
+        if grep -q '^export KIMCHI_ENABLE_RESOURCES=' ${devenvConfigured}/bin/kimchi; then
+          echo "devenv set KIMCHI_ENABLE_RESOURCES instead of appending to it" >&2
+          exit 1
+        fi
+        expect_resources() {
+          local expected=$1 actual
+          shift
+          actual="$("$@")"
+          if [ "$actual" != "$expected" ]; then
+            echo "KIMCHI_ENABLE_RESOURCES: expected '$expected', got '$actual'" >&2
+            exit 1
+          fi
+        }
+        expect_resources extensions.ferment-v2,extensions.workflows \
+          env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesOnly}/bin/kimchi
+        expect_resources extensions.memory,extensions.ferment-v2,extensions.workflows \
+          env KIMCHI_ENABLE_RESOURCES=extensions.memory ${devenvResourcesOnly}/bin/kimchi
+        expect_resources extensions.teleport,extensions.ferment-v2,extensions.workflows \
+          env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesWithEnvironment}/bin/kimchi
         # `! grep` never fails under errexit, so each absence is an explicit branch.
         if grep -qE "KIMCHI_(ENABLE_RESOURCES|REGION|TELEMETRY_ENABLED)" "$bin"; then
           echo "Home Manager duplicated config.json settings in the launcher" >&2

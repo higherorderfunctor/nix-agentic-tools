@@ -169,10 +169,11 @@
         + lib.optionalString (!isHm) ''
           Devenv rejects keys Kimchi reads only from the user settings.json,
           with one exception: `resources`. Kimchi reads resource toggles only
-          from the user file, so devenv passes the ids set to true, sorted and
-          comma-joined, as KIMCHI_ENABLE_RESOURCES and leaves them out of the
-          project file. That variable can only enable a resource, so devenv
-          rejects a false value; disable a resource with Home Manager or
+          from the user file, so devenv appends the ids set to true,
+          comma-joined, to KIMCHI_ENABLE_RESOURCES (keeping any value the
+          caller already set) and leaves them out of the project file. That
+          variable can only enable a resource, so devenv rejects a false
+          value; disable a resource with Home Manager or
           `kimchi resources disable <id>`, either of which outranks the
           variable.
         ''
@@ -206,7 +207,7 @@
       if native.harnessSettings.resources == null
       then {}
       else native.harnessSettings.resources;
-    idsSetTo = value: lib.sort lib.lessThan (builtins.attrNames (lib.filterAttrs (_: enabled: enabled == value) resources));
+    idsSetTo = value: builtins.attrNames (lib.filterAttrs (_: enabled: enabled == value) resources);
   in {
     disabledResources = idsSetTo false;
     enabledResources = idsSetTo true;
@@ -284,9 +285,6 @@
           then "1"
           else "0";
       }
-      // lib.optionalAttrs (shadowed.enabledResources != []) {
-        ${sidecar.environmentName "KIMCHI_ENABLE_RESOURCES"} = lib.concatStringsSep "," shadowed.enabledResources;
-      }
     );
     # The builder's `launcherEnvironment` keeps module defaults (e.g. the
     # sandbox-safe GIT_SSH_COMMAND) under the consumer's pool, as for every
@@ -314,11 +312,17 @@
       fi
     '';
 
-    # wrapProgram args: `--set` for non-secret env, `--run` for the
-    # runtime secret export. Joined with a single space on the continued
-    # line — never a backslash-newline, which breaks multi-arg wrapping.
+    # wrapProgram args: `--set` for non-secret env, `--suffix` for devenv's
+    # resource ids, `--run` for the runtime secret export. Joined with a
+    # single space on the continued line — never a backslash-newline, which
+    # breaks multi-arg wrapping.
     wrapArgs =
       lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
+      # KIMCHI_ENABLE_RESOURCES is an additive comma list (store.ts:45-61), so
+      # the declared ids are appended to a caller's or an `ai.kimchi`
+      # environment value instead of replacing it. Placed after `--set` so a
+      # set value is extended, not overwritten.
+      ++ lib.optional (backend == "devenv" && shadowed.enabledResources != []) "--suffix ${lib.escapeShellArg (sidecar.environmentName "KIMCHI_ENABLE_RESOURCES")} , ${lib.escapeShellArg (lib.concatStringsSep "," shadowed.enabledResources)}"
       ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}"
       ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
 
@@ -553,13 +557,6 @@
               message = ''
                 ai.kimchi.native.harnessSettings.resources sets ${lib.concatStringsSep ", " shadowed.disabledResources} to false, which devenv cannot deliver: Kimchi reads resource toggles only from ~/.config/kimchi/harness/settings.json, and KIMCHI_ENABLE_RESOURCES can only enable.
                 Remove the false entries. Disable a resource with Home Manager or `kimchi resources disable <id>`; either outranks the variable.
-              '';
-            }
-            {
-              assertion = shadowed.enabledResources == [] || (mergedEnvironmentVariables.KIMCHI_ENABLE_RESOURCES or null) == null;
-              message = ''
-                ai.kimchi.native.harnessSettings.resources and an ai.kimchi environment variable both set KIMCHI_ENABLE_RESOURCES, and the launcher would silently replace the environment value.
-                Declare the resources in one place: move the ids into ai.kimchi.native.harnessSettings.resources, or tombstone a root ai.environmentVariables entry with ai.kimchi.environmentVariables.KIMCHI_ENABLE_RESOURCES = null.
               '';
             }
           ];

@@ -13,8 +13,8 @@
 > the runtime; the remaining files and every devenv file stay read-only copies.
 > Its rules use the shared flat AGENTS.md renderer and repository aggregate.
 > Region is required; Home Manager delivers it and telemetry through global
-> config.json only. Devenv accepts harness `resources` and delivers the
-> true-valued ids as `KIMCHI_ENABLE_RESOURCES`, rejecting a false value. The
+> config.json only. Devenv accepts harness `resources` and appends the
+> true-valued ids to `KIMCHI_ENABLE_RESOURCES`, rejecting a false value. The
 > pinned pi dependency is 0.85.1. Agents are read-only copies from the runtime's
 > generated Markdown tree; the opt-in docs skill uses the shared frontmatter
 > text renderer and a guarded generated-file tree that formats whole files and
@@ -276,10 +276,13 @@ Harness `resources` toggles follow the same shape. Kimchi reads them only from
 `KIMCHI_ENABLE_RESOURCES`, which beats the resource's default
 (`store.ts:35-43`), and the variable lists ids to enable, so it cannot carry a
 false value. Home Manager writes `resources` into the user file unchanged.
-Devenv bakes the true-valued ids, sorted and comma-joined, into the wrapper as
-`KIMCHI_ENABLE_RESOURCES`, keeps `resources` out of the project harness
-`settings.json`, and fails evaluation on a false value or when an
-`ai.kimchi.environmentVariables` entry also sets the variable. Locked by
+Devenv appends the true-valued ids, sorted and comma-joined, to
+`KIMCHI_ENABLE_RESOURCES` with makeWrapper's `--suffix VAR , VAL`, keeps
+`resources` out of the project harness `settings.json`, and fails evaluation on
+a false value. The variable is an additive comma list (`store.ts:45-61`), so the
+wrapper must not `--set` it: a caller's value, or an
+`ai.kimchi.environmentVariables` entry (which is `--set` first), is kept and the
+declared ids are appended to it. Locked by
 `module-kimchi-devenv-env-shadowed-resources` and
 `module-kimchi-wrapper-builds`.
 
