@@ -12,6 +12,9 @@ devenv shell          # enter dev shell with all tools
 
 ## Build & Validation Commands
 
+> **Last verified:** 2026-10-03 — generation includes devenv.yaml; lock
+> resolution remains an explicit network operation.
+
 ```bash
 nix flake show                # List all outputs
 nix flake check               # The CI gate: formatting, structural/module eval,
@@ -22,9 +25,12 @@ devenv shell                  # Enter the devenv shell with all tools
 treefmt                       # Format all files (formats only — lints nothing)
 devenv tasks run devenv:git-hooks:run # Manual-stage local all-files diagnostic
 
-# Regenerate every generated file, committed and gitignored. `--mode before` is
+# Regenerate instructions, repo documents and devenv.yaml. `--mode before` is
 # load-bearing: without it devenv runs the aggregate and skips the leaves.
 devenv tasks run --mode before generate:all
+
+# After adding or changing a flake input, sync its devenv lock (may use network).
+devenv update <input>
 ```
 
 ## Tests
@@ -36,14 +42,15 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-10-01 — repo documents and agent files are built by
+> **Last verified:** 2026-10-03 — repo documents and agent files are built by
 > `mkTree` with the evaluated `ai.formatter` treefmt config and the named
 > guards; scoped rules rely on the normalized matcher-derived `fileMatch`
-> trigger default. `generate:all` writes every generated file, committed and
-> gitignored; the generator produces content only; `dev/ai.nix` hands it to
-> `ai.*`, which writes every agent instruction file from its generated-file
-> tree, formatted there with this repository's treefmt; the drift check compares
-> the built files.
+> trigger default. `generate:all` writes instruction and repo-document
+> projections plus devenv.yaml; devenv.lock requires a separate network update;
+> the generator produces content only; `dev/ai.nix` hands it to `ai.*`, which
+> writes every agent instruction file from its generated-file tree, formatted
+> there with this repository's treefmt; the drift check compares the built
+> files.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -113,15 +120,29 @@ reads them like any tracked file.
 ### Running Generation
 
 ```bash
-devenv tasks run --mode before generate:all  # every generated file
+devenv tasks run --mode before generate:all  # instructions, repo docs, devenv.yaml
 ```
 
-`generate:all` orders the writers of every generated file: the two `ai.*`
-writers whose files are committed (`ai:agents-md:materialize`,
+`generate:all` orders the projection writers: the two `ai.*` writers whose files
+are committed (`ai:agents-md:materialize`,
 `ai:copilot:materialize-instructions`), `devenv:files` for the gitignored ones
-(Claude rules, Kiro steering and the rest), and `generate:repo`. It is not a
-second writer. The aggregate form requires `--mode before`; without it devenv
-runs the named aggregate but skips its dependency leaves.
+(Claude rules, Kiro steering and the rest), `generate:devenv-yaml`, and
+`generate:repo`. It is not a second writer. The aggregate form requires
+`--mode before`; without it devenv runs the named aggregate but skips its
+dependency leaves.
+
+`generate:devenv-yaml` projects the root flake inputs and their locked revisions
+into devenv.yaml. After adding or changing an input, run `devenv update <input>`
+to sync devenv.lock separately: resolving its transitive inputs can require
+network access, so it is outside `generate:all`. The pure
+`checks.devenv-inputs-drift` check compares devenv.yaml with its generator and
+checks each declared input's locked rev and narHash against flake.lock,
+resolving root edges rather than assuming lock node names match input names. It
+reports the generation or lock-update command needed to repair drift. It
+compares only each root input's own lock entry: transitive nodes can still
+differ (today `go-overlay/git-hooks`, because `config/generate-devenv-yaml.nix`
+emits only `nixpkgs` follows), and extra undeclared root inputs in devenv.lock
+are ignored.
 
 ## Updating Dependencies
 

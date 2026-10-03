@@ -1,7 +1,8 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-09-30 — `generate:all` regenerates every projection,
-> committed and gitignored; fragment sources live in the dev or package tree;
+> **Last verified:** 2026-10-03 — `generate:all` regenerates instructions, repo
+> documents and devenv.yaml; devenv.lock is synced separately with
+> `devenv update <input>`; fragment sources live in the dev or package tree;
 > package categories live in owner registries; `dev/generate.nix` turns them
 > into `ai.rules` and `ai.*` writes every runtime's files, AGENTS.md index
 > first; devenv warns where AGENTS.md is past the limit Codex will apply there.
