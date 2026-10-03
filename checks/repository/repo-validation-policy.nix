@@ -56,8 +56,8 @@ pkgs.runCommandLocal "repo-validation-policy-check" {
       [.repos[].hooks[] | select(.id == "cspell")]
       | length == 1
         and (.[0].args | index("--no-must-find-files") != null)
-        and .[0].pass_filenames
-        and (.[0].require_serial | not)
+        and .[0].pass_filenames == true
+        and .[0].require_serial == false
     ' "$config" >/dev/null
   done
 
