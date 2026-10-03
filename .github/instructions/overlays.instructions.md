@@ -10,7 +10,8 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 > **Last verified:** 2026-10-03 — overlay recipes take the consumer's `final`;
 > flake `packages` use this repo's unfree-enabled nixpkgs. Toolchains use
 > `mkGoBin` and `mkRustBin` over the supplied package set. Agnix and Semble
-> identity checks live with their owners.
+> identity checks live with their owners. Recipes take bun and pnpm from
+> `pkgs.ai.generic`, gated by a marked consumer set.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -35,6 +36,19 @@ owner. `registry.nix` declares update/doc entries; `repoPath ./relative/path`
 derives mutable paths from their actual location. Native nixpkgs evaluation
 enforces the consumer's unfree policy. See the package-ownership fragment for
 the native composition boundaries.
+
+**A consumer-built overlay does not give recipes our toolchains.** `bun` and
+`pnpm_<N>` are pinned under `pkgs.ai.generic` so this repository's own recipes
+build and run against them. A bare `pkgs.bun` or `pkgs.pnpm_10` is the
+CONSUMER's: a devenv consumer on bun 1.3 broke kimchi that way after the
+`ourPkgs` pin was retired. Take them from `pkgs.ai.generic.*` everywhere a
+recipe uses one, including runtime wrappers, `fetchPnpmDeps` and owner checks
+that mirror a recipe's build. A bare attribute stays correct for an owner's
+thin-override base and for inputs this repository does not pin.
+`checks.toolchain-provenance` applies our overlay over a consumer set whose
+`bun` and `pnpm_<N>` carry marker versions, then fails any package, passthru
+helper or `pnpmDeps` whose derivation inputs reference a marked one. The markers
+are what make it work at version parity, where the two drvPaths are identical.
 
 ### Absorption is about CADENCE. Never re-open it on a version comparison
 

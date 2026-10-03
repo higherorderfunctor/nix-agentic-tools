@@ -67,10 +67,10 @@ in
     };
     pnpmDeps = pkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
-      pnpm = pkgs.pnpm_11;
+      pnpm = pkgs.ai.generic.pnpm_11;
       fetcherVersion = 4;
       postInstall = verifyNapiPatch;
-      hash = "sha256-1uzmAVPYHBG4KLvTibBgeGgvixwO79fwD+IzahL3Xuo=";
+      hash = "sha256-OhMQNS5tbTIFlIynOOatjoqpd/7uT6yALiz8F5Ca184=";
     };
     # Validate cached dependency materialization too, before compiling Rust.
     preBuild = verifyNapiPatch + (prev.preBuild or "");
@@ -94,7 +94,7 @@ in
       map
       (input:
         if (input.pname or "") == "pnpm"
-        then pkgs.pnpm_11
+        then pkgs.ai.generic.pnpm_11
         else input)
       (prev.nativeBuildInputs or []);
     # Strip versionCheckHook: `oxlint --version` prints the bare upstream
