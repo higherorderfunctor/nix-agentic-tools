@@ -1,5 +1,7 @@
 # Model decisions and runtime spellings, grouped by tier. The renderer orders
 # tiers by capability and puts first-party models first within each tier.
+# A row carries a kiro id only when Kiro serves that exact version; a model
+# whose Kiro version lags gets no Kiro id.
 {
   frontier = {
     astra = {
@@ -18,6 +20,7 @@
       ids = {
         claude = "fable";
         claudeHeadless = "claude-fable-5-1";
+        kiro = "claude-fable-5.1";
       };
       name = "Fable 5.1";
       useFor = "hardest and longest autonomous runs; taste and architecture judgment when it already holds the context; final polish";
@@ -37,7 +40,7 @@
       vendor = "anthropic";
     };
     terra = {
-      avoidFor = "being the default: Sol/medium and Luna/high beat it on cost at the same quality";
+      avoidFor = "being the default when Sol or Luna is reachable: they beat it on cost at the same quality";
       effort = "medium; more effort rarely pays";
       ids = {
         codex = "gpt-5.6-terra";

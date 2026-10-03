@@ -79,16 +79,15 @@
     '';
     introspectModels.text = ''
       Run `kiro-cli chat --list-models -f json | jq -r '.models[].model_id'`
-      first and pin only ids it returns. This catalog has no Astra. Fable 5.1
-      is in the catalog but has no Kiro id in this table.
+      first and pin only ids it returns. This catalog has no Astra.
 
       For effort choices, run `kiro-cli acp --agent-engine v3 --auth-method cli`.
       Send `initialize` with `protocolVersion: 1` and
       `clientCapabilities: {terminal: false}`, then `session/new` with the
       current `cwd` and `mcpServers: []`. Query `_kiro/config/template` for
       that session and read the selected model's effort choices.
-      Opus 5.5 and Sonnet 5 accept `low`, `medium`, `high`, `xhigh`, `max`;
-      Sol, Terra and Luna also accept `none`. When a `kiro-cli chat` launch
+      Claude models (Opus, Sonnet, Fable; Haiku excepted) accept `low`, `medium`, `high`, `xhigh`, `max`;
+      the GPT models also accept `none`. When a `kiro-cli chat` launch
       pins a model other than `auto` (`--model auto`), set effort every time:
       a launch has no parent to inherit from. On a workflow step, set
       `modelId` and `effortLevel` on the step itself; an omitted field

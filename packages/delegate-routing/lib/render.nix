@@ -22,6 +22,24 @@
     && builtins.elem model.vendor firstParty.${target}
     && (target != "kiro" || builtins.elem model.ids.kiro kiroModels);
   targets = model: builtins.filter (target: available target model) runtimes;
+  writerOrder = builtins.filter (writer: targets writer.model != []) [
+    {
+      model = models.strong.sol;
+      sizing = "Sol/medium";
+    }
+    {
+      model = models.small.luna;
+      sizing = "Luna/high";
+    }
+    {
+      model = models.mid.terra;
+      sizing = "Terra/medium";
+    }
+  ];
+  sizingGuidance = lib.concatStringsSep " " (
+    lib.optional (targets models.strong.sol != []) "Default delegate: Sol/medium."
+    ++ lib.optional (writerOrder != []) "OpenAI writer order: ${lib.concatMapStringsSep ", then " (writer: writer.sizing) writerOrder}."
+  );
   modelId = target: model:
     if target == "claude" && target != runtime
     then model.ids.claudeHeadless
@@ -121,7 +139,7 @@ in ''
 
   ## delegate sizing
 
-  Default delegate: Sol/medium. OpenAI writer order: Sol/medium, then Luna/high, then Terra/medium.
+  ${sizingGuidance}
   ${lib.optionalString (extras != [] || manualExternalDelegates != []) "For an external delegate, use its launch block in a shell step."}
 
   ${joinBlocks (map tier ["frontier" "strong" "mid" "small"])}

@@ -133,6 +133,13 @@
       && !(lib.hasInfix "Sol (GPT-6.1) (openai)" kiroWithLagging)
     )
     "delegate-routing Kiro catalog intersection must include present models and exclude absent models"; true;
+    defaultDelegateChecked = assert lib.assertMsg
+    (
+      !(lib.hasInfix "Default delegate" kiro)
+      && !(lib.hasInfix "Default delegate" (readSkill manualDisabled "claude"))
+      && lib.hasInfix "Default delegate: Sol/medium." claude
+    )
+    "delegate-routing-${name}: default delegate guidance must render only when Sol is reachable"; true;
     nativeDelegateToolsChecked = assert lib.assertMsg
     (lib.all
       (runtime:
@@ -343,6 +350,7 @@
       && !(lib.hasInfix "## manual-only" kiro)
       && !(lib.hasInfix "via `" kiro)
       && catalogIntersectionChecked
+      && defaultDelegateChecked
       && nativeDelegateToolsChecked
       && settingsDefaultsChecked
       && lib.hasInfix "/bin/claude-usage`" claude

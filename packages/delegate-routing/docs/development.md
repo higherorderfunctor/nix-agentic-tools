@@ -1,7 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-03 — model ids match the extracted catalogs;
-> lagging Kiro versions have no row in the shared table.
+> **Last verified:** 2026-10-03 — model ids match the extracted catalogs; Kiro
+> rows intersect the catalog, including Fable 5.1; sizing guidance follows
+> rendered models.
 
 `lib/models.nix` owns the model decisions and runtime ids. `lib/render.nix`
 generates one skill per runtime: first-party candidates first within each tier,
@@ -9,8 +10,9 @@ then enabled external pools. Kiro candidates intersect the `models` array in
 `packages/kiro-cli/extracted.json` at build time. The kiro-cli extractor
 generates these ids from the public catalog; the skill still requires the live
 list before a workflow pins an id because account availability differs. For
-example, `claude-fable-5.1` is in the public catalog but has no Kiro id in
-`lib/models.nix`, so no Fable row renders. Manual external entries add
+example, Fable 5.1 renders only when its `claude-fable-5.1` Kiro id is in the
+catalog. A row carries a `kiro` id only when Kiro serves that exact version; a
+model whose Kiro version lags gets no Kiro id. Manual external entries add
 instructions, never candidate rows; manual-only wins if a consumer lists a
 runtime in both external lists.
 
