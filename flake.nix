@@ -40,6 +40,10 @@
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    microvm = {
+      url = "github:microvm-nix/microvm.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # Dev tooling — not published in overlays/modules, only used by
     # this repo's devenv tasks and CI pipeline.
     nix-fast-build = {
