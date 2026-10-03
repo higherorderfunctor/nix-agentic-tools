@@ -937,19 +937,27 @@ ai.claude.programs.delegate-routing = {
 };
 ```
 
-Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
-Manual-only entries require an explicit user request and do not require that
-runtime's module to be enabled. Codex and Kiro default to their own models.
-Kimchi and Copilot are excluded because supported delegation controls are absent
-or unestablished.
+Portable `families.<vendor>.<family>` records describe tiers, task and effort
+guidance, and live-model patterns. Override any field or add a family. Each
+runtime's `models` is a list of selectors over `vendors`, `tiers` and
+`families`: selectors are alternatives, and every non-empty field in one
+selector must match. Claude defaults to Anthropic and Codex to OpenAI. Kiro
+requires an explicit selection when its runtime and delegate-routing program are
+enabled.
 
-Runtime-only overrides include `settings.delegateTools`,
-`settings.introspectModels`, `settings.checkUsage` and `settings.launch`: set
-`.text` (or `.source`) to replace a preset, and `.enable = false` to omit a
-block. Launch instructions are used when that runtime appears as an external
-delegate in another skill. The package intersects Kiro models with its catalog
-and requires a live list before pinning. Both Home Manager and devenv expose the
-same options.
+Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
+Manual-only entries require an explicit user request and do not require runtime
+enable. If Kiro is enabled only for manual delegation, disable its own
+delegate-routing program with
+`ai.kiro.programs.delegate-routing.enable = false`. Kimchi and Copilot are
+excluded because supported delegation controls are absent or unestablished.
+
+Runtime `techniques` describe workflows, subagents, external launches, model
+introspection and usage. Override a node's fields or disable it with
+`enable = false`. Pick the newest model matching a family's pattern from the
+live runtime list, using its own spelling. Portable `rules` and `procedure`
+accept replacement `text` or `source`, or `enable = false`. Both Home Manager
+and devenv expose the same options.
 
 </details>
 

@@ -24,10 +24,23 @@
     claude-usage = mkUsageScript "claude-usage" [pkgs.curl pkgs.jq];
     codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.jq pkgs.python3];
   };
-  presets = import ../../lib/presets.nix {
+  rawDefaults = import ../../lib/defaults.nix {
     claudeUsageScript = lib.getExe usageScripts.claude-usage;
     codexUsageScript = lib.getExe usageScripts.codex-usage;
   };
+  techniqueType = import ../../lib/technique-type.nix {inherit lib;};
+  normalizedTechniques =
+    (lib.evalModules {
+      modules = [
+        {
+          options.techniques = lib.mkOption {
+            type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
+            default = rawDefaults.techniques;
+          };
+        }
+      ];
+    }).config.techniques;
+  defaults = rawDefaults // {techniques = normalizedTechniques;};
   render = args: builtins.readFile "${mkSkill args}/SKILL.md";
   # The skill in the house prose style. No table check: this package set's
   # pkgs carries no overlay, so the overlay's linters are not in it.
@@ -38,7 +51,7 @@
         type = "markdown";
         text = frontmatter.render {
           data = skillData;
-          body = import ../../lib/render.nix ({inherit lib presets;} // args);
+          body = import ../../lib/render.nix ({inherit lib;} // defaults // args);
         };
       };
       guards.parseCompare = true;
@@ -46,12 +59,13 @@
       inherit (args) runtime;
       inherit treefmt;
     };
-  skills = lib.genAttrs ["claude" "codex" "kiro"] (runtime: mkSkill {inherit runtime;});
+  skills = lib.genAttrs (builtins.attrNames (lib.filterAttrs (_: models: models != []) defaults.models)) (runtime: mkSkill {inherit runtime;});
 in
   pkgs.runCommand "delegate-routing-content" {
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
-      inherit mkSkill presets render skills usageScripts;
+      inherit mkSkill render skills usageScripts;
+      inherit (defaults) families models techniques rules procedure;
     };
   } ''
     # Full strict mode is required here: stdenv does not set every flag (#909).

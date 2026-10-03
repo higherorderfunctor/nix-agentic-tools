@@ -685,8 +685,7 @@ cannot see it, which is exactly how this reached a release.
 `-a/--trust-all-tools`. On 2.15.2 only `-v` survived. 2.24.1 adds the inverse
 case: `acp --auth-method <METHOD>` is accepted ONLY under v3, and under `v2` it
 fails with "--auth-method is only supported with --agent-engine=v3" (measured on
-2.24.1; `packages/delegate-routing/lib/presets.nix` ships
-`kiro-cli acp --agent-engine v3 --auth-method cli`).
+2.24.1).
 
 The conflict is value-specific — `=v1`/`=v2` accept all five (measured on
 2.15.2) — and, on 2.24.1, `acp`-specific. Both columns were measured on 2.24.1

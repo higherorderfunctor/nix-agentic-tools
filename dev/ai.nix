@@ -71,7 +71,7 @@ in {
 
     programs.delegate-routing = {
       enable = true;
-      # Enable the package's own presets here because this repository is its primary consumer.
+      # Enable the package's own guidance here because this repository is its primary consumer.
       whenToDelegate = {
         "Launch independent work together".enable = true;
         "Orchestrator session".enable = true;
@@ -235,6 +235,8 @@ in {
     kimchi.enable = true;
     kiro = {
       enable = true;
+      # Operator choice: GPT models cost more credits on Kiro, so select Anthropic only.
+      programs.delegate-routing.models = [{vendors = ["anthropic"];}];
       mcpServers.agnix = agnixMcp;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
       # a launcher-global option, so it reaches every subcommand including

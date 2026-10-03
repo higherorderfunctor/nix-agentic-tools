@@ -3,7 +3,9 @@
    medium. Synthesis, design, adversarial review and judging are reasoning: a
    strong model. Work whose output the operator acts on is reasoning even when
    most of it is reading.
-2. Never inherit: every delegate names its model and effort.
+2. Size every delegate: name its model and effort, and use a technique that pins
+   both, unless it is a headless delegate whose launch brief stated values that
+   match.
 3. At mid tier, step up the model before the effort. Opus/medium beats
    Sonnet/high.
 4. Big models flatten after the first step up. Cheap models keep gaining but
@@ -11,5 +13,5 @@
 5. For judging against a rubric, use a cheap judge with written criteria and
    samples. For taste or architecture, use one strong judge at high.
 6. Choose the pool with more allowance first, then whoever holds the context.
-   Claude offloads to Codex for debug loops, long runs, cheap writers and web
-   sweeps.
+   Offload debug loops, long runs, cheap writers and web sweeps to an enabled
+   external runtime.

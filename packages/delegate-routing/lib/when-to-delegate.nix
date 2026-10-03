@@ -16,7 +16,7 @@
     };
   };
 in {
-  # Default-priority content keeps package presets from auto-enabling themselves.
+  # Default-priority content keeps package defaults from auto-enabling themselves.
   mkPreset = args @ {
     source ? null,
     text ? null,
