@@ -16,9 +16,9 @@
 # account.
 #
 # A thin `overrideAttrs` over nixpkgs' own `pnpm_<N>` derivation:
-# `version`, `src` and `passthru.updateScript` move, plus a `postPatch`
-# that binds hardened shim helpers to store paths (see below). Every other
-# build input, phase and hook stays whatever nixpkgs ships.
+# `version`, `src` and `passthru.updateScript` move, plus a pnpm 11
+# `postPatch` that binds hardened shim helpers to store paths (see below).
+# Every other build input, phase and hook stays whatever nixpkgs ships.
 #
 # NAMESPACED ONLY. This writes `pkgs.ai.generic.pnpm_10` /
 # `pkgs.ai.generic.pnpm_11` and never a top-level `pkgs.pnpm_10`. The bare
@@ -60,7 +60,7 @@
   major,
   ...
 }: let
-  inherit (pkgs) fetchurl;
+  inherit (pkgs) fetchurl lib;
   vu = packageLib;
 
   attr = "pnpm_${major}";
@@ -73,92 +73,76 @@
     then null
     else builtins.head majorMatch;
 
-  drv = pkgs.${attr}.overrideAttrs (prev: {
-    inherit (sources) version;
-    # fetchurl of the npm registry tarball, so the recorded hash is the
-    # FLAT FILE's — no --unpack on the prefetch below, unlike the
-    # fetchzip packages in this directory. Same fetcher and same URL
-    # nixpkgs uses, which is what makes the store-path parity noted in
-    # the per-major files possible.
-    src = fetchurl {inherit (sources.src) url hash;};
+  # pnpm 11.28.2 hardened its generated `node_modules/.bin` shims with
+  # `command -p readlink|sed|uname`, so a dependency's bin cannot shadow
+  # those helpers. `command -p` ignores PATH and searches /bin:/usr/bin,
+  # which a Linux build sandbox does not have: oxlint's napi shim died with
+  # `sed: not found` while darwin, which has /usr/bin, built. Bind the
+  # helpers to store paths instead, which keeps upstream's isolation.
+  # `printf` is a builtin and `cygpath`/`wslpath` run only on Cygwin/WSL.
+  # A `<helper>: not found` from a `.bin` shim in a consumer's build means
+  # pnpm added a `command -p` helper: extend this patch.
+  # Scoped in a subshell: later nixpkgs hooks in this build read unset vars.
+  shimHelpers = prev:
+    lib.optionalAttrs (major == "11") {
+      postPatch =
+        (prev.postPatch or "")
+        + ''
+          (
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          substituteInPlace dist/pnpm.mjs \
+            --replace-fail 'command -p readlink' '${pkgs.coreutils}/bin/readlink' \
+            --replace-fail 'command -p sed' '${pkgs.gnused}/bin/sed' \
+            --replace-fail 'command -p uname' '${pkgs.coreutils}/bin/uname'
+          )
+        '';
+    };
 
-    # pnpm 11.28.2 hardened its generated `node_modules/.bin` shims with
-    # `command -p readlink|sed|uname`, so a dependency's bin cannot shadow
-    # those helpers. `command -p` ignores PATH and searches /bin:/usr/bin,
-    # which a Linux build sandbox does not have: oxlint's napi shim died with
-    # `sed: not found` while darwin, which has /usr/bin, built. Bind the
-    # helpers to store paths instead, which keeps upstream's isolation; the
-    # shims it then writes stay valid while this pnpm's store path is alive.
-    # Rewritten by content, not by version, so a full or partial backport to
-    # another major, or an equivalent nixpkgs patch, is handled. `printf` is a
-    # shell builtin and `cygpath`/`wslpath` run only on Cygwin/WSL; any other
-    # `command -p` helper left in the bundle fails the build here instead of
-    # inside a consumer's build. The shims vendored under dist/node_modules/.bin
-    # are not scanned: pnpm never puts its own .bin on a script's PATH.
-    # Scoped in a subshell: later nixpkgs hooks in this build read unset vars.
-    postPatch =
-      (prev.postPatch or "")
-      + ''
-        (
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        bundles=0
-        for bundle in dist/pnpm.cjs dist/pnpm.mjs; do
-          [ -f "$bundle" ] || continue
-          bundles=$((bundles + 1))
-          substituteInPlace "$bundle" \
-            --replace-quiet 'command -p readlink' '${pkgs.coreutils}/bin/readlink' \
-            --replace-quiet 'command -p sed' '${pkgs.gnused}/bin/sed' \
-            --replace-quiet 'command -p uname' '${pkgs.coreutils}/bin/uname'
-          # Whitespace-tolerant, and any spelling other than the exact
-          # allowlisted names (quoted, escaped, a new helper) is reported.
-          unhandled=$(grep -Eo 'command[[:space:]]+-p[[:space:]]+[^[:space:];|&)`]+' "$bundle" \
-            | awk '{print $NF}' | sort -u | grep -Evx 'printf|cygpath|wslpath' || true)
-          if [ -n "$unhandled" ]; then
-            echo "pnpm_${major}: unhandled shim helper(s) in $bundle: $unhandled" >&2
-            false
-          fi
-        done
-        if [ "$bundles" -eq 0 ]; then
-          echo "pnpm_${major}: no dist/pnpm.cjs or dist/pnpm.mjs; the shim rewrite above found nothing to check" >&2
-          false
-        fi
-        )
-      '';
+  drv = pkgs.${attr}.overrideAttrs (prev:
+    shimHelpers prev
+    // {
+      inherit (sources) version;
+      # fetchurl of the npm registry tarball, so the recorded hash is the
+      # FLAT FILE's — no --unpack on the prefetch below, unlike the
+      # fetchzip packages in this directory. Same fetcher and same URL
+      # nixpkgs uses, which is what makes the store-path parity noted in
+      # the per-major files possible.
+      src = fetchurl {inherit (sources.src) url hash;};
 
-    # Merge, never replace: nixpkgs hangs `configHook`, `fetchDeps`,
-    # `majorVersion`, `nodejs-slim` and `tests` here and replacing the
-    # set drops all of them. See the nix-standards fragment.
-    passthru =
-      (prev.passthru or {})
-      // {
-        updateScript = vu.mkUpdateScript {
-          inherit pkgs;
-          pname = attr;
-          inherit sourcesFile;
-          platforms = {
-            # One platform-independent tarball — npm publishes a single
-            # artifact — so the sidecar has a single `src` key rather
-            # than per-platform ones.
-            src = ver: "https://registry.npmjs.org/pnpm/-/pnpm-${ver}.tgz";
+      # Merge, never replace: nixpkgs hangs `configHook`, `fetchDeps`,
+      # `majorVersion`, `nodejs-slim` and `tests` here and replacing the
+      # set drops all of them. See the nix-standards fragment.
+      passthru =
+        (prev.passthru or {})
+        // {
+          updateScript = vu.mkUpdateScript {
+            inherit pkgs;
+            pname = attr;
+            inherit sourcesFile;
+            platforms = {
+              # One platform-independent tarball — npm publishes a single
+              # artifact — so the sidecar has a single `src` key rather
+              # than per-platform ones.
+              src = ver: "https://registry.npmjs.org/pnpm/-/pnpm-${ver}.tgz";
+            };
+            # npm's dist-tags already express "latest within major N", so
+            # the check reads the tag directly instead of filtering the
+            # full package document by major.
+            #
+            # `// empty` matters: a missing dist-tag makes `jq -r` print
+            # the string "null", which would sail past mkUpdateScript's
+            # emptiness guard and send the prefetch after
+            # `pnpm-null.tgz`. Emitting nothing instead makes a retired
+            # `latest-<major>` fail loud on the guard.
+            #
+            # Absolute store paths: this string is interpolated into a
+            # writeShellScript wrapper, which the update pipeline invokes
+            # directly and which therefore cannot assume a PATH.
+            versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-${major}\"] // empty'";
           };
-          # npm's dist-tags already express "latest within major N", so
-          # the check reads the tag directly instead of filtering the
-          # full package document by major.
-          #
-          # `// empty` matters: a missing dist-tag makes `jq -r` print
-          # the string "null", which would sail past mkUpdateScript's
-          # emptiness guard and send the prefetch after
-          # `pnpm-null.tgz`. Emitting nothing instead makes a retired
-          # `latest-<major>` fail loud on the guard.
-          #
-          # Absolute store paths: this string is interpolated into a
-          # writeShellScript wrapper, which the update pipeline invokes
-          # directly and which therefore cannot assume a PATH.
-          versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-${major}\"] // empty'";
         };
-      };
-  });
+    });
 in
   if sidecarMajor == null
   then
