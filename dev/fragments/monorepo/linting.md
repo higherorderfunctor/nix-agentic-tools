@@ -1,8 +1,9 @@
 ## Linting
 
-> **Last verified:** 2026-09-28 — removed Stop-time validation; verified the
-> formatter and linter CI gates plus the explicit devenv diagnostics. Full
-> lineage: `git show f7189d05:dev/fragments/monorepo/linting.md`.
+> **Last verified:** 2026-10-03 — local and CI cspell hooks tolerate batches
+> excluded entirely by ignorePaths while still failing spelling errors; the
+> separate shellcheck backend retains its empty-corpus guard. Full lineage:
+> `git show f7189d05:dev/fragments/monorepo/linting.md`.
 
 `nix flake check` is the authoritative CI gate. Local hooks provide earlier
 feedback, but neither a successful changeset scan nor a `--no-verify` commit is
@@ -57,7 +58,11 @@ Formatters and linters remain separate — treefmt formats and lints nothing.
 - **Shell:** `shellcheck -x` with the shared opt-in flags from
   `config/shell-strict.nix`. The specialized CI scanner deliberately covers a
   superset of prek's file tagging and hard-fails an empty corpus.
-- **Spelling:** cspell
+- **Spelling:** cspell uses `--no-must-find-files` because a commit whose staged
+  files are all excluded by `ignorePaths`, or one of prek's parallel filename
+  batches made only of such files, otherwise exits 1 with nothing checked. Both
+  local hooks and `checks.repo-lints` use this invocation; spelling issues still
+  fail. There is no separate empty-corpus guard for cspell.
 
 **Commit-only hooks:**
 
