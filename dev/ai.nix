@@ -232,7 +232,15 @@ in {
     # read, so `.config/kimchi/**` is materialized-but-inert today. Enabling
     # the runtime is still correct — it stops `kimchi` resolving to whatever
     # the developer happens to have installed user-globally.
-    kimchi.enable = true;
+    kimchi = {
+      enable = true;
+      # Not part of that inert fanout: devenv passes these through the
+      # launcher as KIMCHI_ENABLE_RESOURCES, which Kimchi reads.
+      native.harnessSettings.resources = {
+        "extensions.ferment-v2" = true;
+        "extensions.workflows" = true;
+      };
+    };
     kiro = {
       enable = true;
       # Operator choice: GPT models cost more credits on Kiro, so select Anthropic only.

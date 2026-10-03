@@ -63,7 +63,6 @@
     modelMetadata.example.description = "Example model";
     modelRoles.builder = "provider/model";
     multiModel = true;
-    resources."tools.web_search" = true;
     shellProfileApiKeyMigrationDismissed = true;
     statusLine.pinned = ["model"];
   };
@@ -181,7 +180,9 @@
           };
         });
     })
-    (lib.remove "defaultProjectTrust" userScopeOnlyHarnessSettingKeys));
+    # Exceptions with their own checks: defaultProjectTrust below, and
+    # `resources`, which devenv delivers through KIMCHI_ENABLE_RESOURCES.
+    (lib.subtractLists ["defaultProjectTrust" "resources"] userScopeOnlyHarnessSettingKeys));
 
   hmDefaultProjectTrustChecks = let
     failures = value:
@@ -784,6 +785,55 @@ in {
         == []
         && !((projectFiles shadowed) ? "config.json")
         && lib.any (lib.hasInfix "user scope: telemetry") (failedAssertions withEndpoint)
+    );
+
+    # Harness `resources` is user scope, but KIMCHI_ENABLE_RESOURCES can
+    # enable a resource. Devenv accepts true values, delivers them through the
+    # launcher alone and keeps them out of the project harness settings.json;
+    # a false value or a second source for the variable fails by name, and
+    # Home Manager still writes the toggles into the user file.
+    module-kimchi-devenv-env-shadowed-resources = mkTest "kimchi-devenv-env-shadowed-resources" (
+      let
+        withKimchi = kimchi:
+          evalDevenv {
+            ai.kimchi = {enable = true;} // kimchi;
+          };
+        enabled = {
+          "extensions.ferment-v2" = true;
+          "extensions.workflows" = true;
+        };
+        shadowed = withKimchi {
+          native.harnessSettings = {
+            hideThinkingBlock = true;
+            resources = enabled;
+          };
+        };
+        resourcesOnly = withKimchi {native.harnessSettings.resources = enabled;};
+        withFalse = failedAssertions (withKimchi {
+          native.harnessSettings.resources = enabled // {"extensions.memory" = false;};
+        });
+        withEnvironment = failedAssertions (withKimchi {
+          environmentVariables.KIMCHI_ENABLE_RESOURCES = "extensions.memory";
+          native.harnessSettings.resources = enabled;
+        });
+        hmResources =
+          (hmHarnessSettings (evalHm {
+            ai.kimchi = {
+              enable = true;
+              native.harnessSettings.resources = enabled // {"extensions.memory" = false;};
+            };
+          })).resources;
+      in
+        failedAssertions shadowed
+        == []
+        && projectHarnessSettings shadowed == {hideThinkingBlock = true;}
+        && failedAssertions resourcesOnly == []
+        && !((devenvFiles ".config/kimchi/harness" resourcesOnly) ? "settings.json")
+        && builtins.length withFalse == 1
+        && lib.hasInfix "sets extensions.memory to false" (builtins.head withFalse)
+        && builtins.length withEnvironment == 1
+        && lib.hasInfix "both set KIMCHI_ENABLE_RESOURCES" (builtins.head withEnvironment)
+        && hmResources == enabled // {"extensions.memory" = false;}
     );
 
     module-kimchi-devenv-project-paths = mkTest "kimchi-devenv-project-paths" (
@@ -1499,21 +1549,29 @@ in {
     # env via --set and reads the key from its file at runtime (cat), never
     # baking the secret literal into the store. The old backslash-newline
     # separator made this build fail with exit 127 once >=2 args were present.
-    # Home Manager supplies region and telemetry through global config.json.
-    # Devenv has no global file and keeps exporting declared values.
+    # Home Manager supplies region and telemetry through global config.json,
+    # and resources through the user harness settings.json. Devenv has no
+    # global file and keeps exporting declared values.
     module-kimchi-wrapper-builds = let
       result = evalHm {
         ai.kimchi = {
           enable = true;
           apiKey.file = "/run/secrets/kimchi-test";
           environmentVariables.KIMCHI_EXTRA = "yes";
+          native.harnessSettings.resources."extensions.workflows" = true;
         };
       };
       wrapped = builtins.head result.config.home.packages;
       devenvConfigured = mkDevenvKimchiPackage {
-        ai.kimchi.native.settings = {
-          region = "eu";
-          telemetry.enabled = false;
+        ai.kimchi.native = {
+          harnessSettings.resources = {
+            "extensions.ferment-v2" = true;
+            "extensions.workflows" = true;
+          };
+          settings = {
+            region = "eu";
+            telemetry.enabled = false;
+          };
         };
       };
       devenvDefault = mkDevenvKimchiPackage {};
@@ -1532,12 +1590,13 @@ in {
         grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
         grep -q "KIMCHI_REGION.*eu" ${devenvConfigured}/bin/kimchi
         grep -q "KIMCHI_TELEMETRY_ENABLED.*0" ${devenvConfigured}/bin/kimchi
+        grep -q "KIMCHI_ENABLE_RESOURCES.*extensions.ferment-v2,extensions.workflows" ${devenvConfigured}/bin/kimchi
         # `! grep` never fails under errexit, so each absence is an explicit branch.
-        if grep -qE "KIMCHI_(REGION|TELEMETRY_ENABLED)" "$bin"; then
+        if grep -qE "KIMCHI_(ENABLE_RESOURCES|REGION|TELEMETRY_ENABLED)" "$bin"; then
           echo "Home Manager duplicated config.json settings in the launcher" >&2
           exit 1
         fi
-        if grep -qE "KIMCHI_(REGION|TELEMETRY_ENABLED)" ${devenvDefault}/bin/kimchi; then
+        if grep -qE "KIMCHI_(ENABLE_RESOURCES|REGION|TELEMETRY_ENABLED)" ${devenvDefault}/bin/kimchi; then
           echo "devenv set a global-only setting nobody declared" >&2
           exit 1
         fi
