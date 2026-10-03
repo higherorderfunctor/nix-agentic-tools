@@ -110,8 +110,10 @@
             --replace-quiet 'command -p readlink' '${pkgs.coreutils}/bin/readlink' \
             --replace-quiet 'command -p sed' '${pkgs.gnused}/bin/sed' \
             --replace-quiet 'command -p uname' '${pkgs.coreutils}/bin/uname'
-          unhandled=$(grep -Eo 'command -p [A-Za-z0-9_-]+' "$bundle" | sort -u \
-            | grep -Ev ' (printf|cygpath|wslpath)$' || true)
+          # Whitespace-tolerant, and any spelling other than the exact
+          # allowlisted names (quoted, escaped, a new helper) is reported.
+          unhandled=$(grep -Eo 'command[[:space:]]+-p[[:space:]]+[^[:space:];|&)`]+' "$bundle" \
+            | awk '{print $NF}' | sort -u | grep -Evx 'printf|cygpath|wslpath' || true)
           if [ -n "$unhandled" ]; then
             echo "pnpm_${major}: unhandled shim helper(s) in $bundle: $unhandled" >&2
             false
