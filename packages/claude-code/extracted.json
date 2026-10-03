@@ -2055,6 +2055,15 @@
       "modelSettings.*": {
         "type": "object"
       },
+      "modelSettings.*.autoCompactWindow": {
+        "type": "anyOf"
+      },
+      "modelSettings.*.autoCompactWindow|0": {
+        "type": "string"
+      },
+      "modelSettings.*.autoCompactWindow|1": {
+        "type": "integer"
+      },
       "modelSettings.*.effortLevel": {
         "enum": ["high", "low", "medium", "xhigh"],
         "type": "string"
