@@ -87,11 +87,14 @@
     # those helpers. `command -p` ignores PATH and searches /bin:/usr/bin,
     # which a Linux build sandbox does not have: oxlint's napi shim died with
     # `sed: not found` while darwin, which has /usr/bin, built. Bind the
-    # helpers to store paths instead, which keeps upstream's isolation.
-    # Detected by content, not by version, so a backport to another major or
-    # an equivalent nixpkgs patch is handled. `printf` is a shell builtin and
-    # `cygpath`/`wslpath` run only on Cygwin/WSL; any other `command -p`
-    # helper fails the build here instead of inside a consumer's build.
+    # helpers to store paths instead, which keeps upstream's isolation; the
+    # shims it then writes stay valid while this pnpm's store path is alive.
+    # Rewritten by content, not by version, so a full or partial backport to
+    # another major, or an equivalent nixpkgs patch, is handled. `printf` is a
+    # shell builtin and `cygpath`/`wslpath` run only on Cygwin/WSL; any other
+    # `command -p` helper left in the bundle fails the build here instead of
+    # inside a consumer's build. The shims vendored under dist/node_modules/.bin
+    # are not scanned: pnpm never puts its own .bin on a script's PATH.
     # Scoped in a subshell: later nixpkgs hooks in this build read unset vars.
     postPatch =
       (prev.postPatch or "")
@@ -99,22 +102,25 @@
         (
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
+        bundles=0
         for bundle in dist/pnpm.cjs dist/pnpm.mjs; do
-          if [ -f "$bundle" ] && grep -Eq 'command -p (readlink|sed|uname)' "$bundle"; then
-            substituteInPlace "$bundle" \
-              --replace-fail 'command -p readlink' '${pkgs.coreutils}/bin/readlink' \
-              --replace-fail 'command -p sed' '${pkgs.gnused}/bin/sed' \
-              --replace-fail 'command -p uname' '${pkgs.coreutils}/bin/uname'
-          fi
-          if [ -f "$bundle" ]; then
-            unhandled=$(grep -Eo 'command -p [A-Za-z0-9_-]+' "$bundle" | sort -u \
-              | grep -Ev ' (printf|cygpath|wslpath)$' || true)
-            if [ -n "$unhandled" ]; then
-              echo "pnpm_${major}: unhandled shim helper(s) in $bundle: $unhandled" >&2
-              false
-            fi
+          [ -f "$bundle" ] || continue
+          bundles=$((bundles + 1))
+          substituteInPlace "$bundle" \
+            --replace-quiet 'command -p readlink' '${pkgs.coreutils}/bin/readlink' \
+            --replace-quiet 'command -p sed' '${pkgs.gnused}/bin/sed' \
+            --replace-quiet 'command -p uname' '${pkgs.coreutils}/bin/uname'
+          unhandled=$(grep -Eo 'command -p [A-Za-z0-9_-]+' "$bundle" | sort -u \
+            | grep -Ev ' (printf|cygpath|wslpath)$' || true)
+          if [ -n "$unhandled" ]; then
+            echo "pnpm_${major}: unhandled shim helper(s) in $bundle: $unhandled" >&2
+            false
           fi
         done
+        if [ "$bundles" -eq 0 ]; then
+          echo "pnpm_${major}: no dist/pnpm.cjs or dist/pnpm.mjs; the shim rewrite above found nothing to check" >&2
+          false
+        fi
         )
       '';
 
