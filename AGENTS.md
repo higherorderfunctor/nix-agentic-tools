@@ -197,6 +197,7 @@ for it. When several entries match, their guidance composes.
     - `packages/kimchi/**`
   - Read:
     - [`packages/kimchi/docs/kimchi-factory.md`](packages/kimchi/docs/kimchi-factory.md)
+    - [`packages/kimchi/docs/login-vm.md`](packages/kimchi/docs/login-vm.md)
 - **`kiro-agents`**
   - Match:
     - `packages/kiro-cli/checks/module-eval.nix`

@@ -3,10 +3,19 @@
   repoPath,
   ...
 }: {
-  checks.cacheHitParity.kimchi = {consumerPath = ["ai" "kimchi"];};
-  checks.cacheHitParity.kimchi-docs = {consumerPath = ["docs" "kimchi-docs"];};
-  documentation.aiCliDescriptions.kimchi = "Kimchi CLI";
-  documentation.skillDescriptions.kimchi-docs = "Search the pinned Kimchi docs snapshot; enable via ai.programs.kimchi-docs.enable";
+  checks.cacheHitParity = {
+    kimchi = {consumerPath = ["ai" "kimchi"];};
+    kimchi-docs = {consumerPath = ["docs" "kimchi-docs"];};
+    kimchi-login-vm = {
+      consumerPath = ["ai" "devTools" "kimchi-login-vm"];
+      platforms = import ./packages/ai/devTools/kimchi-login-vm/platforms.nix;
+    };
+  };
+  documentation = {
+    aiCliDescriptions.kimchi = "Kimchi CLI";
+    devToolDescriptions.kimchi-login-vm = "Throwaway headless NixOS guest for Kimchi browser login testing (Linux only)";
+    skillDescriptions.kimchi-docs = "Search the pinned Kimchi docs snapshot; enable via ai.programs.kimchi-docs.enable";
+  };
   # kimchi: two-tree factory (config.json + harness/), runtime SOPS
   # credential, wrapProgram separator + flattenDotKeys gotchas.
   fragments.categories.kimchi = {
@@ -17,6 +26,11 @@
       {
         location = "package";
         name = "kimchi-factory";
+        dir = facetOwner;
+      }
+      {
+        location = "package";
+        name = "login-vm";
         dir = facetOwner;
       }
     ];

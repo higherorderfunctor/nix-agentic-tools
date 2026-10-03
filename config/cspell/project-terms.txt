@@ -275,6 +275,8 @@ Menlo
 mergetool
 metacharacter
 metavariable
+microvm
+microvms
 minishlab
 misattributes
 miscited
@@ -538,9 +540,12 @@ upgrader
 upgraders
 uppercased
 usebruno
+usernet
 userns
 valkey
+vcpu
 vendorhash
+virtiofsd
 vllm
 watchlist
 webp

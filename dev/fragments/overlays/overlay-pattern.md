@@ -1,6 +1,7 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-02 — Go and Rust compilers come only from the
+> **Last verified:** 2026-10-03 — Linux-only NixOS runners use the same package
+> attribute gate as Linux binaries. Go and Rust compilers come only from the
 > locked overlays (`mkGoToolchain`, `mkRustPlatform`); rev-tracked Go packages
 > derive recipe-owned floor literals before nix-update; release packages retain
 > the ordered sidecar extraction chain; rev-bumped packages regenerate committed
@@ -707,14 +708,16 @@ constant — `oh-my-posh` keeps its module under `src/`.
 
 ### A genuinely platform-specific package is gated at the ATTRIBUTE
 
-`gluetun` is the only one so far: `internal/routing` uses `unix.RT_TABLE_MAIN` /
+`gluetun` is one example: `internal/routing` uses `unix.RT_TABLE_MAIN` /
 `RT_TABLE_LOCAL`, Linux-only constants (measured by cross-compiling
 `GOOS=darwin GOARCH=arm64`). A restrictive `meta.platforms` is NOT sufficient —
 the attribute still exists on darwin and forcing its `drvPath` throws "not
 available on the requested hostPlatform", which both `nix flake check` (it
 evaluates every system) and the required darwin CI leg do. So the recipe's
 sibling `platforms.nix` declares `["x86_64-linux"]`. Native discovery excludes
-the leaf on other systems, from both scopes and outputs.
+the leaf on other systems, from both scopes and outputs. `kimchi-login-vm` uses
+the same gate because its guest is NixOS and its standalone QEMU runner requires
+Linux KVM.
 
 Two registries have to agree with that:
 `config.checks.cacheHitParity.<name>.platforms` (or the check aborts on darwin

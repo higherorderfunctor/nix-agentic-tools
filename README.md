@@ -246,6 +246,7 @@ Agent-adjacent development utilities exposed as `pkgs.ai.devTools.*`.
 | `beads` | Graph-based issue tracker for AI coding agents |
 | `gh` | GitHub CLI |
 | `glab` | GitLab CLI |
+| `kimchi-login-vm` | Throwaway headless NixOS guest for Kimchi browser login testing (Linux only) |
 | `markdownlint-cli2` | Configuration-based markdown linter (markdownlint) |
 | `oxlint` | Fast JS/TS linter with type-aware (tsgo) linting and JS plugins |
 | `rumdl` | Fast Rust markdown linter (markdownlint-compatible rules) |
