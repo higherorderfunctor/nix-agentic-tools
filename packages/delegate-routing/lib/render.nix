@@ -121,7 +121,7 @@ in ''
 
   ## delegate sizing
 
-  OpenAI writer order: Sol/medium, then Luna/high, then Terra/medium.
+  Default delegate: Sol/medium. OpenAI writer order: Sol/medium, then Luna/high, then Terra/medium.
   ${lib.optionalString (extras != [] || manualExternalDelegates != []) "For an external delegate, use its launch block in a shell step."}
 
   ${joinBlocks (map tier ["frontier" "strong" "mid" "small"])}

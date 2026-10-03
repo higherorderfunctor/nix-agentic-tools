@@ -30,10 +30,9 @@
       effort = "medium default, high when the bar is modest, never xhigh or max";
       ids = {
         claude = "sonnet";
-        claudeHeadless = "claude-sonnet-5";
-        kiro = "claude-sonnet-5";
+        claudeHeadless = "claude-sonnet-5-5";
       };
-      name = "Sonnet 5";
+      name = "Sonnet 5.5";
       useFor = "code to a spec, tests, transcription, summaries; the cheap writer in a writer-judge loop";
       vendor = "anthropic";
     };
@@ -66,10 +65,9 @@
       avoidFor = "long context (vendor-only cliff); spec writing; judging";
       effort = "medium→high is the best marginal buy in the set (+7 for 2×); no ultra";
       ids = {
-        codex = "gpt-5.6-luna";
-        kiro = "gpt-5.6-luna";
+        codex = "gpt-6-luna";
       };
-      name = "Luna (5.6)";
+      name = "Luna (GPT-6)";
       useFor = "classification, extraction, routing, high-volume mechanical work; cheapest code writer";
       vendor = "openai";
     };
@@ -77,25 +75,24 @@
   strong = {
     opus = {
       avoidFor = "mechanical work (10× Haiku price)";
-      effort = "medium is the sweet spot, high for open-ended investigation, xhigh only for long autonomous runs; flattens after medium";
+      effort = "medium default, high when more reasoning is needed; returns flatten after medium";
       ids = {
         claude = "opus";
-        claudeHeadless = "claude-opus-5";
-        kiro = "claude-opus-5";
+        claudeHeadless = "claude-opus-5-5";
+        kiro = "claude-opus-5.5";
       };
-      name = "Opus 5";
-      useFor = "the default reasoning delegate: design, adversarial review, synthesis, judging, multi-file coding";
+      name = "Opus 5.5";
+      useFor = "adversarial review, judging, design, synthesis; complex reasoning across files";
       vendor = "anthropic";
     };
     sol = {
       avoidFor = "sole grader or judge; ultra";
-      effort = "low is its default, medium is the sweet spot, above high rarely pays";
+      effort = "medium default, high when the task needs more reasoning";
       ids = {
-        codex = "gpt-5.6-sol";
-        kiro = "gpt-5.6-sol";
+        codex = "gpt-6.1-sol";
       };
-      name = "Sol (5.6)";
-      useFor = "default OpenAI code writer; long-horizon coding; recall-heavy code review (finds more, filters less); written deliverables";
+      name = "Sol (GPT-6.1)";
+      useFor = "default delegate and code writer; long-horizon coding; recall-heavy code review (finds more, filters less); written deliverables";
       vendor = "openai";
     };
   };

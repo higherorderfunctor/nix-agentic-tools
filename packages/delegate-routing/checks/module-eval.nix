@@ -59,7 +59,7 @@
       inherit runtime;
       extraRuntimes = lib.remove runtime runtimes;
     });
-  sonnetRow = "Sonnet 5 (anthropic)";
+  opusRow = "Opus 5.5 (anthropic)";
   optionTree = result: path: (lib.getAttrFromPath path result.options).type.getSubOptions [];
   checkBackend = {
     name,
@@ -121,10 +121,17 @@
       };
     });
     customizedClaude = readSkill customized "claude";
-    kiroWithSonnet = renderKiro ["claude-sonnet-5"];
-    kiroWithoutSonnet = renderKiro [];
+    kiroWithOpus = renderKiro ["claude-opus-5.5"];
+    kiroWithoutOpus = renderKiro [];
+    kiroWithLagging = renderKiro ["claude-sonnet-5" "gpt-5.6-luna" "gpt-5.6-sol"];
     catalogIntersectionChecked = assert lib.assertMsg
-    (lib.hasInfix sonnetRow kiroWithSonnet && !(lib.hasInfix sonnetRow kiroWithoutSonnet))
+    (
+      lib.hasInfix opusRow kiroWithOpus
+      && !(lib.hasInfix opusRow kiroWithoutOpus)
+      && !(lib.hasInfix "Sonnet 5.5 (anthropic)" kiroWithLagging)
+      && !(lib.hasInfix "Luna (GPT-6) (openai)" kiroWithLagging)
+      && !(lib.hasInfix "Sol (GPT-6.1) (openai)" kiroWithLagging)
+    )
     "delegate-routing Kiro catalog intersection must include present models and exclude absent models"; true;
     nativeDelegateToolsChecked = assert lib.assertMsg
     (lib.all
