@@ -177,10 +177,11 @@
       && real.report.staleRefinements == []
       && withoutModelRoles.report.staleRefinements == ["harnessSettings.modelRoles"];
 
-    # The devenv rejection list is the sidecar's per-key scope, including the
-    # Kimchi-read markers and pi's global-only keys a hand list once missed.
+    # The devenv rejection list is the sidecar's per-key scope, including
+    # Kimchi's own additions and pi's global-only keys a hand list once
+    # missed.
     user-scope-harness-follows-the-sidecar =
-      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["autoDefaultApplied" "defaultProjectTrust" "httpProxy" "lastTerminalWarnings" "modelRoles"]
+      lib.all (key: lib.elem key real.userScopeHarnessKeys) ["defaultProjectTrust" "httpProxy" "lastTerminalWarnings" "modelRoles"]
       && !(lib.elem "defaultThinkingLevel" real.userScopeHarnessKeys)
       && !(lib.elem "theme" real.userScopeHarnessKeys)
       && lib.elem "theme" withUserScopeTheme.userScopeHarnessKeys

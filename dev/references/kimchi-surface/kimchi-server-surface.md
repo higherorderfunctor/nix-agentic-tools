@@ -525,11 +525,21 @@ What changes for a reader is when Auto takes over. With no client gate, a fresh
 main session installs `kimchi-dev/auto` as the persisted default model once per
 install for **every** account whose catalog advertises `auto`, writes the
 `autoDefaultApplied` marker, and tells the user
-(`src/extensions/auto-model/index.ts:269-291`). The backend catalog is now the
-only thing deciding who gets it. `getMe` is back to its two telemetry callers
-(`src/extensions/telemetry/pre-session.ts:44`,
+(`1.5.0 src/extensions/auto-model/index.ts:269-291`). The backend catalog is now
+the only thing deciding who gets it. `getMe` is back to its two telemetry
+callers (`src/extensions/telemetry/pre-session.ts:44`,
 `src/extensions/telemetry/session-context.ts:339`), and nothing warms it at
 startup for Auto any more.
+
+**1.5.1 made it every launch, not once.** The marker is retired: a fresh main
+session deletes `autoDefaultApplied` from the harness `settings.json`
+(`1.5.1 src/extensions/auto-model/index.ts:104`), and on an account whose
+catalog advertises `auto` it rolls a non-Auto model back to `kimchi-dev/auto`
+and persists it on every fresh main session
+(`1.5.1 src/extensions/auto-model/index.ts:270-303`). Only a launch-time
+`--model`, `--provider`, `--multi-model` or `--models`, or a per-session
+`/model`, avoids it. The network surface is unchanged: Auto still rides the
+ordinary inference wire.
 
 ### 4.4 Connecting wakes a hibernated workspace, with no prompt
 
