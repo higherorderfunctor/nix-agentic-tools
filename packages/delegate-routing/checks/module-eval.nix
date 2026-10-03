@@ -34,32 +34,20 @@
       };
     };
     codex.enable = true;
-    kiro.enable = true;
+    kiro = {
+      enable = true;
+      programs.delegate-routing.models = [
+        {
+          vendors = ["anthropic"];
+          tiers = ["strong" "small"];
+        }
+      ];
+    };
     programs.delegate-routing.enable = true;
   };
   hasLoadInstruction = text: lib.hasInfix "load the `delegate-routing` skill" (lib.replaceStrings ["\n"] [" "] text);
-  nativeDelegateTools = {
-    claude = "Use Workflow `agent(prompt, {model, effort})`";
-    codex = "Call `collaboration.spawn_agent`";
-    kiro = "Set `modelId` and `effortLevel`";
-  };
-  presets = import ../lib/presets.nix {
-    claudeUsageScript = "/nix/store/test-claude-usage";
-    codexUsageScript = "/nix/store/test-codex-usage";
-  };
+  crossVendor = "Rows span more than one vendor";
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
-  render = args: import ../lib/render.nix ({inherit lib presets;} // args);
-  renderKiro = kiroModels:
-    render {
-      inherit kiroModels;
-      runtime = "kiro";
-    };
-  renderedAllRuntimes = lib.genAttrs runtimes (runtime:
-    render {
-      inherit runtime;
-      extraRuntimes = lib.remove runtime runtimes;
-    });
-  opusRow = "Opus 5.5 (anthropic)";
   optionTree = result: path: (lib.getAttrFromPath path result.options).type.getSubOptions [];
   checkBackend = {
     name,
@@ -71,115 +59,70 @@
     codex = readSkill result "codex";
     kiro = readSkill result "kiro";
     stub = result.config.ai.claude.rules.delegate-routing-router.text;
+    change = config: evaluate (lib.recursiveUpdate scenario config);
+    skill = config: readSkill (change config) "claude";
+    passes = evaluation: lib.all (item: item.assertion) evaluation.config.assertions;
+    failsWith = evaluation: option: lib.any (item: !item.assertion && lib.hasInfix option item.message) evaluation.config.assertions;
+    native = change {ai.claude.programs.delegate-routing.extraRuntimes = [];};
+    nativeClaude = readSkill native "claude";
     disabled = evaluate {
       ai.programs.delegate-routing.enable = true;
       ai.codex.programs.delegate-routing.enable = false;
     };
-    manualScenario = {
-      ai = {
-        claude = {
+    manualScenario.ai = {
+      claude = {
+        enable = true;
+        programs.delegate-routing = {
           enable = true;
-          programs.delegate-routing = {
-            enable = true;
-            manualExternalDelegates = ["kiro"];
-          };
+          manualExternalDelegates = ["kiro"];
         };
-        kiro.enable = lib.mkForce false;
       };
+      kiro.enable = lib.mkForce false;
     };
     manualDisabled = evaluate manualScenario;
     manualOverlap = evaluate (lib.recursiveUpdate manualScenario {
       ai.claude.programs.delegate-routing.extraRuntimes = ["kiro"];
     });
-    invalid = evaluate {
-      ai = {
-        claude = {
-          enable = true;
-          programs.delegate-routing = {
-            enable = true;
-            extraRuntimes = ["kiro"];
-          };
-        };
-        kiro.enable = lib.mkForce false;
-      };
-    };
-    failed = builtins.filter (item: !item.assertion) invalid.config.assertions;
-    invalidChecked = assert lib.assertMsg (failed == [])
-    (lib.concatMapStringsSep "\n" (item: item.message) failed); true;
-    customized = evaluate (lib.recursiveUpdate scenario {
-      ai = {
-        claude.programs.delegate-routing.settings = {
-          checkUsage.enable = false;
-          delegateTools.text = "CUSTOM CLAUDE DELEGATION";
-          introspectModels.enable = false;
-        };
-        codex.programs.delegate-routing.settings.launch.text = "CUSTOM CODEX LAUNCH";
-        kiro.programs.delegate-routing.settings = {
-          introspectModels.enable = false;
-          launch.enable = false;
-        };
+    invalid = evaluate (lib.recursiveUpdate manualScenario {
+      ai.claude.programs.delegate-routing = {
+        extraRuntimes = ["kiro"];
+        manualExternalDelegates = [];
       };
     });
-    customizedClaude = readSkill customized "claude";
-    kiroWithFable = renderKiro ["claude-fable-5.1"];
-    kiroWithoutFable = renderKiro [];
-    kiroWithOpus = renderKiro ["claude-opus-5.5"];
-    kiroWithoutOpus = renderKiro [];
-    kiroWithLagging = renderKiro ["claude-sonnet-5" "gpt-5.6-luna" "gpt-5.6-sol"];
-    catalogIntersectionChecked = assert lib.assertMsg
-    (
-      lib.hasInfix opusRow kiroWithOpus
-      && !(lib.hasInfix opusRow kiroWithoutOpus)
-      && lib.hasInfix "Fable 5.1 (anthropic)" kiroWithFable
-      && !(lib.hasInfix "Fable 5.1 (anthropic)" kiroWithoutFable)
-      && !(lib.hasInfix "Sonnet 5.5 (anthropic)" kiroWithLagging)
-      && !(lib.hasInfix "Luna (GPT-6) (openai)" kiroWithLagging)
-      && !(lib.hasInfix "Sol (GPT-6.1) (openai)" kiroWithLagging)
-    )
-    "delegate-routing Kiro catalog intersection must include present models and exclude absent models"; true;
-    defaultDelegateChecked = assert lib.assertMsg
-    (
-      !(lib.hasInfix "Default delegate" kiro)
-      && !(lib.hasInfix "Default delegate" (readSkill manualDisabled "claude"))
-      && lib.hasInfix "Default delegate: Sol/medium." claude
-    )
-    "delegate-routing-${name}: default delegate guidance must render only when Sol is reachable"; true;
-    hasFullWriterOrder = text:
-      lib.hasInfix "OpenAI writer order: Sol/medium, then Luna/high, then Terra/medium."
-      (lib.replaceStrings ["\n"] [" "] text);
-    writerOrderChecked = assert lib.assertMsg
-    (
-      lib.hasInfix "OpenAI writer order: Terra/medium." kiro
-      && !(lib.hasInfix "Sol/medium" kiro)
-      && !(lib.hasInfix "Luna/high" kiro)
-      && !(lib.hasInfix "OpenAI writer order" (render {runtime = "claude";}))
-      && !(lib.hasInfix "OpenAI writer order" (readSkill manualDisabled "claude"))
-      && hasFullWriterOrder claude
-      && hasFullWriterOrder renderedAllRuntimes.claude
-    )
-    "delegate-routing-${name}: OpenAI writer order must follow reachable models"; true;
-    nativeDelegateToolsChecked = assert lib.assertMsg
-    (lib.all
-      (runtime:
-        lib.all
-        (other: other == runtime || !(lib.hasInfix nativeDelegateTools.${other} renderedAllRuntimes.${runtime}))
-        runtimes)
-      runtimes)
-    "delegate-routing rendered skills must not contain another runtime's native delegate tools"; true;
-    settingsDefaultsChecked = assert lib.assertMsg
-    (lib.all
-      (runtime:
-        lib.all
-        (setting:
-          result.config.ai.${runtime}.programs.delegate-routing.settings.${setting}.enable
-          == !(runtime == "kiro" && setting == "checkUsage"))
-        (builtins.attrNames presets.${runtime}))
-      runtimes)
-    "delegate-routing-${name}: settings blocks must default enabled except kiro.checkUsage"; true;
+    emptyKiro = change {ai.kiro.programs.delegate-routing.models = [];};
+    inactiveKiro = change {
+      ai.kiro = {
+        enable = lib.mkForce false;
+        programs.delegate-routing.models = [];
+      };
+    };
+    programDisabledKiro = change {
+      ai.kiro.programs.delegate-routing = {
+        enable = false;
+        models = [];
+      };
+    };
+    selector = value: change {ai.claude.programs.delegate-routing.models = [value];};
+    familyOverride = skill {ai.programs.delegate-routing.families.anthropic.opus.useFor = "CUSTOM OPUS TASK";};
+    addedFamily = skill {
+      ai = {
+        programs.delegate-routing.families.example.x = {
+          match = "example-x-*";
+          tier = "strong";
+          useFor = "CUSTOM FAMILY TASK";
+        };
+        claude.programs.delegate-routing.models = [{families = ["x"];}];
+      };
+    };
+    disabledNode = skill {ai.claude.programs.delegate-routing.techniques.Agent.enable = false;};
+    modifiedNode = skill {ai.codex.programs.delegate-routing.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
+    invalidNode = node: change {ai.claude.programs.delegate-routing.techniques.Invalid = node;};
+    replacedText = key: field: value: skill {ai.programs.delegate-routing.${key}.${field} = value;};
+    kiroInvoke = lib.findFirst (lib.hasInfix "`invoke_sub_agent`") "" (lib.splitString "\n" kiro);
     noEntries = evaluate scenario;
-    shippedPresets = noEntries.config.ai.programs.delegate-routing.whenToDelegate;
-    shippedPresetNames = builtins.attrNames shippedPresets;
-    shippedPresetFieldDefinitions = preset:
+    shippedEntries = noEntries.config.ai.programs.delegate-routing.whenToDelegate;
+    shippedEntryNames = builtins.attrNames shippedEntries;
+    shippedEntryFieldDefinitions = preset:
       lib.modules.mergeAttrDefinitionsWithPrio {
         type = lib.types.attrsOf lib.types.raw;
         definitionsWithLocations =
@@ -194,18 +137,18 @@
               && builtins.hasAttr preset definition.value.whenToDelegate)
             noEntries.options.ai.programs.delegate-routing.definitionsWithLocations);
       };
-    shippedPresetPrioritiesChecked = assert lib.assertMsg
+    shippedEntryPrioritiesChecked = assert lib.assertMsg
     (lib.all
       (preset:
         lib.all
         (field: field.highestPrio == (lib.mkDefault null).priority)
-        (builtins.attrValues (shippedPresetFieldDefinitions preset)))
-      shippedPresetNames)
-    "delegate-routing-${name}: every field defined by package whenToDelegate presets must use lib.mkDefault"; true;
-    shippedPresetsDisabledChecked = assert lib.assertMsg
-    (lib.all (preset: !shippedPresets.${preset}.enable) shippedPresetNames)
-    "delegate-routing-${name}: package whenToDelegate presets must remain disabled until consumer content overrides them"; true;
-    enabledShippedPresets = lib.genAttrs shippedPresetNames (preset:
+        (builtins.attrValues (shippedEntryFieldDefinitions preset)))
+      shippedEntryNames)
+    "delegate-routing-${name}: every field defined by package whenToDelegate defaults must use lib.mkDefault"; true;
+    shippedEntriesDisabledChecked = assert lib.assertMsg
+    (lib.all (preset: !shippedEntries.${preset}.enable) shippedEntryNames)
+    "delegate-routing-${name}: package whenToDelegate defaults must remain disabled until consumer content overrides them"; true;
+    enabledShippedEntries = lib.genAttrs shippedEntryNames (preset:
       evaluate (lib.recursiveUpdate scenario {
         ai.programs.delegate-routing.whenToDelegate.${preset}.enable = true;
       }));
@@ -214,10 +157,10 @@
         text = "Delegate when the task is independently verifiable.";
       };
     });
-    overriddenShippedPresetName = builtins.head shippedPresetNames;
-    overriddenShippedPresetText = "Consumer replacement guidance.";
-    overriddenShippedPreset = evaluate (lib.recursiveUpdate scenario {
-      ai.programs.delegate-routing.whenToDelegate.${overriddenShippedPresetName}.text = overriddenShippedPresetText;
+    overriddenShippedEntryName = builtins.head shippedEntryNames;
+    overriddenShippedEntryText = "Consumer replacement guidance.";
+    overriddenShippedEntry = evaluate (lib.recursiveUpdate scenario {
+      ai.programs.delegate-routing.whenToDelegate.${overriddenShippedEntryName}.text = overriddenShippedEntryText;
     });
     disabledPreset = evaluate (lib.recursiveUpdate scenario {
       ai.programs.delegate-routing.whenToDelegate.Preset = {
@@ -352,38 +295,137 @@
       else true;
   in {
     "module-delegate-routing-${name}-content" = mkTest "delegate-routing-${name}-content" (
-      lib.hasInfix "codex exec --model <slug> --config 'model_reasoning_effort=\"<level>\"' --json --output-last-message <out>.md - < <prompt-file>" claude
-      && lib.hasInfix "## manual-only external delegate sizing\n" claude
-      && lib.hasInfix "### kiro\n" claude
-      && lib.hasInfix "kiro-cli chat --no-interactive --model auto \"<prompt>\"" claude
-      && lib.hasInfix "For a Kiro external delegate, follow its launch block below." claude
-      && lib.hasInfix "Not a candidate for auto-selection; use only when the user names it." claude
-      && lib.hasInfix "(anthropic)" claude
-      && lib.hasInfix "(openai)" claude
+      passes result
+      && lib.all (family: lib.hasInfix "${family} (anthropic)" nativeClaude) ["fable" "haiku" "opus" "sonnet"]
+      && lib.hasInfix "native" nativeClaude
+      && !(lib.hasInfix "(openai)" nativeClaude)
+      && !(lib.hasInfix crossVendor nativeClaude)
+      && lib.all (family: lib.hasInfix "${family} (openai)" claude) ["astra" "luna" "sol" "terra"]
+      && lib.hasInfix "via codex external" claude
+      && lib.hasInfix crossVendor claude
       && lib.hasInfix "(openai)" codex
       && !(lib.hasInfix "(anthropic)" codex)
-      && !(lib.hasInfix "## manual-only" codex)
-      && lib.hasInfix "(anthropic)" kiro
-      && lib.hasInfix "(openai)" kiro
-      && !(lib.hasInfix "## manual-only" kiro)
-      && !(lib.hasInfix "via `" kiro)
-      && catalogIntersectionChecked
-      && writerOrderChecked
-      && defaultDelegateChecked
-      && nativeDelegateToolsChecked
-      && settingsDefaultsChecked
+      && !(lib.hasInfix crossVendor codex)
+      && lib.hasInfix "## manual-only external delegates" claude
+      && lib.hasInfix "Not a candidate for auto-selection; use only when the user names it." claude
+      && lib.hasInfix "claude-opus-*" claude
+      && lib.hasInfix "gpt-*-sol" claude
+    );
+    "module-delegate-routing-${name}-kiro-models" = mkTest "delegate-routing-${name}-kiro-models" (
+      failsWith emptyKiro "ai.kiro.programs.delegate-routing.models must select at least one"
+      && passes inactiveKiro
+      && passes programDisabledKiro
+      && lib.hasInfix "opus (anthropic)" kiro
+      && lib.hasInfix "haiku (anthropic)" kiro
+      && !(lib.hasInfix "fable (anthropic)" kiro)
+      && !(lib.hasInfix "sonnet (anthropic)" kiro)
+      && !(lib.hasInfix "(openai)" kiro)
+    );
+    "module-delegate-routing-${name}-selectors" = mkTest "delegate-routing-${name}-selectors" (
+      failsWith (selector {vendors = ["unknown"];}) "ai.claude.programs.delegate-routing.models references"
+      && failsWith (selector {families = ["unknown"];}) "ai.claude.programs.delegate-routing.models references"
+      && failsWith (change {
+        ai = {
+          programs.delegate-routing.families = lib.mapAttrs (_: lib.mapAttrs (_: _: {tier = "small";})) (import ../lib/families.nix);
+          claude.programs.delegate-routing.models = [{tiers = ["frontier"];}];
+        };
+      }) "ai.claude.programs.delegate-routing.models references"
+      && failsWith (selector {}) "ai.claude.programs.delegate-routing.models contains an empty selector"
+      && failsWith (selector {
+        vendors = ["openai"];
+        families = ["opus"];
+      }) "ai.claude.programs.delegate-routing.models must select"
+      && passes (selector {
+        vendors = ["anthropic"];
+        tiers = ["strong" "small"];
+      })
+      && (let
+        union = skill {
+          ai.claude.programs.delegate-routing = {
+            extraRuntimes = [];
+            manualExternalDelegates = [];
+            models = [
+              {families = ["haiku"];}
+              {
+                vendors = ["openai"];
+                tiers = ["strong"];
+              }
+            ];
+          };
+        };
+      in
+        lib.hasInfix "haiku (anthropic)" union && lib.hasInfix "sol (openai)" union && !(lib.hasInfix "opus (anthropic)" union))
+    );
+    "module-delegate-routing-${name}-families" = mkTest "delegate-routing-${name}-families" (
+      lib.hasInfix "CUSTOM OPUS TASK" familyOverride
+      && lib.hasInfix "x (example)" addedFamily
+      && lib.hasInfix "example-x-*" addedFamily
+      && lib.hasInfix "CUSTOM FAMILY TASK" addedFamily
+    );
+    "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
+      failsWith (invalidNode {
+        kind = "subagent";
+        pinsModel = true;
+      }) "techniques.Invalid: pinsModel and pinsEffort"
+      && failsWith (invalidNode {
+        kind = "workflow";
+        pinsEffort = true;
+      }) "techniques.Invalid: pinsModel and pinsEffort"
+      && failsWith (invalidNode {
+        kind = "usage";
+        pinsModel = false;
+      }) "techniques.Invalid: pinsModel and pinsEffort"
+      && failsWith (invalidNode {
+        kind = "introspect";
+        pinsEffort = false;
+      }) "techniques.Invalid: pinsModel and pinsEffort"
+      && failsWith (invalidNode {
+        kind = "external";
+        pinsModel = true;
+        pinsEffort = true;
+      }) "techniques.Invalid.command"
+      && passes (invalidNode {
+        kind = "external";
+        pinsModel = true;
+        pinsEffort = true;
+        command = "external-command";
+      })
+    );
+    "module-delegate-routing-${name}-techniques" = mkTest "delegate-routing-${name}-techniques" (
+      !(lib.hasInfix "`Agent`" disabledNode)
+      && lib.hasInfix "`Workflow`" disabledNode
+      && lib.hasInfix "CUSTOM CODEX COMMAND" modifiedNode
+      && !(lib.hasInfix "| workflow" codex)
+      && lib.hasInfix "headless+acp" kiroInvoke
+      && lib.hasInfix "false" kiroInvoke
       && lib.hasInfix "/bin/claude-usage`" claude
       && lib.hasInfix "/bin/codex-usage`" codex
-      && !(lib.hasInfix "#### kiro usage" kiro)
+      && !(lib.hasInfix "usage (usage)" kiro)
+      && !(lib.hasInfix "`spawn_agent`" claude)
+      && !(lib.hasInfix "`invoke_sub_agent`" claude)
+      && lib.hasInfix "kiro-cli chat --no-interactive --model <id> --effort <effort>" claude
+    );
+    "module-delegate-routing-${name}-text" = mkTest "delegate-routing-${name}-text" (
+      lib.all (key: let
+        marker =
+          if key == "rules"
+          then "Size every delegate"
+          else "## procedure";
+        replacement = replacedText key "text" "CUSTOM TEXT BLOCK";
+        sourced = replacedText key "source" ../fragments/skill-routing.md;
+        omitted = replacedText key "enable" false;
+      in
+        lib.hasInfix "CUSTOM TEXT BLOCK" replacement
+        && !(lib.hasInfix marker replacement)
+        && hasLoadInstruction sourced
+        && !(lib.hasInfix marker sourced)
+        && !(lib.hasInfix marker omitted)) ["rules" "procedure"]
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (
-      !(builtins.tryEval invalidChecked).success
-      && lib.any
-      (item: lib.hasInfix "ai.claude.programs.delegate-routing.extraRuntimes includes `kiro`, but ai.kiro.enable is false" item.message)
-      failed
-      && lib.all (item: item.assertion) manualDisabled.config.assertions
-      && lib.hasInfix "### kiro\n" (readSkill manualDisabled "claude")
-      && lib.all (item: item.assertion) manualOverlap.config.assertions
+      failsWith invalid "ai.claude.programs.delegate-routing.extraRuntimes includes `kiro`, but ai.kiro.enable is false"
+      && passes manualDisabled
+      && lib.hasInfix "### kiro techniques" (readSkill manualDisabled "claude")
+      && passes manualOverlap
       && readSkill manualOverlap "claude" == readSkill manualDisabled "claude"
     );
     "module-delegate-routing-${name}-options" = mkTest "delegate-routing-${name}-options" (
@@ -393,46 +435,39 @@
       in
         portable ? enable
         && portable ? whenToDelegate
+        && portable ? families
+        && portable ? rules
+        && portable ? procedure
         && !(portable ? extraRuntimes)
         && !(portable ? manualExternalDelegates)
-        && !(portable ? settings)
+        && !(portable ? models)
+        && !(portable ? techniques)
         && perRuntime ? extraRuntimes
         && perRuntime ? manualExternalDelegates
-        && perRuntime.settings ? launch
+        && perRuntime ? models
+        && perRuntime ? techniques
         && !(result.options.ai.kimchi.programs ? delegate-routing)
         && !(result.options.ai.copilot.programs ? delegate-routing)
     );
     "module-delegate-routing-${name}-overrides" = mkTest "delegate-routing-${name}-overrides" (
-      lib.hasInfix "CUSTOM CLAUDE DELEGATION" customizedClaude
-      && lib.hasInfix "CUSTOM CODEX LAUNCH" customizedClaude
-      && !(lib.hasInfix "#### claude usage" customizedClaude)
-      && !(lib.hasInfix "api.anthropic.com/api/oauth/usage" customizedClaude)
-      && !(lib.hasInfix "maxEffortLevel" customizedClaude)
-      && !(lib.hasInfix "kiro-cli chat --no-interactive" customizedClaude)
-      && !(lib.hasInfix "--model auto" customizedClaude)
-      && !(lib.hasInfix "follow its launch block below" customizedClaude)
-      && !(lib.hasInfix "_kiro/config/template" customizedClaude)
-      && !(disabled.config.ai.codex.skills ? delegate-routing)
+      !(disabled.config.ai.codex.skills ? delegate-routing)
       && !(disabled.config.ai.codex.rules ? delegate-routing-router)
       && disabled.config.ai.claude.skills ? delegate-routing
       && !(result.config.ai.skills ? delegate-routing)
       && !(result.config.ai.rules ? delegate-routing-router)
     );
     "module-delegate-routing-${name}-preset-priorities" = mkTest "delegate-routing-${name}-preset-priorities" (
-      shippedPresetsDisabledChecked && shippedPresetPrioritiesChecked
+      shippedEntriesDisabledChecked && shippedEntryPrioritiesChecked
     );
     "module-delegate-routing-${name}-stub" = mkTest "delegate-routing-${name}-stub" (
       builtins.length (lib.splitString "\n" (lib.removeSuffix "\n" stub))
       <= 10
       && hasLoadInstruction stub
-      && !(lib.hasInfix "Never inherit" stub)
-      && lib.all
-      (runtime: let
-        skill = readSkill result runtime;
+      && !(lib.hasInfix "Size every delegate" stub)
+      && lib.all (runtime: let
+        text = readSkill result runtime;
       in
-        builtins.length (lib.splitString "Never inherit" skill)
-        == 2
-        && !(hasLoadInstruction skill))
+        builtins.length (lib.splitString "Size every delegate" text) == 2 && !(hasLoadInstruction text))
       runtimes
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-routing-router.text == stub) runtimes
     );
@@ -440,14 +475,14 @@
       ruleText noEntries
       == builtins.readFile ../fragments/skill-routing.md
       && lib.hasInfix "### Consumer\n\nDelegate when the task is independently verifiable." (ruleText consumerEntry)
-      && lib.hasInfix "### ${overriddenShippedPresetName}\n\n${overriddenShippedPresetText}" (ruleText overriddenShippedPreset)
-      && !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedPresets.${overriddenShippedPresetName}.source)) (ruleText overriddenShippedPreset))
+      && lib.hasInfix "### ${overriddenShippedEntryName}\n\n${overriddenShippedEntryText}" (ruleText overriddenShippedEntry)
+      && !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedEntries.${overriddenShippedEntryName}.source)) (ruleText overriddenShippedEntry))
       && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
       && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
       && lib.all
       (preset: let
-        declaredSource = shippedPresets.${preset}.source;
-        text = ruleText enabledShippedPresets.${preset};
+        declaredSource = shippedEntries.${preset}.source;
+        text = ruleText enabledShippedEntries.${preset};
       in
         lib.hasInfix
         "### ${preset}\n\n${lib.removeSuffix "\n" (builtins.readFile declaredSource)}"
@@ -456,9 +491,9 @@
         (other:
           other
           == preset
-          || !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedPresets.${other}.source)) text))
-        shippedPresetNames)
-      shippedPresetNames
+          || !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedEntries.${other}.source)) text))
+        shippedEntryNames)
+      shippedEntryNames
     );
     "module-delegate-routing-${name}-when-to-delegate-preset-constructor" = mkTest "delegate-routing-${name}-when-to-delegate-preset-constructor" presetConstructorContract;
     "module-delegate-routing-${name}-when-to-delegate-protection" = mkTest "delegate-routing-${name}-when-to-delegate-protection" protectionContract;

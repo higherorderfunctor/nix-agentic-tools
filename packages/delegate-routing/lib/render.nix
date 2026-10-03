@@ -1,164 +1,106 @@
 {
   lib,
   runtime,
+  families,
+  models,
+  techniques,
+  rules,
+  procedure,
   extraRuntimes ? [],
-  kiroModels ? (builtins.fromJSON (builtins.readFile ../../kiro-cli/extracted.json)).models,
   manualExternalDelegates ? [],
-  presets,
-  settings ? presets,
 }: let
-  # Read model decisions and runtime routes before selecting table candidates.
-  models = import ./models.nix;
-  firstParty = {
-    claude = ["anthropic"];
-    codex = ["openai"];
-    kiro = ["anthropic" "openai"];
-  };
-  # Manual-only wins if a consumer names the same runtime in both lists.
+  select = import ./select-families.nix {inherit lib;};
   extras = lib.subtractLists manualExternalDelegates (lib.unique extraRuntimes);
   runtimes = [runtime] ++ extras;
-  available = target: model:
-    model.ids ? ${target}
-    && builtins.elem model.vendor firstParty.${target}
-    && (target != "kiro" || builtins.elem model.ids.kiro kiroModels);
-  targets = model: builtins.filter (target: available target model) runtimes;
-  writerOrder = builtins.filter (writer: targets writer.model != []) [
-    {
-      model = models.strong.sol;
-      sizing = "Sol/medium";
-    }
-    {
-      model = models.small.luna;
-      sizing = "Luna/high";
-    }
-    {
-      model = models.mid.terra;
-      sizing = "Terra/medium";
-    }
-  ];
-  sizingGuidance = lib.concatStringsSep " " (
-    lib.optional (targets models.strong.sol != []) "Default delegate: Sol/medium."
-    ++ lib.optional (writerOrder != []) "OpenAI writer order: ${lib.concatMapStringsSep ", then " (writer: writer.sizing) writerOrder}."
-  );
-  modelId = target: model:
-    if target == "claude" && target != runtime
-    then model.ids.claudeHeadless
-    else model.ids.${target};
-  reach = target: model: let
-    id = "`${modelId target model}`";
-  in
-    if target != runtime
-    then "via ${target} launch block: ${id}"
-    else if runtime == "claude"
-    then "Agent/Workflow `model`: ${id}"
-    else if runtime == "codex"
-    then "`collaboration.spawn_agent` model: ${id}"
-    else "workflow step `modelId`: ${id}";
-  # Emit tiers in capability order, with first-party rows before external rows.
+  selected = target: select families models.${target};
+  targets = family: builtins.filter (target: builtins.elem family (selected target)) runtimes;
+  candidates = lib.unique (lib.concatMap selected runtimes);
   cell = lib.replaceStrings ["|" "\n"] ["\\|" " "];
-  row = model:
-    "| "
-    + lib.concatMapStringsSep " | " cell [
-      "${model.name} (${model.vendor})"
-      model.useFor
-      model.avoidFor
-      model.effort
-      (lib.concatMapStringsSep "; " (target: reach target model) (targets model))
-    ]
-    + " |";
+  row = cells: "| ${lib.concatMapStringsSep " | " cell cells} |";
+  table = columns: rows:
+    lib.concatStringsSep "\n" ([
+        (row columns)
+        (row (map (_: "---") columns))
+      ]
+      ++ map row rows);
+  familyLabel = family: "${family.name} (${family.vendor}) `${family.match}`";
   tier = name: let
-    candidates = builtins.filter (model: targets model != []) (builtins.attrValues models.${name});
-    native =
-      lib.concatMap
-      (vendor: builtins.filter (model: available runtime model && model.vendor == vendor) candidates)
-      firstParty.${runtime};
-    external = builtins.filter (model: !(available runtime model)) candidates;
+    members = builtins.filter (family: family.tier == name) candidates;
   in
-    lib.optionalString (candidates != []) ''
+    lib.optionalString (members != []) ''
       ### ${name}
 
-      | Model | Use for | Avoid for | Effort (delegate) | How to reach |
-      | --- | --- | --- | --- | --- |
-      ${lib.concatMapStringsSep "\n" row (native ++ external)}
+      ${table ["Family" "Use for" "Avoid for" "Effort (delegate)" "Reach"] (map (family: [
+          (familyLabel family)
+          family.useFor
+          family.avoidFor
+          family.effort
+          (lib.concatMapStringsSep "; " (target:
+            if target == runtime
+            then "native"
+            else "via ${target} external") (targets family))
+        ])
+        members)}
     '';
-  enabled = target: key: settings.${target}.${key}.enable or true;
-  # Emit only configured blocks; manual-only instructions follow the main table.
-  block = target: key: title:
-    lib.optionalString (enabled target key)
-    "#### ${target} ${title}\n\n${lib.removeSuffix "\n" settings.${target}.${key}.text}\n";
-  joinBlocks = blocks: lib.concatStringsSep "\n" (builtins.filter (text: text != "") blocks);
-  runtimeBlock = target:
-    "### ${target} runtime\n\n"
-    + joinBlocks [
-      (lib.optionalString (target == runtime) (block target "delegateTools" "delegate tools"))
-      (block target "introspectModels" "models and effort")
-      (block target "checkUsage" "usage")
-      (lib.optionalString (target != runtime) (block target "launch" "launch"))
-    ];
-  allModels = lib.concatMap (name: builtins.attrValues models.${name}) ["frontier" "strong" "mid" "small"];
-  manual = target: let
-    known = builtins.filter (available target) allModels;
-    ids = lib.concatMapStringsSep "; " (model: "${model.name}: `${modelId target model}`") known;
-    purpose = {
-      claude = "For a Claude external delegate, follow the matching model row in the main table when present.";
-      codex = "For a Codex external delegate, follow the matching model row in the main table when present.";
-      kiro = lib.optionalString (enabled "kiro" "launch") "For a Kiro external delegate, follow its launch block below.";
-    };
-    purposeLine = lib.optionalString (purpose.${target} != "") "${purpose.${target}}\n\n";
-  in ''
-    ### ${target}
+  techniqueBlock = target: externalOnly: let
+    nodes = lib.filterAttrs (_: node:
+      (node.enable or true)
+      && (!externalOnly || builtins.elem node.kind ["external" "introspect" "usage"]))
+    techniques.${target};
+    delegates = lib.filterAttrs (_: node: builtins.elem node.kind ["workflow" "subagent" "external"]) nodes;
+    info = lib.filterAttrs (_: node: builtins.elem node.kind ["introspect" "usage"]) nodes;
+    hasCommand = lib.any (node: (node.command or null) != null) (builtins.attrValues delegates);
+    command = node: lib.optionalString ((node.command or null) != null) "`${node.command}`";
+  in
+    lib.optionalString (nodes != {}) ''
+      ### ${target} techniques
 
+      ${lib.optionalString (delegates != {}) (table
+        (["Technique" "Kind" "Pins model" "Pins effort" "Modes" "Notes"] ++ lib.optional hasCommand "Command")
+        (lib.mapAttrsToList (name: node:
+          [
+            "`${name}`"
+            node.kind
+            (builtins.toJSON node.pinsModel)
+            (builtins.toJSON node.pinsEffort)
+            (lib.concatStringsSep "+" node.modes)
+            (node.notes or "")
+          ]
+          ++ lib.optional hasCommand (command node))
+        delegates))}
+
+      ${lib.concatStringsSep "\n\n" (lib.mapAttrsToList (name: node: "**${name} (${node.kind}):** ${command node} ${node.notes or ""}") info)}
+    '';
+  manual = target: ''
+    ${lib.concatMapStringsSep "\n" (family: "- ${familyLabel family}") (selected target)}
+
+    ${techniqueBlock target true}
     Not a candidate for auto-selection; use only when the user names it.
-
-    ${purposeLine}Slug spelling: ${ids}.
-    Confirm availability in the live catalog before launching.
-
-    ${joinBlocks [(block target "launch" "launch") (block target "introspectModels" "models and effort")]}
   '';
 in ''
-  ${builtins.readFile ./rules.md}
-  Use this skill for delegates and workflow nodes. Size each stage separately.
-  Set effort every time; harness defaults differ. If a model has no effort
-  control, record effort as not applicable. State the selected model and effort
-  in the brief and apply them through the controls below.
+  ${lib.optionalString rules.enable rules.text}
 
-  A delegate CLI resolves its permission and default configuration from the
-  directory it is launched in, so launching it elsewhere silently changes the
-  permission model; a bypass or full-access flag reached for to compensate may
-  be refused outright by the hosting harness. This is why the launch blocks say
-  to launch from the current working directory and pass model and effort
-  explicitly instead of inheriting them.
+  Use this skill for delegates and workflow nodes. Size each stage separately. If a model has no effort control, record effort as not applicable.
 
-  A harness without a per-delegate model or effort control (Copilot today) does the work inline at the session's sizing, or hands it to an external delegate.
-  Sizing is a budget decision, not a rigor decision: a cheaper delegate still owes the same evidence, and a task that cannot meet the bar on the cheap model is sized up, not relaxed.
+  Launch delegate CLIs from the current directory: it determines their permissions and configuration. Copilot has no per-delegate model or effort controls; work inline or use an external delegate.
 
-  If one model clearly stands out for the work, take it regardless of usage
-  unless that pool is exhausted. If candidates are close, take the pool with
-  more remaining. Check usage with the runtime's command. If no usage check is
-  available, prefer the other pool among otherwise close candidates.
+  Sizing is a budget decision, not a rigor decision: a cheaper delegate still owes the same evidence. Size up a task that cannot meet the bar. If one model stands out, use it unless its pool is exhausted; among close candidates, prefer the pool with more remaining allowance. Check usage with the runtime's command; if none is available, prefer the other pool among close candidates.
+
+  **Prefer workflows.** When work has more than one stage or several independent pieces, build it as a workflow graph with model and effort set on every node, not as a series of single subagent calls. Use a lone subagent only for one self-contained task, through a technique that pins its model and effort. If this runtime has no workflow technique, build the graph from pinned subagents or external launches.
+
+  **Inheritance.** A technique that does not pin a value inherits it from the session. An interactive session cannot reliably know its own model or effort (`/model` and `/effort` change them), so treat an inheriting technique as unsized there. A headless delegate inherits what it was launched with: state the model and effort in every external launch brief, and a delegate told its launch values may use an inheriting technique when those values match its choice.
 
   ## delegate sizing
 
-  ${sizingGuidance}
-  ${lib.optionalString (extras != [] || manualExternalDelegates != []) "For an external delegate, use its launch block in a shell step."}
+  Each row is a family: pick the newest id in the live model list matching its pattern, and use the runtime's own spelling from the introspection step (Claude's interactive tools take the alias, e.g. `opus`).
 
-  ${joinBlocks (map tier ["frontier" "strong" "mid" "small"])}
-  ${lib.concatMapStringsSep "\n" runtimeBlock runtimes}
-  ## procedure
+  ${lib.optionalString (builtins.length (lib.unique (map (family: family.vendor) candidates)) > 1) "Rows span more than one vendor, so a reviewer may come from a different vendor than the writer."}
 
-  1. Write the rubric from operator-approved examples and give it to the writer and judge.
-  2. Before assigning a change, decide whether to extend an existing abstraction or replace it.
-  3. Set a hard cap before starting: three writer/reviewer rounds by default.
-  4. Classify each failure: conceptual, missing evidence, execution, unclear standard or done.
-     Step up the model for conceptual failures; fetch missing evidence; repair execution failures.
-     Clarify unclear standards with the operator. Stop when done.
-  5. Judge correctness and readability separately. Check calibration, actionability, precision,
-     recall and stopping. Return accept, revise or insufficient evidence with a localized reason.
-  6. Escalate after two rounds with the same defect. Change the brief; do not reset the cap.
-     At the cap, return the artifact, remaining defects and needed decision to the operator.
-  7. For two reviewers, take the union of their findings and adjudicate each one.
-     Do not intersect findings or use cross-vendor panels. Sol must not be the sole judge.
+  ${lib.concatMapStringsSep "\n" tier ["frontier" "strong" "mid" "small"]}
+  ${techniqueBlock runtime false}
+  ${lib.concatMapStringsSep "\n" (target: techniqueBlock target true) extras}
+  ${lib.optionalString procedure.enable procedure.text}
 
   ${lib.optionalString (manualExternalDelegates != [])
-    ("## manual-only external delegate sizing\n\n" + lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates))}
+    ("## manual-only external delegates\n\n" + lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates))}
 ''
