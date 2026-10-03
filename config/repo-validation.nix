@@ -46,24 +46,10 @@
     };
     cspell = {
       role = "validator";
-      hook = {
-        enable = true;
-        excludes = [
-          ".*package-lock\\.json$"
-          ".*\\.lock$"
-          "^config/cspell/"
-          "^docs/"
-          # Verbatim engine-bundle quotes and real command output, including
-          # identifier fragments cut mid-token by windowed byte extraction.
-          "^fixtures/kiro-primitives/evidence/"
-          "^fixtures/kiro-primitives/records/"
-          "^packages/chatgpt-codex/extracted\\.json$"
-          "^packages/claude-code/extracted\\.json$"
-          "^packages/kimchi/egress-report\\.json$"
-          # Patch files are verbatim third-party code plus Git blob hashes.
-          ".*\\.patch$"
-        ];
-      };
+      # config/cspell/cspell.json `ignorePaths` is the one skip list: cspell
+      # honours it for files prek passes explicitly. It skips generated files,
+      # verbatim third-party text (patches, kiro-primitives evidence) and docs.
+      hook.enable = true;
       ci.backend = "git-hooks";
     };
     deadnix = {
