@@ -625,9 +625,9 @@ to any versioned attribute family:
   version.
 - pnpm_12 keeps a version/source/cargo sidecar and `mkUpdateScript`'s cheap
   no-op exit. A `mkHashFix` restores source then cargo hashes after a bump and
-  is exposed as `fixVendorHash` for input-update repair. Read npm's wrapper
-  `latest-12` tag; the platform exe tags can lag releases. Earlier binary and
-  JavaScript-placeholder measurements are historical:
+  is exposed as `fixVendorHash` for input-update repair. npm's `latest-12`
+  dist-tag picks the release and the source fixer fetches the matching GitHub
+  tag. Earlier binary and JavaScript-placeholder measurements are historical:
   `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
 
 Rust packages take `rustPlatform` from `vu.mkRustPlatform`; the recipe passes it

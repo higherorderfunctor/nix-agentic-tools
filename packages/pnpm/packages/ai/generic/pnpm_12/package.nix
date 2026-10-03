@@ -74,7 +74,8 @@ in
             pname = "pnpm_12";
             platforms = {};
             extraExtract = "${fixVendorHash}";
-            # Read the wrapper's release channel; platform exe tags can lag.
+            # npm's per-major dist-tag picks the release; the source fixer then
+            # fetches the matching GitHub tag and fails loudly if it is missing.
             versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-12\"] // empty'";
           };
         };

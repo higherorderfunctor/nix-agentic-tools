@@ -12,14 +12,16 @@
 # reader did not write.
 #
 # WHY THIS CHECK EXISTS RATHER THAN A COMMENT. `pnpm_12` shipped without that
-# passthru and the gap stayed latent from the day it was written. It is built
-# from the per-platform `@pnpm/exe.*` native binaries instead of nixpkgs'
+# passthru and the gap stayed latent from the day it was written. It was then
+# built from the per-platform `@pnpm/exe.*` native binaries instead of nixpkgs'
 # `generic.nix`, so it never inherited the argument of the same name — and
 # nothing in the repo passed it to `fetchPnpmDeps`, so nothing evaluated the
 # combination. `checks/packaging/pnpm-fetcher-parity.nix` could not catch it either: that
 # check enumerates packages which already ship a `pnpmDeps`, and none of them
 # used pnpm 12. The gap surfaced only when oxlint became the first such
-# consumer, roughly a year later.
+# consumer, roughly a year later. pnpm_12 now overrides nixpkgs' source-built
+# `pnpm_12` and inherits `nodejs-slim` from it; the check still guards every
+# major.
 #
 # Packaging a pnpm major is therefore NOT the same as proving it usable as a
 # fetcher argument, and the difference is invisible until someone tries.
