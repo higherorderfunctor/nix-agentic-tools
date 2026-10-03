@@ -86,8 +86,8 @@
       `clientCapabilities: {terminal: false}`, then `session/new` with the
       current `cwd` and `mcpServers: []`. Query `_kiro/config/template` for
       that session and read the selected model's effort choices.
-      Claude models (Opus, Sonnet, Fable; Haiku excepted) accept `low`, `medium`, `high`, `xhigh`, `max`;
-      the GPT models also accept `none`. When a `kiro-cli chat` launch
+      Opus and Sonnet accept `low`, `medium`, `high`, `xhigh`, `max`; the
+      GPT models also accept `none`. When a `kiro-cli chat` launch
       pins a model other than `auto` (`--model auto`), set effort every time:
       a launch has no parent to inherit from. On a workflow step, set
       `modelId` and `effortLevel` on the step itself; an omitted field
