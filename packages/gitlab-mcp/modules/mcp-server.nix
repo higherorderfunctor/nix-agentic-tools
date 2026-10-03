@@ -3,7 +3,9 @@
 # Upstream env vars and tool registry verified 2026-05-20 against
 # c2577169b21d62197f767895fe97651ffb2d7443 (v2.1.13). See
 # docs/plans/gitlab-mcp-packaging-slim.md for the upstream
-# verification trail.
+# verification trail. GITLAB_DISABLE_VERSION_CHECK (disableVersionCheck)
+# is newer: verified 2026-10-03 against
+# 1b375eb0252065d14e8b2853a905b0ddbaa4f1ff (v2.1.68), config.ts.
 #
 # Naming divergence from github-mcp (single generic `credentials`
 # vs three named `pat`/`apiUrl`/`jobToken`) is deliberate and
