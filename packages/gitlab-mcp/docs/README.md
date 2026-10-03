@@ -64,6 +64,15 @@ Three sets of settings narrow that surface:
   project IDs (joined into `GITLAB_ALLOWED_PROJECT_IDS`). Pair with
   `defaultProjectId` if most calls target a single project.
 
+## Startup version check
+
+`disableVersionCheck` defaults to `true`, setting
+`GITLAB_DISABLE_VERSION_CHECK=true`. This disables upstream's npm version check
+at startup: the Nix-pinned package cannot self-update, and the check causes DNS
+and HTTPS egress before any tool call. Set
+`settings.disableVersionCheck = false` to restore the upstream check (the
+environment variable is omitted).
+
 ## Optional features
 
 - `useWiki = true` / `useMilestone = true` / `usePipeline = true` — enable the
