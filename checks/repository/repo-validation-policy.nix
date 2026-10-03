@@ -49,6 +49,18 @@ pkgs.runCommandLocal "repo-validation-policy-check" {
   diff -u expected-ci actual-ci
   jq -e 'all(.repos[].hooks[]; .stages == ["manual"])' ci.json >/dev/null
 
+  # Local and CI cspell invocations must tolerate batches filtered entirely by
+  # ignorePaths while retaining filename passing and parallel execution.
+  for config in local.json ci.json; do
+    jq -e '
+      [.repos[].hooks[] | select(.id == "cspell")]
+      | length == 1
+        and (.[0].args | index("--no-must-find-files") != null)
+        and .[0].pass_filenames == true
+        and .[0].require_serial == false
+    ' "$config" >/dev/null
+  done
+
   export HOME="$PWD/home"
   mkdir -p "$HOME" repo
   cd repo

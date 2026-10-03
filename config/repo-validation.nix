@@ -49,7 +49,12 @@
       # config/cspell/cspell.json `ignorePaths` is the one skip list: cspell
       # honours it for files prek passes explicitly. It skips generated files,
       # verbatim third-party text (patches, kiro-primitives evidence) and docs.
-      hook.enable = true;
+      hook = {
+        enable = true;
+        # prek batches filenames in parallel; ignorePaths can exclude an entire
+        # batch. Allow zero checked files without suppressing spelling errors.
+        args = ["--no-must-find-files"];
+      };
       ci.backend = "git-hooks";
     };
     deadnix = {

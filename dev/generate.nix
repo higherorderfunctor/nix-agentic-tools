@@ -1203,12 +1203,13 @@
     ```
 
     Linting is separate from formatting: the linters (deadnix, statix,
-    shellcheck, cspell) run as prek pre-commit hooks, which are disabled in
-    CI and can be skipped with `--no-verify`.
+    shellcheck, cspell) run as prek pre-commit hooks on staged files, which
+    `--no-verify` skips locally.
 
-    `nix flake check` is the CI gate (formatting, structural checks, and
-    module evaluation). Spelling is NOT part of it — cspell runs only as a
-    prek hook, so CI never checks it.
+    `nix flake check` is the CI gate. Besides formatting, structural checks
+    and module evaluation, it runs the same linters over every tracked file
+    (`checks.repo-lints`, plus `checks.shellcheck-corpus`), so spelling is
+    checked in CI even when a local commit skipped the hooks.
 
     ${commitConvention}
 
