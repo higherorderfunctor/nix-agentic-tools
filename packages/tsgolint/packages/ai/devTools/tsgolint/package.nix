@@ -1,6 +1,5 @@
-# tsgolint — HEAD-tracked type-aware linting backend for oxlint, pinned
-# against `pkgs` (this repo's nixpkgs) for cache-hit parity. Thin
-# overrideAttrs of nixpkgs' tsgolint: swap src (main rev, submodules),
+# tsgolint — HEAD-tracked type-aware linting backend for oxlint.
+# Thin overrideAttrs of nixpkgs' tsgolint: swap src (main rev, submodules),
 # version, and vendorHash; inherit the typescript-go submodule patch dance.
 {
   pkgs,

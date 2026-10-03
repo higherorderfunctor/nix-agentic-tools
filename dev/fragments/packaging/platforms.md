@@ -17,7 +17,7 @@ Linux, `.dmg` on Darwin):
 1. Create a `<name>-sources.json` sidecar with version and per-platform
    `{url, hash}` entries keyed by Nix system string
 2. Select the correct source in the `.nix` overlay via
-   `ourPkgs.stdenv.hostPlatform.system`
+   `pkgs.stdenv.hostPlatform.system`
 3. Use `mkUpdateScript` from `lib/packaging.nix` to automate version bumps and
    hash prefetching for all platforms
 
@@ -33,7 +33,7 @@ one-key shape.
 
 ### Version-independent URLs need `alwaysPrefetch`
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
+> **Last verified:** 2026-10-03 — source paths and ownership guidance follow
 > native package assembly.
 
 `mkUpdateScript` normally early-exits when `versionCheck.cmd`'s output equals

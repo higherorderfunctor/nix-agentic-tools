@@ -1,5 +1,5 @@
 # nixos-mcp — builds the upstream mcp-nixos package via its exposed
-# `lib.mkMcpNixos`, against this repo's nixpkgs pin.
+# `lib.mkMcpNixos`, against the supplied package set.
 #
 # We deliberately do NOT consume `inputs.mcp-nixos.packages.<system>.default`.
 # That evaluates the upstream flake's own `perSystem`, which applies its
@@ -11,18 +11,13 @@
 # which is what broke the nixpkgs bump in PR #328. nixpkgs now satisfies
 # mcp-nixos's `fastmcp>=3.2.0` natively, so we build against stock
 # `python3Packages.fastmcp` via the upstream-exposed `lib.mkMcpNixos`.
-#
-# `ourPkgs` is instantiated from this repo's `inputs.nixpkgs`; only
-# `pkgs.stdenv.hostPlatform.system` is read from the consumer, preserving
-# cache-hit parity (see .claude/rules/overlays.md).
 {
   inputs,
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  upstream = inputs.mcp-nixos.lib.mkMcpNixos {pkgs = ourPkgs;};
+  upstream = inputs.mcp-nixos.lib.mkMcpNixos {inherit pkgs;};
   vu = packageLib;
 in
   upstream.overrideAttrs {

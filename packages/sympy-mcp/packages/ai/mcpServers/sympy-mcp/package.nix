@@ -8,8 +8,7 @@
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchFromGitHub makeWrapper python314;
+  inherit (pkgs) fetchFromGitHub makeWrapper python314;
   vu = packageLib;
 
   rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
@@ -24,7 +23,7 @@
     python314.withPackages (ps:
       with ps; [mcp typer python-dotenv sympy]);
 in
-  ourPkgs.stdenv.mkDerivation {
+  pkgs.stdenv.mkDerivation {
     pname = "sympy-mcp";
     version = vu.mkVersion {
       # upstream: readPyprojectVersion @ pyproject.toml

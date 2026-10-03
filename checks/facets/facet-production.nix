@@ -1,8 +1,4 @@
-{
-  inputs,
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
   checks.facet-owner-relocation = let
     system = pkgs.stdenv.hostPlatform.system;
     probe = pkgs.writeText "facet-owner-relocation.nix" ''
@@ -10,16 +6,9 @@
         pkgs = import ${pkgs.path} {system = ${builtins.toJSON system};};
         inherit (pkgs) lib;
         repository = import ${../..}/lib/facets/repository.nix {
-          # Both overlay flakes define `overlays.default = import ./.`; import
-          # the same locked sources so the probe builds with the real toolchains.
-          inputs = {
-            go-overlay.overlays.default = import ${inputs.go-overlay};
-            nixpkgs = {outPath = ${pkgs.path}; inherit lib;};
-            rust-overlay.overlays.default = import ${inputs.rust-overlay};
-          };
+          inputs.nixpkgs = {outPath = ${pkgs.path}; inherit lib;};
           registryModules = [];
           root = builtins.toPath root;
-          systems = [${builtins.toJSON system}];
         };
         consumerPkgs = import ${pkgs.path} {
           system = ${builtins.toJSON system};
@@ -40,7 +29,6 @@
         };
       in {
         checks = builtins.mapAttrs (_: check: check.drvPath) checks;
-        consumerPath = repository.cacheHitParity.git-revise.consumerPath;
         drvPath = package.drvPath;
         file = repository.update.targets.git-revise.file;
         ninjaHasOwner = lib.hasInfix "build update-git-revise: update-pkg" (
@@ -51,9 +39,6 @@
         );
         unfree = lib.optionalAttrs (consumerPkgs.ai ? facet-unfree-control) {
           drvPath = consumerPkgs.ai.facet-unfree-control.drvPath;
-          inner = toString (builtins.head consumerPkgs.ai.facet-unfree-control.paths);
-          outer = toString consumerPkgs.ai.facet-unfree-control;
-          pinned = toString repository.packageWorlds.${system}.packages.ai.facet-unfree-control;
         };
       }
     '';
@@ -61,6 +46,10 @@
     pkgs.runCommandLocal "facet-owner-relocation" {
       nativeBuildInputs = [pkgs.jq pkgs.nix];
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      USER="$(id -un)"
+      export USER
       export NIX_STATE_DIR="$TMPDIR/nix-state"
       export NIXPKGS_ALLOW_UNFREE=0
       mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER" repository/packages
@@ -94,7 +83,7 @@
       echo '{}' > repository/packages/unfree-control/registry.nix
       for policy in allow predicate; do
         nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" --argstr policy "$policy" > "$policy.json"
-        jq -e '.unfree.inner == .unfree.pinned and .unfree.outer != .unfree.inner' "$policy.json"
+        jq -e '.unfree.drvPath | endswith("facet-unfree-control-1.drv")' "$policy.json"
       done
       for policy in deny rejected-predicate; do
         if nix-instantiate --eval --strict --json ${probe} --argstr root "$PWD/repository" --argstr policy "$policy" > "$policy.json" 2> "$policy.log"; then

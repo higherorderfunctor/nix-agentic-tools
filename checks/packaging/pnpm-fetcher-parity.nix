@@ -123,32 +123,36 @@
 
     drifts = lib.filter (x: x != null) (map mkCheck pnpmPackages);
   in {
-    pnpm-fetcher-parity = pkgs.runCommand "pnpm-fetcher-parity" {} (
-      if drifts == []
-      then "echo 'ok — every pnpmDeps fetcher uses the same pnpm as its consuming buildPhase' > $out"
-      else let
-        report = lib.concatStringsSep "\n" (map (
-            d:
-              if d ? reason
-              then "  ${d.name}: ${d.reason}"
-              else ''
-                ${d.name}:
-                  fetcher pnpm: ${d.fetcher}
-                  build   pnpm: ${d.build}
-              ''
-          )
-          drifts);
-      in ''
-        echo "FAIL: ${toString (builtins.length drifts)} package(s) bind fetchPnpmDeps to a different pnpm than the buildPhase:" >&2
-        cat >&2 <<'DRIFT'
-        ${report}
-        DRIFT
-        echo "" >&2
-        echo "Fix: pass 'pnpm = ourPkgs.pnpm_<N>;' explicitly to fetchPnpmDeps so the" >&2
-        echo "fetcher's offline-store layout matches the pnpm that buildPhase will read." >&2
-        echo "See docs/update-pipeline-transitive-hash-gap.md § Mode D and Gap 4." >&2
-        exit 1
+    pnpm-fetcher-parity = pkgs.runCommand "pnpm-fetcher-parity" {} (''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
       ''
-    );
+      + (
+        if drifts == []
+        then "echo 'ok — every pnpmDeps fetcher uses the same pnpm as its consuming buildPhase' > $out"
+        else let
+          report = lib.concatStringsSep "\n" (map (
+              d:
+                if d ? reason
+                then "  ${d.name}: ${d.reason}"
+                else ''
+                  ${d.name}:
+                    fetcher pnpm: ${d.fetcher}
+                    build   pnpm: ${d.build}
+                ''
+            )
+            drifts);
+        in ''
+          echo "FAIL: ${toString (builtins.length drifts)} package(s) bind fetchPnpmDeps to a different pnpm than the buildPhase:" >&2
+          cat >&2 <<'DRIFT'
+          ${report}
+          DRIFT
+          echo "" >&2
+          echo "Fix: pass 'pnpm = pkgs.pnpm_<N>;' explicitly to fetchPnpmDeps so the" >&2
+          echo "fetcher's offline-store layout matches the pnpm that buildPhase will read." >&2
+          echo "See docs/update-pipeline-transitive-hash-gap.md § Mode D and Gap 4." >&2
+          exit 1
+        ''
+      ));
   };
 }

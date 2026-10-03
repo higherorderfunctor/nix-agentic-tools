@@ -2,7 +2,6 @@
   inputs,
   registryModules ? null,
   root,
-  systems,
 }: let
   inherit (inputs.nixpkgs) lib;
   facets = import ../facets.nix {inherit lib;};
@@ -11,35 +10,31 @@
       // lib.optionalAttrs (registryModules != null) {modules = registryModules;});
   inherit (registry) index repoPath;
   inherit (registry.config) update;
-  cacheHitParity = registry.config.checks.cacheHitParity;
   # The git tools' census builder, handed to owner packages and checks as an
   # argument so an owner never reaches into lib/ by a relative path (the
   # facet-owner-relocation check moves an owner and re-evaluates it).
   gitToolExtraction = import ../git-tool-settings/extraction.nix;
-  packageWorlds = lib.genAttrs systems (system:
+  packageWorldFor = pkgs: let
+    system = pkgs.stdenv.hostPlatform.system;
+  in
     facets.realizePackages {
-      inherit index inputs system;
-      pkgs = import inputs.nixpkgs {
-        inherit system;
-        config.allowUnfree = true;
-        overlays = [inputs.go-overlay.overlays.default inputs.rust-overlay.overlays.default];
-      };
+      inherit index inputs pkgs system;
       scopeArgs = {
         inherit gitToolExtraction repoPath;
-        packageLib = import ../packaging.nix;
+        packageLib = import ../packaging.nix // import ../toolchains.nix {inherit inputs;};
         fragmentsLib = import ../fragments.nix {inherit lib;};
         # `generatedLib pkgs`: the builder generated files are formatted in.
         generatedLib = import ../generated.nix {inherit lib;};
         traceSource = import ../traceSource.nix {inherit lib;};
       };
-    });
+    };
   # Overlay attribute names must be available before the nixpkgs fixed point
   # can supply stdenv/system. Discover the outer namespace without realization.
   packageRoots =
     lib.unique (map (claim: builtins.head claim.keyPath)
       (lib.concatMap (owner: owner.contributions.packages) index.owners));
 in {
-  inherit cacheHitParity index packageWorlds repoPath update;
+  inherit index repoPath update;
   libraryFor = rootLibrary:
     facets.realizeLibrary {
       inherit index rootLibrary;
@@ -47,20 +42,20 @@ in {
       context = {inherit inputs lib repoPath;};
     };
   packagesFor = {
-    system,
     pkgs,
     rootPackages ? {},
   }:
     facets.flattenPackages {
       inherit pkgs rootPackages;
-      packageWorld = packageWorlds.${system};
+      packageWorld = packageWorldFor pkgs;
       rootSource = root + "/flake.nix";
     };
   overlay = final: prev: let
     system = final.stdenv.hostPlatform.system;
+    packageWorld = packageWorldFor final;
     context = {
       inherit inputs lib system;
-      inherit (packageWorlds.${system}) packages;
+      inherit (packageWorld) packages;
     };
     ordinaryRoots = lib.concatMap (owner: let
       claim = owner.contributions.overlay;
@@ -74,20 +69,12 @@ in {
       then []
       else map builtins.head contribution.claims)
     index.owners;
-    guard = import ./unfree-guard.nix final;
     world = facets.realizeOverlay {
-      inherit context index;
-      packageWorld = packageWorlds.${system};
+      inherit context index packageWorld;
     };
-    # Guard only owned package leaves; namespace neighbors may already have
-    # been guarded by another overlay and must not acquire a second wrapper.
-    guarded = lib.updateManyAttrsByPath (map (claim: {
-        path = claim.keyPath;
-        update = guard;
-      })
-      packageWorlds.${system}.eligibleClaims) (world.overlay final prev);
+    composed = world.overlay final prev;
   in
-    lib.genAttrs (lib.unique (packageRoots ++ ordinaryRoots)) (name: guarded.${name} or (prev.${name} or {}));
+    lib.genAttrs (lib.unique (packageRoots ++ ordinaryRoots)) (name: composed.${name} or (prev.${name} or {}));
   checksFor = {rootModules ? [], ...} @ context: let
     world = facets.realizeChecks {
       inherit index rootModules;

@@ -7,9 +7,10 @@ applyTo: "checks/*/default.nix,checks/facets/**,flake.nix,lib/facets.nix,lib/fac
 
 ## Package ownership and native composition
 
-> **Last verified:** 2026-09-28 — all owners use native package, library,
-> module, registry, and check composition; recipes receive the `scopeArgs` in
-> `lib/facets/repository.nix`.
+> **Last verified:** 2026-10-03 — overlays build recipes from the consumer's
+> `final`; flake `packages` and checks share one internal unfree-enabled nixpkgs
+> instantiation. Toolchains use `mkGoBin` and `mkRustBin` over the supplied set;
+> Agnix and Semble identity checks are owner-local.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -22,8 +23,8 @@ raw backend module imports, and typed `evalModules` registries. Ownership checks
 run before module priority can hide a competing definition. Shared namespace
 containers are legal; package leaves and conflicting prefixes are exclusive.
 
-`registry.nix` contributes update/cache metadata, documentation descriptions,
-and owner-specific architecture fragment registrations. Use the injected
+`registry.nix` contributes update metadata, documentation descriptions, and
+owner-specific architecture fragment registrations. Use the injected
 `repoPath ./relative/source.nix` to declare a mutable repository source path. It
 derives the path from the actual owner location and removes Nix string context;
 hardcoding `packages/<owner>/...` would defeat relocation. Root modules remain
@@ -88,15 +89,14 @@ Namespace merging stops at derivations. A generic recursive attrset merge would
 retain fields from a previous package while replacing its `drvPath`, creating a
 hybrid package. Preserve namespace neighbors and replace package leaves whole.
 
-Package recipes receive this flake's pinned `pkgs`, independently of the
-consumer pin. Shared helpers arrive as the `scopeArgs` that
-`lib/facets/repository.nix` injects into every recipe (`fragmentsLib`,
-`generatedLib`, `packageLib`, `repoPath`, `traceSource`); package implementation
-files should not encode a relative route back to the repository root. Consumer
-policy, including the existing unfree guard, belongs at overlay assembly rather
-than inside a package's source/build recipe. The composer guards only owned
-package leaves with `lib/facets/unfree-guard.nix`, preserving existing namespace
-neighbors and avoiding duplicate wrappers.
+Package recipes receive the consumer's `final` as `pkgs` through native
+`callPackage` scopes. Shared helpers arrive as `scopeArgs` from
+`lib/facets/repository.nix` (`fragmentsLib`, `generatedLib`, `packageLib`,
+`repoPath`, `traceSource`). Recipes should not encode a relative route back to
+the repository root. Consumer overrides and native nixpkgs unfree policy apply
+to every locally built recipe. Flake `packages` and checks use one internal
+nixpkgs instantiation with `config.allowUnfree = true`; toolchain input
+libraries construct their compilers over the package set supplied to the recipe.
 
 `lib/default.nix` contributes public helpers, using native module options with
 raw leaf values. Functions retain their `functionArgs`; option declarations,

@@ -266,10 +266,7 @@ if [ -n "$git_url" ]; then
             resolved="[]"
             while IFS='|' read -r lineno kind manifest_rel; do
               [ -z "$lineno" ] && continue
-              new_upstream=$(nix eval --impure --raw --expr "
-                let vu = import (toString $PWD/lib/packaging.nix);
-                in vu.$kind ($storePath + \"/$manifest_rel\")
-              " 2>/dev/null || true)
+              upstream_error=$(mktemp)
               # A marker names a manifest the maintainer asserts exists.
               # Failing to read it means the path moved upstream, the
               # helper name is wrong, or the manifest changed shape. In
@@ -277,12 +274,20 @@ if [ -n "$git_url" ]; then
               # while rev + src.hash have already been bumped, so the
               # package would ship claiming one version and building
               # another. Hold it back rather than continue.
-              if [ -z "$new_upstream" ]; then
+              if ! new_upstream=$(nix eval --impure --raw --expr "
+                let vu = import (toString $PWD/lib/packaging.nix);
+                in vu.$kind ($storePath + \"/$manifest_rel\")
+              " 2>"$upstream_error") || [ -z "$new_upstream" ]; then
+                cat "$upstream_error" >&2
+                eval_error=$(tr -s '\n' ' ' <"$upstream_error")
+                eval_error=${eval_error% }
+                rm -f "$upstream_error"
                 git -C "$wt" reset --hard "$base_head"
                 report_held_back "$name" "upstream version not derivable" \
-                  "$(basename "$target_file") L$lineno: $kind @ $manifest_rel"
+                  "$(basename "$target_file") L$lineno: $kind @ $manifest_rel: $eval_error"
                 exit 0
               fi
+              rm -f "$upstream_error"
               resolved=$(echo "$resolved" | jq --arg n "$lineno" --arg v "$new_upstream" \
                 '. + [{lineno: ($n | tonumber), value: $v}]')
               log_info "Upstream (L$lineno): $kind @ $manifest_rel -> $new_upstream"

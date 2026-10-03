@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.kagi-mcp = {consumerPath = ["ai" "mcpServers" "kagi-mcp"];};
   documentation.mcpServerMeta.kagi-mcp = {
     description = "Kagi search and summarization";
     credentials = "Required";

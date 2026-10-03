@@ -167,7 +167,6 @@ in {
     (import ./lib/facets/repository.nix {
       inherit inputs;
       root = ./.;
-      systems = [pkgs.stdenv.hostPlatform.system];
     }).overlay
   ];
 

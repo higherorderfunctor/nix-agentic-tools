@@ -8,10 +8,7 @@
 #     lib/ai/mkSkillPackageModule.nix is a factory whose RESULT is one. Either
 #     way the code runs inside a CONSUMER's own evaluation, with module args and
 #     no flake context — in particular no `self`. That is what rules out the
-#     `cacheHitParityTargets` shape
-#     (owner registry.nix files + lib/checks.nix merged by
-#     the native repository registry), which is reachable only as
-#     `self.cacheHitParityTargets`.
+#     owner registry flake outputs, which require `self`.
 #   - checks/modules/options-doc.nix needs it inside a derivation's shell string.
 #   - lib/testing/module-harness.nix needs it in a plain `let`.
 #

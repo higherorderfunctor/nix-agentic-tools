@@ -1,10 +1,3 @@
-# `pkgs` is this repo's pinned nixpkgs (with the Go and Rust overlays
-# applied by the repository composer), so every build input (base
-# derivation, `vu.mkRustPlatform` toolchain) routes through it instead of
-# the consumer's. This is what
-# gives the store path cache-hit parity against CI's standalone build
-# — see dev/fragments/overlays/overlay-pattern.md
-#
 # Argument shape adapted from legacy 3-layer curried pattern during Milestone 6 port.
 #
 # `passthru.extracted` is the config-key census of the source this recipe

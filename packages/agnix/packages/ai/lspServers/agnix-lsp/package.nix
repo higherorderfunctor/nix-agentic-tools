@@ -9,8 +9,8 @@
 # forks the derivation hash and triggers a full, redundant Rust
 # recompile. `//` overrides only the eval-time meta that `lib.getExe`
 # reads, leaving the build untouched, so agnix/agnix-lsp/agnix-mcp all
-# share ONE derivation and ONE compile. Guarded by the agnix sibling
-# drvPath assertion in checks/packaging/cache-hit-parity.nix.
+# share ONE derivation and ONE compile.
+# packages/agnix/checks/role-identity.nix guards this identity.
 {agnix}:
 agnix
 // {

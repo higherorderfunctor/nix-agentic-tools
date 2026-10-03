@@ -167,7 +167,7 @@ Fragments must focus on what the CODE ITSELF DOES NOT TELL YOU:
 **Include:**
 
 - Why something is the way it is (design decisions, trade-offs)
-- Cross-cutting invariants (config parity rules, cache-hit parity)
+- Cross-cutting invariants (config parity rules, toolchain provenance)
 - Warnings about pitfalls (known bugs, migrations in flight)
 - Shapes of abstractions (how the ai module fans out, how buddy activation works
   end-to-end — things that span multiple files)

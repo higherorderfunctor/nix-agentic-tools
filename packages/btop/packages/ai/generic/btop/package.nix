@@ -15,26 +15,18 @@
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
-#
-# Free (Apache-2.0). ensureUnfreeCheck in default.nix passes free
-# packages through unwrapped.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchzip;
+  inherit (pkgs) fetchzip;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
 in
-  ourPkgs.btop.overrideAttrs (prev: {
+  pkgs.btop.overrideAttrs (prev: {
     inherit (sources) version;
     # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
     # why the updateScript below prefetches with --unpack.
@@ -46,7 +38,7 @@ in
       (prev.passthru or {})
       // {
         updateScript = vu.ghArchiveUpdateScript {
-          pkgs = ourPkgs;
+          inherit pkgs;
           pname = "btop";
           repo = "aristocratos/btop";
           sourcesFile = repoPath ../../../../sources.json;

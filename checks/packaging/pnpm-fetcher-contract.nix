@@ -64,6 +64,8 @@
     tooFew = builtins.length pnpmNames < 3;
   in {
     pnpm-fetcher-contract = pkgs.runCommand "pnpm-fetcher-contract" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       ${lib.optionalString tooFew ''
         echo "FAIL: matched ${toString (builtins.length pnpmNames)} pnpm package(s) (${lib.concatStringsSep ", " pnpmNames}); expected at least 3." >&2
         echo "" >&2
@@ -81,7 +83,7 @@
         echo "names neither pnpm nor the fetcher." >&2
         echo "" >&2
         echo "Fix: expose it on the derivation, e.g." >&2
-        echo "  passthru.nodejs-slim = ourPkgs.nodejs-slim;" >&2
+        echo "  passthru.nodejs-slim = pkgs.nodejs-slim;" >&2
         echo "It is not a derivation input, so the outPath does not move and existing" >&2
         echo "consumers are unaffected." >&2
         exit 1

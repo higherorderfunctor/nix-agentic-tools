@@ -114,18 +114,13 @@
 #
 # Free (MIT) BECAUSE WE BUILD FROM SOURCE. The unfree framing that attaches to
 # bruno elsewhere is about the prebuilt .deb, which this deliberately does not
-# use. ensureUnfreeCheck in default.nix passes free packages through
-# unwrapped.
+# use.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs pin,
-  # never the consumer's `final`. `pkgs.stdenv.hostPlatform.system` is the
-  # only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
   inherit (pkgs) lib;
   vu = packageLib;
 

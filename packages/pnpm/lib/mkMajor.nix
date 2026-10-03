@@ -9,7 +9,7 @@
 # pnpm 12 moved the implementation out of the npm package and into
 # per-platform native binaries (`@pnpm/exe.<platform>`), leaving
 # `package/pnpm` a placeholder text file — so there is no
-# `ourPkgs.pnpm_12` to override, and nixpkgs' own generic expression
+# `pkgs.pnpm_12` to override, and nixpkgs' own generic expression
 # cannot build a 12.x tarball either. It is a standalone prebuilt-binary
 # derivation instead; its header carries the measurements. The guard
 # below still matters for 10 and 11 and must not be relaxed on its
@@ -21,10 +21,8 @@
 #
 # NAMESPACED ONLY. This writes `pkgs.ai.generic.pnpm_10` /
 # `pkgs.ai.generic.pnpm_11` and never a top-level `pkgs.pnpm_10`. The bare
-# nixpkgs attributes stay untouched — packages/oxlint/packages/ai/devTools/oxlint/package.nix
-# reads `ourPkgs.pnpm_10` out of a fresh `import inputs.nixpkgs` that
-# does not have this overlay applied, and every consumer of the overlay
-# gets an additive change they do not have to audit.
+# nixpkgs attributes stay untouched, so packages can use `pkgs.pnpm_10`
+# without selecting this repository's namespaced variant.
 #
 # WHY `src` MUST BE OVERRIDDEN, not just `version`. nixpkgs' generic.nix
 # is finalAttrs-style and builds the tarball URL from
@@ -53,9 +51,6 @@
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
-#
-# Free (MIT). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
 {
   pkgs,
   packageLib,
@@ -63,12 +58,7 @@
   major,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl;
+  inherit (pkgs) fetchurl;
   vu = packageLib;
 
   attr = "pnpm_${major}";
@@ -81,7 +71,7 @@
     then null
     else builtins.head majorMatch;
 
-  drv = ourPkgs.${attr}.overrideAttrs (prev: {
+  drv = pkgs.${attr}.overrideAttrs (prev: {
     inherit (sources) version;
     # fetchurl of the npm registry tarball, so the recorded hash is the
     # FLAT FILE's — no --unpack on the prefetch below, unlike the
@@ -97,7 +87,7 @@
       (prev.passthru or {})
       // {
         updateScript = vu.mkUpdateScript {
-          pkgs = ourPkgs;
+          inherit pkgs;
           pname = attr;
           inherit sourcesFile;
           platforms = {
@@ -119,7 +109,7 @@
           # Absolute store paths: this string is interpolated into a
           # writeShellScript wrapper, which the update pipeline invokes
           # directly and which therefore cannot assume a PATH.
-          versionCheck.cmd = "${ourPkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${ourPkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-${major}\"] // empty'";
+          versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-${major}\"] // empty'";
         };
       };
   });

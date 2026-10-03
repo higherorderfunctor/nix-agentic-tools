@@ -370,7 +370,7 @@ Each names a fixable entry (set `extensions` or rename the server, or
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-02 — main-tracking rev bumps are done by
+> **Last verified:** 2026-10-03 — main-tracking rev bumps are done by
 > `update-pkg.sh`; chatgpt-codex installs upstream's complete
 > `codex-package-<target>` layout.
 
@@ -415,8 +415,7 @@ tarball selected from `sources.json`. On Linux the dynamically-linked ones run
   binaries and bwrap stay byte-identical (codex digest-checks its bundled
   bwrap); only the glibc-linked `codex-resources/{voice,zsh}` get a scoped
   `autoPatchelf`. `checks/chatgpt-codex-package-layout.nix` starts and stops the
-  real daemon to hold this. Apache-2.0 (free), so the unfree guard passes it
-  through unwrapped. Its daemon policy is in
+  real daemon to hold this. Its daemon policy is in
   `packages/chatgpt-codex/docs/codex-daemon.md`.
 - copilot-cli installs a single SEA binary (`copilot`).
 
@@ -424,8 +423,7 @@ tarball selected from `sources.json`. On Linux the dynamically-linked ones run
 to the same pnpm 10 used by the build. Upstream compiles the CLI with Bun and
 stages `bin/kimchi` plus `share/kimchi/`; a separate `buildGoModule` compiles
 `proxy-helper` from the same source. Preserve this layout and disable generic
-ELF rewriting and stripping of the compiled Bun graph. Apache-2.0 (free), so the
-result passes the unfree guard unwrapped.
+ELF rewriting and stripping of the compiled Bun graph.
 
 **Python application** (kiro-gateway): Built with `mkDerivation` using a
 `python.withPackages` environment. The source is fetched via inline `rev` +

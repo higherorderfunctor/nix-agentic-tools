@@ -1,16 +1,10 @@
 # git-intel-mcp — builds the Git Intel MCP server via buildNpmPackage.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (buildNpmPackage, nodejs, makeWrapper) routes through this repo's pinned
-# nixpkgs instead of the consumer's. This gives cache-hit parity against
-# CI's standalone build (see dev/fragments/overlays/overlay-pattern.md).
 {
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) buildNpmPackage bun fetchgit git makeWrapper;
+  inherit (pkgs) buildNpmPackage bun fetchgit git makeWrapper;
   vu = packageLib;
 
   rev = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";

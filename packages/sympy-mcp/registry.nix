@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.sympy-mcp = {consumerPath = ["ai" "mcpServers" "sympy-mcp"];};
   documentation.mcpServerMeta.sympy-mcp = {
     description = "Symbolic mathematics";
     credentials = "None";

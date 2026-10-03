@@ -12,10 +12,10 @@
 # config.fragments.categories.<name>.
 #
 # `lib.evalModules` merges those contributions and does the collision-checking;
-# the result is read directly by dev/generate.nix. Unlike the update and
-# cache-hit-parity registries there is no matching flake output, because
-# dev/generate.nix is imported as a bare `{lib, pkgs}` function by callers that
-# never pass `self` — see the `fragmentCategories` comment there.
+# the result is read directly by dev/generate.nix. Unlike the update registry,
+# there is no matching flake output, because dev/generate.nix is imported as a
+# bare `{lib, pkgs}` function by callers that never pass `self` — see the
+# `fragmentCategories` comment there.
 #
 # NOT to be confused with the pre-existing, unrelated `lib/fragments.nix`: that
 # is the fragment COMPOSITION helper library (mkFragment / compose), exported
@@ -23,7 +23,7 @@
 # module describing which fragments exist and what they are scoped to, and is
 # NOT exported.
 #
-# Mirrors the authoring style of lib/update.nix and lib/checks.nix.
+# Mirrors the authoring style of lib/update.nix.
 {lib, ...}: let
   inherit (lib) mkOption types;
 in {

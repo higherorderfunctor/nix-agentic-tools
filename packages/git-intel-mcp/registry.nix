@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.git-intel-mcp = {consumerPath = ["ai" "mcpServers" "git-intel-mcp"];};
   documentation.mcpServerMeta.git-intel-mcp = {
     description = "Git repository analytics";
     credentials = "None";

@@ -2,16 +2,12 @@
 #
 # nixpkgs uses python3Packages.buildPythonApplication with finalAttrs
 # and GitHub source. We override src/version to track upstream.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
-# (see dev/fragments/overlays/overlay-pattern.md).
 {
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchFromGitHub;
+  inherit (pkgs) fetchFromGitHub;
   vu = packageLib;
 
   rev = "153a96a61fde2bf5a23961c64a3dd96b5e385108";
@@ -22,7 +18,7 @@
     hash = "sha256-LeQc1AWq+/iGEePN8ouYjowEt63K23AoKiKktX2EziQ=";
   };
 in
-  ourPkgs.mcp-proxy.overridePythonAttrs (old: let
+  pkgs.mcp-proxy.overridePythonAttrs (old: let
     # upstream: readPyprojectVersion @ pyproject.toml
     upstreamVersion = "0.12.0";
   in {
@@ -50,8 +46,8 @@ in
     # which is what let the build reach this phase at all.
     dependencies =
       (old.dependencies or [])
-      ++ [ourPkgs.python3Packages.httpx-auth];
-    nativeCheckInputs = with ourPkgs.python3Packages; [pytest pytest-asyncio];
+      ++ [pkgs.python3Packages.httpx-auth];
+    nativeCheckInputs = with pkgs.python3Packages; [pytest pytest-asyncio];
     doInstallCheck = true;
     installCheckPhase = vu.mkMcpSmokeTest {bin = "mcp-proxy";};
     # Patch versionCheckHook's $version to drop our +<shortRev> suffix.

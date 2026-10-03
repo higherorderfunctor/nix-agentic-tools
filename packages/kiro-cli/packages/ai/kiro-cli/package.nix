@@ -1,8 +1,5 @@
 # Kiro CLI — override nixpkgs with nightly version.
 # Per-platform sources in kiro-cli-sources.json, managed by updateScript.
-#
-# Unfree: wrapped by ensureUnfreeCheck in default.nix so the consumer's
-# allowUnfree config is respected.
 {
   pkgs,
   packageLib,
@@ -51,9 +48,8 @@
   #
   # The DEFAULT (`[]`) must stay byte-identical to the unparameterized
   # derivation this replaced: `optionalString` yields "", `postFixup` is
-  # unchanged, the drvPath is unchanged, and `checks.cache-hit-parity` plus
-  # every cachix hit keep working. Do NOT "simplify" this by always appending
-  # the patch step.
+  # unchanged, the drvPath is unchanged, preserving existing cache hits.
+  # Do NOT "simplify" this by always appending the patch step.
   # Canonicalized HERE rather than at the call site, because this is where
   # derivation identity is decided: the feature list is comma-joined into
   # `postFixup`, so an unsorted or duplicated list yields a different drvPath
@@ -227,12 +223,6 @@
               }
             );
 
-            # Opt-in variant carrying dark-shipped rollout features. Returns an
-            # UNGUARDED derivation (no `ensureUnfreeCheck` symlinkJoin), which is
-            # sound only because reaching this attribute requires evaluating the
-            # guarded `pkgs.ai.kiro-cli` first — check-meta has already fired by
-            # then. If this is ever exposed somewhere that does NOT go through the
-            # guarded attribute, re-wrap it.
             withRolloutFeatures = mkKiroCli;
 
             # Re-compose the public Linux FHS package around a configured
@@ -251,11 +241,8 @@
       # feature, and silently costs the cache hit this option exists to preserve.
       # Measured — it did move the default drvPath before this was corrected.
       #
-      # Worth knowing: neither `checks.cache-hit-parity` nor
-      # `module-kiro-rollout-default-is-stock` catches that class of regression,
-      # because both compare two evaluations that each already contain the
-      # change. Diffing `.#kiro-cli.drvPath` against origin/main is what caught
-      # it, and is the check to re-run when touching this attrset.
+      # Compare the default drvPath against origin/main when changing this
+      # attrset: comparing two evaluations of the new code misses regressions.
       // pkgs.lib.optionalAttrs (rolloutFeatures != []) {
         # This is the 621 MiB proprietary ELF — the derivation the rollout
         # patch actually rewrites, and the one whose leak prompted this. It
@@ -315,16 +302,7 @@
               unwrapped = pinned;
             };
         }
-        # `version` is REQUIRED where it is absent, not decoration:
-        # `ensureUnfreeCheck` in lib/facets/repository.nix rebuilds every unfree
-        # package as `final.symlinkJoin {inherit (drv) name version; …}`, so a
-        # wrapper that does not surface the attr fails the guard outright with
-        # `attribute 'version' missing`. Upstream's linux join derives
-        # `name = "kiro-cli-${version}"` and stops there.
-        #
-        # The pre-split overlay satisfied this BY ACCIDENT — its `version`
-        # override was one of the attrs the join silently ignored, but it still
-        # landed on the attrset the guard reads.
+        # Expose version for mkKiro.nix, which reads (resolvePackage cfg).version.
         #
         # CONDITIONAL on the attr being missing. The original linux
         # `symlinkJoin` omitted `version`; the consolidated FHS derivation and
@@ -338,9 +316,7 @@
         }
         # Rename the EXPORTED package too, so a patched build is identifiable
         # at the attribute consumers install — not only at the unwrapped layer
-        # underneath it. `ensureUnfreeCheck` does
-        # `symlinkJoin {inherit (drv) name version;}`, so the guard wrapper
-        # inherits this for free.
+        # underneath it.
         #
         # PLATFORM-BRANCHED because linux's public wrapper is renamed through
         # `name` in both supported topologies (the original `symlinkJoin` and

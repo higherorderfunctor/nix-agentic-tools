@@ -37,16 +37,8 @@
 # table at all. Measured: rumdl 0.04s over this corpus, markdownlint
 # 8.2s, which is why the Rust one leads. Neither is redundant; the
 # markdown-formatting fragment carries the full rationale.
-#
-# Free (MIT). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
 {pkgs, ...}: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
-  ourPkgs = pkgs;
-  inherit (ourPkgs) lib;
+  inherit (pkgs) lib;
 
   # Bumped in place by `nix-update --generate-lockfile` (see the
   # owner registry.nix row). Keep the literals on their own lines:
@@ -55,9 +47,9 @@
   srcHash = "sha256-LqnTcSu700XfDoBw5Lp18gZFBrOg6mXOBg3uc3RLV98=";
   npmDepsHash = "sha256-18cRIYz7WX7H5IC3XgsmKy40wOyw+azzFovqfm/aLro=";
 in
-  ourPkgs.markdownlint-cli2.override (_: {
+  pkgs.markdownlint-cli2.override (_: {
     buildNpmPackage = args:
-      ourPkgs.buildNpmPackage (finalAttrs: let
+      pkgs.buildNpmPackage (finalAttrs: let
         upstream = (lib.toFunction args) finalAttrs;
       in
         upstream

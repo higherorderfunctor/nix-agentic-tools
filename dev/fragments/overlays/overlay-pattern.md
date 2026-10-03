@@ -1,10 +1,9 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-02 — Go and Rust compilers come only from the
-> locked overlays (`mkGoToolchain`, `mkRustPlatform`); rev-tracked Go packages
-> derive recipe-owned floor literals before nix-update; release packages retain
-> the ordered sidecar extraction chain; rev-bumped packages regenerate committed
-> sidecars through `passthru.regenerateExtracted`.
+> **Last verified:** 2026-10-03 — overlay recipes take the consumer's `final`;
+> flake `packages` use this repo's unfree-enabled nixpkgs. Toolchains use
+> `mkGoBin` and `mkRustBin` over the supplied package set. Agnix and Semble
+> identity checks live with their owners.
 >
 > Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
 
@@ -20,14 +19,15 @@ The outer directory is ownership; the inner tree is the public namespace.
 clearer role. A later namespace change should move the inner recipe path, while
 renaming the outer owner leaves the public namespace unchanged.
 
-Recipes receive this flake's pinned `pkgs` and `inputs`, plus every entry of
-`scopeArgs` in `lib/facets/repository.nix`: `fragmentsLib`, `generatedLib`,
-`packageLib`, `repoPath` and `traceSource`. Keep source sidecars, patches,
-extraction helpers, and declarative registrations with the owner. `registry.nix`
-declares update/cache/doc entries; `repoPath ./relative/path` derives mutable
-paths from their actual location. The shared composer owns consumer unfree
-policy. See the package-ownership fragment for the native composition
-boundaries.
+Recipes receive the consumer's `final` as `pkgs` for overlays, and this flake's
+unfree-enabled nixpkgs set for `packages`, together with `inputs`, plus every
+entry of `scopeArgs` in `lib/facets/repository.nix`: `fragmentsLib`,
+`generatedLib`, `packageLib`, `repoPath` and `traceSource`. Keep source
+sidecars, patches, extraction helpers, and declarative registrations with the
+owner. `registry.nix` declares update/doc entries; `repoPath ./relative/path`
+derives mutable paths from their actual location. Native nixpkgs evaluation
+enforces the consumer's unfree policy. See the package-ownership fragment for
+the native composition boundaries.
 
 ### Absorption is about CADENCE. Never re-open it on a version comparison
 
@@ -92,20 +92,16 @@ update path without changing the upstream `drvPath` or `outPath`.
 When one upstream derivation ships multiple role binaries, expose secondary
 roles with a plain attrset/meta overlay. `semble-mcp` changes only
 `meta.mainProgram`, so `lib.getExe` selects the MCP binary while `drvPath` and
-`outPath` remain identical to the CLI and upstream output. The cache-hit-parity
-check locks all three identities.
+`outPath` remain identical to the CLI and upstream output.
 
 Shared update helpers require an explicit `sourcesFile`. Pass
 `sourcesFile = repoPath ./relative/sources.json`; there is no
 directory-dependent default. Use the injected `packageLib` rather than importing
 a root-relative helper path from a deeply nested recipe.
 
-Nothing else is relaxed: cache-hit parity applies in full (see that fragment —
-shipping data files is NOT the same as being content-only), each package gets a
-`config.checks.cacheHitParity` row, and each version-tracked one must be covered
-by the bidirectional update-target check. Locally pinned packages normally own a
-same-name `config.update.targets` row; direct external derivations name their
-flake-input owner instead.
+Each version-tracked package must be covered by the bidirectional update-target
+check. Locally pinned packages normally own a same-name `config.update.targets`
+row; direct external derivations name their flake-input owner instead.
 
 These are package properties, not a second name registry:
 `passthru.updateFlakeInput = "<input>"` is accepted only when the named root
@@ -603,24 +599,70 @@ Two traps, both measured on `oh-my-posh` while landing it:
   prefetch-and-write path, run the update script, and confirm the regenerated
   file is byte-identical.
 
+### Meta-only overrides can still fork the hash (`mainProgram`)
+
+`overrideAttrs` is NOT free when it touches `meta.mainProgram`. Current nixpkgs
+injects `NIX_MAIN_PROGRAM = meta.mainProgram` into the **build environment**
+(`pkgs/stdenv/generic/make-derivation.nix`), so `mainProgram` is a derivation
+input — an `overrideAttrs` that re-points it re-runs `mkDerivation`, re-derives
+`NIX_MAIN_PROGRAM`, and forks the output hash. For a package whose base build
+produces several role binaries (e.g. `agnix` builds `agnix` / `agnix-lsp` /
+`agnix-mcp` in one derivation), exposing the role variants via `overrideAttrs`
+therefore triggers a FULL, redundant rebuild per variant — invisible when
+cached, but multiplied on every cold / toolchain-bump build.
+
+Expose such variants with a plain attrset overlay instead, which does not re-run
+`mkDerivation`:
+
+```nix
+# packages/agnix/packages/ai/lspServers/agnix-lsp/package.nix
+{agnix}: agnix // {meta = agnix.meta // {mainProgram = "agnix-lsp";};}
+```
+
+`//` overrides only the eval-time `meta` that `lib.getExe` reads, so all
+variants share ONE derivation and ONE build while `getExe` still resolves the
+correct per-role binary. The variant retains `type`, `drvPath`, `outPath`,
+`passthru`, and the base package's override functions. Those functions remain
+bound to the base package; further overrides do not automatically retain the
+role's metadata. `packages/agnix/checks/role-identity.nix` asserts that all
+three roles share one `drvPath`, so a regression back to `overrideAttrs` fails
+the check.
+
+### Pinned external derivations preserve upstream identity
+
+Semble is selected directly from `inputs.llm-agents.packages.${system}.semble`.
+It is not rebuilt against the recipe's `pkgs` or changed with `overrideAttrs`.
+Its `drvPath` and `outPath` belong to the upstream flake, including when a
+consumer uses a different nixpkgs input.
+
+The `semble-mcp` role uses the same plain attrset extension as Agnix's roles,
+changing only evaluation-time `meta.mainProgram`. The CLI also adds
+`passthru.updateFlakeInput = "llm-agents"` through that extension; the MCP role
+inherits it. These metadata changes preserve both store paths.
+`packages/semble/checks/package-identity.nix` asserts the roles share one
+`drvPath` and the CLI retains the upstream `drvPath` and `outPath`.
+
 ### Go and Rust toolchains come only from the locked overlays
 
-`lib/facets/repository.nix` applies `go-overlay` and `rust-overlay` once to the
-nixpkgs instance every owner recipe receives as `pkgs`. Recipes never
-instantiate nixpkgs themselves.
+`lib/facets/repository.nix` merges the plain `lib/packaging.nix` helpers with
+`lib/toolchains.nix {inputs}` into `packageLib`. Toolchain helpers apply
+`inputs.go-overlay.lib.mkGoBin pkgs` and
+`inputs.rust-overlay.lib.mkRustBin {} pkgs` to each recipe's supplied package
+set. Recipes never instantiate nixpkgs themselves.
 
 `vu.mkGoToolchain {floor, pkgs, pname, recipeFile ? null}` returns
 `{go, buildGoModule, overridePackage, passthru}`. `go` is the newest STABLE
-release in the locked `go-bin.versions`; the floor only VALIDATES it (a throw
-names package, floor and the locked version when the locked overlay is too old,
-and another when it holds no stable release). It never falls back to nixpkgs'
-`go`, and no per-package version is chosen. Fix a throw with
-`nix flake update go-overlay`, not by pinning. Prereleases are filtered out on
-purpose: Nix sorts `1.27rc1` ABOVE `1.27.0`. `vu.mkRustPlatform {pkgs}` does the
-same for Rust (`rust-bin.stable.latest.default`). These two helpers are a
-recipe's only compiler source: never nixpkgs' own `go`, `rustc` or `cargo`.
-`checks/packaging/toolchain-provenance.nix` fails when a Go or Rust package
-lacks the locked compiler or carries a nixpkgs one.
+release in `(inputs.go-overlay.lib.mkGoBin pkgs).versions`; the floor only
+VALIDATES it (a throw names package, floor and the locked version when the
+locked overlay is too old, and another when it holds no stable release). It
+never falls back to nixpkgs' `go`, and no per-package version is chosen. Fix a
+throw with `nix flake update go-overlay`, not by pinning. Prereleases are
+filtered out on purpose: Nix sorts `1.27rc1` ABOVE `1.27.0`.
+`vu.mkRustPlatform {pkgs}` does the same for Rust, selecting
+`(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default`. These two
+helpers are a recipe's only compiler source: never nixpkgs' own `go`, `rustc` or
+`cargo`. `checks/packaging/toolchain-provenance.nix` fails when a Go or Rust
+package lacks the locked compiler or carries a nixpkgs one.
 
 Do not "clean up" a recorded floor that the locked Go already satisfies: it is
 the validation input, and a stale-LOW floor weakens the check silently. Do not
@@ -716,16 +758,9 @@ evaluates every system) and the required darwin CI leg do. So the recipe's
 sibling `platforms.nix` declares `["x86_64-linux"]`. Native discovery excludes
 the leaf on other systems, from both scopes and outputs.
 
-Two registries have to agree with that:
-`config.checks.cacheHitParity.<name>.platforms` (or the check aborts on darwin
-looking up a package that is not there) and, if a future case needs it, anything
-else that enumerates packages per system. This is the exception, not a licence
-to platform-gate anything inconvenient. Before adding a `platforms.nix`
-restriction, prove the package genuinely cannot build on the excluded system, as
-`gluetun` was proved by cross-compiling `GOOS=darwin GOARCH=arm64`. A sidecar
-whose per-system keys omit a system the upstream release actually ships for is a
-STALE SIDECAR: add the missing `{url, hash}` entry and the matching
-`config.checks.cacheHitParity.<name>.platforms` row, do not gate the attribute.
+Before adding a `platforms.nix` restriction, prove the package cannot build on
+the excluded system. A sidecar missing an artifact that upstream ships is stale:
+add the missing `{url, hash}` entry instead of gating the attribute.
 
 **The CI IFD warm step DOES cover that kind of IFD — since it started forcing
 `drvPath`.** `.github/actions/warm-ifd` pre-realizes sources by evaluating

@@ -1,16 +1,10 @@
 # gitlab-mcp — builds the GitLab MCP server via buildNpmPackage.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (buildNpmPackage, nodejs, makeWrapper) routes through this repo's pinned
-# nixpkgs instead of the consumer's. This gives cache-hit parity against
-# CI's standalone build (see dev/fragments/overlays/overlay-pattern.md).
 {
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) buildNpmPackage bun fetchgit makeWrapper;
+  inherit (pkgs) buildNpmPackage bun fetchgit makeWrapper;
   vu = packageLib;
 
   rev = "1b375eb0252065d14e8b2853a905b0ddbaa4f1ff";
@@ -43,7 +37,7 @@ in
     meta = {
       description = "GitLab platform integration MCP server";
       homepage = "https://github.com/zereight/gitlab-mcp";
-      license = ourPkgs.lib.licenses.mit;
+      license = pkgs.lib.licenses.mit;
       mainProgram = "gitlab-mcp";
     };
   }

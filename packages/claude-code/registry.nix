@@ -4,7 +4,6 @@
   # that branch. Rename it here and you must rename it there too, or the
   # reminder silently never fires — packages/claude-code/checks/claude-heron-brook.nix asserts the
   # two agree.
-  checks.cacheHitParity.claude-code = {consumerPath = ["ai" "claude-code"];};
   documentation.aiCliDescriptions.claude-code = "Claude Code CLI";
   # claude-code: package and plugin delivery plus the heron_brook
   # delegation-clamp mitigation. Spans the claude-code overlay package and the

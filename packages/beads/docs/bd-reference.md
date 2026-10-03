@@ -2,8 +2,9 @@
 
 # bd (beads) — tool reference
 
-> **Last verified:** 2026-10-01 for the repository package and disposable
-> contracts at stable Beads v1.3.1 and Dolt 2.4.0. Historical session, server,
+> **Last verified:** 2026-10-03 — recipe wording checked against the supplied
+> package set. The repository package and disposable contracts at stable Beads
+> v1.3.1 and Dolt 2.4.0 were measured on 2026-10-01. Historical session, server,
 > recovery, and external-packager observations retain their version tags; they
 > were not all repeated for this update. See **Version-skew boundary** for the
 > limits of the fresh-database migration check. Companion documents:
@@ -77,16 +78,15 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   (`TestCleanupMergeArtifacts_CommandInjectionPrevention`), and the recipe sets
   `__darwinAllowLocalNetworking`. `[upstream]`
 - **This repository**: `pkgs.ai.devTools.beads` pins stable **v1.3.1** from a
-  source sidecar and thinly overrides the nixpkgs recipe through the
-  repository's pinned `pkgs`, with its Go compiler from the locked go-overlay
-  (`mkGoToolchain`) and the derived `go.mod` floor validating it. The sidecar
-  owns the source hash, vendor hash, and `go.mod` floor (**1.26.7**); the
-  stable-release update script follows GitHub's `releases/latest` redirect and
-  excludes prereleases. A sibling sidecar pins the exact Dolt exposed as
-  `passthru.dolt`; two independent child updaters run behind the one Beads
-  update target, so either release moves on the same branch and PR. Darwin check
-  inputs include `ps` and `lsof` for upstream's orphan-server cleanup test.
-  `[measured package @1.3.1]`
+  source sidecar and thinly overrides the nixpkgs recipe through the supplied
+  `pkgs`, with its Go compiler from the locked go-overlay (`mkGoToolchain`) and
+  the derived `go.mod` floor validating it. The sidecar owns the source hash,
+  vendor hash, and `go.mod` floor (**1.26.7**); the stable-release update script
+  follows GitHub's `releases/latest` redirect and excludes prereleases. A
+  sibling sidecar pins the exact Dolt exposed as `passthru.dolt`; two
+  independent child updaters run behind the one Beads update target, so either
+  release moves on the same branch and PR. Darwin check inputs include `ps` and
+  `lsof` for upstream's orphan-server cleanup test. `[measured package @1.3.1]`
 - **Upstream flake (1.2.2 observation)**: pins `nixos-25.11`, requires
   `buildGo126Module`, exposes `beads-unwrapped` via `overlays.default` with a
   documented `vendorHash` override recipe. Its wrapper adds shell completions

@@ -141,8 +141,8 @@ the new hash doesn't work in CI either.
 
 **Root cause:**
 `packages/context7-mcp/packages/ai/mcpServers/context7-mcp/package.nix:48-53`
-declares its own `pnpmDeps` via `ourPkgs.fetchPnpmDeps` **without threading the
-matching `pnpm` interpreter**. The fetcher defaults to `ourPkgs.pnpm` (=
+declares its own `pnpmDeps` via `pkgs.fetchPnpmDeps` **without threading the
+matching `pnpm` interpreter**. The fetcher defaults to `pkgs.pnpm` (=
 `pnpmLatest`), which moved from `pnpm_10` to `pnpm_11` when nixpkgs unstable
 shifted its default. Meanwhile the **parent derivation's `buildPhase`** still
 runs `pnpm_10`, because nixpkgs's `pkgs/by-name/co/context7-mcp/package.nix:17`
@@ -174,7 +174,7 @@ nothing transitive), Mode B (nix-update saw the hash and updated it correctly
 given the inputs it had), and Mode C (no Python constraint involved).
 
 effect-mcp's recipe is fine today because it uses `mkDerivation` with `pnpm` and
-`pnpmConfigHook` both pulled from the same `ourPkgs` attribute set — fetcher and
+`pnpmConfigHook` both pulled from the same `pkgs` attribute set — fetcher and
 build are bound to the same pnpm. context7-mcp's recipe is fragile because it
 uses `overrideAttrs` against a nixpkgs derivation that pins one pnpm version
 while the fetcher default tracks another.
@@ -306,9 +306,9 @@ guard to prevent recurrence.
 (`packages/context7-mcp/packages/ai/mcpServers/context7-mcp/package.nix:48-53`):**
 
 ```nix
-pnpmDeps = ourPkgs.fetchPnpmDeps {
+pnpmDeps = pkgs.fetchPnpmDeps {
   inherit (finalAttrs) pname version src;
-  pnpm = ourPkgs.pnpm_10;   # match nixpkgs parent buildPhase pin
+  pnpm = pkgs.pnpm_10;   # match nixpkgs parent buildPhase pin
   fetcherVersion = 3;
   hash = "sha256-f3PXpCdmKh2LPD5VyFsRdLR7CEvh+GozkQFSeeNuj2c=";
 };
@@ -324,8 +324,7 @@ via the same explicit binding.
 
 **Structural guard (prevents Mode D from recurring elsewhere):**
 
-Add a flake check `checks.pnpm-fetcher-parity` (sibling to the existing
-`checks.cache-hit-parity` documented in `.claude/rules/overlays.md`). For every
+The flake check `checks.pnpm-fetcher-parity` provides this guard. For every
 overlay package whose final `pnpmDeps` is a `fetchPnpmDeps` output, assert that
 the fetcher's pnpm storeDir matches the buildPhase's pnpm storeDir.
 
@@ -335,8 +334,8 @@ attribute is `drv.pnpmDeps.nativeBuildInputs` filtered by `pname == "pnpm"`,
 compared against the same filter applied to `drv.nativeBuildInputs`.
 
 Consumer set in the overlay today: `context7-mcp` and `effect-mcp`. Hardcoded
-list matches the cache-hit-parity convention; revisit if a third pnpm consumer
-lands.
+list is retained to avoid evaluating unrelated packages; update it when adding a
+pnpm consumer.
 
 Live walkthrough against the pre-fix state confirms the check would flag
 `context7-mcp` (fetcher=`pnpm-11.1.1`, build=`pnpm-10.33.4`) and pass
@@ -481,11 +480,11 @@ One-time manual hash exceptions landed (authorized; do not generalize per
 Real fixes shipped (originally as PRs, then cherry-picked directly per user
 preference for landing on the dev branch without PR overhead):
 
-- **Gap 4 content fix** in commit `51a8429`. Threads `pnpm = ourPkgs.pnpm_10;`
-  into `overlays/mcp-servers/context7-mcp.nix` fetcher. Local build green,
-  cachix HTTP/2 200 on the cache-served `f3PX…` outPath,
-  `nix flake check --no-build` passes. PR #166 closed without merging; PR #160
-  closed as superseded by this fix.
+- **Gap 4 content fix** in commit `51a8429`. Threads `pnpm = pkgs.pnpm_10;` into
+  `overlays/mcp-servers/context7-mcp.nix` fetcher. Local build green, cachix
+  HTTP/2 200 on the cache-served `f3PX…` outPath, `nix flake check --no-build`
+  passes. PR #166 closed without merging; PR #160 closed as superseded by this
+  fix.
 
 - **Gap 4 structural guard** in commit `1d864d3`. Adds
   `checks/packaging/pnpm-fetcher-parity.nix` asserting fetcher pnpm ==

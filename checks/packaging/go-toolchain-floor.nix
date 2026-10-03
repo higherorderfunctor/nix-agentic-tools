@@ -6,22 +6,19 @@
   ...
 }: {
   checks.go-toolchain-floor = let
-    vu = import ../../lib/packaging.nix;
-    toolPkgs = import inputs.nixpkgs {
-      inherit (pkgs.stdenv.hostPlatform) system;
-      overlays = [inputs.go-overlay.overlays.default];
-    };
+    vu = import ../../lib/toolchains.nix {inherit inputs;};
+    goBin = inputs.go-overlay.lib.mkGoBin pkgs;
     resolve = floor:
       vu.mkGoToolchain {
         inherit floor;
-        pkgs = toolPkgs;
+        inherit pkgs;
         pname = "fixture";
       };
     releases =
       builtins.filter (v: builtins.match "[0-9]+\\.[0-9]+(\\.[0-9]+)?" v != null)
-      (builtins.attrNames toolPkgs.go-bin.versions);
+      (builtins.attrNames goBin.versions);
     latest = lib.last (builtins.sort lib.versionOlder releases);
-    expected = toolPkgs.go-bin.versions.${latest};
+    expected = goBin.versions.${latest};
     toolchain = resolve "0";
     # The sentinel proves a versioned builder's defaults survive replacement.
     builder = lib.makeOverridable ({
@@ -34,14 +31,17 @@
     packageFor = name: lib.makeOverridable (args: args.${name}) {${name} = builder;};
     injected = name: toolchain.overridePackage (packageFor name);
     rejects = package: !(builtins.tryEval (builtins.deepSeq (toolchain.overridePackage package) true)).success;
-    noStable = vu.mkGoToolchain {
-      floor = "0";
-      pkgs = toolPkgs // {go-bin.versions = {"99.0rc1" = null;};};
-      pname = "no-stable";
-    };
+    noStable =
+      (import ../../lib/toolchains.nix {
+        inputs.go-overlay.lib.mkGoBin = _: {versions = {"99.0rc1" = null;};};
+      }).mkGoToolchain {
+        floor = "0";
+        inherit pkgs;
+        pname = "no-stable";
+      };
     recipeToolchain = vu.mkGoToolchain {
       floor = "1.17";
-      pkgs = toolPkgs;
+      inherit pkgs;
       pname = "fixture";
       recipeFile = "./package.nix";
     };
@@ -49,7 +49,7 @@
       "accepts the newest locked stable Go" = (resolve latest).go.outPath == expected.outPath;
       "accepts the vacuous floor" = toolchain.go.outPath == expected.outPath;
       "accepts a lower floor" = (resolve "1.17").go.outPath == expected.outPath;
-      "fixture holds a non-stable release" = lib.any (v: !(lib.elem v releases)) (builtins.attrNames toolPkgs.go-bin.versions);
+      "fixture holds a non-stable release" = lib.any (v: !(lib.elem v releases)) (builtins.attrNames goBin.versions);
       "injects buildGo127Module" = (injected "buildGo127Module").go.outPath == expected.outPath;
       "injects buildGoModule" = (injected "buildGoModule").go.outPath == expected.outPath;
       "keeps versioned builder defaults" = (injected "buildGo134Module").sentinel == "upstream builder";

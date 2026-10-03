@@ -243,67 +243,6 @@ rec {
     tagPrefix ? "v",
   }: "${pkgs.curl}/bin/curl -fsSL https://gitlab.com/api/v4/projects/${project}/releases/permalink/latest | ${pkgs.jq}/bin/jq -r '.tag_name' | ${pkgs.gnused}/bin/sed -n 's|^${tagPrefix}\\([0-9].*\\)$|\\1|p'";
 
-  # Compiler versions come only from the locked overlays. A recorded source
-  # floor validates the newest stable Go release; it never selects nixpkgs Go.
-  #
-  # `recipeFile` is for TRUNK-TRACKED packages, whose floor is a `goFloor`
-  # literal in the recipe rather than a sidecar key. The returned `passthru`
-  # then carries `fixGoFloor`; the rev-bump worker runs it after replacing
-  # rev + src hash and before nix-update derives vendorHash, keeping the
-  # literal synchronized with go.mod. The flake attribute must equal `pname`.
-  mkGoToolchain = {
-    floor,
-    pkgs,
-    pname,
-    recipeFile ? null,
-  }: let
-    inherit (pkgs) lib;
-    releases =
-      builtins.filter
-      (version: builtins.match "[0-9]+\\.[0-9]+(\\.[0-9]+)?" version != null)
-      (builtins.attrNames pkgs.go-bin.versions);
-    latest =
-      if releases == []
-      then throw "${pname}: the locked go-overlay contains no stable Go release"
-      else lib.last (builtins.sort lib.versionOlder releases);
-    go =
-      if lib.versionAtLeast latest floor
-      then pkgs.go-bin.versions.${latest}
-      else throw "${pname}: needs Go >= ${floor}; locked go-overlay provides ${latest}. Update go-overlay.";
-    withGo = builder: builder.override {inherit go;};
-  in {
-    inherit go;
-    buildGoModule = withGo pkgs.buildGoModule;
-    # Preserve the upstream recipe's builder, including versioned constructors
-    # and their package-specific defaults. Only its compiler changes.
-    overridePackage = package:
-      package.override (args: let
-        names =
-          builtins.filter
-          (name: builtins.match "buildGo[0-9]*Module" name != null)
-          (builtins.attrNames args);
-        name =
-          if builtins.length names == 1
-          then builtins.head names
-          else throw "${pname}: expected one Go builder argument, found ${builtins.toString names}";
-      in {${name} = withGo args.${name};});
-    passthru = lib.optionalAttrs (recipeFile != null) {
-      goFloor = floor;
-      fixGoFloor = mkGoFloorFix {
-        inherit pkgs pname recipeFile;
-        attr = pname;
-      };
-    };
-  };
-
-  mkRustPlatform = {pkgs}: let
-    rust = pkgs.rust-bin.stable.latest.default;
-  in
-    pkgs.makeRustPlatform {
-      cargo = rust;
-      rustc = rust;
-    };
-
   # The placeholder a Go overlay reads when its recorded floor is absent.
   # Every version satisfies it, so `mkGoToolchain` accepts it and the
   # floor validation passes vacuously. The toolchain itself never depends

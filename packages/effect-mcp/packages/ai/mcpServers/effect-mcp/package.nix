@@ -1,32 +1,27 @@
 # effect-mcp — builds the Effect MCP server from GitHub source via
 # pnpm + tsup with inline hashes.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# routes through this repo's pinned nixpkgs for cache-hit parity
-# (see dev/fragments/overlays/overlay-pattern.md).
 {
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) bun fetchPnpmDeps makeWrapper nodejs pnpmConfigHook;
+  inherit (pkgs) bun fetchPnpmDeps makeWrapper nodejs pnpmConfigHook;
   # New nixpkgs makes the default `pnpm` be pnpm_11, which dropped
   # fetchPnpmDeps `fetcherVersion = 3`. Pin pnpm_10 for BOTH the deps
   # fetch and the build so they stay in lockstep
   # (see checks/packaging/pnpm-fetcher-parity.nix). Mirrors the context7-mcp owner recipe.
-  pnpm = ourPkgs.pnpm_10;
+  pnpm = pkgs.pnpm_10;
   vu = packageLib;
 
   rev = "83a768303839b9e125f6c286369a5d9cc26c666e";
-  src = ourPkgs.fetchFromGitHub {
+  src = pkgs.fetchFromGitHub {
     owner = "tim-smart";
     repo = "effect-mcp";
     inherit rev;
     hash = "sha256-okTpUZnYUfIuZThnqDKJ+FGImIeRLY2DMiS6HEQBoTQ=";
   };
 in
-  ourPkgs.stdenv.mkDerivation (finalAttrs: {
+  pkgs.stdenv.mkDerivation (finalAttrs: {
     pname = "effect-mcp";
     version = vu.mkVersion {
       # upstream: readPackageJsonVersion @ package.json
