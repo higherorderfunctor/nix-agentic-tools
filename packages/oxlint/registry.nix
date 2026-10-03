@@ -19,7 +19,6 @@
   # the patch applied cleanly (`patch_hash stamped on 8 importer + 2 snapshot
   # entries`) and the run still failed on this. Do not read that message as
   # naming a patch problem; check for this one too.
-  checks.cacheHitParity.oxlint = {consumerPath = ["ai" "devTools" "oxlint"];};
   documentation.devToolDescriptions.oxlint = "Fast JS/TS linter with type-aware (tsgo) linting and JS plugins";
   update.targets.oxlint = {
     file = repoPath ./packages/ai/devTools/oxlint/package.nix;

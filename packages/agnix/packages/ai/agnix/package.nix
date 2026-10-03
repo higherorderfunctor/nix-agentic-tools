@@ -7,13 +7,6 @@
 # tool (linter + LSP + MCP server) that doesn't fit cleanly into
 # git-tools or mcp-servers groupings.
 #
-# Receives `pkgs` as this repo's pinned nixpkgs (with the Go and Rust
-# overlays applied by the repository composer), so every build input
-# (pkg-config, darwin SDK) routes through it instead of the consumer's;
-# the Rust toolchain comes from `vu.mkRustPlatform`.
-# This is what gives the store path cache-hit parity against CI's
-# standalone build — see dev/fragments/overlays/overlay-pattern.md.
-#
 # Argument shape adapted from legacy 2-layer curried pattern during Milestone 6 port.
 {
   pkgs,

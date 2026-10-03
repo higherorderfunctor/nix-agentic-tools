@@ -18,9 +18,6 @@
 # upstream nixos-unstable HEAD changes mechanism away from the
 # universal-node layout we forked against — same UX as the held-back-PR
 # warnings, no eval-time tripwires here.
-#
-# Unfree (proprietary). ensureUnfreeCheck in default.nix wraps the
-# output so the consumer's allowUnfree config is respected.
 {
   pkgs,
   packageLib,

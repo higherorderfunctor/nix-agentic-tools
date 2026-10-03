@@ -1,7 +1,8 @@
 ## Naming Conventions
 
-> **Last verified:** 2026-09-20 — generated npm locks retain nix-update's
-> standard filename beside the recipe.
+> **Last verified:** 2026-10-03 — owner registries contribute update and
+> documentation rows; generated npm locks retain nix-update's standard filename
+> beside the recipe.
 
 - Package recipes:
   `packages/<owner>/packages/<namespace...>/<name>/package.nix`. Directory
@@ -11,7 +12,7 @@
   where the updater writes it. Formatter/spelling exclusions cover both that
   standard name and existing `<name>-package-lock.json` files.
 - Owner metadata: `packages/<owner>/registry.nix` contributes
-  update/cache/documentation rows; derive mutable recipe paths with
+  update/documentation rows; derive mutable recipe paths with
   `repoPath ./relative/package.nix`.
 - Owner source files: `sources.json`, `extracted.json`, `patches/`, and `src/`.
   Multiple release lines may use qualified sidecars such as `sources-10.json`.

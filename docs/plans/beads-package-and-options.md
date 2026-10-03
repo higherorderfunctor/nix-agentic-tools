@@ -111,11 +111,10 @@ template — Go, sidecar, grouped subtree), not a fresh derivation:
   `DOLT_DISABLE_EVENT_FLUSH`, preserving the inherited Dolt PATH prefix and all
   other upstream installation logic.
 - Registrations, all alphabetically placed within their files:
-  `config/cache-hit-parity-targets.nix`
-  (`consumerPath = ["ai" "devTools" "beads"]`), `config/update-targets.nix`
-  (binary row, `--override-filename overlays/dev-tools/beads.nix`),
-  `dev/data.nix` (`devToolDescriptions` — root README is generated; regenerate
-  via `devenv tasks run --mode before generate:all`), `overlays/README.md`
+  `config/update-targets.nix` (binary row,
+  `--override-filename overlays/dev-tools/beads.nix`), `dev/data.nix`
+  (`devToolDescriptions` — root README is generated; regenerate via
+  `devenv tasks run --mode before generate:all`), `overlays/README.md`
   (hand-maintained index), `overlays/default.nix` (`devToolDrvs`).
 - cgo note: upstream needs ICU (`go-icu-regex` ships no `#cgo pkg-config:`
   line); the nixpkgs recipe already handles this on Linux — Darwin behavior is a
@@ -415,9 +414,11 @@ session against the phase 2 package. Feeds noted.
   OD-P2 landed, also assert the baked env: run the wrapped `bd` under `env -i`
   and confirm both Beads telemetry controls plus the Dolt no-flush variable are
   set (the wrap-count check alone cannot catch a misspelled `--set`).
-- `nix flake check` — structural gates (`update-targets-parity`,
-  `cache-hit-parity`, `go-floor-drift` via `passthru.goFloor`) all discover the
-  new package without manual test edits.
+- Structural gates (`update-targets-parity`, `go-floor-drift-*` via
+  `passthru.goFloor`, and `toolchain-provenance`) discover the new package
+  without manual test edits. Overlay recipes use the consumer's package set and
+  unfree policy; flake package outputs use this flake's unfree-enabled nixpkgs
+  input.
 - Update-pipeline dry run: the sweep's update script rewrites the sidecar and
   restores `vendorHash`/`goFloor` (a no-op run costs ~1s).
 - Module eval: HM and devenv fixtures for the future normalized convenience

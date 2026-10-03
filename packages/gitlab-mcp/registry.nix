@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.gitlab-mcp = {consumerPath = ["ai" "mcpServers" "gitlab-mcp"];};
   documentation.mcpServerMeta.gitlab-mcp = {
     description = "GitLab platform integration";
     credentials = "Required";

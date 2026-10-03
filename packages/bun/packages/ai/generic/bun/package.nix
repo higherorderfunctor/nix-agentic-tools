@@ -24,23 +24,14 @@
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
-#
-# Free (MIT + LGPL-2.1-only). ensureUnfreeCheck in default.nix passes
-# free packages through unwrapped.
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
   inherit (pkgs.stdenv.hostPlatform) system;
-  ourPkgs = import inputs.nixpkgs {inherit system;};
-  inherit (ourPkgs) fetchurl;
+  inherit (pkgs) fetchurl;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
@@ -66,7 +57,7 @@
     )
     assets;
 in
-  ourPkgs.bun.overrideAttrs (prev: {
+  pkgs.bun.overrideAttrs (prev: {
     inherit (sources) version;
 
     # Set explicitly as well as through passthru.sources below. nixpkgs'
@@ -86,12 +77,12 @@ in
       // {
         sources = platformSrcs;
         updateScript = vu.mkUpdateScript {
-          pkgs = ourPkgs;
+          inherit pkgs;
           platforms = builtins.mapAttrs (_: assetUrl) assets;
           pname = "bun";
           sourcesFile = repoPath ../../../../sources.json;
           versionCheck.cmd = vu.ghLatestVersionCmd {
-            pkgs = ourPkgs;
+            inherit pkgs;
             repo = "oven-sh/bun";
             tagPrefix = "bun-v";
           };

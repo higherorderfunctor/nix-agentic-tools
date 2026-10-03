@@ -1,13 +1,5 @@
-# git-branchless — HEAD source + importCargoLock, pinned against
-# `pkgs` (this repo's nixpkgs) for cache-hit parity.
-#
-# The upstream flake (github:arxanas/git-branchless) provides an
-# overlay that does the `overrideAttrs` + `importCargoLock` dance
-# against `final` — the consumer's pkgs. That binds build inputs
-# to the consumer's nixpkgs pin, so consumers with a different
-# pin cache-miss against `nix-agentic-tools.cachix.org`. We
-# re-implement the same overrides here against `pkgs` so the
-# derivation hash only depends on this repo's pin.
+# git-branchless — HEAD source + importCargoLock, built with the supplied
+# package set and the locked Rust toolchain.
 #
 # Local adjustments preserved from the previous thin-wrapper
 # version:

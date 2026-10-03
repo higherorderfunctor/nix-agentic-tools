@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.mcp-language-server = {consumerPath = ["ai" "mcpServers" "mcp-language-server"];};
   documentation.mcpServerMeta.mcp-language-server = {
     description = "LSP-to-MCP bridge";
     credentials = "None";

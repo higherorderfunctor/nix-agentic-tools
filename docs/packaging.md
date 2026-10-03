@@ -88,13 +88,13 @@ composed registry and ninja DAG:
   fetch instead of substituting the previous release's cached output.
 - **Go and Rust toolchains** (every owned Go and Rust package): compilers come
   only from the locked overlays. `vu.mkGoToolchain` returns the newest stable
-  `go-bin` (purpleclay/go-overlay) release and throws if the package's recorded
-  go.mod floor outruns it; `vu.mkRustPlatform` uses
-  `rust-bin.stable.latest.default`. nixpkgs' own `go` / `rustc` is never
-  selected, and a toolchain version is never pinned per package.
-  `checks/packaging/go-toolchain-floor.nix` covers the selection and builder
-  contracts; `checks/packaging/toolchain-provenance.nix` checks the compilers
-  the built packages actually use.
+  release from `(inputs.go-overlay.lib.mkGoBin pkgs).versions` and throws if the
+  package's recorded go.mod floor outruns it; `vu.mkRustPlatform` uses
+  `(inputs.rust-overlay.lib.mkRustBin {} pkgs).stable.latest.default`. nixpkgs'
+  own `go` / `rustc` is never selected, and a toolchain version is never pinned
+  per package. `checks/packaging/go-toolchain-floor.nix` covers the selection
+  and builder contracts; `checks/packaging/toolchain-provenance.nix` checks the
+  compilers the built packages actually use.
 - **Version-independent URLs** (`dns-root-hints`): the version-equality early
   exit is not a valid change signal, so pass `alwaysPrefetch = true` to
   `mkUpdateScript`. It prefetches every run and decides whether to write by

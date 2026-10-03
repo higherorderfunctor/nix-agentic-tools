@@ -23,11 +23,8 @@
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Prebuilt Go toolchains (go.dev manifests) as `pkgs.go-bin`. Applied
-    # with rust-overlay to the repository package world
-    # (lib/facets/repository.nix), so every owned Go package compiles with the
-    # newest stable release locked here — see `mkGoToolchain` in
-    # lib/packaging.nix. nixpkgs' own Go is never selected.
+    # Locked binary toolchains are constructed over each recipe's package set
+    # through the input libraries; nixpkgs' own Go and Rust are never selected.
     go-overlay = {
       url = "github:purpleclay/go-overlay";
       inputs = {
@@ -55,15 +52,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # Deliberately different nixpkgs pin used ONLY by the
-    # `checks.cache-hit-parity` regression gate to simulate a
-    # consumer whose own nixpkgs diverges from ours. NO follows —
-    # the whole point is that this pin drifts from `nixpkgs`. If
-    # every overlay package takes its build inputs from the injected
-    # repository-pinned `pkgs` (not the consumer's `final`/`prev`),
-    # the store paths stay byte-identical across the two pins and
-    # cachix hits work for consumers regardless of their own pin.
-    nixpkgs-test.url = "github:NixOS/nixpkgs/nixos-25.05";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -107,7 +95,6 @@
     repository = import ./lib/facets/repository.nix {
       inherit inputs;
       root = ./.;
-      systems = supportedSystems;
     };
     updateRegistry = repository.update;
   in {
@@ -115,7 +102,6 @@
 
     # Declarative owner contributions and workspace policy share native options.
     updateTargets = updateRegistry.targets;
-    cacheHitParityTargets = repository.cacheHitParity;
 
     homeManagerModules.default = {
       ai.internal.treefmtNix = inputs.treefmt-nix;
@@ -205,7 +191,7 @@
       repoDocs = repoDocsFor system;
     in
       repository.packagesFor {
-        inherit pkgs system;
+        inherit pkgs;
         rootPackages = {
           # Repo-root documents from dev/generate.nix. The `generate:repo:*`
           # tasks build these by name; without them the tasks fail with

@@ -613,22 +613,6 @@
         "type": "github"
       }
     },
-    "nixpkgs-test": {
-      "locked": {
-        "lastModified": 1767313136,
-        "narHash": "sha256-16KkgfdYqjaeRGBaYsNrhPRRENs0qzkQVUooNHtoy2w=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "ac62194c3917d5f474c1a844b6fd6da2db95077d",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-25.05",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "nixpkgs_2": {
       "locked": {
         "lastModified": 1790600678,
@@ -723,7 +707,6 @@
         "nix-fast-build": "nix-fast-build",
         "nix-update": "nix-update",
         "nixpkgs": "nixpkgs_3",
-        "nixpkgs-test": "nixpkgs-test",
         "rust-overlay": "rust-overlay_2",
         "serena": "serena",
         "treefmt-nix": "treefmt-nix_5"

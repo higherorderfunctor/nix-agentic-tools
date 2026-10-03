@@ -95,18 +95,12 @@
 #      it ever does, DELETE the patch, drop the `config.update.excludePatterns`
 #      entry and the update.yml detector, and add a real targets row — the
 #      patch is the only thing keeping this package out of the sweep.
-#
-# Cache-hit parity: every build input comes from THIS repo's nixpkgs pin,
-# never the consumer's `final`. `pkgs.stdenv.hostPlatform.system` is the
-# only thing read from the consumer — see
-# dev/fragments/overlays/overlay-pattern.md.
 {
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) buildNpmPackage fetchurl lib;
+  inherit (pkgs) buildNpmPackage fetchurl lib;
   vu = packageLib;
 
   # The published npm version we carry — currently npm `dist-tags.latest`.

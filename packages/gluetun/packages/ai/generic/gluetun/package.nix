@@ -25,8 +25,7 @@
 # `meta.platforms` alone would make `packages.aarch64-darwin.gluetun`
 # throw "not available on the requested hostPlatform" the instant its
 # `drvPath` is forced, which is what this repo's required darwin CI leg
-# and `nix flake check` both do. The package is simply absent there, and
-# `config.checks.cacheHitParity.gluetun.platforms` says so too.
+# and `nix flake check` both do. The package is simply absent there.
 #
 # `subPackages = ["cmd/gluetun"]` is load-bearing twice over: `ci/` is a
 # NESTED Go module with its own go.mod that the default package sweep
@@ -44,8 +43,9 @@
 # sidecar by `vu.mkGoFloorFix`, and `vu.mkGoToolchain` validates it against the locked
 # go-overlay. No version literals here on purpose — the sidecar holds the
 # current value and `checks/packaging/go-floor-drift.nix` asserts it still matches
-# source. See lib/packaging.nix, and checks/packaging/go-toolchain-floor.nix for
-# the selector's contract coverage.
+# source. See lib/packaging.nix (`mkGoFloorFix`) and lib/toolchains.nix
+# (`mkGoToolchain`); checks/packaging/go-toolchain-floor.nix covers the selector's
+# contract.
 #
 # vendorHash lives in the SIDECAR rather than inline: `mkUpdateScript`
 # rebuilds the sidecar from scratch on every write, so any key it does not
@@ -55,19 +55,12 @@
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
-#
-# Free (MIT). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
   inherit (pkgs) fetchzip lib;
   vu = packageLib;
 

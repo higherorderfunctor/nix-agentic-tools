@@ -3,14 +3,6 @@
   repoPath,
   ...
 }: {
-  checks.cacheHitParity = {
-    kiro-cli = {consumerPath = ["ai" "kiro-cli"];};
-    # The patched `workflows` variant is intentionally not distributed through
-    # Cachix, but parity still matters: consumers reach it through
-    # `ai.kiro.unlockedRolloutFeatures`, and a consumer-pin-bound build would
-    # realize a different derivation from the one the local-only CI job tests.
-    kiro-cli-workflows = {consumerPath = ["ai" "kiro-cli-workflows"];};
-  };
   documentation.aiCliDescriptions.kiro-cli = "Kiro CLI";
   fragments.categories = {
     # kiro-agents: generated JSON and Markdown profiles reach different Kiro

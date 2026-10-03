@@ -268,7 +268,7 @@ _: {
     # edit it governs, and that is not hypothetical: PR #946 edited
     # warm-ifd/action.yml and loaded none of it. Scoping it here rather than
     # widening `overlays` keeps a ci.yml editor from being handed
-    # unfree-guard and cache-hit-parity, which have nothing to say about CI.
+    # packaging guidance, which has nothing to say about CI.
     ifd = {
       scopes = [
         ".github/actions/warm-ifd/**"
@@ -392,7 +392,7 @@ _: {
       scopes = ["**/*.nix"];
       sources = ["nix-standards"];
     };
-    # overlays: cache-hit parity, the overlay pattern, and the unfree guard.
+    # overlays: package sets, toolchains, and recipe patterns.
     # Scoped to package recipe files under `packages/*/packages/**`. IFD
     # guidance is NOT
     # here any more — it moved to the `ifd` row above, which re-scopes these
@@ -411,14 +411,13 @@ _: {
         "lib/facets/**"
         "lib/testing/**"
         "lib/packaging.nix"
+        "lib/toolchains.nix"
         "packages/*/lib/packaging.nix"
         "packages/*/packages/**/*.nix"
         "packages/*/packages/**"
       ];
       sources = [
-        "cache-hit-parity"
         "overlay-pattern"
-        "unfree-guard"
       ];
     };
     # packaging: naming conventions + platform handling for overlay

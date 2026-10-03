@@ -1,6 +1,6 @@
 ## MCP Server Packages
 
-> **Last verified:** 2026-10-02 — main-tracking rev bumps are done by
+> **Last verified:** 2026-10-03 — main-tracking rev bumps are done by
 > `update-pkg.sh`; vendored npm lock locations follow their manual or automatic
 > updater.
 >
@@ -11,8 +11,9 @@
 MCP recipes live under
 `packages/<owner>/packages/ai/mcpServers/<server>/package.nix`. Native discovery
 exposes them at `pkgs.ai.mcpServers.*` and flat flake package outputs. The
-composer injects pinned `pkgs` and shared `packageLib`; owner-private libraries,
-patches, and source sidecars stay beside the owner registry.
+composer injects the active package set as `pkgs` and shared `packageLib`;
+owner-private libraries, patches, and source sidecars stay beside the owner
+registry.
 
 ### Build Patterns
 
@@ -177,12 +178,12 @@ around; plan for the patch to be DELETED, not maintained forever.
 ### Adding a New Server
 
 1. Create the owner recipe under `packages/<owner>/packages/ai/mcpServers/`. Use
-   the appropriate builder and route build inputs through pinned `pkgs`.
+   the appropriate builder.
 2. Put patches and vendored source files in the owner's `patches/` and `src/`.
    For generated lockfiles, follow the updater's output location as described
    above.
-3. Contribute update, cache-parity, and `documentation.mcpServerMeta` rows in
-   the owner's `registry.nix`. Adding the native recipe needs no root edit.
+3. Contribute update and `documentation.mcpServerMeta` rows in the owner's
+   `registry.nix`. Adding the native recipe needs no root edit.
 4. Export consumer factories through the owner's `lib/default.nix`. Managed
    services also need their service module and backend integration.
 5. Add package checks beside the implementation, then regenerate with
@@ -190,9 +191,9 @@ around; plan for the patch to be DELETED, not maintained forever.
 
 For an external package role such as `semble-mcp`, replace the local build and
 update target with a direct input-package selection and input update automation.
-Still register both the CLI and MCP roles in cache-hit parity, and add a
-sibling-derivation assertion so a future `overrideAttrs` cannot create a
-redundant build.
+Add a sibling-derivation assertion, as in
+`packages/semble/checks/package-identity.nix`, so a future `overrideAttrs`
+cannot create a redundant build.
 
 ### Updating
 

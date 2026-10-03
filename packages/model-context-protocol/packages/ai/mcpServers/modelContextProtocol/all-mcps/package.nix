@@ -7,8 +7,7 @@
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper python314Packages;
+  inherit (pkgs) buildNpmPackage bun fetchFromGitHub makeWrapper python314Packages;
   vu = packageLib;
 
   rev = "f46d9578190b476b3501923ea8977d899e8db2cb";
@@ -152,7 +151,7 @@
     meta.mainProgram = "mcp-server-time";
   };
 in
-  ourPkgs.stdenv.mkDerivation {
+  pkgs.stdenv.mkDerivation {
     pname = "modelcontextprotocol-all-mcps";
     version = vu.mkVersion {
       # upstream: readPackageJsonVersion @ src/sequentialthinking/package.json

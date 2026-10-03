@@ -1,8 +1,4 @@
 {facetOwner, ...}: {
-  checks.cacheHitParity = {
-    semble = {consumerPath = ["ai" "semble"];};
-    semble-mcp = {consumerPath = ["ai" "mcpServers" "semble-mcp"];};
-  };
   documentation = {
     aiCliDescriptions.semble = "Local semantic and lexical code-search CLI";
     mcpServerMeta.semble-mcp = {

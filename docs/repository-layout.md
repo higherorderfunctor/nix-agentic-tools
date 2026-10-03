@@ -36,7 +36,7 @@ packages/
       module-eval.nix               Owner assertions for both backends
       kiro-wrapper-argv.nix         Runtime contracts
       fixtures/                     Owner test data
-    registry.nix                    Update, cache, docs, architecture metadata
+    registry.nix                    Update, docs, architecture metadata
     sources.json                    Release pins
     extracted.json                  Measured upstream metadata
     docs/, patches/, src/           Supporting material when applicable

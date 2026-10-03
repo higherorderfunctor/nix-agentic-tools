@@ -1,6 +1,6 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-02 — rev bumps prefetch with the package's own
+> **Last verified:** 2026-10-03 — rev bumps prefetch with the package's own
 > fetcher mode (archive or fetchgit, read from the evaluated `src`); rev-tracked
 > Go packages refresh recipe-owned floor literals before nix-update; both update
 > paths regenerate committed sidecars through `passthru.regenerateExtracted`: an
@@ -144,7 +144,10 @@ receives the repo URL as a trailing argument:
    empty, malformed response or one without a hash holds the target back before
    `nix-update` can mistake a source mismatch for a dependency hash. Recipes
    with source-version markers also require the returned source tree; every
-   marker is resolved from that same prefetch.
+   marker is resolved from that same prefetch using the plain
+   `lib/packaging.nix` helper set. A failed version eval rolls back the
+   candidate and reports `HELD BACK` with the eval error, even if eval emitted
+   partial stdout.
 4. `sed` replaces the old `hash` in the overlay `.nix` file.
 5. `git commit` creates a commit with the rev + src hash change.
 6. A package exposing `passthru.fixGoFloor` derives its recipe literal from the

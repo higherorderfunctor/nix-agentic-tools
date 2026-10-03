@@ -15,14 +15,12 @@
     inherit index;
     claimPaths =
       [
-        ["checks" "cacheHitParity"]
         ["fragments" "categories"]
         ["update" "targets"]
       ]
       ++ map (name: ["documentation" name]) (builtins.attrNames documentationOptions);
     modules =
       [
-        ../checks.nix
         ../documentation.nix
         ../fragments-registry.nix
         ../update.nix

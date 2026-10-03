@@ -1,9 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity = {
-    agnix = {consumerPath = ["ai" "agnix"];};
-    agnix-lsp = {consumerPath = ["ai" "lspServers" "agnix-lsp"];};
-    agnix-mcp = {consumerPath = ["ai" "mcpServers" "agnix-mcp"];};
-  };
   documentation.gitToolDescriptions.agnix = "Linter, LSP, and MCP for AI config files";
   update = {
     excludePatterns = ["^agnix-lsp$" "^agnix-mcp$"];

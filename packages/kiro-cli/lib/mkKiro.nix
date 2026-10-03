@@ -904,9 +904,6 @@
   # invariant, not a nicety), so the resolution lives here rather than being
   # open-coded at each `wrapKiroPackage` call site.
   #
-  # `cfg.package` is evaluated either way, which is what keeps the unfree guard
-  # honest: `pkgs.ai.kiro-cli` is an `ensureUnfreeCheck` symlinkJoin, so
-  # check-meta fires on it before `withRolloutFeatures` is ever reached.
   # No canonicalization here on purpose. `withRolloutFeatures` sorts and
   # de-duplicates its own argument (see `canonFeatures` in
   # packages/kiro-cli/packages/ai/kiro-cli/package.nix), because that is where derivation identity is

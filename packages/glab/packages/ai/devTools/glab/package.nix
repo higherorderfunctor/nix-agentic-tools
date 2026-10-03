@@ -53,19 +53,12 @@
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
-#
-# Free (MIT). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
   inherit (pkgs) lib runCommand writeText;
   vu = packageLib;
 

@@ -1,9 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity = {
-    pnpm_10 = {consumerPath = ["ai" "generic" "pnpm_10"];};
-    pnpm_11 = {consumerPath = ["ai" "generic" "pnpm_11"];};
-    pnpm_12 = {consumerPath = ["ai" "generic" "pnpm_12"];};
-  };
   documentation.genericDescriptions = {
     pnpm_10 = "Fast, disk-space-efficient JavaScript package manager (10.x)";
     pnpm_11 = "Fast, disk-space-efficient JavaScript package manager (11.x)";

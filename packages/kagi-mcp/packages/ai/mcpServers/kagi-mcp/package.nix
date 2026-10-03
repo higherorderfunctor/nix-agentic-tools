@@ -1,17 +1,11 @@
 # kagi-mcp — builds the Kagi MCP server from GitHub source
 # via buildPythonApplication.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (python interpreter + python packages) routes through this repo's pinned
-# nixpkgs instead of the consumer's. This gives cache-hit parity against
-# CI's standalone build (see dev/fragments/overlays/overlay-pattern.md).
 {
   pkgs,
   packageLib,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchFromGitHub python313Packages;
+  inherit (pkgs) fetchFromGitHub python313Packages;
   vu = packageLib;
 
   rev = "55b38d20c67f1406f2c284af776de395297a75cc";

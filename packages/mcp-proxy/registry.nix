@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.mcp-proxy = {consumerPath = ["ai" "mcpServers" "mcp-proxy"];};
   documentation.mcpServerMeta.mcp-proxy = {
     description = "stdio-to-HTTP bridge proxy";
     credentials = "None";

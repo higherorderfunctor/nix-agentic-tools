@@ -3,7 +3,6 @@
   repoPath,
   ...
 }: {
-  checks.cacheHitParity.beads = {consumerPath = ["ai" "devTools" "beads"];};
   documentation.devToolDescriptions.beads = "Graph-based issue tracker for AI coding agents";
   # beads: the contained devenv lifecycle, serialized checkpoint protocol,
   # and sole raw-Dolt publication boundary.

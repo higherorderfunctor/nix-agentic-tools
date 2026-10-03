@@ -3,9 +3,6 @@
 # nixpkgs uses finalAttrs pattern where pnpmDeps reads from
 # finalAttrs.{pname, version, src}. We override version + src +
 # pnpmDeps hash; the fixed-point re-derives the rest.
-#
-# Uses the injected, overlay-applied `pkgs` for cache-hit parity
-# (see dev/fragments/overlays/overlay-pattern.md).
 {
   pkgs,
   packageLib,

@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.github-mcp = {consumerPath = ["ai" "mcpServers" "github-mcp"];};
   documentation.mcpServerMeta.github-mcp = {
     description = "GitHub platform integration";
     credentials = "Required";

@@ -35,17 +35,13 @@
 # against the running executable. Only the glibc-linked optional resources
 # (zsh, the voice host and its bundled GStreamer) are repointed at the nix
 # glibc, and only on Linux.
-#
-# Free (Apache-2.0). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl lib stdenv;
+  inherit (pkgs) fetchurl lib stdenv;
   inherit (stdenv.hostPlatform) isLinux system;
   vu = packageLib // import ../../../lib/packaging.nix;
 
@@ -79,10 +75,10 @@ in
     dontAutoPatchelf = true;
     dontPatchELF = true;
 
-    nativeBuildInputs = lib.optionals isLinux [ourPkgs.autoPatchelfHook];
+    nativeBuildInputs = lib.optionals isLinux [pkgs.autoPatchelfHook];
     # zsh needs libtinfo; the voice host brings its own GStreamer and glib and
     # needs nothing else beyond glibc.
-    buildInputs = lib.optionals isLinux [ourPkgs.ncurses];
+    buildInputs = lib.optionals isLinux [pkgs.ncurses];
 
     installPhase = ''
       runHook preInstall
@@ -122,7 +118,7 @@ in
 
         pname = "chatgpt-codex";
         versionCheck.cmd = vu.ghLatestVersionCmd {
-          pkgs = ourPkgs;
+          inherit pkgs;
           repo = "openai/codex";
           tagPrefix = "rust-v";
         };
@@ -138,14 +134,14 @@ in
         extraExtract = vu.mkExtractRegen {
           attr = "chatgpt-codex";
           dest = repoPath ../../../extracted.json;
-          pkgs = ourPkgs;
+          inherit pkgs;
         };
-        pkgs = ourPkgs;
+        inherit pkgs;
       };
-      extracted = ourPkgs.runCommandLocal "chatgpt-codex-extracted.json" {} (
+      extracted = pkgs.runCommandLocal "chatgpt-codex-extracted.json" {} (
         vu.mkCodexExtract {
           bin = "${finalAttrs.finalPackage}/bin/codex";
-          pkgs = ourPkgs;
+          inherit pkgs;
           inherit (sources) version;
           dest = "$out";
         }

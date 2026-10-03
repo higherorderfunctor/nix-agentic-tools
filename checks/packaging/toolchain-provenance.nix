@@ -10,33 +10,28 @@
   ...
 }: {
   checks.toolchain-provenance = let
-    vu = import ../../lib/packaging.nix;
+    vu = import ../../lib/toolchains.nix {inherit inputs;};
     inherit (pkgs.stdenv.hostPlatform) system;
-    plainPkgs = import inputs.nixpkgs {inherit system;};
-    toolPkgs = import inputs.nixpkgs {
-      inherit system;
-      overlays = [inputs.go-overlay.overlays.default inputs.rust-overlay.overlays.default];
-    };
     inherit
       (vu.mkGoToolchain {
         floor = "0";
-        pkgs = toolPkgs;
+        inherit pkgs;
         pname = "provenance";
       })
       go
       ;
-    rust = (vu.mkRustPlatform {pkgs = toolPkgs;}).rust.rustc;
+    rust = (vu.mkRustPlatform {inherit pkgs;}).rust.rustc;
     # nixpkgs' default `go`, `rustc` and `cargo`, plus every versioned
     # `go_1_<N>`: a nixpkgs recipe builds with `buildGo<N>Module`, so its Go
     # is usually not `pkgs.go` (gh: go-1.27.1 while `go` is go-1.26.8).
     # A name that does not evaluate (removed or insecure) cannot be an input.
     forbidden = lib.concatMap (name: let
-      probe = builtins.tryEval (builtins.seq plainPkgs.${name}.outPath plainPkgs.${name}.outPath);
+      probe = builtins.tryEval (builtins.seq pkgs.${name}.outPath pkgs.${name}.outPath);
     in
       lib.optional probe.success {
         inherit name;
         outPath = probe.value;
-      }) (["cargo" "go" "rustc"] ++ builtins.filter (n: builtins.match "go_1_[0-9]+" n != null) (builtins.attrNames plainPkgs));
+      }) (["cargo" "go" "rustc"] ++ builtins.filter (n: builtins.match "go_1_[0-9]+" n != null) (builtins.attrNames pkgs));
     packages = builtins.attrValues self.packages.${system};
     nested = lib.concatMap (p:
       builtins.filter

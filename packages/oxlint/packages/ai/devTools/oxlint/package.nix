@@ -1,6 +1,6 @@
 # cspell:ignore andrewbranch Funtar
-# oxlint — HEAD-tracked JS/TS linter with type-aware (tsgo) support, pinned
-# against `pkgs` for cache-hit parity. Thin override of nixpkgs' oxlint:
+# oxlint — HEAD-tracked JS/TS linter with type-aware (tsgo) support.
+# Thin override of nixpkgs' oxlint:
 # inject our sibling tsgolint via .override (so --type-aware uses our HEAD
 # backend, kept in lockstep), then overrideAttrs to swap src + the three
 # hashes (src, cargoDeps, pnpmDeps). The pnpm/JS-plugin build, OXC_VERSION,

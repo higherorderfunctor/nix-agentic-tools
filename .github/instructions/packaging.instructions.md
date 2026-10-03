@@ -7,8 +7,9 @@ applyTo: "config/update-targets.nix,packages/**/*.nix"
 
 ## Naming Conventions
 
-> **Last verified:** 2026-09-20 — generated npm locks retain nix-update's
-> standard filename beside the recipe.
+> **Last verified:** 2026-10-03 — owner registries contribute update and
+> documentation rows; generated npm locks retain nix-update's standard filename
+> beside the recipe.
 
 - Package recipes:
   `packages/<owner>/packages/<namespace...>/<name>/package.nix`. Directory
@@ -18,7 +19,7 @@ applyTo: "config/update-targets.nix,packages/**/*.nix"
   where the updater writes it. Formatter/spelling exclusions cover both that
   standard name and existing `<name>-package-lock.json` files.
 - Owner metadata: `packages/<owner>/registry.nix` contributes
-  update/cache/documentation rows; derive mutable recipe paths with
+  update/documentation rows; derive mutable recipe paths with
   `repoPath ./relative/package.nix`.
 - Owner source files: `sources.json`, `extracted.json`, `patches/`, and `src/`.
   Multiple release lines may use qualified sidecars such as `sources-10.json`.
@@ -58,7 +59,7 @@ Linux, `.dmg` on Darwin):
 1. Create a `<name>-sources.json` sidecar with version and per-platform
    `{url, hash}` entries keyed by Nix system string
 2. Select the correct source in the `.nix` overlay via
-   `ourPkgs.stdenv.hostPlatform.system`
+   `pkgs.stdenv.hostPlatform.system`
 3. Use `mkUpdateScript` from `lib/packaging.nix` to automate version bumps and
    hash prefetching for all platforms
 
@@ -74,7 +75,7 @@ one-key shape.
 
 ### Version-independent URLs need `alwaysPrefetch`
 
-> **Last verified:** 2026-09-12 — source paths and ownership guidance follow
+> **Last verified:** 2026-10-03 — source paths and ownership guidance follow
 > native package assembly.
 
 `mkUpdateScript` normally early-exits when `versionCheck.cmd`'s output equals

@@ -16,28 +16,20 @@
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
-#
-# Free (public domain). ensureUnfreeCheck in default.nix passes free
-# packages through unwrapped.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl lib;
+  inherit (pkgs) fetchurl lib;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
 
   url = "https://www.internic.net/domain/named.root";
 in
-  ourPkgs.stdenvNoCC.mkDerivation {
+  pkgs.stdenvNoCC.mkDerivation {
     pname = "dns-root-hints";
     inherit (sources) version;
     # fetchurl of a single flat file, so the recorded hash is the FILE's
@@ -73,7 +65,7 @@ in
     '';
 
     passthru.updateScript = vu.mkUpdateScript {
-      pkgs = ourPkgs;
+      inherit pkgs;
       pname = "dns-root-hints";
       sourcesFile = repoPath ../../../../sources.json;
       platforms = {
@@ -108,7 +100,7 @@ in
       # but it would still mislabel the derivation. Hence `+` rather than
       # `{10}`: anchoring on a digit count is exactly what broke, and the
       # literal `version of root zone:` prefix already bounds the match.
-      versionCheck.cmd = "${ourPkgs.curl}/bin/curl -fsSL ${url} | ${ourPkgs.gnugrep}/bin/grep -oP 'version of root zone:\\s+\\K[0-9]+' | ${ourPkgs.coreutils}/bin/head -1";
+      versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL ${url} | ${pkgs.gnugrep}/bin/grep -oP 'version of root zone:\\s+\\K[0-9]+' | ${pkgs.coreutils}/bin/head -1";
     };
 
     meta = {

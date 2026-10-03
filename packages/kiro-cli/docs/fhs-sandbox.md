@@ -1,19 +1,18 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-08-16 — `ai.kiro.useFhsSandbox = false` selects the
-> pinned unwrapped payload explicitly, and `true` stays the default.
-> `trustedMcpTools` composes inside the FHS payload so launcher dispatch reaches
-> it under both supported nixpkgs topologies, and the structural check pins that
-> shape.
+> **Last verified:** 2026-10-03 — runtime-chain wording checked after the
+> overlay policy change. The sandbox contracts below were verified on
+> 2026-08-16: `ai.kiro.useFhsSandbox = false` selects the pinned unwrapped
+> payload explicitly, and `true` stays the default. `trustedMcpTools` composes
+> inside the FHS payload so launcher dispatch reaches it under both supported
+> nixpkgs topologies, and the structural check pins that shape.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
 **This is not Kiro's sandbox.** It is an upstream nixpkgs wrapper: since the
 package split, `pkgs.ai.kiro-cli` on Linux routes all three commands through one
 shared `buildFHSEnv` sandbox. `$out/bin/*` are thin command-selecting wrappers;
-`$out/libexec/kiro-cli/kiro-cli-wrapper` is the bubblewrap launcher. This repo's
-unfree guard may add an outer `symlinkJoin`, but it does not change that runtime
-chain.
+`$out/libexec/kiro-cli/kiro-cli-wrapper` is the bubblewrap launcher.
 
 **It is also a different axis from Kiro's own workspace-root allowlist** (see
 `dev/references/kiro-workflow-ref.md`). The discriminator is cheap: bwrap has no

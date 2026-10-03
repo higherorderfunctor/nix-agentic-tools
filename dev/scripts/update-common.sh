@@ -260,7 +260,7 @@ export NAT_UPDATE_JOBS
 # It bites when several inputs move at once against a COLD eval cache —
 # exactly what a `nixpkgs` bump guarantees, since that invalidates the
 # eval cache for the whole package set. Run 30181958460 died that way
-# twice in a row: nixpkgs, nixpkgs-test and devenv all updated, the
+# twice in a row: nixpkgs and devenv both updated, the
 # pipeline went silent with four nix-eval-jobs processes live, and the
 # runner was torn down ("The runner has received a shutdown signal",
 # exit 143/SIGTERM) 6m59s into attempt 1 and 19m27s into attempt 2.

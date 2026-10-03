@@ -10,26 +10,18 @@
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
-#
-# Free (MIT). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchzip lib;
+  inherit (pkgs) fetchzip lib;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
 in
-  ourPkgs.stdenvNoCC.mkDerivation {
+  pkgs.stdenvNoCC.mkDerivation {
     pname = "arkenfox";
     inherit (sources) version;
     # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
@@ -46,7 +38,7 @@ in
     '';
 
     passthru.updateScript = vu.ghArchiveUpdateScript {
-      pkgs = ourPkgs;
+      inherit pkgs;
       pname = "arkenfox";
       repo = "arkenfox/user.js";
       sourcesFile = repoPath ../../../../sources.json;

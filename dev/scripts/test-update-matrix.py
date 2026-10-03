@@ -1007,6 +1007,13 @@ if args[:1] in (['build'], ['eval']) and 'regenerateExtracted' in ' '.join(args)
     raise SystemExit(0)
 if args[:1] == ['eval']:
     joined = ' '.join(args)
+    if 'vu.readPackageJsonVersion' in joined and mode == 'upstream-eval-failed':
+        print('partial version', end='')
+        print('error:', file=sys.stderr)
+        print('       … while evaluating the attribute version', file=sys.stderr)
+        print('       … while calling the readPackageJsonVersion helper', file=sys.stderr)
+        print('       error: expected a set but found a function', file=sys.stderr)
+        raise SystemExit(17)
     if 'fixGoFloor' in joined:
         print('true' if mode.startswith('floor') else 'false', end='')
     elif 'drvAttrs' in joined:
@@ -1037,7 +1044,7 @@ if args[:2] == ['flake', 'prefetch']:
         'malformed': '{',
         'no-store': json.dumps({'hash': 'sha256-' + 'B' * 43 + '='}),
     }
-    if mode.startswith('floor'):
+    if mode.startswith('floor') or mode == 'upstream-eval-failed':
         print(json.dumps({'hash': 'sha256-' + 'B' * 43 + '=', 'storePath': os.environ['UPSTREAM_SOURCE']}), end='')
     else:
         print(values.get(mode, ''), end='')
@@ -1203,6 +1210,23 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
                 self.assertFalse(any(call[:1] == ["run"] for call in map(json.loads, (self.root / "nix-calls").read_text().splitlines())))
                 (self.repo / ".update-report.txt").unlink()
                 (self.root / "nix-calls").unlink()
+
+    def test_upstream_version_eval_failure_reports_error_and_rolls_back(self):
+        result = self.run_package("upstream-eval-failed", marker=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = (self.repo / ".update-report.txt").read_text()
+        self.assertIn("HELD BACK: demo", report)
+        self.assertIn("upstream version not derivable", report)
+        self.assertIn("error: expected a set but found a function", report)
+        self.assertEqual(len(report.splitlines()), 1)
+        self.assertTrue(report.rstrip().endswith("(upstream version not derivable)"))
+        self.assertIn("       … while evaluating the attribute version\n", result.stderr)
+        self.assertIn("       error: expected a set but found a function\n", result.stderr)
+        self.assertNotIn("UPDATED: demo", report)
+        self.assertEqual(self.git("rev-parse", "update/demo"), self.base)
+        calls = list(map(json.loads, (self.root / "nix-calls").read_text().splitlines()))
+        self.assertTrue(any("vu.readPackageJsonVersion" in " ".join(call) for call in calls))
+        self.assertFalse(any(call[:1] == ["run"] for call in calls))
 
     def test_marker_target_with_empty_prefetch_never_reaches_later_source_repair(self):
         result = self.run_package("empty", marker=True)

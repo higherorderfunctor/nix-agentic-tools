@@ -219,9 +219,9 @@ jobs:
       # should not pay for a 621 MiB build on two runners.
       #
       # The raw Kiro recipe, release sidecar, and owner packaging helpers
-      # determine the patched build. Shared facet assembly supplies its pinned
-      # package set and consumer unfree guard. HM/devenv module-only changes do
-      # not alter the raw binary derivation.
+      # determine the patched build. Shared facet assembly supplies the
+      # active package set. HM/devenv module-only changes do not alter the
+      # raw binary derivation.
       - name: Scope
         id: scope
         env:

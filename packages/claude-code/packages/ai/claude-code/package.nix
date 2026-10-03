@@ -12,16 +12,13 @@
 # We use only patchelf --set-interpreter (header-only, safe). The
 # patched interpreter finds glibc via its own search path — no
 # rpath or LD_LIBRARY_PATH needed. Verified with ldd.
-#
-# Unfree: wrapped by `ensureUnfreeCheck` in default.nix.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  ourPkgs = pkgs;
-  inherit (ourPkgs) fetchurl lib stdenv;
+  inherit (pkgs) fetchurl lib stdenv;
   vu = packageLib // import ../../../lib/packaging.nix;
 
   manifestBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases";
@@ -55,7 +52,7 @@ in
         sourcesFile = repoPath ../../../sources.json;
 
         pname = "claude-code";
-        versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s ${manifestBase}/latest";
+        versionCheck.cmd = "${pkgs.curl}/bin/curl -s ${manifestBase}/latest";
         platforms = {
           "x86_64-linux" = ver: "${manifestBase}/${ver}/linux-x64/claude";
           "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
@@ -66,9 +63,9 @@ in
         extraExtract = vu.mkExtractRegen {
           attr = "claude-code";
           dest = repoPath ../../../extracted.json;
-          pkgs = ourPkgs;
+          inherit pkgs;
         };
-        pkgs = ourPkgs;
+        inherit pkgs;
       };
       # THIS package's own binary -> committed-sidecar shape: the settings
       # schema comes from the binary's own emitter (unpacked module graph +
@@ -88,13 +85,13 @@ in
       # `registerHooks`, which needs Node >= 22.15. Pinned so a nixpkgs
       # default bump cannot regress it.
       extracted =
-        ourPkgs.runCommand "claude-code-extracted.json" {
-          nativeBuildInputs = [ourPkgs.jq ourPkgs.nodejs_24 ourPkgs.python3];
+        pkgs.runCommand "claude-code-extracted.json" {
+          nativeBuildInputs = [pkgs.jq pkgs.nodejs_24 pkgs.python3];
         } (
           vu.mkClaudeExtract {
             assets = ../../../extract;
             bin = "${finalAttrs.finalPackage}/bin/claude";
-            pkgs = ourPkgs;
+            inherit pkgs;
             dest = "$out";
           }
         );

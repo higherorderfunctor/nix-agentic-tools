@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.effect-mcp = {consumerPath = ["ai" "mcpServers" "effect-mcp"];};
   documentation.mcpServerMeta.effect-mcp = {
     description = "Effect-TS documentation";
     credentials = "None";

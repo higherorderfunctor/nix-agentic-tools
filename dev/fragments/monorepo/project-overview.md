@@ -1,7 +1,8 @@
 ## Project Overview
 
-> **Last verified:** 2026-09-28 — project-local configuration uses the devenv
-> modules; the standalone shell constructor is gone.
+> **Last verified:** 2026-10-03 — owner registries contribute update,
+> documentation, and architecture metadata; project-local configuration uses the
+> devenv modules.
 
 nix-agentic-tools is a Nix flake monorepo providing:
 
@@ -24,7 +25,7 @@ packages/<owner>/
   packages/ai/<namespace>/<name>/package.nix  Native binary recipes and roles
   lib/                  Public default.nix plus private factories/helpers
   modules/              Consumer Home Manager and devenv configuration
-  registry.nix          Update, cache, documentation, and architecture metadata
+  registry.nix          Update, documentation, and architecture metadata
   checks.nix, checks/   Owner checks and fixtures
   sources.json          Owner-local release pins (when needed)
   extracted.json        Measured CLI schemas (when needed)

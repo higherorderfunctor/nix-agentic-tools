@@ -3,7 +3,6 @@
   repoPath,
   ...
 }: {
-  checks.cacheHitParity.chatgpt-codex = {consumerPath = ["ai" "chatgpt-codex"];};
   documentation.aiCliDescriptions.chatgpt-codex = "OpenAI Codex CLI";
   # Which package the shared app-server daemon runs, and why devenv runs Codex
   # without it: the selector, its lock and time budget, and what it releases.

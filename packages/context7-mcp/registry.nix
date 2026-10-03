@@ -1,5 +1,4 @@
 {repoPath, ...}: {
-  checks.cacheHitParity.context7-mcp = {consumerPath = ["ai" "mcpServers" "context7-mcp"];};
   documentation.mcpServerMeta.context7-mcp = {
     description = "Library documentation lookup";
     credentials = "None";

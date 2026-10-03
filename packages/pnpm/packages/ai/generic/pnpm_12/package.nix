@@ -29,7 +29,7 @@
 #      pkgs/development/tools/pnpm/default.nix carries `variants` for
 #      10_29_2, 10_34_0, 10 and 11 and stops — checked against nixpkgs
 #      MASTER, not just this repo's pin. ../../../../lib/mkMajor.nix is a thin
-#      `ourPkgs.pnpm_${major}.overrideAttrs`, so for major 12 it does not
+#      `pkgs.pnpm_${major}.overrideAttrs`, so for major 12 it does not
 #      merely produce a wrong package, it fails to evaluate.
 #
 #   2. NIXPKGS' `generic.nix` CANNOT BUILD 12 EITHER, so calling it
@@ -94,23 +94,14 @@
 #
 # Supporting package; its public role is encoded by the native recipe tree.
 # earmarked repo split can lift the subtree whole.
-#
-# Free (MIT). ensureUnfreeCheck in default.nix passes free packages
-# through unwrapped.
 {
-  inputs,
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  # Cache-hit parity: every build input comes from THIS repo's nixpkgs
-  # pin, never the consumer's `final`. `pkgs.stdenv.hostPlatform.system`
-  # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
   inherit (pkgs.stdenv.hostPlatform) system;
-  ourPkgs = import inputs.nixpkgs {inherit system;};
-  inherit (ourPkgs) fetchurl lib stdenv;
+  inherit (pkgs) fetchurl lib stdenv;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources-12.json);
@@ -196,8 +187,8 @@ in
       # its upstream signature stays intact; rewriting it would invalidate
       # that signature and buy nothing.
       nativeBuildInputs =
-        [ourPkgs.installShellFiles]
-        ++ lib.optionals stdenv.hostPlatform.isLinux [ourPkgs.autoPatchelfHook];
+        [pkgs.installShellFiles]
+        ++ lib.optionals stdenv.hostPlatform.isLinux [pkgs.autoPatchelfHook];
 
       # `libgcc_s.so.1` is the only NEEDED entry glibc does not itself
       # provide (the rest are librt/libpthread/libm/libdl/libc). Measured
@@ -211,6 +202,8 @@ in
       buildInputs = lib.optionals stdenv.hostPlatform.isLinux [stdenv.cc.cc.lib];
 
       installPhase = ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         runHook preInstall
         install -Dm755 pnpm $out/bin/pnpm
 
@@ -273,10 +266,15 @@ in
           for sh in bash fish zsh; do
             "$out/bin/pnpm" completion "$sh" > "$TMPDIR/pnpm.$sh"
           done
-          installShellCompletion --cmd pnpm \
-            --bash "$TMPDIR/pnpm.bash" \
-            --fish "$TMPDIR/pnpm.fish" \
-            --zsh "$TMPDIR/pnpm.zsh"
+          # nixpkgs' argument parser reads $1 once more after exhausting argv.
+          # Scope its nounset compatibility adjustment to the completion call.
+          (
+            set +u
+            installShellCompletion --cmd pnpm \
+              --bash "$TMPDIR/pnpm.bash" \
+              --fish "$TMPDIR/pnpm.fish" \
+              --zsh "$TMPDIR/pnpm.zsh"
+          )
         }
         postFixupHooks+=(pnpmInstallCompletions)
       '';
@@ -315,10 +313,10 @@ in
       # is for the fetcherVersion-4 SQLite state-db fixup helper, which is a
       # JS program. Dropping this to "clean up an unused input" re-breaks
       # every `fetchPnpmDeps` caller that passes this derivation.
-      passthru.nodejs-slim = ourPkgs.nodejs-slim;
+      passthru.nodejs-slim = pkgs.nodejs-slim;
 
       passthru.updateScript = vu.mkUpdateScript {
-        pkgs = ourPkgs;
+        inherit pkgs;
         platforms = builtins.mapAttrs (_: assetUrl) assets;
         pname = "pnpm_12";
         sourcesFile = repoPath ../../../../sources-12.json;
@@ -336,7 +334,7 @@ in
         # Absolute store paths: this string is interpolated into a
         # writeShellScript wrapper, which the update pipeline invokes
         # directly and which therefore cannot assume a PATH.
-        versionCheck.cmd = "${ourPkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${ourPkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-12\"] // empty'";
+        versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://registry.npmjs.org/pnpm | ${pkgs.jq}/bin/jq -r '.[\"dist-tags\"][\"latest-12\"] // empty'";
       };
 
       meta = {
