@@ -18,11 +18,9 @@
     "docs/**",
     "fixtures/kiro-primitives/evidence/**",
     "fixtures/kiro-primitives/records/**",
-    "packages/chatgpt-codex/extracted.json",
-    "packages/claude-code/extracted.json",
-    "packages/glab/extracted.json",
+    "packages/*/extracted.json",
+    "packages/*/model-catalog.json",
     "packages/kimchi/egress-report.json",
-    "packages/semble/extracted.json",
     "result"
   ],
   "language": "en",
