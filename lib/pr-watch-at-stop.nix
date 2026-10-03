@@ -1,7 +1,9 @@
 # writeShellApplication wrapper for the PR-monitoring Stop hook. `gh` and `git`
-# come from runtimeInputs so the hook works under a stripped PATH. Use this
-# repo's pinned `ai.devTools.gh` so the hook follows its release cadence rather
-# than the caller's nixpkgs pin.
+# come from runtimeInputs so the hook works under a stripped PATH; `gh` being
+# absent is handled inside the script as a fail-open, because a consumer may
+# wire this hook without wanting a GitHub dependency. `gh` is this repo's pinned
+# `ai.devTools.gh`, so the hook follows its release cadence rather than the
+# caller's nixpkgs pin.
 {pkgs, ...}: let
   shellStrict = import ../config/shell-strict.nix;
 in
