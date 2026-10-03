@@ -14,6 +14,7 @@
         vendors = ["openai"];
       }
     ];
+    kimchi = [];
     kiro = [];
   };
   procedure = builtins.readFile ./procedure.md;

@@ -307,7 +307,7 @@ instruction building.
 <!-- prettier-ignore -->
 | Feature | Without Nix | Home-Manager | DevEnv |
 |---------|-------------|--------------|--------|
-| Delegate routing | Copy a generated runtime skill | `ai.programs.delegate-routing.enable` (Claude + Codex + Kiro) | Same; project-native paths |
+| Delegate routing | Copy a generated runtime skill | `ai.programs.delegate-routing.enable` (Claude + Codex + Kimchi + Kiro) | Same; project-native paths |
 | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |
@@ -941,16 +941,17 @@ Portable `families.<vendor>.<family>` records describe tiers, task and effort
 guidance, and live-model patterns. Override any field or add a family. Each
 runtime's `models` is a list of selectors over `vendors`, `tiers` and
 `families`: selectors are alternatives, and every non-empty field in one
-selector must match. Claude defaults to Anthropic and Codex to OpenAI. Kiro
-requires an explicit selection when its runtime and delegate-routing program are
-enabled.
+selector must match. Claude defaults to Anthropic and Codex to OpenAI. Kimchi
+and Kiro require an explicit selection when their runtime and delegate-routing
+program are enabled. The package ships no families for Kimchi-served vendors;
+declare them under `families` before selecting them.
 
 Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
 Manual-only entries require an explicit user request and do not require runtime
 enable. If Kiro is enabled only for manual delegation, disable its own
 delegate-routing program with
-`ai.kiro.programs.delegate-routing.enable = false`. Kimchi and Copilot are
-excluded because supported delegation controls are absent or unestablished.
+`ai.kiro.programs.delegate-routing.enable = false`. Copilot is excluded because
+its delegation controls are unestablished.
 
 Runtime `techniques` describe workflows, subagents, external launches, model
 introspection and usage. Override a node's fields or disable it with
