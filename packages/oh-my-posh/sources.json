@@ -1,9 +1,9 @@
 {
-  "version": "31.4.0",
+  "version": "31.4.1",
   "src": {
-    "url": "https://github.com/JanDeDobbeleer/oh-my-posh/archive/v31.4.0.tar.gz",
-    "hash": "sha256-xm0K1GU6iicRR7D7Fn5e29ocMFQOyXL0yAJVC7b+lvY="
+    "url": "https://github.com/JanDeDobbeleer/oh-my-posh/archive/v31.4.1.tar.gz",
+    "hash": "sha256-2+a7U/2onW3UL01SSSf0I9PGk4k3iQwAjH02CE3lRnw="
   },
   "goFloor": "1.27.0",
-  "vendorHash": "sha256-B3meE3BjOMeUrCIitHmyZuJeiDDiOCpFJUoK3pDhdhk="
+  "vendorHash": "sha256-4XJNjRI7rMjueFH9SzV1BVUapnW1QxRPH+b41gbko5A="
 }
