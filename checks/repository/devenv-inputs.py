@@ -36,7 +36,9 @@ def main():
 
     flake = json.loads(flake_path.read_text())
     devenv = json.loads(devenv_path.read_text())
-    for name in sorted(yaml.safe_load(committed.read_text())["inputs"]):
+    # Input names come from the generator's output, so an empty or malformed
+    # committed devenv.yaml still reports the drift above and its repair.
+    for name in sorted(yaml.safe_load(expected.read_text())["inputs"]):
         fix = f"Fix: devenv update {name}"
         try:
             flake_locked = locked_input(flake, name)
