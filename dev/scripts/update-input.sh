@@ -65,10 +65,9 @@ set +e
   # Write to a temp and move, NEVER `>devenv.yaml` directly: the shell
   # truncates the redirect target BEFORE running the command, so an eval
   # failure left a zero-byte devenv.yaml — which then got staged, committed
-  # and opened as a PR. Nothing downstream catches that: devenv.yaml has no
-  # drift check under `nix flake check`, and prettier accepts an empty YAML
-  # file, so the six required checks stay green and the bot's auto-merge
-  # lands it. Explicit `exit` for the errexit reason above.
+  # and opened as a PR. The devenv-inputs-drift check now fails that PR, but
+  # failing here keeps the bot from opening a PR it could not write correctly.
+  # Explicit `exit` for the errexit reason above.
   if ! nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' \
     >devenv.yaml.tmp; then
     rm -f devenv.yaml.tmp
@@ -77,9 +76,9 @@ set +e
   fi
   # The `mv` needs the same guard as the eval above. Bare, a failed rename
   # left devenv.yaml at its OLD content, which then got staged and committed
-  # beside a bumped flake.lock — a stale-but-well-formed file that no
-  # required check compares against the lock, so it would auto-merge exactly
-  # like the zero-byte case this temp-and-move exists to prevent.
+  # beside a bumped flake.lock — a stale-but-well-formed file that
+  # devenv-inputs-drift would then fail in CI; holding back here is the
+  # earlier, clearer failure.
   if ! mv devenv.yaml.tmp devenv.yaml; then
     rm -f devenv.yaml.tmp
     log_failure "could not install regenerated devenv.yaml"
@@ -88,7 +87,7 @@ set +e
 
   # Sync devenv.lock. Producing content the PR carries, so a failure is a
   # hold-back: shipping a stale devenv.lock beside a bumped flake.lock is a
-  # PR we could not write correctly, and no required check compares them.
+  # PR we could not write correctly (devenv-inputs-drift would fail it).
   if ! devenv update; then
     log_failure "devenv update failed"
     exit 1
