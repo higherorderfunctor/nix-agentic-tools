@@ -8,16 +8,17 @@
 # `pnpm_12/package.nix` IS NOT A CALLER, and that is not an oversight to tidy up.
 # pnpm 12 moved the implementation out of the npm package and into
 # per-platform native binaries (`@pnpm/exe.<platform>`), leaving
-# `package/pnpm` a placeholder text file — so there is no
-# `pkgs.pnpm_12` to override, and nixpkgs' own generic expression
-# cannot build a 12.x tarball either. It is a standalone prebuilt-binary
+# `package/pnpm` a placeholder text file — so overriding the JavaScript
+# bundle does not fit it (nixpkgs had no `pnpm_12` at all when it landed),
+# and nixpkgs' own generic expression cannot build a 12.x tarball either. It is a standalone prebuilt-binary
 # derivation instead; its header carries the measurements. The guard
 # below still matters for 10 and 11 and must not be relaxed on its
 # account.
 #
-# A thin `overrideAttrs` over nixpkgs' own `pnpm_<N>` derivation: only
-# `version`, `src` and `passthru.updateScript` move, so every build
-# input, phase and hook stays whatever nixpkgs ships.
+# A thin `overrideAttrs` over nixpkgs' own `pnpm_<N>` derivation:
+# `version`, `src` and `passthru.updateScript` move, plus a `postPatch`
+# that binds hardened shim helpers to store paths (see below). Every other
+# build input, phase and hook stays whatever nixpkgs ships.
 #
 # NAMESPACED ONLY. This writes `pkgs.ai.generic.pnpm_10` /
 # `pkgs.ai.generic.pnpm_11` and never a top-level `pkgs.pnpm_10`. The bare
@@ -80,6 +81,42 @@
     # nixpkgs uses, which is what makes the store-path parity noted in
     # the per-major files possible.
     src = fetchurl {inherit (sources.src) url hash;};
+
+    # pnpm 11.28.2 hardened its generated `node_modules/.bin` shims with
+    # `command -p readlink|sed|uname`, so a dependency's bin cannot shadow
+    # those helpers. `command -p` ignores PATH and searches /bin:/usr/bin,
+    # which a Linux build sandbox does not have: oxlint's napi shim died with
+    # `sed: not found` while darwin, which has /usr/bin, built. Bind the
+    # helpers to store paths instead, which keeps upstream's isolation.
+    # Detected by content, not by version, so a backport to another major or
+    # an equivalent nixpkgs patch is handled. `printf` is a shell builtin and
+    # `cygpath`/`wslpath` run only on Cygwin/WSL; any other `command -p`
+    # helper fails the build here instead of inside a consumer's build.
+    # Scoped in a subshell: later nixpkgs hooks in this build read unset vars.
+    postPatch =
+      (prev.postPatch or "")
+      + ''
+        (
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        for bundle in dist/pnpm.cjs dist/pnpm.mjs; do
+          if [ -f "$bundle" ] && grep -Eq 'command -p (readlink|sed|uname)' "$bundle"; then
+            substituteInPlace "$bundle" \
+              --replace-fail 'command -p readlink' '${pkgs.coreutils}/bin/readlink' \
+              --replace-fail 'command -p sed' '${pkgs.gnused}/bin/sed' \
+              --replace-fail 'command -p uname' '${pkgs.coreutils}/bin/uname'
+          fi
+          if [ -f "$bundle" ]; then
+            unhandled=$(grep -Eo 'command -p [A-Za-z0-9_-]+' "$bundle" | sort -u \
+              | grep -Ev ' (printf|cygpath|wslpath)$' || true)
+            if [ -n "$unhandled" ]; then
+              echo "pnpm_${major}: unhandled shim helper(s) in $bundle: $unhandled" >&2
+              false
+            fi
+          fi
+        done
+        )
+      '';
 
     # Merge, never replace: nixpkgs hangs `configHook`, `fetchDeps`,
     # `majorVersion`, `nodejs-slim` and `tests` here and replacing the

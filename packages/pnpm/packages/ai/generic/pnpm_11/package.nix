@@ -14,12 +14,12 @@
 #
 # pnpm_12 is NOT carried this way, and the difference is upstream's, not
 # a style choice: pnpm 12 moved its implementation out of the npm package
-# into per-platform native binaries, so there is no `pkgs.pnpm_12` to
-# override at all. See ../pnpm_12/package.nix.
+# into per-platform native binaries, so the JavaScript-bundle override in
+# mkMajor.nix does not fit it. See ../pnpm_12/package.nix.
 #
-# Bare `pnpm` in the pinned nixpkgs aliases `pnpm_11` (identical
-# drvPath). We deliberately do NOT shadow it: this overlay is additive
-# and writes only into the `generic` namespace.
+# Bare `pnpm` in the pinned nixpkgs aliased `pnpm_11` when this landed and
+# aliases nixpkgs' `pnpm_12` as of 2026-10-03. We deliberately do NOT shadow
+# it: this overlay is additive and writes only into the `generic` namespace.
 {
   packageLib,
   pkgs,
