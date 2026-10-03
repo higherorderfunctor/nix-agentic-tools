@@ -7,21 +7,25 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-01 — the 1.5.0 source build adds resource controls
-> for teleport and remote-run and anchors pi's fd/rg lookup to Nix packages. The
-> extractor binds patch-added source before resolving environment aliases and
-> classifies Kimchi 1.5.0's versioned config and environment additions before
-> the package pin moves. A normalized agent's `tools` list is dropped with a
-> warning instead of failing evaluation. Kimchi shares Home Manager's user
-> config.json and harness/settings.json with the runtime; the remaining files
-> and every devenv file stay read-only copies. Its rules use the shared flat
-> AGENTS.md renderer and repository aggregate. Region is required; Home Manager
-> delivers it and telemetry through global config.json only. The pinned pi
-> dependency is 0.85.1. Agents are read-only copies from the runtime's generated
-> Markdown tree; the opt-in docs skill uses the shared frontmatter text renderer
-> and a guarded generated-file tree that formats whole files and compares parsed
-> header values; a store-path string is an input just as a path is. Full
-> lineage: `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-10-03 — pinned to Kimchi 1.5.1, which retired the
+> `autoDefaultApplied` marker and rolls an Auto-entitled account back to Auto on
+> every fresh main launch; the marker is gone from the factory, extractor and
+> checks, and Home Manager still defaults the model pair to Auto. The 1.5.0
+> source build adds resource controls for teleport and remote-run and anchors
+> pi's fd/rg lookup to Nix packages. The extractor binds patch-added source
+> before resolving environment aliases and classifies Kimchi 1.5.0's versioned
+> config and environment additions before the package pin moves. A normalized
+> agent's `tools` list is dropped with a warning instead of failing evaluation.
+> Kimchi shares Home Manager's user config.json and harness/settings.json with
+> the runtime; the remaining files and every devenv file stay read-only copies.
+> Its rules use the shared flat AGENTS.md renderer and repository aggregate.
+> Region is required; Home Manager delivers it and telemetry through global
+> config.json only. The pinned pi dependency is 0.85.1. Agents are read-only
+> copies from the runtime's generated Markdown tree; the opt-in docs skill uses
+> the shared frontmatter text renderer and a guarded generated-file tree that
+> formats whole files and compares parsed header values; a store-path string is
+> an input just as a path is. Full lineage:
+> `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -48,11 +52,13 @@ trusted project, and the wrapper refuses launches below the devenv root. That is
 the uniform consequence of any project harness setting, and the only way to
 deliver effort at project scope.
 
-Model selection is configuration Nix owns. Kimchi 1.1.37 would otherwise pick
-Auto itself: it installs Auto as the saved default and writes the user harness
-`settings.json` unless that file carries `autoDefaultApplied: true` (the trigger
-and the write are described at the declaration in `mkKimchi.nix`). So whenever
-HM manages that document it declares both:
+Model selection is configuration Nix owns. Since 1.5.1, Kimchi moves an
+Auto-entitled account to Auto on its own: it rolls back a non-Auto session model
+on every fresh main launch with no CLI model choice, whatever that model's
+source, and persists Auto (described at the declaration in `mkKimchi.nix`). The
+next activation restores the declared leaves, but on such an account a declared
+non-Auto model never survives a fresh main launch. Whenever HM manages the user
+harness `settings.json` it declares:
 
 - **The model**: `defaultProvider = "kimchi-dev"` and `defaultModel = "auto"`,
   at priority 1200 (`autoModelPriority`), below `mkDefault`. Both defaults are a
@@ -70,27 +76,28 @@ HM manages that document it declares both:
   not values, so it cannot recurse. The shared `ai.settings` surface has no
   model field, so these two native keys are the only declaration path.
   - **Nix owns the pair.** Kimchi can persist a startup `--model`, `/model`
-    set-default, the `set_model` tool, and ACP model changes. The next
-    activation restores only the declared model leaves and preserves unrelated
-    runtime state.
+    set-default, the `set_model` tool, and ACP model changes, and since 1.5.1 it
+    persists Auto itself on an Auto-entitled account. The next activation
+    restores only the declared model leaves and preserves unrelated runtime
+    state. That restore does not make a non-Auto model stick on an Auto-entitled
+    account: Kimchi switches back to Auto and persists it on the next fresh main
+    launch. Only a launch-time `--model`/`--provider` (or
+    `--multi-model`/`--models`) or a per-session `/model` avoids it.
   - **Multi-model.** Any saved default, Auto included, turns off the global
     `multiModel` default on a fresh launch whose model is not on `kimchi-dev`
-    (`auto-model/index.ts:104-106,255-259`). An account whose catalog lacks Auto
+    (`auto-model/index.ts:130-132,316-321`). An account whose catalog lacks Auto
     still starts, because pi 0.85.1 silently falls back to the model it picks
     when none is declared, but that fallback runs with multi-model off.
-    `multiModel = true` needs `defaultModel = null`.
-- **The marker**: `autoDefaultApplied = true` at `mkDefault`. It matters when
-  the consumer declares a non-Auto `kimchi-dev` model or nulls the pair. Kimchi
-  reads only `=== true`, so false or no marker re-arms Auto after every
-  activation.
-
-Devenv is an explicit exclusion for both. Kimchi reads the marker only from the
-user file and devenv rejects user-scope keys. A project model default would make
-every devenv Kimchi's harness file non-empty, which puts it behind project trust
-and the exact-cwd launch guard, and it would outrank the user's HM choice. So a
-devenv-only user's first fresh launch runs on Auto and Kimchi persists it in
-their user file; a declared project `defaultModel` outranks it on later
-launches. Locked by `module-kimchi-auto-default-marker`.
+    `multiModel = true` needs `defaultModel = null`. Devenv is an explicit
+    exclusion. A project model default would make every devenv Kimchi's harness
+    file non-empty, which puts it behind project trust and the exact-cwd launch
+    guard, and it would outrank the user's HM choice. So a devenv-only user's
+    fresh launch runs on Auto and Kimchi persists it in their user file. A
+    declared project `defaultModel` takes effect only on an account whose
+    catalog lacks Auto, or with a launch-time `--model`/`--provider` (or
+    `--multi-model`/`--models`); on an Auto-entitled account Kimchi rolls it
+    back to Auto and persists that. Locked by
+    `module-kimchi-auto-model-default`.
 
 `packages/kimchi/extracted.json` measures the two native settings surfaces and
 the environment variables Kimchi and pi read, and `lib/extracted.nix` is its
@@ -118,22 +125,22 @@ checks do not), and one description note. `report.stale*` lists any row whose
 path the sidecar lost, and `checks/native-options.nix` fails on it.
 
 The extractor has hand-written parts of its own, each guarded only as far as
-stated. Kimchi's harness additions (`autoDefaultApplied`, `fermentV2`,
-`modelRoles` and the rest, each typed from a named declaration) are a hand list
-in `extract.mjs`. Two censuses check it: every harness key config.ts parses, and
-every constant key passed to config/settings.ts's `readConfigSetting`,
-`readConfigSettingAsync`, `writeConfigSetting` and `writeConfigSettingAsync`
-anywhere in `src/`, must be a pi `Settings` key or an addition. Other direct
-readers of the harness file are not censused (in 1.1.37,
-`telemetry/config-snapshot.ts` reads `model` and `provider` for telemetry), so a
-key upstream adds there meets the closed submodule as an unknown option with no
-drift signal. The config.json shapes of `teleport`, `gitTokens` and the
-`surveys` record have no declared type, so they are written by hand and pinned
-both ways to their readers' runtime guards (`readTeleportCompactHintEnabled`,
-`readGitToken`, `readSurveyConfig`): every scalar leaf must be `typeof`-guarded
-as its type, and every guarded path must be in the shape. That check also runs
-the generator over a fixture sidecar with a key added, a key removed and an enum
-widened, and requires the option surface to move with it.
+stated. Kimchi's harness additions (`fermentV2`, `modelRoles` and the rest, each
+typed from a named declaration) are a hand list in `extract.mjs`. Two censuses
+check it: every harness key config.ts parses, and every constant key passed to
+config/settings.ts's `readConfigSetting`, `readConfigSettingAsync`,
+`writeConfigSetting` and `writeConfigSettingAsync` anywhere in `src/`, must be a
+pi `Settings` key or an addition. Other direct readers of the harness file are
+not censused (in 1.1.37, `telemetry/config-snapshot.ts` reads `model` and
+`provider` for telemetry), so a key upstream adds there meets the closed
+submodule as an unknown option with no drift signal. The config.json shapes of
+`teleport`, `gitTokens` and the `surveys` record have no declared type, so they
+are written by hand and pinned both ways to their readers' runtime guards
+(`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`): every
+scalar leaf must be `typeof`-guarded as its type, and every guarded path must be
+in the shape. That check also runs the generator over a fixture sidecar with a
+key added, a key removed and an enum widened, and requires the option surface to
+move with it.
 
 The sidecar also drives two rejections and one lookup. Devenv rejects
 `native.settings` keys whose `project` flag is false, because Kimchi merges only
@@ -252,7 +259,7 @@ something is declared. Locked by `module-kimchi-hm-owns-user-files`,
 The shared document makes launch-seed defaults unnecessary. `hmHarnessDefaults`
 does not declare `hideThinkingBlock`, `lastChangelogVersion`, `quietStartup`,
 `retry`, or `shellProfileApiKeyMigrationDismissed`; Kimchi owns and persists
-them. It keeps the actual Nix policy: the Auto model pair and marker,
+them. It keeps the actual Nix policy: the Auto model pair,
 `defaultProjectTrust = "never"`, disabled install telemetry, and the
 `kimchi-minimal` theme.
 

@@ -51,9 +51,14 @@
   # (1500), which a non-null value at the same priority would conflict with.
   autoModelPriority = 1200;
 
-  # Home Manager owns the Auto model choice and marker. Kimchi otherwise
-  # installs that choice once when settings.json lacks
-  # `autoDefaultApplied: true` (src/extensions/auto-model/index.ts:253-291).
+  # Home Manager owns the model choice and defaults it to Kimchi's Auto
+  # router. Since Kimchi 1.5.1 it also moves an Auto-entitled account to Auto
+  # on its own: it rolls back a non-Auto session model, whatever its source, on
+  # every fresh main launch with no CLI model choice and persists Auto, and it
+  # deletes the retired `autoDefaultApplied` key
+  # (src/extensions/auto-model/index.ts:104,270-303). The next activation
+  # restores the declared leaves, but on an Auto-entitled account a declared
+  # non-Auto model never survives a fresh main launch.
   #
   # A module of the option TYPE, not a definition of the option: an outer
   # definition would sit at normal priority, and the outer option's
@@ -75,18 +80,12 @@
   # falls back, silently, to the model it picks when no default is declared
   # (dist/core/model-resolver.js:501-529). Any saved default, Auto included,
   # also turns off the global `multiModel` default on a fresh launch whose
-  # model is not on `kimchi-dev` (auto-model/index.ts:104-106,255-259), so
+  # model is not on `kimchi-dev` (auto-model/index.ts:130-132,316-321), so
   # such an account loses multi-model, and `multiModel = true` takes effect
   # only with `defaultModel = null`.
   #
-  # The marker stays declared, at `mkDefault`, for a consumer who declares a
-  # non-Auto `kimchi-dev` model or nulls the pair: Kimchi reads only `=== true`,
-  # so null or false re-arms its Auto installation after every activation.
-  #
-  # Home Manager only: Kimchi reads the marker from the user file alone
-  # (src/config.ts:22,812-814), devenv rejects user-scope harness keys, and a
-  # project `defaultModel` would put every devenv Kimchi behind project trust
-  # and the exact-cwd launch guard.
+  # Home Manager only: a project `defaultModel` would put every devenv Kimchi
+  # behind project trust and the exact-cwd launch guard.
   hmHarnessDefaults = {options, ...}: let
     consumerDeclared = lib.any (name: options.${name}.highestPrio < autoModelPriority) ["defaultModel" "defaultProvider"];
     autoDefault = value:
@@ -97,7 +96,6 @@
       );
   in {
     config = {
-      autoDefaultApplied = lib.mkDefault true;
       defaultModel = autoDefault "auto";
       defaultProjectTrust = lib.mkDefault "never";
       defaultProvider = autoDefault "kimchi-dev";
@@ -177,9 +175,11 @@
           global `multiModel` default on a fresh launch whose model is not on
           `kimchi-dev`, so `multiModel = true` needs `defaultModel = null`; an
           account whose catalog lacks Auto gets the model Kimchi picks when
-          none is declared, with multi-model off. Home Manager also declares
-          `autoDefaultApplied` as true at `mkDefault`, so Kimchi does not
-          reinstall Auto over an explicit model choice.
+          none is declared, with multi-model off. Since Kimchi 1.5.1, an
+          Auto-entitled account starts every fresh main session on Auto
+          whatever `defaultModel` declares; only a launch-time
+          `--model`/`--provider` (or `--multi-model`/`--models`) or a
+          per-session `/model` avoids it.
         '';
     };
   };

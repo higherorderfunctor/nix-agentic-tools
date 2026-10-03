@@ -359,13 +359,13 @@ instruction building.
 | Permissions              | `.kimchi/permissions.json`             | Requires project trust and launch from the devenv root                                                                                                                                                                                                      |
 | Hooks                    | `.kimchi/hooks.json`                   | Requires project trust and launch from the devenv root; PermissionRequest is not a Kimchi event and is left out. Home Manager has no user-scope hook file it can own, so shared `ai.hooks` do not reach Kimchi there (silently) and `ai.kimchi.hooks` warns |
 
-devenv rejects Kimchi's user-scope-only harness settings: `autoDefaultApplied`,
-`defaultProjectTrust`, `fermentV2`, `hidePhaseChanges`, `httpProxy`,
-`lastTerminalWarnings`, `modelMetadata`, `modelRoles`, `multiModel`,
-`resources`, `shellProfileApiKeyMigrationDismissed`, `statusLine`. Set those
-with Home Manager or through Kimchi itself. Every project file is a read-only
-copy, written only when something is declared; an in-app change Kimchi renames
-over one is backed up and replaced at the next shell entry.
+devenv rejects Kimchi's user-scope-only harness settings: `defaultProjectTrust`,
+`fermentV2`, `hidePhaseChanges`, `httpProxy`, `lastTerminalWarnings`,
+`modelMetadata`, `modelRoles`, `multiModel`, `resources`,
+`shellProfileApiKeyMigrationDismissed`, `statusLine`. Set those with Home
+Manager or through Kimchi itself. Every project file is a read-only copy,
+written only when something is declared; an in-app change Kimchi renames over
+one is backed up and replaced at the next shell entry.
 
 Kimchi's user-global files live under `~/.config/kimchi`, which devenv never
 writes. Who manages each setting there depends on whether you use Home Manager:

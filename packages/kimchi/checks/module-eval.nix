@@ -41,7 +41,6 @@
     telemetry.enabled = false;
   };
   userHarnessDefaults = {
-    autoDefaultApplied = true;
     defaultModel = "auto";
     defaultProjectTrust = "never";
     defaultProvider = "kimchi-dev";
@@ -56,7 +55,6 @@
       extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
     }).userScopeHarnessKeys;
   userScopeOnlyHarnessSettingValues = {
-    autoDefaultApplied = true;
     defaultProjectTrust = "always";
     fermentV2.autoResume = true;
     hidePhaseChanges = true;
@@ -525,20 +523,15 @@ in {
         && !(result.config.files ? ".config/kimchi/harness/settings.json")
     );
 
-    # Home Manager defaults Kimchi to its Auto router and declares the
-    # `autoDefaultApplied` marker, so Kimchi 1.1.37 never installs Auto as
-    # the saved default itself. Both live in the HM harness option TYPE, so a
-    # whole-attrset definition reaches them at any priority. The model pair
-    # sits at priority 1200 and is coupled: a consumer who declares either
-    # half at mkDefault or stronger, null included, gets neither half from
-    # the module, so a model on another provider never pairs with
-    # `kimchi-dev`; a weaker declaration loses to the default. The marker is
-    # a plain mkDefault: at runtime null and false both re-arm Auto after
-    # every activation, which restores the declared leaf without a true
-    # marker. Devenv cannot carry the user-scope
-    # marker and adds no model default, so it must add nothing and must not
-    # trip its own user-scope rejection.
-    module-kimchi-auto-default-marker = mkTest "kimchi-auto-default-marker" (
+    # Home Manager defaults Kimchi to its Auto router. The default lives in
+    # the HM harness option TYPE, so a whole-attrset definition reaches it at
+    # any priority. The model pair sits at priority 1200 and is coupled: a
+    # consumer who declares either half at mkDefault or stronger, null
+    # included, gets neither half from the module, so a model on another
+    # provider never pairs with `kimchi-dev`; a weaker declaration loses to
+    # the default. Devenv adds no model default, so it must add nothing and
+    # must not trip its own user-scope rejection.
+    module-kimchi-auto-model-default = mkTest "kimchi-auto-model-default" (
       let
         hmHarness = harnessSettings:
           hmHarnessSettings (evalHm {
@@ -583,18 +576,15 @@ in {
             settings.reasoningEffort = "high";
           };
         });
-        optedOut = hmHarness {autoDefaultApplied = false;};
-        nulled = hmHarness {autoDefaultApplied = null;};
         devenv = evalDevenv {ai.kimchi.enable = true;};
         devenvHarness = projectHarnessSettings devenv;
       in
-        # default: Auto on kimchi-dev, plus the marker
+        # default: Auto on kimchi-dev
         pairOf undeclared
         == {
           model = "auto";
           provider = "kimchi-dev";
         }
-        && undeclared.autoDefaultApplied or null == true
         && pairOf withEffort
         == {
           model = "auto";
@@ -606,7 +596,6 @@ in {
           model = "some-model";
           provider = "some-provider";
         }
-        && declaredPair.autoDefaultApplied or null == true
         && pairOf declaredPairAtDefault
         == {
           model = "some-model";
@@ -633,7 +622,6 @@ in {
           model = "some-model";
           provider = "some-provider";
         }
-        && wholeDefault.autoDefaultApplied or null == true
         && pairOf wholeForce
         == {
           model = "auto";
@@ -645,17 +633,8 @@ in {
           model = "auto";
           provider = "kimchi-dev";
         }
-        # an explicit marker value wins over the module default
-        && optedOut.autoDefaultApplied or null == false
-        && !(nulled ? autoDefaultApplied)
-        && pairOf nulled
-        == {
-          model = "auto";
-          provider = "kimchi-dev";
-        }
-        # devenv: no marker and no model default in the project file, and no
-        # assertion fires
-        && !(devenvHarness ? autoDefaultApplied)
+        # devenv: no model default in the project file, and no assertion
+        # fires
         && !(devenvHarness ? defaultModel)
         && !(devenvHarness ? defaultProvider)
         && failedAssertions devenv == []

@@ -108,12 +108,16 @@
           'typeof p === "string"' 'typeof p === "number"'
         mutant "$kimchi" config-nested-shape src/config.ts \
           'typeof t.enabled === "boolean"' 'typeof t.enabled === "string"'
+        # Repoint readSurveyConfig's config.json parse: at the harness file its
+        # `surveys` read must surface as an unknown harness key, and at a file
+        # that is neither surface the parse must be unattributable.
+        survey_parse=$'function readSurveyConfig(surveyId: string, configPath: string): SurveyConfig | undefined {\n\ttry {\n\t\tconst parsed = JSON.parse(readFileSync('
         mutant "$kimchi" config-parse-attribution src/config.ts \
-          'JSON.parse(readFileSync(settingsPath ?? resolve(AGENT_CONFIG_DIR, "settings.json"), "utf-8"))' \
-          'JSON.parse(readFileSync(settingsPath ?? KIMCHI_CONFIG_PATH, "utf-8"))'
+          "''${survey_parse}configPath, \"utf-8\"))" \
+          "''${survey_parse}resolve(AGENT_CONFIG_DIR, \"settings.json\"), \"utf-8\"))"
         mutant "$kimchi" config-parse-unattributable src/config.ts \
-          'JSON.parse(readFileSync(settingsPath ?? resolve(AGENT_CONFIG_DIR, "settings.json"), "utf-8"))' \
-          'JSON.parse(readFileSync(settingsPath ?? resolve(AGENT_CONFIG_DIR, "state.json"), "utf-8"))'
+          "''${survey_parse}configPath, \"utf-8\"))" \
+          "''${survey_parse}resolve(AGENT_CONFIG_DIR, \"state.json\"), \"utf-8\"))"
         mutant "$kimchi" config-shape src/config.ts \
           'typeof parsed.apiKey === "string"' 'typeof parsed.apiKey === "number"'
         mutant "$kimchi" config-second-shape src/config.ts \
@@ -192,8 +196,6 @@
           '+const environment = process.env' \
           '+void environment.UNLISTED_PATCH_PROBE' \
           > "$TMPDIR/environment-patch-alias-source/patches/environment-probe.patch"
-        mutant "$kimchi" harness-auto-default src/config.ts \
-          'return parsed.autoDefaultApplied === true' 'return parsed.autoDefaultApplied === "yes"'
         mutant "$kimchi" harness-shape src/extensions/orchestration/model-roles.ts \
           'orchestrator: string' 'orchestrator: number'
         mutant "$kimchi" project-tier src/config.ts \
@@ -248,7 +250,7 @@
         expect_rejection config-nested-shape "$TMPDIR/config-nested-shape-source" \
           "config.json validation shape changed" >> "$TMPDIR/proof"
         expect_rejection config-parse-attribution "$TMPDIR/config-parse-attribution-source" \
-          'config.json key census changed; new=["autoDefaultApplied"]' >> "$TMPDIR/proof"
+          'that are neither pi Settings nor Kimchi additions: ["surveys"]' >> "$TMPDIR/proof"
         expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
           'cannot attribute the JSON read' >> "$TMPDIR/proof"
         expect_rejection config-shape "$TMPDIR/config-shape-source" \
@@ -314,8 +316,6 @@
           "$TMPDIR/future-ignored-blank-reason.json" >> "$TMPDIR/proof"
         expect_rejection harness-shape "$TMPDIR/harness-shape-source" \
           "harness/settings.json Kimchi additions validation shape changed" >> "$TMPDIR/proof"
-        expect_rejection harness-auto-default "$TMPDIR/harness-auto-default-source" \
-          "readAutoDefaultApplied no longer reads autoDefaultApplied === true" >> "$TMPDIR/proof"
         expect_rejection pi-app-name "$kimchi" \
           'pi APP_NAME in' "$TMPDIR/pi-app-name-source" >> "$TMPDIR/proof"
 
@@ -391,7 +391,7 @@
         for fixture in real:false pi-scope-merged:true; do
           IFS=: read -r label project <<< "$fixture"
           if ${pkgs.jq}/bin/jq -e --argjson project "$project" \
-            '.harness.keys | (.defaultProjectTrust.project == $project) and (.httpProxy.project == false) and (.theme.project == true) and .autoDefaultApplied.project == false' \
+            '.harness.keys | (.defaultProjectTrust.project == $project) and (.httpProxy.project == false) and (.theme.project == true)' \
             "$TMPDIR/$label.json" > /dev/null; then
             echo "$label (exit 0): defaultProjectTrust project=$project" >> "$TMPDIR/proof"
           else

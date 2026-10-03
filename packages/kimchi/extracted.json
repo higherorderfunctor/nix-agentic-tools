@@ -898,13 +898,6 @@
         "optional": true,
         "project": true
       },
-      "autoDefaultApplied": {
-        "source": "kimchi",
-        "typeExpression": "boolean",
-        "type": "boolean",
-        "optional": true,
-        "project": false
-      },
       "branchSummary": {
         "source": "pi",
         "typeExpression": "BranchSummarySettings",
@@ -1481,7 +1474,7 @@
   },
   "provenance": {
     "extractorSchema": 3,
-    "kimchiVersion": "1.5.0",
+    "kimchiVersion": "1.5.1",
     "piVersion": "0.85.1"
   }
 }

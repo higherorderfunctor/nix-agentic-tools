@@ -386,9 +386,11 @@ function unwrapExpression(expression, ts) {
 // Attribute each parsed object in config.ts to the file it was read from by
 // following the parse argument back to readFileSync's path, then the path
 // through constants, defaults, `??`/`||` fallbacks, and in-file call sites.
-// Kimchi 1.1.37 parses harness/settings.json in config.ts
-// (readAutoDefaultApplied), so "every JSON.parse here is config.json" no
-// longer holds; an unattributable parse fails rather than being guessed.
+// config.ts resolves the harness directory (AGENT_CONFIG_DIR) as well as
+// config.json, and earlier releases parsed harness/settings.json here. So
+// "every JSON.parse here is config.json" is not assumed: a harness read is
+// counted with the harness keys, which must all be known, and an
+// unattributable parse fails rather than being guessed.
 function discoverConfigKeys(sourceFile, checker, ts) {
   const location = (node) => {
     const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
@@ -1396,14 +1398,6 @@ function extractHarness(
     true,
   );
   const additions = {
-    // config.ts readAutoDefaultApplied: a one-shot marker, true once Kimchi
-    // installed Auto as the saved default.
-    autoDefaultApplied: descriptorForType(
-      checker.getBooleanType(),
-      ferment,
-      checker,
-      ts,
-    ),
     fermentV2: {
       type: "object",
       typeExpression: "FermentV2Settings",
@@ -1460,33 +1454,6 @@ function extractHarness(
       "harness/settings.json Kimchi additions validation shape changed: modelRoles.orchestrator is no longer a string",
     );
   }
-  let autoDefaultMarker = false;
-  function findAutoDefaultMarker(node) {
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
-      ts.isPropertyAccessExpression(node.left) &&
-      node.left.name.text === "autoDefaultApplied" &&
-      node.right.kind === ts.SyntaxKind.TrueKeyword
-    ) {
-      autoDefaultMarker = true;
-    }
-    ts.forEachChild(node, findAutoDefaultMarker);
-  }
-  findAutoDefaultMarker(
-    declarationInScope(
-      configSource,
-      "readAutoDefaultApplied",
-      ts.isFunctionDeclaration,
-      checker,
-      ts,
-    ),
-  );
-  if (!autoDefaultMarker) {
-    fail(
-      "harness/settings.json Kimchi additions validation shape changed: readAutoDefaultApplied no longer reads autoDefaultApplied === true",
-    );
-  }
   additions.statusLine.properties.command = descriptorForType(
     checker.getStringType(),
     statusLine,
@@ -1510,9 +1477,9 @@ function extractHarness(
   if (!baseKeys.modelThinkingLevels.additionalProperties)
     fail("pi modelThinkingLevels value type was not resolved");
   // Kimchi reads its additions itself, from the user harness file only
-  // (config/settings.ts, config.ts readAutoDefaultApplied, the model-metadata
-  // and terminal-warning readers all resolve ~/.config/kimchi/harness), never
-  // through pi's project-merging SettingsManager, which does not type them.
+  // (config/settings.ts and the model-metadata and terminal-warning readers
+  // all resolve ~/.config/kimchi/harness), never through pi's project-merging
+  // SettingsManager, which does not type them.
   for (const [name, descriptor] of Object.entries(additions))
     keys[name] = { source: "kimchi", ...descriptor, project: false };
   const unknownHarnessReads = [
