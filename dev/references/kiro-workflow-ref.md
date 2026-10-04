@@ -1554,17 +1554,17 @@ every iteration it has. Never `/tmp`.
 
 Write the path **relative**: it resolves against the workspace root by
 construction, and step agents' cwd is that same root, so the writing step and
-the check agree without any interpolation. The vendor's bundled
-`workflows_default` steering instructs the opposite — interpolate an absolute
-`{{worktree_path}}/…` — and that is wrong whenever worktrees are SIBLINGS of the
-checkout rather than subdirectories of it, which is this repo's own worktree
-convention. This is why `packages/kiro-cli/lib/workflowReminder.nix` carries a
-correcting paragraph rather than a pointer: msg0 is frozen, so the bad
-instruction cannot be edited out, only contradicted later in context. And
-`stopWhen`'s `"{{id.output}} contains <text>"` form matches against _captured
-output_, so it inherits the empty-capture hazard wholesale — under a cheap model
-the condition can never match and the loop silently runs to `maxIterations`
-(ledger §7.6).
+the check agree without any interpolation. The 2.16.x vendor steering instructed
+the opposite — interpolate an absolute `{{worktree_path}}/…` — which is wrong
+whenever worktrees are SIBLINGS of the checkout rather than subdirectories of
+it, which is this repo's own worktree convention. 2.27.1 dropped that section,
+and with it the reminder's correcting paragraph. The reminder's one remaining
+correction is the 2.27.1 instruction to create worktrees INSIDE the checkout
+(`.worktrees/<name>`) off `mainline`. msg0 is frozen, so a bad instruction
+cannot be edited out, only contradicted later in context. And `stopWhen`'s
+`"{{id.output}} contains <text>"` form matches against _captured output_, so it
+inherits the empty-capture hazard wholesale — under a cheap model the condition
+can never match and the loop silently runs to `maxIterations` (ledger §7.6).
 
 ### Small things that save a run
 

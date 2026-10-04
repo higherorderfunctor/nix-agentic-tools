@@ -29,50 +29,43 @@
   # Deliberately a POINTER, not a summary. The vendor block is already in msg0;
   # restating its rules here would fork a second source of truth that goes stale
   # against the engine on the next bump. This names the decision to re-open and
-  # the shape to reach for, and lets msg0 supply the detail.
+  # the shape to reach for, and lets msg0 supply the detail. Both pointers match
+  # the 2.27.1 steering: delegation is ONE `run_workflow` call carrying a
+  # `workflowPrompt` brief (`workflow-creator` runs inside it), and the reviewer
+  # is the last step of the loop.
   #
-  # The stop-condition paragraph is the ONE deliberate exception, because there
-  # msg0 is WRONG rather than merely distant. Its "Worktree steps: absolute paths
-  # are mandatory" section tells the model to interpolate an absolute
-  # `{{worktree_path}}/...` into `fileCheck.path`, and 2.16.2 REJECTS the run at
-  # launch when that resolves outside the workspace root -- which it does
-  # whenever worktrees are SIBLINGS of the checkout rather than subdirectories of
-  # it. msg0 is frozen and replayed byte-for-byte, so no pointer can repair it;
-  # only later, contradicting text can, which is the one thing this hook's
-  # POSITION actually buys. Do not delete this as drift: it is a CORRECTION of
-  # msg0, not a restatement of it.
+  # The worktree paragraph is the ONE deliberate exception, because there msg0
+  # is WRONG for us rather than merely distant. 2.27.1 tells the generated
+  # workflow to `git worktree add .worktrees/<name> -b <branch> mainline`, i.e.
+  # INSIDE the checkout, and to rebase onto and fast-forward `mainline`. A
+  # worktree nested in the checkout is re-entered and re-evaluated by
+  # direnv/devenv under the parent, which blows up their caches; that is why
+  # worktrees belong outside the checkout the LLM runs in. And `mainline` is
+  # not every repository's trunk. msg0 is frozen and replayed byte-for-byte, so
+  # no pointer can repair it; only later, contradicting text can, which is the
+  # one thing this hook's POSITION buys. Do not delete it as drift: it is a
+  # CORRECTION of msg0, not a restatement. It names no repository's paths
+  # because it ships to every consumer.
   #
-  # Why the failure is LOUD here, which is not obvious: the engine's containment
-  # check opens `const firstRef = effectivePath.indexOf("{{"); if (firstRef === 0)
-  # continue;` -- but `effectivePath` is already
-  # `resolveDeclaredInputRefs(rawPath, inputs)`. `{{worktree_path}}` is a DECLARED
-  # input, so it is substituted before that test, the path is literal by then,
-  # and it is containment-checked rather than skipped. An UNDECLARED leading
-  # reference takes the other branch and fails silently at evaluation instead.
-  # Same authoring mistake, two entirely different symptoms -- which is why the
-  # paragraph tells the model to avoid templates in `fileCheck.path` outright
-  # rather than to reason about when they are safe.
-  #
-  # Retire this when a later bundle fixes the steering text itself.
+  # Retire it when the vendor text stops nesting worktrees; the vendorAnchors
+  # entry below makes the drift check fail when that text moves.
   defaultText = ''
     <workflow_orchestration_reminder>
     Before answering: if this turn asks you to implement a feature, fix a bug,
     investigate an issue, or change code, delegate it to a workflow rather than
-    doing it inline. Use `workflow-creator` to generate the JSON, then
-    `run_workflow`. Do not pre-read source files to "understand the problem"
-    first -- that is the workflow's job.
+    doing it inline, with a single `run_workflow` call carrying a
+    `workflowPrompt` brief. Do not pre-read source files to "understand the
+    problem" first -- that is the workflow's job.
 
     For anything a reviewer should sign off on, use the repeat loop: `wf-coder`
     then `semantic_reviewer`, in that order, with a stopCondition on the review
     verdict file. The reviewer is always last.
 
-    Write `fileCheck.path` as a plain RELATIVE path
-    (`.agents/tasks/review.json`). It resolves against the workspace root, and
-    step agents' cwd is that same root, so the writing step and the check agree
-    by construction. Ignore the instruction to interpolate an absolute
-    `{{worktree_path}}/...` -- the engine rejects the whole run at launch when
-    that resolves outside the workspace root, which is every worktree that is a
-    SIBLING of the checkout rather than a subdirectory of it.
+    Never create a worktree inside the workspace, whatever the default
+    `.worktrees/<name>` says. Take the worktree location and the trunk branch
+    from the repository's own instructions (AGENTS.md, steering). If they name
+    none, put worktrees in a sibling directory of the checkout and use the
+    repository's actual default branch, not `mainline`.
 
     Conversation, status, and follow-up questions are yours to answer directly;
     substantive work is not.
@@ -93,6 +86,14 @@
     {
       paragraph = "review loop (the reviewer is always last)";
       text = "The reviewer is always the last step";
+    }
+    {
+      paragraph = "worktree correction (nested `.worktrees/` and `mainline`)";
+      text = "`git worktree add .worktrees/<name> -b <branch> mainline`";
+    }
+    {
+      paragraph = "worktree correction (nested `.worktrees/` and `mainline`)";
+      text = "rebases the branch onto `mainline` and fast-forwards `mainline`";
     }
   ];
 in {
