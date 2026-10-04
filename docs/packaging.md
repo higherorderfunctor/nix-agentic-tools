@@ -99,22 +99,19 @@ composed registry and ninja DAG:
   exit is not a valid change signal, so pass `alwaysPrefetch = true` to
   `mkUpdateScript`. It prefetches every run and decides whether to write by
   comparing the freshly built sidecar against the committed one.
-- **Several majors of one upstream** (`pnpm_10`, `pnpm_11` — but NOT `pnpm_12`,
-  see below): one shared builder (`packages/pnpm/lib/mkMajor.nix`) parameterized
-  by the major, with a two-line file per major so each gets its own
-  `--override-filename` path and sidecar. The version check reads the registry's
-  per-major channel, and an eval-time guard rejects a sidecar whose major does
-  not match the attribute.
-- **A major that leaves the family** (`pnpm_12`): the shared builder is only
-  correct while every major is the same KIND of artifact. pnpm 12 moved its
-  implementation out of the npm package into per-platform native binaries
-  (`@pnpm/exe.<platform>`), leaving `package/pnpm` a placeholder text file — so
-  there is no `pkgs.pnpm_12` to override and nixpkgs' own generic expression
-  cannot build a 12.x tarball either. `pnpm_12` is therefore a standalone
-  prebuilt-binary derivation on the `chatgpt-codex` shape with a per-platform
-  sidecar, and it carries its OWN major guard rather than inheriting
-  `mkMajor.nix`'s. See the header of
-  `packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
+- **Several majors of one upstream** (`pnpm_10`, `pnpm_11`): one shared builder
+  (`packages/pnpm/lib/mkMajor.nix`) parameterized by the major, with a two-line
+  file per major so each gets its own `--override-filename` path and sidecar.
+  The version check reads the registry's per-major channel, and an eval-time
+  guard rejects a sidecar whose major does not match the attribute.
+- **A major built by a different nixpkgs expression** (`pnpm_12`): nixpkgs
+  builds pnpm 12 from source with `generic-rust.nix`, so `pnpm_12` is a
+  `.override` of nixpkgs' `pnpm_12` rather than an `mkMajor.nix` caller. It
+  moves the version, `srcHash`, `cargoHash`, the locked `rustPlatform` and the
+  update script; its sidecar's hashes are restored by `passthru.fixVendorHash`.
+  It carries its own major guard. Until 2026-10-03 it unpacked upstream's
+  prebuilt `@pnpm/exe.<platform>` binaries; measurements at
+  `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
 - **Hand-bumped, with currency annotated instead of swept** (`aihubmix-mcp`): a
   package carrying a local patch against upstream's published BUILD OUTPUT
   cannot ride the sweep — no update script can re-author a patch. This says
@@ -279,6 +276,6 @@ Fetching itself is nixpkgs' to test.
 | pipelock             | generic    | GitHub archive          | go (source)               | —                     | — (subPkg)    | --version           |
 | pnpm_10              | generic    | npm `latest-10` tag     | files only (nixpkgs ovr)  | `pnpm_10`             | —             | --version           |
 | pnpm_11              | generic    | npm `latest-11` tag     | files only (nixpkgs ovr)  | `pnpm_11`             | —             | --version           |
-| pnpm_12              | generic    | npm `latest-12` tag     | pre-built binary          | — (no `pnpm_12`)      | —             | --version           |
+| pnpm_12              | generic    | npm `latest-12` tag     | cargo (nixpkgs override)  | `pnpm_12`             | —             | --version, pnpx     |
 | agnix-mcp            | mcpServers | mainProgram override    | —                         | —                     | —             | —                   |
 | agnix-lsp            | lspServers | mainProgram override    | —                         | —                     | —             | —                   |

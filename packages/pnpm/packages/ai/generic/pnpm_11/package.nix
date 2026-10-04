@@ -12,10 +12,9 @@
 # channel — and it is why pnpm_10 and pnpm_11 are carried the same way
 # even though one of them happens to be at parity right now.
 #
-# pnpm_12 is NOT carried this way, and the difference is upstream's, not
-# a style choice: pnpm 12 moved its implementation out of the npm package
-# into per-platform native binaries, so the JavaScript-bundle override in
-# mkMajor.nix does not fit it. See ../pnpm_12/package.nix.
+# pnpm_12 instead overrides nixpkgs' source-built Rust package, with our
+# source/cargo hashes and locked toolchain. This JavaScript-bundle builder
+# remains appropriate for 10 and 11. See ../pnpm_12/package.nix.
 #
 # Bare `pnpm` in the pinned nixpkgs aliased `pnpm_11` when this landed and
 # aliases nixpkgs' `pnpm_12` as of 2026-10-03. We deliberately do NOT shadow
