@@ -91,8 +91,12 @@ binaries where needed. Cross-package assertions stay under the relevant root
 check concern. Repository-only devenv tasks and validation policy remain at the
 workspace level.
 
-Consumers use `overlays.default`. The flat flake outputs derive from native
-package basenames; the former `modelcontextprotocol-all-mcps` and
+Consumers use `overlays.default`, the module package defaults, or the flat flake
+outputs; all of them hand out the same builds of this flake's own nixpkgs.
+`packages` holds the free leaves, `legacyPackages` every leaf plus the nested
+roots (unfree ones need the consumer's opt-in), and `ciPackages` is the
+unfree-enabled set CI builds. The flat outputs derive from native package
+basenames; the former `modelcontextprotocol-all-mcps` and
 `modelcontextprotocol-filesystem-mcp` names are now `all-mcps` and
 `filesystem-mcp`. Compatibility aliases are intentionally absent. Consumer
 repository updates are separate from this repository redesign.

@@ -1,12 +1,21 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-03 — overlay recipes take the consumer's `final`;
-> flake `packages` use this repo's unfree-enabled nixpkgs. Toolchains use
-> `mkGoBin` and `mkRustBin` over the supplied package set. Agnix and Semble
-> identity checks live with their owners. Recipes take bun and pnpm from
-> `pkgs.ai.generic`, gated by a marked consumer set.
+> **Last verified:** 2026-10-03 — this flake's own nixpkgs builds every package
+> it ships: `natSetFor` builds `packages`, `legacyPackages`, `ciPackages`, the
+> exported overlay's re-export and the module defaults, and
+> `checks.nat-overlay-parity` gates that they are one derivation. Recipes still
+> take bun and pnpm from `pkgs.ai.generic`.
 >
-> Full lineage: `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
+> **Settled — do not relitigate.** Full lineage:
+> `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
+>
+> - **Do not build the exported overlay on the consumer's `final` again.** #2197
+>   (D11) tried it and D12 reverted it on 2026-10-03: a devenv consumer
+>   (kimchi-kb, nixpkgs `34ca302a`) lost every cachix hit for the guards' rumdl,
+>   and recipes that borrow nixpkgs recipe text, patches or fetchers (tsgolint's
+>   patch list, kiro-cli, bruno, beads, the pnpm fetchers, Go `vendorHash`,
+>   git-branchless) can fail outright on a foreign nixpkgs. `follows` is the
+>   supported way to rebuild on your own nixpkgs.
 
 `lib/facets/repository.nix` discovers native package trees below
 `packages/<owner>/packages/` and exposes them through `overlays.default`. AI
@@ -20,27 +29,116 @@ The outer directory is ownership; the inner tree is the public namespace.
 clearer role. A later namespace change should move the inner recipe path, while
 renaming the outer owner leaves the public namespace unchanged.
 
-Recipes receive the consumer's `final` as `pkgs` for overlays, and this flake's
-unfree-enabled nixpkgs set for `packages`, together with `inputs`, plus every
+Recipes receive a package set as `pkgs`, together with `inputs`, plus every
 entry of `scopeArgs` in `lib/facets/repository.nix`: `fragmentsLib`,
 `generatedLib`, `packageLib`, `repoPath` and `traceSource`. Keep source
 sidecars, patches, extraction helpers, and declarative registrations with the
 owner. `registry.nix` declares update/doc entries; `repoPath ./relative/path`
-derives mutable paths from their actual location. Native nixpkgs evaluation
-enforces the consumer's unfree policy. See the package-ownership fragment for
-the native composition boundaries.
+derives mutable paths from their actual location. See the package-ownership
+fragment for the native composition boundaries.
 
-**A consumer-built overlay does not give recipes our toolchains.** `bun` and
-`pnpm_<N>` are pinned under `pkgs.ai.generic` so this repository's own recipes
-build and run against them. A bare `pkgs.bun` or `pkgs.pnpm_10` is the
-CONSUMER's: a devenv consumer on bun 1.3 broke kimchi that way after the
-`ourPkgs` pin was retired. Take them from `pkgs.ai.generic.*` everywhere a
-recipe uses one, including runtime wrappers and `fetchPnpmDeps`. An owner check
-that mirrors a recipe's build reads the toolchain off the package (oxlint's uses
-`package.pnpmDeps.pnpm`) rather than naming it again. A bare attribute stays
-correct for an owner's thin-override base and for inputs this repository does
-not pin. `checks.toolchain-provenance` applies our overlay over a consumer set
-whose `bun` and `pnpm_<N>` carry marker versions, then fails any package,
+### Who builds a package: `buildOverlay` and the exported overlay
+
+`lib/facets/repository.nix` has two overlays. Do not confuse them.
+
+- **`buildOverlay`** is the recipe-level overlay. It builds every claimed
+  package on whatever `final` it is given. It is used in three places:
+  `natSetFor`, the repository's devenv shell (`devenv.nix`; devenv.yaml pins the
+  same nixpkgs with `allowUnfree`, so one evaluation gives the same drvs), and
+  the exported overlay's fallback.
+- **`overlay`** is exported as `overlays.default`. It does not build. For every
+  claimed leaf it reads the attribute from
+  `natSetFor { system; config = final.config; }` and merges it over `prev` the
+  same way `realizeOverlay` does, so a consumer's neighbours in a shared
+  namespace survive.
+
+`natSetFor { system, config ? {} }` is the only `import inputs.nixpkgs` for
+packages. Its `config` is `licenseConfig config`: only the keys in `gateKeys`
+that the caller actually set. Each of those keys is read only by nixpkgs'
+`stdenv/generic/{check-meta,problems,remediations}.nix`, so forwarding them
+changes which packages evaluate, never a derivation hash. `allowUnfree` and
+`allowUnfreePredicate` were measured hash-neutral; gate B covers the rest. Keys
+that change hashes (the GPU support flags, `allowAliases`, `replaceStdenv`,
+`packageOverrides`, …) are never forwarded. **Re-check `gateKeys` on every
+nixpkgs bump**; gate G fails when check-meta's key set moves.
+
+`flake.nix` binds two instances per system so outputs share one evaluation:
+
+| Set         | Config        | Feeds                                               |
+| ----------- | ------------- | --------------------------------------------------- |
+| `ciSet`     | `allowUnfree` | `ciPackages`, checks, repo docs, devShells.ci, apps |
+| `publicSet` | none          | `packages` (free leaves only), `legacyPackages`     |
+
+- `packages` filters out every `meta.unfree` leaf, because `nix flake check`
+  forces every drvPath there and an unfree one throws without `allowUnfree`.
+- `legacyPackages` is one rule: every leaf under its flat name and every root
+  (`ai`, `docs`, …) nested. `nix run <flake>#claude-code` resolves there and
+  needs the caller's opt-in (`NIXPKGS_ALLOW_UNFREE=1 --impure`), as in nixpkgs.
+- `ciPackages` is the full flat set CI builds and pushes to cachix. Everything
+  that reads a package by name (CI, warm-ifd, update scripts, checks) uses it.
+  Unfree is never set for a consumer; naming `ciPackages` is an explicit opt-in,
+  like `checks`.
+
+**Fallback.** `natSystemOf pkgs` returns the system only when it is in
+`config/systems.nix` and both build and host platform triples equal the system's
+native triple. Otherwise the overlay uses `buildOverlay final prev`: an
+unsupported system (aarch64-linux, x86_64-darwin), a cross build, or a
+non-default libc/ABI on the same system string (`pkgsMusl`, `pkgsStatic`). The
+test is the triple because the cache is keyed to it, so `pkgsLLVM` and a
+`hostPlatform.gcc.arch` tune keep the triple and get this flake's gcc-built
+re-export. The choice is made per attribute value: attribute names come from
+static `rootsFor`, because deciding at the top level recurses through
+`final.stdenv`.
+
+**Module defaults.** `aiFor pkgs` is `pkgs.ai` when the overlay is applied (so a
+consumer's `pkgs.ai.X` override still flows), else `natSetFor`'s `ai` on the
+same system and license config, else `(pkgs.extend buildOverlay).ai` on the
+fallback. The wrappers inject it as `ai.internal = repository.moduleInternals`;
+modules read `config.ai.internal.packages`. See the module-conventions fragment.
+
+**`follows` is the opt-out.** It rewrites `inputs.nixpkgs` at lock time, so
+`natSetFor` rebuilds everything on the consumer's nixpkgs and still agrees with
+the module defaults. The consumer then owns the recipe breakage above.
+
+**One exception to "one nixpkgs builds everything":** `semble` and `serena-mcp`
+take `inputs.llm-agents.packages` and `inputs.serena.packages`, built on those
+inputs' nixpkgs. The re-export still hands consumers this flake's drv, so the
+overlay and module defaults still agree.
+
+### `checks.nat-overlay-parity`
+
+Eval-only; every assertion compares drvPath strings. The foreign nixpkgs is
+llm-agents' input (devenv's if llm-agents ever locks this flake's revision), so
+no new input is fetched.
+
+- **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
+  claimed leaf, and the claim list equals the `ciPackages` leaves.
+- **B** `packages` equals `ciPackages` by name; only unfree leaves are missing.
+- **C** with no config, the overlay's `ai.claude-code` does not evaluate.
+- **D** positive controls: foreign `hello` and `buildOverlay`'s rumdl differ.
+- **E** every module package default, both backends, over a base with no `ai`
+  attribute (the harness's `injectAi = false`), equals `ciPackages`, and with
+  the overlay equals the overlay attribute.
+- **F** `pkgsStatic` takes the fallback.
+- **G** `gateKeys` plus a named ignore list equals the config keys nixpkgs' meta
+  checks read.
+- **H** no module file reads raw `pkgs.ai`. A new module that passes the
+  unmodified `pkgs` to a factory is not caught by H, only by adding its row to
+  E.
+
+### Recipes still take toolchains from `pkgs.ai.generic`
+
+`bun` and `pnpm_<N>` are pinned under `pkgs.ai.generic` so recipes build and run
+against them. A bare `pkgs.bun` or `pkgs.pnpm_10` is whatever set the recipe was
+given: under `follows` or the fallback that is the CONSUMER's, and a devenv
+consumer on bun 1.3 broke kimchi that way under #2197. Take them from
+`pkgs.ai.generic.*` everywhere a recipe uses one, including runtime wrappers and
+`fetchPnpmDeps`. An owner check that mirrors a recipe's build reads the
+toolchain off the package (oxlint's uses `package.pnpmDeps.pnpm`) rather than
+naming it again. A bare attribute stays correct for an owner's thin-override
+base and for inputs this repository does not pin. `checks.toolchain-provenance`
+applies `buildOverlay` (not the exported overlay, which ignores `final`) over a
+set whose `bun` and `pnpm_<N>` carry marker versions, then fails any package,
 passthru helper or `pnpmDeps` that references a marked one DIRECTLY. It does not
 walk the closure (a marked toolchain behind an unexposed intermediate derivation
 passes) and does not audit owner checks. The markers keep it working where a
@@ -503,18 +601,18 @@ top-level Go build, and everything below still applies to it unchanged.
   `or` covers the window between the sidecar write and the fix — and threads
   `extraExtract = "${goUpdate.extract}"` so the vendor fixer built by
   `vu.mkGoUpdateExtract` runs immediately after. The fixer builds
-  `<attr>.goModules` through the flake's own `packages` output (this repo has NO
-  `legacyPackages`) and writes back the `got:` hash from a `-go-modules`
+  `<attr>.goModules` through the flake's `ciPackages` output (`ciAttr` in
+  `lib/packaging.nix`) and writes back the `got:` hash from a `-go-modules`
   mismatch only.
 - It is also `passthru.fixVendorHash`, because a nixpkgs or Go-toolchain bump
   can invalidate a vendor hash with no version bump at all — and `extraExtract`
   fires only on a VERSION bump, so nothing else would re-derive it.
   `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) discovers this attr
-  across `packages.<system>` and runs it when an input bump's build verification
-  fails, so that case self-heals into the same commit instead of parking the
-  input update as HELD BACK. Until 2026-07-25 the standalone had NO caller and
-  `lib/packaging.nix` claimed a re-run that did not exist; if you unwire it, fix
-  both.
+  across `ciPackages.<system>` and runs it when an input bump's build
+  verification fails, so that case self-heals into the same commit instead of
+  parking the input update as HELD BACK. Until 2026-07-25 the standalone had NO
+  caller and `lib/packaging.nix` claimed a re-run that did not exist; if you
+  unwire it, fix both.
 - `passthru` must be MERGED. `buildGoModule` hangs `goModules` and
   `overrideModAttrs` there, `build-support/go/module.nix` warns loudly when an
   overlay drops them, and the fixer resolves `.goModules` through that very
@@ -757,7 +855,7 @@ the missing key would deadlock the fixer that repairs it.
 recorded floor against the real go.mod and names the package, actual requirement
 and automated fixer when it fails.
 
-That check takes **NO REGISTRY**: it filters `self.packages.<system>` for
+That check takes **NO REGISTRY**: it filters `self.ciPackages.<system>` for
 `passthru.goFloor`. A list of Go packages would be a second source of truth a
 new package could be added without touching, which is exactly how one ends up
 unprotected. It shares `vu.goModFloorFn` with the writer, so gate and writer

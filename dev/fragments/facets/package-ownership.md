@@ -1,9 +1,10 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-03 — overlays build recipes from the consumer's
-> `final`; flake `packages` and checks share one internal unfree-enabled nixpkgs
-> instantiation. Toolchains use `mkGoBin` and `mkRustBin` over the supplied set;
-> Agnix and Semble identity checks are owner-local.
+> **Last verified:** 2026-10-03 — recipes run through `buildOverlay` on this
+> flake's own nixpkgs (`natSetFor`); the exported overlay re-exports those
+> builds and falls back to `buildOverlay` on `final` only off the native triple.
+> Toolchains use `mkGoBin` and `mkRustBin` over the supplied set; Agnix and
+> Semble identity checks are owner-local.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -82,14 +83,17 @@ Namespace merging stops at derivations. A generic recursive attrset merge would
 retain fields from a previous package while replacing its `drvPath`, creating a
 hybrid package. Preserve namespace neighbors and replace package leaves whole.
 
-Package recipes receive the consumer's `final` as `pkgs` through native
-`callPackage` scopes. Shared helpers arrive as `scopeArgs` from
+Package recipes receive `pkgs` through native `callPackage` scopes built by
+`buildOverlay`. Shared helpers arrive as `scopeArgs` from
 `lib/facets/repository.nix` (`fragmentsLib`, `generatedLib`, `packageLib`,
 `repoPath`, `traceSource`). Recipes should not encode a relative route back to
-the repository root. Consumer overrides and native nixpkgs unfree policy apply
-to every locally built recipe. Flake `packages` and checks use one internal
-nixpkgs instantiation with `config.allowUnfree = true`; toolchain input
-libraries construct their compilers over the package set supplied to the recipe.
+the repository root. That `pkgs` is this flake's nixpkgs (`natSetFor`) for every
+output, the exported overlay and the module defaults; a consumer's `final`
+reaches a recipe only through the overlay's fallback (unsupported system, cross,
+non-default libc) or when the consumer sets `follows`. License config is the
+only consumer config `natSetFor` takes, and it only gates evaluation. Toolchain
+input libraries construct their compilers over the package set supplied to the
+recipe. The overlay-pattern fragment has the full build-versus-export shape.
 
 `lib/default.nix` contributes public helpers, using native module options with
 raw leaf values. Functions retain their `functionArgs`; option declarations,
@@ -98,8 +102,9 @@ lazy. Private helpers beside that entry point are not exported automatically.
 Backend directories require `default.nix`; ordinary `.nix` sidecars in
 `modules/` remain private to the backend modules that import them.
 
-The flat flake package projection comes from indexed leaf basenames. It rejects
-collisions, including workspace outputs, before constructing the final attrset.
-A nested namespace is available through the overlay while every leaf remains a
-derivation at the flat flake boundary. Both flake and devenv use the same
-repository composer; document generation uses its package-independent registry.
+The flat flake package projections (`packages`, `ciPackages`, and the flat part
+of `legacyPackages`) come from indexed leaf basenames. It rejects collisions,
+including workspace outputs, before constructing the final attrset. A nested
+namespace is available through the overlay while every leaf remains a derivation
+at the flat flake boundary. Both flake and devenv use the same repository
+composer; document generation uses its package-independent registry.

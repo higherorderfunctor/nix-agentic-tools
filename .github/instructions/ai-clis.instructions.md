@@ -370,8 +370,9 @@ Each names a fixable entry (set `extensions` or rename the server, or
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-03 — main-tracking rev bumps are done by
-> `update-pkg.sh`; chatgpt-codex installs upstream's complete
+> **Last verified:** 2026-10-03 — the unfree CLIs are absent from `packages` and
+> read from `ciPackages` or `legacyPackages`; main-tracking rev bumps are done
+> by `update-pkg.sh`; chatgpt-codex installs upstream's complete
 > `codex-package-<target>` layout.
 
 ### Overview
@@ -390,8 +391,14 @@ AI coding CLI recipes live at `packages/<owner>/packages/ai/<name>/package.nix`:
   with a Python runtime environment
 
 Packages live under `pkgs.ai.*` and are flattened to top-level flake outputs
-(`pkgs.chatgpt-codex`, `pkgs.claude-code`, `pkgs.copilot-cli`, `pkgs.kimchi`,
-`pkgs.kiro-cli`, `pkgs.kiro-gateway`).
+(`chatgpt-codex`, `claude-code`, `copilot-cli`, `kimchi`, `kiro-cli`,
+`kiro-gateway`).
+
+claude-code, copilot-cli, kiro-cli and kiro-cli-workflows are unfree, so they
+are not in `packages.<system>`: `nix flake check` forces every drvPath there,
+and this flake never enables unfree for a consumer. Consumers get them from
+`legacyPackages.<system>` (or the overlay, or the modules) with their own unfree
+opt-in. Repository code reads them from `ciPackages.<system>`.
 
 ### Build Patterns
 
@@ -482,12 +489,12 @@ package set and emits a positive `--select` expression for each shard. Keep the
 patched variant in that exclusion set; the dedicated native jobs validate it
 without cache credentials.
 
-`verify_all_packages` (`dev/scripts/update-common.sh`) builds `.#packages.<sys>`
-with **no `--select`**, on every input bump. That is deliberate and stays:
-`postInstallCheck` runs `kiro-cli-chat --version`, so the build is a genuine
-runtime smoke test of the patch, and `doInstallCheck` is already true upstream
-so the phase really executes. The fix is therefore at the PUSH, not the build —
-`pushFilter: "kiro-cli"` on that job's `cachix-action`.
+`verify_all_packages` (`dev/scripts/update-common.sh`) builds
+`.#ciPackages.<sys>` with **no `--select`**, on every input bump. That is
+deliberate and stays: `postInstallCheck` runs `kiro-cli-chat --version`, so the
+build is a genuine runtime smoke test of the patch, and `doInstallCheck` is
+already true upstream so the phase really executes. The fix is therefore at the
+PUSH, not the build — `pushFilter: "kiro-cli"` on that job's `cachix-action`.
 
 **The generalizable lesson: `cachix-action` with a token runs a watch-store
 daemon that pushes every path realized in the job.** Reasoning about which
