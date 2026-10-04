@@ -504,6 +504,14 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            sandbox = true
+
+      - uses: ./.github/actions/assert-nix-config
+        with:
+          require: |
+            ^accept-flake-config = true
+            ^sandbox = true
+
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
