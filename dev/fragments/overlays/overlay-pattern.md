@@ -1,10 +1,11 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-03 — this flake's own nixpkgs builds every package
-> it ships: `natSetFor` builds `packages`, `legacyPackages`, `ciPackages`, the
-> exported overlay's re-export and the module defaults, and
-> `checks.nat-overlay-parity` gates that they are one derivation. Recipes still
-> take bun and pnpm from `pkgs.ai.generic`.
+> **Last verified:** 2026-10-04 — this flake's own nixpkgs builds every package
+> it ships: one `natSets.<system>` builds `packages`, `legacyPackages`,
+> `ciPackages`, the exported overlay's re-export and the module defaults, and
+> `checks.nat-overlay-parity` gates that they are one derivation. Unfree is
+> decided by the receiver's own nixpkgs through `checkedBy`. Recipes still take
+> bun and pnpm from `pkgs.ai.generic`.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
@@ -16,6 +17,12 @@
 >   patch list, kiro-cli, bruno, beads, the pnpm fetchers, Go `vendorHash`,
 >   git-branchless) can fail outright on a foreign nixpkgs. `follows` is the
 >   supported way to rebuild on your own nixpkgs.
+> - **Do not forward the consumer's license config into this flake's nixpkgs.**
+>   The first D12 cut copied a fixed list of 14 check-meta keys (`gateKeys`)
+>   into a per-consumer instantiation and gated it with a scan of nixpkgs'
+>   check-meta sources. The operator rejected it on 2026-10-04: modelling
+>   nixpkgs' key set is a list that drifts on every bump. The consumer's own
+>   `mkDerivation` judges a probe instead.
 
 `lib/facets/repository.nix` discovers native package trees below
 `packages/<owner>/packages/` and exposes them through `overlays.default`. AI
@@ -43,46 +50,60 @@ fragment for the native composition boundaries.
 
 - **`buildOverlay`** is the recipe-level overlay. It builds every claimed
   package on whatever `final` it is given. It is used in three places:
-  `natSetFor`, the repository's devenv shell (`devenv.nix`; devenv.yaml pins the
+  `natSets`, the repository's devenv shell (`devenv.nix`; devenv.yaml pins the
   same nixpkgs with `allowUnfree`, so one evaluation gives the same drvs), and
   the exported overlay's fallback.
 - **`overlay`** is exported as `overlays.default`. It does not build. For every
-  claimed leaf it reads the attribute from
-  `natSetFor { system; config = final.config; }` and merges it over `prev` the
-  same way `realizeOverlay` does, so a consumer's neighbours in a shared
-  namespace survive.
+  claimed leaf it reads the attribute from `natSets.<system>`, wraps it with
+  `checkedBy final`, and merges it over `prev` the same way `realizeOverlay`
+  does, so a consumer's neighbours in a shared namespace survive.
 
-`natSetFor { system, config ? {} }` is the only `import inputs.nixpkgs` for
-packages. Its `config` is `licenseConfig config`: only the keys in `gateKeys`
-that the caller actually set. nixpkgs' meta checks
-(`stdenv/generic/{check-meta,problems,remediations}.nix`) read them to decide
-which packages evaluate, but they are not read only there: `config.allowUnfree`
-also selects inputs elsewhere (python `emerge`'s `withMkl` default, the logstash
-and beats `passthru.tests`). What proves hash-neutrality for this flake's
-shipped set is gate B, and only for `allowUnfree`: every shipped leaf has the
-same drv with and without it. The other keys are forwarded on the unchecked
-premise that no shipped closure reads them; gate G cannot see such a reader,
-because it scans only the three meta-check files. Keys that change hashes (the
-GPU support flags, `allowAliases`, `replaceStdenv`, `packageOverrides`, …) are
-never forwarded. **Re-check `gateKeys` on every nixpkgs bump**; gate G fails
-when check-meta's key set moves.
+`natSets.<system>` is the only `import inputs.nixpkgs` that builds packages: one
+instance per supported system, with `allowUnfree = true` so every leaf evaluates
+for CI and checks. No consumer config reaches it, so a store path never depends
+on who asks.
 
-`flake.nix` binds two instances per system so outputs share one evaluation:
+**Unfree is the receiver's own nixpkgs check.** Nothing leaves `natSets`
+unwrapped except `ciPackages`. `checkedBy pkgs value` recurses lazily through
+attrsets that are not derivations and wraps each derivation with
+`lib.extendDerivation`: drvPath, outPath, meta and passthru are unchanged, but
+drvPath and outPath first assert a probe, a never-built
+`pkgs.stdenvNoCC.mkDerivation` with the leaf's name, pname, version, outputs and
+meta. The receiver's nixpkgs runs its own meta checks on it, with its own config
+and key names, and refuses with nixpkgs' own message ("Refusing to evaluate
+package 'claude-code-…' in …/package.nix:…"). Nothing here lists config keys,
+and nixpkgs' `check-meta.nix` is never imported, so there is nothing to keep in
+sync on a nixpkgs bump.
 
-| Set         | Config        | Feeds                                               |
-| ----------- | ------------- | --------------------------------------------------- |
-| `ciSet`     | `allowUnfree` | `ciPackages`, checks, repo docs, devShells.ci, apps |
-| `publicSet` | none          | `packages` (free leaves only), `legacyPackages`     |
+The probe is forced through `meta.available`, which answers without
+instantiating anything; only a refusal forces the probe's drvPath, whose own
+assertion throws before a `.drv` is written. Measured 2026-10-04: forcing a
+valid probe's drvPath writes a `.drv` and instantiates stdenvNoCC (0.27 s vs
+0.13 s for one probe), the `meta.available` route writes none. The cost:
+warn-level problems the consumer configures are not shown for an available
+probe.
+
+`.override` and `.overrideAttrs` are wrapped too, so their results are checked
+again: without that, a consumer's `pkgs.ai.claude-code.overrideAttrs` would be
+evaluated by this flake's `allowUnfree` instance and skip their opt-in. Other
+passthru functions (`mkSkill`, ...) hand out unchecked derivations.
+
+| Output           | Checked by                                         |
+| ---------------- | -------------------------------------------------- |
+| overlay          | the consumer's `final`                             |
+| module defaults  | the module's `pkgs` (`rootsFor`)                   |
+| `packages`       | plain `import inputs.nixpkgs { inherit system; }`  |
+| `legacyPackages` | plain `import inputs.nixpkgs { inherit system; }`  |
+| `ciPackages`     | nothing: CI, checks, repo docs, devShells.ci, apps |
 
 - `packages` filters out every `meta.unfree` leaf, because `nix flake check`
-  forces every drvPath there and an unfree one throws without `allowUnfree`.
+  forces every drvPath there and an unfree one throws.
 - `legacyPackages` is one rule: every leaf under its flat name and every root
   (`ai`, `docs`, …) nested. `nix run <flake>#claude-code` resolves there and
   needs the caller's opt-in (`NIXPKGS_ALLOW_UNFREE=1 --impure`), as in nixpkgs.
 - `ciPackages` is the full flat set CI builds and pushes to cachix. Everything
   that reads a package by name (CI, warm-ifd, update scripts, checks) uses it.
-  Unfree is never set for a consumer; naming `ciPackages` is an explicit opt-in,
-  like `checks`.
+  Naming `ciPackages` is an explicit opt-in, like `checks`.
 
 **Fallback.** `natSystemOf pkgs` returns the system only when it is in
 `config/systems.nix` and both build and host platform triples equal the system's
@@ -91,20 +112,21 @@ unsupported system (aarch64-linux, x86_64-darwin), a cross build, or a
 non-default libc/ABI on the same system string (`pkgsMusl`, `pkgsStatic`). The
 test is the triple because the cache is keyed to it, so `pkgsLLVM` and a
 `hostPlatform.gcc.arch` tune keep the triple and get this flake's gcc-built
-re-export. The choice is made per attribute value: attribute names come from
-static `rootNamesFor`, because deciding at the top level recurses through
+re-export. The fallback needs no probe: `final`'s own `mkDerivation` checks. The
+choice is made per attribute value: attribute names come from static
+`rootNamesFor`, because deciding at the top level recurses through
 `final.stdenv`.
 
 **Module defaults.** `rootsFor pkgs` gives every claimed root (`ai`, `docs`, the
 `*-content` packages): `pkgs.<root>` when the overlay is applied (so a
-consumer's `pkgs.ai.X` override still flows), else `natSetFor`'s on the same
-system and license config, else `pkgs.extend buildOverlay`'s on the fallback.
-The wrappers inject it as `ai.internal = repository.moduleInternals`; modules
-read `config.ai.internal.roots` (`.packages` is its `ai`). See the
-module-conventions fragment.
+consumer's `pkgs.ai.X` override still flows), else `natSets`' wrapped with
+`checkedBy pkgs`, else `pkgs.extend buildOverlay`'s on the fallback. The
+wrappers inject it as `ai.internal = repository.moduleInternals`; modules read
+`config.ai.internal.roots` (`.packages` is its `ai`). See the module-conventions
+fragment.
 
 **`follows` is the opt-out.** It rewrites `inputs.nixpkgs` at lock time, so
-`natSetFor` rebuilds everything on the consumer's nixpkgs and still agrees with
+`natSets` rebuilds everything on the consumer's nixpkgs and still agrees with
 the module defaults. The consumer then owns the recipe breakage above.
 
 **One exception to "one nixpkgs builds everything":** `semble` and `serena-mcp`
@@ -114,14 +136,20 @@ overlay and module defaults still agree.
 
 ### `checks.nat-overlay-parity`
 
-Eval-only; every assertion compares drvPath or out path strings. The foreign
-nixpkgs is llm-agents' input (devenv's if llm-agents ever locks this flake's
-revision), so no new input is fetched.
+Eval-only; every assertion compares drvPath or out path strings, or whether one
+evaluates. The foreign nixpkgs is llm-agents' input (devenv's if llm-agents ever
+locks this flake's revision), so no new input is fetched.
 
 - **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
   claimed leaf, and the claim list equals the `ciPackages` leaves.
-- **B** `packages` equals `ciPackages` by name; only unfree leaves are missing.
-- **C** with no config, the overlay's `ai.claude-code` does not evaluate.
+- **B** `packages` and `legacyPackages` give `ciPackages`' drvs; only unfree
+  leaves are missing from `packages`, and they refuse in `legacyPackages`.
+- **C** over the foreign nixpkgs with no opt-in, every unfree claimed leaf
+  refuses and every free one gives `ciPackages`' drv; with `allowUnfree`, and
+  separately `allowUnfreePredicate = _: true`, `ai.claude-code` gives
+  `ciPackages`' drv; a predicate naming claude-code admits it and not
+  copilot-cli; `.overrideAttrs` refuses without the opt-in. Disabling the probe
+  or the override re-check fails C (measured 2026-10-04).
 - **D** positive controls: foreign `hello` and `buildOverlay`'s rumdl differ.
 - **E** every module package default, both backends, over a base with none of
   this flake's roots (the harness's `injectAi = false`), equals `ciPackages`,
@@ -131,9 +159,7 @@ revision), so no new input is fetched.
   expected roots forced, and changed by a marker root. The guard program is
   checked in the claude tree and, on devenv, in the shared AGENTS.md writer's.
 - **F** `pkgsStatic` takes the fallback.
-- **G** `gateKeys` plus a named ignore list equals the config keys nixpkgs' meta
-  checks read.
-- **H** no module file reads `pkgs.<root>` for any claimed root. A new module
+- **G** no module file reads `pkgs.<root>` for any claimed root. A new module
   that passes the unmodified `pkgs` to a factory is not caught by H, only by
   adding its row to E. `lib/ai/**` is not scanned: its public factories take the
   caller's `pkgs` by design.

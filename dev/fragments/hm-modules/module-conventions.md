@@ -1,20 +1,21 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-03 — module sites read this flake's roots from
+> **Last verified:** 2026-10-04 — module sites read this flake's roots from
 > `ai.internal.roots` (`ai.internal.packages` is its `ai`), this flake's build
-> unless the overlay is applied. Kimchi's user config.json and harness
-> settings.json are shared documents; stacked-workflows' Git preset is
-> `mkDefault` sugar over the shared `git.*` options. JSON document targets
-> retire independently; no runtime flips an upstream `programs.<cli>.enable`;
-> skills reach Claude through `mkSkillFiles`, and Claude has no wrapper.
-> Claude's devenv `.claude/settings.json` and `.mcp.json`, Copilot's settings
-> files, and Kiro's and Kimchi's settings copies are written only when something
-> is declared; other devenv writes are unconditional. Settings are read-only
-> copies or symlinks where the CLI's write primitive permits; only Claude and
-> Copilot retain writable state documents with Nix-owned leaves. The JSON
-> document reconciler has no TOML codec, document mode or native-writer lock.
-> Semble's `pathMappings` and model routing live at the program root. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> checked by the module's own nixpkgs unless the overlay is applied. Kimchi's
+> user config.json and harness settings.json are shared documents;
+> stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
+> options. JSON document targets retire independently; no runtime flips an
+> upstream `programs.<cli>.enable`; skills reach Claude through `mkSkillFiles`,
+> and Claude has no wrapper. Claude's devenv `.claude/settings.json` and
+> `.mcp.json`, Copilot's settings files, and Kiro's and Kimchi's settings copies
+> are written only when something is declared; other devenv writes are
+> unconditional. Settings are read-only copies or symlinks where the CLI's write
+> primitive permits; only Claude and Copilot retain writable state documents
+> with Nix-owned leaves. The JSON document reconciler has no TOML codec,
+> document mode or native-writer lock. Semble's `pathMappings` and model routing
+> live at the program root. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Shared documents, each declared by
 > `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
@@ -148,10 +149,11 @@ never from raw `pkgs`.** That covers every root the packages claim: `ai`,
 (`homeManagerModules.default`, `devenvModules`, the repo's `devenv.nix`) set
 `ai.internal = repository.moduleInternals`, whose `rootsFor` (in
 `lib/facets/repository.nix`) returns each root from the consumer's `pkgs` when
-this flake's overlay is applied, else this flake's own build (`natSetFor` with
-the consumer's license config). So a module default is the same derivation as
-the overlay attribute and as `packages.<name>`, and a consumer's own `pkgs.ai.X`
-override still reaches it. The routing shapes:
+this flake's overlay is applied, else this flake's own build (`natSets`) wrapped
+by `checkedBy pkgs`, so the module's own nixpkgs decides unfree. So a module
+default is the same derivation as the overlay attribute and as
+`packages.<name>`, and a consumer's own `pkgs.ai.X` override still reaches it.
+The routing shapes:
 
 - runtime modules, and the shared AGENTS.md writer's guards, pass
   `pkgs = pkgs // {ai = config.ai.internal.packages;}` to their factory; the

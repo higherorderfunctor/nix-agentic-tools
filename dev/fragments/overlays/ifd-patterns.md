@@ -1,13 +1,13 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-03 — the warm step evaluates `ciPackages`, the
-> unfree-enabled set CI builds; git-branchless joins the source-measured
-> sidecars. `fix_sidecar_hashes` also re-derives `pnpmDepsHash`, but only when
-> the stale output is not substitutable; kimchi versions its pnpm-deps and src
-> FOD names; Kiro settings extraction validates its materialized TUI registry
-> and workspace merge with AST checks; Kimchi attributes every config.ts JSON
-> read to the file it reads, censuses every resolved environment read, and no
-> longer extracts a CLI surface nothing read.
+> **Last verified:** 2026-10-04 — the warm step evaluates `ciPackages`, the
+> unfree-enabled, unchecked set CI builds; git-branchless joins the
+> source-measured sidecars. `fix_sidecar_hashes` also re-derives `pnpmDepsHash`,
+> but only when the stale output is not substitutable; kimchi versions its
+> pnpm-deps and src FOD names; Kiro settings extraction validates its
+> materialized TUI registry and workspace merge with AST checks; Kimchi
+> attributes every config.ts JSON read to the file it reads, censuses every
+> resolved environment read, and no longer extracts a CLI surface nothing read.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -149,7 +149,7 @@ evaluation; git-branchless reads its flake-input lock.
 The cost is real and was measured before adopting it: eval cache disabled, warm
 store, 2026-07-25 — `version` 1.2s / 0.9 GB RSS versus `drvPath` 19.2s / 3.0 GB
 on `x86_64-linux`, and 23.4s / 3.8 GB for the `aarch64-darwin` set evaluated on
-a linux host. Both evaluate clean: `ciPackages` comes from `ciSet`, which sets
+a linux host. Both evaluate clean: `ciPackages` comes from `natSets`, which sets
 `allowUnfree`, so the native unfree check does not throw (the public `packages`
 omits unfree leaves and would not warm them), and the one genuinely Linux-only
 package (`gluetun`) is gated out of the darwin attrset entirely rather than left

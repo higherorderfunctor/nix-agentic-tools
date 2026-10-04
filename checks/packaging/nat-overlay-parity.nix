@@ -5,27 +5,29 @@
 # same builds, so a consumer on any nixpkgs hits the cache. Nothing else proves
 # that: a regression (an overlay that builds on `final` again, a module site
 # that reads raw `pkgs.ai`) still evaluates and still builds, just not from the
-# cache. Every assertion compares drvPath or out path strings; nothing is built.
+# cache. Everything handed out passes through `checkedBy`, which must keep each
+# drv while the receiver's own nixpkgs decides unfree. Every assertion compares
+# drvPath or out path strings, or whether one evaluates; nothing is built.
 #
 #   A  the overlay over a foreign nixpkgs gives `ciPackages`' drv for every
 #      claimed leaf, and the claim list is complete
-#   B  license config is hash-neutral: `packages` equals `ciPackages` by name,
-#      and only the unfree leaves are missing from it
-#   C  the overlay never sets unfree for the consumer
+#   B  `packages` and `legacyPackages` give `ciPackages`' drvs; only the unfree
+#      leaves are missing from `packages`, and they refuse in `legacyPackages`
+#   C  the consumer's own meta check decides: without an opt-in every unfree
+#      leaf refuses and every free leaf gives `ciPackages`' drv; `allowUnfree`
+#      and `allowUnfreePredicate` each admit claude-code with that drv
 #   D  positive controls: the foreign nixpkgs differs, and building on it
 #      (buildOverlay) gives a different drv
 #   E  every module package default, both backends, with and without the
 #      overlay, over a base with NO `ai` attribute
 #   F  the fallback (non-native triple) still builds on `final`
-#   G  `gateKeys` matches the config keys nixpkgs' meta checks read
-#   H  no module file reads a root (`pkgs.ai`, `pkgs.docs`, ...) from raw pkgs
+#   G  no module file reads a root (`pkgs.ai`, `pkgs.docs`, ...) from raw pkgs
 #
 # Linux only: F uses pkgsStatic, and the foreign nixpkgs imports are paid once
 # where `nix flake check` runs in CI.
 {
   buildOverlay,
   claimedPaths,
-  gateKeys,
   harnessFor,
   inputs,
   lib,
@@ -63,12 +65,56 @@
     map (keyPath: "overlay ${lib.concatStringsSep "." keyPath} differs from ciPackages.${lib.last keyPath}")
     (builtins.filter (keyPath: drvOf (lib.getAttrFromPath keyPath overlaid) != drvOf ciPackages.${lib.last keyPath}) claimedPaths);
 
-  # ── B: license config is hash-neutral ──────────────────────────────
+  # ── B: the public outputs ──────────────────────────────────────────
+  # Both are checked by a plain import of this flake's nixpkgs (default
+  # config), so in a pure evaluation an unfree leaf refuses there.
+  evaluation = value: builtins.tryEval (drvOf value);
   publicNames = builtins.attrNames publicPackages;
-  unfreeNames = sorted (builtins.filter (name: ciPackages.${name}.meta.unfree or false) leafNames);
-  licenseMismatches =
+  legacyPackages = self.legacyPackages.${system};
+  isUnfree = name: ciPackages.${name}.meta.unfree or false;
+  unfreeNames = sorted (builtins.filter isUnfree leafNames);
+  publicMismatches =
     map (name: "packages.${name} differs from ciPackages.${name}")
-    (builtins.filter (name: drvOf publicPackages.${name} != drvOf ciPackages.${name}) publicNames);
+    (builtins.filter (name: drvOf publicPackages.${name} != drvOf ciPackages.${name}) publicNames)
+    ++ map (name: "legacyPackages.${name} differs from ciPackages.${name}")
+    (builtins.filter (name: drvOf legacyPackages.${name} != drvOf ciPackages.${name}) (lib.subtractLists unfreeNames leafNames))
+    ++ map (name: "legacyPackages.${name} is unfree and evaluated without an opt-in")
+    (builtins.filter (name: (evaluation legacyPackages.${name}).success) unfreeNames);
+
+  # ── C: the consumer's own meta check ───────────────────────────────
+  # The overlay over the foreign nixpkgs with no opt-in: each claimed leaf is
+  # judged by that nixpkgs' check. Refusing only the unfree leaves, while
+  # the free ones keep ciPackages' drv, shows the probe is what refuses.
+  overlaidWith = config: (foreignWith config).extend overlay;
+  freeOverlaid = foreignFree.extend overlay;
+  freeMismatches = lib.concatMap (keyPath: let
+    name = lib.last keyPath;
+    result = evaluation (lib.getAttrFromPath keyPath freeOverlaid);
+    path = lib.concatStringsSep "." keyPath;
+  in
+    if isUnfree name
+    then lib.optional result.success "${path} is unfree and evaluated without an opt-in"
+    else lib.optional (!(result.success && result.value == drvOf ciPackages.${name})) "${path} is free and does not give ciPackages' drv without an opt-in")
+  claimedPaths;
+  claudeDrv = drvOf ciPackages.claude-code;
+  givesClaude = set: let
+    result = evaluation set.ai.claude-code;
+  in
+    result.success && result.value == claudeDrv;
+  # A predicate that names one package: the consumer's predicate judges each
+  # leaf by the probe's name (lib.getName), not all-or-nothing.
+  namedOverlaid = overlaidWith {allowUnfreePredicate = package: lib.getName package == "claude-code";};
+  rebuilt = set: set.ai.claude-code.overrideAttrs (_: {});
+  consumerMismatches =
+    lib.optional (!lib.elem "claude-code" unfreeNames) "claude-code is not an unfree leaf; the refusal rows below test nothing"
+    ++ lib.optional (!(evaluation ciPackages.claude-code).success) "ciPackages.claude-code does not evaluate; a refusal would not be the probe's"
+    ++ lib.optional (!givesClaude overlaid) "with allowUnfree, ai.claude-code is not ciPackages' drv"
+    ++ lib.optional (!givesClaude (overlaidWith {allowUnfreePredicate = _: true;})) "with allowUnfreePredicate, ai.claude-code is not ciPackages' drv"
+    ++ lib.optional (!givesClaude namedOverlaid) "a predicate naming claude-code does not admit it"
+    ++ lib.optional (evaluation namedOverlaid.ai.copilot-cli).success "a predicate naming claude-code admits copilot-cli"
+    ++ lib.optional (evaluation (rebuilt freeOverlaid)).success "ai.claude-code.overrideAttrs evaluated without an opt-in"
+    ++ lib.optional ((evaluation (rebuilt overlaid)).value != claudeDrv) "with allowUnfree, an identity overrideAttrs is not ciPackages' drv"
+    ++ freeMismatches;
 
   # ── E: module defaults ─────────────────────────────────────────────
   # One row per module site that defaults a package. `read` takes the
@@ -289,38 +335,7 @@
   staticPkgs = pkgs.pkgsStatic;
   staticRumdl = builtins.tryEval (drvOf (staticPkgs.extend overlay).ai.devTools.rumdl);
 
-  # ── G: gate keys follow nixpkgs ────────────────────────────────────
-  # Every `config.<k>`, `config ? <k>` and `inherit (config) <k>` token in the
-  # three files nixpkgs' meta checks live in. A bump that adds, drops or
-  # renames a gate key changes this set and fails here, naming the key.
-  ignoredKeys = [
-    # Read there, deliberately not forwarded: diagnostics, and the `problems`
-    # schema skews between nixpkgs revisions.
-    "checkMeta"
-    "checkMetaRecursively"
-    "handleEvalIssue"
-    "inHydra"
-    "problems"
-    # Scan false positives: prose and the `problems` submodule's own fields.
-    "allow"
-    "handler"
-    "name"
-    "nix"
-    "package"
-  ];
-  metaCheckTokens = let
-    capturesOf = regex: text: builtins.filter builtins.isList (builtins.split regex text);
-    identifier = "([A-Za-z_][A-Za-z0-9_'-]*)";
-    tokensOf = text:
-      map (captures: builtins.elemAt captures 1) (capturesOf "config(\\.|[[:space:]]*\\?[[:space:]]*)${identifier}" text)
-      ++ lib.concatMap (captures: builtins.filter (word: builtins.isString word && word != "") (builtins.split "[[:space:]]+" (lib.head captures)))
-      (capturesOf "inherit[[:space:]]*\\(config\\)([^;]*);" text);
-  in
-    sorted (lib.unique (lib.concatMap (file: tokensOf (builtins.readFile "${inputs.nixpkgs}/pkgs/stdenv/generic/${file}.nix"))
-        ["check-meta" "problems" "remediations"]));
-  expectedTokens = sorted (gateKeys ++ ignoredKeys);
-
-  # ── H: no raw module reads ─────────────────────────────────────────
+  # ── G: no raw module reads ─────────────────────────────────────────
   # Every module file, with `#` comments dropped, searched for `pkgs.<root>`
   # for each root this flake claims. A new module that passes the unmodified
   # pkgs to a factory (`inherit pkgs;`) is NOT caught here, only by adding its
@@ -345,12 +360,11 @@
     ++ lib.optional (claimNames != leafNames)
     "A: claim basenames ${toString claimNames} != ciPackages leaves ${toString leafNames}"
     ++ map (message: "A: ${message}") overlayMismatches
-    ++ map (message: "B: ${message}") licenseMismatches
+    ++ map (message: "B: ${message}") publicMismatches
     ++ lib.optional (unfreeNames == []) "B: no unfree leaf; the unfree filter is untested"
     ++ lib.optional (sorted (lib.subtractLists publicNames (builtins.attrNames ciPackages)) != unfreeNames)
     "B: ciPackages minus packages is not exactly the unfree leaves ${toString unfreeNames}"
-    ++ lib.optional (builtins.tryEval (drvOf (foreignFree.extend overlay).ai.claude-code)).success
-    "C: the overlay evaluated an unfree package without the consumer's opt-in"
+    ++ map (message: "C: ${message}") consumerMismatches
     ++ lib.optional (drvOf foreign.hello == drvOf pkgs.hello)
     "D: the foreign nixpkgs builds the same hello; it is not foreign"
     ++ lib.optional (drvOf (foreign.extend buildOverlay).ai.devTools.rumdl == drvOf publicPackages.rumdl)
@@ -361,9 +375,7 @@
     ++ lib.optional (!staticRumdl.success) "F: the pkgsStatic fallback does not evaluate rumdl"
     ++ lib.optional (staticRumdl.success && staticRumdl.value == drvOf publicPackages.rumdl)
     "F: the pkgsStatic fallback re-exported the native rumdl"
-    ++ lib.optional (metaCheckTokens != expectedTokens)
-    "G: nixpkgs' meta checks read ${toString (lib.subtractLists expectedTokens metaCheckTokens)} not in gateKeys/ignoredKeys, and no longer read ${toString (lib.subtractLists metaCheckTokens expectedTokens)}"
-    ++ map (file: "H: ${relative file} reads a root from raw pkgs; read config.ai.internal.roots") rawReads;
+    ++ map (file: "G: ${relative file} reads a root from raw pkgs; read config.ai.internal.roots") rawReads;
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     nat-overlay-parity =
@@ -378,7 +390,6 @@ in {
             echo "packages compared: ${toString (builtins.length publicNames)}"
             echo "unfree leaves: ${toString (builtins.length unfreeNames)}"
             echo "module rows: ${toString (lib.foldl' (n: backend: n + builtins.length (rows backend) + builtins.length (sourceRows backend) + builtins.length (builtins.attrNames (guardPaths backend))) 0 ["hm" "devenv"])} per run, 2 runs"
-            echo "gate keys: ${toString (builtins.length gateKeys)}"
             echo "module files scanned: ${toString (builtins.length moduleFiles)}"
           } > "$out"
         '';

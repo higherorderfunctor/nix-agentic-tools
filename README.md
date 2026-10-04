@@ -157,11 +157,13 @@ default to its own packages.
   overlays on shared dependencies do not reach these packages, and security
   fixes arrive when this flake bumps nixpkgs (the update sweep runs four times a
   day). Go and Rust compilers come from this flake's locked toolchain inputs.
-- **Unfree is your opt-in.** Only your license settings reach this flake's
-  nixpkgs: `allowUnfree`, `allowUnfreePredicate`, `allowUnfreePackages`, and the
-  other license, broken, insecure and platform gates. They never change a store
-  path, so they cost no cache hits. Set them where you set them for nixpkgs
-  (`nixpkgs.config`, or devenv.yaml `allowUnfree`).
+- **Unfree is your opt-in, decided by your own nixpkgs.** Every package this
+  flake hands you is checked by your nixpkgs' own meta checks with your config,
+  so `allowUnfree`, `allowUnfreePredicate` and any other license, broken,
+  insecure or platform setting work exactly as they do for nixpkgs, with
+  nixpkgs' own error when one refuses. The check never changes a store path, so
+  it costs no cache hits, and there is nothing to keep in sync. Set them where
+  you set them for nixpkgs (`nixpkgs.config`, or devenv.yaml `allowUnfree`).
 - **`packages.<system>` is free packages only.** `legacyPackages.<system>` has
   every package plus the nested `ai` tree. `nix run` on an unfree package
   resolves there and needs your opt-in, as in nixpkgs:

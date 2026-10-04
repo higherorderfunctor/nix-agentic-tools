@@ -1,8 +1,8 @@
 ## MCP Server Packages
 
-> **Last verified:** 2026-10-03 — recipes build on this flake's nixpkgs
-> (`natSetFor`) and the overlay re-exports them; main-tracking rev bumps are
-> done by `update-pkg.sh`; vendored npm lock locations follow their manual or
+> **Last verified:** 2026-10-04 — recipes build on this flake's nixpkgs
+> (`natSets`) and the overlay re-exports them; main-tracking rev bumps are done
+> by `update-pkg.sh`; vendored npm lock locations follow their manual or
 > automatic updater.
 >
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.

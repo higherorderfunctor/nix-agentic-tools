@@ -76,25 +76,20 @@
     # shellcheckFlags) — see config/shell-strict.nix.
     shellStrict = import ./config/shell-strict.nix;
     forAllSystems = lib.genAttrs repository.supportedSystems;
-    # The internal unfree-enabled package set: checks, repo documents, the CI
-    # shell, apps and the formatter. Bound once per system so they share one
-    # nixpkgs evaluation.
-    ciSet = forAllSystems (system:
-      repository.natSetFor {
-        inherit system;
-        config.allowUnfree = true;
-      });
-    # The public set: this flake's nixpkgs with no license config, so unfree
-    # packages need the consumer's own opt-in, the same as nixpkgs. License
-    # config only gates evaluation, so its drvPaths equal ciSet's.
-    publicSet = forAllSystems (system: repository.natSetFor {inherit system;});
-    pkgsFor = system: ciSet.${system};
-    # Every leaf of `set` under its basename, plus the repo-root documents.
-    flatPackagesFor = set: system: let
+    # This flake's one package set per system (repository.natSets, with
+    # allowUnfree): checks, repo documents, the CI shell, apps and the
+    # formatter read it directly. Shared, so they cost one nixpkgs evaluation.
+    pkgsFor = system: repository.natSets.${system};
+    # What the public outputs hand out: every derivation checked by a plain
+    # import of this flake's nixpkgs with default config, so an unfree leaf
+    # refuses exactly as it would in nixpkgs. Its drvPath is unchanged.
+    publicCheck = forAllSystems (system: repository.checkedBy (import nixpkgs {inherit system;}));
+    # Every leaf under its basename, plus the repo-root documents.
+    flatPackagesFor = system: let
       repoDocs = repoDocsFor system;
     in
       repository.packagesFor {
-        pkgs = set;
+        pkgs = pkgsFor system;
         rootPackages = {
           # Repo-root documents from dev/generate.nix. The `generate:repo:*`
           # tasks build these by name; without them the tasks fail with
@@ -205,23 +200,23 @@
     # from devenv.nix; nothing in this flake constructs it.
     # devShells.ci is a lightweight shell for the CI update pipeline.
 
-    # The internal unfree-enabled flat package set: what CI builds and pushes
-    # to cachix, and what checks and the update pipeline read. A consumer who
+    # The internal flat package set, unchecked: what CI builds and pushes to
+    # cachix, and what checks and the update pipeline read. A consumer who
     # names it opts in to unfree, the same as building `checks`.
-    ciPackages = forAllSystems (system: flatPackagesFor ciSet.${system} system);
+    ciPackages = forAllSystems flatPackagesFor;
 
     # Every package under its flat name plus the nested roots (`ai`, `docs`,
-    # ...), built without allowUnfree: `nix run <this flake>#claude-code`
+    # ...), checked by plain nixpkgs: `nix run <this flake>#claude-code`
     # resolves here and needs the caller's unfree opt-in
     # (NIXPKGS_ALLOW_UNFREE=1 --impure), as in nixpkgs.
-    legacyPackages = forAllSystems (system: repository.legacyPackagesFor publicSet.${system});
+    legacyPackages = forAllSystems (system: publicCheck.${system} (repository.legacyPackagesFor (pkgsFor system)));
 
-    # The free subset of legacyPackages' flat names, plus the repo documents.
-    # Unfree leaves are filtered out by meta, because `nix flake check` forces
-    # every drvPath here and an unfree one throws without allowUnfree.
+    # The free subset of the flat names, checked like legacyPackages, plus the
+    # repo documents. Unfree leaves are filtered out by meta, because
+    # `nix flake check` forces every drvPath here and an unfree one throws.
     packages = forAllSystems (system:
       lib.filterAttrs (_: package: !(package.meta.unfree or false))
-      (flatPackagesFor publicSet.${system} system));
+      (publicCheck.${system} self.ciPackages.${system}));
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.
