@@ -7,7 +7,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    package = self.packages.${system}.kimchi;
+    package = self.ciPackages.${system}.kimchi;
     inherit (package.passthru) extracted extractionSources extractionSourceUrls;
     committed = ../extracted.json;
     extractor = ../extract/extract.mjs;

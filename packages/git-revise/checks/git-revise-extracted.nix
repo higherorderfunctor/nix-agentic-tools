@@ -18,7 +18,7 @@
 }: {
   checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-revise";
-    package = self.packages.${pkgs.stdenv.hostPlatform.system}.git-revise;
+    package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.git-revise;
     sidecar = "packages/git-revise/extracted.json";
     committed = ../extracted.json;
     extractDir = ../extract;

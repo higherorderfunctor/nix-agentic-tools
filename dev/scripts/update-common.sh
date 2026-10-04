@@ -40,6 +40,16 @@ CYAN=$'\033[0;36m'
 BOLD=$'\033[1m'
 RESET=$'\033[0m'
 
+# This host's Nix system, for the flake attributes below.
+NAT_SYSTEM=$(nix eval --impure --raw --expr 'builtins.currentSystem')
+
+# The flake attribute of package $1 in the internal unfree-enabled set
+# (flake.nix `ciPackages`). The public `packages` omits unfree packages, so
+# every pipeline read of a package by name goes through here.
+nat_attr() {
+  printf 'ciPackages.%s.%s' "$NAT_SYSTEM" "$1"
+}
+
 # GitHub token for nix-update rate limits
 if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
   GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
@@ -493,17 +503,16 @@ run_nfb_build() {
 # update-input.sh's initial attempt and repair retry must invoke it identically;
 # when copies drifted they silently verified different things.
 verify_all_packages() {
-  local system expected_packages verify_rc=0
-  system=$(nix eval --impure --raw --expr 'builtins.currentSystem') || return 2
+  local expected_packages verify_rc=0
   mkdir -p "$UPDATE_LOGS_DIR" || return 2
   expected_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-packages-XXXXXX) || return 2
-  if ! nix eval --json ".#packages.$system" --apply builtins.attrNames >"$expected_packages"; then
+  if ! nix eval --json ".#ciPackages.$NAT_SYSTEM" --apply builtins.attrNames >"$expected_packages"; then
     log_failure "Could not enumerate packages before verification"
     return 2
   fi
   run_nfb_build "$expected_packages" nix run --inputs-from . nix-fast-build -- \
     --skip-cached --no-nom --no-link \
-    --flake ".#packages.$system" || verify_rc=$?
+    --flake ".#ciPackages.$NAT_SYSTEM" || verify_rc=$?
   [ "$verify_rc" -ne 0 ] || rm -f "$expected_packages"
   return "$verify_rc"
 }
@@ -582,7 +591,7 @@ fix_sidecar_hashes() {
   # sequences, so bash never tries to expand any part of it.
   expr='let
       flake = builtins.getFlake (toString ./.);
-      ps = builtins.getAttr builtins.currentSystem flake.packages;
+      ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
       fixersOf = n:
         let p = builtins.getAttr n ps;
         in builtins.filter (x: x != null) [
@@ -632,12 +641,12 @@ fix_sidecar_hashes() {
 # package-name registry.
 refresh_package_go_floor() {
   local name="$1" has_fixer fixer
-  if ! has_fixer=$(nix eval --raw ".#$name" --apply 'p: builtins.toJSON (p ? fixGoFloor)'); then
+  if ! has_fixer=$(nix eval --raw ".#$(nat_attr "$name")" --apply 'p: builtins.toJSON (p ? fixGoFloor)'); then
     log_failure "could not evaluate $name for a Go-floor fixer (nix error above)"
     return 1
   fi
   [ "$has_fixer" = true ] || return 0
-  if ! fixer=$(nix build --no-link --print-out-paths ".#$name.fixGoFloor"); then
+  if ! fixer=$(nix build --no-link --print-out-paths ".#$(nat_attr "$name").fixGoFloor"); then
     log_failure "could not build $name Go-floor fixer (nix error above)"
     return 1
   fi
@@ -682,7 +691,7 @@ regenerate_sidecars() {
       flake = builtins.getFlake (toString ./.);
       by = builtins.getEnv "NAT_REGEN_BY";
       name = builtins.getEnv "NAT_REGEN_NAME";
-      ps = builtins.getAttr builtins.currentSystem flake.packages;
+      ps = builtins.getAttr builtins.currentSystem flake.ciPackages;
       selected = n:
         let
           p = builtins.getAttr n ps;

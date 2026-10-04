@@ -6,7 +6,7 @@
   ...
 }: {
   checks.agnix-role-identity = let
-    packages = self.packages.${pkgs.stdenv.hostPlatform.system};
+    packages = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
   in
     assert lib.assertMsg (packages.agnix.drvPath
       == packages.agnix-lsp.drvPath

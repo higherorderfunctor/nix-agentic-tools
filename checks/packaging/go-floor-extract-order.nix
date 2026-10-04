@@ -45,8 +45,8 @@
 # hand-rolling the chain again.
 #
 # `beads.dolt` is walked EXPLICITLY. It is a ninth Go package, and it is
-# NOT A TOP-LEVEL ENTRY of `self.packages.<system>` — it is reachable
-# only as a nested attribute of one, `self.packages.<system>.beads.dolt`.
+# NOT A TOP-LEVEL ENTRY of `self.ciPackages.<system>` — it is reachable
+# only as a nested attribute of one, `self.ciPackages.<system>.beads.dolt`.
 # `lib.filterAttrs` over that set therefore never visits it, which is the
 # same blind spot `packages/beads/checks/beads-contracts.nix` exists to cover for its
 # floor. Any future discovery-based check inherits it.
@@ -78,7 +78,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    pkgSet = self.packages.${system};
+    pkgSet = self.ciPackages.${system};
 
     discovered =
       lib.filterAttrs
@@ -87,7 +87,7 @@
         && (p.passthru.fixGoFloor.goFloorDestination or null) == "sidecar")
       pkgSet;
 
-    # Not in `self.packages` — see the header.
+    # Not in `self.ciPackages` — see the header.
     extras = lib.optionalAttrs ((pkgSet.beads.passthru or {}) ? dolt) {
       "beads.dolt" = pkgSet.beads.dolt;
     };

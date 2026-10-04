@@ -170,7 +170,7 @@ in {
       context =
         builtins.removeAttrs context ["rootModules"]
         // {
-          inherit gitToolExtraction inputs lib;
+          inherit buildOverlay gitToolExtraction inputs lib;
           harness = import ../testing/module-harness.nix {
             inherit inputs lib;
             inherit (context) pkgs;

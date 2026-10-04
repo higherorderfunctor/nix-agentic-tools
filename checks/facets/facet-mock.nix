@@ -129,7 +129,7 @@
       else if builtins.isAttrs tree
       then lib.concatMap packageValues (builtins.attrValues tree)
       else [];
-    publicPackageValues = packageValues self.packages.${system};
+    publicPackageValues = packageValues self.ciPackages.${system};
     fixtureOverlayValues =
       map (claim: {
         inherit (claim) keyPath;

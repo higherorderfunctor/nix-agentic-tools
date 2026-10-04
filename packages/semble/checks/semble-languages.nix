@@ -15,7 +15,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    semble = self.packages.${system}.semble;
+    semble = self.ciPackages.${system}.semble;
     committed = ../extracted.json;
     languages = import ../lib/extracted.nix;
 

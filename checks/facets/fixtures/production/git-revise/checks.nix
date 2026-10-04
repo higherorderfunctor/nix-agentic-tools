@@ -41,7 +41,7 @@ in {
     assert builtins.elem "fragments" metadataKinds;
     assert builtins.elem "nix-sidecar" metadataKinds;
     assert builtins.elem "data-sidecar" metadataKinds;
-    assert !(self.packages.${system} ? git-revise-fixture);
+    assert !(self.ciPackages.${system} ? git-revise-fixture);
       pkgs.runCommandLocal "facet-git-revise-production-boundary" {
         nativeBuildInputs = [package];
       } ''

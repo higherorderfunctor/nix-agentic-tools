@@ -20,7 +20,7 @@
 }: {
   checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-branchless";
-    package = self.packages.${pkgs.stdenv.hostPlatform.system}.git-branchless;
+    package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.git-branchless;
     sidecar = "packages/git-branchless/extracted.json";
     committed = ../extracted.json;
     extractDir = ../extract;

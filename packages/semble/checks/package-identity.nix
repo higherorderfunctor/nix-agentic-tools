@@ -8,7 +8,7 @@
 }: {
   checks.semble-package-identity = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    packages = self.packages.${system};
+    packages = self.ciPackages.${system};
     upstream = inputs.llm-agents.packages.${system}.semble;
   in
     assert lib.assertMsg (packages.semble.drvPath == packages.semble-mcp.drvPath)

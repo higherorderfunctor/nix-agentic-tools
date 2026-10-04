@@ -68,7 +68,7 @@ in {
   assert builtins.attrNames self.lib.packaging == ["fetchHuggingFaceModel"];
   assert !(pkgs.ai or {} ? fetchHuggingFaceModel);
   assert !(pkgs ? fetchHuggingFaceModel);
-  assert !(self.packages.${system} ? fetchHuggingFaceModel);
+  assert !(self.ciPackages.${system} ? fetchHuggingFaceModel);
   # `pkgs` is consumed, never handed to nixpkgs.
   assert !(passed {} ? pkgs);
   # What the wrapper hands nixpkgs.

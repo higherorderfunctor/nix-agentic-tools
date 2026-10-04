@@ -7,7 +7,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    extracted = self.packages.${system}.chatgpt-codex.passthru.extracted;
+    extracted = self.ciPackages.${system}.chatgpt-codex.passthru.extracted;
     committed = ../extracted.json;
   in {
     chatgpt-codex-extracted = pkgs.runCommand "chatgpt-codex-extracted-drift" {} ''

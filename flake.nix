@@ -85,6 +85,22 @@
         config.allowUnfree = true;
       });
     pkgsFor = system: ciSet.${system};
+    # Every leaf of `set` under its basename, plus the repo-root documents.
+    flatPackagesFor = set: system: let
+      repoDocs = repoDocsFor system;
+    in
+      repository.packagesFor {
+        pkgs = set;
+        rootPackages = {
+          # Repo-root documents from dev/generate.nix. The `generate:repo:*`
+          # tasks build these by name; without them the tasks fail with
+          # "attribute missing" and both files fall back to hand-editing.
+          # The agent instruction files are not packages: `ai.*` writes them
+          # (dev/ai.nix).
+          repo-contributing = repoDocs.repoContributing;
+          repo-readme = repoDocs.repoReadme;
+        };
+      };
     repoDocsFor = system:
       import ./dev/repo-docs.nix {
         inherit lib;
@@ -185,22 +201,12 @@
     # from devenv.nix; nothing in this flake constructs it.
     # devShells.ci is a lightweight shell for the CI update pipeline.
 
-    packages = forAllSystems (system: let
-      pkgs = pkgsFor system;
-      repoDocs = repoDocsFor system;
-    in
-      repository.packagesFor {
-        inherit pkgs;
-        rootPackages = {
-          # Repo-root documents from dev/generate.nix. The `generate:repo:*`
-          # tasks build these by name; without them the tasks fail with
-          # "attribute missing" and both files fall back to hand-editing.
-          # The agent instruction files are not packages: `ai.*` writes them
-          # (dev/ai.nix).
-          repo-contributing = repoDocs.repoContributing;
-          repo-readme = repoDocs.repoReadme;
-        };
-      });
+    # The internal unfree-enabled flat package set: what CI builds and pushes
+    # to cachix, and what checks and the update pipeline read. A consumer who
+    # names it opts in to unfree, the same as building `checks`.
+    ciPackages = forAllSystems (system: flatPackagesFor ciSet.${system} system);
+
+    packages = forAllSystems (system: flatPackagesFor ciSet.${system} system);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.

@@ -71,7 +71,7 @@ runs:
           nix eval --json \
             --option allow-import-from-derivation true \
             --apply 'pkgs: builtins.mapAttrs (_: p: p.drvPath or p.name or "unknown") pkgs' \
-            ".#packages.$1" >/dev/null
+            ".#ciPackages.$1" >/dev/null
         }
 
         warm_system() {

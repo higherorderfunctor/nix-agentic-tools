@@ -21,7 +21,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) isLinux system;
-    codex = self.packages.${system}.chatgpt-codex;
+    codex = self.ciPackages.${system}.chatgpt-codex;
     inherit (codex.passthru.codexPackage) root target;
     # The files the daemon bootstrap's `validate_package` requires, each
     # executable. bwrap is Linux-only upstream too.

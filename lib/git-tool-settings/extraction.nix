@@ -17,6 +17,7 @@
 # derivation input, so neither moves the package's store path, and the drift
 # check and the update pipeline's regeneration read the same derivation.
 {pkgs}: let
+  inherit (import ../packaging.nix) ciAttr;
   jq = "${pkgs.jq}/bin/jq";
 
   # One interpreter for every extractor: tree-sitter-rust for the Rust
@@ -90,7 +91,10 @@ in {
         diff <(${jq} -S . ${committed}) <(${jq} -S . ${extracted}) >&2 || :
         echo "" >&2
         echo "Regenerate from the repository root:" >&2
-        echo '  "$(nix build --no-link --print-out-paths .#${name}.passthru.regenerateExtracted)"' >&2
+        echo '  "$(nix build --no-link --print-out-paths .#${ciAttr {
+        attr = name;
+        inherit pkgs;
+      }}.passthru.regenerateExtracted)"' >&2
         exit 1
       fi
     '';

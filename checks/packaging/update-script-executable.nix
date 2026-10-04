@@ -22,7 +22,7 @@
   ...
 }: {
   checks.update-script-executable = let
-    packages = self.packages.${pkgs.stdenv.hostPlatform.system};
+    packages = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
     argv0 = package: let
       script = package.updateScript;
     in

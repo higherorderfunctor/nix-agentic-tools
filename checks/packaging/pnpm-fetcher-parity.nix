@@ -37,7 +37,7 @@
 
     # Overlay packages that ship a `pnpmDeps` built from
     # `fetchPnpmDeps`. Each must be reachable as a top-level
-    # `self.packages.${system}.<name>` (see flake.nix's
+    # `self.ciPackages.${system}.<name>` (see flake.nix's
     # grouped-namespace flattening at `pkgs.ai.mcpServers.*`).
     #
     # ENUMERATED, THOUGH THE RULE IN THE HEADER IS INTENSIONAL. The rule is
@@ -50,7 +50,7 @@
     # store):
     #
     #   - The intensional filter forces EVERY package in
-    #     `self.packages.${system}` to weak head normal form. A
+    #     `self.ciPackages.${system}` to weak head normal form. A
     #     `stdenv.mkDerivation` result only reaches that form through
     #     `derivationStrict`, which is strict in
     #     all of its arguments — so `drv ? pnpmDeps` is not a cheap
@@ -99,7 +99,7 @@
       lib.findFirst (i: (i.pname or "") == "pnpm") null inputs;
 
     mkCheck = name: let
-      drv = self.packages.${system}.${name};
+      drv = self.ciPackages.${system}.${name};
       fetcherPnpm = findPnpm (drv.pnpmDeps.nativeBuildInputs or []);
       buildPnpm = findPnpm (drv.nativeBuildInputs or []);
     in

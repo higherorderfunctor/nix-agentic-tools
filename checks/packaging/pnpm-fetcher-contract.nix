@@ -31,7 +31,7 @@
 #
 # INTENSIONAL, unlike its sibling. `pnpm-fetcher-parity.nix` is deliberately
 # enumerated and documents the measured cost that decided it; this one is not,
-# because the discovery is a NAME match over `self.packages.${system}` rather
+# because the discovery is a NAME match over `self.ciPackages.${system}` rather
 # than a property probe that must instantiate unrelated derivations. Only the
 # matched attributes are evaluated, so a future `pnpm_13` is covered the day it
 # is added, with no list to forget.
@@ -44,7 +44,7 @@
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
 
-    packageSet = self.packages.${system};
+    packageSet = self.ciPackages.${system};
 
     # Name-level discovery: cheap, and it cannot miss a new major.
     pnpmNames =

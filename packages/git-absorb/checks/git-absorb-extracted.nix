@@ -18,7 +18,7 @@
 }: {
   checks = (gitToolExtraction {inherit pkgs;}).checks {
     name = "git-absorb";
-    package = self.packages.${pkgs.stdenv.hostPlatform.system}.git-absorb;
+    package = self.ciPackages.${pkgs.stdenv.hostPlatform.system}.git-absorb;
     sidecar = "packages/git-absorb/extracted.json";
     committed = ../extracted.json;
     extractDir = ../extract;

@@ -3,6 +3,7 @@
 # or derivation-valued passthru helper (vendor, extractor) may carry nixpkgs'
 # own go, rustc or cargo (no silent nixpkgs fallback).
 {
+  buildOverlay,
   inputs,
   lib,
   pkgs,
@@ -32,7 +33,7 @@
         inherit name;
         outPath = probe.value;
       }) (["cargo" "go" "rustc"] ++ builtins.filter (n: builtins.match "go_1_[0-9]+" n != null) (builtins.attrNames pkgs));
-    packages = builtins.attrValues self.packages.${system};
+    packages = builtins.attrValues self.ciPackages.${system};
     nested = lib.concatMap (p:
       builtins.filter
       (value: lib.isDerivation value && value ? goModules)
@@ -71,7 +72,10 @@
               version = "consumer-marker-${name}";
               __intentionallyOverridingVersion = true;
             }))
-        self.overlays.default
+        # The recipe-level overlay, which builds on this marked set. The
+        # exported overlay re-exports this flake's own builds and would
+        # ignore the markers, making the audit vacuous.
+        buildOverlay
       ];
     };
     jsForbidden =

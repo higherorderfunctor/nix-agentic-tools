@@ -18,7 +18,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    extracted = self.packages.${system}.claude-code.passthru.extracted;
+    extracted = self.ciPackages.${system}.claude-code.passthru.extracted;
     committed = ../extracted.json;
   in {
     claude-code-extracted = pkgs.runCommand "claude-code-extracted-drift" {} ''
@@ -37,7 +37,7 @@
         ${pkgs.diffutils}/bin/diff -u committed.json extracted.json \
           | ${pkgs.coreutils}/bin/head -80 >&2 || true
         echo "" >&2
-        echo "Regenerate: nix build .#claude-code.passthru.extracted --no-link --print-out-paths" >&2
+        echo "Regenerate: nix build .#ciPackages.${system}.claude-code.passthru.extracted --no-link --print-out-paths" >&2
         echo "then cp the result over packages/claude-code/extracted.json and 'git add' it." >&2
         exit 1
       fi

@@ -18,7 +18,6 @@ if [ ${#args[@]} -gt 0 ] && [[ ${args[-1]} == *.git ]]; then
   unset 'args[-1]'
 fi
 extra_flags="${args[*]:-}"
-system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
 
 log_header "Package: $name"
 
@@ -69,7 +68,7 @@ commit_pending_update() {
 #
 # Prints {mode, url, name, args, unsupported} as JSON.
 source_fetch_spec() {
-  nix eval --json ".#$1.src" --apply '
+  nix eval --json ".#$(nat_attr "$1").src" --apply '
     src: let
       a = src.drvAttrs or {};
       # fetchgit leaves an unused attr null, false, "" or [] (structured attrs).
@@ -387,14 +386,14 @@ set +e
   # context-realization needs the drv registered. A single
   # `nix eval` on drvPath instantiates the derivation file without
   # building the output, which is enough to unblock nix-update.
-  nix eval --raw ".#$name.src.drvPath" >/dev/null 2>&1 || true
+  nix eval --raw ".#$(nat_attr "$name").src.drvPath" >/dev/null 2>&1 || true
 
   # `if !` rather than a bare pipeline plus a PIPESTATUS test: `pipefail`
   # already makes the pipeline's status nix-update's, and with errexit armed
   # a bare pipeline would abort before any status check ran, losing this
   # message.
   # shellcheck disable=SC2086
-  if ! nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"; then
+  if ! nix run --inputs-from . nix-update -- --flake "$(nat_attr "$name")" --system "$NAT_SYSTEM" $extra_flags 2>&1 | tee "$version_file"; then
     # PIPESTATUS survives into this block — measured, including the real
     # exit code and which side failed:
     #   $ if ! bash -c 'exit 42' | tee /dev/null; then echo "${PIPESTATUS[*]}"; fi
@@ -486,7 +485,7 @@ set +e
   # Local Ninja retains its informational build and all resource safeguards.
   if [ "${NAT_UPDATE_VERIFY_PACKAGES:-1}" = "0" ]; then
     log_info "Prepared update — native PR CI will verify the build"
-  elif ! run_build nix build ".#$name" --no-link --log-format bar-with-logs; then
+  elif ! run_build nix build ".#$(nat_attr "$name")" --no-link --log-format bar-with-logs; then
     log_info "Build failed — opening the PR; branch CI is the gate"
     echo "::warning::${name}: build verification failed, PR opens red"
   fi
