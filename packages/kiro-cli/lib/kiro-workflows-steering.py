@@ -49,6 +49,13 @@ def hex_digits(body, i, count):
     return int(digits, 16)
 
 
+def code_point(value):
+    try:
+        return chr(value)
+    except ValueError:
+        die("escape out of range in the steering literal")
+
+
 def js_unescape(body):
     """Decode the body of a '...' or "..." JS string literal.
 
@@ -77,16 +84,16 @@ def js_unescape(body):
         if c in SIMPLE:
             out.append(SIMPLE[c])
         elif c == "x":
-            out.append(chr(hex_digits(body, i, 2)))
+            out.append(code_point(hex_digits(body, i, 2)))
             i += 2
         elif c == "u" and body[i : i + 1] == "{":
             end = body.find("}", i)
             if end == -1:
                 die("unterminated \\u{...} escape in the steering literal")
-            out.append(chr(hex_digits(body, i + 1, end - i - 1)))
+            out.append(code_point(hex_digits(body, i + 1, end - i - 1)))
             i = end + 1
         elif c == "u":
-            out.append(chr(hex_digits(body, i, 4)))
+            out.append(code_point(hex_digits(body, i, 4)))
             i += 4
         elif c == "0" and not body[i : i + 1].isdigit():
             out.append("\0")
@@ -100,7 +107,10 @@ def js_unescape(body):
             pass  # line continuation
         else:
             out.append(c)
-    return "".join(out).encode("utf-16", "surrogatepass").decode("utf-16")
+    try:
+        return "".join(out).encode("utf-16", "surrogatepass").decode("utf-16")
+    except UnicodeDecodeError:
+        die("unpaired surrogate escape in the steering literal")
 
 
 def extract(data):

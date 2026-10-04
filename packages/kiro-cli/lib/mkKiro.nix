@@ -1375,8 +1375,9 @@ in
             without the reminder. Set `true`/`false` to force it either way.
 
             Why a hook rather than more steering: when workflows are enabled the
-            engine ALREADY appends its own ~4.8k-token `workflows_default` block
-            to the system prompt, and msg0 is computed once on turn one and
+            engine ALREADY appends its own ~3.9k-token workflow-orchestration
+            steering (minified since 2.27.1; formerly `workflows_default`) to
+            the system prompt, and msg0 is computed once on turn one and
             replayed byte-for-byte thereafter. The instruction never decays —
             ATTENTION does. A hook lands as a context message beside each
             prompt, so it buys position, not content.
@@ -1403,11 +1404,12 @@ in
           type = lib.types.bool;
           default = false;
           description = ''
-            Inject the vendor's COMPLETE `workflows_default` steering text every
-            turn instead of the short reminder, extracted from the installed
-            engine bundle and cached.
+            Inject the vendor's COMPLETE workflow-orchestration steering text
+            (minified since 2.27.1; formerly `workflows_default`) every turn
+            instead of the short reminder, extracted from the installed engine
+            bundle and cached.
 
-            Off by default because it costs roughly 4.8k tokens PER TURN (~240k
+            Off by default because it costs roughly 3.9k tokens PER TURN (~195k
             across a 50-turn session) to repeat text the model already has in
             msg0. Turn it on only if you have measured that the short reminder
             is not enough.

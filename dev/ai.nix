@@ -358,7 +358,7 @@ in {
       #
       # Expect flavor rather than behavior change: one line sits above the
       # vendor's terse-engineer prose AND (because `workflows` is unlocked
-      # above) its ~4.8k-token workflow-orchestration block.
+      # above) its ~3.9k-token workflow-orchestration block.
       identity.text = ''
         You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
       '';
