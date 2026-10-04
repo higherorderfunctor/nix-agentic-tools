@@ -100,7 +100,8 @@ evaluates by name is under `ciPackages.<system>`, the same unfree-enabled set CI
 builds and pushes:
 
 - shell scripts call `nat_attr <name>` (`dev/scripts/update-common.sh`), which
-  prints `ciPackages.$NAT_SYSTEM.<name>`; `nix-update` gets
+  prints `ciPackages.<system>.<name>` with the system from `nat_system`, which
+  asks `nix` lazily so sourcing the script never needs it; `nix-update` gets
   `--flake "$(nat_attr <name>)"`, which it resolves as a flake-root attribute
   path;
 - generated fixers and regeneration scripts in `lib/packaging.nix` use `ciAttr`;

@@ -1091,7 +1091,7 @@ if args[:1] == ['run']:
     raise SystemExit(0)
 if args[:1] == ['fmt']: raise SystemExit(0)
 if args[:1] == ['build']:
-    if args[-1:] == ['.#demo.fixGoFloor'] and mode.startswith('floor'):
+    if args[-1:] == ['.#ciPackages.x86_64-linux.demo.fixGoFloor'] and mode.startswith('floor'):
         # Model the refresh capability at the mocked Nix boundary: the build
         # prints an executable standing in for the fixer. The native
         # go-floor-fixer check owns generated-script execution; this fixture

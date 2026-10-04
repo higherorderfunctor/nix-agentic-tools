@@ -40,14 +40,24 @@ CYAN=$'\033[0;36m'
 BOLD=$'\033[1m'
 RESET=$'\033[0m'
 
-# This host's Nix system, for the flake attributes below.
-NAT_SYSTEM=$(nix eval --impure --raw --expr 'builtins.currentSystem')
+# This host's Nix system, for the flake attributes below. Resolved lazily
+# and memoized, never at source time: sourcing must not need `nix`, so the
+# update test matrix keeps running before Nix is installed. Returns 2 when
+# `nix` cannot answer. A call inside `$(...)` memoizes only in that subshell.
+nat_system() {
+  if [ -z "${NAT_SYSTEM:-}" ]; then
+    NAT_SYSTEM=$(nix eval --impure --raw --expr 'builtins.currentSystem') || return 2
+  fi
+  printf '%s' "$NAT_SYSTEM"
+}
 
 # The flake attribute of package $1 in the internal unfree-enabled set
 # (flake.nix `ciPackages`). The public `packages` omits unfree packages, so
 # every pipeline read of a package by name goes through here.
 nat_attr() {
-  printf 'ciPackages.%s.%s' "$NAT_SYSTEM" "$1"
+  local system
+  system=$(nat_system) || return 2
+  printf 'ciPackages.%s.%s' "$system" "$1"
 }
 
 # GitHub token for nix-update rate limits
@@ -503,16 +513,17 @@ run_nfb_build() {
 # update-input.sh's initial attempt and repair retry must invoke it identically;
 # when copies drifted they silently verified different things.
 verify_all_packages() {
-  local expected_packages verify_rc=0
+  local expected_packages system verify_rc=0
+  system=$(nat_system) || return 2
   mkdir -p "$UPDATE_LOGS_DIR" || return 2
   expected_packages=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-packages-XXXXXX) || return 2
-  if ! nix eval --json ".#ciPackages.$NAT_SYSTEM" --apply builtins.attrNames >"$expected_packages"; then
+  if ! nix eval --json ".#ciPackages.$system" --apply builtins.attrNames >"$expected_packages"; then
     log_failure "Could not enumerate packages before verification"
     return 2
   fi
   run_nfb_build "$expected_packages" nix run --inputs-from . nix-fast-build -- \
     --skip-cached --no-nom --no-link \
-    --flake ".#ciPackages.$NAT_SYSTEM" || verify_rc=$?
+    --flake ".#ciPackages.$system" || verify_rc=$?
   [ "$verify_rc" -ne 0 ] || rm -f "$expected_packages"
   return "$verify_rc"
 }

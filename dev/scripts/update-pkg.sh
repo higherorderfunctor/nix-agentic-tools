@@ -393,7 +393,7 @@ set +e
   # a bare pipeline would abort before any status check ran, losing this
   # message.
   # shellcheck disable=SC2086
-  if ! nix run --inputs-from . nix-update -- --flake "$(nat_attr "$name")" --system "$NAT_SYSTEM" $extra_flags 2>&1 | tee "$version_file"; then
+  if ! nix run --inputs-from . nix-update -- --flake "$(nat_attr "$name")" --system "$(nat_system)" $extra_flags 2>&1 | tee "$version_file"; then
     # PIPESTATUS survives into this block — measured, including the real
     # exit code and which side failed:
     #   $ if ! bash -c 'exit 42' | tee /dev/null; then echo "${PIPESTATUS[*]}"; fi
