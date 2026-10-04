@@ -301,8 +301,9 @@ in {
     };
     kiro = {
       enable = true;
-      # Operator choice: GPT models cost more credits on Kiro, so select Anthropic only.
-      programs.delegate-routing.models = [{vendors = ["anthropic"];}];
+      # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
+      # only, and not Fable, which this account does not have.
+      programs.delegate-routing.models = [{families = ["haiku" "opus" "sonnet"];}];
       mcpServers.agnix = agnixMcp;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
       # a launcher-global option, so it reaches every subcommand including
