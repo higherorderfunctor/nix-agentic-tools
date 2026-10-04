@@ -84,6 +84,10 @@
         inherit system;
         config.allowUnfree = true;
       });
+    # The public set: this flake's nixpkgs with no license config, so unfree
+    # packages need the consumer's own opt-in, the same as nixpkgs. License
+    # config only gates evaluation, so its drvPaths equal ciSet's.
+    publicSet = forAllSystems (system: repository.natSetFor {inherit system;});
     pkgsFor = system: ciSet.${system};
     # Every leaf of `set` under its basename, plus the repo-root documents.
     flatPackagesFor = set: system: let
@@ -206,7 +210,18 @@
     # names it opts in to unfree, the same as building `checks`.
     ciPackages = forAllSystems (system: flatPackagesFor ciSet.${system} system);
 
-    packages = forAllSystems (system: flatPackagesFor ciSet.${system} system);
+    # Every package under its flat name plus the nested roots (`ai`, `docs`,
+    # ...), built without allowUnfree: `nix run <this flake>#claude-code`
+    # resolves here and needs the caller's unfree opt-in
+    # (NIXPKGS_ALLOW_UNFREE=1 --impure), as in nixpkgs.
+    legacyPackages = forAllSystems (system: repository.legacyPackagesFor publicSet.${system});
+
+    # The free subset of legacyPackages' flat names, plus the repo documents.
+    # Unfree leaves are filtered out by meta, because `nix flake check` forces
+    # every drvPath here and an unfree one throws without allowUnfree.
+    packages = forAllSystems (system:
+      lib.filterAttrs (_: package: !(package.meta.unfree or false))
+      (flatPackagesFor publicSet.${system} system));
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.

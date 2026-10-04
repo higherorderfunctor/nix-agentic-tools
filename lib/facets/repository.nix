@@ -162,6 +162,24 @@ in {
       packageWorld = packageWorldFor pkgs;
       rootSource = root + "/flake.nix";
     };
+  # One rule for legacyPackages: every leaf under its basename, and every
+  # namespace root (`ai`, `docs`, ...) nested. The roots go through the same
+  # exclusive merge, so a leaf named like a root fails instead of shadowing it.
+  # Roots that are themselves leaves are already in the flat set.
+  legacyPackagesFor = pkgs: let
+    packageWorld = packageWorldFor pkgs;
+    leafRoots = map (claim: builtins.head claim.keyPath) (builtins.filter (claim: builtins.length claim.keyPath == 1) packageWorld.eligibleClaims);
+    namespaceRoots = builtins.filter (name: !lib.elem name leafRoots) (rootsFor {
+      inherit inputs lib packageWorld;
+      inherit (packageWorld) packages;
+      system = pkgs.stdenv.hostPlatform.system;
+    });
+  in
+    facets.flattenPackages {
+      inherit packageWorld pkgs;
+      rootPackages = lib.genAttrs namespaceRoots (name: pkgs.${name});
+      rootSource = root + "/flake.nix";
+    };
   overlay = buildOverlay;
   checksFor = {rootModules ? [], ...} @ context: let
     world = facets.realizeChecks {
