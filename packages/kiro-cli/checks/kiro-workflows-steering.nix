@@ -14,6 +14,8 @@ in {
   checks =
     {
       kiro-workflows-steering-fixtures = pkgs.runCommandLocal "kiro-workflows-steering-fixtures-check" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         ${pkgs.python3}/bin/python3 ${./kiro-workflows-steering-fixtures.py} ${../lib/kiro-workflows-steering.py}
         ${pkgs.coreutils}/bin/touch "$out"
       '';
