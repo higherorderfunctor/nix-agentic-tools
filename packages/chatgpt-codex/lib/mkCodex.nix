@@ -1096,7 +1096,10 @@ in
       "shell"
       "skills"
     ];
-    defaults.package = pkgs.ai.chatgpt-codex;
+    defaults = {
+      package = pkgs.ai.chatgpt-codex;
+      packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "chatgpt-codex";
+    };
     # The native agent layer (see mkRuntime.nix): each normalized agent
     # lowers into `ai.codex.native.agents.<name>`, one standalone TOML role
     # layer. `tools` is dropped: Codex role files have no allowlist field.

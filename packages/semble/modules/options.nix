@@ -1,6 +1,7 @@
 {
+  # This flake's package tree (`ai.internal.packages`).
+  ai,
   lib,
-  pkgs,
 }: let
   contentScope = import ../lib/contentScope.nix {inherit lib;};
   modelExample = repo: rev: hash: ''
@@ -117,8 +118,8 @@ in {
     };
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.ai.semble;
-      defaultText = lib.literalExpression "pkgs.ai.semble";
+      default = ai.semble;
+      defaultText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "semble";
       description = "Semble package installed when at least one resolved runtime integration is active.";
     };
     grammars = lib.mkOption {

@@ -9,7 +9,7 @@
 }:
 import ../../../lib/git-tool-settings/tool-module.nix {
   inherit backend;
-  package = pkgs: pkgs.ai.gitTools.git-absorb;
+  package = ai: ai.gitTools.git-absorb;
   section = "absorb";
   settings = (import ../lib/default.nix).git-absorb.settings {inherit lib;};
   tool = "git-absorb";

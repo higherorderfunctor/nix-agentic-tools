@@ -25,7 +25,7 @@
 
     package = lib.mkOption {
       type = lib.types.package;
-      defaultText = lib.literalExpression "pkgs.ai.devTools.beads";
+      defaultText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "devTools.beads";
       description = "Pinned Beads package; its passthru.dolt is the paired Dolt runtime.";
     };
 

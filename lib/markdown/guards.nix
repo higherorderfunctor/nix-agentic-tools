@@ -75,6 +75,10 @@
       })
     program;
 
+  # Recursion invariant: sharedOptions.nix declares options.ai.guards by mapping
+  # over this table and passes it the module's package tree. Keep the key set
+  # and every entry's default, defaultText and description independent of
+  # package values; only `program` may read packages.
   table = pkgs: prettierEnabled: let
     programs = mkGuards pkgs {
       title = "Generated-file guard";

@@ -29,7 +29,7 @@
 {
   # "homeManager" or "devenv": where `enable` puts the package.
   backend,
-  # pkgs → the tool's derivation (the one this flake builds).
+  # This flake's package tree (`ai.internal.packages`) → the tool's derivation.
   package,
   # The git config section, which is also the option name: "absorb".
   section,
@@ -47,7 +47,6 @@
   config,
   lib,
   options,
-  pkgs,
   ...
 }: let
   cfg = config.git.${section};
@@ -80,8 +79,8 @@ in {
     {git.settings = lib.mkMerge (lib.concatMap lower settings.leaves);}
     (lib.mkIf cfg.enable (
       if backend == "homeManager"
-      then {home.packages = [(package pkgs)];}
-      else {packages = [(package pkgs)];}
+      then {home.packages = [(package config.ai.internal.packages)];}
+      else {packages = [(package config.ai.internal.packages)];}
     ))
   ];
 }

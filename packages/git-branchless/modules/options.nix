@@ -38,7 +38,7 @@ in
     imports = [
       (import ../../../lib/git-tool-settings/tool-module.nix {
         inherit backend settings;
-        package = pkgs: pkgs.ai.gitTools.git-branchless;
+        package = ai: ai.gitTools.git-branchless;
         section = "branchless";
         tool = "git-branchless";
         enableDescription = ''

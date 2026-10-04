@@ -72,7 +72,7 @@ in {
 
       package = mkOption {
         type = types.package;
-        defaultText = lib.literalExpression "pkgs.ai.devTools.glab";
+        defaultText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "devTools.glab";
         description = "The glab package to wrap.";
       };
 

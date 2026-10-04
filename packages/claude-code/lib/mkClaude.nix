@@ -285,6 +285,7 @@ in
     ];
     defaults = {
       package = pkgs.ai.claude-code;
+      packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "claude-code";
     };
     agentsDescriptionSuffix = "Each lands at `.claude/agents/<name>.md` under the backend root (`~` for Home Manager, the project for devenv).";
     # The builder declares these pool options; Claude states its delivery.

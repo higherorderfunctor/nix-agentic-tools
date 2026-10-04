@@ -4,7 +4,7 @@
 # Both sites are needed. The records are exported as plain attrsets, so an
 # override (`r // {hm = r.hm // {config = …;};}`) or a hand-built record reaches
 # `hmTransform` / `devenvTransform` without passing the constructor. The
-# transform reads only record-level `config` and `defaults.package`, so a field
+# transform reads only record-level `config` and `defaults`, so a field
 # written against the retired per-backend seam would otherwise be dropped with
 # no error: the runtime evaluates and delivers nothing.
 #
@@ -25,7 +25,7 @@
 # only once the transform calls it: true, or a throw naming stray fields.
 {lib}: let
   backendKeys = ["installPackage" "migrationConfig" "options"];
-  defaultsKeys = ["package"];
+  defaultsKeys = ["package" "packageText"];
   # The pools whose option `mkBackendTransform.nix` declares through
   # `poolOption`, and so the only ones `poolOptions` can override.
   poolOptionPools = ["environmentVariables" "lspServers"];

@@ -54,7 +54,7 @@ in {
       ];
     }
     (lib.mkIf cfg.enable {
-      glab.package = lib.mkDefault pkgs.ai.devTools.glab;
+      glab.package = lib.mkDefault config.ai.internal.packages.devTools.glab;
 
       home.packages = [
         wrappedGlab

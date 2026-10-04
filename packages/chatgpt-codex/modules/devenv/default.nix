@@ -1,5 +1,6 @@
 # Applies the devenv transform to the chatgpt-codex app record.
 {
+  config,
   lib,
   pkgs,
   ...
@@ -19,7 +20,8 @@ in
   (aiLib.app.devenvTransform (import ../../lib/mkCodex.nix {
     getEnv = codexGetEnv;
     lib = lib // {ai = aiLib;};
-    inherit pkgs;
+    # This flake's build unless the overlay is applied (ai.internal.packages).
+    pkgs = pkgs // {ai = config.ai.internal.packages;};
     resolveGitCommonDir = codexGitCommonDirResolver;
   }))
   args

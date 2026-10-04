@@ -7,6 +7,7 @@
 # `{config, ...}: <body>`; the module system applies it, so it can be listed in
 # `imports` directly.
 {
+  config,
   lib,
   pkgs,
   ...
@@ -20,7 +21,8 @@ in {
     ../common.nix
     (extLib.ai.app.hmTransform (import ../../lib/mkKimchi.nix {
       lib = extLib;
-      inherit pkgs;
+      # This flake's build unless the overlay is applied (ai.internal.packages).
+      pkgs = pkgs // {ai = config.ai.internal.packages;};
     }))
   ];
 }

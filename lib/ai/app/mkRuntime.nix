@@ -12,7 +12,9 @@
 # Returned record shape:
 #   {
 #     name;                          # app identifier (used for ai.<name>.* paths)
-#     defaults ? {};                 # {package?} — shared across backends
+#     defaults ? {};                 # {package?, packageText?} — shared across
+#                                    #   backends; packageText is the package
+#                                    #   option's defaultText
 #     options ? {};                  # shared option declarations (both backends see these)
 #     supportedPools ? [];           # normalized ai.* pools the runtime consumes.
 #                                    # Unsupported per-runtime pool options are absent;

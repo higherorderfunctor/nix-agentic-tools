@@ -28,7 +28,15 @@
         {settings.global.excludes = lib.mkForce [];}
       ];
     }).config;
-  guardTable = (import ../markdown/guards.nix {inherit lib;}).table pkgs formatter.programs.prettier.enable;
+  # Recursion invariant: options.ai.guards is built by mapping over this table,
+  # so its key set and each entry's default, defaultText and description must
+  # not depend on package values. Only `program` may, because it reads
+  # config.ai.internal.packages; a key that read one would make the option
+  # declarations read config and recurse.
+  guardTable =
+    (import ../markdown/guards.nix {inherit lib;}).table
+    (pkgs // {ai = config.ai.internal.packages;})
+    formatter.programs.prettier.enable;
   mcpProxy = import ./mcpProxy.nix {inherit lib pkgs;};
   runtimeFiles = import ./runtime-files.nix {inherit lib;};
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
@@ -506,6 +514,22 @@ in {
         readOnly = true;
         visible = false;
         description = "Evaluated generated-file treefmt configuration.";
+      };
+      # The one helper every module package default reads.
+      packages = lib.mkOption {
+        type = lib.types.raw;
+        default = config.ai.internal.packagesFor pkgs;
+        internal = true;
+        readOnly = true;
+        visible = false;
+        description = "This flake's package tree (`ai.*`) for the module's pkgs: `pkgs.ai` when this flake's overlay is applied, else this flake's own build.";
+      };
+      packagesFor = lib.mkOption {
+        type = lib.types.raw;
+        default = throw "ai.internal.packagesFor: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those";
+        internal = true;
+        visible = false;
+        description = "Function from pkgs to this flake's package tree, supplied by the flake-level module wrappers.";
       };
       treefmtNix = lib.mkOption {
         type = lib.types.raw;
