@@ -813,6 +813,12 @@ in {
         withFalse = failedAssertions (withKimchi {
           native.harnessSettings.resources = enabled // {"extensions.memory" = false;};
         });
+        # A comma or whitespace would change which ids the comma list
+        # enables, and a key outside RESOURCE_KINDS names nothing.
+        badIds = ["extensions." "extensions.a b" "extensions.ferment-v2,extensions.memory" "memory" "widgets.x"];
+        withBad = failedAssertions (withKimchi {
+          native.harnessSettings.resources = enabled // lib.genAttrs badIds (_: true);
+        });
         hmResources =
           (hmHarnessSettings (evalHm {
             ai.kimchi = {
@@ -828,6 +834,9 @@ in {
         && !((devenvFiles ".config/kimchi/harness" resourcesOnly) ? "settings.json")
         && builtins.length withFalse == 1
         && lib.hasInfix "sets extensions.memory to false" (builtins.head withFalse)
+        && builtins.length withBad == 1
+        && lib.all (id: lib.hasInfix (builtins.toJSON id) (builtins.head withBad)) badIds
+        && !(lib.any (id: lib.hasInfix (builtins.toJSON id) (builtins.head withBad)) (builtins.attrNames enabled))
         && hmResources == enabled // {"extensions.memory" = false;}
     );
 
@@ -1565,15 +1574,9 @@ in {
       };
       wrapped = builtins.head result.config.home.packages;
       devenvConfigured = mkDevenvKimchiPackage {
-        ai.kimchi.native = {
-          harnessSettings.resources = {
-            "extensions.ferment-v2" = true;
-            "extensions.workflows" = true;
-          };
-          settings = {
-            region = "eu";
-            telemetry.enabled = false;
-          };
+        ai.kimchi.native.settings = {
+          region = "eu";
+          telemetry.enabled = false;
         };
       };
       devenvDefault = mkDevenvKimchiPackage {};
@@ -1613,14 +1616,6 @@ in {
         grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
         grep -q "KIMCHI_REGION.*eu" ${devenvConfigured}/bin/kimchi
         grep -q "KIMCHI_TELEMETRY_ENABLED.*0" ${devenvConfigured}/bin/kimchi
-        # makeWrapper's `--suffix` appends each comma-separated id in turn; a
-        # `--set` would render as one `export VAR=...` and replace the caller's.
-        grep -q 'KIMCHI_ENABLE_RESOURCES.*extensions.ferment-v2' ${devenvConfigured}/bin/kimchi
-        grep -q 'KIMCHI_ENABLE_RESOURCES.*extensions.workflows' ${devenvConfigured}/bin/kimchi
-        if grep -q '^export KIMCHI_ENABLE_RESOURCES=' ${devenvConfigured}/bin/kimchi; then
-          echo "devenv set KIMCHI_ENABLE_RESOURCES instead of appending to it" >&2
-          exit 1
-        fi
         expect_resources() {
           local expected=$1 actual
           shift
@@ -1632,6 +1627,9 @@ in {
         }
         expect_resources extensions.ferment-v2,extensions.workflows \
           env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesOnly}/bin/kimchi
+        # Set but empty: no leading comma.
+        expect_resources extensions.ferment-v2,extensions.workflows \
+          env KIMCHI_ENABLE_RESOURCES= ${devenvResourcesOnly}/bin/kimchi
         expect_resources extensions.memory,extensions.ferment-v2,extensions.workflows \
           env KIMCHI_ENABLE_RESOURCES=extensions.memory ${devenvResourcesOnly}/bin/kimchi
         expect_resources extensions.teleport,extensions.ferment-v2,extensions.workflows \

@@ -208,9 +208,13 @@
       then {}
       else native.harnessSettings.resources;
     idsSetTo = value: builtins.attrNames (lib.filterAttrs (_: enabled: enabled == value) resources);
+    # The variable is a comma list whose entries Kimchi trims, so a key with a
+    # comma or whitespace would enable a different id than the one declared.
+    validId = id: builtins.match "(${lib.concatStringsSep "|" sidecar.resourceKinds})\\.[^,[:space:]]+" id != null;
   in {
     disabledResources = idsSetTo false;
     enabledResources = idsSetTo true;
+    invalidResources = builtins.filter (id: !(validId id)) (builtins.attrNames resources);
     inherit (native.settings) region;
     telemetryEnabled =
       if native.settings.telemetry == null
@@ -550,6 +554,13 @@
               message = ''
                 ai.kimchi.native.harnessSettings contains settings Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeOnlyHarnessSettings}.
                 Set these with Home Manager, which owns ~/.config/kimchi/harness/settings.json. Without Home Manager that file is Kimchi's own. (`resources` is accepted here: the launcher passes its true-valued ids as KIMCHI_ENABLE_RESOURCES.)
+              '';
+            }
+            {
+              assertion = shadowed.invalidResources == [];
+              message = ''
+                ai.kimchi.native.harnessSettings.resources has ids devenv cannot deliver: ${lib.concatMapStringsSep ", " builtins.toJSON shadowed.invalidResources}.
+                Each id must be `<kind>.<name>` with kind one of ${lib.concatStringsSep ", " sidecar.resourceKinds}, and contain no comma or whitespace: the launcher joins the ids into the comma list KIMCHI_ENABLE_RESOURCES, whose entries Kimchi splits and trims.
               '';
             }
             {

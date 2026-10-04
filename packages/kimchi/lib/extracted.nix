@@ -255,6 +255,17 @@ in {
     then name
     else throw "ai.kimchi sets ${name}, which packages/kimchi/extracted.json does not list as a variable Kimchi reads and lets the caller set. Kimchi ${extracted.provenance.kimchiVersion} stopped reading it or overwrites it; update packages/kimchi/lib/mkKimchi.nix.";
 
+  # The resource kinds a harness `resources` key may start with, read from the
+  # key's template-literal index signatures (src/resources/types.ts
+  # RESOURCE_KINDS). An empty match means the sidecar's shape changed; fail
+  # rather than reject every key.
+  resourceKinds = let
+    kinds = lib.concatLists (builtins.filter builtins.isList (builtins.split "\\[x: `([a-z]+)\\.\\$\\{string}`]" extracted.harness.keys.resources.typeExpression));
+  in
+    if kinds == []
+    then throw "packages/kimchi/extracted.json harness.keys.resources.typeExpression lists no `<kind>.\${string}` index signatures; update packages/kimchi/lib/extracted.nix."
+    else lib.sort (a: b: a < b) kinds;
+
   report = {
     excluded = lib.mapAttrs (_: s: s.excluded) generated;
     staleExclusions = stale exclusions;

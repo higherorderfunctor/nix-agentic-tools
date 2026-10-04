@@ -21,12 +21,13 @@ applyTo: "packages/kimchi/**"
 > Its rules use the shared flat AGENTS.md renderer and repository aggregate.
 > Region is required; Home Manager delivers it and telemetry through global
 > config.json only. Devenv accepts harness `resources` and appends the
-> true-valued ids to `KIMCHI_ENABLE_RESOURCES`, rejecting a false value. The
-> pinned pi dependency is 0.85.1. Agents are read-only copies from the runtime's
-> generated Markdown tree; the opt-in docs skill uses the shared frontmatter
-> text renderer and a guarded generated-file tree that formats whole files and
-> compares parsed header values; a store-path string is an input just as a path
-> is. Full lineage: `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
+> true-valued ids to `KIMCHI_ENABLE_RESOURCES`, rejecting a false value or a
+> malformed id. The pinned pi dependency is 0.85.1. Agents are read-only copies
+> from the runtime's generated Markdown tree; the opt-in docs skill uses the
+> shared frontmatter text renderer and a guarded generated-file tree that
+> formats whole files and compares parsed header values; a store-path string is
+> an input just as a path is. Full lineage:
+> `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -286,11 +287,16 @@ false value. Home Manager writes `resources` into the user file unchanged.
 Devenv appends the true-valued ids, sorted and comma-joined, to
 `KIMCHI_ENABLE_RESOURCES` with makeWrapper's `--suffix VAR , VAL`, keeps
 `resources` out of the project harness `settings.json`, and fails evaluation on
-a false value. The variable is an additive comma list (`store.ts:45-61`), so the
-wrapper must not `--set` it: a caller's value, or an
+a false value. It also rejects an id that is not `<kind>.<name>`, with the kinds
+read from the sidecar's `resources` type (`src/resources/types.ts`
+`RESOURCE_KINDS`), or that contains a comma or whitespace: Kimchi splits the
+variable on commas and trims each entry, so such a key would enable a different
+id than the one declared. The variable is an additive comma list
+(`store.ts:45-61`), so the wrapper must not `--set` it: a caller's value, or an
 `ai.kimchi.environmentVariables` entry (which is `--set` first), is kept and the
-declared ids are appended to it. Locked by
-`module-kimchi-devenv-env-shadowed-resources` and
+declared ids are appended to it. The wrapper check runs the launcher against a
+stub for an unset, empty and non-empty caller value rather than grepping its
+text. Locked by `module-kimchi-devenv-env-shadowed-resources` and
 `module-kimchi-wrapper-builds`.
 
 `ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
