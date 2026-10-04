@@ -278,8 +278,10 @@ rec {
     # launch. Since 2.23.0 the JS is no longer present as plaintext in the ELF,
     # so both settings fields come from that authoritative TUI source. The
     # materializer stops before agent startup and has only a fake KAS available.
+    # It is referenced through the directory because it imports its sibling
+    # isolated_launch.py, which the KAS-bundle drift check shares.
     tuiJs="$PWD/kiro-tui.js"
-    "$python3" ${../extract/embedded-tui.py} "$kiroChatBin" "$tuiJs" ${kiroFakeKasScript pkgs} ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+    "$python3" ${../extract}/embedded-tui.py "$kiroChatBin" "$tuiJs" ${kiroFakeKasScript pkgs} ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
     settingsJson=$(${kiroSettingsExtractScript pkgs} "$tuiJs")
     # Model availability is server-side and account-dependent. Suggestions come
     # from the public documentation snapshot, refreshed independently of releases.

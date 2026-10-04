@@ -78,8 +78,25 @@
     substantive work is not.
     </workflow_orchestration_reminder>
   '';
+
+  # Vendor sentences `defaultText` is written against. The
+  # kiro-workflows-steering-drift check extracts the steering from the pinned
+  # release's real engine bundle and fails when any of these is gone, so a
+  # vendor rewrite under the reminder turns the kiro-cli update PR red instead
+  # of leaving the reminder pointing at, or correcting, text that moved.
+  # `paragraph` names what to re-review when the check fires.
+  vendorAnchors = [
+    {
+      paragraph = "delegation (one run_workflow call carrying a workflowPrompt brief)";
+      text = "create and launch the workflow with a single `run_workflow` call carrying a `workflowPrompt` brief";
+    }
+    {
+      paragraph = "review loop (the reviewer is always last)";
+      text = "The reviewer is always the last step";
+    }
+  ];
 in {
-  inherit defaultText;
+  inherit defaultText vendorAnchors;
 
   # Command-mode reminder for `includeVendorSteering = true`: the vendor text
   # cannot be read at eval time (the engine bundle is unpacked from the binary
