@@ -334,7 +334,7 @@ nix build .#dns-root-hints
 | `chatgpt-codex` | OpenAI Codex CLI |
 | `claude-code` | Claude Code CLI |
 | `copilot-cli` | GitHub Copilot CLI |
-| `kimchi` | Kimchi CLI with optional external source-built workflows (`ai.kimchi.extensions.workflows.enable`) |
+| `kimchi` | Kimchi CLI with optional external source-built workflows (ai.kimchi.extensions.workflows.enable) |
 | `kiro-cli` | Kiro CLI |
 | `kiro-gateway` | Python proxy API for Kiro |
 | `semble` | Local semantic and lexical code-search CLI |
