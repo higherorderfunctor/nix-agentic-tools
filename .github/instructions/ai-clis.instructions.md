@@ -370,10 +370,10 @@ Each names a fixable entry (set `extensions` or rename the server, or
 
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-03 — the unfree CLIs are absent from `packages` and
-> read from `ciPackages` or `legacyPackages`; main-tracking rev bumps are done
-> by `update-pkg.sh`; chatgpt-codex installs upstream's complete
-> `codex-package-<target>` layout.
+> **Last verified:** 2026-10-03 — the unfree packages are absent from `packages`
+> and read from `ciPackages` or `legacyPackages`, repository commands included;
+> main-tracking rev bumps are done by `update-pkg.sh`; chatgpt-codex installs
+> upstream's complete `codex-package-<target>` layout.
 
 ### Overview
 
@@ -394,11 +394,11 @@ Packages live under `pkgs.ai.*` and are flattened to top-level flake outputs
 (`chatgpt-codex`, `claude-code`, `copilot-cli`, `kimchi`, `kiro-cli`,
 `kiro-gateway`).
 
-claude-code, copilot-cli, kiro-cli and kiro-cli-workflows are unfree, so they
-are not in `packages.<system>`: `nix flake check` forces every drvPath there,
-and this flake never enables unfree for a consumer. Consumers get them from
-`legacyPackages.<system>` (or the overlay, or the modules) with their own unfree
-opt-in. Repository code reads them from `ciPackages.<system>`.
+claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-cli-workflows are
+unfree, so they are not in `packages.<system>`: `nix flake check` forces every
+drvPath there, and this flake never enables unfree for a consumer. Consumers get
+them from `legacyPackages.<system>` (or the overlay, or the modules) with their
+own unfree opt-in. Repository code reads them from `ciPackages.<system>`.
 
 ### Build Patterns
 
@@ -614,9 +614,10 @@ carries the two commands that detect this class.
 
 ```bash
 nix build .#chatgpt-codex       # Build OpenAI Codex CLI
-nix build .#copilot-cli         # Build Copilot CLI
 nix build .#kimchi              # Build Kimchi CLI
-nix build .#kiro-cli            # Build Kiro CLI
 nix build .#kiro-gateway        # Build Kiro Gateway
+# Unfree packages are not in `packages`; build them from the internal set
+nix build .#ciPackages.<system>.copilot-cli   # Build Copilot CLI
+nix build .#ciPackages.<system>.kiro-cli      # Build Kiro CLI
 nix run .#update                # Update all source versions via config.update.targets
 ```

@@ -244,7 +244,7 @@ no sandbox.
 
 ```bash
 # Does the package expose the shared bwrap path? Then these rules apply.
-K=$(nix build --no-link --print-out-paths .#kiro-cli)
+K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli)
 readlink -f "$K/libexec/kiro-cli/kiro-cli-wrapper"
 ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole world
 ```

@@ -210,6 +210,14 @@
   };
   builtSystems = lib.concatMapStringsSep " and " (system: "`${system}`") (import ../config/systems.nix);
 
+  # ── Unfree packages ──────────────────────────────────────────────────
+  # Read off every claimed leaf's `meta.unfree`, so the README's list cannot
+  # drift from the licenses. `meta` is readable without an unfree opt-in.
+  unfreeNames =
+    lib.sort lib.lessThan (lib.unique (map lib.last (builtins.filter (keyPath: (lib.attrByPath keyPath {} pkgs).meta.unfree or false)
+          (map (claim: claim.keyPath) (lib.concatMap (owner: owner.contributions.packages) registry.index.owners)))));
+  unfreeList = "${lib.concatStringsSep ", " (lib.init unfreeNames)} and ${lib.last unfreeNames}";
+
   # ── Full README content ──────────────────────────────────────────────
   # The AI feature matrix is intentionally capability-oriented rather than a
   # blanket "all CLIs" claim. Codex lacks some native surfaces (notably LSP
@@ -264,8 +272,9 @@
     # builds without it.
     nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 
-    # claude-code, copilot-cli and kiro-cli are unfree: allow them in the
-    # nixpkgs.config your pkgs comes from (NixOS's when useGlobalPkgs is set).
+    # Unfree: ${unfreeList}.
+    # Allow them in the nixpkgs.config your pkgs comes from (NixOS's when
+    # useGlobalPkgs is set).
 
     # Home-manager config
     imports = [inputs.nix-agentic-tools.homeManagerModules.default];
@@ -306,7 +315,8 @@
 
     ```yaml
     # devenv.yaml
-    # claude-code, copilot-cli and kiro-cli are unfree: opt in as for nixpkgs.
+    # Unfree: ${unfreeList}.
+    # Opt in as for nixpkgs.
     allowUnfree: true
     inputs:
       nix-agentic-tools:

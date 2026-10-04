@@ -251,7 +251,7 @@ no sandbox.
 
 ```bash
 # Does the package expose the shared bwrap path? Then these rules apply.
-K=$(nix build --no-link --print-out-paths .#kiro-cli)
+K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli)
 readlink -f "$K/libexec/kiro-cli/kiro-cli-wrapper"
 ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole world
 ```
@@ -773,7 +773,7 @@ the launcher FORWARDS, put a `kiro-cli-chat` that prints its argv first on
 `PATH` on purpose.
 
 ```bash
-K=$(nix build --no-link --print-out-paths .#kiro-cli); KB="$K/bin/kiro-cli"
+K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli); KB="$K/bin/kiro-cli"
 
 # 1. globals still parse BEFORE a subcommand, and still fail after it
 "$KB" --tui --v3 whoami >/dev/null && echo "prepend ok"

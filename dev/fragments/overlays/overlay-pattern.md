@@ -459,11 +459,11 @@ matching its sidecar. Two cheap probes:
 
 ```bash
 # Does the exported version still match the pin we wrote?
-nix eval --raw .#kiro-cli.version
+nix eval --raw .#ciPackages.x86_64-linux.kiro-cli.version
 jq -r .version packages/kiro-cli/sources.json
 
 # Did our postFixup actually run? (no wrappers => fixupPhase never happened)
-ls -a "$(nix build .#kiro-cli --no-link --print-out-paths)/bin"
+ls -a "$(nix build .#ciPackages.x86_64-linux.kiro-cli --no-link --print-out-paths)/bin"
 ```
 
 The derived lesson generalizes past kiro: **a thin `overrideAttrs` does NOT
