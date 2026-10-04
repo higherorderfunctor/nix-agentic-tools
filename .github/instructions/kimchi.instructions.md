@@ -20,9 +20,11 @@ applyTo: "packages/kimchi/**"
 > the runtime; the remaining files and every devenv file stay read-only copies.
 > Its rules use the shared flat AGENTS.md renderer and repository aggregate.
 > Region is required; Home Manager delivers it and telemetry through global
-> config.json only. The pinned pi dependency is 0.85.1. Agents are read-only
-> copies from the runtime's generated Markdown tree; the opt-in docs skill uses
-> the shared frontmatter text renderer and a guarded generated-file tree that
+> config.json only. Devenv accepts harness `resources` and appends the
+> true-valued ids to `KIMCHI_ENABLE_RESOURCES`, rejecting a false value or a
+> malformed id. The pinned pi dependency is 0.85.1. Agents are read-only copies
+> from the runtime's generated Markdown tree; the opt-in docs skill uses the
+> shared frontmatter text renderer and a guarded generated-file tree that
 > formats whole files and compares parsed header values; a store-path string is
 > an input just as a path is. Full lineage:
 > `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
@@ -154,9 +156,10 @@ every path and no earlier statement reads it, counting what a callee handed
 preserved first, so it stays settable. The analysis fails instead of guessing
 when a module entry.ts statically imports reads the same name, or when an
 assignment follows entry.ts's first `await` or `import()`. Every variable the
-factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_REGION`,
-`KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`, which fails
-evaluation if the pinned Kimchi no longer reads it or starts overwriting it.
+factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`,
+`KIMCHI_REGION`, `KIMCHI_TELEMETRY_ENABLED`) goes through `environmentName`,
+which fails evaluation if the pinned Kimchi no longer reads it or starts
+overwriting it.
 
 Every resolved environment name is either published from an annotation (a
 `controls` description and optional `introduced` release) or listed, with a
@@ -275,6 +278,27 @@ Devenv emits `KIMCHI_REGION` or `KIMCHI_TELEMETRY_ENABLED` when its
 corresponding setting is declared, because it never writes `$HOME` and Kimchi
 ignores those leaves in a project `config.json`.
 
+Harness `resources` toggles follow the same shape. Kimchi reads them only from
+`$KIMCHI_CODING_AGENT_DIR/settings.json` or the user harness `settings.json`
+(`src/resources/store.ts:9-13`), never from a project. A settings override beats
+`KIMCHI_ENABLE_RESOURCES`, which beats the resource's default
+(`store.ts:35-43`), and the variable lists ids to enable, so it cannot carry a
+false value. Home Manager writes `resources` into the user file unchanged.
+Devenv appends the true-valued ids, sorted and comma-joined, to
+`KIMCHI_ENABLE_RESOURCES` with makeWrapper's `--suffix VAR , VAL`, keeps
+`resources` out of the project harness `settings.json`, and fails evaluation on
+a false value. It also rejects an id that is not `<kind>.<name>`, with the kinds
+read from the sidecar's `resources` type (`src/resources/types.ts`
+`RESOURCE_KINDS`), or that contains a comma or whitespace: Kimchi splits the
+variable on commas and trims each entry, so such a key would enable a different
+id than the one declared. The variable is an additive comma list
+(`store.ts:45-61`), so the wrapper must not `--set` it: a caller's value, or an
+`ai.kimchi.environmentVariables` entry (which is `--set` first), is kept and the
+declared ids are appended to it. The wrapper check runs the launcher against a
+stub for an unset, empty and non-empty caller value rather than grepping its
+text. Locked by `module-kimchi-devenv-env-shadowed-resources` and
+`module-kimchi-wrapper-builds`.
+
 `ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
 `lib/credentials.nix` shape. Kimchi reads git tokens only from the user
 `config.json` and has no environment input for them
@@ -390,11 +414,13 @@ through `this.globalSettings` or `getGlobalSettings()` (`defaultProjectTrust`,
 `httpProxy` in pi 0.85.1) are user scope, and a key it sees read neither way
 stops the extraction. Every Kimchi addition is user scope, because Kimchi reads
 them itself from `~/.config/kimchi/harness/settings.json`, never through pi's
-merged manager. It likewise rejects every `native.settings` key whose sidecar
-`project` flag is false (`gitTokens`, `onboarding`, `preferences`, `region`,
-`surveys`, `telemetry`, `teleport` in 1.1.37), except `region` and
-`telemetry.enabled`, which it passes through the launcher environment instead.
-Set the rest with Home Manager; without it, the user files are Kimchi's own.
+merged manager. The one exception is `resources`, which devenv passes as
+`KIMCHI_ENABLE_RESOURCES` (enable-only, above). It likewise rejects every
+`native.settings` key whose sidecar `project` flag is false (`gitTokens`,
+`onboarding`, `preferences`, `region`, `surveys`, `telemetry`, `teleport` in
+1.1.37), except `region` and `telemetry.enabled`, which it passes through the
+launcher environment instead. Set the rest with Home Manager; without it, the
+user files are Kimchi's own.
 
 ## Agents: read-only copies
 

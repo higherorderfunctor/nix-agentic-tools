@@ -12,8 +12,8 @@
 # `lib/ai/mkSkillPackageModule.nix` for every runtime whose skills pool exists in
 # this evaluation. `ai.skills` keeps its `attrsOf (nullOr path)` type.
 #
-# EVERY runtime is supported, unlike delegate-routing, which excludes kimchi
-# because kimchi has no delegate primitive. Kimchi's documentation is useful to
+# EVERY runtime is supported, unlike delegate-routing, which excludes Copilot
+# because its sizing controls are not established. Kimchi's documentation is useful to
 # any agent working on a kimchi integration, whichever harness it runs in, so the
 # `presentSkillRuntimes` filter inside the factory gives the right set on its own
 # and no list is hardcoded here.

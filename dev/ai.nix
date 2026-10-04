@@ -1,4 +1,4 @@
-# cspell:ignore sembleignore
+# cspell:ignore nemotron sembleignore zhipu
 # This repository's `ai.*` configuration, through the same interface any
 # consumer uses. dev/generate.nix only produces content; this module hands it
 # to `ai.*`, which owns and writes every runtime's instruction files:
@@ -71,6 +71,63 @@ in {
 
     programs.delegate-routing = {
       enable = true;
+      # Kimchi-served families. The package ships none, so this repository
+      # declares the ones its Kimchi runtime selects below.
+      families = {
+        deepseek.deepseek-flash = {
+          avoidFor = "review, building code, correctness judgment; knowledge-heavy questions";
+          effort = "thinks by default; low for reads, high for tracing; never cap output tokens small (returns empty)";
+          match = "deepseek-v*-flash*";
+          tier = "small";
+          useFor = "codebase exploration, research reads, compaction, trivial re-verification";
+        };
+        minimax.minimax = {
+          avoidFor = "judging or review (abstains, weak abstract reasoning)";
+          effort = "no documented knob; expect long reasoning traces";
+          match = "minimax-m*";
+          tier = "mid";
+          useFor = "well-scoped code to a spec; screenshot or image input";
+        };
+        moonshot = {
+          kimi-k2 = {
+            avoidFor = "build subagents on a time budget (slow, times out); mixed-goal prompts";
+            effort = "always thinks";
+            match = "kimi-k2*";
+            tier = "mid";
+            useFor = "coding with image input";
+          };
+          kimi-k3 = {
+            avoidFor = "simple or latency-bound work (slow, always thinks); ambiguous briefs; mid-session model switches";
+            effort = "always thinks; treat effort as fixed";
+            match = "kimi-k3*";
+            tier = "strong";
+            useFor = "orchestration and review; frontend and browsing-heavy agentic work";
+          };
+        };
+        nvidia.nemotron-ultra = {
+          avoidFor = "review, building code, multi-file edits, long-horizon planning";
+          effort = "keep the reasoning budget low; the value is speed";
+          match = "nemotron-*-ultra*";
+          tier = "small";
+          useFor = "cheapest, fastest long-context reads: exploration, doc ingestion, confirming tests pass";
+        };
+        zhipu = {
+          glm = {
+            avoidFor = "image input (text-only); quick lookups (thinking cannot be turned off)";
+            effort = "low, high or max; high default, max for judging";
+            match = "glm-[0-9]*.[0-9]";
+            tier = "strong";
+            useFor = "planning, spec writing, judging; hard multi-file coding";
+          };
+          glm-flash = {
+            avoidFor = "edits near untested working code; flaky tasks (extra time does not help); hard reasoning";
+            effort = "token-hungry thinking; keep the default effort";
+            match = "glm-*-flash";
+            tier = "mid";
+            useFor = "code to a spec; the writer in a writer-judge loop with glm; image or document input";
+          };
+        };
+      };
       # Enable the package's own guidance here because this repository is its primary consumer.
       whenToDelegate = {
         "Launch independent work together".enable = true;
@@ -202,7 +259,7 @@ in {
       };
       programs.delegate-routing = {
         extraRuntimes = ["codex"];
-        manualExternalDelegates = ["kiro"];
+        manualExternalDelegates = ["kimchi" "kiro"];
       };
     };
     codex = {
@@ -232,11 +289,21 @@ in {
     # read, so `.config/kimchi/**` is materialized-but-inert today. Enabling
     # the runtime is still correct — it stops `kimchi` resolving to whatever
     # the developer happens to have installed user-globally.
-    kimchi.enable = true;
+    kimchi = {
+      enable = true;
+      # Not part of that inert fanout: devenv passes these through the
+      # launcher as KIMCHI_ENABLE_RESOURCES, which Kimchi reads.
+      native.harnessSettings.resources = {
+        "extensions.ferment-v2" = true;
+        "extensions.workflows" = true;
+      };
+      programs.delegate-routing.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
+    };
     kiro = {
       enable = true;
-      # Operator choice: GPT models cost more credits on Kiro, so select Anthropic only.
-      programs.delegate-routing.models = [{vendors = ["anthropic"];}];
+      # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
+      # only, and not Fable, which this account does not have.
+      programs.delegate-routing.models = [{families = ["haiku" "opus" "sonnet"];}];
       mcpServers.agnix = agnixMcp;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
       # a launcher-global option, so it reaches every subcommand including

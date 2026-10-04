@@ -166,6 +166,17 @@
           writes a read-only .config/kimchi/harness/settings.json when
           something is declared.
         ''
+        + lib.optionalString (!isHm) ''
+          Devenv rejects keys Kimchi reads only from the user settings.json,
+          with one exception: `resources`. Kimchi reads resource toggles only
+          from the user file, so devenv appends the ids set to true,
+          comma-joined, to KIMCHI_ENABLE_RESOURCES (keeping any value the
+          caller already set) and leaves them out of the project file. That
+          variable can only enable a resource, so devenv rejects a false
+          value; disable a resource with Home Manager or
+          `kimchi resources disable <id>`, either of which outranks the
+          variable.
+        ''
         + lib.optionalString isHm ''
           Home Manager defaults the model to Kimchi's Auto router,
           `defaultProvider = "kimchi-dev"` and `defaultModel = "auto"`, at
@@ -188,12 +199,27 @@
   # only at global scope. A project config.json cannot supply either leaf, so
   # devenv delivers its accepted exceptions through the launcher environment.
   # Home Manager writes the global leaves and needs no duplicate environment.
-  envShadowedSettings = settings: {
-    inherit (settings) region;
+  # Harness `resources` toggles are read only from the user settings.json
+  # (src/resources/store.ts:9-13); KIMCHI_ENABLE_RESOURCES delivers the
+  # true-valued ids, and nothing can deliver a false one (store.ts:35-60).
+  envShadowedSettings = native: let
+    resources =
+      if native.harnessSettings.resources == null
+      then {}
+      else native.harnessSettings.resources;
+    idsSetTo = value: builtins.attrNames (lib.filterAttrs (_: enabled: enabled == value) resources);
+    # The variable is a comma list whose entries Kimchi trims, so a key with a
+    # comma or whitespace would enable a different id than the one declared.
+    validId = id: builtins.match "(${lib.concatStringsSep "|" sidecar.resourceKinds})\\.[^,[:space:]]+" id != null;
+  in {
+    disabledResources = idsSetTo false;
+    enabledResources = idsSetTo true;
+    invalidResources = builtins.filter (id: !(validId id)) (builtins.attrNames resources);
+    inherit (native.settings) region;
     telemetryEnabled =
-      if settings.telemetry == null
+      if native.settings.telemetry == null
       then null
-      else settings.telemetry.enabled;
+      else native.settings.telemetry.enabled;
   };
   # What a project .kimchi/config.json carries: the declaration without the
   # environment-shadowed leaves.
@@ -202,6 +228,9 @@
       region = null;
       telemetry.enabled = null;
     });
+  # What a project harness settings.json carries: the declaration without
+  # `resources`, which the launcher delivers instead.
+  projectHarnessSettings = cfg: aiCommon.filterNulls (cfg.native.harnessSettings // {resources = null;});
 
   # Kimchi 1.1.37's lifecycle events, FULL_COMMAND_HOOK_EVENTS
   # (src/extensions/hook-adapters/discovery.ts:29-50). Every portable event
@@ -250,7 +279,7 @@
     requiredProjectRoot ? null,
   }: let
     # Non-secret env vars — baked into the wrapper via `--set`.
-    shadowed = envShadowedSettings cfg.native.settings;
+    shadowed = envShadowedSettings cfg.native;
     kimchiEnvVars = lib.optionalAttrs (backend == "devenv") (
       lib.optionalAttrs (shadowed.region != null) {${sidecar.environmentName "KIMCHI_REGION"} = shadowed.region;}
       # Any value but `0` or `false` turns telemetry on.
@@ -287,11 +316,17 @@
       fi
     '';
 
-    # wrapProgram args: `--set` for non-secret env, `--run` for the
-    # runtime secret export. Joined with a single space on the continued
-    # line — never a backslash-newline, which breaks multi-arg wrapping.
+    # wrapProgram args: `--set` for non-secret env, `--suffix` for devenv's
+    # resource ids, `--run` for the runtime secret export. Joined with a
+    # single space on the continued line — never a backslash-newline, which
+    # breaks multi-arg wrapping.
     wrapArgs =
       lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
+      # KIMCHI_ENABLE_RESOURCES is an additive comma list (store.ts:45-61), so
+      # the declared ids are appended to a caller's or an `ai.kimchi`
+      # environment value instead of replacing it. Placed after `--set` so a
+      # set value is extended, not overwritten.
+      ++ lib.optional (backend == "devenv" && shadowed.enabledResources != []) "--suffix ${lib.escapeShellArg (sidecar.environmentName "KIMCHI_ENABLE_RESOURCES")} , ${lib.escapeShellArg (lib.concatStringsSep "," shadowed.enabledResources)}"
       ++ lib.optional (exactCwdGuard != "") "--run ${lib.escapeShellArg exactCwdGuard}"
       ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
 
@@ -330,7 +365,7 @@
     hasExactCwdProjectFiles =
       projectSettings cfg
       != {}
-      || aiCommon.filterNulls cfg.native.harnessSettings != {}
+      || projectHarnessSettings cfg != {}
       || mergedServers != {}
       || mergedAgents != {}
       || aiCommon.filterNulls cfg.permissions != {}
@@ -366,6 +401,8 @@
     filteredSettings = aiCommon.filterNulls cfg.native.settings;
     filteredProjectSettings = projectSettings cfg;
     filteredHarnessSettings = aiCommon.filterNulls cfg.native.harnessSettings;
+    filteredProjectHarnessSettings = projectHarnessSettings cfg;
+    shadowed = envShadowedSettings cfg.native;
     filteredPermissions = aiCommon.filterNulls cfg.permissions;
     gitTokens = lib.filterAttrs (_: token: token != null) cfg.gitTokens;
     isDevenv = backend == "devenv";
@@ -395,7 +432,7 @@
       if isDevenv
       then "${projectDir}/agents"
       else "${harness}/agents";
-    userScopeOnlyHarnessSettings = lib.intersectLists sidecar.userScopeHarnessKeys (builtins.attrNames filteredHarnessSettings);
+    userScopeOnlyHarnessSettings = lib.intersectLists sidecar.userScopeHarnessKeys (builtins.attrNames filteredProjectHarnessSettings);
     userScopeConfigSettings = lib.intersectLists sidecar.userScopeConfigKeys (builtins.attrNames filteredProjectSettings);
     fixedEnvironmentVariables = builtins.attrNames (builtins.intersectAttrs sidecar.fixedEnvironmentVariables (lib.filterAttrs (_: value: value != null) mergedEnvironmentVariables));
     # Home Manager's agents ledger identity predates project-path delivery and
@@ -516,7 +553,21 @@
               assertion = userScopeOnlyHarnessSettings == [];
               message = ''
                 ai.kimchi.native.harnessSettings contains settings Kimchi reads only from user scope: ${lib.concatStringsSep ", " userScopeOnlyHarnessSettings}.
-                Set these with Home Manager, which owns ~/.config/kimchi/harness/settings.json. Without Home Manager that file is Kimchi's own.
+                Set these with Home Manager, which owns ~/.config/kimchi/harness/settings.json. Without Home Manager that file is Kimchi's own. (`resources` is accepted here: the launcher passes its true-valued ids as KIMCHI_ENABLE_RESOURCES.)
+              '';
+            }
+            {
+              assertion = shadowed.invalidResources == [];
+              message = ''
+                ai.kimchi.native.harnessSettings.resources has ids devenv cannot deliver: ${lib.concatMapStringsSep ", " builtins.toJSON shadowed.invalidResources}.
+                Each id must be `<kind>.<name>` with kind one of ${lib.concatStringsSep ", " sidecar.resourceKinds}, and contain no comma or whitespace: the launcher joins the ids into the comma list KIMCHI_ENABLE_RESOURCES, whose entries Kimchi splits and trims.
+              '';
+            }
+            {
+              assertion = shadowed.disabledResources == [];
+              message = ''
+                ai.kimchi.native.harnessSettings.resources sets ${lib.concatStringsSep ", " shadowed.disabledResources} to false, which devenv cannot deliver: Kimchi reads resource toggles only from ~/.config/kimchi/harness/settings.json, and KIMCHI_ENABLE_RESOURCES can only enable.
+                Remove the false entries. Disable a resource with Home Manager or `kimchi resources disable <id>`; either outranks the variable.
               '';
             }
           ];
@@ -569,7 +620,7 @@
       # declaration, so in-app changes do not persist.
       {
         ai.kimchi.files = lib.listToAttrs (
-          lib.optional isDevenv (settingsCopy "settings" "${harness}/settings.json" {content.value = filteredHarnessSettings;})
+          lib.optional isDevenv (settingsCopy "settings" "${harness}/settings.json" {content.value = filteredProjectHarnessSettings;})
           ++ [
             (settingsCopy "mcpServers" "${mcpAndSkillsDir}/mcp.json" {
               content.value = lib.optionalAttrs (mergedServers != {}) {

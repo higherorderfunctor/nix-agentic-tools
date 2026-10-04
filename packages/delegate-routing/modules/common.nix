@@ -7,8 +7,8 @@ args @ {
   ...
 }: let
   delegateRoutingRenames = args.delegateRoutingRenames or (import ../lib/when-to-delegate-renames.nix);
-  # Kimchi has no delegate primitive; Copilot's sizing controls are not established.
-  supportedRuntimes = ["claude" "codex" "kiro"];
+  # Copilot's sizing controls are not established.
+  supportedRuntimes = ["claude" "codex" "kimchi" "kiro"];
   defaults = pkgs.delegate-routing-content;
   portable = config.ai.programs.delegate-routing;
   vocabulary = import ../lib/vocabulary.nix;
@@ -76,7 +76,7 @@ args @ {
         };
       });
       default = defaults.models.${runtime};
-      description = "Alternative family selectors. Each non-empty field must match; an empty selector is invalid. Kiro requires an explicit selection when its skill is enabled.";
+      description = "Alternative family selectors. Each non-empty field must match; an empty selector is invalid. Kimchi and Kiro require an explicit selection when their skill is enabled.";
     };
     techniques = lib.mkOption {
       type = lib.types.attrsOf techniqueType;

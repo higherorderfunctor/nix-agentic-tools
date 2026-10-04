@@ -62,6 +62,28 @@
       notes = "read `usedPercent`, `remainingPercent`, `resetsAt`";
     };
   };
+  kimchi = {
+    Agent = {
+      kind = "subagent";
+      modes = ["acp" "headless" "interactive"];
+      notes = "always pass `thinking` explicitly: an omitted one falls back to the persona default, not the parent's level; an omitted `model` uses the session's, or the role model when multi-model is on; with multi-model on, an explicit `model` must be in the allowed pool; runs in the background by default when a UI is attached";
+      pinsEffort = true;
+      pinsModel = true;
+    };
+    "kimchi -p" = {
+      command = ''kimchi -p --mode json --no-session --model <id> --thinking <level> "<prompt>"'';
+      kind = "external";
+      modes = ["headless"];
+      notes = "thinking levels: off, minimal, low, medium, high, xhigh, max. An unknown model exits 1, but an invalid --thinking only warns and runs, so validate it yourself; loads the project AGENTS.md, so no prompt is small; the answer is the last assistant message in the `agent_end` event's `messages`";
+      pinsEffort = true;
+      pinsModel = true;
+    };
+    models = {
+      command = "kimchi --list-models";
+      kind = "introspect";
+      notes = "pass its `model` column to `--model`; the `thinking` column says whether `--thinking` applies";
+    };
+  };
   kiro = {
     invoke_sub_agent = {
       kind = "subagent";

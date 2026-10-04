@@ -1,25 +1,28 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-03 — portable families and runtime selectors
-> replace pinned model versions; structured techniques describe delegation
-> controls.
+> **Last verified:** 2026-10-03 — Kimchi is a supported runtime with no package
+> families or default selection; its techniques come from Kimchi 1.5.1 probes
+> and source, with no `/workflow` node; under devenv its skill loads only in a
+> trusted project.
 
 `ai.programs.delegate-routing.families` is the portable decision table, keyed by
 vendor and family. Each family has a capability tier, task and effort guidance,
 and a required normalized live-model pattern. Package fields use `mkDefault`, so
 consumers can override one field or add a family without replacing the table.
 `lib/families.nix` carries the eight package families; it contains no concrete
-model versions.
+model versions and no Kimchi-served vendors. Kimchi serves other vendors'
+models, so a consumer declares those families; this repository does in
+`dev/ai.nix`.
 
 Each runtime chooses families through
 `ai.<runtime>.programs.delegate-routing.models`. Selectors are alternatives;
 within a selector every non-empty field must match the vendor, tier and family
-name. Claude defaults to Anthropic, Codex to OpenAI, and Kiro to no selection.
-Empty selectors, and selectors naming a vendor, tier or family that is not
-configured, fail assertions. An enabled program on an enabled runtime must
-select at least one family. That program's `extraRuntimes` and
-`manualExternalDelegates` targets also need a family selection, even when a
-target runtime or program is disabled.
+name. Claude defaults to Anthropic, Codex to OpenAI, and Kimchi and Kiro to no
+selection, so the package builds no default skill for either. Empty selectors,
+and selectors naming a vendor, tier or family that is not configured, fail
+assertions. An enabled program on an enabled runtime must select at least one
+family. That program's `extraRuntimes` and `manualExternalDelegates` targets
+also need a family selection, even when a target runtime or program is disabled.
 
 Resolve a concrete model at launch time: introspect the runtime's live list,
 choose its newest model matching the family's pattern, and use that runtime's
@@ -39,8 +42,15 @@ ACP. Assertions require both pin fields to be non-null exactly for delegate
 kinds, and a command for every external node. Each package field uses
 `mkDefault`; consumers can replace fields, add nodes or disable individual
 nodes. External and manual runtime sections include only external, introspect
-and usage nodes. Codex has no workflow node. Shared table rendering escapes
-cells once for families and techniques.
+and usage nodes. Codex and Kimchi have no workflow node; Kimchi has no usage
+node because no command reads usage without a model turn.
+
+Kimchi's nodes record Kimchi 1.5.1 probes and source. Its Agent tool pins model
+and thinking, but an omitted `thinking` falls back to the persona default rather
+than the parent's level, so the notes say to pass it. Kimchi's `/workflow` is a
+slash command with no model tool, so no delegate can call it and it has no node;
+`dev/ai.nix` still enables the `extensions.workflows` resource for interactive
+use. Shared table rendering escapes cells once for families and techniques.
 
 Portable `rules` and `procedure` use `lib.ai.types.optionalTextSource` with
 enabled package `defaultContent`. Set `text` or `source` to replace either, or
@@ -49,11 +59,17 @@ runtime techniques. The procedure includes review routing and requires the judge
 to review for subtraction.
 
 Both Home Manager and devenv import `modules/common.nix`, which declares this
-option surface and imports `mkSkillPackageModule` once for Claude, Codex and
-Kiro. Per-runtime program enable inherits portable enable through the same
-null-as-inherit rule as the factory. Skills and router rules contribute to
-per-runtime pools, never the portable pools. Runtime-only controls are not
-declared at the portable scope.
+option surface and imports `mkSkillPackageModule` once for Claude, Codex, Kimchi
+and Kiro. The Kimchi skill lands in Kimchi's own skill roots: devenv
+`.kimchi/skills`, Home Manager `harness/skills`. Kimchi's precedence is project
+(`.kimchi/skills`) over config paths over harness. The config paths include the
+cwd `.claude/skills` from the default `skillPaths`. Both project-scoped roots
+load only when Kimchi trusts the project. So under devenv the skill loads only
+in a trusted project, and under Home Manager a trusted project with its own
+`.claude/skills/delegate-routing` overrides the harness copy. Per-runtime
+program enable inherits portable enable through the same null-as-inherit rule as
+the factory. Skills and router rules contribute to per-runtime pools, never the
+portable pools. Runtime-only controls are not declared at the portable scope.
 
 The portable `whenToDelegate` entries are unchanged. Attribute names become
 headings in the always-on router rule. Entries use `optionalTextSource`:
@@ -70,12 +86,13 @@ through its module option; devenv uses `lib.warn` during assertion evaluation.
 `fragments/skill-routing.md` is the short always-on stub. `router.nix` appends
 enabled `whenToDelegate` entries. With no enabled entries it is byte-identical
 to the stub. This repository enables the guidance and consumes it through
-`dev/ai.nix`. Kiro is enabled with its own skill selecting Anthropic families,
-and is also a manual-only external delegate for Claude. Copilot and Kimchi are
-excluded from this program. The router is delivered in
-`.claude/rules/delegate-routing-router.md` and inline in AGENTS.md for Codex and
-Kiro; byte-identical contributions deduplicate. Keep model tables and harness
-details in the generated skill.
+`dev/ai.nix`. Kiro is enabled with its own skill selecting Anthropic families;
+Kimchi selects the consumer-declared Kimchi-served families. Both are
+manual-only external delegates for Claude. Copilot is excluded from this
+program. The router is delivered in `.claude/rules/delegate-routing-router.md`
+and inline in AGENTS.md for Codex, Kimchi and Kiro; under Home Manager, Kimchi's
+copy is in its user harness AGENTS.md. Byte-identical contributions deduplicate.
+Keep model tables and harness details in the generated skill.
 
 The content package injects packaged usage helper paths into technique defaults.
 The Claude helper carries curl and jq; the Codex helper carries timeout, jq and

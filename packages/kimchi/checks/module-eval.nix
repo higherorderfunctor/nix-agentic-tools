@@ -63,7 +63,6 @@
     modelMetadata.example.description = "Example model";
     modelRoles.builder = "provider/model";
     multiModel = true;
-    resources."tools.web_search" = true;
     shellProfileApiKeyMigrationDismissed = true;
     statusLine.pinned = ["model"];
   };
@@ -181,7 +180,9 @@
           };
         });
     })
-    (lib.remove "defaultProjectTrust" userScopeOnlyHarnessSettingKeys));
+    # Exceptions with their own checks: defaultProjectTrust below, and
+    # `resources`, which devenv delivers through KIMCHI_ENABLE_RESOURCES.
+    (lib.subtractLists ["defaultProjectTrust" "resources"] userScopeOnlyHarnessSettingKeys));
 
   hmDefaultProjectTrustChecks = let
     failures = value:
@@ -784,6 +785,59 @@ in {
         == []
         && !((projectFiles shadowed) ? "config.json")
         && lib.any (lib.hasInfix "user scope: telemetry") (failedAssertions withEndpoint)
+    );
+
+    # Harness `resources` is user scope, but KIMCHI_ENABLE_RESOURCES can
+    # enable a resource. Devenv accepts true values, delivers them through the
+    # launcher alone and keeps them out of the project harness settings.json;
+    # a false value fails by name, and Home Manager still writes the toggles
+    # into the user file. module-kimchi-wrapper-builds proves the launcher
+    # merges the ids with a value the caller already set.
+    module-kimchi-devenv-env-shadowed-resources = mkTest "kimchi-devenv-env-shadowed-resources" (
+      let
+        withKimchi = kimchi:
+          evalDevenv {
+            ai.kimchi = {enable = true;} // kimchi;
+          };
+        enabled = {
+          "extensions.ferment-v2" = true;
+          "extensions.workflows" = true;
+        };
+        shadowed = withKimchi {
+          native.harnessSettings = {
+            hideThinkingBlock = true;
+            resources = enabled;
+          };
+        };
+        resourcesOnly = withKimchi {native.harnessSettings.resources = enabled;};
+        withFalse = failedAssertions (withKimchi {
+          native.harnessSettings.resources = enabled // {"extensions.memory" = false;};
+        });
+        # A comma or whitespace would change which ids the comma list
+        # enables, and a key outside RESOURCE_KINDS names nothing.
+        badIds = ["extensions." "extensions.a b" "extensions.ferment-v2,extensions.memory" "memory" "widgets.x"];
+        withBad = failedAssertions (withKimchi {
+          native.harnessSettings.resources = enabled // lib.genAttrs badIds (_: true);
+        });
+        hmResources =
+          (hmHarnessSettings (evalHm {
+            ai.kimchi = {
+              enable = true;
+              native.harnessSettings.resources = enabled // {"extensions.memory" = false;};
+            };
+          })).resources;
+      in
+        failedAssertions shadowed
+        == []
+        && projectHarnessSettings shadowed == {hideThinkingBlock = true;}
+        && failedAssertions resourcesOnly == []
+        && !((devenvFiles ".config/kimchi/harness" resourcesOnly) ? "settings.json")
+        && builtins.length withFalse == 1
+        && lib.hasInfix "sets extensions.memory to false" (builtins.head withFalse)
+        && builtins.length withBad == 1
+        && lib.all (id: lib.hasInfix (builtins.toJSON id) (builtins.head withBad)) badIds
+        && !(lib.any (id: lib.hasInfix (builtins.toJSON id) (builtins.head withBad)) (builtins.attrNames enabled))
+        && hmResources == enabled // {"extensions.memory" = false;}
     );
 
     module-kimchi-devenv-project-paths = mkTest "kimchi-devenv-project-paths" (
@@ -1447,9 +1501,13 @@ in {
       ];
       # Nothing exact-cwd is declared, so nothing is missed from a
       # subdirectory and the wrapper must not refuse the launch. Region and
-      # telemetry reach Kimchi through its environment, not a project file.
+      # telemetry reach Kimchi through its environment, not a project file,
+      # and so do harness resources.
       unguardedPackages = [
         (mkDevenvKimchiPackage {})
+        (mkDevenvKimchiPackage {
+          ai.kimchi.native.harnessSettings.resources."extensions.workflows" = true;
+        })
         (mkDevenvKimchiPackage {
           ai.kimchi.native.settings = {
             region = "eu";
@@ -1499,14 +1557,19 @@ in {
     # env via --set and reads the key from its file at runtime (cat), never
     # baking the secret literal into the store. The old backslash-newline
     # separator made this build fail with exit 127 once >=2 args were present.
-    # Home Manager supplies region and telemetry through global config.json.
-    # Devenv has no global file and keeps exporting declared values.
+    # Home Manager supplies region and telemetry through global config.json,
+    # and resources through the user harness settings.json. Devenv has no
+    # global file and keeps exporting declared values. Its resource ids are
+    # appended to KIMCHI_ENABLE_RESOURCES, so a caller's value and an
+    # ai.kimchi environment value both survive; the env-printing stub proves
+    # the merge by running the wrapper.
     module-kimchi-wrapper-builds = let
       result = evalHm {
         ai.kimchi = {
           enable = true;
           apiKey.file = "/run/secrets/kimchi-test";
           environmentVariables.KIMCHI_EXTRA = "yes";
+          native.harnessSettings.resources."extensions.workflows" = true;
         };
       };
       wrapped = builtins.head result.config.home.packages;
@@ -1517,6 +1580,27 @@ in {
         };
       };
       devenvDefault = mkDevenvKimchiPackage {};
+      resourcesStub = pkgs.writeShellScriptBin "kimchi" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf '%s\n' "''${KIMCHI_ENABLE_RESOURCES-unset}"
+      '';
+      devenvResources = extraKimchi:
+        mkDevenvKimchiPackage {
+          ai.kimchi =
+            {
+              package = resourcesStub;
+              native.harnessSettings.resources = {
+                "extensions.ferment-v2" = true;
+                "extensions.workflows" = true;
+              };
+            }
+            // extraKimchi;
+        };
+      devenvResourcesOnly = devenvResources {};
+      devenvResourcesWithEnvironment = devenvResources {
+        environmentVariables.KIMCHI_ENABLE_RESOURCES = "extensions.teleport";
+      };
     in
       pkgs.runCommand "module-test-kimchi-wrapper-builds" {} ''
         set -euETo pipefail
@@ -1532,12 +1616,30 @@ in {
         grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
         grep -q "KIMCHI_REGION.*eu" ${devenvConfigured}/bin/kimchi
         grep -q "KIMCHI_TELEMETRY_ENABLED.*0" ${devenvConfigured}/bin/kimchi
+        expect_resources() {
+          local expected=$1 actual
+          shift
+          actual="$("$@")"
+          if [ "$actual" != "$expected" ]; then
+            echo "KIMCHI_ENABLE_RESOURCES: expected '$expected', got '$actual'" >&2
+            exit 1
+          fi
+        }
+        expect_resources extensions.ferment-v2,extensions.workflows \
+          env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesOnly}/bin/kimchi
+        # Set but empty: no leading comma.
+        expect_resources extensions.ferment-v2,extensions.workflows \
+          env KIMCHI_ENABLE_RESOURCES= ${devenvResourcesOnly}/bin/kimchi
+        expect_resources extensions.memory,extensions.ferment-v2,extensions.workflows \
+          env KIMCHI_ENABLE_RESOURCES=extensions.memory ${devenvResourcesOnly}/bin/kimchi
+        expect_resources extensions.teleport,extensions.ferment-v2,extensions.workflows \
+          env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesWithEnvironment}/bin/kimchi
         # `! grep` never fails under errexit, so each absence is an explicit branch.
-        if grep -qE "KIMCHI_(REGION|TELEMETRY_ENABLED)" "$bin"; then
+        if grep -qE "KIMCHI_(ENABLE_RESOURCES|REGION|TELEMETRY_ENABLED)" "$bin"; then
           echo "Home Manager duplicated config.json settings in the launcher" >&2
           exit 1
         fi
-        if grep -qE "KIMCHI_(REGION|TELEMETRY_ENABLED)" ${devenvDefault}/bin/kimchi; then
+        if grep -qE "KIMCHI_(ENABLE_RESOURCES|REGION|TELEMETRY_ENABLED)" ${devenvDefault}/bin/kimchi; then
           echo "devenv set a global-only setting nobody declared" >&2
           exit 1
         fi

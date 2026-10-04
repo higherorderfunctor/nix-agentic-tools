@@ -386,7 +386,7 @@ in {
           procedure = "submodule";
           rules = "submodule";
           whenToDelegate = "attribute set of (submodule)";
-        } ["claude" "codex" "kiro"]
+        } ["claude" "codex" "kimchi" "kiro"]
         && programParity "stacked-workflows" {enable = "boolean";} harnessNames
         && hm.options.stacked-workflows ? gitPreset
         && devenv.options.stacked-workflows ? gitPreset

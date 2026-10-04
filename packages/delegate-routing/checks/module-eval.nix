@@ -1,4 +1,4 @@
-# cspell:ignore Prio
+# cspell:ignore Prio sublist
 # Exercise the generated files as delivered through both consumer backends.
 {
   harness,
@@ -6,7 +6,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs hmLib mkTest;
-  runtimes = ["claude" "codex" "kiro"];
+  runtimes = ["claude" "codex" "kimchi" "kiro"];
   testRenames."Old guidance" = "New guidance";
   warningMarker = "delegate-routing fallback warning: ";
   evalDevenvWarnings = evalDevenvWithSpecialArgs {
@@ -30,10 +30,17 @@
       enable = true;
       programs.delegate-routing = {
         extraRuntimes = ["codex"];
-        manualExternalDelegates = ["kiro"];
+        manualExternalDelegates = ["kimchi" "kiro"];
       };
     };
     codex.enable = true;
+    # The package ships no Kimchi families, so the scenario declares one.
+    kimchi = {
+      enable = true;
+      # Home Manager requires an account region.
+      native.settings.region = "us";
+      programs.delegate-routing.models = [{vendors = ["served"];}];
+    };
     kiro = {
       enable = true;
       programs.delegate-routing.models = [
@@ -43,7 +50,14 @@
         }
       ];
     };
-    programs.delegate-routing.enable = true;
+    programs.delegate-routing = {
+      enable = true;
+      families.served.flash = {
+        match = "test-flash-*";
+        tier = "small";
+        useFor = "TEST KIMCHI FAMILY";
+      };
+    };
   };
   hasLoadInstruction = text: lib.hasInfix "load the `delegate-routing` skill" (lib.replaceStrings ["\n"] [" "] text);
   crossVendor = "Rows span more than one vendor";
@@ -57,6 +71,7 @@
     result = evaluate scenario;
     claude = readSkill result "claude";
     codex = readSkill result "codex";
+    kimchi = readSkill result "kimchi";
     kiro = readSkill result "kiro";
     stub = result.config.ai.claude.rules.delegate-routing-router.text;
     change = config: evaluate (lib.recursiveUpdate scenario config);
@@ -96,25 +111,26 @@
         kiro.programs.delegate-routing.models = [{vendors = ["anthropic"];}];
       };
     });
-    emptyKiro = change {ai.kiro.programs.delegate-routing.models = [];};
-    inactiveKiro = change {
-      ai = {
-        claude.programs.delegate-routing.manualExternalDelegates = [];
-        kiro = {
+    # A runtime with no default selection must choose one when its program and
+    # runtime are enabled, and needs none once either is off and Claude no
+    # longer names it.
+    requiresSelection = target: let
+      unnamed.ai.claude.programs.delegate-routing.manualExternalDelegates =
+        lib.remove target scenario.ai.claude.programs.delegate-routing.manualExternalDelegates;
+    in
+      failsWith (change {ai.${target}.programs.delegate-routing.models = [];}) "ai.${target}.programs.delegate-routing.models must select at least one"
+      && passes (change (lib.recursiveUpdate unnamed {
+        ai.${target} = {
           enable = lib.mkForce false;
           programs.delegate-routing.models = [];
         };
-      };
-    };
-    programDisabledKiro = change {
-      ai = {
-        claude.programs.delegate-routing.manualExternalDelegates = [];
-        kiro.programs.delegate-routing = {
+      }))
+      && passes (change (lib.recursiveUpdate unnamed {
+        ai.${target}.programs.delegate-routing = {
           enable = false;
           models = [];
         };
-      };
-    };
+      }));
     extraProgramDisabledKiroMissingModels = change {
       ai = {
         claude.programs.delegate-routing = {
@@ -155,7 +171,10 @@
     modifiedNode = skill {ai.codex.programs.delegate-routing.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
     invalidNode = node: change {ai.claude.programs.delegate-routing.techniques.Invalid = node;};
     replacedText = key: field: value: skill {ai.programs.delegate-routing.${key}.${field} = value;};
-    kiroInvoke = lib.findFirst (lib.hasInfix "`invoke_sub_agent`") "" (lib.splitString "\n" kiro);
+    techniqueRow = text: technique: lib.findFirst (lib.hasInfix "`${technique}`") "" (lib.splitString "\n" text);
+    kiroInvoke = techniqueRow kiro "invoke_sub_agent";
+    # Technique, kind, pins model, pins effort and modes, without table padding.
+    techniqueCells = text: technique: lib.sublist 1 5 (map lib.trim (lib.splitString "|" (techniqueRow text technique)));
     noEntries = evaluate scenario;
     shippedEntries = noEntries.config.ai.programs.delegate-routing.whenToDelegate;
     shippedEntryNames = builtins.attrNames shippedEntries;
@@ -349,14 +368,22 @@
       && lib.hasInfix "gpt-*-sol" claude
     );
     "module-delegate-routing-${name}-kiro-models" = mkTest "delegate-routing-${name}-kiro-models" (
-      failsWith emptyKiro "ai.kiro.programs.delegate-routing.models must select at least one"
-      && passes inactiveKiro
-      && passes programDisabledKiro
+      requiresSelection "kiro"
       && lib.hasInfix "opus (anthropic)" kiro
       && lib.hasInfix "haiku (anthropic)" kiro
       && !(lib.hasInfix "fable (anthropic)" kiro)
       && !(lib.hasInfix "sonnet (anthropic)" kiro)
       && !(lib.hasInfix "(openai)" kiro)
+    );
+    "module-delegate-routing-${name}-kimchi-models" = mkTest "delegate-routing-${name}-kimchi-models" (
+      requiresSelection "kimchi"
+      # Kimchi ships no default selection.
+      && failsWith (evaluate {ai = scenario.ai // {kimchi = builtins.removeAttrs scenario.ai.kimchi ["programs"];};}) "ai.kimchi.programs.delegate-routing.models must select at least one"
+      && result.config.ai.kimchi.skills ? delegate-routing
+      && lib.hasInfix "flash (served)" kimchi
+      && !(lib.hasInfix "(anthropic)" kimchi)
+      && !(lib.hasInfix "(openai)" kimchi)
+      && lib.hasInfix "### kimchi\n\n- flash (served)" claude
     );
     "module-delegate-routing-${name}-selectors" = mkTest "delegate-routing-${name}-selectors" (
       failsWith (selector {vendors = ["unknown"];}) ''ai.claude.programs.delegate-routing.models references unknown values ["unknown"]''
@@ -440,6 +467,13 @@
       && !(lib.hasInfix "`spawn_agent`" claude)
       && !(lib.hasInfix "`invoke_sub_agent`" claude)
       && lib.hasInfix "kiro-cli chat --no-interactive --model <id> --effort <effort>" claude
+      && lib.hasInfix "always pass `thinking` explicitly" (techniqueRow kimchi "Agent")
+      && techniqueCells kimchi "Agent" == ["`Agent`" "subagent" "true" "true" "acp+headless+interactive"]
+      && lib.hasInfix "**models (introspect):** `kimchi --list-models`" kimchi
+      && !(lib.hasInfix "(usage)" kimchi)
+      && lib.hasInfix "### kimchi techniques" claude
+      && lib.hasInfix "kimchi -p --mode json --no-session --model <id> --thinking <level>" claude
+      && !(lib.hasInfix "`/workflow`" claude)
     );
     "module-delegate-routing-${name}-text" = mkTest "delegate-routing-${name}-text" (
       lib.all (key: let
@@ -486,7 +520,7 @@
         && perRuntime ? manualExternalDelegates
         && perRuntime ? models
         && perRuntime ? techniques
-        && !(result.options.ai.kimchi.programs ? delegate-routing)
+        && result.options.ai.kimchi.programs ? delegate-routing
         && !(result.options.ai.copilot.programs ? delegate-routing)
     );
     "module-delegate-routing-${name}-overrides" = mkTest "delegate-routing-${name}-overrides" (
