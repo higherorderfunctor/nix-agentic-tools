@@ -385,14 +385,16 @@
       fixes arrive when this flake bumps nixpkgs (the update sweep runs four
       times a day). Go and Rust compilers come from this flake's locked
       toolchain inputs.
-    - **Unfree is your opt-in, decided by your own nixpkgs.** Every package
-      this flake hands you is checked by your nixpkgs' own meta checks with your
-      config, so `allowUnfree`, `allowUnfreePredicate` and any other license,
-      broken, insecure or platform setting work exactly as they do for nixpkgs,
-      with nixpkgs' own error when one refuses. The check never changes a store
-      path, so it costs no cache hits, and there is nothing to keep in sync.
-      Set them where you set them for nixpkgs (`nixpkgs.config`, or devenv.yaml
-      `allowUnfree`).
+    - **Unfree is your opt-in, decided by your own nixpkgs.** Each package's
+      own license and platform are checked by your nixpkgs with your config
+      (`allowUnfree`, `allowUnfreePredicate`, ...), with nixpkgs' own error when
+      it refuses, and `meta.available` reports that verdict. The package set
+      itself, dependencies included, is built once with this flake's nixpkgs.
+      The check never changes a store path, so it costs no cache hits, and
+      there is nothing to keep in sync. Set them where you set them for nixpkgs
+      (`nixpkgs.config`, or devenv.yaml `allowUnfree`). A `checkMeta = true`
+      config on a nixpkgs older than this flake's may reject newer meta keys;
+      `checkMeta` is a nixpkgs-CI setting, default false.
     - **`packages.<system>` is free packages only.** `legacyPackages.<system>`
       has every package plus the nested `ai` tree. `nix run` on an unfree
       package resolves there and needs your opt-in, as in nixpkgs:

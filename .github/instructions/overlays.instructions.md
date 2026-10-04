@@ -11,8 +11,10 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 > it ships: one `natSets.<system>` builds `packages`, `legacyPackages`,
 > `ciPackages`, the exported overlay's re-export and the module defaults, and
 > `checks.nat-overlay-parity` gates that they are one derivation. Unfree is
-> decided by the receiver's own nixpkgs through `checkedBy`. Recipes still take
-> bun and pnpm from `pkgs.ai.generic`.
+> decided by the receiver's own nixpkgs through `checkedBy`, which also
+> re-checks every override function and reports the receiver's `meta.available`;
+> a free leaf's dependencies are judged in CI by a no-config set. Recipes still
+> take bun and pnpm from `pkgs.ai.generic`.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 4705317b:dev/fragments/overlays/overlay-pattern.md`.
@@ -73,14 +75,35 @@ on who asks.
 **Unfree is the receiver's own nixpkgs check.** Nothing leaves `natSets`
 unwrapped except `ciPackages`. `checkedBy pkgs value` recurses lazily through
 attrsets that are not derivations and wraps each derivation with
-`lib.extendDerivation`: drvPath, outPath, meta and passthru are unchanged, but
-drvPath and outPath first assert a probe, a never-built
-`pkgs.stdenvNoCC.mkDerivation` with the leaf's name, pname, version, outputs and
-meta. The receiver's nixpkgs runs its own meta checks on it, with its own config
-and key names, and refuses with nixpkgs' own message ("Refusing to evaluate
-package 'claude-code-…' in …/package.nix:…"). Nothing here lists config keys,
-and nixpkgs' `check-meta.nix` is never imported, so there is nothing to keep in
-sync on a nixpkgs bump.
+`lib.extendDerivation`: drvPath, outPath and passthru are unchanged, but drvPath
+and outPath first assert a probe, a never-built `pkgs.stdenvNoCC.mkDerivation`
+with the leaf's name, pname, version, outputs and meta. The receiver's nixpkgs
+runs its own meta checks on it, with its own config and key names, and refuses
+with nixpkgs' own message ("Refusing to evaluate package 'claude-code-…' in
+…/package.nix:…"). Nothing here lists config keys, and nixpkgs' `check-meta.nix`
+is never imported, so there is nothing to keep in sync on a nixpkgs bump. `meta`
+is unchanged except `meta.available`, which is the probe's, so
+`builtins.filter (p: p.meta.available)` behaves as it does for nixpkgs.
+
+The probe judges only the leaf's own meta. Its dependencies were judged when
+`natSets` evaluated them, with `allowUnfree`, so a free leaf that interpolates
+an unfree dependency would be handed out without the consumer's opt-in. Gate B
+guards that: every free leaf must also evaluate on this flake's nixpkgs with no
+config. For the same reason the consumer's `allowBroken` or
+`permittedInsecurePackages` cannot unlock what `natSets` refused; moot in
+practice, since CI forces every `ciPackages` drvPath.
+
+Predicates (`allowUnfreePredicate`, `allowInsecurePredicate`, ...) receive the
+probe: name, pname, version and meta, which is what `lib.getName` and
+`meta.license` need. A predicate reading any other attribute (`src`, ...) does
+not see it.
+
+Limitation, accepted: a consumer with `checkMeta = true` on a nixpkgs older than
+this flake's can reject meta keys only the newer one computes (measured on
+nixos-25.05: `key 'meta.identifiers' is unrecognized`). It fails loud with
+nixpkgs' own error and cannot admit unfree. `checkMeta` is a nixpkgs-CI setting,
+default false, and this is the same class as any newer-schema package reaching
+an older nixpkgs, so the keys are not filtered.
 
 The probe is forced through `meta.available`, which answers without
 instantiating anything; only a refusal forces the probe's drvPath, whose own
@@ -90,10 +113,12 @@ valid probe's drvPath writes a `.drv` and instantiates stdenvNoCC (0.27 s vs
 warn-level problems the consumer configures are not shown for an available
 probe.
 
-`.override` and `.overrideAttrs` are wrapped too, so their results are checked
-again: without that, a consumer's `pkgs.ai.claude-code.overrideAttrs` would be
-evaluated by this flake's `allowUnfree` instance and skip their opt-in. Other
-passthru functions (`mkSkill`, ...) hand out unchecked derivations.
+`.override`, `.overrideAttrs` and `.overrideDerivation` are wrapped too, so
+their results are checked again: without that, a consumer's
+`pkgs.ai.claude-code.overrideAttrs` would be evaluated by this flake's
+`allowUnfree` instance and skip their opt-in. Those three are every override a
+derivation here carries; other passthru functions (`mkSkill`, ...) hand out
+unchecked derivations.
 
 | Output           | Checked by                                         |
 | ---------------- | -------------------------------------------------- |
@@ -150,13 +175,20 @@ locks this flake's revision), so no new input is fetched.
 - **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
   claimed leaf, and the claim list equals the `ciPackages` leaves.
 - **B** `packages` and `legacyPackages` give `ciPackages`' drvs; only unfree
-  leaves are missing from `packages`, and they refuse in `legacyPackages`.
+  leaves are missing from `packages`, and they refuse in `legacyPackages`; every
+  free claimed leaf evaluates on this flake's nixpkgs with no config. The
+  refusal rows assume pure evaluation: `--impure` with `NIXPKGS_ALLOW_UNFREE=1`
+  or a user `config.nix` allowing unfree fails them.
 - **C** over the foreign nixpkgs with no opt-in, every unfree claimed leaf
   refuses and every free one gives `ciPackages`' drv; with `allowUnfree`, and
   separately `allowUnfreePredicate = _: true`, `ai.claude-code` gives
   `ciPackages`' drv; a predicate naming claude-code admits it and not
-  copilot-cli; `.overrideAttrs` refuses without the opt-in. Disabling the probe
-  or the override re-check fails C (measured 2026-10-04).
+  copilot-cli; `.overrideAttrs` and `.overrideDerivation` refuse without the
+  opt-in; `meta.available` is false for claude-code and true for every free
+  leaf; `rootsFor` over the same nixpkgs refuses claude-code and gives
+  `ciPackages`' rumdl. Disabling the probe, any override re-check, the
+  `meta.available` copy or `rootsFor`'s `checkedBy` fails C (measured
+  2026-10-04).
 - **D** positive controls: foreign `hello` and `buildOverlay`'s rumdl differ.
 - **E** every module package default, both backends, over a base with none of
   this flake's roots (the harness's `injectAi = false`), equals `ciPackages`,

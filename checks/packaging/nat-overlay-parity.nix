@@ -12,10 +12,14 @@
 #   A  the overlay over a foreign nixpkgs gives `ciPackages`' drv for every
 #      claimed leaf, and the claim list is complete
 #   B  `packages` and `legacyPackages` give `ciPackages`' drvs; only the unfree
-#      leaves are missing from `packages`, and they refuse in `legacyPackages`
+#      leaves are missing from `packages`, and they refuse in `legacyPackages`;
+#      every free leaf also evaluates on this flake's nixpkgs with NO config,
+#      so none of them hands out an unfree dependency without the opt-in
 #   C  the consumer's own meta check decides: without an opt-in every unfree
-#      leaf refuses and every free leaf gives `ciPackages`' drv; `allowUnfree`
-#      and `allowUnfreePredicate` each admit claude-code with that drv
+#      leaf refuses, every free leaf gives `ciPackages`' drv and reports
+#      `meta.available`, and so do the module roots (`rootsFor`); `allowUnfree`
+#      and `allowUnfreePredicate` each admit claude-code with that drv;
+#      `.overrideAttrs` and `.overrideDerivation` are checked again
 #   D  positive controls: the foreign nixpkgs differs, and building on it
 #      (buildOverlay) gives a different drv
 #   E  every module package default, both backends, with and without the
@@ -25,6 +29,10 @@
 #
 # Linux only: F uses pkgsStatic, and the foreign nixpkgs imports are paid once
 # where `nix flake check` runs in CI.
+#
+# B's refusal rows assume a pure evaluation. Under `--impure` with
+# NIXPKGS_ALLOW_UNFREE=1, or a ~/.config/nixpkgs/config.nix allowing unfree,
+# `legacyPackages`' plain nixpkgs import admits the unfree leaves and B fails.
 {
   buildOverlay,
   claimedPaths,
@@ -33,6 +41,7 @@
   lib,
   natSystemOf,
   pkgs,
+  rootsFor,
   self,
   ...
 }: let
@@ -73,13 +82,23 @@
   legacyPackages = self.legacyPackages.${system};
   isUnfree = name: ciPackages.${name}.meta.unfree or false;
   unfreeNames = sorted (builtins.filter isUnfree leafNames);
+  # This flake's own set with no config: a free leaf that interpolates an
+  # unfree dependency refuses here. Everything handed out comes from the
+  # `allowUnfree` natSets, and the probe judges only the leaf's own meta, so
+  # this is the only place a free leaf's dependencies are judged.
+  strict = import inputs.nixpkgs {
+    inherit system;
+    overlays = [buildOverlay];
+  };
   publicMismatches =
     map (name: "packages.${name} differs from ciPackages.${name}")
     (builtins.filter (name: drvOf publicPackages.${name} != drvOf ciPackages.${name}) publicNames)
     ++ map (name: "legacyPackages.${name} differs from ciPackages.${name}")
     (builtins.filter (name: drvOf legacyPackages.${name} != drvOf ciPackages.${name}) (lib.subtractLists unfreeNames leafNames))
     ++ map (name: "legacyPackages.${name} is unfree and evaluated without an opt-in")
-    (builtins.filter (name: (evaluation legacyPackages.${name}).success) unfreeNames);
+    (builtins.filter (name: (evaluation legacyPackages.${name}).success) unfreeNames)
+    ++ map (keyPath: "${lib.concatStringsSep "." keyPath} is free but does not evaluate without allowUnfree; an unfree dependency would reach consumers unchecked")
+    (builtins.filter (keyPath: !isUnfree (lib.last keyPath) && !(evaluation (lib.getAttrFromPath keyPath strict)).success) claimedPaths);
 
   # ── C: the consumer's own meta check ───────────────────────────────
   # The overlay over the foreign nixpkgs with no opt-in: each claimed leaf is
@@ -94,7 +113,9 @@
   in
     if isUnfree name
     then lib.optional result.success "${path} is unfree and evaluated without an opt-in"
-    else lib.optional (!(result.success && result.value == drvOf ciPackages.${name})) "${path} is free and does not give ciPackages' drv without an opt-in")
+    else
+      lib.optional (!(result.success && result.value == drvOf ciPackages.${name})) "${path} is free and does not give ciPackages' drv without an opt-in"
+      ++ lib.optional (!(lib.getAttrFromPath keyPath freeOverlaid).meta.available) "${path} is free and reports meta.available = false without an opt-in")
   claimedPaths;
   claudeDrv = drvOf ciPackages.claude-code;
   givesClaude = set: let
@@ -105,6 +126,9 @@
   # leaf by the probe's name (lib.getName), not all-or-nothing.
   namedOverlaid = overlaidWith {allowUnfreePredicate = package: lib.getName package == "claude-code";};
   rebuilt = set: set.ai.claude-code.overrideAttrs (_: {});
+  rebuiltDerivation = set: set.ai.claude-code.overrideDerivation (_: {});
+  # Module defaults without the overlay: `rootsFor` over the foreign nixpkgs.
+  freeRoots = rootsFor foreignFree;
   consumerMismatches =
     lib.optional (!lib.elem "claude-code" unfreeNames) "claude-code is not an unfree leaf; the refusal rows below test nothing"
     ++ lib.optional (!(evaluation ciPackages.claude-code).success) "ciPackages.claude-code does not evaluate; a refusal would not be the probe's"
@@ -114,6 +138,12 @@
     ++ lib.optional (evaluation namedOverlaid.ai.copilot-cli).success "a predicate naming claude-code admits copilot-cli"
     ++ lib.optional (evaluation (rebuilt freeOverlaid)).success "ai.claude-code.overrideAttrs evaluated without an opt-in"
     ++ lib.optional ((evaluation (rebuilt overlaid)).value != claudeDrv) "with allowUnfree, an identity overrideAttrs is not ciPackages' drv"
+    ++ lib.optional (evaluation (rebuiltDerivation freeOverlaid)).success "ai.claude-code.overrideDerivation evaluated without an opt-in"
+    ++ lib.optional ((evaluation (rebuiltDerivation overlaid)).value != claudeDrv) "with allowUnfree, an identity overrideDerivation is not ciPackages' drv"
+    ++ lib.optional freeOverlaid.ai.claude-code.meta.available "ai.claude-code reports meta.available = true without an opt-in"
+    ++ lib.optional (!overlaid.ai.claude-code.meta.available) "with allowUnfree, ai.claude-code reports meta.available = false"
+    ++ lib.optional (evaluation freeRoots.ai.claude-code).success "rootsFor: ai.claude-code evaluated without an opt-in"
+    ++ lib.optional ((evaluation freeRoots.ai.devTools.rumdl).value != drvOf ciPackages.rumdl) "rootsFor: ai.devTools.rumdl is not ciPackages' drv without an opt-in"
     ++ freeMismatches;
 
   # ── E: module defaults ─────────────────────────────────────────────

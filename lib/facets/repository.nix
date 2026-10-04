@@ -95,9 +95,15 @@
   # throws nixpkgs' refusal before anything is instantiated. Consumer-configured
   # warn-level problems are not shown for an available probe.
   #
-  # `.override` and `.overrideAttrs` results are checked again, so a
-  # consumer's rebuild of an unfree package still needs the opt-in. Other
-  # passthru functions return unchecked derivations.
+  # `.override`, `.overrideAttrs` and `.overrideDerivation` results are checked
+  # again, so a consumer's rebuild of an unfree package still needs the
+  # opt-in. Other passthru functions (`mkSkill`, ...) return unchecked
+  # derivations. `meta.available` is the probe's, so a consumer filtering on
+  # it sees the receiver's verdict rather than this flake's `allowUnfree` one.
+  #
+  # The receiver's predicates (`allowUnfreePredicate`, ...) are handed the
+  # probe, which carries name, pname, version and meta; one that reads any
+  # other attribute (`src`, ...) does not see it.
   checkedBy = pkgs: let
     check = value:
       if lib.isDerivation value
@@ -117,7 +123,13 @@
             ${name} = lib.mirrorFunctionArgs value.${name} (argument: check (value.${name} argument));
           };
       in
-        lib.extendDerivation valid (recheck "override" // recheck "overrideAttrs") value
+        lib.extendDerivation valid (recheck "override"
+          // recheck "overrideAttrs"
+          // recheck "overrideDerivation"
+          // {
+            meta = (value.meta or {}) // lib.optionalAttrs (probe.meta ? available) {inherit (probe.meta) available;};
+          })
+        value
       else if ordinaryAttrs value
       then builtins.mapAttrs (_: check) value
       else value;
@@ -249,7 +261,7 @@ in {
       context =
         builtins.removeAttrs context ["rootModules"]
         // {
-          inherit buildOverlay gitToolExtraction harnessFor inputs lib natSystemOf;
+          inherit buildOverlay gitToolExtraction harnessFor inputs lib natSystemOf rootsFor;
           # The leaf paths the exported overlay re-exports on this system.
           claimedPaths = claimedPaths {
             inherit inputs lib;
