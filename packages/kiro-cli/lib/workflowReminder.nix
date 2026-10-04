@@ -54,9 +54,9 @@
   # instruction to interpolate `{{worktree_path}}/...` into every path,
   # `fileCheck.path` included, lives in the workflow-creator prompt, which the
   # orchestrator can reach only through that brief. A sibling worktree makes
-  # such a path resolve outside the workspace roots, and the engine rejects
-  # the run at launch (`additionalDirectories` comes from the ACP session
-  # request, so the model cannot widen the roots).
+  # such a path resolve outside the default workspace roots, and the engine
+  # rejects it at launch or when the check first runs (`additionalDirectories`
+  # comes from the ACP session request, so the model cannot widen the roots).
   #
   # Retire it when the vendor text stops nesting worktrees and stops
   # interpolating fileCheck paths; the vendorAnchors entries below make the
@@ -81,10 +81,13 @@
     checkout. Name the repository's actual default branch in the brief, not
     `mainline`. Also tell it that every `fileCheck.path` (review verdict, stop
     condition), both where a step writes the file and where the check reads
-    it, is a RELATIVE path inside the workspace, such as
-    `.agents/tasks/review.json`, never `{{worktree_path}}/...`. The engine
-    rejects the run at launch when that path resolves outside the workspace,
-    and a sibling worktree always does.
+    it, is a RELATIVE path inside the workspace that is unique to this run,
+    such as `.agents/tasks/<unique-run-id>/review.json`, never
+    `{{worktree_path}}/...`. Use a path the repository ignores (gitignored),
+    and have the workflow remove that run's verdict directory before the loop
+    starts. The engine rejects a path outside the allowed workspace roots
+    (at launch, or when the check first runs); a sibling worktree is outside
+    those roots unless the client explicitly adds it to `additionalDirectories`.
 
     Conversation, status, and follow-up questions are yours to answer directly;
     substantive work is not.
@@ -99,8 +102,9 @@
   # `paragraph` names what to re-review when the check fires. Anchors default to
   # the extracted steering; `scope = "bundle"` matches the raw engine bundle
   # instead, for text that lives elsewhere in it (the workflow-creator prompt,
-  # the engine's errors, the agent registries). Bundle-scoped text must contain
-  # no backtick, because the raw template literals escape it.
+  # the engine's errors, the agent registries). Bundle-scoped text must be a
+  # single line of plain ASCII with no backtick, quote or other character the
+  # raw literal escapes.
   vendorAnchors = [
     {
       paragraph = "delegation (one run_workflow call carrying a workflowPrompt brief)";
@@ -121,12 +125,12 @@
     {
       paragraph = "worktree correction (fileCheck stays workspace-relative)";
       scope = "bundle";
-      text = "for every file a step reads, writes, or commits";
+      text = "has a fileCheck path";
     }
     {
       paragraph = "worktree correction (fileCheck stays workspace-relative)";
       scope = "bundle";
-      text = "outside the allowed workspace roots";
+      text = "relative paths resolve against the workflow";
     }
     {
       paragraph = "review loop (agent names)";
