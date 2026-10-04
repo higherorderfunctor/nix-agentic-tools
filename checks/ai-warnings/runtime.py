@@ -122,10 +122,14 @@ def reminder(script, root):
     bundle = bundle_root / "node_modules/@kiro/agent/dist/server/acp-server.js"
     bundle.parent.mkdir(parents=True)
     bundle.write_text("// no steering here")
-    run([script], env=env, warning="vendor steering extraction failed")
+    # The extractor's own reason must reach the warning, not just the summary.
+    run([script], env=env, warning="vendor steering extraction failed: kiro-workflows-steering: expected exactly one")
+    # Anchored on the content, so any binding name extracts.
+    bundle.write_text("var Zq='# Workflow Orchestration\\ncall `run_workflow` positive control';")
+    run([script], env=env, output="call `run_workflow` positive control")
     cache = root / "cache/nix-agentic-tools/kiro-workflow-steering/1.0.0-probe.md"
-    cache.write_text("vendor reminder positive control")
-    run([script], env=env, output="vendor reminder positive control")
+    cache.write_text("vendor reminder cache positive control")
+    run([script], env=env, output="vendor reminder cache positive control")
 
 
 def credentials(manifest):
