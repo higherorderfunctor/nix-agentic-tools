@@ -392,6 +392,7 @@ tsgo
 tsgolint
 tummychow
 turbofish
+typebox
 ufcs
 ugrep
 ultracode

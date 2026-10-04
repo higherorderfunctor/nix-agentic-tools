@@ -114,7 +114,7 @@ in ''
 
   ${lib.optionalString (extras != [] || manualExternalDelegates != []) "If one model stands out, use it unless its pool is exhausted; among close candidates, prefer the pool with more remaining allowance. Check usage with the runtime's command; if none is available, prefer the other pool among close candidates."}
 
-  **Prefer workflows.** When work has more than one stage or several independent pieces, build it as a workflow graph with model and effort set on every node, not as a series of single subagent calls. Use a lone subagent only for one self-contained task, through a technique that pins its model and effort. If this runtime has no workflow technique, build the graph from pinned subagents or external launches.
+  **Prefer workflows.** When work has more than one stage or several independent pieces, build it as a workflow graph with model and effort set on every node, not as a series of single subagent calls. Use a lone subagent only for one self-contained task, through a technique that pins its model and effort. Use skill-provided techniques only in their documented, measured modes. If this runtime has no workflow technique for the current mode, build the graph from pinned subagents or external launches.
 
   **Inheritance.** A technique that does not pin a value inherits it from the session. An interactive session cannot reliably know its own model or effort (`/model` and `/effort` change them), so treat an inheriting technique as unsized there. A headless delegate inherits what it was launched with: state the model and effort in every external launch brief, and a delegate told its launch values may use an inheriting technique when those values match its choice.
 
@@ -127,7 +127,7 @@ in ''
   ${lib.optionalString (builtins.length (lib.unique (map (family: family.vendor) candidates)) > 1) "Rows span more than one vendor, so a reviewer may come from a different vendor than the writer."}
 
   ${lib.concatMapStringsSep "\n" tier tiers}
-  Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
+  Use a technique only if it appears in your tool list or is provided by an enabled skill; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
 
   ${techniqueBlock runtime false}
   ${lib.concatMapStringsSep "\n" (target: techniqueBlock target true) extras}

@@ -1,0 +1,4 @@
+{"type":"run-started","runId":"workflow-success-da9f64f0","workflowName":"success","at":"2026-10-04T08:20:22.237Z"}
+{"type":"step-started","runId":"workflow-success-da9f64f0","path":"answer","at":"2026-10-04T08:20:22.238Z"}
+{"type":"step-completed","runId":"workflow-success-da9f64f0","path":"answer","output":{"marker":"item2-ok"},"at":"2026-10-04T08:20:24.182Z"}
+{"type":"run-completed","runId":"workflow-success-da9f64f0","output":{"marker":"item2-ok"},"at":"2026-10-04T08:20:24.182Z","executionId":"d0605d79-4335-44d8-8c8e-60f70a44b47c"}

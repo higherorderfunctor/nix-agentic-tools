@@ -50,6 +50,7 @@
         }
       ];
     };
+    programs.kimchi-workflow.enable = true;
     programs.delegate-routing = {
       enable = true;
       families.served.flash = {
@@ -514,7 +515,7 @@
       && hasProse "among close candidates, prefer the pool" claude
       && !(hasProse "among close candidates, prefer the pool" (readSkill (roleScenario {} [] []) "claude"))
       && hasProse "comparing version numbers segment by segment (6.1 > 6 > 5.6)" claude
-      && hasProse "Use a technique only if it appears in your tool list" claude
+      && hasProse "Use a technique only if it appears in your tool list or is provided by an enabled skill" claude
       && hasProse "an agent cannot reliably tell which mode it is in, but it can see its tools" claude
       && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
       && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
@@ -568,6 +569,9 @@
       && !(lib.hasInfix "`invoke_sub_agent`" claude)
       && lib.hasInfix "kiro-cli chat --no-interactive --model <id> --effort <effort>" claude
       && lib.hasInfix "always pass `thinking` explicitly" (techniqueRow kimchi "Agent")
+      && techniqueCells kimchi "kimchi-workflow-run" == ["`kimchi-workflow-run`" "workflow" "true" "false" "headless"]
+      && !(lib.hasInfix "`kimchi-workflow-run`" (readSkill (change {ai.programs.kimchi-workflow.enable = false;}) "kimchi"))
+      && !(lib.hasInfix "`kimchi-workflow-run`" (readSkill (change {ai.kimchi.programs.kimchi-workflow.enable = false;}) "kimchi"))
       && techniqueCells kimchi "Agent" == ["`Agent`" "subagent" "true" "true" "acp+headless+interactive"]
       && lib.hasInfix "**models (introspect):** `kimchi --list-models`" kimchi
       && !(lib.hasInfix "(usage)" kimchi)

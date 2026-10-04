@@ -1,4 +1,4 @@
-# Opt-in delivery of the pinned kimchi documentation snapshot as a skill.
+# Opt-in delivery of kimchi-docs (all runtimes) and kimchi-workflow (Kimchi only).
 #
 # Shared by both backends (`modules/devenv`, `modules/homeManager`); the `ai.*`
 # pools are per-`evalModules`, so each backend imports its own instance.
@@ -7,12 +7,16 @@
 #
 #   ai.programs.kimchi-docs.enable            portable, default false
 #   ai.<runtime>.programs.kimchi-docs.enable  per-runtime override, null inherits
+#   ai.programs.kimchi-workflow.enable        portable, default false
+#   ai.kimchi.programs.kimchi-workflow.enable Kimchi-only override, null inherits
+#
+# kimchi-workflow mounts SKILL.md and its bin link only in ai.kimchi.skills.
 #
 # and the mount is `ai.<runtime>.skills.kimchi-docs`, written by
 # `lib/ai/mkSkillPackageModule.nix` for every runtime whose skills pool exists in
 # this evaluation. `ai.skills` keeps its `attrsOf (nullOr path)` type.
 #
-# EVERY runtime is supported, unlike delegate-routing, which excludes Copilot
+# kimchi-docs supports EVERY runtime, unlike delegate-routing, which excludes Copilot
 # because its sizing controls are not established. Kimchi's documentation is useful to
 # any agent working on a kimchi integration, whichever harness it runs in, so the
 # `presentSkillRuntimes` filter inside the factory gives the right set on its own
@@ -21,9 +25,11 @@
   config,
   lib,
   pkgs,
+  options,
   ...
 }: let
   mkDocsSkill = import ../lib/mkDocsSkill.nix;
+  inherit (import ../../../lib/ai/ai-common.nix {inherit lib;}) resolveOverride;
 
   # Which search directions SKILL.md carries, resolved per runtime.
   #
@@ -56,6 +62,15 @@
     then "mcp"
     else "plain";
 in {
+  config = lib.mkIf (lib.hasAttrByPath ["ai" "kimchi" "programs" "delegate-routing"] options) {
+    ai.kimchi.programs.delegate-routing.techniques.kimchi-workflow-run.enable = lib.mkDefault (
+      resolveOverride {
+        topValue = config.ai.programs.kimchi-workflow.enable;
+        cliValue = config.ai.kimchi.programs.kimchi-workflow.enable;
+      }
+    );
+  };
+
   imports = [
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "kimchi-docs";
@@ -67,6 +82,14 @@ in {
           search = searchFor runtime;
           treefmt-nix = config.ai.internal.treefmtNix;
         }}";
+      };
+    })
+    (import ../../../lib/ai/mkSkillPackageModule.nix {
+      name = "kimchi-workflow";
+      enableDescription = "the headless Kimchi workflow launch and result skill";
+      supportedRuntimes = ["kimchi"];
+      skills = {pkgs, ...}: {
+        kimchi-workflow = "${import ../lib/mkWorkflowSkill.nix {inherit pkgs;}}";
       };
     })
   ];

@@ -192,6 +192,7 @@ git-branchless, git-absorb, and git-revise.
 |-------|-------------|
 | `/delegate-routing` | Size model and effort before calling subagents or building workflows |
 | `/kimchi-docs` | Search the pinned Kimchi docs snapshot; enable via ai.programs.kimchi-docs.enable |
+| `/kimchi-workflow` | Launch a headless Kimchi workflow and read its durable result; enable via ai.programs.kimchi-workflow.enable |
 | `/stack-fix` | Absorb fixes into correct stack commits |
 | `/stack-plan` | Plan and build a commit stack from description or existing commits |
 | `/stack-split` | Split a large commit into reviewable atomic commits |

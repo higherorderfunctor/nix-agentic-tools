@@ -3,8 +3,13 @@
   repoPath,
   ...
 }: {
-  documentation.aiCliDescriptions.kimchi = "Kimchi CLI";
-  documentation.skillDescriptions.kimchi-docs = "Search the pinned Kimchi docs snapshot; enable via ai.programs.kimchi-docs.enable";
+  documentation = {
+    aiCliDescriptions.kimchi = "Kimchi CLI";
+    skillDescriptions = {
+      kimchi-docs = "Search the pinned Kimchi docs snapshot; enable via ai.programs.kimchi-docs.enable";
+      kimchi-workflow = "Launch a headless Kimchi workflow and read its durable result; enable via ai.programs.kimchi-workflow.enable";
+    };
+  };
   # kimchi: two-tree factory (config.json + harness/), runtime SOPS
   # credential, wrapProgram separator + flattenDotKeys gotchas.
   fragments.categories.kimchi = {
@@ -16,6 +21,20 @@
         location = "package";
         name = "kimchi-factory";
         dir = facetOwner;
+      }
+    ];
+  };
+  fragments.categories.kimchi-workflow = {
+    scopes = [
+      "packages/${facetOwner}/lib/mkWorkflow*.nix"
+      "packages/${facetOwner}/skills/kimchi-workflow/**"
+      "packages/${facetOwner}/src/workflow-run/**"
+    ];
+    sources = [
+      {
+        dir = facetOwner;
+        location = "package";
+        name = "kimchi-workflow";
       }
     ];
   };

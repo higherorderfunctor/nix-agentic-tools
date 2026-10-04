@@ -70,6 +70,17 @@
       pinsEffort = true;
       pinsModel = true;
     };
+    # Off here at mkOptionDefault priority; packages/kimchi/modules/common.nix
+    # turns it on with mkDefault when the kimchi-workflow skill is enabled.
+    kimchi-workflow-run = {
+      command = ''<kimchi-workflow-skill-dir>/bin/kimchi-workflow-run --model <id> <absolute.workflow.ts> [--input <json|@file>]'';
+      enable = false;
+      kind = "workflow";
+      modes = ["headless"];
+      notes = "requires the kimchi-workflow skill (ai.programs.kimchi-workflow.enable) and bash; 2026-10-04 probe: Kimchi 1.5.1, kimchi-dev/glm-5.3-flash, real home, kimchi -p parent session, run-completed observed; pin each agent step's model in the workflow definition; child thinking is fixed off, set an explicit bash timeout, and read the launcher's record-derived JSON; only completed is success, even when kimchi exits 0";
+      pinsEffort = false;
+      pinsModel = true;
+    };
     "kimchi -p" = {
       command = ''kimchi -p --mode json --no-session --model <id> --thinking <level> "<prompt>"'';
       kind = "external";

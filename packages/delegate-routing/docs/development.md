@@ -1,8 +1,9 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-03 — roles with a typed `use` and ceiling, selector
+> **Last verified:** 2026-10-04 — roles with a typed `use` and ceiling, selector
 > enums, tool-presence and highest-version selection, multi-runtime-only pool
-> paragraph.
+> paragraph; Kimchi has a headless workflow skill route backed by durable run
+> events, measured with a real-home `kimchi -p` parent.
 
 `ai.programs.delegate-routing.families` is the portable decision table, keyed by
 vendor and family. Each family has a capability tier, task and effort guidance,
@@ -56,19 +57,34 @@ they pin model and effort and where they are available: interactive, headless or
 ACP. Assertions require both pin fields to be non-null exactly for delegate
 kinds, and a command for every external node. Each package field uses
 `mkDefault`; consumers can replace fields, add nodes or disable individual
-nodes. Techniques are usable only when present in the tool list, and external
-commands must be on PATH. Modes describe usual availability, not a reliable
-session-mode detector; some ACP clients expose Kiro `orchestrate_subagent`
-instead of `invoke_sub_agent`. External and manual runtime sections include only
-external, introspect and usage nodes. Codex and Kimchi have no workflow node;
-Kimchi has no usage node because no command reads usage without a model turn.
+nodes. Techniques are usable when present in the tool list or provided by an
+enabled skill, and external commands must be on PATH. Modes describe usual
+availability, not a reliable session-mode detector; some ACP clients expose Kiro
+`orchestrate_subagent` instead of `invoke_sub_agent`. External and manual
+runtime sections include only external, introspect and usage nodes. Codex has no
+workflow node; Kimchi has no usage node because no command reads usage without a
+model turn.
 
 Kimchi's nodes record Kimchi 1.5.1 probes and source. Its Agent tool pins model
 and thinking, but an omitted `thinking` falls back to the persona default rather
-than the parent's level, so the notes say to pass it. Kimchi's `/workflow` is a
-slash command with no model tool, so no delegate can call it and it has no node;
-`dev/ai.nix` still enables the `extensions.workflows` resource for interactive
-use. Shared table rendering escapes cells once for families and techniques.
+than the parent's level, so the notes say to pass it. Kimchi's
+`kimchi-workflow-run` node uses the opt-in `kimchi-workflow` skill and its
+bundled `bin/kimchi-workflow-run`, launched through bash from a headless parent.
+It pins model with `--model` and per-agent workflow definitions; effort is not
+selectable (the child uses fixed `--thinking off`), so `pinsEffort = false`.
+Headless is the only measured mode: the 2026-10-04 probe used Kimchi 1.5.1,
+model `kimchi-dev/glm-5.3-flash`, a `kimchi -p` parent session and the real
+home; `run-completed` was observed. The row follows the skill's resolved enable.
+Shipped technique enables use option-default priority so the owning skill's
+`mkDefault` can gate its row. Interactive use is unverified. The slash command
+itself is not a model tool. The separate child runs that command with
+`extensions.workflows` enabled, and the launcher reads the durable event record;
+Kimchi exit zero alone is never success. Missing or ambiguous records and
+unfinished runs fail; blocked records return the human-input payload and path,
+excluding opaque conversation history. The reader mirrors
+`@kimchi-dev/kimchi-workflows@0.0.9` `src/engine/run-status.ts`, `step-state.ts`
+and `node-path.ts`. `dev/ai.nix` still enables the resource for interactive use.
+Shared table rendering escapes cells once for families and techniques.
 
 Portable `rules` and `procedure` use `lib.ai.types.optionalTextSource` with
 enabled package `defaultContent`. Set `text` or `source` to replace either, or

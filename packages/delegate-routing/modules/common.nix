@@ -223,7 +223,15 @@ in {
           };
         }
         (lib.genAttrs supportedRuntimes (runtime: {
-          programs.delegate-routing.techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
+          # Enablement is an option default so an owning skill can provide a
+          # resolved mkDefault value without conflicting with this preset.
+          programs.delegate-routing.techniques =
+            lib.mapAttrsRecursive
+            (path: value:
+              if lib.last path == "enable"
+              then lib.mkOptionDefault value
+              else lib.mkDefault value)
+            defaults.techniques.${runtime};
         }))
       ];
       assertions =

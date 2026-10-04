@@ -1,0 +1,3 @@
+{"type":"run-started","runId":"workflow-blocked-f05b613a","workflowName":"blocked","at":"2026-10-04T08:20:25.530Z"}
+{"type":"step-started","runId":"workflow-blocked-f05b613a","path":"need-human","at":"2026-10-04T08:20:25.531Z"}
+{"type":"questionnaire-asked","runId":"workflow-blocked-f05b613a","path":"need-human","questionnaire":{"questions":[{"key":"answer","header":"Answer","question":"Supply the answer","kind":"text"}]},"conversation":[],"at":"2026-10-04T08:20:25.531Z"}
