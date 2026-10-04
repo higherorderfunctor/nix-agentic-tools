@@ -94,14 +94,16 @@ non-default libc/ABI on the same system string (`pkgsMusl`, `pkgsStatic`). The
 test is the triple because the cache is keyed to it, so `pkgsLLVM` and a
 `hostPlatform.gcc.arch` tune keep the triple and get this flake's gcc-built
 re-export. The choice is made per attribute value: attribute names come from
-static `rootsFor`, because deciding at the top level recurses through
+static `rootNamesFor`, because deciding at the top level recurses through
 `final.stdenv`.
 
-**Module defaults.** `aiFor pkgs` is `pkgs.ai` when the overlay is applied (so a
-consumer's `pkgs.ai.X` override still flows), else `natSetFor`'s `ai` on the
-same system and license config, else `(pkgs.extend buildOverlay).ai` on the
-fallback. The wrappers inject it as `ai.internal = repository.moduleInternals`;
-modules read `config.ai.internal.packages`. See the module-conventions fragment.
+**Module defaults.** `rootsFor pkgs` gives every claimed root (`ai`, `docs`, the
+`*-content` packages): `pkgs.<root>` when the overlay is applied (so a
+consumer's `pkgs.ai.X` override still flows), else `natSetFor`'s on the same
+system and license config, else `pkgs.extend buildOverlay`'s on the fallback.
+The wrappers inject it as `ai.internal = repository.moduleInternals`; modules
+read `config.ai.internal.roots` (`.packages` is its `ai`). See the
+module-conventions fragment.
 
 **`follows` is the opt-out.** It rewrites `inputs.nixpkgs` at lock time, so
 `natSetFor` rebuilds everything on the consumer's nixpkgs and still agrees with
@@ -114,24 +116,29 @@ overlay and module defaults still agree.
 
 ### `checks.nat-overlay-parity`
 
-Eval-only; every assertion compares drvPath strings. The foreign nixpkgs is
-llm-agents' input (devenv's if llm-agents ever locks this flake's revision), so
-no new input is fetched.
+Eval-only; every assertion compares drvPath or out path strings. The foreign
+nixpkgs is llm-agents' input (devenv's if llm-agents ever locks this flake's
+revision), so no new input is fetched.
 
 - **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
   claimed leaf, and the claim list equals the `ciPackages` leaves.
 - **B** `packages` equals `ciPackages` by name; only unfree leaves are missing.
 - **C** with no config, the overlay's `ai.claude-code` does not evaluate.
 - **D** positive controls: foreign `hello` and `buildOverlay`'s rumdl differ.
-- **E** every module package default, both backends, over a base with no `ai`
-  attribute (the harness's `injectAi = false`), equals `ciPackages`, and with
-  the overlay equals the overlay attribute.
+- **E** every module package default, both backends, over a base with none of
+  this flake's roots (the harness's `injectAi = false`), equals `ciPackages`,
+  and with the overlay equals the overlay attribute. Sites that build from a
+  root (skills of stacked-workflows, delegate-routing and kimchi-docs, the
+  mcp-servers bridge launcher) are pinned by source: equal to the value with the
+  expected roots forced, and changed by a marker root. The guard program is
+  checked in the claude tree and, on devenv, in the shared AGENTS.md writer's.
 - **F** `pkgsStatic` takes the fallback.
 - **G** `gateKeys` plus a named ignore list equals the config keys nixpkgs' meta
   checks read.
-- **H** no module file reads raw `pkgs.ai`. A new module that passes the
-  unmodified `pkgs` to a factory is not caught by H, only by adding its row to
-  E.
+- **H** no module file reads `pkgs.<root>` for any claimed root. A new module
+  that passes the unmodified `pkgs` to a factory is not caught by H, only by
+  adding its row to E. `lib/ai/**` is not scanned: its public factories take the
+  caller's `pkgs` by design.
 
 ### Recipes still take toolchains from `pkgs.ai.generic`
 

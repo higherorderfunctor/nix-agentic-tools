@@ -515,21 +515,30 @@ in {
         visible = false;
         description = "Evaluated generated-file treefmt configuration.";
       };
-      # The one helper every module package default reads.
+      # The `ai` root, which most module package defaults read.
       packages = lib.mkOption {
         type = lib.types.raw;
-        default = config.ai.internal.packagesFor pkgs;
+        default = config.ai.internal.roots.ai;
         internal = true;
         readOnly = true;
         visible = false;
-        description = "This flake's package tree (`ai.*`) for the module's pkgs: `pkgs.ai` when this flake's overlay is applied, else this flake's own build.";
+        description = "This flake's package tree (`ai.*`) for the module's pkgs: `ai.internal.roots.ai`.";
       };
-      packagesFor = lib.mkOption {
+      # Every root a module site reads (`ai`, `docs`, `*-content`).
+      roots = lib.mkOption {
         type = lib.types.raw;
-        default = throw "ai.internal.packagesFor: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those";
+        default = config.ai.internal.rootsFor pkgs;
+        internal = true;
+        readOnly = true;
+        visible = false;
+        description = "Every package root this flake claims, for the module's pkgs: the consumer's root when this flake's overlay is applied, else this flake's own build.";
+      };
+      rootsFor = lib.mkOption {
+        type = lib.types.raw;
+        default = throw "ai.internal.rootsFor: set by the flake's homeManagerModules.default and devenvModules.nix-agentic-tools wrappers; compose one of those";
         internal = true;
         visible = false;
-        description = "Function from pkgs to this flake's package tree, supplied by the flake-level module wrappers.";
+        description = "Function from pkgs to this flake's package roots, supplied by the flake-level module wrappers.";
       };
       treefmtNix = lib.mkOption {
         type = lib.types.raw;

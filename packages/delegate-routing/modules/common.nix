@@ -3,13 +3,13 @@ args @ {
   config,
   lib,
   options,
-  pkgs,
   ...
 }: let
   delegateRoutingRenames = args.delegateRoutingRenames or (import ../lib/when-to-delegate-renames.nix);
   # Copilot's sizing controls are not established.
   supportedRuntimes = ["claude" "codex" "kimchi" "kiro"];
-  defaults = pkgs.delegate-routing-content;
+  # This flake's build unless the overlay is applied (ai.internal.roots).
+  defaults = config.ai.internal.roots.delegate-routing-content;
   portable = config.ai.programs.delegate-routing;
   vocabulary = import ../lib/vocabulary.nix;
   inherit (vocabulary) delegateKinds;
@@ -191,12 +191,8 @@ in {
       name = "delegate-routing";
       enableDescription = "delegate model and effort sizing skills and rule";
       inherit supportedRuntimes;
-      skills = {
-        pkgs,
-        runtime,
-        ...
-      }: {
-        delegate-routing = "${pkgs.delegate-routing-content.passthru.mkSkill {
+      skills = {runtime, ...}: {
+        delegate-routing = "${defaults.passthru.mkSkill {
           inherit runtime models techniques;
           inherit (portable) families;
           rules = lib.optionalString portable.rules.enable portable.rules.text;

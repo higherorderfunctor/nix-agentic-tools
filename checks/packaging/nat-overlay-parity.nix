@@ -5,7 +5,7 @@
 # same builds, so a consumer on any nixpkgs hits the cache. Nothing else proves
 # that: a regression (an overlay that builds on `final` again, a module site
 # that reads raw `pkgs.ai`) still evaluates and still builds, just not from the
-# cache. Every assertion compares drvPath strings; nothing is built.
+# cache. Every assertion compares drvPath or out path strings; nothing is built.
 #
 #   A  the overlay over a foreign nixpkgs gives `ciPackages`' drv for every
 #      claimed leaf, and the claim list is complete
@@ -18,7 +18,7 @@
 #      overlay, over a base with NO `ai` attribute
 #   F  the fallback (non-native triple) still builds on `final`
 #   G  `gateKeys` matches the config keys nixpkgs' meta checks read
-#   H  no module file reads raw `pkgs.ai`
+#   H  no module file reads a root (`pkgs.ai`, `pkgs.docs`, ...) from raw pkgs
 #
 # Linux only: F uses pkgsStatic, and the foreign nixpkgs imports are paid once
 # where `nix flake check` runs in CI.
@@ -75,6 +75,8 @@
   # evaluated config; `path` is the leaf under `ai`, whose basename is its
   # `ciPackages` name. `match` is `same` (the value IS the package) or
   # `contains` (the value carries its out path: an installed list, a script).
+  # A site that reads a root other than `ai`, or builds a new derivation from
+  # one, is a source row instead (sourceRows below).
   runtimes = {
     claude = "claude-code";
     codex = "chatgpt-codex";
@@ -138,66 +140,95 @@
         read = config: config.services.mcp-servers.servers.context7-mcp.package;
       }
     ];
+  # Merged recursively: the devenv part adds to `ai`, it must not replace it.
   enabled = backend:
-    {
+    lib.foldl' lib.recursiveUpdate {
       ai.claude = {
         enable = true;
         files.".claude/settings.json".content.enable = false;
         rules.heading.text = "#   Heading";
       };
+      ai.programs = lib.genAttrs ["delegate-routing" "kimchi-docs" "stacked-workflows"] (_: {enable = true;});
       git = lib.genAttrs ["absorb" "branchless" "revise"] (_: {enable = true;});
       glab.enable = true;
-    }
-    // lib.optionalAttrs (backend == "devenv") {
-      git-hooks.enable = true;
-      services.beads.enable = true;
-    }
-    // lib.optionalAttrs (backend == "hm") {
-      services.mcp-servers.servers.context7-mcp.enable = true;
-    };
-  # The tableCells guard a runtime's generated tree runs. Its program is
-  # built from the module's pkgs with this flake's tree as `ai`, so it is
-  # compared with the program built from the same base and `expectedAi`.
+    } [
+      (lib.optionalAttrs (backend == "devenv") {
+        # The shared AGENTS.md writer runs the guards on this table.
+        ai.codex = {
+          enable = true;
+          context.text = "| a | b |\n| - | - |\n| 1 | 2 |\n";
+        };
+        git-hooks.enable = true;
+        services.beads.enable = true;
+      })
+      (lib.optionalAttrs (backend == "hm") {
+        services.mcp-servers.servers.context7-mcp.enable = true;
+      })
+    ];
+  # The tableCells guard a generated tree runs. Its program is built from the
+  # module's pkgs with this flake's tree as `ai`, so it is compared with the
+  # program built from the same base and `expectedRoots.ai`. One row per
+  # writer: a runtime's own tree (the claude rule) and, on devenv, the shared
+  # AGENTS.md writer.
   guardsTable = import ../../lib/markdown/guards.nix {inherit lib;};
-  guardRow = harness: evaluated: base: expectedAi: let
-    expected = builtins.unsafeDiscardStringContext (lib.getExe (guardsTable.table (base // {ai = expectedAi;}) true).tableCells.program);
+  guardPaths = backend:
+    {claude = rulePath;}
+    // lib.optionalAttrs (backend == "devenv") {"shared AGENTS.md" = "AGENTS.md";};
+  guardRows = harness: backend: evaluated: base: expectedRoots: let
+    expected = builtins.unsafeDiscardStringContext (lib.getExe (guardsTable.table (base // {inherit (expectedRoots) ai;}) true).tableCells.program);
   in
-    lib.optional (!harness.hasLiteral expected (harness.deliveredTree evaluated rulePath).buildPhase)
-    "guard tableCells in the claude tree is not built from this flake's rumdl";
-  # A bridge service's launcher puts mcp-proxy on its PATH, and ExecStart is
-  # only the launcher's path. So pin the source instead: the launcher must
-  # equal the one built with `expectedAi` as the package tree, and must change
-  # when that tree's mcp-proxy is swapped for a marker.
-  bridgeRow = harness: evaluated: fixture: expectedAi: let
-    execWith = packages:
-      (harness.evalHmModules [
-        {config = fixture;}
-        {ai.internal.packagesFor = lib.mkForce (_: packages);}
-      ])
-      .config
-      .systemd
-      .user
-      .services
-      .mcp-context7-mcp
-      .Service
-      .ExecStart;
-    expected = execWith expectedAi;
-    marked = execWith (expectedAi // {mcpServers = expectedAi.mcpServers // {mcp-proxy = pkgs.emptyDirectory;};});
-  in
-    lib.optional (evaluated.config.systemd.user.services.mcp-context7-mcp.Service.ExecStart != expected)
-    "mcp-servers bridge launcher is not built from this flake's mcp-proxy"
-    ++ lib.optional (marked == expected)
-    "mcp-servers bridge launcher does not read mcp-proxy from ai.internal.packages";
+    lib.concatLists (lib.mapAttrsToList (writer: path:
+      lib.optional (!harness.hasLiteral expected (harness.deliveredTree evaluated path).buildPhase)
+      "guard tableCells in the ${writer} tree is not built from this flake's rumdl")
+    (guardPaths backend));
+  # Sites whose value is not a root's leaf but is built from a root: a
+  # launcher with mcp-proxy on its PATH, a skill rendered from a content
+  # package, a skill linking a docs snapshot. Each is pinned by its source:
+  # the value must equal the one evaluated with `expectedRoots` forced as
+  # `ai.internal.roots`, and must change when `mark` swaps the root it reads
+  # for a marker.
+  marker = pkgs.emptyDirectory;
+  withPassthru = drv: extra: drv // {passthru = drv.passthru // extra;};
+  sourceRows = backend:
+    [
+      {
+        name = "stacked-workflows skill";
+        read = config: config.ai.claude.skills.stack-fix;
+        mark = roots:
+          roots
+          // {
+            stacked-workflows-content = withPassthru roots.stacked-workflows-content {
+              skills = lib.mapAttrs (_: _: "${marker}") roots.stacked-workflows-content.passthru.skills;
+            };
+          };
+      }
+      {
+        name = "delegate-routing skill";
+        read = config: config.ai.claude.skills.delegate-routing;
+        mark = roots: roots // {delegate-routing-content = withPassthru roots.delegate-routing-content {mkSkill = _: marker;};};
+      }
+      {
+        name = "kimchi-docs skill";
+        read = config: config.ai.claude.skills.kimchi-docs;
+        mark = roots: roots // {docs = roots.docs // {kimchi-docs = marker;};};
+      }
+    ]
+    ++ lib.optional (backend == "hm") {
+      name = "mcp-servers bridge launcher";
+      read = config: config.systemd.user.services.mcp-context7-mcp.Service.ExecStart;
+      mark = roots: roots // {ai = roots.ai // {mcpServers = roots.ai.mcpServers // {mcp-proxy = marker;};};};
+    };
+  textOf = value: builtins.unsafeDiscardStringContext (toString value);
   moduleMismatches = {
     base,
-    expectedAi,
+    expectedRoots,
     label,
   }: let
     harness = harnessFor {
       pkgs = base;
       injectAi = false;
     };
-    evaluate = backend: let
+    evaluate = backend: extraModules: let
       fixture = enabled backend;
       modules =
         lib.optional (backend == "devenv") {
@@ -206,16 +237,25 @@
             default = false;
           };
         }
-        ++ [{config = fixture;}];
+        ++ [{config = fixture;}]
+        ++ extraModules;
     in
       if backend == "hm"
       then harness.evalHmModules modules
       else harness.evalDevenvModules modules;
     check = backend: let
-      evaluated = evaluate backend;
+      evaluated = evaluate backend [];
+      readWith = roots: (evaluate backend [{ai.internal.rootsFor = lib.mkForce (_: roots);}]).config;
+      sourceMismatches = row: let
+        expected = textOf (row.read (readWith expectedRoots));
+      in
+        lib.optional (textOf (row.read evaluated.config) != expected)
+        "${row.name} is not built from this flake's roots"
+        ++ lib.optional (textOf (row.read (readWith (row.mark expectedRoots))) == expected)
+        "${row.name} does not read its root from ai.internal.roots";
     in
       map (row: "${label}: ${row.name}") (builtins.filter (row: let
-        expected = lib.getAttrFromPath row.path expectedAi;
+        expected = lib.getAttrFromPath row.path expectedRoots.ai;
         value = row.read evaluated.config;
       in
         if (row.match or "same") == "same"
@@ -223,23 +263,25 @@
         else if builtins.isList value
         then !(builtins.elem (drvOf expected) (map drvOf value))
         else !(harness.hasLiteral (outOf expected) value)) (rows backend))
-      ++ map (message: "${label}: ${backend} ${message}") (guardRow harness evaluated base expectedAi
-        ++ lib.optionals (backend == "hm") (bridgeRow harness evaluated (enabled backend) expectedAi));
+      ++ map (message: "${label}: ${backend} ${message}") (guardRows harness backend evaluated base expectedRoots
+        ++ lib.concatMap sourceMismatches (sourceRows backend));
   in
     check "hm" ++ check "devenv";
-  # Run 1: no overlay. The base has no `ai`, so a site still reading raw
-  # `pkgs.ai` throws instead of passing; every default must be ciPackages'.
-  # Run 2: the overlay applied; every default must be the overlay attribute.
-  ciAi = pkgs.ai;
+  # Run 1: no overlay. The base has none of this flake's roots, so a site
+  # still reading one from raw `pkgs` throws instead of passing; every default
+  # must be ciPackages'. Run 2: the overlay applied; every default must be the
+  # overlay attribute.
+  rootNames = lib.unique (map builtins.head claimedPaths);
+  rootsOf = set: lib.genAttrs rootNames (root: set.${root});
   defaultMismatches =
     moduleMismatches {
       base = foreign;
-      expectedAi = ciAi;
+      expectedRoots = rootsOf pkgs;
       label = "no overlay";
     }
     ++ moduleMismatches {
       base = overlaid;
-      expectedAi = overlaid.ai;
+      expectedRoots = rootsOf overlaid;
       label = "overlay";
     };
 
@@ -279,9 +321,11 @@
   expectedTokens = sorted (gateKeys ++ ignoredKeys);
 
   # ── H: no raw module reads ─────────────────────────────────────────
-  # Every module file, with `#` comments dropped. A new module that passes
-  # the unmodified pkgs to a factory (`inherit pkgs;`) is NOT caught here,
-  # only by adding its row to E.
+  # Every module file, with `#` comments dropped, searched for `pkgs.<root>`
+  # for each root this flake claims. A new module that passes the unmodified
+  # pkgs to a factory (`inherit pkgs;`) is NOT caught here, only by adding its
+  # row to E. lib/ai/** is not scanned: its public factories take the caller's
+  # pkgs by design, and a module path through them is an E row.
   nixFilesUnder = dir:
     lib.filter (lib.hasSuffix ".nix") (map toString (lib.filesystem.listFilesRecursive dir));
   moduleFiles =
@@ -292,7 +336,8 @@
     (builtins.attrNames (lib.filterAttrs (_: type: type == "directory") (builtins.readDir ../../packages)))
     ++ [(toString ../../lib/git-tool-settings/tool-module.nix)];
   withoutComments = text: lib.concatMapStringsSep "\n" (line: lib.head (lib.splitString "#" line)) (lib.splitString "\n" text);
-  rawReads = builtins.filter (file: lib.hasInfix "pkgs.ai" (withoutComments (builtins.readFile file))) moduleFiles;
+  rawRead = "(.*[^A-Za-z0-9_'-])?pkgs\\.(${lib.concatMapStringsSep "|" lib.escapeRegex rootNames})([^A-Za-z0-9_'-].*)?";
+  rawReads = builtins.filter (file: lib.any (line: builtins.match rawRead line != null) (lib.splitString "\n" (withoutComments (builtins.readFile file)))) moduleFiles;
   relative = file: lib.removePrefix "${toString ../..}/" file;
 
   failures =
@@ -318,7 +363,7 @@
     "F: the pkgsStatic fallback re-exported the native rumdl"
     ++ lib.optional (metaCheckTokens != expectedTokens)
     "G: nixpkgs' meta checks read ${toString (lib.subtractLists expectedTokens metaCheckTokens)} not in gateKeys/ignoredKeys, and no longer read ${toString (lib.subtractLists metaCheckTokens expectedTokens)}"
-    ++ map (file: "H: ${relative file} reads raw pkgs.ai; read config.ai.internal.packages") rawReads;
+    ++ map (file: "H: ${relative file} reads a root from raw pkgs; read config.ai.internal.roots") rawReads;
 in {
   checks = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
     nat-overlay-parity =
@@ -332,7 +377,7 @@ in {
             echo "claims: ${toString (builtins.length claimedPaths)}"
             echo "packages compared: ${toString (builtins.length publicNames)}"
             echo "unfree leaves: ${toString (builtins.length unfreeNames)}"
-            echo "module rows: ${toString (builtins.length (rows "hm") + builtins.length (rows "devenv") + 3)} per run, 2 runs"
+            echo "module rows: ${toString (lib.foldl' (n: backend: n + builtins.length (rows backend) + builtins.length (sourceRows backend) + builtins.length (builtins.attrNames (guardPaths backend))) 0 ["hm" "devenv"])} per run, 2 runs"
             echo "gate keys: ${toString (builtins.length gateKeys)}"
             echo "module files scanned: ${toString (builtins.length moduleFiles)}"
           } > "$out"

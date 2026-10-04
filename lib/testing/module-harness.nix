@@ -1,7 +1,7 @@
 {
   # False evaluates the modules over `pkgs` exactly as given, with no `ai`
   # attribute injected, so a module default must come from
-  # `ai.internal.packages` (this flake's build) or fail.
+  # `ai.internal.roots` (this flake's build) or fail.
   injectAi ? true,
   lib,
   moduleImports,

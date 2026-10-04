@@ -50,7 +50,7 @@
     index.owners;
   # Overlay attribute names. They must not depend on `final`'s values: the
   # nixpkgs fixed point needs them before it can supply stdenv or system.
-  rootsFor = context: lib.unique (packageRoots ++ map builtins.head (ordinaryClaimsFor context));
+  rootNamesFor = context: lib.unique (packageRoots ++ map builtins.head (ordinaryClaimsFor context));
   supportedSystems = import ../../config/systems.nix;
   ordinaryAttrs = value: builtins.isAttrs value && !lib.isDerivation value;
   # The recipe-level overlay: builds every claimed package on whatever `final`
@@ -68,7 +68,7 @@
     };
     composed = world.overlay final prev;
   in
-    lib.genAttrs (rootsFor context) (name: composed.${name} or (prev.${name} or {}));
+    lib.genAttrs (rootNamesFor context) (name: composed.${name} or (prev.${name} or {}));
   # Every nixpkgs config key that only gates evaluation (sorted). Each one is
   # read only by nixpkgs' stdenv/generic/{check-meta,problems,remediations}.nix,
   # so forwarding it changes which packages evaluate, never a derivation hash.
@@ -126,28 +126,29 @@
       inherit (context) system;
     })
     ++ ordinaryClaimsFor context;
-  # This flake's package tree for `pkgs`: its own `ai` when the overlay is
-  # applied (so a consumer's override flows), else this flake's build.
-  aiFor = pkgs:
-    pkgs.ai or (
-      let
-        system = natSystemOf pkgs;
-      in
-        if system == null
-        then (pkgs.extend buildOverlay).ai
-        else
-          (natSetFor {
-            inherit system;
-            config = pkgs.config or {};
-          }).ai
-    );
+  # Every root this flake's packages claim (`ai`, `docs`, ...) for `pkgs`: the
+  # consumer's own root when the overlay is applied (so a consumer's override
+  # flows), else this flake's build. Module sites read these, never a root of
+  # their raw `pkgs`. `natSet` is forced only for a root `pkgs` lacks.
+  rootsFor = pkgs: let
+    system = natSystemOf pkgs;
+    natSet =
+      if system == null
+      then pkgs.extend buildOverlay
+      else
+        natSetFor {
+          inherit system;
+          config = pkgs.config or {};
+        };
+  in
+    lib.genAttrs packageRoots (root: pkgs.${root} or natSet.${root});
   # Flake values the exported modules receive as `ai.internal`.
   moduleInternals = {
-    packagesFor = aiFor;
+    inherit rootsFor;
     treefmtNix = inputs.treefmt-nix;
   };
 in {
-  inherit aiFor buildOverlay claimedPaths gateKeys index moduleInternals natSetFor natSystemOf repoPath supportedSystems update;
+  inherit buildOverlay claimedPaths gateKeys index moduleInternals natSetFor natSystemOf repoPath rootsFor supportedSystems update;
   libraryFor = rootLibrary:
     facets.realizeLibrary {
       inherit index rootLibrary;
@@ -170,7 +171,7 @@ in {
   legacyPackagesFor = pkgs: let
     packageWorld = packageWorldFor pkgs;
     leafRoots = map (claim: builtins.head claim.keyPath) (builtins.filter (claim: builtins.length claim.keyPath == 1) packageWorld.eligibleClaims);
-    namespaceRoots = builtins.filter (name: !lib.elem name leafRoots) (rootsFor {
+    namespaceRoots = builtins.filter (name: !lib.elem name leafRoots) (rootNamesFor {
       inherit inputs lib packageWorld;
       inherit (packageWorld) packages;
       system = pkgs.stdenv.hostPlatform.system;
@@ -211,7 +212,7 @@ in {
       tree;
     built = buildOverlay final prev;
   in
-    lib.genAttrs (rootsFor context) (name:
+    lib.genAttrs (rootNamesFor context) (name:
       if system == null
       then built.${name}
       else reexported.${name} or (prev.${name} or {}));

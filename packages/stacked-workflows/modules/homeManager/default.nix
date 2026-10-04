@@ -16,7 +16,7 @@
 # (../options.nix) outside `ai.*`: it is sugar over the `git.*` options, which
 # Home Manager delivers through `programs.git.settings`. It has no runtime
 # meaning. Skill sources are the deref'd, self-contained skill dirs from
-# `pkgs.stacked-workflows-content.passthru.skills` (real reference files
+# `stacked-workflows-content.passthru.skills` (`ai.internal.roots`) (real reference files
 # bundled inside each, so they resolve in every scope).
 #
 # Picked up by `native Home Manager module discovery` in flake.nix.
@@ -25,13 +25,17 @@
     (import ../../../../lib/ai/mkSkillPackageModule.nix {
       name = "stacked-workflows";
       enableDescription = "stacked workflow skills and skill-routing rule in each enabled runtime";
-      skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
+      skills = {config, ...}: config.ai.internal.roots.stacked-workflows-content.passthru.skills;
       rules = {
+        config,
         lib,
         pkgs,
         ...
       }:
-        import ../../router.nix {inherit lib pkgs;};
+        import ../../router.nix {
+          inherit lib;
+          pkgs = pkgs // config.ai.internal.roots;
+        };
     })
     (import ../options.nix {inherit lib;})
   ];
