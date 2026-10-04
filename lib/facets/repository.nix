@@ -69,10 +69,10 @@
     composed = world.overlay final prev;
   in
     lib.genAttrs (rootNamesFor context) (name: composed.${name} or (prev.${name} or {}));
-  # Every nixpkgs config key that only gates evaluation (sorted). Each one is
-  # read only by nixpkgs' stdenv/generic/{check-meta,problems,remediations}.nix,
-  # so forwarding it changes which packages evaluate, never a derivation hash.
-  # Re-check this list on every nixpkgs bump.
+  # Every nixpkgs config key the meta checks read to gate evaluation (sorted).
+  # Hash-neutrality is proven only for `allowUnfree`, by nat-overlay-parity's
+  # gate B over every shipped leaf; the rest are forwarded on the premise that
+  # no shipped closure reads them. Re-check this list on every nixpkgs bump.
   gateKeys = [
     "allowBroken"
     "allowBrokenPredicate"

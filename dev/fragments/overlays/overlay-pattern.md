@@ -54,13 +54,18 @@ fragment for the native composition boundaries.
 
 `natSetFor { system, config ? {} }` is the only `import inputs.nixpkgs` for
 packages. Its `config` is `licenseConfig config`: only the keys in `gateKeys`
-that the caller actually set. Each of those keys is read only by nixpkgs'
-`stdenv/generic/{check-meta,problems,remediations}.nix`, so forwarding them
-changes which packages evaluate, never a derivation hash. `allowUnfree` and
-`allowUnfreePredicate` were measured hash-neutral; gate B covers the rest. Keys
-that change hashes (the GPU support flags, `allowAliases`, `replaceStdenv`,
-`packageOverrides`, …) are never forwarded. **Re-check `gateKeys` on every
-nixpkgs bump**; gate G fails when check-meta's key set moves.
+that the caller actually set. nixpkgs' meta checks
+(`stdenv/generic/{check-meta,problems,remediations}.nix`) read them to decide
+which packages evaluate, but they are not read only there: `config.allowUnfree`
+also selects inputs elsewhere (python `emerge`'s `withMkl` default, the logstash
+and beats `passthru.tests`). What proves hash-neutrality for this flake's
+shipped set is gate B, and only for `allowUnfree`: every shipped leaf has the
+same drv with and without it. The other keys are forwarded on the unchecked
+premise that no shipped closure reads them; gate G cannot see such a reader,
+because it scans only the three meta-check files. Keys that change hashes (the
+GPU support flags, `allowAliases`, `replaceStdenv`, `packageOverrides`, …) are
+never forwarded. **Re-check `gateKeys` on every nixpkgs bump**; gate G fails
+when check-meta's key set moves.
 
 `flake.nix` binds two instances per system so outputs share one evaluation:
 
