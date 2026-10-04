@@ -15,6 +15,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 > materialized TUI registry and workspace merge with AST checks; Kimchi
 > attributes every config.ts JSON read to the file it reads, censuses every
 > resolved environment read, and no longer extracts a CLI surface nothing read.
+> pnpm_12 inherits nixpkgs' source-built Rust package and nodejs-slim passthru,
+> with sidecar source/cargo repair exposed as fixVendorHash.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -560,26 +562,20 @@ feature maturities, and config-key extraction fail closed.
   `pnpm-fixup-state-db.override {inherit (pnpm) nodejs-slim;}`. Any pnpm handed
   to that fetcher must carry the passthru, or evaluation dies with a bare
   `attribute 'nodejs-slim' missing` that names neither pnpm nor the fetcher.
-  nixpkgs' own pnpm exposes it from `generic.nix`'s argument of the same name; a
+  nixpkgs' pnpm expressions expose it from their argument of the same name; a
   hand-built one does not get it for free.
 
-  Counter-intuitive for pnpm 12, which ships as a self-contained native binary
-  and needs no Node to RUN — the Node is for the fetcherVersion-4 SQLite
-  state-db fixup helper, which is a JS program. So "this pnpm needs no Node" is
-  true of the tool and false of the fetcher contract.
+  Counter-intuitive for pnpm 12, which builds a native Rust binary and needs no
+  Node to RUN — the Node is for the fetcherVersion-4 SQLite state-db fixup
+  helper, which is a JS program. So "this pnpm needs no Node" is true of the
+  tool and false of the fetcher contract.
 
-  **Packaging a pnpm major is not the same as proving it usable as a fetcher
-  argument.** This was latent in
-  `packages/pnpm/packages/ai/generic/pnpm_12/package.nix` from the day it was
-  written: `checks/packaging/pnpm-fetcher-parity.nix` enumerates only packages
-  that already ship a `pnpmDeps`, and none of them used pnpm 12, so nothing
-  evaluated the combination. The passthru is not a derivation input — the
-  `pnpm_12` outPath is byte-identical with and without it — so adding it is
-  inert for existing consumers and cannot be validated by any build product.
-
-  `checks/packaging/pnpm-fetcher-contract.nix` now enforces this across every
-  `pnpm_<major>` the flake exposes, discovering them by name so a future major
-  is covered the day it is added.
+  pnpm_12 now inherits `nodejs-slim` from nixpkgs' `generic-rust.nix` and merges
+  passthru when adding our update script and hash fixer. Its former standalone
+  binary recipe needed to add the attribute explicitly; see
+  `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
+  `checks/packaging/pnpm-fetcher-contract.nix` enforces this across every
+  exposed `pnpm_<major>`, including majors no package yet uses for `pnpmDeps`.
 
 - **Apply patch metadata by key, not as lockfile hunks.** Upstream can reshuffle
   peer variants without changing the patched code.
