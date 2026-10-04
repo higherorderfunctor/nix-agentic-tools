@@ -141,15 +141,15 @@ in {
     );
 
     # Asserts: enabling it mounts the skill in every runtime's pool and
-    # materializes it on both backends — and that the snapshot stays ONE devenv
-    # entry (the symlink), not one per snapshot file.
+    # materializes it on both backends — and that snapshot and workflows each
+    # stay ONE devenv entry (the symlink), not one per source file.
     module-kimchi-docs-skill-delivered = mkTest "kimchi-docs-skill-delivered" (
       hmOn.config.ai.kimchi.skills
       ? kimchi-docs
       && hmOn.config.ai.claude.skills ? kimchi-docs
       && hmOn.config.home.file.${skillDir}.recursive
       && lib.sort lib.lessThan (devenvSkillKeys devenvOn)
-      == ["${devenvSkillDir}/SKILL.md" "${devenvSkillDir}/snapshot"]
+      == ["${devenvSkillDir}/SKILL.md" "${devenvSkillDir}/snapshot" "${devenvSkillDir}/workflows"]
     );
 
     # Asserts: a per-runtime `false` suppresses exactly that runtime.
