@@ -141,13 +141,19 @@ in {
         if [ ! -s "$cache" ]; then
           "$coreutils"/bin/mkdir -p "$cache_root" 2>/dev/null || skip_reminder "cannot create reminder cache"
           tmp="$("$coreutils"/bin/mktemp "$cache_root/.extract.XXXXXX" 2>/dev/null)" || skip_reminder "cannot create reminder temporary file"
-          if "$python" "$extract" "$bundle" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+          # The extractor's own stderr is the diagnosis (which anchor, how many
+          # matches), so it is captured into the warning rather than discarded:
+          # a bare "extraction failed" sends the reader to re-derive what the
+          # extractor already knew. Redirection order matters: stderr goes to
+          # the capture, stdout to the temporary file.
+          if reason="$("$python" "$extract" "$bundle" 2>&1 > "$tmp")" && [ -s "$tmp" ]; then
             "$coreutils"/bin/mv "$tmp" "$cache" 2>/dev/null || skip_reminder "cannot publish reminder cache"
           else
             # Best effort, and deliberately so: cleanup failing must not turn
             # this hook into a non-zero exit under errexit.
             "$coreutils"/bin/rm -f "$tmp" 2>/dev/null || :
-            skip_reminder "vendor steering extraction failed"
+            reason="''${reason//$'\n'/ }"
+            skip_reminder "vendor steering extraction failed: ''${reason:-extractor printed no text}"
           fi
         fi
 
