@@ -58,6 +58,8 @@ fails("'" + HEAD + " run_workflow", "unterminated")
 fails("'" + HEAD + " run_workflow\n'", "raw line break")
 fails("'" + HEAD + r" run_workflow \1'", "legacy octal")
 fails("'" + HEAD + r" run_workflow \xZZ'", "malformed escape")
+fails("'" + HEAD + r" run_workflow \u{110000}'", "escape out of range")
+fails("'" + HEAD + r" run_workflow \uD800'", "unpaired surrogate escape")
 fails("'" + HEAD + " nothing else'", "lacks 'run_workflow'")
 
 print("PASS: steering extractor anchors on content and decodes JS escapes")

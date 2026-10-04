@@ -807,9 +807,10 @@ without saying the word stopped it. The hook was added days later precisely
 because that coupling made the behavior unreliable.
 
 The elicitation source is therefore the **vendor's** `workflows_default`
-steering — ~19.3k characters, emphatic ("always delegate implementation to
-workflows"). What makes it topic-coupled is _where_ it sits, and
-`workflowReminder.nix`'s own header names the symptom exactly:
+steering — ~15.5k characters since 2.27.1 (~19.3k through 2.16.x), emphatic
+("always delegate implementation to workflows"). What makes it topic-coupled is
+_where_ it sits, and `workflowReminder.nix`'s own header names the symptom
+exactly:
 
 > What decays is ATTENTION: one block near the top of a growing conversation
 > loses out to everything since, which is exactly the reported symptom (the
@@ -1554,17 +1555,20 @@ every iteration it has. Never `/tmp`.
 
 Write the path **relative**: it resolves against the workspace root by
 construction, and step agents' cwd is that same root, so the writing step and
-the check agree without any interpolation. The 2.16.x vendor steering instructed
-the opposite — interpolate an absolute `{{worktree_path}}/…` — which is wrong
-whenever worktrees are SIBLINGS of the checkout rather than subdirectories of
-it, which is this repo's own worktree convention. 2.27.1 dropped that section,
-and with it the reminder's correcting paragraph. The reminder's one remaining
-correction is the 2.27.1 instruction to create worktrees INSIDE the checkout
-(`.worktrees/<name>`) off `mainline`. msg0 is frozen, so a bad instruction
-cannot be edited out, only contradicted later in context. And `stopWhen`'s
-`"{{id.output}} contains <text>"` form matches against _captured output_, so it
-inherits the empty-capture hazard wholesale — under a cheap model the condition
-can never match and the loop silently runs to `maxIterations` (ledger §7.6).
+the check agree without any interpolation. The vendor text instructs the
+opposite (2.16.x in the orchestrator steering; since 2.27.1 in the
+workflow-creator prompt) — interpolate an absolute `{{worktree_path}}/…` — which
+is wrong whenever worktrees are SIBLINGS of the checkout rather than
+subdirectories of it, which is this repo's own worktree convention. 2.27.1 moved
+that instruction into the creator prompt, so the reminder now tells the
+orchestrator to put the relative path in its `workflowPrompt` brief. The
+reminder's other correction is the 2.27.1 instruction to create worktrees INSIDE
+the checkout (`.worktrees/<name>`) off `mainline`. msg0 is frozen, so a bad
+instruction cannot be edited out, only contradicted later in context. And
+`stopWhen`'s `"{{id.output}} contains <text>"` form matches against _captured
+output_, so it inherits the empty-capture hazard wholesale — under a cheap model
+the condition can never match and the loop silently runs to `maxIterations`
+(ledger §7.6).
 
 ### Small things that save a run
 
