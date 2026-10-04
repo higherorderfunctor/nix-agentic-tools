@@ -319,6 +319,7 @@ in rec {
     ) (filter (owner: owner.contributions.modules ? ${backend}) index.owners);
 
   realizePackages = packageTree.realize;
+  inherit (packageTree) eligibleClaimsFor;
 
   # Native module options merge library namespaces while raw leaf options keep
   # function identity (including functionArgs) intact. types.anything would wrap

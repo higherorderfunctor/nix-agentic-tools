@@ -56,6 +56,16 @@
       )
       (attrNames entries);
 
+  # Package claims a system builds. Reads only platforms.nix files, so callers
+  # without a package set (the exported overlay's claim list) can use it.
+  eligibleFor = system: claim: claim.platforms == null || elem system (import claim.platforms);
+  packageClaimsOf = index: filter (claim: claim.kind == "package") (concatMap (owner: owner.contributions.packages) index.owners);
+  eligibleClaimsFor = {
+    index,
+    system,
+  }:
+    filter (eligibleFor system) (packageClaimsOf index);
+
   realize = {
     index,
     inputs,
@@ -68,10 +78,9 @@
     reservedNames = lib.unique (attrNames (lib.makeScope pkgs.newScope (_: {})) ++ attrNames injectedArgs ++ ["recurseForDerivations"]);
     reservedClaims = filter (claim: builtins.any (name: elem name reservedNames) claim.keyPath) claims;
     exclusive = mergeExclusiveClaims "packages" claims;
-    packageClaims = filter (claim: claim.kind == "package") claims;
-    eligible = claim: claim.platforms == null || elem system (import claim.platforms);
-    eligibleClaims = filter eligible packageClaims;
-    omittedClaims = filter (claim: !eligible claim) packageClaims;
+    packageClaims = packageClaimsOf index;
+    eligibleClaims = filter (eligibleFor system) packageClaims;
+    omittedClaims = filter (claim: !eligibleFor system claim) packageClaims;
     owners = filter (owner: owner.contributions.packages != []) index.owners;
 
     realizeOwner = owner: let
@@ -134,5 +143,5 @@
       omitted = map (claim: claim.keyPath) omittedClaims;
     };
 in {
-  inherit realize scan;
+  inherit eligibleClaimsFor realize scan;
 }

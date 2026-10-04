@@ -75,17 +75,16 @@
     # Shared shell-hardening settings (bashOptions / shoptHeader /
     # shellcheckFlags) — see config/shell-strict.nix.
     shellStrict = import ./config/shell-strict.nix;
-    supportedSystems = [
-      "aarch64-darwin"
-      "x86_64-linux"
-    ];
-    forAllSystems = lib.genAttrs supportedSystems;
-    pkgsFor = system:
-      import nixpkgs {
+    forAllSystems = lib.genAttrs repository.supportedSystems;
+    # The internal unfree-enabled package set: checks, repo documents, the CI
+    # shell, apps and the formatter. Bound once per system so they share one
+    # nixpkgs evaluation.
+    ciSet = forAllSystems (system:
+      repository.natSetFor {
         inherit system;
         config.allowUnfree = true;
-        overlays = [self.overlays.default];
-      };
+      });
+    pkgsFor = system: ciSet.${system};
     repoDocsFor = system:
       import ./dev/repo-docs.nix {
         inherit lib;
