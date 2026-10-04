@@ -4,7 +4,8 @@
 > and read from `ciPackages` or `legacyPackages`, repository commands included;
 > main-tracking rev bumps are done by `update-pkg.sh`; chatgpt-codex compiles
 > nixpkgs' `codex` from source, assembles upstream's complete package layout
-> itself and adds the voice and zsh resources from the release archive.
+> itself, adds the voice and zsh resources from the release archive and stamps
+> the voice build commit into the CLI.
 
 ### Overview
 
@@ -60,7 +61,10 @@ and `extracted.json` records the binary's own defaults.
   platforms' archives carry both). That happens in postFixup, so strip never
   touches them (it would break the macOS signatures), and on Linux a scoped
   `autoPatchelf` repoints them at the nix glibc and ncurses while the
-  source-built binaries are left alone. The fully prebuilt recipe is
+  source-built binaries are left alone. The voice host refuses any CLI whose
+  compiled-in `STABLE_GIT_COMMIT` differs from its own (unset means `"dev"`), so
+  preBuild exports the voice manifest's `buildCommit` from the same archive. The
+  fully prebuilt recipe is
   `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
   `checks/chatgpt-codex-package-layout.nix` starts and stops the real daemon to
   hold this. Its daemon policy is in

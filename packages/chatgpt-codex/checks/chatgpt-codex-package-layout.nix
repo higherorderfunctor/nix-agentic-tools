@@ -63,6 +63,15 @@
         [ "$("$root/codex-resources/zsh/bin/zsh" -fc 'print ok')" = ok ] \
           || fail "bundled zsh does not run"
 
+        # Voice refuses any CLI whose stamped commit differs from the voice
+        # host's own. Running the host also proves it executes on this
+        # platform after patching.
+        commit="$(jq -r .buildCommit "$root/codex-resources/voice/manifest.json")"
+        [ "$("$root/codex-resources/voice/bin/codex-voice-host" --build-commit)" = "$commit" ] \
+          || fail "voice host does not report the manifest's build commit $commit"
+        grep -qaF "$commit" "$root/bin/codex" \
+          || fail "bin/codex is not stamped with the voice build commit $commit"
+
         # The bootstrap copies the tree and rejects links that leave it.
         links="$(find "$root" -type l)"
         [ -z "$links" ] || fail "package contains symlinks: $links"

@@ -40,7 +40,12 @@
 # code signatures. On Linux they are glibc-linked, so a scoped autoPatchelf
 # repoints their interpreter and rpath at the nix glibc; the source-built
 # binaries are left alone. The voice `manifest.json` lists upstream's digests,
-# including its own `bin/codex`; codex does not check them at runtime.
+# including its own `bin/codex`; codex does not check them at runtime. It
+# does check the build commit: the CLI's `Hello` must carry the commit the
+# voice host was compiled with, or the host refuses the session as an
+# incompatible helper (codex-rs/voice-host). Both read it from
+# STABLE_GIT_COMMIT at compile time, defaulting to "dev", so preBuild stamps
+# this build with the `buildCommit` of the archive's voice manifest.
 #
 # Fully prebuilt history (musl tarball installed verbatim):
 # `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
@@ -68,8 +73,12 @@
   releaseArchive = pkgs.fetchurl {
     inherit (sources.${system} or (throw "chatgpt-codex: no release archive pinned for ${system}")) url hash;
   };
-  # Present in both platforms' archives.
-  resourceDirs = map (r: "codex-resources/${r}") ["voice" "zsh"];
+  # Present in both platforms' archives: each resource and its entrypoint.
+  resources = {
+    voice = "bin/codex-voice-host";
+    zsh = "bin/zsh";
+  };
+  resourceDirs = map (r: "codex-resources/${r}") (lib.attrNames resources);
   resourcePaths = lib.concatMapStringsSep " " (d: ''"$out/${packageRoot}/${d}"'') resourceDirs;
   # What the daemon's `platform_target()` reports for this build, and so what
   # `codex-package.json` must record: x86_64-unknown-linux-gnu for this glibc
@@ -138,6 +147,23 @@ in
     # binary's own feature defaults, so the binary keeps upstream's.
     patches = [];
 
+    # The voice handshake's commit, read from the archive the voice host
+    # comes from. Exported in this shell so cargoBuildHook compiles it in.
+    preBuild =
+      (prev.preBuild or "")
+      + ''
+        STABLE_GIT_COMMIT=$(
+          set -euETo pipefail
+          tar -xzOf ${releaseArchive} codex-resources/voice/manifest.json \
+            | sed -n 's/.*"buildCommit": *"\([0-9a-f]\{40\}\)".*/\1/p'
+        )
+        if [ -z "$STABLE_GIT_COMMIT" ]; then
+          echo "chatgpt-codex: no buildCommit in the voice manifest of ${releaseArchive}" >&2
+          false
+        fi
+        export STABLE_GIT_COMMIT
+      '';
+
     postInstall =
       (prev.postInstall or "")
       + ''
@@ -201,7 +227,7 @@ in
         # the layout this recipe says it produces rather than a copy of it.
         codexPackage = {
           # The prebuilt resources' entrypoints, relative to `root`.
-          resources = ["codex-resources/voice/bin/codex-voice-host" "codex-resources/zsh/bin/zsh"];
+          resources = lib.mapAttrsToList (r: exe: "codex-resources/${r}/${exe}") resources;
           root = packageRoot;
           inherit target;
         };
