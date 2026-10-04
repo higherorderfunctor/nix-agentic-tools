@@ -1,8 +1,8 @@
 1. Classify the work before picking a tier. Reading, searching, measuring,
    running a check, transcribing and formatting are mechanical: a small model at
-   medium. Synthesis, design, adversarial review and judging are reasoning: a
-   strong model. Work whose output the operator acts on is reasoning even when
-   most of it is reading.
+   medium. Synthesis, design, adversarial review and judging are reasoning: the
+   default role's tier when one is configured, else a strong model. Work whose
+   output the operator acts on is reasoning even when most of it is reading.
 2. Size every delegate: name its model and effort, and use a technique that pins
    both, unless it is a headless delegate whose launch brief stated values that
    match.

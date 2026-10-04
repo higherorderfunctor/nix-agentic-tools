@@ -17,6 +17,10 @@
   pkgs,
   ...
 }: let
+  defaultDelegateRole = {
+    effort = "medium";
+    use = "strong";
+  };
   gen = import ./generate.nix {inherit lib pkgs;};
   # The stacked-workflows program is not imported (see devenv.nix), but its
   # always-on routing rule is wanted: deliver it from the program's source.
@@ -260,10 +264,12 @@ in {
       programs.delegate-routing = {
         extraRuntimes = ["codex"];
         manualExternalDelegates = ["kimchi" "kiro"];
+        roles.default = defaultDelegateRole;
       };
     };
     codex = {
       enable = true;
+      programs.delegate-routing.roles.default = defaultDelegateRole;
       # AGENTS.md carries the whole orientation plus the path-scoped index,
       # well past Codex's 32 KiB default. `ai.*` fails the build of the
       # Markdown tree holding AGENTS.md (its install check) above this limit,
@@ -303,7 +309,10 @@ in {
       enable = true;
       # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
       # only, and not Fable, which this account does not have.
-      programs.delegate-routing.models = [{families = ["haiku" "opus" "sonnet"];}];
+      programs.delegate-routing = {
+        models = [{families = ["haiku" "opus" "sonnet"];}];
+        roles.default = defaultDelegateRole;
+      };
       mcpServers.agnix = agnixMcp;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
       # a launcher-global option, so it reaches every subcommand including

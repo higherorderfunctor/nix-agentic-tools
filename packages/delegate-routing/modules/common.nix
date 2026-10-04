@@ -16,7 +16,7 @@ args @ {
   tierNames = vocabulary.tiers;
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
   familyFunctions = import ../lib/select-families.nix {inherit lib;};
-  inherit (familyFunctions) select;
+  inherit (familyFunctions) automatic candidates select;
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   enabled = runtime:
     config.ai.${runtime}.programs.delegate-routing.enable
@@ -44,7 +44,27 @@ args @ {
     lib.foldr (warning: result: lib.warn warning result) value warningMessages;
 
   # Declare runtime-only controls alongside the factory's enable override.
-  runtimeOptions = runtime: {
+  runtimeOptions = runtime: let
+    runtimeConfig = config.ai.${runtime}.programs.delegate-routing;
+    automaticRuntimes = automatic {
+      inherit runtime;
+      inherit (runtimeConfig) extraRuntimes manualExternalDelegates;
+    };
+    selectedNames = map (family: family.name) (candidates portable.families models automaticRuntimes);
+    roleType = lib.types.submodule {
+      options = {
+        effort = lib.mkOption {
+          type = lib.types.nullOr (lib.types.enum vocabulary.efforts);
+          default = null;
+          description = "Preferred effort; writer and reviewer inherit the default role's effort when unset.";
+        };
+        use = lib.mkOption {
+          type = lib.types.enum (tierNames ++ selectedNames);
+          description = "Capability tier or selected automatic family. The default sets the starting tier and ceiling.";
+        };
+      };
+    };
+  in {
     extraRuntimes = lib.mkOption {
       type = lib.types.listOf (lib.types.enum (lib.remove runtime supportedRuntimes));
       default = [];
@@ -59,17 +79,17 @@ args @ {
       type = lib.types.listOf (lib.types.submodule {
         options = {
           families = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
+            type = lib.types.listOf (lib.types.enum names);
             default = [];
             description = "Family names to select.";
           };
           tiers = lib.mkOption {
-            type = lib.types.listOf (lib.types.enum tierNames);
+            type = lib.types.listOf (lib.types.enum tiers);
             default = [];
             description = "Capability tiers to select.";
           };
           vendors = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
+            type = lib.types.listOf (lib.types.enum vendors);
             default = [];
             description = "Vendors to select.";
           };
@@ -77,6 +97,18 @@ args @ {
       });
       default = defaults.models.${runtime};
       description = "Alternative family selectors. Each non-empty field must match; an empty selector is invalid. Kimchi and Kiro require an explicit selection when their skill is enabled.";
+    };
+    roles = lib.mkOption {
+      type = lib.types.submodule {
+        options = lib.genAttrs ["default" "reviewer" "writer"] (role:
+          lib.mkOption {
+            type = lib.types.nullOr roleType;
+            default = defaults.roles.${role};
+            description = "Optional ${role} delegation preference.";
+          });
+      };
+      default = {};
+      description = "Starting model and effort, ceiling, and writer/reviewer preferences.";
     };
     techniques = lib.mkOption {
       type = lib.types.attrsOf techniqueType;
@@ -169,7 +201,7 @@ in {
           inherit (portable) families;
           rules = lib.optionalString portable.rules.enable portable.rules.text;
           procedure = lib.optionalString portable.procedure.enable portable.procedure.text;
-          inherit (config.ai.${runtime}.programs.delegate-routing) extraRuntimes manualExternalDelegates;
+          inherit (config.ai.${runtime}.programs.delegate-routing) extraRuntimes manualExternalDelegates roles;
         }}";
       };
       rules = _:
@@ -206,7 +238,13 @@ in {
         )
         (
           # Static validation is ungated on purpose; runtime-dependent checks apply only when the source runtime and program are enabled.
-          lib.concatMap (runtime: let
+          [
+            {
+              assertion = lib.allUnique (tierNames ++ map (family: family.name) flattenedFamilies);
+              message = "ai.programs.delegate-routing.families: family names must be unique across vendors and must not equal a capability tier.";
+            }
+          ]
+          ++ lib.concatMap (runtime: let
             path = "ai.${runtime}.programs.delegate-routing";
             sourceEnabled = programEnabled runtime && runtimeEnabled runtime;
             extraRuntimes = config.ai.${runtime}.programs.delegate-routing.extraRuntimes;
@@ -217,27 +255,16 @@ in {
               assertion = !sourceEnabled || runtimeEnabled target;
               message = "${path}.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
             })
-            (lib.subtractLists manualExternalDelegates extraRuntimes)
+            (automatic {inherit runtime extraRuntimes manualExternalDelegates;})
             ++ map (target: {
               assertion = !sourceEnabled || select portable.families models.${target} != [];
               message = "ai.${target}.programs.delegate-routing.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
             })
             requiredTargets
-            ++ lib.concatMap (selector: let
-              unknown =
-                lib.subtractLists vendors selector.vendors
-                ++ lib.subtractLists tiers selector.tiers
-                ++ lib.subtractLists names selector.families;
-            in [
-              {
-                assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
-                message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
-              }
-              {
-                assertion = unknown == [];
-                message = "${path}.models references unknown values ${builtins.toJSON unknown} absent from ai.programs.delegate-routing.families.";
-              }
-            ])
+            ++ map (selector: {
+              assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
+              message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
+            })
             models.${runtime}
             ++ lib.concatLists (lib.mapAttrsToList (name: node: let
                 delegate = builtins.elem node.kind delegateKinds;

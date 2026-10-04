@@ -7,10 +7,9 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-03 — Kimchi is a supported runtime with no package
-> families or default selection; its techniques come from Kimchi 1.5.1 probes
-> and source, with no `/workflow` node; under devenv its skill loads only in a
-> trusted project.
+> **Last verified:** 2026-10-03 — roles with a typed `use` and ceiling, selector
+> enums, tool-presence and highest-version selection, multi-runtime-only pool
+> paragraph.
 
 `ai.programs.delegate-routing.families` is the portable decision table, keyed by
 vendor and family. Each family has a capability tier, task and effort guidance,
@@ -25,15 +24,31 @@ Each runtime chooses families through
 `ai.<runtime>.programs.delegate-routing.models`. Selectors are alternatives;
 within a selector every non-empty field must match the vendor, tier and family
 name. Claude defaults to Anthropic, Codex to OpenAI, and Kimchi and Kiro to no
-selection, so the package builds no default skill for either. Empty selectors,
-and selectors naming a vendor, tier or family that is not configured, fail
-assertions. An enabled program on an enabled runtime must select at least one
+selection, so the package builds no default skill for either. Empty selectors
+fail assertions. Vendor, tier and family selectors use dynamic enums from
+configured families, so selector tiers include only tiers used by those
+families. An enabled program on an enabled runtime must select at least one
 family. That program's `extraRuntimes` and `manualExternalDelegates` targets
 also need a family selection, even when a target runtime or program is disabled.
 
+Runtime `roles.default`, `roles.writer` and `roles.reviewer` are nullable
+records with required `use` and optional `effort`. All default to null. `use` is
+a dynamic enum of static tiers and families that this runtime or an automatic
+extra selects. Family names must be unique across vendors and cannot equal
+tiers. The default role sets the starting tier. The default role's tier is the
+ceiling; a family resolves to its own tier. Explicit writer and reviewer choices
+may exceed it. Manual-only families are ineligible. Rendering omits unset roles.
+The Roles paragraph states the ceiling only when `roles.default` is set.
+
+Writer and reviewer effort inherits the default when unset; efforts are low,
+medium, high, xhigh or max. Runtime reasoning settings retain their separate
+enum without max. The pool-choice paragraph in delegate sizing appears only with
+an automatic extra or a manual delegate.
+
 Resolve a concrete model at launch time: introspect the runtime's live list,
-choose its newest model matching the family's pattern, and use that runtime's
-spelling. Claude's interactive tools take aliases such as `opus`.
+choose the highest version matching the family's pattern by comparing version
+segments, and use that runtime's spelling. Claude's interactive tools take
+aliases such as `opus`.
 
 `extraRuntimes` adds automatic external candidates and requires the target
 runtime to be enabled. `manualExternalDelegates` adds instructions for explicit
@@ -48,9 +63,12 @@ they pin model and effort and where they are available: interactive, headless or
 ACP. Assertions require both pin fields to be non-null exactly for delegate
 kinds, and a command for every external node. Each package field uses
 `mkDefault`; consumers can replace fields, add nodes or disable individual
-nodes. External and manual runtime sections include only external, introspect
-and usage nodes. Codex and Kimchi have no workflow node; Kimchi has no usage
-node because no command reads usage without a model turn.
+nodes. Techniques are usable only when present in the tool list, and external
+commands must be on PATH. Modes describe usual availability, not a reliable
+session-mode detector; some ACP clients expose Kiro `orchestrate_subagent`
+instead of `invoke_sub_agent`. External and manual runtime sections include only
+external, introspect and usage nodes. Codex and Kimchi have no workflow node;
+Kimchi has no usage node because no command reads usage without a model turn.
 
 Kimchi's nodes record Kimchi 1.5.1 probes and source. Its Agent tool pins model
 and thinking, but an omitted `thinking` falls back to the persona default rather
@@ -104,10 +122,10 @@ Keep model tables and harness details in the generated skill.
 The content package injects packaged usage helper paths into technique defaults.
 The Claude helper carries curl and jq; the Codex helper carries timeout, jq and
 Python, while the consumer supplies the Codex CLI. `mkSkill`, `render` and
-`skills` use the same family, selector, technique and text inputs. Generated
-skill trees use `lib.ai.generated` and the shared Markdown formatter; previews
-read the built files. Package discovery supplies content, both backend modules
-and the module checks.
+`skills` use the same family, selector, technique, role and text inputs.
+Generated skill trees use `lib.ai.generated` and the shared Markdown formatter;
+previews read the built files. Package discovery supplies content, both backend
+modules and the module checks.
 
 ## Preview skills
 
@@ -118,5 +136,5 @@ launching delegates.
 nix eval --raw .#delegate-routing-content.skills.claude.text
 nix eval --raw .#delegate-routing-content.skills.codex.text
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
-nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.kiro = [{vendors = ["anthropic"];}]; }'
+nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```

@@ -934,6 +934,7 @@ ai.programs.delegate-routing.enable = true;
 ai.claude.programs.delegate-routing = {
   extraRuntimes = ["codex"];
   manualExternalDelegates = ["kiro"];
+  roles.default = {effort = "medium"; use = "strong";};
 };
 ```
 
@@ -941,10 +942,11 @@ Portable `families.<vendor>.<family>` records describe tiers, task and effort
 guidance, and live-model patterns. Override any field or add a family. Each
 runtime's `models` is a list of selectors over `vendors`, `tiers` and
 `families`: selectors are alternatives, and every non-empty field in one
-selector must match. Claude defaults to Anthropic and Codex to OpenAI. Kimchi
-and Kiro require an explicit selection when their runtime and delegate-routing
-program are enabled. The package ships no families for Kimchi-served vendors;
-declare them under `families` before selecting them.
+selector must match. Selector enums come from configured families; tier
+selectors accept only tiers used by those families. Claude defaults to Anthropic
+and Codex to OpenAI. Kimchi and Kiro require an explicit selection when their
+runtime and delegate-routing program are enabled. The package ships no families
+for Kimchi-served vendors; declare them under `families` before selecting them.
 
 Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
 Manual-only entries require an explicit user request and do not require runtime
@@ -953,12 +955,21 @@ delegate-routing program with
 `ai.kiro.programs.delegate-routing.enable = false`. Copilot is excluded because
 its delegation controls are unestablished.
 
+Runtime `roles.default`, `roles.writer` and `roles.reviewer` optionally select a
+tier or a family, with effort `low`, `medium`, `high`, `xhigh` or `max`. All
+roles default to null. `use` takes a static tier or a family that this runtime
+or an automatic extra selects. Family names must be unique across vendors and
+cannot equal tiers. The default role sets the starting tier. The default role's
+tier is the ceiling; a family resolves to its own tier. Writer and reviewer
+effort inherits the default when unset. Explicit writer and reviewer choices may
+exceed that default ceiling. Manual-only families are ineligible.
+
 Runtime `techniques` describe workflows, subagents, external launches, model
 introspection and usage. Override a node's fields or disable it with
-`enable = false`. Pick the newest model matching a family's pattern from the
-live runtime list, using its own spelling. Portable `rules` and `procedure`
-accept replacement `text` or `source`, or `enable = false`. Both Home Manager
-and devenv expose the same options.
+`enable = false`. Pick the highest-version model matching a family's pattern
+from the live runtime list, using its own spelling. Portable `rules` and
+`procedure` accept replacement `text` or `source`, or `enable = false`. Both
+Home Manager and devenv expose the same options.
 
 </details>
 

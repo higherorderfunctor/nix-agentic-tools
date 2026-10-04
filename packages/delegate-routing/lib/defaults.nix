@@ -18,6 +18,11 @@
     kiro = [];
   };
   procedure = builtins.readFile ./procedure.md;
+  roles = {
+    default = null;
+    reviewer = null;
+    writer = null;
+  };
   rules = builtins.readFile ./rules.md;
   techniques = import ./techniques.nix {inherit claudeUsageScript codexUsageScript;};
 }

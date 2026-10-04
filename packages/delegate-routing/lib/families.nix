@@ -50,7 +50,7 @@
       effort = "medium default, high when the task needs more reasoning";
       match = "gpt-*-sol";
       tier = "strong";
-      useFor = "default delegate and code writer; long-horizon coding; recall-heavy code review (finds more, filters less); written deliverables";
+      useFor = "code writer; long-horizon coding; recall-heavy code review (finds more, filters less); written deliverables";
     };
     terra = {
       avoidFor = "being the default when Sol or Luna is reachable: they beat it on cost at the same quality";

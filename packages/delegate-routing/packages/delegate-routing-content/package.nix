@@ -65,7 +65,7 @@ in
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
       inherit mkSkill render skills usageScripts;
-      inherit (defaults) families models techniques rules procedure;
+      inherit (defaults) families models techniques rules procedure roles;
     };
   } ''
     # Full strict mode is required here: stdenv does not set every flag (#909).

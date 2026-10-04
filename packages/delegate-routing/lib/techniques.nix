@@ -107,7 +107,8 @@
     };
     orchestrate_subagent = {
       kind = "subagent";
-      modes = ["interactive"];
+      modes = ["interactive" "acp"];
+      notes = "some ACP clients enable it in place of invoke_sub_agent";
       pinsEffort = false;
       pinsModel = false;
     };
