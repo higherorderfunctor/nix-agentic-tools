@@ -46,6 +46,24 @@ in
     Either point the sidecar back at a 12.x release, or add a pnpm_${sidecarMajor} attribute and move it there.
   '';
     package.overrideAttrs (finalAttrs: prev: {
+      # pnpm's .cargo/config.toml carries a "pnpm-managed cargo sources" block
+      # that points crates-io and its node-semver git source at a local
+      # .pnpm/crates vendor dir. cargoSetupHook defines the same git source
+      # for the Nix vendor tree, and cargo rejects the duplicate ("source
+      # `original-source-git-0` defines source ..., but that source is already
+      # defined"). Drop upstream's block by its own markers; nixpkgs' 12.3.4
+      # predates it.
+      postPatch =
+        (prev.postPatch or "")
+        + ''
+          (
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          grep -qxF '# >>> pnpm-managed cargo sources >>>' .cargo/config.toml
+          grep -qxF '# <<< pnpm-managed cargo sources <<<' .cargo/config.toml
+          sed -i '/^# >>> pnpm-managed cargo sources >>>$/,/^# <<< pnpm-managed cargo sources <<<$/d' .cargo/config.toml
+          )
+        '';
       doInstallCheck = true;
       # Upstream's passthru testVersion is separate from the package build.
       # Keep its install checks if introduced, and require our exact pin too.
