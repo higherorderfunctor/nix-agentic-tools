@@ -13,6 +13,14 @@
 # body to avoid the self-reference would be the DRY loss this file
 # exists to prevent. Same shape as lib/ai/transformers/*.nix.
 rec {
+  # The flake attribute path of a package in the internal unfree-enabled set
+  # (flake.nix `ciPackages`). The public `packages` omits unfree packages, so
+  # every generated script that reads a package by name goes through here.
+  ciAttr = {
+    attr,
+    pkgs,
+  }: "ciPackages.${pkgs.stdenv.hostPlatform.system}.${attr}";
+
   # Format: "{upstream}+{shortrev}"
   mkVersion = {
     upstream,
@@ -121,10 +129,9 @@ rec {
   # only sees tracked files, so an untracked sidecar is invisible to the
   # eval this drives.
   #
-  #   attr:        name under `packages.<system>` (flake.nix flattens
+  #   attr:        name under `ciPackages.<system>` (flake.nix flattens
   #                `pkgs.ai.generic` into it, so a generic package is
-  #                reachable by its bare name). This repo has NO
-  #                `legacyPackages` output — do not reach for one.
+  #                reachable by its bare name; see `ciAttr`).
   #   sourcesFile: threaded explicitly by every caller.
   fodHashFixFn = {
     attr,
@@ -136,9 +143,9 @@ rec {
       local attrPath="$1" drvPattern="$2" key="$3"
       local expr output hash tmp
 
-      # builtins.getAttr keeps the expression free of a brace substitution
-      # sequence, so bash never tries to expand any part of it.
-      expr="(builtins.getAttr builtins.currentSystem (builtins.getFlake (toString ./.)).packages).${attr}.$attrPath"
+      # The expression carries no brace substitution sequence, so bash never
+      # tries to expand any part of it.
+      expr="(builtins.getFlake (toString ./.)).${ciAttr {inherit attr pkgs;}}.$attrPath"
 
       if output=$(${pkgs.nix}/bin/nix build --impure --no-link --expr "$expr" 2>&1); then
         echo "${pname}: $key ok"
@@ -326,7 +333,7 @@ rec {
   #   inside the vendor build. `mkGoUpdateExtract` owns the sequence and
   #   `checks/packaging/go-floor-extract-order.nix` gates it.
   #
-  #   attr:       flake package attribute (built through `.#<attr>.src`)
+  #   attr:       flake package attribute (built through `ciAttr`'s `.src`)
   #   goModPath:  go.mod location inside src — NOT always the root;
   #               oh-my-posh keeps its module under `src/`.
   mkGoFloorFix = {
@@ -345,7 +352,7 @@ rec {
 
         ${goModFloorFn {inherit pkgs;}}
 
-        src=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths ".#${attr}.src")
+        src=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths ".#${ciAttr {inherit attr pkgs;}}.src")
         floor=$(go_floor_of "$src/${goModPath}")
 
         ${
@@ -454,7 +461,7 @@ rec {
   }: ''
     echo "${attr}: regenerating ${dest}"
     extracted=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
-      ".#${attr}.passthru.extracted")
+      ".#${ciAttr {inherit attr pkgs;}}.passthru.extracted")
     ${pkgs.coreutils}/bin/cp "$extracted" "${dest}"
     ${pkgs.coreutils}/bin/chmod 644 "${dest}"
     ${pkgs.nix}/bin/nix fmt -- "${dest}"

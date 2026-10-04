@@ -7,19 +7,22 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-09-30 — Kimchi's user config.json and harness
-> settings.json are shared documents; stacked-workflows' Git preset is
-> `mkDefault` sugar over the shared `git.*` options. JSON document targets
-> retire independently; no runtime flips an upstream `programs.<cli>.enable`;
-> skills reach Claude through `mkSkillFiles`, and Claude has no wrapper.
-> Claude's devenv `.claude/settings.json` and `.mcp.json`, Copilot's settings
-> files, and Kiro's and Kimchi's settings copies are written only when something
-> is declared; other devenv writes are unconditional. Settings are read-only
-> copies or symlinks where the CLI's write primitive permits; only Claude and
-> Copilot retain writable state documents with Nix-owned leaves. The JSON
-> document reconciler has no TOML codec, document mode or native-writer lock.
-> Semble's `pathMappings` and model routing live at the program root. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
+> **Last verified:** 2026-10-04 — module sites read this flake's roots from
+> `ai.internal.roots` (`ai.internal.packages` is its `ai`), this flake's build
+> checked by the module's own nixpkgs unless the overlay is applied. Kimchi's
+> user config.json and harness settings.json are shared documents;
+> stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
+> options. JSON document targets retire independently; no runtime flips an
+> upstream `programs.<cli>.enable`; skills reach Claude through `mkSkillFiles`,
+> and Claude has no wrapper. Claude's devenv `.claude/settings.json` and
+> `.mcp.json`, Copilot's settings files, and Kiro's and Kimchi's settings copies
+> are written only when something is declared; other devenv writes are
+> unconditional. Settings are read-only copies or symlinks where the CLI's write
+> primitive permits; only Claude and Copilot retain writable state documents
+> with Nix-owned leaves. The JSON document reconciler has no TOML codec,
+> document mode or native-writer lock. Semble's `pathMappings` and model routing
+> live at the program root. Native file settings live under
+> `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Shared documents, each declared by
 > `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
@@ -145,6 +148,35 @@ pkgs.symlinkJoin {
   '';
 }
 ```
+
+**Every module site reads this flake's roots from `config.ai.internal.roots`,
+never from raw `pkgs`.** That covers every root the packages claim: `ai`,
+`docs`, `stacked-workflows-content`, `delegate-routing-content`.
+`config.ai.internal.packages` is `roots.ai`. The flake wrappers
+(`homeManagerModules.default`, `devenvModules`, the repo's `devenv.nix`) set
+`ai.internal = repository.moduleInternals`, whose `rootsFor` (in
+`lib/facets/repository.nix`) returns each root from the consumer's `pkgs` when
+this flake's overlay is applied, else this flake's own build (`natSets`) wrapped
+by `checkedBy pkgs`, so the module's own nixpkgs decides unfree. So a module
+default is the same derivation as the overlay attribute and as
+`packages.<name>`, and a consumer's own `pkgs.ai.X` override still reaches it.
+The routing shapes:
+
+- runtime modules, and the shared AGENTS.md writer's guards, pass
+  `pkgs = pkgs // {ai = config.ai.internal.packages;}` to their factory; the
+  factories stay public and read the `pkgs` given;
+- skill packages (stacked-workflows, delegate-routing, kimchi-docs) read
+  `config.ai.internal.roots.<root>`; their `skills` / `rules` lambdas take
+  `config` for it;
+- git tool records take `package = ai: ai.gitTools.<tool>`, which
+  `lib/git-tool-settings/tool-module.nix` applies;
+- the guards table and single sites (glab, beads, semble, mcp-services, the
+  git-branchless init task) read `config.ai.internal.packages.<path>` directly.
+
+`defaultText` comes from `lib/ai/nat-package-text.nix "<path>"` (runtime records
+set `defaults.packageText`), so the wording lives in one place. Public library
+factories (`mk*Mcp`, `mkSemble`, `lib.ai.guards`) still take the caller's
+`pkgs`.
 
 ### Optional cross-module contributions
 
@@ -437,14 +469,16 @@ commit message. If the mismatch is accidental, it's a bug.
 ### Validation
 
 Owner-local module tests use `lib/testing/module-harness.nix`, which evaluates
-the same discovered Home Manager and devenv module sets as production. Root
-check concerns own cross-package contracts. Add a case in the SAME commit
-whenever it (a) adds or removes an option under `modules/**` or `lib/ai/**`, (b)
-changes what an existing option's `mkIf` writes into `config`, or (c) adds,
-removes or changes the condition of an assertion. A commit that touches
-`modules/**` but does none of those — a rename, a comment, formatting, a
-refactor with identical evaluated `config` — needs no new case. The three map
-onto:
+the same discovered Home Manager and devenv module sets as production. It
+injects stubbed `pkgs.ai` by default, which `ai.internal.roots` prefers;
+`injectAi = false` evaluates over `pkgs` as given, so a site still reading a
+root from raw `pkgs` throws instead of passing on stubs. Root check concerns own
+cross-package contracts. Add a case in the SAME commit whenever it (a) adds or
+removes an option under `modules/**` or `lib/ai/**`, (b) changes what an
+existing option's `mkIf` writes into `config`, or (c) adds, removes or changes
+the condition of an assertion. A commit that touches `modules/**` but does none
+of those — a rename, a comment, formatting, a refactor with identical evaluated
+`config` — needs no new case. The three map onto:
 
 - Option discoverability (set an option, verify it evaluates)
 - Fanout correctness (set an option, verify it propagates)

@@ -60,7 +60,7 @@ in {
           exec = ''
             set -euETo pipefail
             shopt -s inherit_errexit 2>/dev/null || :
-            if ! ${lib.getExe script} init "$DEVENV_ROOT" ${lib.getExe pkgs.ai.gitTools.git-branchless}${lib.optionalString (cfg.settings.core.mainBranch != null) " ${lib.escapeShellArg cfg.settings.core.mainBranch}"}; then
+            if ! ${lib.getExe script} init "$DEVENV_ROOT" ${lib.getExe config.ai.internal.packages.gitTools.git-branchless}${lib.optionalString (cfg.settings.core.mainBranch != null) " ${lib.escapeShellArg cfg.settings.core.mainBranch}"}; then
               : # Keep dependent configuration and hook-install tasks runnable.
             fi
           '';

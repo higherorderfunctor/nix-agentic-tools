@@ -1,12 +1,13 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-03 — git-branchless joins the source-measured
-> sidecars. `fix_sidecar_hashes` also re-derives `pnpmDepsHash`, but only when
-> the stale output is not substitutable; kimchi versions its pnpm-deps and src
-> FOD names; Kiro settings extraction validates its materialized TUI registry
-> and workspace merge with AST checks; Kimchi attributes every config.ts JSON
-> read to the file it reads, censuses every resolved environment read, and no
-> longer extracts a CLI surface nothing read.
+> **Last verified:** 2026-10-04 — the warm step evaluates `ciPackages`, the
+> unfree-enabled, unchecked set CI builds; git-branchless joins the
+> source-measured sidecars. `fix_sidecar_hashes` also re-derives `pnpmDepsHash`,
+> but only when the stale output is not substitutable; kimchi versions its
+> pnpm-deps and src FOD names; Kiro settings extraction validates its
+> materialized TUI registry and workspace merge with AST checks; Kimchi
+> attributes every config.ts JSON read to the file it reads, censuses every
+> resolved environment read, and no longer extracts a CLI surface nothing read.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -56,7 +57,7 @@ Key properties of IFD in nix:
   substituters.
 - **`builtins.attrNames` is lazy.** It does NOT trigger IFD. Only accessing a
   value that depends on a `builtins.readFile` inside a derivation output forces
-  the fetch. This cost hours of debugging — `nix eval .#packages.x86_64-linux`
+  the fetch. This cost hours of debugging — `nix eval .#ciPackages.x86_64-linux`
   with `builtins.attrNames` succeeds on cold runners but produces no source
   fetches.
 - **`NIX_CONFIG="eval-cache = false"` does not help.** Tools like
@@ -129,7 +130,7 @@ The composite runs, per system with backoff:
 nix eval --json \
   --option allow-import-from-derivation true \
   --apply 'pkgs: builtins.mapAttrs (_: p: p.drvPath or p.name or "unknown") pkgs' \
-  ".#packages.${system}" >/dev/null
+  ".#ciPackages.${system}" >/dev/null
 ```
 
 `builtins.mapAttrs` forcing `p.drvPath` puts every package through
@@ -148,10 +149,11 @@ evaluation; git-branchless reads its flake-input lock.
 The cost is real and was measured before adopting it: eval cache disabled, warm
 store, 2026-07-25 — `version` 1.2s / 0.9 GB RSS versus `drvPath` 19.2s / 3.0 GB
 on `x86_64-linux`, and 23.4s / 3.8 GB for the `aarch64-darwin` set evaluated on
-a linux host. Both evaluate clean: `allowUnfree` is set by `pkgsFor` so the
-native unfree check does not throw, and the one genuinely Linux-only package
-(`gluetun`) is gated out of the darwin attrset entirely rather than left to
-throw on `drvPath`.
+a linux host. Both evaluate clean: `ciPackages` comes from `natSets`, which sets
+`allowUnfree`, so the native unfree check does not throw (the public `packages`
+omits unfree leaves and would not warm them), and the one genuinely Linux-only
+package (`gluetun`) is gated out of the darwin attrset entirely rather than left
+to throw on `drvPath`.
 
 Note the `or` chain does NOT swallow a throwing `drvPath` — it only covers a
 MISSING attribute. That is intended: a fetch failure must fail the warm so the

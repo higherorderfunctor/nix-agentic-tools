@@ -5,6 +5,12 @@
   inputs,
   ...
 }: let
+  # The same facet assembly the flake uses: the overlay below and the module
+  # internals come from it.
+  repository = import ./lib/facets/repository.nix {
+    inherit inputs;
+    root = ./.;
+  };
   # One declaration table owns each hook's local and CI lifecycle.
   repoValidation = import ./config/repo-validation.nix {inherit lib pkgs;};
   gitHooksPackages = import "${inputs.git-hooks}/nix" {
@@ -156,19 +162,17 @@ in {
   ];
 
   # This repository assembles the modules directly instead of consuming the
-  # published devenv wrapper, so provide the same internal treefmt-nix value.
-  ai.internal.treefmtNix = inputs.treefmt-nix;
+  # published devenv wrapper, so provide the same internal values.
+  ai.internal = repository.moduleInternals;
 
   # ── Overlays ──────────────────────────────────────────────────────────
   # devenv applies these to pkgs, so pkgs.ai.* and
   # pkgs.stacked-workflows-content are available everywhere. No manual
-  # overlay composition needed.
-  overlays = [
-    (import ./lib/facets/repository.nix {
-      inherit inputs;
-      root = ./.;
-    }).overlay
-  ];
+  # overlay composition needed. The recipe-level buildOverlay, not the
+  # exported one: devenv.yaml pins the same nixpkgs revision with allowUnfree
+  # (generated from flake.lock), so it yields the same derivations as the
+  # flake's ciPackages without a second nixpkgs evaluation per shell.
+  overlays = [repository.buildOverlay];
 
   # ── Binary Cache ──────────────────────────────────────────────────────
   cachix.pull = ["nix-agentic-tools"];
@@ -492,7 +496,7 @@ in {
           echo "Building for $system..."
           # TODO: add .env-based cachix push for local builds
           nix run --inputs-from . nix-fast-build -- \
-            --flake ".#packages.$system" \
+            --flake ".#ciPackages.$system" \
             --skip-cached \
             --no-nom \
             --no-link

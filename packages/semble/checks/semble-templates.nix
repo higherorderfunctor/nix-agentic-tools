@@ -9,7 +9,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    semble = self.packages.${system}.semble;
+    semble = self.ciPackages.${system}.semble;
     committed = ../upstream-templates.json;
     reviewed = import ../lib/templateCoverage.nix;
     records = import ../lib/integrations.nix;

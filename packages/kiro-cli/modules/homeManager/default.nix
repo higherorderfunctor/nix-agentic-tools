@@ -8,6 +8,7 @@
 # attrset (matches the module-system contract for path-imported
 # modules).
 {
+  config,
   lib,
   pkgs,
   ...
@@ -19,6 +20,7 @@
 in
   (extLib.ai.app.hmTransform (import ../../lib/mkKiro.nix {
     lib = extLib;
-    inherit pkgs;
+    # This flake's build unless the overlay is applied (ai.internal.packages).
+    pkgs = pkgs // {ai = config.ai.internal.packages;};
   }))
   args

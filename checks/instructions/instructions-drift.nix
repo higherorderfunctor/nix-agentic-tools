@@ -33,7 +33,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    drv = self.packages.${system};
+    drv = self.ciPackages.${system};
 
     # dev/ai.nix gates Semble's install on `isCI`, and nothing else may read
     # it: the committed bytes must not depend on who evaluates them. Both

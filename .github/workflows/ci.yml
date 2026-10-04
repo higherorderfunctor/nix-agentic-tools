@@ -69,7 +69,7 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          nix eval --json ".#packages.$SYSTEM" --apply builtins.attrNames > "$RUNNER_TEMP/packages.json"
+          nix eval --json ".#ciPackages.$SYSTEM" --apply builtins.attrNames > "$RUNNER_TEMP/packages.json"
           python3 dev/scripts/ci-packages.py plan "$RUNNER_TEMP/packages.json" \
             "$SHARD_INDEX" "$SHARD_COUNT" "$RUNNER_TEMP/plan.json" > "$RUNNER_TEMP/select.nix"
           echo "packages=$(jq -c .packages "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
@@ -79,7 +79,7 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           nix run --inputs-from . nix-fast-build -- \
-            --flake ".#packages.$SYSTEM" \
+            --flake ".#ciPackages.$SYSTEM" \
             --select "$(cat "$RUNNER_TEMP/select.nix")" \
             --eval-workers 1 --eval-max-memory-size 4096 --max-jobs 1 \
             --skip-cached --no-link \
@@ -129,7 +129,7 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          semble_path="$(nix build ".#packages.${{ matrix.system }}.semble" \
+          semble_path="$(nix build ".#ciPackages.${{ matrix.system }}.semble" \
             --no-link --print-out-paths)"
           printf '%s\n' "$semble_path" | cachix push nix-agentic-tools
 
@@ -320,7 +320,7 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          out="$(nix build ".#packages.${{ matrix.system }}.kiro-cli-workflows" \
+          out="$(nix build ".#ciPackages.${{ matrix.system }}.kiro-cli-workflows" \
             --no-link --print-out-paths \
             --option extra-substituters "" \
             --option substituters "https://cache.nixos.org https://devenv.cachix.org")"
@@ -386,7 +386,7 @@ jobs:
           # again on this axis. `// empty` drops the one null that schema also
           # produces for outputs carrying no path.
           base_names="$(
-            nix derivation show -r ".#packages.${SYSTEM}.kiro-cli" \
+            nix derivation show -r ".#ciPackages.${SYSTEM}.kiro-cli" \
               | jq -r '(.derivations // .) | to_entries[].value.outputs[]?.path // empty' \
               | sed 's|.*/||' \
               | sort -u
@@ -571,7 +571,7 @@ jobs:
       # TO DISCHARGE — build the binary and grep it. The positive control is NOT
       # optional; a clean negative from an unverified grep on a ~275 MB binary
       # proves nothing:
-      #   B=$(nix build --no-link --print-out-paths .#claude-code)/bin/claude
+      #   B=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.claude-code)/bin/claude
       #   grep -ac 'NotebookEdit' "$B"                            # control, must be >0
       #   grep -ac 'Do not call the AgentTool unless the user requested it' "$B"
       #                                                           # 0 => upstream fixed it

@@ -1275,6 +1275,7 @@ in
     ];
     defaults = {
       package = pkgs.ai.kiro-cli;
+      packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "kiro-cli";
     };
     # The builder declares `agents`, `agentsDir`, `environmentVariables`
     # (baked into the launcher on both backends), and `lspServers`.

@@ -342,6 +342,9 @@
   migrationConfigFn = backendSpec.migrationConfig or appRecord.migrationConfig or (_: {});
 
   package = (appRecord.defaults or {}).package or null;
+  # The package option's defaultText, when the record states one. Without it
+  # the options documentation renders the default by evaluating the package.
+  packageText = (appRecord.defaults or {}).packageText or null;
 
   # `config` rides along so callbacks can observe sibling backend
   # options — e.g. the devenv materializer's conditional `devenv:files`
@@ -561,11 +564,12 @@ in {
               to replace the transformer's input.
             '';
           })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools);
-      package = lib.mkOption {
-        type = lib.types.nullOr lib.types.package;
-        default = package;
-        description = "The ${appRecord.name} package, or null to configure the runtime without installing it.";
-      };
+      package = lib.mkOption ({
+          type = lib.types.nullOr lib.types.package;
+          default = package;
+          description = "The ${appRecord.name} package, or null to configure the runtime without installing it.";
+        }
+        // lib.optionalAttrs (packageText != null) {defaultText = packageText;});
       internal = lib.mkOption {
         type = lib.types.submodule {
           options._integration_writable_roots = lib.mkOption {

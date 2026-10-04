@@ -37,7 +37,7 @@
 }: {
   checks.update-targets-parity = let
     inherit (self) updateTargets;
-    packages = self.packages.${pkgs.stdenv.hostPlatform.system};
+    packages = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
     versionedPackages = lib.filterAttrs (_: package: package ? version) packages;
     targetPackageNames = builtins.filter (name: builtins.hasAttr name packages) (builtins.attrNames updateTargets);
     targetPackages = map (name: packages.${name}) targetPackageNames;

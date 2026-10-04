@@ -40,8 +40,13 @@ inputs.nix-agentic-tools = {
   url = "github:higherorderfunctor/nix-agentic-tools";
 };
 
-# Apply overlay
+# Optional: `pkgs.ai.*` for your own use. The modules install this flake's
+# builds without it.
 nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
+
+# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-cli-workflows.
+# Allow them in the nixpkgs.config your pkgs comes from (NixOS's when
+# useGlobalPkgs is set).
 
 # Home-manager config
 imports = [inputs.nix-agentic-tools.homeManagerModules.default];
@@ -83,6 +88,9 @@ services.mcp-servers.servers.github-mcp = {
 
 ```yaml
 # devenv.yaml
+# Unfree: claude-code, copilot-cli, kimchi-docs, kiro-cli and kiro-cli-workflows.
+# Opt in as for nixpkgs.
+allowUnfree: true
 inputs:
   nix-agentic-tools:
     url: github:higherorderfunctor/nix-agentic-tools
@@ -93,9 +101,9 @@ inputs:
 {inputs, ...}: {
   imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
-  # The overlay is required when a runtime installs its default package
-  # (`pkgs.ai.*`) because the module does not apply it itself.
-  # `package = null` configures a runtime without installing one.
+  # Optional: the modules install this flake's builds without it. Apply it
+  # to use or override `pkgs.ai.*` yourself; the modules then install your
+  # `pkgs.ai.*`. `package = null` configures a runtime without installing one.
   overlays = [inputs.nix-agentic-tools.overlays.default];
 
   ai = {
@@ -113,20 +121,66 @@ inputs:
 
 </details>
 
-### Package sets and toolchains
+### Binary cache
 
-The overlay builds recipes with your nixpkgs package set. Your overrides and
-`allowUnfree` policy apply. Go and Rust compilers come from this flake's locked
-toolchain inputs, constructed over your package set.
+CI builds every package here with this flake's own nixpkgs and pushes the
+results to `nix-agentic-tools.cachix.org`. The overlay and the module package
+defaults hand you those same builds, so they come from the cache whatever
+nixpkgs you use.
 
-`packages.<system>` uses this flake's `nixpkgs` input with
-`config.allowUnfree = true`, so named proprietary CLIs work with `nix run`.
-Their licenses remain labelled unfree. Use the overlay to apply your own unfree
-policy. Setting `inputs.nix-agentic-tools.inputs.nixpkgs.follows = "nixpkgs"` is
-supported; toolchain inputs can also follow your own inputs.
+Add the cache to your own Nix configuration. This flake's `nixConfig` lists it,
+but Nix ignores a flake's substituters unless you are a trusted user.
 
-Cache reuse depends on matching derivation inputs. A different nixpkgs or
-consumer override can require a rebuild.
+```nix
+# NixOS (or nix-darwin)
+nix.settings = {
+  extra-substituters = ["https://nix-agentic-tools.cachix.org"];
+  extra-trusted-public-keys = ["nix-agentic-tools.cachix.org-1:0jFprh5fkDez9mk6prYisYxzalr0hn78kyywGPXvOn0="];
+};
+```
+
+```ini
+# nix.conf
+extra-substituters = https://nix-agentic-tools.cachix.org
+extra-trusted-public-keys = nix-agentic-tools.cachix.org-1:0jFprh5fkDez9mk6prYisYxzalr0hn78kyywGPXvOn0=
+```
+
+The packages bring this flake's runtime base (glibc, bash, and so on, about 100
+MB) next to your own, from `cache.nixos.org`, shared by every package here.
+Module defaults also evaluate a second nixpkgs, like any flake whose modules
+default to its own packages.
+
+### Package sets, unfree, and opting out
+
+- **One nixpkgs builds everything.** This flake's `nixpkgs` input builds the
+  overlay, the module defaults, `packages` and `legacyPackages`. Your own
+  overlays on shared dependencies do not reach these packages, and security
+  fixes arrive when this flake bumps nixpkgs (the update sweep runs four times a
+  day). Go and Rust compilers come from this flake's locked toolchain inputs.
+- **Unfree is your opt-in, decided by your own nixpkgs.** Each package's own
+  license and platform are checked by your nixpkgs with your config
+  (`allowUnfree`, `allowUnfreePredicate`, ...), with nixpkgs' own error when it
+  refuses, and `meta.available` reports that verdict. The package set itself,
+  dependencies included, is built once with this flake's nixpkgs. The check
+  never changes a store path, so it costs no cache hits, and there is nothing to
+  keep in sync. Set them where you set them for nixpkgs (`nixpkgs.config`, or
+  devenv.yaml `allowUnfree`). A `checkMeta = true` config on a nixpkgs older
+  than this flake's may reject newer meta keys; `checkMeta` is a nixpkgs-CI
+  setting, default false.
+- **`packages.<system>` is free packages only.** `legacyPackages.<system>` has
+  every package plus the nested `ai` tree. `nix run` on an unfree package
+  resolves there and needs your opt-in, as in nixpkgs:
+  `NIXPKGS_ALLOW_UNFREE=1 nix run --impure github:higherorderfunctor/nix-agentic-tools#claude-code`.
+- **Swap a dependency with `.override`.** Overriding a package's bun, pnpm, Go
+  or Rust works and costs a rebuild of that package.
+- **`follows` is the opt-out.** Setting
+  `inputs.nix-agentic-tools.inputs.nixpkgs.follows = "nixpkgs"` rebuilds every
+  package on your nixpkgs, with no cache. You then own breakage where a recipe
+  borrows nixpkgs' recipe text, patches or fetchers: tsgolint's patch list,
+  kiro-cli's install step, the pnpm fetcher versions, Go `vendorHash`.
+- **Other systems build locally.** On systems this flake does not build
+  (anything but `aarch64-darwin` and `x86_64-linux`), cross builds, and musl or
+  static package sets, the overlay builds on your package set.
 
 ## Skills
 

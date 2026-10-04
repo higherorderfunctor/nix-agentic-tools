@@ -67,19 +67,22 @@
     serverNames);
 
   # ── Package resolution ─────────────────────────────────────────────
-  # Most servers live at pkgs.ai.mcpServers.<name>. Servers from the
+  # Defaults come from this flake's package tree (ai.internal.packages).
+  # Most servers live at mcpServers.<name>. Servers from the
   # modelcontextprotocol mono-repo live under
-  # pkgs.ai.mcpServers.modelContextProtocol.<name>.
+  # mcpServers.modelContextProtocol.<name>.
   modelContextProtocolServers = [
     "fetch-mcp"
     "git-mcp"
     "sequential-thinking-mcp"
   ];
 
-  resolvePackage = name:
+  packagePath = name:
     if builtins.elem name modelContextProtocolServers
-    then pkgs.ai.mcpServers.modelContextProtocol.${name}
-    else pkgs.ai.mcpServers.${name};
+    then "mcpServers.modelContextProtocol.${name}"
+    else "mcpServers.${name}";
+  resolvePackage = name: lib.getAttrFromPath (lib.splitString "." (packagePath name)) config.ai.internal.packages;
+  packageText = name: import ../../../../lib/ai/nat-package-text.nix {inherit lib;} (packagePath name);
 
   # ── Credentials helpers ──────────────────────────────────────────────
   credentialVarsFor = name: serverFiles.${name}.meta.credentialVars or {};
@@ -161,7 +164,7 @@
       inherit (shellStrict) bashOptions;
       runtimeInputs =
         [srv.package]
-        ++ optionals (httpCmd == "bridge") [pkgs.ai.mcpServers.mcp-proxy];
+        ++ optionals (httpCmd == "bridge") [config.ai.internal.packages.mcpServers.mcp-proxy];
       text = ''
         ${shellStrict.shoptHeader}
         ${credSnippet}
@@ -273,7 +276,7 @@ in {
     servers = mapAttrs (name: serverDef:
       mkOption {
         type = types.submodule (mkServiceModule {
-          inherit name serverDef resolvePackage;
+          inherit name packageText serverDef resolvePackage;
         });
         default = {};
         description = "Configuration for the ${name} MCP server.";

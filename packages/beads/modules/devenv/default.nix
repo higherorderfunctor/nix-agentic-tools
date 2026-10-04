@@ -32,7 +32,7 @@ in {
 
   config = lib.mkMerge [
     {
-      services.beads.package = lib.mkDefault pkgs.ai.devTools.beads;
+      services.beads.package = lib.mkDefault config.ai.internal.packages.devTools.beads;
 
       assertions = [
         {

@@ -228,6 +228,7 @@ in
     ];
     defaults = {
       package = pkgs.ai.copilot-cli;
+      packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "copilot-cli";
     };
     agentsDescriptionSuffix = "Each lands at `<configDir>/agents/<name>.md` under Home Manager and `<projectDir>/agents/<name>.agent.md` under devenv.";
     # The builder declares these pool options, `environmentVariables` (baked

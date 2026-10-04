@@ -9,7 +9,7 @@
 }:
 import ../../../lib/git-tool-settings/tool-module.nix {
   inherit backend;
-  package = pkgs: pkgs.ai.gitTools.git-revise;
+  package = ai: ai.gitTools.git-revise;
   section = "revise";
   settings = (import ../lib/default.nix).git-revise.settings {inherit lib;};
   tool = "git-revise";

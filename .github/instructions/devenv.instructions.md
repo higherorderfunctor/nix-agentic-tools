@@ -7,7 +7,8 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-03 — Kimchi source builds require fresh closure
+> **Last verified:** 2026-10-03 — the CI build matrix reads `ciPackages`; the
+> repo shell applies `buildOverlay`. Kimchi source builds require fresh closure
 > measurements; old binary-release figures are not current estimates. The
 > instruction copier check is gone with the generator's materializer.
 >
@@ -48,7 +49,7 @@ runner against the immutable generated hook config.
 | Interactive-only dev UX  | LSPs (`nixd`→llvm, `marksman`→dotnet, `taplo`), Semble | no — `lib.optionals (!isCI)`           | not invoked                                           |
 | Validation hooks         | prek plus declared hook tools                          | yes — policy is unconditional          | validator-only projection; commit lifecycle excluded  |
 | Factory CLI wrappers     | all five `ai.*` runtimes (see note)                    | yes — enterTest exercises files fanout | package/build checks remain separate                  |
-| Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages              | never unless explicitly selected       | CI build matrix                                       |
+| Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages              | never unless explicitly selected       | CI build matrix over `ciPackages`                     |
 
 ## The decision rule
 

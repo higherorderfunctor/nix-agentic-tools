@@ -6,6 +6,7 @@
 # `{config, ...}: <body>`. Applying it to `args` here resolves the wrapper to
 # the module body attrset expected by the module system.
 {
+  config,
   lib,
   pkgs,
   ...
@@ -17,6 +18,7 @@
 in
   (extLib.ai.app.hmTransform (import ../../lib/mkCodex.nix {
     lib = extLib;
-    inherit pkgs;
+    # This flake's build unless the overlay is applied (ai.internal.packages).
+    pkgs = pkgs // {ai = config.ai.internal.packages;};
   }))
   args

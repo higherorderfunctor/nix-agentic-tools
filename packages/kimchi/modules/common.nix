@@ -63,7 +63,7 @@ in {
       skills = {runtime, ...}: {
         kimchi-docs = "${mkDocsSkill {
           inherit lib pkgs;
-          docs = pkgs.docs.kimchi-docs;
+          docs = config.ai.internal.roots.docs.kimchi-docs;
           search = searchFor runtime;
           treefmt-nix = config.ai.internal.treefmtNix;
         }}";

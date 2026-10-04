@@ -166,7 +166,7 @@ set +e
     # derived", and treating it that way re-parks the input behind one
     # broken peer — the exact failure this rule exists to remove. Two
     # paths return non-zero for other reasons: the roster expression
-    # forces every attr in `packages.<system>`, so ONE package throwing
+    # forces every attr in `ciPackages.<system>`, so ONE package throwing
     # at eval fails the whole resolve; and a fixer whose FOD build breaks
     # with no hash mismatch to scrape exits 1 too (lib/packaging.nix,
     # `fix_fod_hash`) — that is "the recorded hash was already right and

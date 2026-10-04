@@ -1,7 +1,7 @@
 # Factory: MCP server → HM submodule options.
 #
-# Takes a server name, its definition (from loadServer), and a package
-# resolver function. Returns a submodule function suitable for use in
+# Takes a server name, its definition (from loadServer), a package
+# resolver function, and optionally the package option's defaultText. Returns a submodule function suitable for use in
 # `types.submodule (mkServiceModule ...)`.
 #
 # The returned submodule declares:
@@ -29,6 +29,8 @@ in
     name,
     serverDef,
     resolvePackage,
+    # name → the package option's defaultText.
+    packageText ? name: literalExpression "pkgs.ai.mcpServers.${name}",
   }: _: let
     honorsServiceHost = serviceSchema.honorsServiceHost name serverDef;
   in {
@@ -66,7 +68,7 @@ in
         package = mkOption {
           type = types.package;
           default = resolvePackage name;
-          defaultText = literalExpression "pkgs.ai.mcpServers.${name}";
+          defaultText = packageText name;
           description = "The ${name} package to use.";
         };
       }

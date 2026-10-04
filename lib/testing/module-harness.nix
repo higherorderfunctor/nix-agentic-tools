@@ -1,8 +1,12 @@
 {
-  inputs,
+  # False evaluates the modules over `pkgs` exactly as given, with no `ai`
+  # attribute injected, so a module default must come from
+  # `ai.internal.roots` (this flake's build) or fail.
+  injectAi ? true,
   lib,
-  pkgs,
   moduleImports,
+  moduleInternals,
+  pkgs,
   testing,
 }: let
   mcpLib = import ../mcp.nix {inherit lib;};
@@ -183,7 +187,10 @@
       specialArgs =
         {
           lib = hmLib;
-          pkgs = pkgs // {ai = aiStubs;};
+          pkgs =
+            if injectAi
+            then pkgs // {ai = aiStubs;}
+            else pkgs;
           inherit (hmLib) hm;
         }
         // extraSpecialArgs;
@@ -191,7 +198,7 @@
         [../ai/sharedOptions.nix]
         ++ moduleImports "homeManager"
         ++ [hmStubs]
-        ++ [{ai.internal.treefmtNix = inputs.treefmt-nix;}]
+        ++ [{ai.internal = moduleInternals;}]
         ++ modules;
     };
   evalHmWithSpecialArgs = extraSpecialArgs: config: evalHmModulesWithSpecialArgs extraSpecialArgs [{inherit config;}];
@@ -206,14 +213,17 @@
         {
           codexGitCommonDirResolver = _: null;
           lib = hmLib;
-          pkgs = pkgs // {ai = pkgs.ai or {};};
+          pkgs =
+            if injectAi
+            then pkgs // {ai = pkgs.ai or {};}
+            else pkgs;
         }
         // extraSpecialArgs;
       modules =
         [../ai/sharedOptions.nix]
         ++ moduleImports "devenv"
         ++ [devenvStubs]
-        ++ [{ai.internal.treefmtNix = inputs.treefmt-nix;}]
+        ++ [{ai.internal = moduleInternals;}]
         ++ modules;
     };
   evalDevenvWithSpecialArgs = extraSpecialArgs: config: evalDevenvModulesWithSpecialArgs extraSpecialArgs [{inherit config;}];

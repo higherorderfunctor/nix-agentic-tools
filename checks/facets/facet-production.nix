@@ -25,7 +25,7 @@
           rootModules = lib.optional collision {
             checks.git-revise-package = pkgs.runCommand "root-collision" {} "touch $out";
           };
-          self.packages.${system}.git-revise = package;
+          self.ciPackages.${system}.git-revise = package;
         };
       in {
         checks = builtins.mapAttrs (_: check: check.drvPath) checks;

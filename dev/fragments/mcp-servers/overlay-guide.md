@@ -1,8 +1,9 @@
 ## MCP Server Packages
 
-> **Last verified:** 2026-10-03 — main-tracking rev bumps are done by
-> `update-pkg.sh`; vendored npm lock locations follow their manual or automatic
-> updater.
+> **Last verified:** 2026-10-04 — recipes build on this flake's nixpkgs
+> (`natSets`) and the overlay re-exports them; main-tracking rev bumps are done
+> by `update-pkg.sh`; vendored npm lock locations follow their manual or
+> automatic updater.
 >
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
 
@@ -11,9 +12,10 @@
 MCP recipes live under
 `packages/<owner>/packages/ai/mcpServers/<server>/package.nix`. Native discovery
 exposes them at `pkgs.ai.mcpServers.*` and flat flake package outputs. The
-composer injects the active package set as `pkgs` and shared `packageLib`;
-owner-private libraries, patches, and source sidecars stay beside the owner
-registry.
+composer injects the package set `buildOverlay` is applied to as `pkgs` (this
+flake's own nixpkgs, except on the overlay's fallback or under `follows`; see
+the overlay-pattern fragment) and shared `packageLib`; owner-private libraries,
+patches, and source sidecars stay beside the owner registry.
 
 ### Build Patterns
 
@@ -103,7 +105,7 @@ HAND, and make the machinery honest:
 2. a non-blocking annotation step in `.github/workflows/update.yml` — the family
    that already holds the copilot-cli SEA detector and the pnpm new-major
    detector — comparing upstream's version against one DERIVED from the repo
-   (`nix eval --raw .#packages.<system>.<name>.version`), never a literal;
+   (`nix eval --raw .#ciPackages.<system>.<name>.version`), never a literal;
 3. the reasoning, measured, in the recipe's own header.
 
 Keep the two mechanisms mutually exclusive: excludePattern + detector, OR a

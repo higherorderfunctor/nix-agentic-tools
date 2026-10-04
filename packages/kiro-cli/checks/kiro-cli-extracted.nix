@@ -11,7 +11,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    extracted = self.packages.${system}.kiro-cli.passthru.extracted;
+    extracted = self.ciPackages.${system}.kiro-cli.passthru.extracted;
     committed = ../extracted.json;
   in {
     kiro-cli-extracted = pkgs.runCommand "kiro-cli-extracted-drift" {} ''
@@ -26,7 +26,7 @@
         echo "--- extracted ---" >&2
         "$jq" -S . ${extracted} >&2
         echo "" >&2
-        echo "Regenerate: nix build .#kiro-cli.passthru.extracted --no-link --print-out-paths" >&2
+        echo "Regenerate: nix build .#ciPackages.${system}.kiro-cli.passthru.extracted --no-link --print-out-paths" >&2
         echo "then cp the result over packages/kiro-cli/extracted.json, 'nix fmt' it, and 'git add'." >&2
         exit 1
       fi

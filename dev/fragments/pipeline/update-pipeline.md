@@ -1,13 +1,15 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-03 — rev bumps prefetch with the package's own
-> fetcher mode (archive or fetchgit, read from the evaluated `src`); rev-tracked
-> Go packages refresh recipe-owned floor literals before nix-update; both update
-> paths regenerate committed sidecars through `passthru.regenerateExtracted`: an
-> input bump for every package that input owns, a package target (rev bump or
-> nix-update) for the package itself; the hardcoded Semble block is gone.
-> `--use-update-script` rows must resolve `updateScript` to an executable file,
-> gated by `checks.update-script-executable`.
+> **Last verified:** 2026-10-03 — every pipeline read of a package by name goes
+> through `ciPackages` (`nat_attr`, `ciAttr`); rev bumps prefetch with the
+> package's own fetcher mode (archive or fetchgit, read from the evaluated
+> `src`); rev-tracked Go packages refresh recipe-owned floor literals before
+> nix-update; both update paths regenerate committed sidecars through
+> `passthru.regenerateExtracted`: an input bump for every package that input
+> owns, a package target (rev bump or nix-update) for the package itself; the
+> hardcoded Semble block is gone. `--use-update-script` rows must resolve
+> `updateScript` to an executable file, gated by
+> `checks.update-script-executable`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -89,6 +91,25 @@ Targets fall into three categories:
   `update-report` target runs `update-report.sh` to print a summary grouped by
   status. There is no base-checkout format/build finalizer because it cannot
   observe changes committed only on target branches.
+
+### Packages are read from `ciPackages`
+
+The public `packages` output omits unfree leaves (claude-code, copilot-cli,
+kiro-cli, …), so the pipeline never reads it. Every flake attribute it builds or
+evaluates by name is under `ciPackages.<system>`, the same unfree-enabled set CI
+builds and pushes:
+
+- shell scripts call `nat_attr <name>` (`dev/scripts/update-common.sh`), which
+  prints `ciPackages.<system>.<name>` with the system from `nat_system`, which
+  asks `nix` lazily so sourcing the script never needs it; `nix-update` gets
+  `--flake "$(nat_attr <name>)"`, which it resolves as a flake-root attribute
+  path;
+- generated fixers and regeneration scripts in `lib/packaging.nix` use `ciAttr`;
+- `verify_all_packages`, `update.yml` and the warm-ifd action evaluate
+  `.#ciPackages.<system>`.
+
+Add a new by-name read through one of those helpers, never a literal
+`.#packages.` path.
 
 ### Worktree isolation
 

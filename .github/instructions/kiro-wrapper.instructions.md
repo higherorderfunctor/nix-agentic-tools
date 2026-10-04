@@ -7,9 +7,10 @@ applyTo: "packages/kiro-cli/checks/kiro-fhs-contract.nix,packages/kiro-cli/check
 
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-10-03 — runtime-chain wording checked after the
-> overlay policy change. The sandbox contracts below were verified on
-> 2026-08-16: `ai.kiro.useFhsSandbox = false` selects the pinned unwrapped
+> **Last verified:** 2026-10-03 — the overlay and module default hand consumers
+> this flake's own kiro-cli build; a pre-split nixpkgs is reached only through
+> `follows` or the overlay's fallback. The sandbox contracts below were verified
+> on 2026-08-16: `ai.kiro.useFhsSandbox = false` selects the pinned unwrapped
 > payload explicitly, and `true` stays the default. `trustedMcpTools` composes
 > inside the FHS payload so launcher dispatch reaches it under both supported
 > nixpkgs topologies, and the structural check pins that shape.
@@ -143,8 +144,9 @@ and wrapper helpers. A custom `ai.kiro.package` must expose `passthru.unwrapped`
 on every rollout-resolved variant; otherwise evaluation fails with a named
 assertion instead of silently retaining the sandbox. Direct package consumers
 can make the same choice with `pkgs.ai.kiro-cli.unwrapped`. The overlay exposes
-that route even on pre-split nixpkgs, where it selects the already-direct
-package and is therefore a no-op.
+that route even on pre-split nixpkgs (reachable only when a consumer sets
+`follows` or lands on the overlay's fallback), where it selects the
+already-direct package and is therefore a no-op.
 
 With the sandbox enabled, a custom FHS package used with `trustedMcpTools` must
 also expose `passthru.withFhsPayload`. Without it the FHS command shadows the
@@ -249,7 +251,7 @@ no sandbox.
 
 ```bash
 # Does the package expose the shared bwrap path? Then these rules apply.
-K=$(nix build --no-link --print-out-paths .#kiro-cli)
+K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli)
 readlink -f "$K/libexec/kiro-cli/kiro-cli-wrapper"
 ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole world
 ```
@@ -771,7 +773,7 @@ the launcher FORWARDS, put a `kiro-cli-chat` that prints its argv first on
 `PATH` on purpose.
 
 ```bash
-K=$(nix build --no-link --print-out-paths .#kiro-cli); KB="$K/bin/kiro-cli"
+K=$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kiro-cli); KB="$K/bin/kiro-cli"
 
 # 1. globals still parse BEFORE a subcommand, and still fail after it
 "$KB" --tui --v3 whoami >/dev/null && echo "prepend ok"

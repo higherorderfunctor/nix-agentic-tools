@@ -5,6 +5,27 @@
 | x86_64-linux   | Yes | All      | Primary dev platform |
 | aarch64-darwin | Yes | All      | macOS Apple Silicon  |
 
+`config/systems.nix` is the one list in Nix: `flake.nix` iterates it for every
+per-system output, and the overlay reads it. The CI matrices in
+`.github/workflows/ci.yml` name the same systems by hand; keep them in step.
+
+### Other systems build on the consumer's nixpkgs
+
+> **Last verified:** 2026-10-03 — `natSystemOf` gates the overlay's re-export on
+> `config/systems.nix` and the native triple.
+
+The exported overlay re-exports this flake's builds only where `natSystemOf`
+returns a system: a listed system whose build and host triples are both that
+system's native triple. Everywhere else it falls back to `buildOverlay` on the
+consumer's `final`, which builds from source with no cache:
+
+- unlisted systems (aarch64-linux, x86_64-darwin);
+- cross builds;
+- `pkgsMusl` / `pkgsStatic` (same system string, different triple).
+
+Adding a system is therefore a `config/systems.nix` edit plus its CI legs; the
+overlay picks it up with no other change.
+
 ### Nightly Packaging Pattern
 
 All binary packages track nightly/latest versions via inline hashes and

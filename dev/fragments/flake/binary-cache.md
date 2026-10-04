@@ -1,7 +1,8 @@
 ## Binary Cache Maintenance
 
-> **Last verified:** 2026-09-25 — the diagnostic shell gates only Semble's
-> install on `isCI`, not its rule.
+> **Last verified:** 2026-10-03 — README renders the consumer cache snippet from
+> `flake.nix` `nixConfig`; the diagnostic shell gates only Semble's install on
+> `isCI`, not its rule.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show b330b5af:dev/fragments/flake/binary-cache.md`.
@@ -23,9 +24,13 @@ Cachix cache. If so, add it to:
   `nixConfig.extra-trusted-public-keys`
 - `devenv.nix` `cachix.pull`
 
-Current public consumer cache: `nix-agentic-tools`. The `follows` pattern for
-nixpkgs is intentional — do not remove it to chase upstream cache hits unless
-the input provides pre-built binaries independent of nixpkgs.
+Current public consumer cache: `nix-agentic-tools`. Consumers must add it
+themselves: Nix ignores a flake's `nixConfig` substituters for users who are not
+trusted. README's snippet reads the substituter and key from `flake.nix`
+`nixConfig` (`natCache` in `dev/generate.nix`), so change them there only. The
+`follows` pattern for nixpkgs is intentional — do not remove it to chase
+upstream cache hits unless the input provides pre-built binaries independent of
+nixpkgs.
 
 Semble is the deliberate exception. The unfollowed `llm-agents` input supplies
 an already-built package whose exact derivation is part of this repository's

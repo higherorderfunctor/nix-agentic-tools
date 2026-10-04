@@ -20,7 +20,10 @@
   ...
 }: let
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
-  program = programFactory.mkProgram (import ./options.nix {inherit lib pkgs;});
+  program = programFactory.mkProgram (import ./options.nix {
+    ai = config.ai.internal.packages;
+    inherit lib;
+  });
   customization = import ../lib/customization.nix {inherit lib;};
   records = import ../lib/integrations.nix;
   runtimes = program.supportedRuntimes;

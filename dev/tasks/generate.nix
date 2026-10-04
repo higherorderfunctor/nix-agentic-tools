@@ -42,7 +42,7 @@ in {
         ${bashPreamble}
         ${log}
         log "Building all packages"
-        nix-fast-build --flake ".#packages" --skip-cached --no-link
+        nix-fast-build --flake ".#ciPackages" --skip-cached --no-link
         log "All packages built"
       '';
     };

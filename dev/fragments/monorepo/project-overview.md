@@ -1,8 +1,9 @@
 ## Project Overview
 
-> **Last verified:** 2026-10-03 — owner registries contribute update,
-> documentation, and architecture metadata; project-local configuration uses the
-> devenv modules.
+> **Last verified:** 2026-10-03 — this flake's own nixpkgs builds every package
+> it ships, and the overlay and module defaults re-export those builds; owner
+> registries contribute update, documentation, and architecture metadata;
+> project-local configuration uses the devenv modules.
 
 nix-agentic-tools is a Nix flake monorepo providing:
 
@@ -17,6 +18,12 @@ nix-agentic-tools is a Nix flake monorepo providing:
 
 Skills work without Nix. Nix unlocks overlays, home-manager modules, and devenv
 modules.
+
+This flake's own nixpkgs builds every package it ships. `overlays.default` and
+the module package defaults hand consumers those same builds, so they hit the
+cache whatever nixpkgs the consumer uses. Unfree packages are left out of
+`packages` and need the consumer's own opt-in; CI and checks read the
+unfree-enabled `ciPackages`. The overlay-pattern fragment has the details.
 
 ### Key Directories
 

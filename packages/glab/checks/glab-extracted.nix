@@ -22,7 +22,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    extracted = self.packages.${system}.glab.passthru.extracted;
+    extracted = self.ciPackages.${system}.glab.passthru.extracted;
     committed = ../extracted.json;
   in {
     glab-extracted = pkgs.runCommand "glab-extracted-drift" {} ''

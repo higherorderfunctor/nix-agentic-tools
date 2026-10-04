@@ -526,7 +526,7 @@ Real fixes pending:
 
 - **Gap 1** — design discussion needed (downstream refresh on input bumps;
   touches the DAG model). Less urgent now that `update-input.sh` Phase 2 build
-  runs the full `nix-fast-build --flake .#packages.${system}` against every
+  runs the full `nix-fast-build --flake .#ciPackages.${system}` against every
   input bump, which catches Mode A transitively. Gap 1's narrower "refresh
   hashes inline in the input PR" work would still produce a coherent unit of
   validation rather than separate red/held-back PRs, but isn't blocking anything

@@ -14,7 +14,7 @@
 # extracted sidecars (`checks/<pkg>-extracted.nix`).
 #
 # NO REGISTRY. The check discovers its own subjects by filtering
-# `self.packages.<system>` for `passthru.goFloor`. A registry listing the
+# `self.ciPackages.<system>` for `passthru.goFloor`. A registry listing the
 # Go packages would be a second source of truth that a new Go package
 # could be added without touching — which is precisely how a package ends
 # up unprotected. Packages carry the metadata; this consumer derives the
@@ -37,7 +37,7 @@
     goPackages =
       lib.filterAttrs
       (_: p: (p.passthru or {}) ? goFloor)
-      self.packages.${pkgs.stdenv.hostPlatform.system};
+      self.ciPackages.${pkgs.stdenv.hostPlatform.system};
 
     mkCheck = name: p: let
       # NOT always the repo root — oh-my-posh keeps its module under `src/`.

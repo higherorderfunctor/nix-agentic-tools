@@ -325,7 +325,7 @@ jobs:
           # DERIVED from the repo, never hardcoded: a literal `11` here
           # would rot silently the moment the window slides, and a detector
           # that has quietly stopped detecting is worse than none.
-          ours=$(nix eval --json .#packages.x86_64-linux --apply builtins.attrNames 2>/dev/null \
+          ours=$(nix eval --json .#ciPackages.x86_64-linux --apply builtins.attrNames 2>/dev/null \
             | jq -r '.[] | select(test("^pnpm_[0-9]+$"))' | sed 's/^pnpm_//' | sort -n | tail -1 || true)
 
           if [ -z "$upstream_max" ] || [ -z "$ours" ]; then
@@ -358,7 +358,7 @@ jobs:
           # stopped detecting is worse than none. This form is
           # version-agnostic on purpose: it survived the 1.0.0 -> 1.1.0
           # bump untouched, which is the property to preserve.
-          ours=$(nix eval --raw .#packages.x86_64-linux.aihubmix-mcp.version 2>/dev/null | cut -d+ -f1 || true)
+          ours=$(nix eval --raw .#ciPackages.x86_64-linux.aihubmix-mcp.version 2>/dev/null | cut -d+ -f1 || true)
 
           if [ -z "$upstream" ] || [ -z "$ours" ]; then
             echo "aihubmix-mcp: could not determine versions (upstream='${upstream}' ours='${ours}') — no annotation."

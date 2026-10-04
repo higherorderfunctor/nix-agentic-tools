@@ -29,7 +29,11 @@
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   byteLimit = import ../../markdown/byte-limit.nix pkgs;
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
-  adapters = import ../adapters {inherit lib pkgs;};
+  # The guards' programs come from this flake's tree, not the raw pkgs.
+  adapters = import ../adapters {
+    inherit lib;
+    pkgs = pkgs // {ai = config.ai.internal.packages;};
+  };
   writer = "materialize-agents-md";
   ledger = "materialize/agents-md.manifest";
   deduplicatingType = {

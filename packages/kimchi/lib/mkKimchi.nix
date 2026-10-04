@@ -764,7 +764,10 @@ in
       "settings"
       "skills"
     ];
-    defaults.package = pkgs.ai.kimchi;
+    defaults = {
+      package = pkgs.ai.kimchi;
+      packageText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "kimchi";
+    };
     agentsDescriptionSuffix = lib.concatStringsSep " " [
       "Each lands as one `<name>.md`: Home Manager writes `<configDir>/harness/agents/`, devenv a trusted project's `.kimchi/agents/`."
       "A normalized record renders to Kimchi frontmatter plus body."

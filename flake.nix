@@ -75,16 +75,30 @@
     # Shared shell-hardening settings (bashOptions / shoptHeader /
     # shellcheckFlags) — see config/shell-strict.nix.
     shellStrict = import ./config/shell-strict.nix;
-    supportedSystems = [
-      "aarch64-darwin"
-      "x86_64-linux"
-    ];
-    forAllSystems = lib.genAttrs supportedSystems;
-    pkgsFor = system:
-      import nixpkgs {
-        inherit system;
-        config.allowUnfree = true;
-        overlays = [self.overlays.default];
+    forAllSystems = lib.genAttrs repository.supportedSystems;
+    # This flake's one package set per system (repository.natSets, with
+    # allowUnfree): checks, repo documents, the CI shell, apps and the
+    # formatter read it directly. Shared, so they cost one nixpkgs evaluation.
+    pkgsFor = system: repository.natSets.${system};
+    # What the public outputs hand out: every derivation checked by a plain
+    # import of this flake's nixpkgs with default config, so an unfree leaf
+    # refuses exactly as it would in nixpkgs. Its drvPath is unchanged.
+    publicCheck = forAllSystems (system: repository.checkedBy (import nixpkgs {inherit system;}));
+    # Every leaf under its basename, plus the repo-root documents.
+    flatPackagesFor = system: let
+      repoDocs = repoDocsFor system;
+    in
+      repository.packagesFor {
+        pkgs = pkgsFor system;
+        rootPackages = {
+          # Repo-root documents from dev/generate.nix. The `generate:repo:*`
+          # tasks build these by name; without them the tasks fail with
+          # "attribute missing" and both files fall back to hand-editing.
+          # The agent instruction files are not packages: `ai.*` writes them
+          # (dev/ai.nix).
+          repo-contributing = repoDocs.repoContributing;
+          repo-readme = repoDocs.repoReadme;
+        };
       };
     repoDocsFor = system:
       import ./dev/repo-docs.nix {
@@ -104,7 +118,7 @@
     updateTargets = updateRegistry.targets;
 
     homeManagerModules.default = {
-      ai.internal.treefmtNix = inputs.treefmt-nix;
+      ai.internal = repository.moduleInternals;
       imports =
         [./lib/ai/sharedOptions.nix]
         ++ repository.moduleImports "homeManager";
@@ -113,7 +127,7 @@
     treefmtModules.default = ./lib/treefmt-module.nix;
 
     devenvModules.nix-agentic-tools = {
-      ai.internal.treefmtNix = inputs.treefmt-nix;
+      ai.internal = repository.moduleInternals;
       imports =
         [./lib/ai/sharedOptions.nix]
         ++ repository.moduleImports "devenv";
@@ -186,22 +200,23 @@
     # from devenv.nix; nothing in this flake constructs it.
     # devShells.ci is a lightweight shell for the CI update pipeline.
 
-    packages = forAllSystems (system: let
-      pkgs = pkgsFor system;
-      repoDocs = repoDocsFor system;
-    in
-      repository.packagesFor {
-        inherit pkgs;
-        rootPackages = {
-          # Repo-root documents from dev/generate.nix. The `generate:repo:*`
-          # tasks build these by name; without them the tasks fail with
-          # "attribute missing" and both files fall back to hand-editing.
-          # The agent instruction files are not packages: `ai.*` writes them
-          # (dev/ai.nix).
-          repo-contributing = repoDocs.repoContributing;
-          repo-readme = repoDocs.repoReadme;
-        };
-      });
+    # The internal flat package set, unchecked: what CI builds and pushes to
+    # cachix, and what checks and the update pipeline read. A consumer who
+    # names it opts in to unfree, the same as building `checks`.
+    ciPackages = forAllSystems flatPackagesFor;
+
+    # Every package under its flat name plus the nested roots (`ai`, `docs`,
+    # ...), checked by plain nixpkgs: `nix run <this flake>#claude-code`
+    # resolves here and needs the caller's unfree opt-in
+    # (NIXPKGS_ALLOW_UNFREE=1 --impure), as in nixpkgs.
+    legacyPackages = forAllSystems (system: publicCheck.${system} (repository.legacyPackagesFor (pkgsFor system)));
+
+    # The free subset of the flat names, checked like legacyPackages, plus the
+    # repo documents. Unfree leaves are filtered out by meta, because
+    # `nix flake check` forces every drvPath here and an unfree one throws.
+    packages = forAllSystems (system:
+      lib.filterAttrs (_: package: !(package.meta.unfree or false))
+      (publicCheck.${system} self.ciPackages.${system}));
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.
