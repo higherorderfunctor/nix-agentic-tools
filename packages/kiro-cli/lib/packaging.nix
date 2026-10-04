@@ -203,17 +203,16 @@ rec {
       exec ${pkgs.nodejs}/bin/node ${../extract/settings.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
 
-  # The embedded-TUI materializer and the one sibling it imports, and nothing
-  # else from extract/. Interpolating the whole directory would put every
-  # extractor (kas-bundle.py included) into the inputs of whatever runs it.
-  kiroExtractTui = pkgs:
+  # Select each extractor and its imports without making unrelated extract/
+  # files inputs of its callers.
+  kiroExtractFiles = pkgs: names:
     pkgs.lib.fileset.toSource {
       root = ../extract;
-      fileset = pkgs.lib.fileset.unions [
-        ../extract/embedded-tui.py
-        ../extract/isolated_launch.py
-      ];
+      fileset = pkgs.lib.fileset.unions (map (name: ../extract + "/${name}") names);
     };
+
+  # The embedded-TUI materializer and the one sibling it imports.
+  kiroExtractTui = pkgs: kiroExtractFiles pkgs ["embedded-tui.py" "isolated_launch.py"];
 
   kiroFakeKasScript = pkgs:
     pkgs.writeTextFile {

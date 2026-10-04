@@ -22,20 +22,20 @@ if result.returncode != 0 or not result.stdout:
 with open(bundle, encoding="utf-8", errors="replace") as handle:
     haystacks = {"steering": result.stdout, "bundle": handle.read()}
 with open(anchors_path) as handle:
-    anchors = json.load(handle)
+    anchors = [{"scope": "steering", **a} for a in json.load(handle)]
 
-unknown = sorted({a.get("scope", "steering") for a in anchors} - haystacks.keys())
+unknown = sorted({a["scope"] for a in anchors} - haystacks.keys())
 if unknown:
     sys.exit("FAIL: unknown vendorAnchors scope(s): %s" % ", ".join(unknown))
 
-missing = [a for a in anchors if a["text"] not in haystacks[a.get("scope", "steering")]]
+missing = [a for a in anchors if a["text"] not in haystacks[a["scope"]]]
 if missing:
     sys.exit(
         "FAIL: the vendor workflow text changed under the default "
         "reminder (packages/kiro-cli/lib/workflowReminder.nix). Re-review "
         "these paragraphs against the new text, then update vendorAnchors:\n"
         + "".join(
-            f"  - {a['paragraph']} ({a.get('scope', 'steering')}): {a['text']!r} is gone\n"
+            f"  - {a['paragraph']} ({a['scope']}): {a['text']!r} is gone\n"
             for a in missing
         )
     )

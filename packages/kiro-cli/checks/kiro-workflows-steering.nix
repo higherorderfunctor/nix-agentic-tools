@@ -40,7 +40,7 @@ in {
           shopt -s inherit_errexit 2>/dev/null || :
           python3=${pkgs.python3}/bin/python3
           chat=$("$python3" ${vu.kiroLocateChatScript pkgs} ${self.packages.${system}.kiro-cli.unwrapped})
-          "$python3" ${../extract}/kas-bundle.py "$chat" "$TMPDIR/acp-server.js" \
+          "$python3" ${vu.kiroExtractFiles pkgs ["isolated_launch.py" "kas-bundle.py"]}/kas-bundle.py "$chat" "$TMPDIR/acp-server.js" \
             ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
           "$python3" ${./kiro-workflows-steering-anchors.py} ${../lib/kiro-workflows-steering.py} \
             "$TMPDIR/acp-server.js" "$anchorsPath"
