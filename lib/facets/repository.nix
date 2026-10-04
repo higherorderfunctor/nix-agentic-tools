@@ -216,19 +216,31 @@ in {
       then built.${name}
       else reexported.${name} or (prev.${name} or {}));
   checksFor = {rootModules ? [], ...} @ context: let
+    # The module harness over any package set; `harness` is it over the
+    # checks' own. The overlay parity gate re-instantiates it over a foreign
+    # nixpkgs with `injectAi = false`.
+    harnessFor = args:
+      import ../testing/module-harness.nix ({
+          inherit lib moduleInternals;
+          inherit (context) pkgs;
+          inherit (world) testing;
+          moduleImports = backend: facets.moduleImports {inherit backend index;};
+        }
+        // args);
     world = facets.realizeChecks {
       inherit index rootModules;
       rootSource = root + "/checks";
       context =
         builtins.removeAttrs context ["rootModules"]
         // {
-          inherit buildOverlay gitToolExtraction inputs lib;
-          harness = import ../testing/module-harness.nix {
-            inherit lib moduleInternals;
-            inherit (context) pkgs;
-            inherit (world) testing;
-            moduleImports = backend: facets.moduleImports {inherit backend index;};
+          inherit buildOverlay gateKeys gitToolExtraction harnessFor inputs lib natSystemOf;
+          # The leaf paths the exported overlay re-exports on this system.
+          claimedPaths = claimedPaths {
+            inherit inputs lib;
+            inherit (packageWorldFor context.pkgs) packages;
+            system = context.pkgs.stdenv.hostPlatform.system;
           };
+          harness = harnessFor {};
         };
     };
   in
