@@ -934,6 +934,7 @@ ai.programs.delegate-routing.enable = true;
 ai.claude.programs.delegate-routing = {
   extraRuntimes = ["codex"];
   manualExternalDelegates = ["kiro"];
+  roles.default = {effort = "medium"; use = "strong";};
 };
 ```
 
@@ -953,12 +954,19 @@ delegate-routing program with
 `ai.kiro.programs.delegate-routing.enable = false`. Copilot is excluded because
 its delegation controls are unestablished.
 
+Runtime `roles.default`, `roles.writer` and `roles.reviewer` optionally select a
+tier or an automatic selected family, with effort `low`, `medium`, `high`,
+`xhigh` or `max`. All roles default to null. The default role sets the starting
+tier and ceiling; a family's tier determines its ceiling. Writer and reviewer
+effort inherits the default when unset. Explicit writer and reviewer choices may
+exceed that default ceiling. Manual-only families are ineligible.
+
 Runtime `techniques` describe workflows, subagents, external launches, model
 introspection and usage. Override a node's fields or disable it with
-`enable = false`. Pick the newest model matching a family's pattern from the
-live runtime list, using its own spelling. Portable `rules` and `procedure`
-accept replacement `text` or `source`, or `enable = false`. Both Home Manager
-and devenv expose the same options.
+`enable = false`. Pick the highest-version model matching a family's pattern
+from the live runtime list, using its own spelling. Portable `rules` and
+`procedure` accept replacement `text` or `source`, or `enable = false`. Both
+Home Manager and devenv expose the same options.
 
 </details>
 

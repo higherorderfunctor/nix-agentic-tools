@@ -78,6 +78,36 @@
     skill = config: readSkill (change config) "claude";
     passes = evaluation: lib.all (item: item.assertion) evaluation.config.assertions;
     failsWith = evaluation: option: lib.any (item: !item.assertion && lib.hasInfix option item.message) evaluation.config.assertions;
+    evaluationFails = evaluation: !(builtins.tryEval (builtins.deepSeq evaluation.config.ai.claude.programs.delegate-routing true)).success;
+    roleScenario = roles: extras: manual:
+      change {
+        ai.claude.programs.delegate-routing = {
+          inherit roles;
+          extraRuntimes = extras;
+          manualExternalDelegates = manual;
+        };
+      };
+    configuredRoles = {
+      default = {
+        effort = "medium";
+        use = "strong";
+      };
+      reviewer = {
+        effort = "high";
+        use = "opus";
+      };
+      writer = {use = "sol";};
+    };
+    hasProse = needle: text: lib.hasInfix needle (lib.replaceStrings ["\n"] [" "] text);
+    rolesSkill = readSkill (roleScenario configuredRoles ["codex"] []) "claude";
+    loneRuntime = runtime:
+      readSkill (change {
+        ai.${runtime}.programs.delegate-routing = {
+          extraRuntimes = [];
+          manualExternalDelegates = [];
+        };
+      })
+      runtime;
     native = change {ai.claude.programs.delegate-routing.extraRuntimes = [];};
     nativeClaude = readSkill native "claude";
     disabled = evaluate {
@@ -386,14 +416,8 @@
       && lib.hasInfix "### kimchi\n\n- flash (served)" claude
     );
     "module-delegate-routing-${name}-selectors" = mkTest "delegate-routing-${name}-selectors" (
-      failsWith (selector {vendors = ["unknown"];}) ''ai.claude.programs.delegate-routing.models references unknown values ["unknown"]''
-      && failsWith (selector {families = ["unknown"];}) ''ai.claude.programs.delegate-routing.models references unknown values ["unknown"]''
-      && failsWith (change {
-        ai = {
-          programs.delegate-routing.families = lib.mapAttrs (_: lib.mapAttrs (_: _: {tier = "small";})) (import ../lib/families.nix);
-          claude.programs.delegate-routing.models = [{tiers = ["frontier"];}];
-        };
-      }) ''ai.claude.programs.delegate-routing.models references unknown values ["frontier"]''
+      evaluationFails (selector {vendors = ["unknown"];})
+      && evaluationFails (selector {families = ["unknown"];})
       && failsWith (selector {}) "ai.claude.programs.delegate-routing.models contains an empty selector"
       && failsWith (selector {
         vendors = ["openai"];
@@ -419,6 +443,58 @@
         };
       in
         lib.hasInfix "haiku (anthropic)" union && lib.hasInfix "sol (openai)" union && !(lib.hasInfix "opus (anthropic)" union))
+    );
+    "module-delegate-routing-${name}-roles" = mkTest "delegate-routing-${name}-roles" (
+      evaluationFails (roleScenario {default.use = "asdf";} [] [])
+      && evaluationFails (roleScenario {default.use = "sol";} [] [])
+      && evaluationFails (roleScenario {default.use = "sol";} ["codex"] ["codex"])
+      && evaluationFails (roleScenario {
+        default = {
+          effort = "ultra";
+          use = "strong";
+        };
+      } [] [])
+      && passes (roleScenario {default.use = "strong";} [] [])
+      && passes (roleScenario {default.use = "opus";} [] [])
+      && passes (roleScenario {default.use = "sol";} ["codex"] [])
+      && passes (roleScenario {
+        default.use = "small";
+        reviewer.use = "frontier";
+        writer.use = "opus";
+      } [] [])
+      && hasProse "Strong is the ceiling:" (readSkill (roleScenario {default.use = "opus";} [] []) "claude")
+      && failsWith (change {
+        ai.programs.delegate-routing.families.example.strong = {
+          match = "example-*";
+          tier = "small";
+        };
+      }) "family names cannot equal capability tiers"
+      && hasProse "**Roles.** Default for reasoning work: strong at medium. Writer: sol at medium. Reviewer: opus at high. Strong is the ceiling: go above it only when the user asks." rolesSkill
+      && hasProse "Mechanical work still goes to the small tier (rule 1)" rolesSkill
+      && hasProse "Writer: opus at high." (readSkill (roleScenario {
+        writer = {
+          effort = "high";
+          use = "opus";
+        };
+      } [] []) "claude")
+      && !(hasProse "is the ceiling:" (readSkill (roleScenario {writer.use = "opus";} [] []) "claude"))
+      && hasProse "Reviewer: opus at medium." (readSkill (roleScenario {
+        default = {
+          effort = "medium";
+          use = "opus";
+        };
+        reviewer.use = "opus";
+      } [] []) "claude")
+      && !(hasProse "**Roles.**" claude)
+      && lib.all (runtime: !(hasProse "among close candidates, prefer the pool" (loneRuntime runtime))) ["claude" "kiro"]
+      && hasProse "among close candidates, prefer the pool" claude
+      && !(hasProse "among close candidates, prefer the pool" (readSkill (roleScenario {} [] []) "claude"))
+      && hasProse "comparing version numbers segment by segment (6.1 > 6 > 5.6)" claude
+      && hasProse "Use a technique only if it appears in your tool list" claude
+      && hasProse "an agent cannot reliably tell which mode it is in, but it can see its tools" claude
+      && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
+      && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
+      && lib.all (runtime: let value = result.config.ai.${runtime}.programs.delegate-routing.roles; in value.default == null && value.writer == null && value.reviewer == null) runtimes
     );
     "module-delegate-routing-${name}-families" = mkTest "delegate-routing-${name}-families" (
       lib.hasInfix "CUSTOM OPUS TASK" familyOverride
@@ -506,6 +582,8 @@
       let
         portable = optionTree result ["ai" "programs" "delegate-routing"];
         perRuntime = optionTree result ["ai" "claude" "programs" "delegate-routing"];
+        roleOptions = perRuntime.roles.type.getSubOptions [];
+        defaultRole = roleOptions.default.type.getSubOptions [];
       in
         portable ? enable
         && portable ? whenToDelegate
@@ -514,10 +592,18 @@
         && portable ? procedure
         && !(portable ? extraRuntimes)
         && !(portable ? manualExternalDelegates)
+        && !(portable ? roles)
         && !(portable ? models)
         && !(portable ? techniques)
         && perRuntime ? extraRuntimes
         && perRuntime ? manualExternalDelegates
+        && perRuntime ? roles
+        && builtins.attrNames (builtins.removeAttrs roleOptions ["_module"]) == ["default" "reviewer" "writer"]
+        && defaultRole.use.type.name == "enum"
+        && lib.hasInfix "strong" defaultRole.use.type.description
+        && lib.hasInfix "opus" defaultRole.use.type.description
+        && lib.hasInfix "sol" defaultRole.use.type.description
+        && !(lib.hasInfix "flash" defaultRole.use.type.description)
         && perRuntime ? models
         && perRuntime ? techniques
         && result.options.ai.kimchi.programs ? delegate-routing
