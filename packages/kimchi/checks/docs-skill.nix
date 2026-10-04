@@ -10,7 +10,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
-  workflowsSource = import ../lib/workflowsPackage.nix {inherit pkgs;};
+  workflowsSource = pkgs.ai.kimchi-workflows;
 
   # Home Manager delivers the skill to the user harness; devenv delivers it to
   # the project's `.kimchi/skills`, the native project-scope root.
@@ -76,7 +76,7 @@ in {
         "grep -qx 'name: \"kimchi-docs\"' \"\$skill/SKILL.md\""
       require "the snapshot link does not point at the packaged docs.kimchi-docs derivation (${pkgs.docs.kimchi-docs})" \
         '[ "$(readlink "$skill/snapshot")" = ${pkgs.docs.kimchi-docs} ]'
-      require "the workflows link does not point at Kimchi's locked workflows source" \
+      require "the workflows link does not point at the independently pinned workflows build" \
         '[ "$(readlink "$skill/workflows")" = ${workflowsSource} ]'
       require "the workflows README is unreadable through the skill" '[ -s "$skill/workflows/README.md" ]'
       require "SKILL.md omits the workflows source directions" 'grep -q workflows/src "$skill/SKILL.md"'

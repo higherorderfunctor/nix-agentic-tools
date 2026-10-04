@@ -1,28 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-04 — the docs skill links readable workflows
-> source, docs and examples from an unpacked-hash sidecar refreshed from
-> Kimchi's pinned pnpm lock without import-from-derivation; pinned to Kimchi
-> 1.5.1, which retired the `autoDefaultApplied` marker and rolls an
-> Auto-entitled account back to Auto on every fresh main launch; the marker is
-> gone from the factory, extractor and checks, and Home Manager still defaults
-> the model pair to Auto. The 1.5.0 source build adds resource controls for
-> teleport and remote-run and anchors pi's fd/rg lookup to Nix packages. The
-> extractor binds patch-added source before resolving environment aliases and
-> classifies Kimchi 1.5.0's versioned config and environment additions before
-> the package pin moves. A normalized agent's `tools` list is dropped with a
-> warning instead of failing evaluation. Kimchi shares Home Manager's user
-> config.json and harness/settings.json with the runtime; the remaining files
-> and every devenv file stay read-only copies. Its rules use the shared flat
-> AGENTS.md renderer and repository aggregate. Region is required; Home Manager
-> delivers it and telemetry through global config.json only. Devenv accepts
-> harness `resources` and appends the true-valued ids to
-> `KIMCHI_ENABLE_RESOURCES`, rejecting a false value or a malformed id. The
-> pinned pi dependency is 0.85.1. Agents are read-only copies from the runtime's
-> generated Markdown tree; the opt-in docs skill uses the shared frontmatter
-> text renderer and a guarded generated-file tree that formats whole files and
-> compares parsed header values; a store-path string is an input just as a path
-> is. Full lineage: `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-10-04 — workflows is an independent external pi
+> extension, enabled through shared harness settings on both backends; Kimchi
+> removes its static registration and resource toggle before compilation.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -553,25 +533,30 @@ line, and moving it would change the wrapper's store path.
 
 ## Source packaging
 
-`kimchi.workflowsSource` exposes the unpacked npm package for
-`@kimchi-dev/kimchi-workflows`. `refreshExtraction` reads the root importer's
-resolved dependency from the pinned release's `pnpm-lock.yaml` with yq at update
-time, strips peer suffixes, and prefetches the npm tarball with `--unpack`. It
-writes `{hash, url, version}` into `sources.json` under
-`extraction.workflowsPackage`. `lib/workflowsPackage.nix` consumes that
-committed pin without reading a derivation during evaluation. The workflows
-fetch has a versioned name so every version bump verifies its hash anew.
-`kimchi-workflows-source` compares the release lock against the sidecar version
-and URL and the fetched package.json, and checks the package name, README and
-readable source/docs/examples/dist.
+`pkgs.ai.kimchi-workflows` is an independently pinned, source-built external pi
+extension. `ai.kimchi.extensions.workflows.enable` defaults to false and adds
+its store source entry to `native.harnessSettings.extensions` through the
+existing shared delivery. Home Manager owns
+`$HOME/.config/kimchi/harness/settings.json` (by default); devenv writes
+`<project>/.config/kimchi/harness/settings.json` and requires launch from that
+project root. The store string context installs the extension closure. Consumer
+extension entries merge normally. Turning the option off withdraws its entry;
+manually declared extension entries remain independent.
 
-The opt-in `kimchi-docs` skill retains its `snapshot` link and adds a
-`workflows` link to this store tree, with directions to README, docs, examples,
-src and dist. Both module backends fetch the repository's own workflows pin
-through `lib/workflowsPackage.nix`, so this works even when the host pkgs has no
-overlay, the module harness stubs the executable, or a consumer overrides Kimchi
-without a workflows passthru. It describes the pinned release; an independently
-overridden Kimchi executable can resolve a different workflows dependency.
+Kimchi's source patch removes the workflows static import, managed factory
+entry, and resource definition. Its locked package may still be fetched, but
+workflows is unreachable from the executable module graph and no built-in
+resource can load a second copy. `externalized-extensions.nix` is the single
+parameterized list for these exact substitutions and the cheap source check. The
+resource definition is metadata for the resource menu, not an external-loader
+requirement; keeping it would advertise a toggle without a factory. See
+[external workflows](kimchi-workflows.md) for the pinned source evidence,
+runtime payload and CI contracts.
+
+The opt-in `kimchi-docs` skill links the external source build as `workflows`,
+with directions to README, docs, examples, src and dist. Both module backends
+use the repository package roots, so a host without an overlay and the module
+harness's stub executable receive the same pin.
 
 The package builds upstream's Bun executable and its Go proxy helper from the
 same pinned release. That source is pinned once, as `extraction.kimchiSource` in

@@ -603,6 +603,12 @@
         };
       }
 
+      # Native harness delivery preserves string context and merges consumers'
+      # other entries on both backends. Devenv's exact-cwd guard sees this file.
+      (lib.mkIf cfg.extensions.workflows.enable {
+        ai.kimchi.native.harnessSettings.extensions = ["${pkgs.ai.kimchi-workflows}/src/host/extension.ts"];
+      })
+
       # pi 0.85.1's ThinkingLevel is a superset of the normalized enum and
       # pi reads `defaultThinkingLevel` from the merged user and project
       # harness settings, so the lowering is lossless on both backends. It is
@@ -786,6 +792,7 @@ in
       '';
     };
     options = {
+      extensions.workflows.enable = lib.mkEnableOption "the independently pinned external workflows extension";
       permissions = lib.mkOption {
         # No freeform keys: Kimchi validates the file with a `.strict()` zod
         # schema (src/extensions/permissions/config.ts:11-19), so one unknown

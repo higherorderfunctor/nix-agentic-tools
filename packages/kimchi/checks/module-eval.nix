@@ -231,6 +231,35 @@ in {
   ];
 
   checks = {
+    module-kimchi-external-workflows = mkTest "kimchi-external-workflows" (
+      let
+        entry = "${pkgs.ai.kimchi-workflows}/src/host/extension.ts";
+        checkBackend = evaluate: settings: let
+          enabled = evaluate {
+            ai.kimchi = {
+              enable = true;
+              extensions.workflows.enable = true;
+              native.harnessSettings.extensions = ["/consumer/extension.ts"];
+            };
+          };
+          disabled = evaluate {
+            ai.kimchi = {
+              enable = true;
+              extensions.workflows.enable = false;
+            };
+          };
+        in
+          lib.all (assertion: assertion.assertion) enabled.config.assertions
+          && lib.all (assertion: assertion.assertion) disabled.config.assertions
+          && builtins.elem entry (settings enabled).extensions
+          && builtins.elem "/consumer/extension.ts" (settings enabled).extensions
+          && builtins.hasContext (builtins.head (builtins.filter (value: value == entry) (settings enabled).extensions))
+          && !((settings disabled) ? extensions);
+      in
+        checkBackend evalHm hmHarnessSettings
+        && checkBackend evalDevenv projectHarnessSettings
+    );
+
     # `supportedPools` now owns every normalized per-runtime option gate, not
     # shell alone. Each failure has an identical supported-runtime control so an
     # unrelated eval failure cannot make the exclusion look correct.
@@ -801,7 +830,7 @@ in {
           };
         enabled = {
           "extensions.ferment-v2" = true;
-          "extensions.workflows" = true;
+          "extensions.todos" = true;
         };
         shadowed = withKimchi {
           native.harnessSettings = {
@@ -1506,7 +1535,7 @@ in {
       unguardedPackages = [
         (mkDevenvKimchiPackage {})
         (mkDevenvKimchiPackage {
-          ai.kimchi.native.harnessSettings.resources."extensions.workflows" = true;
+          ai.kimchi.native.harnessSettings.resources."extensions.todos" = true;
         })
         (mkDevenvKimchiPackage {
           ai.kimchi.native.settings = {
@@ -1569,7 +1598,7 @@ in {
           enable = true;
           apiKey.file = "/run/secrets/kimchi-test";
           environmentVariables.KIMCHI_EXTRA = "yes";
-          native.harnessSettings.resources."extensions.workflows" = true;
+          native.harnessSettings.resources."extensions.todos" = true;
         };
       };
       wrapped = builtins.head result.config.home.packages;
@@ -1592,7 +1621,7 @@ in {
               package = resourcesStub;
               native.harnessSettings.resources = {
                 "extensions.ferment-v2" = true;
-                "extensions.workflows" = true;
+                "extensions.todos" = true;
               };
             }
             // extraKimchi;
@@ -1625,14 +1654,14 @@ in {
             exit 1
           fi
         }
-        expect_resources extensions.ferment-v2,extensions.workflows \
+        expect_resources extensions.ferment-v2,extensions.todos \
           env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesOnly}/bin/kimchi
         # Set but empty: no leading comma.
-        expect_resources extensions.ferment-v2,extensions.workflows \
+        expect_resources extensions.ferment-v2,extensions.todos \
           env KIMCHI_ENABLE_RESOURCES= ${devenvResourcesOnly}/bin/kimchi
-        expect_resources extensions.memory,extensions.ferment-v2,extensions.workflows \
+        expect_resources extensions.memory,extensions.ferment-v2,extensions.todos \
           env KIMCHI_ENABLE_RESOURCES=extensions.memory ${devenvResourcesOnly}/bin/kimchi
-        expect_resources extensions.teleport,extensions.ferment-v2,extensions.workflows \
+        expect_resources extensions.teleport,extensions.ferment-v2,extensions.todos \
           env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesWithEnvironment}/bin/kimchi
         # `! grep` never fails under errexit, so each absence is an explicit branch.
         if grep -qE "KIMCHI_(ENABLE_RESOURCES|REGION|TELEMETRY_ENABLED)" "$bin"; then

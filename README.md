@@ -191,7 +191,7 @@ git-branchless, git-absorb, and git-revise.
 | Skill | Description |
 |-------|-------------|
 | `/delegate-routing` | Size model and effort before calling subagents or building workflows |
-| `/kimchi-docs` | Search the pinned Kimchi docs snapshot and workflows source, docs and examples; enable via ai.programs.kimchi-docs.enable |
+| `/kimchi-docs` | Search the pinned Kimchi docs snapshot and independently pinned workflows source, docs and examples; enable via ai.programs.kimchi-docs.enable |
 | `/stack-fix` | Absorb fixes into correct stack commits |
 | `/stack-plan` | Plan and build a commit stack from description or existing commits |
 | `/stack-split` | Split a large commit into reviewable atomic commits |
@@ -334,7 +334,7 @@ nix build .#dns-root-hints
 | `chatgpt-codex` | OpenAI Codex CLI |
 | `claude-code` | Claude Code CLI |
 | `copilot-cli` | GitHub Copilot CLI |
-| `kimchi` | Kimchi CLI |
+| `kimchi` | Kimchi CLI with optional external source-built workflows (`ai.kimchi.extensions.workflows.enable`) |
 | `kiro-cli` | Kiro CLI |
 | `kiro-gateway` | Python proxy API for Kiro |
 | `semble` | Local semantic and lexical code-search CLI |

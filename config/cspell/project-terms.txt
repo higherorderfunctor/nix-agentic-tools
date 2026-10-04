@@ -198,6 +198,7 @@ libx
 licence
 licences
 lifecycles
+lightningcss
 lintable
 linuxbrew
 listdir
@@ -392,6 +393,7 @@ tsgo
 tsgolint
 tummychow
 turbofish
+typebox
 ufcs
 ugrep
 ultracode

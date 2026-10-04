@@ -1,34 +1,74 @@
-{pkgs, ...}: let
+{
+  lib,
+  pkgs,
+  ...
+}: let
   kimchi = pkgs.ai.kimchi;
-  source = import ../lib/workflowsPackage.nix {inherit pkgs;};
-  sources = ../sources.json;
+  workflows = pkgs.ai.kimchi-workflows;
+  pin = builtins.fromJSON (builtins.readFile ../workflows-sources.json);
 in {
-  checks.kimchi-workflows-source = pkgs.runCommand "kimchi-workflows-source-check" {} ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    lock_version=$(${pkgs.yq-go}/bin/yq -r '.importers["."].dependencies["@kimchi-dev/kimchi-workflows"].version' ${kimchi.src}/pnpm-lock.yaml)
-    lock_version="''${lock_version%%(*}"
-    pin_version=$(${pkgs.jq}/bin/jq -er '.extraction.workflowsPackage.version' ${sources})
-    pin_url=$(${pkgs.jq}/bin/jq -er '.extraction.workflowsPackage.url' ${sources})
-    if [ "$lock_version" != "$pin_version" ]; then
-      printf 'kimchi workflows: lock resolves %s, sources.json pins %s\n' "$lock_version" "$pin_version" >&2
-      exit 1
-    fi
-    expected_url="https://registry.npmjs.org/@kimchi-dev/kimchi-workflows/-/kimchi-workflows-$lock_version.tgz"
-    if [ "$pin_url" != "$expected_url" ]; then
-      printf 'kimchi workflows: lock expects URL %s, sources.json pins %s\n' "$expected_url" "$pin_url" >&2
-      exit 1
-    fi
-    package_version=$(${pkgs.jq}/bin/jq -er '.version' ${source}/package.json)
-    if [ "$lock_version" != "$package_version" ]; then
-      printf 'kimchi workflows: lock resolves %s, fetched package.json reports %s\n' "$lock_version" "$package_version" >&2
-      exit 1
-    fi
-    ${pkgs.jq}/bin/jq -e '.name == "@kimchi-dev/kimchi-workflows"' ${source}/package.json > /dev/null
-    for directory in dist docs examples src; do
-      test -d "${source}/$directory"
-    done
-    test -s ${source}/README.md
-    printf 'kimchi workflows: lock, sources.json and fetched package agree on %s\n' "$package_version" > "$out"
-  '';
+  checks = {
+    kimchi-workflows-payload = pkgs.runCommand "kimchi-workflows-payload-check" {nativeBuildInputs = [pkgs.nodejs];} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      test -f ${workflows}/src/host/extension.ts
+      test -f ${workflows}/dist/host/extension.js
+      node --input-type=module <<'JS'
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      const root = '${workflows}';
+      const manifest = JSON.parse(fs.readFileSync(root + '/package.json', 'utf8'));
+      assert.equal(manifest.version, '${pin.version}');
+      assert.equal(manifest.nixSourceRev, '${pin.rev}');
+      assert.deepEqual(manifest.pi.extensions, ['./src/host/extension.ts']);
+      for (const name of Object.keys(manifest.dependencies)) {
+        assert(fs.existsSync(root + '/node_modules/' + name), name);
+      }
+      for (const name of Object.keys(manifest.peerDependencies)) {
+        assert(!fs.existsSync(root + '/node_modules/' + name), name);
+      }
+      for (const name of fs.readdirSync(root + '/node_modules', {recursive: true})) {
+        const entry = root + '/node_modules/' + name;
+        if (fs.lstatSync(entry).isSymbolicLink()) {
+          assert(fs.realpathSync(entry).startsWith(root + '/'), entry);
+        }
+      }
+      JS
+      echo PASS > "$out"
+    '';
+
+    # Slash commands dispatch before model/credential validation. The observer
+    # intercepts unrecognized input, so the negative cannot make a model turn.
+    kimchi-workflows-smoke = pkgs.runCommand "kimchi-workflows-smoke" {nativeBuildInputs = [pkgs.python3];} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      python ${./workflows-smoke.py} ${kimchi}/bin/kimchi ${workflows} ${./workflows-observer.ts}
+      echo PASS > "$out"
+    '';
+
+    # Copies only the two registration files: no Kimchi compile or dependency
+    # build. The same exact substitutions run in Kimchi's postPatch phase.
+    kimchi-workflows-source = assert workflows.version == pin.version && workflows.sourceRev == pin.rev;
+      pkgs.runCommand "kimchi-externalized-extensions-source-check" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        mkdir -p src/resources
+        cp ${kimchi.src}/src/cli.ts src/cli.ts
+        cp ${kimchi.src}/src/resources/definitions.ts src/resources/definitions.ts
+        chmod u+w src/cli.ts src/resources/definitions.ts
+        ${kimchi.externalizeExtensions}
+        ${lib.concatMapStrings (extension: ''
+            if grep -F ${lib.escapeShellArg extension.id} src/cli.ts src/resources/definitions.ts; then
+              echo 'externalized resource is still registered' >&2
+              exit 1
+            fi
+            if grep -F ${lib.escapeShellArg extension.importLine} src/cli.ts; then
+              echo 'externalized extension is still imported' >&2
+              exit 1
+            fi
+          '')
+          kimchi.externalizedExtensions}
+        echo PASS > "$out"
+      '';
+  };
 }

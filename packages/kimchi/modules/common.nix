@@ -66,7 +66,7 @@ in {
           docs = config.ai.internal.roots.docs.kimchi-docs;
           search = searchFor runtime;
           treefmt-nix = config.ai.internal.treefmtNix;
-          workflowsSource = import ../lib/workflowsPackage.nix {inherit pkgs;};
+          workflowsSource = config.ai.internal.roots.ai.kimchi-workflows;
         }}";
       };
     })

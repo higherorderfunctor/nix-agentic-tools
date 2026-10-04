@@ -103,13 +103,13 @@
 
     ## Workflows source, documentation and examples
 
-    The `workflows` directory beside this file is the readable npm package for
-    `@kimchi-dev/kimchi-workflows`, at the exact version resolved by the pinned
-    Kimchi release's lockfile. It is pinned and offline; no clone is needed.
+    The `workflows` directory beside this file is the source-built package for
+    `@kimchi-dev/kimchi-workflows`, pinned independently of Kimchi and loaded
+    externally via `ai.kimchi.extensions.workflows.enable`. It is offline; no clone is needed.
     Read `workflows/README.md` first, then search `workflows/docs` for workflow
     authoring and execution guidance, `workflows/examples` for working examples,
     and `workflows/src` for implementation details. `workflows/dist` contains the
-    published JavaScript. These paths are relative to this skill's directory.
+    built JavaScript. These paths are relative to this skill's directory.
 
     ## When this snapshot is the right source, and when it is not
 
@@ -123,7 +123,7 @@
   '';
   rendered = frontmatter.render {
     data = {
-      description = "Answer a question about Kimchi itself — the Kimchi CLI, Kimchi Coding, Ferment, Kimchi Inference, the VS Code extension, or any docs.kimchi.dev setting, provider or reporting surface — from a pinned offline snapshot of docs.kimchi.dev. Read the bundled workflows package source, docs and examples for workflow authoring and execution questions. Use only for Kimchi product documentation; it says nothing about any other tool.";
+      description = "Answer a question about Kimchi itself — the Kimchi CLI, Kimchi Coding, Ferment, Kimchi Inference, the VS Code extension, or any docs.kimchi.dev setting, provider or reporting surface — from a pinned offline snapshot of docs.kimchi.dev. Read the external workflows package source, docs and examples for workflow authoring and execution questions. Use only for Kimchi product documentation; it says nothing about any other tool.";
       name = "kimchi-docs";
     };
     inherit body;

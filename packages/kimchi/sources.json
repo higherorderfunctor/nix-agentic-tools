@@ -24,11 +24,6 @@
       "hash": "sha256-4j4pfgUr+kK5v7WKMzsE13uNXXofeq73Tt3j55wTcW0=",
       "url": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-0.85.1.tgz",
       "version": "0.85.1"
-    },
-    "workflowsPackage": {
-      "hash": "sha256-Dcs8SAxRvE4IP1OwdzJUa+yYiRNHlKudk4feV5I3rKA=",
-      "url": "https://registry.npmjs.org/@kimchi-dev/kimchi-workflows/-/kimchi-workflows-0.0.9.tgz",
-      "version": "0.0.9"
     }
   },
   "goFloor": "1.25.5",

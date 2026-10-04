@@ -2,6 +2,7 @@
 # Keep upstream's bin/ + share/ layout: the compiled CLI resolves its assets
 # relative to the executable, including when the module wraps that executable.
 {
+  externalizedExtensions ? import ../../../externalized-extensions.nix,
   fd,
   packageLib,
   pkgs,
@@ -38,14 +39,14 @@
   piAiPackage = fetchExtraction extraction.piAiPackage;
   piPackage = fetchExtraction extraction.piPackage;
   piTuiPackage = fetchExtraction extraction.piTuiPackage;
-  workflowsSource = import ../../../lib/workflowsPackage.nix {
-    inherit pkgs;
-  };
+  externalizeExtensions = import ../../../lib/externalizeExtensions.nix {inherit externalizedExtensions lib;};
 
   extracted =
     pkgs.runCommand "kimchi-extracted.json" {
       nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       ${pkgs.yq-go}/bin/yq -o=json '.' ${kimchiSource}/pnpm-lock.yaml > kimchi-lock.json
       ${pkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
         --annotations ${../../../extract/annotations.json} \
@@ -81,13 +82,6 @@
     # pi's declaration packages at the versions Kimchi's lockfile resolves
     # pi's dependencies to, which is what the source build installs.
     kimchi_lock_json=$(${pkgs.yq-go}/bin/yq -o=json '.' "$kimchi_source_path/pnpm-lock.yaml")
-    workflows_version=$(${pkgs.jq}/bin/jq -er \
-      '.importers["."].dependencies["@kimchi-dev/kimchi-workflows"].version | strings | sub("\\(.*$"; "") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
-      <<< "$kimchi_lock_json")
-    workflows_url="https://registry.npmjs.org/@kimchi-dev/kimchi-workflows/-/kimchi-workflows-$workflows_version.tgz"
-    workflows_json=$(${pkgs.nix}/bin/nix store prefetch-file --json --unpack "$workflows_url")
-    workflows_hash=$(${pkgs.jq}/bin/jq -er '.hash' <<< "$workflows_json")
-
     pi_reference=$(${pkgs.jq}/bin/jq -er \
       '.importers["."].dependencies["@earendil-works/pi-coding-agent"].version | strings' \
       <<< "$kimchi_lock_json")
@@ -131,16 +125,12 @@
       --arg pth "$pi_tui_hash" \
       --arg ptu "$pi_tui_url" \
       --arg ptv "$pi_tui_version" \
-      --arg wh "$workflows_hash" \
-      --arg wu "$workflows_url" \
-      --arg wv "$workflows_version" \
       '. + {extraction: {
         kimchiSource: {hash: $kh, url: $ku},
         piAgentCorePackage: {hash: $pi_agent_core_hash, url: $pi_agent_core_url, version: $pi_agent_core_version},
         piAiPackage: {hash: $pi_ai_hash, url: $pi_ai_url, version: $pi_ai_version},
         piPackage: {hash: $ph, url: $pu, version: $pv},
-        piTuiPackage: {hash: $pth, url: $ptu, version: $ptv},
-        workflowsPackage: {hash: $wh, url: $wu, version: $wv}
+        piTuiPackage: {hash: $pth, url: $ptu, version: $ptv}
       }}' \
       ${sourcesFile} > "$extraction_tmp"
     ${pkgs.coreutils}/bin/mv "$extraction_tmp" ${sourcesFile}
@@ -235,6 +225,7 @@ in
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
       ''
+      + externalizeExtensions
       + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
         substituteInPlace scripts/build-binary.js \
           --replace-fail 'run("codesign (strip)", `codesign --remove-signature ''${binaryPath}`)' \
@@ -294,7 +285,7 @@ in
     '';
 
     passthru = {
-      inherit extracted fixPnpmDepsHash goFloor goModPath proxyHelper workflowsSource;
+      inherit externalizedExtensions externalizeExtensions extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
       inherit (goUpdate) fixGoFloor fixVendorHash;
       extractionSources = {
         kimchi = kimchiSource;

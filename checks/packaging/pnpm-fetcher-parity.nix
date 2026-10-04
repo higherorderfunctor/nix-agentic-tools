@@ -89,6 +89,7 @@
       "context7-mcp"
       "effect-mcp"
       "kimchi"
+      "kimchi-workflows"
       "oxlint"
     ];
 
