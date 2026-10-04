@@ -1,16 +1,17 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-03 — the unfree packages are absent from `packages`
+> **Last verified:** 2026-10-04 — the unfree packages are absent from `packages`
 > and read from `ciPackages` or `legacyPackages`, repository commands included;
-> main-tracking rev bumps are done by `update-pkg.sh`; chatgpt-codex installs
-> upstream's complete `codex-package-<target>` layout.
+> main-tracking rev bumps are done by `update-pkg.sh`; chatgpt-codex compiles
+> nixpkgs' `codex` from source and assembles upstream's complete package layout
+> itself.
 
 ### Overview
 
 AI coding CLI recipes live at `packages/<owner>/packages/ai/<name>/package.nix`:
 
-- **chatgpt-codex** — OpenAI Codex CLI, upstream's pre-built complete package
-  (static-musl on Linux) fetched from GitHub releases
+- **chatgpt-codex** — OpenAI Codex CLI, compiled from the GitHub source by
+  overriding nixpkgs' `codex`
 - **claude-code** — Claude Code CLI, pre-built binary
 - **copilot-cli** — GitHub Copilot CLI, pre-built SEA binary fetched from GitHub
   releases
@@ -36,25 +37,32 @@ own unfree opt-in. Repository code reads them from `ciPackages.<system>`.
 derivation to pin the version and `src` from a per-platform `sources.json`, then
 re-composes the public package through upstream's wrapper.
 
-**Standalone binary** (chatgpt-codex, copilot-cli): there is no nixpkgs base to
-inherit, so these are fresh `stdenv.mkDerivation`s over a per-platform release
-tarball selected from `sources.json`. On Linux the dynamically-linked ones run
-`autoPatchelfHook` to repoint the interpreter/rpath at the nix glibc.
+**Source override** (chatgpt-codex): `pkgs.codex.override` swaps in the locked
+`mkRustPlatform`, and `overrideAttrs` moves `version`, `src` and `cargoDeps` to
+the `sources.json` pins (nixpkgs' version is not an argument, and
+`buildRustPackage` reads its argument `cargoHash`, so `cargoDeps` is restated).
+nixpkgs' `no-daemon_auto_start.patch` is dropped: our modules write that setting
+and `extracted.json` records the binary's own defaults.
 
-- chatgpt-codex installs upstream's `codex-package-<target>.tar.gz` VERBATIM as
-  `$out/libexec/codex` (`codex-package.json`, `bin/codex`,
-  `bin/codex-code-mode-host`, `codex-path/rg`, `codex-resources/`), with
-  `$out/bin/*` as relative symlinks into it. Do not go back to the loose
-  `codex-<target>` binaries: since 0.157.0 a launch auto-starts the app-server
-  daemon, which only starts when the canonical executable sits at
-  `<root>/bin/codex` beside `<root>/codex-package.json`, and which copies
-  `<root>` into `CODEX_HOME` rejecting any symlink that leaves it. The static
-  binaries and bwrap stay byte-identical (codex digest-checks its bundled
-  bwrap); only the glibc-linked `codex-resources/{voice,zsh}` get a scoped
-  `autoPatchelf`. `checks/chatgpt-codex-package-layout.nix` starts and stops the
-  real daemon to hold this. Its daemon policy is in
+- postInstall assembles upstream's complete package as `$out/libexec/codex`
+  (`codex-package.json`, `bin/codex`, `bin/codex-code-mode-host`,
+  `codex-path/rg`, Linux `codex-resources/bwrap`; rg and bwrap copied from
+  nixpkgs), with `$out/bin/*` as relative symlinks into it, and nixpkgs' PATH
+  wrapper is dropped. Since 0.157.0 the app-server daemon only starts when the
+  canonical executable sits at `<root>/bin/codex` beside a `codex-package.json`
+  whose `target` is the running platform's (`x86_64-unknown-linux-gnu` for this
+  glibc build), and it copies `<root>` into `CODEX_HOME` rejecting any symlink
+  that leaves it. The optional `codex-resources/{voice,zsh}` are not built. The
+  prebuilt-release recipe is
+  `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
+  `checks/chatgpt-codex-package-layout.nix` starts and stops the real daemon to
+  hold this. Its daemon policy is in
   `packages/chatgpt-codex/docs/codex-daemon.md`.
-- copilot-cli installs a single SEA binary (`copilot`).
+
+**Standalone binary** (copilot-cli): there is no nixpkgs base to inherit, so it
+is a fresh `stdenv.mkDerivation` over a per-platform release tarball selected
+from `sources.json`, installing a single SEA binary (`copilot`). On Linux it
+runs `autoPatchelfHook` to repoint the interpreter/rpath at the nix glibc.
 
 **Bun source build** (kimchi): `fetchPnpmDeps` supplies the locked dependencies
 to the same pnpm 10 used by the build. Upstream compiles the CLI with Bun and
@@ -72,9 +80,10 @@ These packages pin versions in their recipe or release `sources.json` sidecar.
 Each uses an update strategy managed by `config.update.targets` (see owner
 `registry.nix`):
 
-- `chatgpt-codex` — per-platform `sources.json` + `mkUpdateScript`; version via
-  `ghLatestVersionCmd` with `tagPrefix = "rust-v"` (openai/codex cuts several
-  tag series, so the prefix is load-bearing)
+- `chatgpt-codex` — `sources.json` {version, srcHash, cargoHash} +
+  `mkUpdateScript`; version via `ghLatestVersionCmd` with `tagPrefix = "rust-v"`
+  (openai/codex cuts several tag series, so the prefix is load-bearing), then
+  `passthru.fixVendorHash` restores the source and cargo vendor hashes
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   GitHub release and prefetches per-platform binaries
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release

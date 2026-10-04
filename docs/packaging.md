@@ -235,7 +235,7 @@ Fetching itself is nixpkgs' to test.
 | Package              | Group      | Source                  | Build                     | nixpkgs               | Tests         | Smoke               |
 | -------------------- | ---------- | ----------------------- | ------------------------- | --------------------- | ------------- | ------------------- |
 | agnix                | root       | GitHub main             | cargo                     | —                     | cargo test    | --version + MCP/LSP |
-| chatgpt-codex        | root       | GitHub releases         | pre-built binary (musl)   | —                     | —             | --version           |
+| chatgpt-codex        | root       | GitHub tag              | cargo (nixpkgs override)  | `codex`               | —             | --version           |
 | claude-code          | root       | GCS manifest            | pre-built binary          | —                     | —             | binary              |
 | copilot-cli          | root       | GitHub releases         | pre-built binary          | `github-copilot-cli`  | —             | binary              |
 | kimchi               | root       | GitHub archive          | bun + go (source)         | —                     | —             | --version           |
