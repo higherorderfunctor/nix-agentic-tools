@@ -17,10 +17,7 @@
   goFloor = sources.goFloor or packageLib.goFloorUnknown;
   goModPath = "tools/proxy-helper/go.mod";
 
-  fetchExtraction = source:
-    fetchzip {
-      inherit (source) hash url;
-    };
+  fetchExtraction = source: fetchzip {inherit (source) hash url;};
   # A fixed-output store path is a function of its name and declared hash
   # only. fetchzip defaults to the unversioned name "source" and
   # fetchPnpmDeps to "<pname>-pnpm-deps", so a bump that leaves a hash
@@ -41,6 +38,9 @@
   piAiPackage = fetchExtraction extraction.piAiPackage;
   piPackage = fetchExtraction extraction.piPackage;
   piTuiPackage = fetchExtraction extraction.piTuiPackage;
+  workflowsSource = import ../../../lib/workflowsPackage.nix {
+    inherit pkgs;
+  };
 
   extracted =
     pkgs.runCommand "kimchi-extracted.json" {
@@ -63,7 +63,7 @@
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this
   # runs first and writes every hash-verified source input: the release
-  # source that both the build and the extractor read, then pi's packages.
+  # source that both the build and the extractor read, then the locked npm packages.
   # The dependency fixers that follow it build against that source pin.
   refreshExtraction = ''
     kimchi_source_url="https://github.com/getkimchi/kimchi/archive/refs/tags/v$latest.tar.gz"
@@ -81,6 +81,13 @@
     # pi's declaration packages at the versions Kimchi's lockfile resolves
     # pi's dependencies to, which is what the source build installs.
     kimchi_lock_json=$(${pkgs.yq-go}/bin/yq -o=json '.' "$kimchi_source_path/pnpm-lock.yaml")
+    workflows_version=$(${pkgs.jq}/bin/jq -er \
+      '.importers["."].dependencies["@kimchi-dev/kimchi-workflows"].version | strings | sub("\\(.*$"; "") | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+      <<< "$kimchi_lock_json")
+    workflows_url="https://registry.npmjs.org/@kimchi-dev/kimchi-workflows/-/kimchi-workflows-$workflows_version.tgz"
+    workflows_json=$(${pkgs.nix}/bin/nix store prefetch-file --json --unpack "$workflows_url")
+    workflows_hash=$(${pkgs.jq}/bin/jq -er '.hash' <<< "$workflows_json")
+
     pi_reference=$(${pkgs.jq}/bin/jq -er \
       '.importers["."].dependencies["@earendil-works/pi-coding-agent"].version | strings' \
       <<< "$kimchi_lock_json")
@@ -124,12 +131,16 @@
       --arg pth "$pi_tui_hash" \
       --arg ptu "$pi_tui_url" \
       --arg ptv "$pi_tui_version" \
+      --arg wh "$workflows_hash" \
+      --arg wu "$workflows_url" \
+      --arg wv "$workflows_version" \
       '. + {extraction: {
         kimchiSource: {hash: $kh, url: $ku},
         piAgentCorePackage: {hash: $pi_agent_core_hash, url: $pi_agent_core_url, version: $pi_agent_core_version},
         piAiPackage: {hash: $pi_ai_hash, url: $pi_ai_url, version: $pi_ai_version},
         piPackage: {hash: $ph, url: $pu, version: $pv},
-        piTuiPackage: {hash: $pth, url: $ptu, version: $ptv}
+        piTuiPackage: {hash: $pth, url: $ptu, version: $ptv},
+        workflowsPackage: {hash: $wh, url: $wu, version: $wv}
       }}' \
       ${sourcesFile} > "$extraction_tmp"
     ${pkgs.coreutils}/bin/mv "$extraction_tmp" ${sourcesFile}
@@ -283,7 +294,7 @@ in
     '';
 
     passthru = {
-      inherit extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
+      inherit extracted fixPnpmDepsHash goFloor goModPath proxyHelper workflowsSource;
       inherit (goUpdate) fixGoFloor fixVendorHash;
       extractionSources = {
         kimchi = kimchiSource;
