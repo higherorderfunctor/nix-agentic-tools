@@ -16,7 +16,7 @@ args @ {
   tierNames = vocabulary.tiers;
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
   familyFunctions = import ../lib/select-families.nix {inherit lib;};
-  inherit (familyFunctions) select;
+  inherit (familyFunctions) automatic candidates select;
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   enabled = runtime:
     config.ai.${runtime}.programs.delegate-routing.enable
@@ -32,6 +32,7 @@ args @ {
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
   names = lib.unique (map (family: family.name) flattenedFamilies);
+  tiers = lib.unique (map (family: family.tier) flattenedFamilies);
   whenToDelegateOptions = import ../lib/when-to-delegate.nix {
     inherit lib;
     renames = delegateRoutingRenames;
@@ -45,8 +46,11 @@ args @ {
   # Declare runtime-only controls alongside the factory's enable override.
   runtimeOptions = runtime: let
     runtimeConfig = config.ai.${runtime}.programs.delegate-routing;
-    automaticRuntimes = [runtime] ++ lib.subtractLists runtimeConfig.manualExternalDelegates runtimeConfig.extraRuntimes;
-    selectedNames = lib.unique (map (family: family.name) (lib.concatMap (target: select portable.families models.${target}) automaticRuntimes));
+    automaticRuntimes = automatic {
+      inherit runtime;
+      inherit (runtimeConfig) extraRuntimes manualExternalDelegates;
+    };
+    selectedNames = map (family: family.name) (candidates portable.families models automaticRuntimes);
     roleType = lib.types.submodule {
       options = {
         effort = lib.mkOption {
@@ -80,7 +84,7 @@ args @ {
             description = "Family names to select.";
           };
           tiers = lib.mkOption {
-            type = lib.types.listOf (lib.types.enum tierNames);
+            type = lib.types.listOf (lib.types.enum tiers);
             default = [];
             description = "Capability tiers to select.";
           };
@@ -236,8 +240,8 @@ in {
           # Static validation is ungated on purpose; runtime-dependent checks apply only when the source runtime and program are enabled.
           [
             {
-              assertion = lib.intersectLists tierNames names == [];
-              message = "ai.programs.delegate-routing.families: family names cannot equal capability tiers.";
+              assertion = lib.allUnique (tierNames ++ map (family: family.name) flattenedFamilies);
+              message = "ai.programs.delegate-routing.families: family names must be unique across vendors and must not equal a capability tier.";
             }
           ]
           ++ lib.concatMap (runtime: let
@@ -251,18 +255,16 @@ in {
               assertion = !sourceEnabled || runtimeEnabled target;
               message = "${path}.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
             })
-            (lib.subtractLists manualExternalDelegates extraRuntimes)
+            (automatic {inherit runtime extraRuntimes manualExternalDelegates;})
             ++ map (target: {
               assertion = !sourceEnabled || select portable.families models.${target} != [];
               message = "ai.${target}.programs.delegate-routing.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
             })
             requiredTargets
-            ++ lib.concatMap (selector: [
-              {
-                assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
-                message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
-              }
-            ])
+            ++ map (selector: {
+              assertion = selector.vendors != [] || selector.tiers != [] || selector.families != [];
+              message = "${path}.models contains an empty selector; specify vendors, tiers or families.";
+            })
             models.${runtime}
             ++ lib.concatLists (lib.mapAttrsToList (name: node: let
                 delegate = builtins.elem node.kind delegateKinds;

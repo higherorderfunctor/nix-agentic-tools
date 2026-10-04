@@ -1,7 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-03 — runtime roles use selected-family enums and
-> render starting tiers, ceilings and inherited effort.
+> **Last verified:** 2026-10-03 — roles with a typed `use` and ceiling, selector
+> enums, tool-presence and highest-version selection, multi-runtime-only pool
+> paragraph.
 
 `ai.programs.delegate-routing.families` is the portable decision table, keyed by
 vendor and family. Each family has a capability tier, task and effort guidance,
@@ -17,22 +18,25 @@ Each runtime chooses families through
 within a selector every non-empty field must match the vendor, tier and family
 name. Claude defaults to Anthropic, Codex to OpenAI, and Kimchi and Kiro to no
 selection, so the package builds no default skill for either. Empty selectors
-fail assertions. Vendor and family selectors use dynamic enums from configured
-families; tiers use the static vocabulary. An enabled program on an enabled
-runtime must select at least one family. That program's `extraRuntimes` and
-`manualExternalDelegates` targets also need a family selection, even when a
-target runtime or program is disabled.
+fail assertions. Vendor, tier and family selectors use dynamic enums from
+configured families, so selector tiers include only tiers used by those
+families. An enabled program on an enabled runtime must select at least one
+family. That program's `extraRuntimes` and `manualExternalDelegates` targets
+also need a family selection, even when a target runtime or program is disabled.
 
 Runtime `roles.default`, `roles.writer` and `roles.reviewer` are nullable
 records with required `use` and optional `effort`. All default to null. `use` is
-a real dynamic enum of static tiers and families selected by the native runtime
-or its automatic extras after manual-only subtraction. Family names cannot equal
-tiers. The default sets the starting tier and ceiling, resolving a family's
-tier. Explicit writer and reviewer choices may exceed it. Their unset efforts
-inherit the default effort; efforts are low, medium, high, xhigh or max. Runtime
-reasoning settings retain their separate enum without max. Rendering omits unset
-roles and only states a ceiling when the default role is configured. Pool-choice
-guidance appears only with an automatic extra or a manual delegate.
+a dynamic enum of static tiers and families that this runtime or an automatic
+extra selects. Family names must be unique across vendors and cannot equal
+tiers. The default role sets the starting tier. The default role's tier is the
+ceiling; a family resolves to its own tier. Explicit writer and reviewer choices
+may exceed it. Manual-only families are ineligible. Rendering omits unset roles.
+The Roles paragraph states the ceiling only when `roles.default` is set.
+
+Writer and reviewer effort inherits the default when unset; efforts are low,
+medium, high, xhigh or max. Runtime reasoning settings retain their separate
+enum without max. The pool-choice paragraph in delegate sizing appears only with
+an automatic extra or a manual delegate.
 
 Resolve a concrete model at launch time: introspect the runtime's live list,
 choose the highest version matching the family's pattern by comparing version
@@ -54,10 +58,10 @@ kinds, and a command for every external node. Each package field uses
 `mkDefault`; consumers can replace fields, add nodes or disable individual
 nodes. Techniques are usable only when present in the tool list, and external
 commands must be on PATH. Modes describe usual availability, not a reliable
-session-mode detector; some ACP clients expose Kiro orchestrate_subagent instead
-of invoke_sub_agent. External and manual runtime sections include only external,
-introspect and usage nodes. Codex and Kimchi have no workflow node; Kimchi has
-no usage node because no command reads usage without a model turn.
+session-mode detector; some ACP clients expose Kiro `orchestrate_subagent`
+instead of `invoke_sub_agent`. External and manual runtime sections include only
+external, introspect and usage nodes. Codex and Kimchi have no workflow node;
+Kimchi has no usage node because no command reads usage without a model turn.
 
 Kimchi's nodes record Kimchi 1.5.1 probes and source. Its Agent tool pins model
 and thinking, but an omitted `thinking` falls back to the persona default rather

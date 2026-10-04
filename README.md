@@ -942,10 +942,11 @@ Portable `families.<vendor>.<family>` records describe tiers, task and effort
 guidance, and live-model patterns. Override any field or add a family. Each
 runtime's `models` is a list of selectors over `vendors`, `tiers` and
 `families`: selectors are alternatives, and every non-empty field in one
-selector must match. Claude defaults to Anthropic and Codex to OpenAI. Kimchi
-and Kiro require an explicit selection when their runtime and delegate-routing
-program are enabled. The package ships no families for Kimchi-served vendors;
-declare them under `families` before selecting them.
+selector must match. Selector enums come from configured families; tier
+selectors accept only tiers used by those families. Claude defaults to Anthropic
+and Codex to OpenAI. Kimchi and Kiro require an explicit selection when their
+runtime and delegate-routing program are enabled. The package ships no families
+for Kimchi-served vendors; declare them under `families` before selecting them.
 
 Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
 Manual-only entries require an explicit user request and do not require runtime
@@ -955,9 +956,11 @@ delegate-routing program with
 its delegation controls are unestablished.
 
 Runtime `roles.default`, `roles.writer` and `roles.reviewer` optionally select a
-tier or an automatic selected family, with effort `low`, `medium`, `high`,
-`xhigh` or `max`. All roles default to null. The default role sets the starting
-tier and ceiling; a family's tier determines its ceiling. Writer and reviewer
+tier or a family, with effort `low`, `medium`, `high`, `xhigh` or `max`. All
+roles default to null. `use` takes a static tier or a family that this runtime
+or an automatic extra selects. Family names must be unique across vendors and
+cannot equal tiers. The default role sets the starting tier. The default role's
+tier is the ceiling; a family resolves to its own tier. Writer and reviewer
 effort inherits the default when unset. Explicit writer and reviewer choices may
 exceed that default ceiling. Manual-only families are ineligible.
 

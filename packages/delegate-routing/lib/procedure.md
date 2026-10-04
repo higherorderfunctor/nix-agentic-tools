@@ -23,12 +23,13 @@
 2. Default: writer, then one reviewer. If a reviewer role is configured, use it.
    Otherwise take the first of these that is available:
    1. A different family at the writer's tier, at the writer's effort.
-   2. A different family at a higher tier, up to the ceiling, at the writer's
-      effort.
+   2. A different family at a higher tier, up to the ceiling (when a default
+      role is configured), at the writer's effort.
    3. The same family at a higher effort.
 
    The reviewer is never below the writer's tier. Neither writer nor reviewer
-   goes above the ceiling unless the user asks.
+   goes above the ceiling (when a default role is configured) unless the user
+   asks.
 
 3. Escalate to prosecute, defend, judge when you intend to dismiss a reviewer
    finding, or the change touches a shared abstraction (library code or an

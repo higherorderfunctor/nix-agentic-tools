@@ -418,6 +418,15 @@
     "module-delegate-routing-${name}-selectors" = mkTest "delegate-routing-${name}-selectors" (
       evaluationFails (selector {vendors = ["unknown"];})
       && evaluationFails (selector {families = ["unknown"];})
+      && evaluationFails (change {
+        ai = {
+          programs.delegate-routing.families = lib.mapAttrs (_: lib.mapAttrs (_: _: {tier = "small";})) result.config.ai.programs.delegate-routing.families;
+          claude.programs.delegate-routing.models = [
+            {families = ["opus"];}
+            {tiers = ["frontier"];}
+          ];
+        };
+      })
       && failsWith (selector {}) "ai.claude.programs.delegate-routing.models contains an empty selector"
       && failsWith (selector {
         vendors = ["openai"];
@@ -468,15 +477,30 @@
           match = "example-*";
           tier = "small";
         };
-      }) "family names cannot equal capability tiers"
-      && hasProse "**Roles.** Default for reasoning work: strong at medium. Writer: sol at medium. Reviewer: opus at high. Strong is the ceiling: go above it only when the user asks." rolesSkill
-      && hasProse "Mechanical work still goes to the small tier (rule 1)" rolesSkill
-      && hasProse "Writer: opus at high." (readSkill (roleScenario {
-        writer = {
-          effort = "high";
-          use = "opus";
+      }) "family names must be unique across vendors and must not equal a capability tier"
+      && failsWith (change {
+        ai.programs.delegate-routing.families.example.opus = {
+          match = "example-opus-*";
+          tier = "small";
         };
-      } [] []) "claude")
+      }) "family names must be unique across vendors and must not equal a capability tier"
+      && hasProse "Default for reasoning work: strong at medium" rolesSkill
+      && hasProse "Writer: sol at medium" rolesSkill
+      && hasProse "Reviewer: opus at high" rolesSkill
+      && hasProse "Strong is the ceiling: go above it only when the user asks" rolesSkill
+      && hasProse "Mechanical work still goes to the small tier (rule 1)" rolesSkill
+      && hasProse "Configured writer and reviewer roles count as the user asking." rolesSkill
+      && (let
+        writerOnly = readSkill (roleScenario {
+          writer = {
+            effort = "high";
+            use = "opus";
+          };
+        } [] []) "claude";
+      in
+        hasProse "Writer: opus at high." writerOnly
+        && hasProse "Configured writer and reviewer roles count as the user asking." writerOnly)
+      && hasProse "Configured writer and reviewer roles count as the user asking." (readSkill (roleScenario {reviewer.use = "opus";} [] []) "claude")
       && !(hasProse "is the ceiling:" (readSkill (roleScenario {writer.use = "opus";} [] []) "claude"))
       && hasProse "Reviewer: opus at medium." (readSkill (roleScenario {
         default = {

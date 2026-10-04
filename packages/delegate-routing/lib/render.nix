@@ -10,33 +10,35 @@
   extraRuntimes ? [],
   manualExternalDelegates ? [],
 }: let
-  inherit (import ./select-families.nix {inherit lib;}) select;
+  selection = import ./select-families.nix {inherit lib;};
+  inherit (selection) automatic select;
   inherit (import ./vocabulary.nix) delegateKinds tiers;
-  extras = lib.subtractLists manualExternalDelegates (lib.unique extraRuntimes);
-  runtimes = [runtime] ++ extras;
+  runtimes = automatic {inherit runtime extraRuntimes manualExternalDelegates;};
+  extras = lib.tail runtimes;
   selected = target: select families models.${target};
   targets = family: builtins.filter (target: builtins.elem family (selected target)) runtimes;
-  candidates = lib.unique (lib.concatMap selected runtimes);
+  candidates = selection.candidates families models runtimes;
   roleTier = role:
     if builtins.elem role.use tiers
     then role.use
-    else (lib.findFirst (family: family.name == role.use) null candidates).tier;
+    else (lib.findFirst (family: family.name == role.use) (throw "roles: ${role.use} is not a tier or a rendered family") candidates).tier;
   roleText = name: let
     role = roles.${name} or null;
-    effort =
-      if (role.effort or null) != null
-      then role.effort
-      else if (roles.default or null) != null
-      then roles.default.effort or null
-      else null;
+    effort = lib.findFirst (value: value != null) null [(role.effort or null) (roles.default.effort or null)];
   in
     lib.optionalString (role != null) "${
       if name == "default"
       then "Default for reasoning work"
-      else "${lib.toUpper (builtins.substring 0 1 name)}${builtins.substring 1 (-1) name}"
+      else lib.toSentenceCase name
     }: ${role.use}${lib.optionalString (effort != null) " at ${effort}"}.";
-  rolesText = lib.concatStringsSep " " (lib.filter (text: text != "") (map roleText ["default" "writer" "reviewer"]));
-  ceiling = lib.optionalString ((roles.default or null) != null) (let name = roleTier roles.default; in "${lib.toUpper (builtins.substring 0 1 name)}${builtins.substring 1 (-1) name} is the ceiling: go above it only when the user asks. Mechanical work still goes to the small tier (rule 1).");
+  rolesText = lib.concatStringsSep " " (lib.filter (text: text != "") [
+    (roleText "default")
+    ceiling
+    (lib.optionalString ((roles.writer or null) != null || (roles.reviewer or null) != null) "Configured writer and reviewer roles count as the user asking.")
+    (roleText "writer")
+    (roleText "reviewer")
+  ]);
+  ceiling = lib.optionalString ((roles.default or null) != null) (let name = roleTier roles.default; in "${lib.toSentenceCase name} is the ceiling: go above it only when the user asks. Mechanical work still goes to the small tier (rule 1).");
   cell = lib.replaceStrings ["|" "\n"] ["\\|" " "];
   row = cells: "| ${lib.concatMapStringsSep " | " cell cells} |";
   table = columns: rows:
@@ -120,7 +122,7 @@ in ''
 
   Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (Claude's interactive tools take the alias, e.g. `opus`).
 
-  ${lib.optionalString (rolesText != "") "**Roles.** ${rolesText} ${ceiling}"}
+  ${lib.optionalString (rolesText != "") "**Roles.** ${rolesText}"}
 
   ${lib.optionalString (builtins.length (lib.unique (map (family: family.vendor) candidates)) > 1) "Rows span more than one vendor, so a reviewer may come from a different vendor than the writer."}
 
