@@ -7,8 +7,9 @@
 > decided by the receiver's own nixpkgs through `checkedBy`, which also
 > re-checks every override function and reports the receiver's `meta.available`;
 > a free leaf's dependencies are judged in CI by a no-config set. Recipes still
-> take bun and pnpm from `pkgs.ai.generic`. pnpm_12 overrides nixpkgs'
-> source-built Rust package with sidecar pins and the locked toolchain.
+> take bun and pnpm from `pkgs.ai.generic`. pnpm_12 and chatgpt-codex override
+> nixpkgs' source-built Rust packages with sidecar pins and the locked
+> toolchain; chatgpt-codex's update restores its hashes before regenerating.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -720,14 +721,18 @@ then restores `vendorHash`.
 `glab` also carries a `passthru.extracted` sidecar, so the SAME `extraExtract`
 runs `vu.mkExtractRegen` after the hash fixer. Its extract BUILDS `src` and
 `goModules`, so running it before the fixer would hit `lib.fakeHash` instead of
-producing a schema. `chatgpt-codex` and `claude-code` fetch prebuilt binaries
-and pass `mkExtractRegen` alone. Kiro also fetches a prebuilt binary, but its
-update wrapper refreshes the public model snapshot before regeneration on EVERY
-sweep: model changes do not wait for a binary version bump. Kimchi pins its
-release source ONCE, and both its source build and its extractor read that pin.
-Beside it sit its exact pi npm dependency and the three declaration packages
-that dependency's settings type imports. A version bump refreshes all five
-inputs and runs `mkExtractRegen` against them before the Go and pnpm fixers.
+producing a schema. `chatgpt-codex` is the same shape on a Rust build: it
+compiles from source, adding only its optional resources from per-platform
+release archives that `mkUpdateScript` prefetches, so its `extraExtract` runs
+`fixVendorHash` (`srcHash`, then `cargoHash`) and then `mkExtractRegen`.
+`claude-code` fetches a prebuilt binary and passes `mkExtractRegen` alone. Kiro
+also fetches a prebuilt binary, but its update wrapper refreshes the public
+model snapshot before regeneration on EVERY sweep: model changes do not wait for
+a binary version bump. Kimchi pins its release source ONCE, and both its source
+build and its extractor read that pin. Beside it sit its exact pi npm dependency
+and the three declaration packages that dependency's settings type imports. A
+version bump refreshes all five inputs and runs `mkExtractRegen` against them
+before the Go and pnpm fixers.
 
 Wiring that regeneration is not optional for an extracted package, and glab
 demonstrates the cost of missing it: it was the one such package that never had

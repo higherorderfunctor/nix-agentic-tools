@@ -22,7 +22,7 @@
   checks = let
     inherit (pkgs.stdenv.hostPlatform) isLinux system;
     codex = self.ciPackages.${system}.chatgpt-codex;
-    inherit (codex.passthru.codexPackage) root target;
+    inherit (codex.passthru.codexPackage) resources root target;
     # The files the daemon bootstrap's `validate_package` requires, each
     # executable. bwrap is Linux-only upstream too.
     required =
@@ -54,9 +54,23 @@
           "$root/codex-package.json" > /dev/null \
           || fail "codex-package.json does not describe this package: $(cat "$root/codex-package.json")"
 
-        for f in ${pkgs.lib.escapeShellArgs required}; do
+        for f in ${pkgs.lib.escapeShellArgs (required ++ resources)}; do
           [ -f "$root/$f" ] && [ -x "$root/$f" ] || fail "package is missing executable $f"
         done
+
+        # The prebuilt zsh is the one resource that runs on its own; on Linux
+        # this proves its interpreter and libtinfo were repointed at nix.
+        [ "$("$root/codex-resources/zsh/bin/zsh" -fc 'print ok')" = ok ] \
+          || fail "bundled zsh does not run"
+
+        # Voice refuses any CLI whose stamped commit differs from the voice
+        # host's own. Running the host also proves it executes on this
+        # platform after patching.
+        commit="$(jq -r .buildCommit "$root/codex-resources/voice/manifest.json")"
+        [ "$("$root/codex-resources/voice/bin/codex-voice-host" --build-commit)" = "$commit" ] \
+          || fail "voice host does not report the manifest's build commit $commit"
+        grep -qaF "$commit" "$root/bin/codex" \
+          || fail "bin/codex is not stamped with the voice build commit $commit"
 
         # The bootstrap copies the tree and rejects links that leave it.
         links="$(find "$root" -type l)"

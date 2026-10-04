@@ -1227,10 +1227,11 @@ in
         switch that changes the package stops the daemon so the next launch
         starts the new one.
         `false` releases the selection and restores upstream's copy and
-        hourly self-update. That copy is taken from this package, so its
-        patched `codex-resources/{voice,zsh}` point into store paths nothing
-        roots: they break after garbage collection until upstream's updater
-        replaces the copy. Home Manager only.
+        hourly self-update. That copy is taken from this package, whose
+        executables and patched voice and zsh resources are dynamically
+        linked against store paths nothing roots from the copy: it breaks
+        after garbage collection until upstream's updater replaces it. Home
+        Manager only.
       '';
     };
 
