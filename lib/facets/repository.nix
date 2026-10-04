@@ -52,6 +52,7 @@
   # nixpkgs fixed point needs them before it can supply stdenv or system.
   rootsFor = context: lib.unique (packageRoots ++ map builtins.head (ordinaryClaimsFor context));
   supportedSystems = import ../../config/systems.nix;
+  ordinaryAttrs = value: builtins.isAttrs value && !lib.isDerivation value;
   # The recipe-level overlay: builds every claimed package on whatever `final`
   # it is given. It builds this flake's own package sets (natSetFor), the
   # repository's devenv shell, and the exported overlay's fallback.
@@ -180,7 +181,40 @@ in {
       rootPackages = lib.genAttrs namespaceRoots (name: pkgs.${name});
       rootSource = root + "/flake.nix";
     };
-  overlay = buildOverlay;
+  # The exported overlay (overlays.default). It re-exports this flake's own
+  # builds from natSetFor rather than rebuilding on the consumer's `final`, so
+  # overlay and module defaults hit the cache whatever nixpkgs the consumer
+  # uses. Only the consumer's license gates reach natSetFor. Where natSystemOf
+  # returns null (unsupported system, cross, non-default libc) it falls back to
+  # buildOverlay on `final`. The fallback choice is made per value: deciding
+  # it at the top level would recurse through `final.stdenv`.
+  overlay = final: prev: let
+    system = natSystemOf final;
+    natSet = natSetFor {
+      inherit system;
+      config = final.config or {};
+    };
+    context = {
+      inherit inputs lib system;
+      inherit (packageWorldFor natSet) packages;
+    };
+    tree =
+      lib.foldl' (
+        acc: keyPath: lib.recursiveUpdate acc (lib.setAttrByPath keyPath (lib.getAttrFromPath keyPath natSet))
+      ) {}
+      (claimedPaths context);
+    # Same merge as facets.realizeOverlay: keep the consumer's neighbours in a
+    # shared namespace, replace only the claimed leaves.
+    reexported =
+      lib.recursiveUpdateUntil (_: before: after: !(ordinaryAttrs before && ordinaryAttrs after))
+      prev
+      tree;
+    built = buildOverlay final prev;
+  in
+    lib.genAttrs (rootsFor context) (name:
+      if system == null
+      then built.${name}
+      else reexported.${name} or (prev.${name} or {}));
   checksFor = {rootModules ? [], ...} @ context: let
     world = facets.realizeChecks {
       inherit index rootModules;
