@@ -3,15 +3,16 @@
 > **Last verified:** 2026-10-04 — the unfree packages are absent from `packages`
 > and read from `ciPackages` or `legacyPackages`, repository commands included;
 > main-tracking rev bumps are done by `update-pkg.sh`; chatgpt-codex compiles
-> nixpkgs' `codex` from source and assembles upstream's complete package layout
-> itself.
+> nixpkgs' `codex` from source, assembles upstream's complete package layout
+> itself and adds the voice and zsh resources from the release archive.
 
 ### Overview
 
 AI coding CLI recipes live at `packages/<owner>/packages/ai/<name>/package.nix`:
 
 - **chatgpt-codex** — OpenAI Codex CLI, compiled from the GitHub source by
-  overriding nixpkgs' `codex`
+  overriding nixpkgs' `codex`, plus the prebuilt voice and zsh resources from
+  the GitHub release
 - **claude-code** — Claude Code CLI, pre-built binary
 - **copilot-cli** — GitHub Copilot CLI, pre-built SEA binary fetched from GitHub
   releases
@@ -52,8 +53,14 @@ and `extracted.json` records the binary's own defaults.
   canonical executable sits at `<root>/bin/codex` beside a `codex-package.json`
   whose `target` is the running platform's (`x86_64-unknown-linux-gnu` for this
   glibc build), and it copies `<root>` into `CODEX_HOME` rejecting any symlink
-  that leaves it. The optional `codex-resources/{voice,zsh}` are not built. The
-  prebuilt-release recipe is
+  that leaves it. bwrap is looked up on PATH first and the bundled copy is the
+  fallback; rg is looked up in `codex-path` first. Neither needs a PATH wrapper.
+- The optional `codex-resources/{voice,zsh}` are not built: they are extracted
+  as real files from the same release's `codex-package-<target>.tar.gz` (both
+  platforms' archives carry both). That happens in postFixup, so strip never
+  touches them (it would break the macOS signatures), and on Linux a scoped
+  `autoPatchelf` repoints them at the nix glibc and ncurses while the
+  source-built binaries are left alone. The fully prebuilt recipe is
   `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
   `checks/chatgpt-codex-package-layout.nix` starts and stops the real daemon to
   hold this. Its daemon policy is in
@@ -80,10 +87,14 @@ These packages pin versions in their recipe or release `sources.json` sidecar.
 Each uses an update strategy managed by `config.update.targets` (see owner
 `registry.nix`):
 
-- `chatgpt-codex` — `sources.json` {version, srcHash, cargoHash} +
-  `mkUpdateScript`; version via `ghLatestVersionCmd` with `tagPrefix = "rust-v"`
-  (openai/codex cuts several tag series, so the prefix is load-bearing), then
-  `passthru.fixVendorHash` restores the source and cargo vendor hashes
+- `chatgpt-codex` — `sources.json` {version, srcHash, cargoHash, per-platform
+  release archive `{url, hash}`} + `mkUpdateScript`; version via
+  `ghLatestVersionCmd` with `tagPrefix = "rust-v"` (openai/codex cuts several
+  tag series, so the prefix is load-bearing). The script prefetches each
+  platform's archive, then `passthru.fixVendorHash` restores the source and
+  cargo vendor hashes the rewrite dropped. Not automated: the V8 library comes
+  from nixpkgs' `librusty_v8` pin, so a codex bump that moves the `v8` crate
+  fails to build until nixpkgs catches up or we pin `librusty_v8` ourselves
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches latest
   GitHub release and prefetches per-platform binaries
 - `kimchi` — `sources.json` + `mkUpdateScript` records the latest GitHub release

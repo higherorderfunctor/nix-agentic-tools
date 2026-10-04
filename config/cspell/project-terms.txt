@@ -191,6 +191,7 @@ libgit
 libm
 libpthread
 librt
+librusty
 libsecret
 libstdc
 libtinfo

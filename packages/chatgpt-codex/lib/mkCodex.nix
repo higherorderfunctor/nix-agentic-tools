@@ -1228,9 +1228,10 @@ in
         starts the new one.
         `false` releases the selection and restores upstream's copy and
         hourly self-update. That copy is taken from this package, whose
-        executables are dynamically linked against store paths nothing roots
-        from the copy: it breaks after garbage collection until upstream's
-        updater replaces it. Home Manager only.
+        executables and patched voice and zsh resources are dynamically
+        linked against store paths nothing roots from the copy: it breaks
+        after garbage collection until upstream's updater replaces it. Home
+        Manager only.
       '';
     };
 

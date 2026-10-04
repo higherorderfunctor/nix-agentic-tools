@@ -1,14 +1,14 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-04 — the package is a source build, so the
-> opt-out's copy links into store paths nothing keeps alive; the selector's
-> worst case is bounded to fit Home Manager's activation unit, its owned shape
-> comes from `lib/packageLayout.nix`, and its warn-and-continue paths are gated.
-> The daemon's `settings.json` is a read-only copy of `native.daemonSettings`.
-> `pinDaemonToPackage` is declared under `hm.options`, not the shared option
-> set, so devenv genuinely has no such option rather than rejecting it by
-> assertion; with `ai.codex.package = null` it stays silent at its default and
-> warns only if set explicitly.
+> **Last verified:** 2026-10-04 — the package is a source build with patched
+> prebuilt resources, so the opt-out's copy links into store paths nothing keeps
+> alive; the selector's worst case is bounded to fit Home Manager's activation
+> unit, its owned shape comes from `lib/packageLayout.nix`, and its
+> warn-and-continue paths are gated. The daemon's `settings.json` is a read-only
+> copy of `native.daemonSettings`. `pinDaemonToPackage` is declared under
+> `hm.options`, not the shared option set, so devenv genuinely has no such
+> option rather than rejecting it by assertion; with `ai.codex.package = null`
+> it stays silent at its default and warns only if set explicitly.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -48,9 +48,9 @@ never reaches the process that runs every tool call.
   refuses to pin a package whose `passthru.codexPackage.root` differs, since it
   could never release it.
 - **The opt-out.** `false` restores upstream's copy and updater. The copied
-  executables are this source build's, dynamically linked against store paths
-  nothing roots from the copy, so it breaks after GC until the updater replaces
-  it.
+  executables are this source build's, and its voice and zsh resources are
+  patched to the nix glibc; both link against store paths nothing roots from the
+  copy, so it breaks after GC until the updater replaces it.
 - **Auto-start is off** (`features.daemon_auto_start` defaults to false; users
   can opt in). A daemon keeps the environment of whoever started it and serves
   every later client with it. With sessions open across direnv or devenv
