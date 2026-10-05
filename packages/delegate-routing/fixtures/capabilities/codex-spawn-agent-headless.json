@@ -1,8 +1,8 @@
 {
   "capabilities": {
     "available": {
-      "evidence": "MEASURED: native child returned its task name and completed; model/effort arguments were accepted.",
-      "result": "supported"
+      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): child requested gpt-6-luna/medium, resolved values unknown; native child reportedly returned its task name and completed; model-written note, no captured collaboration events; raw events not publishable.",
+      "result": "unknown"
     },
     "linkedWorktreeCommit": {
       "evidence": "No execution or resolved-value evidence was recovered.",
@@ -14,19 +14,19 @@
       "value": null
     },
     "pinsEffort": {
-      "evidence": "Explicit medium accepted; tool return does not attest effective effort.",
+      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): child requested gpt-6-luna/medium, resolved values unknown; native child reportedly returned its task name and completed; model-written note, no captured collaboration events; raw events not publishable.",
       "result": "unknown"
     },
     "pinsModel": {
-      "evidence": "Explicit gpt-6-luna accepted; tool return does not attest the serving backend model.",
+      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): child requested gpt-6-luna/medium, resolved values unknown; native child reportedly returned its task name and completed; model-written note, no captured collaboration events; raw events not publishable.",
       "result": "unknown"
     },
     "runsOwnSubagents": {
-      "evidence": "Contract permits children to spawn, but no grandchildren were launched.",
+      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): child requested gpt-6-luna/medium, resolved values unknown; native child reportedly returned its task name and completed; model-written note, no captured collaboration events; raw events not publishable.",
       "result": "unknown"
     }
   },
-  "context": "Measured inside one codex exec root; fork_turns none. Read-only brief. Exact parent launch/config and permission posture were not retained.",
+  "context": "Historical model-written report only; no captured collaboration events or retained launch/config and permission posture.",
   "date": "2026-10-04",
   "mode": "headless",
   "observed": {
@@ -35,16 +35,14 @@
   },
   "replay": [
     "Run codex --version; recorded output: codex-cli 0.160.0.",
-    "Inside the codex exec root call collaboration.spawn_agent with task_name surface_facts, fork_turns none, model gpt-6-luna, reasoning_effort medium and a bounded read-only message. The original message was omitted from the recorded evidence; reproduce those exact settings with a fresh bounded read-only brief.",
-    "Observe returned {\"task_name\":\"/root/surface_facts\"}; read the child completion artifact and collaboration.list_agents({}) status.",
-    "Recorded during a 2026-10-04 codex exec design run (codex-cli 0.160.0); the raw transcript was not retained in the repository. Replay with probes/README.md."
+    "Inside a codex exec root call collaboration.spawn_agent with fork_turns none, model gpt-6-luna, reasoning_effort medium and a fresh bounded read-only brief; capture the child tool call, terminal completion and resolved worker metadata."
   ],
   "requested": {
-    "effort": "medium",
-    "model": "gpt-6-luna"
+    "effort": null,
+    "model": null
   },
   "runtime": "codex",
   "runtimeVersion": "0.160.0",
-  "source": "native-subagent-probe.md (2026-10-04)",
+  "source": "historical report 2026-10-04, codex-cli 0.160.0; no publishable primary",
   "technique": "spawn_agent"
 }

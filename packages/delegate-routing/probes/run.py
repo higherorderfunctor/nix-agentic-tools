@@ -1,79 +1,61 @@
 #!/usr/bin/env python3
-"""Manual, opt-in CLI probes; fixtures retain metadata, never transcripts."""
+"""Manual, opt-in CLI probes with operator-held authenticated event streams."""
 
 # cspell:ignore strerror  (Python OSError attribute, not project vocabulary)
 import argparse
+from contextlib import ExitStack
 import datetime
 import json
 import os
 from pathlib import Path
 import re
-import selectors
 import shlex
 import signal
 import subprocess
-import time
+import tempfile
 import uuid
 
 
-RUNTIMES = {
-    "claude": ("claude", [], "claude -p", ["--model", "--effort"]),
-    "codex": ("codex", ["exec"], "codex exec", ["--model", "--config"]),
-    "copilot": ("copilot", [], "fleet", ["--fleet", "--model", "--effort"]),
-    "kimchi": ("kimchi", [], "kimchi -p", ["--model", "--thinking"]),
-    "kiro": ("kiro-cli", ["chat"], "kiro-cli chat", ["--model", "--effort"]),
+# Material flags mirror lib/techniques.nix and must change together.
+LAUNCHERS = {
+    "claude": ("claude -p", ["claude", "-p", "--model", "{model}", "--effort", "{effort}", "{prompt}"]),
+    "codex": ("codex exec", ["codex", "exec", "--model", "{model}", "--config", "model_reasoning_effort={effort_json}", "--json", "{prompt}"]),
+    "copilot": ("fleet", ["copilot", "--fleet", "-p", "{prompt}", "--model", "{model}", "--effort", "{effort}"]),
+    "kimchi": ("kimchi -p", ["kimchi", "-p", "--mode", "json", "--no-session", "--model", "{model}", "--thinking", "{effort}", "{prompt}"]),
+    "kiro": ("kiro-cli chat", ["kiro-cli", "chat", "--no-interactive", "--model", "{model}", "--effort", "{effort}", "{prompt}"]),
 }
-LIMIT = 131072
 
 
-def capture(command, timeout):
-    """Drain pipes into capped memory buffers; never persist raw streams."""
-    try:
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-    except OSError:
-        return None, "", "", "executable could not be started"
-    buffers = [bytearray(), bytearray()]
-    deadline = time.monotonic() + timeout
-    status = "finished"
-    truncated = False
-    with selectors.DefaultSelector() as selector:
-        for index, stream in enumerate((process.stdout, process.stderr)):
-            selector.register(stream, selectors.EVENT_READ, index)
-        while selector.get_map():
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                status = "timed out; process group killed"
-                break
-            for key, _ in selector.select(min(remaining, 0.1)):
-                chunk = os.read(key.fileobj.fileno(), 8192)
-                if not chunk:
-                    selector.unregister(key.fileobj)
-                    continue
-                buffer = buffers[key.data]
-                room = LIMIT - len(buffer)
-                buffer.extend(chunk[:room])
-                truncated = truncated or len(chunk) > room
-    for stream in (process.stdout, process.stderr):
-        stream.close()
-    try:
-        process.wait(timeout=max(0.1, deadline - time.monotonic()))
-    except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
-        process.wait()
-        status = "timed out; process group killed"
-    if truncated:
-        status += "; stream inspection truncated"
-    return process.returncode, *(buffer.decode("utf-8", errors="replace") for buffer in buffers), status
+def capture(command, timeout, event_paths=None):
+    """Retain authenticated streams; use temporary files for version/help."""
+    with ExitStack() as stack:
+        streams = [
+            stack.enter_context(path.open("x+b") if path else tempfile.TemporaryFile())
+            for path in (event_paths or (None, None))
+        ]
+        try:
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=streams[0],
+                stderr=streams[1],
+                start_new_session=True,
+            )
+        except OSError:
+            return None, "", "", "executable could not be started"
+        status = "finished"
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
+            status = "timed out; process group killed"
+        for stream in streams:
+            stream.seek(0)
+        return process.returncode, *(stream.read().decode("utf-8", errors="replace") for stream in streams), status
 
 
 def exposes(help_text, flag):
@@ -86,21 +68,9 @@ def checked_text(value):
     return value
 
 
-def authenticated_command(runtime, executable, model, effort, prompt):
-    if runtime == "codex":
-        return [executable, "exec", "--model", model, "--config", f"model_reasoning_effort={json.dumps(effort)}", prompt]
-    if runtime == "kimchi":
-        return [executable, "-p", "--model", model, "--thinking", effort, prompt]
-    if runtime == "kiro":
-        return [executable, "chat", "--no-interactive", "--model", model, "--effort", effort, prompt]
-    if runtime == "copilot":
-        return [executable, "--fleet", "-p", prompt, "--model", model, "--effort", effort]
-    return [executable, "-p", "--model", model, "--effort", effort, prompt]
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runtime", choices=sorted(RUNTIMES), required=True)
+    parser.add_argument("--runtime", choices=sorted(LAUNCHERS), required=True)
     parser.add_argument("--output", type=Path, required=True, help="new fixture path; existing files are refused")
     parser.add_argument("--case", choices=["schema", "child", "nested", "workflow"], default="schema")
     parser.add_argument("--authenticated", action="store_true", help="explicitly permit a model turn for non-schema cases")
@@ -118,26 +88,24 @@ def main():
     if args.technique and args.case != "child":
         parser.error("--technique is only valid for --case child")
 
-    executable, subcommand, launcher, flags = RUNTIMES[args.runtime]
+    launcher, template = LAUNCHERS[args.runtime]
+    executable = template[0]
+    first_flag = next(index for index, token in enumerate(template) if token.startswith("-"))
+    help_command = template[:first_flag] + ["--help"]
+    required = [token for token in template if token.startswith("-")]
     replay = []
-    cwd = os.getcwd()
 
-    def run(command):
-        replay.append(f"cd {shlex.quote(cwd)} && {shlex.join(command)}")
-        return capture(command, args.timeout)
+    def run(command, event_paths=None):
+        replay.append(shlex.join(command))
+        return capture(command, args.timeout, event_paths)
 
     version_code, version_stdout, version_stderr, version_status = run([executable, "--version"])
     version_match = re.search(r"\b\d+\.\d+\.\d+(?:[-+][\w.-]+)?\b", version_stdout + version_stderr)
     version = version_match.group(0) if version_code == 0 and version_match else None
     help_code, help_stdout, help_stderr, help_status = run([executable, "--help"])
-    if subcommand:
-        help_code, help_stdout, help_stderr, help_status = run([executable, *subcommand, "--help"])
+    if help_command != [executable, "--help"]:
+        help_code, help_stdout, help_stderr, help_status = run(help_command)
     help_text = help_stdout + help_stderr
-    required = list(flags)
-    if args.runtime in ("claude", "copilot", "kimchi"):
-        required.append("-p")
-    if args.runtime == "kiro":
-        required.append("--no-interactive")
     exposed = [flag for flag in required if exposes(help_text, flag)]
     schema_available = help_code == 0 and help_status == "finished" and len(exposed) == len(required)
     evidence = (
@@ -146,7 +114,7 @@ def main():
     )
     result = "unknown"
     technique = args.technique or launcher
-    context = f"Manual {args.case} probe from {cwd}; no trust or permission bypass flags."
+    context = f"Manual {args.case} probe; no trust or permission bypass flags."
     if args.case != "schema":
         nonce = "delegate-probe-" + uuid.uuid4().hex
         request = {
@@ -169,9 +137,13 @@ def main():
             "Do not substitute prose or simulated execution for a tool call."
         )
         if schema_available:
-            code, stdout, stderr, status = run(authenticated_command(args.runtime, executable, args.model, args.effort, prompt))
+            values = {"model": args.model, "effort": args.effort, "effort_json": json.dumps(args.effort), "prompt": prompt}
+            command = [token.format(**values) for token in template]
+            event_paths = [Path(str(args.output) + suffix) for suffix in (".events.stdout", ".events.stderr")]
+            context += " Event streams: " + ", ".join(path.name for path in event_paths) + " (operator-held, not for commit)."
+            code, stdout, stderr, status = run(command, event_paths)
             evidence += (
-                f" Authenticated launcher exit={code}, {status}; nonce present in bounded "
+                f" Authenticated launcher exit={code}, {status}; nonce present in "
                 f"stdout={nonce in stdout}, stderr={nonce in stderr}. "
                 "Exit status and nonce do not establish child completion, effective pins, or nested tool execution."
             )
@@ -200,7 +172,7 @@ def main():
         "requested": {"effort": args.effort, "model": args.model},
         "runtime": args.runtime,
         "runtimeVersion": version,
-        "source": "Manual opt-in runner; only return codes, exact help flag exposure and bounded nonce presence retained; raw streams discarded.",
+        "source": "Manual opt-in runner: replay commands regenerate version/help output; authenticated stdout/stderr retained as operator-held event streams, not for commit.",
         "technique": technique,
     }
     try:
