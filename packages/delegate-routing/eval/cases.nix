@@ -199,7 +199,7 @@
         inherit (node) kind modes pinsEffort pinsModel;
       }) (lib.filterAttrs (_: node: node.enable && builtins.elem node.kind ["external" "subagent" "workflow"]) program.runtimes.${target}.techniques))
     relevant;
-    rule = evaluated.config.ai.${runtime}.rules.delegate-routing-router;
+    alwaysOn = evaluated.config.ai.${runtime}.extraSystemPrompt.delegate-routing;
   in {
     inherit id usage usageVariants;
     configVariant =
@@ -226,7 +226,7 @@
     };
     rendered = {
       skill = builtins.readFile "${evaluated.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
-      rules = rule.text;
+      rules = alwaysOn.text;
     };
     expected =
       {

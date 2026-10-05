@@ -12,8 +12,7 @@
 # wikilink graph resolves by name.
 #
 # ── Why a hook and not an instruction ───────────────────────────────────────────
-# Same argument delegationClampMitigation.nix's header makes for a different surface: a
-# standing instruction lands once, near the top, and loses position to everything
+# A standing instruction lands once, near the top, and loses position to everything
 # said since. What decays is ATTENTION, not content. A hook fires at the point of
 # action, which is the only place this check is worth anything — the model has to be
 # holding the concept it is about to write.
@@ -34,8 +33,7 @@
 #      Deny the first write to each memory file per session, with the listing as the
 #      denial reason, then allow the retry. Costs one extra round trip per distinct
 #      file and needs marker state to terminate. Chosen because the failure it
-#      prevents is silent and permanent while the cost is one retry, and because
-#      delegationClampMitigation.nix already proves the session-keyed marker shape works here.
+#      prevents is silent and permanent while the cost is one retry.
 #
 # `permissionDecisionReason` was picked over `additionalContext` as the CHANNEL for
 # a second reason worth keeping: on a deny, the reason is documented to be fed back
