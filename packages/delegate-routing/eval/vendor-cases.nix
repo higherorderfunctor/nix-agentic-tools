@@ -17,6 +17,13 @@
       {config = switches;}
     ];
     failures = map (item: item.message) (lib.filter (item: !item.assertion) evaluated.config.assertions);
+    program = evaluated.config.ai.programs.delegate-routing;
+    reminderEnabled = let
+      local = program.runtimes.${runtime}.reminder.enable;
+    in
+      if local == null
+      then program.reminder.enable
+      else local;
     selected = lib.filterAttrs (path: _:
       path
       == "AGENTS.md"
@@ -55,15 +62,17 @@
         then ["vendor system prompt including heron_brook; presence and text UNKNOWN"]
         else ["vendor system prompt including workflows_default; activation and text UNKNOWN"];
       hookContext =
-        if runtime == "claude"
-        then {
-          delegationClampMitigation = {
-            enabled = evaluated.config.ai.claude.delegationClampMitigation.enable;
-            text = evaluated.config.ai.claude.delegationClampMitigation.text;
+        {
+          reminder = {
+            enabled = reminderEnabled;
+            inherit (program.reminder) text;
           };
-          ultracodeOnLaunch = evaluated.config.ai.claude.ultracodeOnLaunch;
         }
-        else {};
+        // lib.optionalAttrs (runtime == "claude") {
+          inherit (evaluated.config.ai.claude) ultracodeOnLaunch;
+        };
+      # Always-on entries reach the runtime's system prompt, not a file.
+      systemPrompt = (evaluated.config.ai.${runtime}.extraSystemPrompt.delegate-routing or {text = null;}).text;
       usage = {
         claude = {
           remainingPercent =
@@ -93,9 +102,9 @@ in
   map (on:
     mkCase {
       expected = "delegate";
-      id = "claude-clamp-${label on}";
+      id = "claude-reminder-${label on}";
       runtime = "claude";
-      switches.ai.claude.delegationClampMitigation.enable = lib.mkForce on;
+      switches.ai.programs.delegate-routing.runtimes.claude.reminder.enable = lib.mkForce on;
       task = single;
     })
   variants
@@ -115,21 +124,23 @@ in
       task = dependent;
     })
   variants
-  ++ map (dependentTask:
-    mkCase {
-      expected =
-        if dependentTask
-        then "workflow"
-        else "one-delegate";
-      id = "kiro-${
-        if dependentTask
-        then "dependent"
-        else "single"
-      }";
-      runtime = "kiro";
-      switches = {};
-      task =
-        if dependentTask
-        then dependent
-        else single;
-    }) [false true]
+  ++ lib.concatMap (dependentTask:
+    map (on:
+      mkCase {
+        expected =
+          if dependentTask
+          then "workflow"
+          else "one-delegate";
+        id = "kiro-${
+          if dependentTask
+          then "dependent"
+          else "single"
+        }-reminder-${label on}";
+        runtime = "kiro";
+        switches.ai.programs.delegate-routing.runtimes.kiro.reminder.enable = lib.mkForce on;
+        task =
+          if dependentTask
+          then dependent
+          else single;
+      })
+    variants) [false true]

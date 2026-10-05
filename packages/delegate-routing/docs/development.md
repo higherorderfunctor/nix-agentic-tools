@@ -1,14 +1,14 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-05 — capability observations cite publishable
-> evidence; the manual evaluation suite renders delivered policy through the
-> module harness, the vendor set covers Claude switch pairs and one Kiro case
-> per task shape, and model turns stay outside structural checks.
+> **Last verified:** 2026-10-05 — always-on entries reach each runtime's system
+> prompt through `ai.<runtime>.extraSystemPrompt.delegate-routing` instead of
+> `ai.rules`, and a per-turn `UserPromptSubmit` reminder replaces Claude's
+> `delegationClampMitigation`.
 
-`ai.programs.delegate-routing` exposes portable `families`, `routing` and
-`workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
-Kimchi and Kiro. Both Home Manager and devenv import `modules/common.nix` and
-expose the same surface.
+`ai.programs.delegate-routing` exposes portable `families`, `routing`,
+`workflows` and `reminder`. Runtime controls live under `runtimes.<runtime>` for
+Claude, Codex, Kimchi and Kiro. Both Home Manager and devenv import
+`modules/common.nix` and expose the same surface.
 
 ## Named guidance
 
@@ -27,12 +27,14 @@ reorder a step by key. Both workflows read shared Rubric and Loop sources. Each
 runs the worker and review inside a loop of at most 3 rounds. A workflow can
 have introductory text or only steps; an enabled step needs content.
 
-Entries with `always = true` render through the existing per-runtime `ai.rules`
-fan-out. Other entries render in the generated skill. A workflow's `always`
-selects the destination for its header and numbered steps together; steps retain
-their order within that workflow. The always-on stub tells the agent to load the
-skill before delegation. When the always-on render is empty, no router rule is
-emitted. Keep model tables and harness details in the skill.
+Entries with `always = true` render into one `# Delegate routing` block that
+`router.nix` returns and the common module writes to
+`ai.<runtime>.extraSystemPrompt.delegate-routing`. Other entries render in the
+generated skill. A workflow's `always` selects the destination for its header
+and numbered steps together; steps retain their order within that workflow. The
+always-on stub tells the agent to load the skill before delegation. When the
+always-on render is empty, no entry is written. Keep model tables and harness
+details in the skill.
 
 Within one scope, named submodules merge by key and package fields use
 `mkDefault`. An ordinary consumer definition overrides a shipped field while
@@ -162,9 +164,11 @@ identity. No refresh daemon or implicit account query exists.
 
 The common module imports `mkSkillPackageModule` once for the supported
 runtimes. Per-runtime program enable inherits portable enable through the
-factory's null-as-inherit rule. Skills and router rules contribute to
-per-runtime pools, never the portable pools. Runtime-only controls are not
-declared at portable scope. Copilot is excluded from this program.
+factory's null-as-inherit rule. The skill, the always-on system-prompt entry and
+the reminder hook contribute to per-runtime pools, never the portable pools;
+each write is gated on that runtime's option existing in the evaluation.
+Runtime-only controls are not declared at portable scope. Copilot is excluded
+from this program.
 
 The Kimchi skill lands in devenv `.kimchi/skills` or Home Manager
 `harness/skills`. Project skills take precedence over config paths and harness
@@ -172,12 +176,17 @@ skills. Both project-scoped roots load only when Kimchi trusts the project. A
 trusted project's `.claude/skills/delegate-routing` can override the Home
 Manager harness copy through default config paths.
 
-The always-on routing rule uses the existing native Claude rules and AGENTS.md
-delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
-its user harness AGENTS.md. Byte-identical contributions deduplicate. The
-content package injects packaged usage helper paths into technique defaults. The
-Claude helper carries curl and jq; the Codex helper carries timeout, jq and
-Python, while the consumer supplies the Codex CLI.
+Every supported runtime has `extraSystemPrompt` delivery, so always-on entries
+no longer use `ai.rules`. Claude gets them through its launcher's
+`--append-system-prompt-file`, Codex through `developer_instructions`, Kimchi
+through the harness `APPEND_SYSTEM.md` and Kiro in the prompt of every typed
+agent. Two gaps follow from those channels. Kiro's built-in default agent and
+raw agent files receive nothing. Claude's and Kimchi's subagents do not receive
+the main session's appended prompt. The entry is written at `mkDefault`, so
+`ai.<runtime>.extraSystemPrompt.delegate-routing.enable = false` withholds it
+from one runtime. The content package injects packaged usage helper paths into
+technique defaults. The Claude helper carries curl and jq; the Codex helper
+carries timeout, jq and Python, while the consumer supplies the Codex CLI.
 
 `mkSkill`, `render` and `skills` consume the same family, selector, technique
 and named-entry inputs. Generated skill trees use `lib.ai.generated` and the
@@ -193,15 +202,35 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
 
+## Reminder
+
+`reminder` is an `enable` plus `text` or `source` record, enabled by default
+with the one-line text in `lib/reminder.nix`. A `UserPromptSubmit` command hook
+prints it on every turn. Claude, Codex and Kimchi read it as
+`hookSpecificOutput.additionalContext` JSON; Kiro takes plain stdout. Each
+payload is serialized at eval time into a store file that a strict-mode
+`writeShellApplication` prints, so every hook command is a bare store path.
+
+Delivery is per backend. Home Manager writes Claude, Codex and Kiro; devenv adds
+Kimchi's `.kimchi/hooks.json`, since Kimchi has no user-scope hook file.
+`runtimes.<runtime>.reminder.enable` overrides the portable `enable` for one
+runtime, and null inherits it. A disabled program on a runtime writes no hook.
+
+The text stays first-person and user-attributed on purpose. It also answers
+Claude Code's `heron_brook` delegation clamp, which a system-attributed channel
+was measured not to do; `packages/claude-code/docs/heron-brook-clamp.md` holds
+that evidence and the wording rules. It fires every turn, so there is no
+`PreCompact` re-arm, and it is cumulative context: one line per turn.
+
 ## Planning regression suite
 
 `eval/` contains a manual routing simulation: named Nix cases render the actual
-delivered skill and router rule through the existing module harness. Fictional
-inventories, capabilities and executed usage mocks provide the observations;
-independent expected tuples stay out of prompts. Pool cases consume this
-worktree's house rule sources. Child-support observations are synthetic test
-configuration, not measurements of real runtimes. Missing-usage fallback remains
-a partial expectation until its policy is decided.
+delivered skill and always-on system-prompt text through the existing module
+harness. Fictional inventories, capabilities and executed usage mocks provide
+the observations; independent expected tuples stay out of prompts. Pool cases
+consume this worktree's house rule sources. Child-support observations are
+synthetic test configuration, not measurements of real runtimes. Missing-usage
+fallback remains a partial expectation until its policy is decided.
 
 `eval/run.py` renders without authentication and grades strict saved JSON plans
 against `eval/plan.schema.json`; `eval/rubric.md` owns prose criteria and
@@ -218,11 +247,11 @@ process. Existing module checks own Home Manager/devenv delivery parity; the
 manual suite owns behavioral evidence. See `eval/README.md` for replay commands.
 
 The separate `eval/vendor-cases.nix` set evaluates `dev/ai.nix` through the
-devenv module harness and exports the actual delivered files for each Claude
-experimental switch and Kiro task shape. `run.py --set vendor --render-only`
-materializes those files and a tool-denial overlay, retaining vendor system
-steering for manually authorized live capture. Configured hook content and
-observed sources are distinguished from hidden vendor text, which stays UNKNOWN.
-The vendor structural check renders every variant without starting a runtime.
-See the evaluation guide for safety preflight requirements, provenance, paired
+devenv module harness and exports the actual delivered files for each
+experimental switch. `run.py --set vendor --render-only` materializes those
+files and a tool-denial overlay, retaining vendor system steering for manually
+authorized live capture. Configured hook content and observed sources are
+distinguished from hidden vendor text, which stays UNKNOWN. The vendor
+structural check renders every variant without starting a runtime. See the
+evaluation guide for safety preflight requirements, provenance, paired
 comparisons and paid-turn counts.
