@@ -1,7 +1,7 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-09-26 — an unreadable predecessor receipt fails the
-> hold-back escalation instead of counting as a first offense.
+> **Last verified:** 2026-10-04 — discovery selects the absolute root
+> `.#.updateTargets` with IFD disabled, before any package workers run.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -17,10 +17,16 @@
 
 `update.yml` runs four times daily and supports `workflow_dispatch`. Discovery
 pins one `main` SHA, reads root inputs from `flake.lock`, and evaluates the
-owner registry's `.#updateTargets`. Every input and package becomes one Linux
-matrix worker, with eight concurrent workers and `fail-fast: false`. The Ninja
-DAG remains the local update entrypoint; its ordering edges do not transfer
-changes between isolated branches, so CI workers need no cross-target edges.
+owner registry's `.#.updateTargets`. The leading dot makes the attribute path
+absolute: Nix skips its package namespace lookup, whose unfree filtering can
+force source-derived versions through `meta.position` and `checkedBy`. Keep
+`allow-import-from-derivation = false` on discovery.
+`checks.update-discovery-ifd-free` runs the actual workflow step against the
+real registry with deliberately cold IFD package namespaces, and verifies the
+resulting matrix. Every input and package becomes one Linux matrix worker, with
+eight concurrent workers and `fail-fast: false`. The Ninja DAG remains the local
+update entrypoint; its ordering edges do not transfer changes between isolated
+branches, so CI workers need no cross-target edges.
 
 Each worker runs the existing `update-input.sh` or `update-pkg.sh` in an
 ephemeral worktree and publishes its own `update/<name>` branch. A slow or

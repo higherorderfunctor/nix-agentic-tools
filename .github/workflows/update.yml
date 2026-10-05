@@ -66,7 +66,7 @@ jobs:
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-          nix eval --json --option allow-import-from-derivation false .#updateTargets > "$RUNNER_TEMP/targets.json"
+          nix eval --json --option allow-import-from-derivation false .#.updateTargets > "$RUNNER_TEMP/targets.json"
           python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" discover
   update:
     needs: discover

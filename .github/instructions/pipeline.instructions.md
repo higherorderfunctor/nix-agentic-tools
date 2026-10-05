@@ -7,8 +7,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-09-26 — an unreadable predecessor receipt fails the
-> hold-back escalation instead of counting as a first offense.
+> **Last verified:** 2026-10-04 — discovery selects the absolute root
+> `.#.updateTargets` with IFD disabled, before any package workers run.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -24,10 +24,16 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 `update.yml` runs four times daily and supports `workflow_dispatch`. Discovery
 pins one `main` SHA, reads root inputs from `flake.lock`, and evaluates the
-owner registry's `.#updateTargets`. Every input and package becomes one Linux
-matrix worker, with eight concurrent workers and `fail-fast: false`. The Ninja
-DAG remains the local update entrypoint; its ordering edges do not transfer
-changes between isolated branches, so CI workers need no cross-target edges.
+owner registry's `.#.updateTargets`. The leading dot makes the attribute path
+absolute: Nix skips its package namespace lookup, whose unfree filtering can
+force source-derived versions through `meta.position` and `checkedBy`. Keep
+`allow-import-from-derivation = false` on discovery.
+`checks.update-discovery-ifd-free` runs the actual workflow step against the
+real registry with deliberately cold IFD package namespaces, and verifies the
+resulting matrix. Every input and package becomes one Linux matrix worker, with
+eight concurrent workers and `fail-fast: false`. The Ninja DAG remains the local
+update entrypoint; its ordering edges do not transfer changes between isolated
+branches, so CI workers need no cross-target edges.
 
 Each worker runs the existing `update-input.sh` or `update-pkg.sh` in an
 ephemeral worktree and publishes its own `update/<name>` branch. A slow or
@@ -549,15 +555,16 @@ are ignored.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-03 — every pipeline read of a package by name goes
-> through `ciPackages` (`nat_attr`, `ciAttr`); rev bumps prefetch with the
-> package's own fetcher mode (archive or fetchgit, read from the evaluated
-> `src`); rev-tracked Go packages refresh recipe-owned floor literals before
-> nix-update; both update paths regenerate committed sidecars through
-> `passthru.regenerateExtracted`: an input bump for every package that input
-> owns, a package target (rev bump or nix-update) for the package itself; the
-> hardcoded Semble block is gone. `--use-update-script` rows must resolve
-> `updateScript` to an executable file, gated by
+> **Last verified:** 2026-10-04 — root metadata reads use absolute
+> `.#.updateTargets` paths to avoid package namespace lookup; every pipeline
+> read of a package by name goes through `ciPackages` (`nat_attr`, `ciAttr`);
+> rev bumps prefetch with the package's own fetcher mode (archive or fetchgit,
+> read from the evaluated `src`); rev-tracked Go packages refresh recipe-owned
+> floor literals before nix-update; both update paths regenerate committed
+> sidecars through `passthru.regenerateExtracted`: an input bump for every
+> package that input owns, a package target (rev bump or nix-update) for the
+> package itself; the hardcoded Semble block is gone. `--use-update-script` rows
+> must resolve `updateScript` to an executable file, gated by
 > `checks.update-script-executable`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
@@ -600,7 +607,7 @@ skipping repair solely for code 4 can strand a repairable update. Setup failure
 
 The local pipeline uses the Ninja DAG. A nix expression
 (`config/generate-update-ninja.nix`) reads `flake.lock` and
-`config.update.targets` (the `.#updateTargets` flake output) to emit
+`config.update.targets` (the `.#.updateTargets` flake output) to emit
 `.update.ninja` with dependency edges (e.g., agnix and git-absorb depend on
 `rust-overlay` input being updated first, via their `dependsOn`).
 `update-init.sh` runs once as the root target to clean stale state (abort stuck
@@ -689,7 +696,7 @@ receives the repo URL as a trailing argument:
 1. `git ls-remote <url> HEAD` fetches the latest commit SHA.
 2. The recipe file to bump comes from the package's declared
    `config.update.targets.<name>.file`, read via
-   `nix eval --raw .#updateTargets.<name>.file`. Every main-tracking package
+   `nix eval --raw .#.updateTargets.<name>.file`. Every main-tracking package
    declares one, so this is the live path; `resolve_recipe_file`
    (`dev/scripts/resolve-recipe-file.sh`) is a retained safety-net fallback that
    searches owner package trees for the single `.nix` recipe pinning this
@@ -770,9 +777,9 @@ registry every package contributes a row to. It replaced the flat, top-level
   row is listed, not silently skipped). Multiple roles sharing a source have one
   update target; Python source slices can declare `passthru.updateSource` so
   completeness follows their common pin. Derive counts from
-  `nix eval --json .#updateTargets`; the sweep also includes root input targets,
-  so that count is not the sweep's PR ceiling.
-- **`.#updateTargets`** — selected from `lib/facets/repository.nix`'s native
+  `nix eval --json .#.updateTargets`; the sweep also includes root input
+  targets, so that count is not the sweep's PR ceiling.
+- **`.#.updateTargets`** — selected from `lib/facets/repository.nix`'s native
   module evaluation. It merges discovered owner registries with workspace policy
   ; ownership validation rejects competing package keys before priorities can
   hide them. `excludePatterns` remains available to the completeness check
@@ -780,9 +787,9 @@ registry every package contributes a row to. It replaced the flat, top-level
 - **Consumers** — `update-matrix.py` reads `updateTargets` for the CI matrix.
   `config/generate-update-ninja.nix` reads the same registry for the ninja DAG
   (flags space-joined, git, and `dependsOn` → `update-<dep>` edges);
-  `update-pkg.sh` reads `.#updateTargets.<name>.file` for the rev-bump target.
+  `update-pkg.sh` reads `.#.updateTargets.<name>.file` for the rev-bump target.
 - **`checks/packaging/update-targets-parity.nix`** — the permanent bidirectional
-  CI gate (and sole update-target check; the former
+  CI gate for target completeness and recipe resolution (the former
   `overlay-target-resolution.nix` folded into it). Packages → targets: every
   versioned flake package must have a same-name row, share a derivation, source,
   or update script with a targeted package, declare an existing flake input

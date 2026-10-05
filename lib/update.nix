@@ -9,7 +9,7 @@
 # Owner registry.nix files and workspace exclusion policy in
 # config/update-targets.nix merge through lib/facets/registry.nix. Native module
 # types realize the values; ownership validation rejects competing owners
-# before priority can hide a definition. The pipeline reads .#updateTargets.
+# before priority can hide a definition. The pipeline reads .#.updateTargets.
 #
 # The sibling lib/fragments-registry.nix uses the same option-submodule style.
 # See docs/repository-layout.md for the settled package/workspace boundary.

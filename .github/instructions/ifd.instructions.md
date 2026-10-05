@@ -7,12 +7,13 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-04 — the warm step evaluates `ciPackages`, the
-> unfree-enabled, unchecked set CI builds; git-branchless joins the
-> source-measured sidecars. `fix_sidecar_hashes` also re-derives `pnpmDepsHash`,
-> but only when the stale output is not substitutable; kimchi versions its
-> pnpm-deps and src FOD names; Kiro settings extraction validates its
-> materialized TUI registry and workspace merge with AST checks; Kimchi
+> **Last verified:** 2026-10-04 — update discovery uses absolute root
+> `.#.updateTargets` selection and keeps IFD disabled; the warm step evaluates
+> `ciPackages`, the unfree-enabled, unchecked set CI builds; git-branchless
+> joins the source-measured sidecars. `fix_sidecar_hashes` also re-derives
+> `pnpmDepsHash`, but only when the stale output is not substitutable; kimchi
+> versions its pnpm-deps and src FOD names; Kiro settings extraction validates
+> its materialized TUI registry and workspace merge with AST checks; Kimchi
 > attributes every config.ts JSON read to the file it reads, censuses every
 > resolved environment read, and no longer extracts a CLI surface nothing read.
 > pnpm_12 inherits nixpkgs' source-built Rust package and nodejs-slim passthru,
@@ -74,6 +75,18 @@ Key properties of IFD in nix:
   are not affected by it.
 - **`--allow-import-from-derivation true` is required** on nix commands when
   `restrict-eval` or sandbox settings would otherwise block IFD.
+
+### Metadata discovery before warming
+
+Use an absolute flake attribute path for root metadata:
+`nix eval --json --option allow-import-from-derivation false .#.updateTargets`.
+The leading dot bypasses Nix's package namespace lookup. Without it, Nix first
+searches `packages.<system>` and `legacyPackages.<system>`; public package
+filtering reads `meta.unfree`, and nixpkgs' computed `meta.position` or the
+receiver's `checkedBy` probe can force an IFD-backed version. The owner registry
+itself needs no package values. Discovery must work before any source warming or
+update worker starts. `checks.update-discovery-ifd-free` verifies this with cold
+package namespaces and the actual workflow command.
 
 ### CI warm step
 
