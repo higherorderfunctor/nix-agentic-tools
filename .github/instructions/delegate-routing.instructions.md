@@ -7,9 +7,9 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — capability observations join technique
-> declarations by runtime, technique and mode; external sections expose native
-> children, and authenticated probes remain manual.
+> **Last verified:** 2026-10-04 — named routing and workflow entries compose by
+> runtime under `runtimes`; the manual evaluation suite renders delivered policy
+> through the module harness and keeps model turns outside structural checks.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -106,54 +106,19 @@ use that runtime's spelling. Claude's interactive tools take aliases such as
 `opus`.
 
 `runtimes.<runtime>.techniques` is a keyed set of workflow, subagent, external,
-introspect and usage nodes. Delegate nodes declare model and effort input
-controls and usual modes. These declarations are separate from observations; use
-only tools present in the current session and external commands on PATH.
-Introspection and usage nodes describe how to obtain live evidence. Usage
-commands remain part of the existing technique catalog. Each package field uses
-`mkDefault`; consumers can override fields, add nodes or disable a node.
+introspect and usage nodes. Delegate nodes describe model and effort pinning,
+and mode availability. Modes describe usual availability, not session-mode
+detection; use only tools present in the current session and external commands
+on PATH. Introspection and usage nodes describe how to obtain live evidence.
+Usage commands remain part of the existing technique catalog. Each package field
+uses `mkDefault`; consumers can override fields, add nodes or disable a node.
 
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
 command without a model tool; `dev/ai.nix` enables its interactive resource
-separately. External and manual runtime sections include native child tools
-marked as callable inside the external root, alongside external, introspect and
-usage nodes. Kimchi has no usage node because no command reads usage without a
-model turn. Shared table rendering escapes cells once.
-
-## Capability evidence
-
-`lib/techniques.nix` owns declarations. `fixtures/capabilities/*.json` owns
-observations; `lib/capabilities.nix` validates and joins them by runtime,
-technique and mode. One record per identity prevents ambiguous selection. Each
-record retains runtime version (null only when historical evidence lacks it),
-date, context, source, replay steps, requested and observed controls, and six
-capability records. Results are supported, unsupported or unknown; nesting depth
-also carries a nullable number. Evidence notes distinguish execution,
-source/help declarations and historical reports. Accepted arguments are not
-evidence of effective backend pins. Linked-worktree commits remain a separate
-capability.
-
-The renderer shows all three modes, the "Runs own subagents" column and
-effective pin results. Missing observations render unknown. A custom technique
-without an observation renders "declared, not observed"; a recorded custom
-identity joins normally. Changes to a shipped command, kind, modes or pin
-controls cannot borrow its old evidence. Notes and enable changes do not change
-the launch contract. Observation details retain provenance and replay steps;
-version and context bound the result and do not attest a different installation.
-
-An external root owning children differs from a native child delegating again.
-External sections assess root ownership from native tool availability and retain
-the separate child nesting observations. Source restrictions can establish an
-unsupported nesting path; source registration alone does not prove successful
-execution. Copilot evidence is recorded without adding a fifth program runtime.
-
-`checks/capabilities.nix` validates the recorded schema and rendering without
-authentication. `probes/run.py` is an explicit local runner, never a CI step or
-an evaluation side effect. See `probes/README.md` for automated headless and
-HITL cases. The runner creates a new observation file; an operator must review
-its evidence before replacing an existing identity. No refresh daemon or
-implicit account query exists.
+separately. External and manual runtime sections include external, introspect
+and usage nodes. Kimchi has no usage node because no command reads usage without
+a model turn. Shared table rendering escapes cells once.
 
 ## Delivery and previews
 
@@ -189,3 +154,27 @@ nix eval --raw .#delegate-routing-content.skills.codex.text
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
+
+## Planning regression suite
+
+`eval/` contains a manual routing simulation: named Nix cases render the actual
+delivered skill and router rule through the existing module harness. Fictional
+inventories, capabilities and executed usage mocks provide the observations;
+independent expected tuples stay out of prompts. Pool cases consume this
+worktree's house rule sources. Child-support observations are synthetic test
+configuration, not measurements of real runtimes. Missing-usage fallback remains
+a partial expectation until its policy is decided.
+
+`eval/run.py` renders without authentication and grades strict saved JSON plans
+against `eval/plan.schema.json`; `eval/rubric.md` owns prose criteria and
+separate calibration samples. Runtime adapters stay disabled until verified
+tool/context suppression and terminal capture establish safe planning mode.
+Outputs default outside checkouts. Pending prose and policy decisions remain
+separate from exact scores, with infrastructure failures retained in end-to-end
+rates.
+
+The owner check `delegate-routing-eval-structure` evaluates and renders all
+cases, validates the schema, and checks expected field references. Its `cases`
+passthru is the runner's fixture export boundary. It never starts a model
+process. Existing module checks own Home Manager/devenv delivery parity; the
+manual suite owns behavioral evidence. See `eval/README.md` for replay commands.
