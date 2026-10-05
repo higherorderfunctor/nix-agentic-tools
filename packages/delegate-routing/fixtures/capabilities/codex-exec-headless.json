@@ -1,48 +1,47 @@
 {
   "capabilities": {
     "available": {
-      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): root requested gpt-6-astra/high, resolved values unknown; root reportedly called spawn_agent and read completed child artifacts; model-written note, no captured collaboration events; raw events not publishable.",
-      "result": "unknown"
+      "evidence": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md (P8): command_execution completed with exit_code 0, commit d7fca96 created probe.txt; independent branch log confirms the commit.",
+      "result": "supported"
     },
     "linkedWorktreeCommit": {
-      "evidence": "No execution or resolved-value evidence was recovered.",
-      "result": "unknown"
+      "evidence": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md (P8): command_execution completed with exit_code 0, commit d7fca96 created probe.txt; independent branch log confirms the commit.",
+      "result": "supported"
     },
     "nestingDepth": {
-      "evidence": "Maximum native nesting depth was not exercised.",
+      "evidence": "Not exercised in this capture.",
       "result": "unknown",
       "value": null
     },
     "pinsEffort": {
-      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): root requested gpt-6-astra/high, resolved values unknown; root reportedly called spawn_agent and read completed child artifacts; model-written note, no captured collaboration events; raw events not publishable.",
+      "evidence": "Historical report (2026-10-04): raw events not publishable; 2026-10-05 P4b captures only empty wait events and parent nonce text, without child completion or resolved controls; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
       "result": "unknown"
     },
     "pinsModel": {
-      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): root requested gpt-6-astra/high, resolved values unknown; root reportedly called spawn_agent and read completed child artifacts; model-written note, no captured collaboration events; raw events not publishable.",
+      "evidence": "Historical report (2026-10-04): raw events not publishable; 2026-10-05 P4b captures only empty wait events and parent nonce text, without child completion or resolved controls; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
       "result": "unknown"
     },
     "runsOwnSubagents": {
-      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): root requested gpt-6-astra/high, resolved values unknown; root reportedly called spawn_agent and read completed child artifacts; model-written note, no captured collaboration events; raw events not publishable.",
+      "evidence": "Historical report (2026-10-04): raw events not publishable; 2026-10-05 P4b captures only empty wait events and parent nonce text, without child completion or resolved controls; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
       "result": "unknown"
     }
   },
-  "context": "Historical model-written report only; no captured collaboration events or retained launch/config and permission posture.",
-  "date": "2026-10-04",
+  "context": "P8: external root launched from the project checkout, targeting a pre-created throwaway linked worktree; no trust or permission bypass flags. P4b separately requested gpt-6-luna/medium.",
+  "date": "2026-10-05",
   "mode": "headless",
   "observed": {
     "effort": null,
     "model": null
   },
   "replay": [
-    "Run codex --version; recorded output: codex-cli 0.160.0.",
-    "Inside a codex exec root call collaboration.spawn_agent with fork_turns none, model gpt-6-luna, reasoning_effort medium and a fresh bounded read-only brief; capture the child tool call, terminal completion and resolved worker metadata."
+    "Launch codex exec --model gpt-6-luna --config 'model_reasoning_effort=\"low\"' --json with a brief to write probe.txt and commit it in a pre-created throwaway linked worktree; retain command events and independently inspect the branch log."
   ],
   "requested": {
-    "effort": null,
-    "model": null
+    "effort": "low",
+    "model": "gpt-6-luna"
   },
   "runtime": "codex",
   "runtimeVersion": "0.160.0",
-  "source": "historical report 2026-10-04, codex-cli 0.160.0; no publishable primary",
+  "source": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md",
   "technique": "codex exec"
 }
