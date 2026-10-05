@@ -136,16 +136,16 @@ if [ -n "$git_url" ]; then
     # See dev/scripts/resolve-recipe-file.sh.
     # config.update.targets is the single source of truth (config/update-matrix
     # .nix was dissolved): read the declared recipe file for this package via
-    # `nix eval --raw .#updateTargets.<name>.file` (owner registry.nix
+    # `nix eval --raw .#.updateTargets.<name>.file` (owner registry.nix
     # contributions plus workspace policy). Every
     # main-tracking package declares one, so resolve_recipe_file below is a
     # retained safety-net fallback. Only `file` is consumed here; `flags`/`git`
     # flow positionally from the same registry via the ninja DAG.
     # checks.update-targets-parity asserts the declared `file` is byte-identical
     # to resolve_recipe_file's output, so the two paths agree.
-    # cwd is still the main tree here (before the Phase 1 subshell `cd`), so
-    # `.#updateTargets` resolves against the checked-out flake.
-    declared_file=$(nix eval --raw ".#updateTargets.${name}.file" 2>/dev/null || true)
+    # cwd is still the main tree here (before Phase 1 changes directories), so
+    # the absolute root selector below reads metadata without package lookup.
+    declared_file=$(nix eval --raw ".#.updateTargets.${name}.file" 2>/dev/null || true)
     if [ -n "$declared_file" ]; then
       target_file="$wt/$declared_file"
       log_info "Target from config.update.targets: $declared_file"

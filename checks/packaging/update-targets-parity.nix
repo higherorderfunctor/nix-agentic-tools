@@ -4,7 +4,7 @@
 # config/update-matrix.nix was dissolved into config.update.targets, so this is
 # now the SOLE update-target gate — there is no coexisting matrix to reconcile.
 # config.update.targets composes owner registry.nix contributions with root
-# workspace policy. The `.#updateTargets` flake output is the
+# workspace policy. The `.#.updateTargets` flake output is the
 # single source of truth the pipeline reads.
 #
 # The reverse packages → targets direction asserts that every versioned flake
