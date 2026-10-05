@@ -1,6 +1,6 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-30 — Claude's skills are `ai.*` delivery entries.
+> **Last verified:** 2026-10-04 — Claude's skills are `ai.*` delivery entries.
 > The repository's instruction files are `ai.*`'s own read-only copies (`own`),
 > never `files.*` symlinks; the generator's materializer and the AGENTS.md seed
 > are gone. Copilot, Kiro and Kimchi settings and Codex daemon settings are
@@ -91,7 +91,17 @@ createSymlinkScript = filename: fileOption: ''
 '';
 ```
 
-No recursion in this branch — one `ln -s` per entry.
+No recursion in this branch — one `ln -s` per entry. Upstream
+`src/modules/files.nix:115` updates with `ln -sf` without `-n`: an existing link
+to a directory is followed, so a changed target attempts to create a link inside
+the old read-only store directory and fails. The delivery router's devenv-only
+`ai:<runtime>:guard-symlink-updates` task uses its lowered symlink entries to
+unlink only changed links whose current target is under `/nix/store/`. It fails
+loudly on a non-store link or a real file or directory at a delivered path,
+where devenv would only warn and skip the entry. The guard runs after
+`devenv:files:cleanup` and any command writers already ordered before
+`devenv:files`, then before `devenv:files`. There is one guard per runtime with
+symlink entries; no file-type probing is needed.
 
 The other branch does recurse. `createCopyScript` drops a previous
 store-symlink, then materializes with `cp -RL` followed by `chmod -R u+w`, so a

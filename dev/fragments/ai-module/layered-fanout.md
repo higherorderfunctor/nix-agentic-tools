@@ -1,6 +1,6 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-01 — a record's `agentNativeType` +
+> **Last verified:** 2026-10-04 — a record's `agentNativeType` +
 > `agentTransformer` give it a typed `native.agents` layer below the normalized
 > agents pool; every agents runtime gets `agentsDir`, and a runtime extends the
 > builder's `agents` description only through `agentsDescriptionSuffix`. Rule
@@ -180,6 +180,12 @@ not move them back.
   Commands omit a final newline because the router supplies it, along with
   strict mode and a scoped subshell. Directory skill sources keep
   `recursive = false` because Codex discovers directory symlinks.
+- **devenv guards native link updates.** For a runtime with symlink entries, the
+  router emits `ai:<runtime>:guard-symlink-updates` from the lowered file map,
+  including recursive leaves. It runs after file cleanup and command writers
+  ordered before file creation, then before `devenv:files`. It removes stale
+  store-backed links, and fails loudly on a non-store link or a real file or
+  directory at a delivered path, where devenv itself would only warn and skip.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` and
   Copilot's HM `config.json` are writable state files with Nix-owned leaves. The
   adapter runs their JSON bundles on activation and retains unowned state.

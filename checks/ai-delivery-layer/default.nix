@@ -924,6 +924,37 @@ in {
         && withoutFiles.tasks.probeDefaults.before == ["devenv:enterShell"]
     );
 
+    module-delivery-devenv-guards-symlink-updates = mkTest "delivery-devenv-guards-symlink-updates" (
+      let
+        config = {
+          ai.kiro = {
+            enable = true;
+            activation.probeMigrate.command = "printf 'probe'";
+            files = {
+              "probe-dir".content.source = ./fixtures/probe-skill;
+              "probe-file".content.source = ./fixtures/probe-skill/SKILL.md;
+              "probe-disabled".content.enable = false;
+              "probe-leaves" = {
+                content.source = ./fixtures/probe-skill;
+                recursive = true;
+              };
+            };
+          };
+        };
+        devenv = (evalDevenv config).config;
+        hm = (evalHm config).config;
+        task = devenv.tasks."ai:kiro:guard-symlink-updates";
+        bare = (evalDevenv {ai.kiro.enable = true;}).config;
+      in
+        devenv.tasks ? "ai:kiro:guard-symlink-updates"
+        && task.after == ["devenv:files:cleanup" "probeMigrate"]
+        && task.before == ["devenv:files"]
+        && lib.all (path: lib.hasInfix "guard_link ${lib.escapeShellArg path} " task.exec) (lib.attrNames devenv.files)
+        && !lib.hasInfix "probe-disabled" task.exec
+        && !(bare.tasks ? "ai:kiro:guard-symlink-updates")
+        && !(hm.home.activation ? "ai:kiro:guard-symlink-updates")
+    );
+
     # The opt-in must not accidentally activate ordinary command writers,
     # owned writers, file claims or packages when the runtime is disabled.
     module-delivery-disabled-runtime-keeps-only-opted-in-writers = mkTest "delivery-disabled-runtime-keeps-only-opted-in-writers" (

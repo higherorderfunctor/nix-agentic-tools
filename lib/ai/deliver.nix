@@ -270,6 +270,22 @@ in
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
     mergeBundles = path: lib.foldl' (merged: bundle: merged // lib.attrByPath path {} bundle) {} bundles;
+    symlinkEntries =
+      lib.concatMapAttrs (
+        path: entry:
+          if entry.recursive && backend == "devenv"
+          then
+            lib.mapAttrs (
+              leaf: _source:
+                runtimeFiles.sinkEntry (entry
+                  // {
+                    content.source = "${entry.rendered.source}/${lib.removePrefix "${path}/" leaf}";
+                    recursive = false;
+                  })
+            ) (formats.walk path entry.content.source)
+          else {${path} = runtimeFiles.sinkEntry (entry // {content = entry.rendered;});}
+      )
+      (bucket "symlink");
   in {
     afterEdges = writer: edges afterTokens writer.after;
     beforeEdges = writer: edges beforeTokens writer.before;
@@ -309,22 +325,44 @@ in
     # take. Home Manager recurses a directory source itself; devenv has no such
     # primitive, so the router walks the tree and emits one entry per leaf —
     # the leaves are ordinary entries, so `recursive` is off for each of them.
-    symlinkEntries =
-      lib.concatMapAttrs (
-        path: entry:
-          if entry.recursive && backend == "devenv"
-          then
-            lib.mapAttrs (
-              leaf: _source:
-                runtimeFiles.sinkEntry (entry
-                  // {
-                    content.source = "${entry.rendered.source}/${lib.removePrefix "${path}/" leaf}";
-                    recursive = false;
-                  })
-            ) (formats.walk path entry.content.source)
-          else {${path} = runtimeFiles.sinkEntry (entry // {content = entry.rendered;});}
-      )
-      (bucket "symlink");
+    inherit symlinkEntries;
+
+    # Reuse the lowered file map, including recursive leaves. Upstream's
+    # ln -sf follows an existing directory link; remove only stale store links
+    # before it runs. Migration commands validate and move legacy content first.
+    symlinkTasks = commandTasks:
+      lib.optionalAttrs (backend == "devenv" && symlinkEntries != {}) {
+        "ai:${runtime}:guard-symlink-updates" = {
+          after =
+            ["devenv:files:cleanup"]
+            ++ lib.attrNames (lib.filterAttrs (_name: task: lib.elem "devenv:files" task.before) commandTasks);
+          before = ["devenv:files"];
+          exec = ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+
+            # Fail loudly where devenv would only warn and skip the entry.
+            guard_link() {
+              local path="$1" desired="$2" target
+              if [ -L "$path" ]; then
+                target="$(${pkgs.coreutils}/bin/readlink -- "$path")"
+                case "$target" in
+                  "$desired") ;;
+                  /nix/store/*) ${pkgs.coreutils}/bin/rm -f -- "$path" ;;
+                  *)
+                    echo "ERROR: $path links outside the Nix store ($target); remove it so devenv can manage it" >&2
+                    false
+                    ;;
+                esac
+              elif [ -e "$path" ]; then
+                echo "ERROR: $path exists and is not a link; move it aside so devenv can manage it" >&2
+                false
+              fi
+            }
+            ${lib.concatStringsSep "\n" (lib.mapAttrsToList (path: entry: "guard_link ${lib.escapeShellArgs [path entry.source]}") symlinkEntries)}
+          '';
+        };
+      };
 
     owned = {
       activation = mergeBundles ["home" "activation"];
