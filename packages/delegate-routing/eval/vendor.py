@@ -147,6 +147,17 @@ def render(case, directory, trial):
         "Delivered skill:\n" + "\n".join((root / file["path"]).read_text() for file in case["files"] if "delegate-routing" in file["path"] and file["path"].endswith("SKILL.md")),
         "Plan schema:\n" + encode(SCHEMA),
     ])
+    # Always-on entries are a system-prompt addition, which the managed launcher
+    # passes to Claude; Kiro carries it only in typed agents, not the default one.
+    system_prompt = case.get("systemPrompt")
+    system_sources = []
+    if system_prompt is not None:
+        system_path = directory / "system-prompt.md"
+        system_path.write_text(system_prompt)
+        if case["runtime"] == "claude":
+            argv += ["--append-system-prompt-file", str(system_path)]
+        system_sources.append({"path": "system-prompt.md", "sha256": digest(system_prompt),
+                               "status": "APPENDED" if case["runtime"] == "claude" else "NOT DELIVERED to the default agent"})
     argv.append(prompt)
     (directory / "prompt.txt").write_text(prompt)
     effective = {str(path.relative_to(root)): ({"symlink": os.readlink(path)} if path.is_symlink() else path.read_text()) for path in sorted(root.rglob("*")) if path.is_file() or path.is_symlink()}
@@ -155,7 +166,7 @@ def render(case, directory, trial):
         "argv": argv, "caseId": case["id"], "configurationSource": case["configurationSource"], "configHash": digest(encode(config)),
         "date": utc(), "generatedConfigHash": generated_hash,
         "safetyProfileHash": digest(encode({"config": config, "denyScript": DENY_SCRIPT, "argv": argv[:-1]}).replace(str(directory), "<TRIAL>")),
-        "contextSources": sources + [
+        "contextSources": sources + system_sources + [
             {"path": "prompt.txt", "sha256": digest(prompt), "status": "INJECTED"},
             {"path": "deny-tools.py", "sha256": digest(DENY_SCRIPT), "status": "SAFETY OVERLAY"},
         ],
@@ -320,9 +331,9 @@ def run_vendor(args):
         write_json(directory / "verdict.json", record)
         results.append(record)
     write_json(out / "summary.json", {"set": "vendor", "trials": results, "comparisons": {
-        "clamp": [item for item in results if item["caseId"].startswith("claude-clamp")],
+        "claudeReminder": [item for item in results if item["caseId"].startswith("claude-reminder")],
+        "kiroReminder": [item for item in results if item["caseId"].startswith("kiro-")],
         "poolDrain": [item for item in results if item["caseId"].startswith("claude-ultracode")],
-        "workflowReminder": [item for item in results if item["caseId"].startswith("kiro-")],
     }})
     print(f"Saved {len(results)} vendor trials to {out}; paid turns: {0 if args.render_only else len(results)}")
     return int(any(item.get("infrastructureError") or item.get("passed") is False for item in results))

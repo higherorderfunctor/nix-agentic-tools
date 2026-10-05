@@ -1,16 +1,8 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-10-01 — `render` returns text (no frontmatter marker
-> metadata); normalized rules default their priority-ordered trigger list from
-> matcher presence before each runtime resolves support. Fragment locations are
-> limited to the dev and package trees; category declaration is SPLIT: shared
-> categories in `config/fragment-categories.nix`, owner-specific ones in the
-> owning package's `registry.nix`, merged by `lib/facets/registry.nix`. The
-> orchestration layer produces content; `ai.*` renders and writes it, with
-> AGENTS.md's index and rules ahead of the context. Kiro's multi-path
-> `fileMatchPattern` is a block sequence, emitted by the shared
-> `lib/frontmatter.nix` renderer. Callers pass raw Nix values; the renderer
-> JSON-quotes every supported scalar into valid YAML.
+> **Last verified:** 2026-10-05 — delegate-routing's always-on entries ride
+> `ai.extraSystemPrompt`, not `ai.rules`; stacked-workflows' router is still a
+> rule.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -182,6 +174,7 @@ them.
   change and the tasks look stale, delete that file.
 - **Monorepo profile vs scoped profile differs semantically**. Only `monorepo`
   gets commonFragments. Scoped categories are intentionally lean. The
-  delegate-routing and stacked-workflow routing rules are separate `ai.*` rules,
-  never orientation text. Don't "fix" this by re-adding commonFragments — that's
-  the context-rot bug that was removed.
+  stacked-workflow routing rule is a separate `ai.*` rule and delegate-routing's
+  always-on entries are an `ai.*` system-prompt addition, never orientation
+  text. Don't "fix" this by re-adding commonFragments — that's the context-rot
+  bug that was removed.

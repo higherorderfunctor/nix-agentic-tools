@@ -6,8 +6,8 @@
   # two agree.
   documentation.aiCliDescriptions.claude-code = "Claude Code CLI";
   # claude-code: package and plugin delivery plus the heron_brook
-  # delegation-clamp mitigation. Spans the claude-code overlay package and the
-  # factory-built module.
+  # delegation-clamp evidence and its review tripwire. Spans the claude-code
+  # overlay package and the factory-built module.
   fragments.categories.claude-code = {
     scopes = [
       "packages/${facetOwner}/packages/ai/claude-code/package.nix"

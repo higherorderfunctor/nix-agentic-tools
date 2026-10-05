@@ -42,15 +42,9 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-10-03 — repo documents and agent files are built by
-> `mkTree` with the evaluated `ai.formatter` treefmt config and the named
-> guards; scoped rules rely on the normalized matcher-derived `fileMatch`
-> trigger default. `generate:all` writes instruction and repo-document
-> projections plus devenv.yaml; devenv.lock requires a separate network update;
-> the generator produces content only; `dev/ai.nix` hands it to `ai.*`, which
-> writes every agent instruction file from its generated-file tree, formatted
-> there with this repository's treefmt; the drift check compares the built
-> files.
+> **Last verified:** 2026-10-05 — delegate-routing's always-on entries ride
+> `ai.<runtime>.extraSystemPrompt`; stacked-workflows' router is still a root
+> rule.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -99,9 +93,9 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
 - `packages/coding-standards/fragments/` — published coding standards, part of
   the orientation.
 - `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the
-  always-on routing rules, delivered as `ai.*` rules of their own (the
-  delegate-routing program and a root rule) rather than inlined into the
-  orientation.
+  always-on routing guidance, delivered through `ai.*` rather than inlined into
+  the orientation: delegate-routing as a per-runtime `extraSystemPrompt` entry,
+  stacked-workflows as a root rule.
 - `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 
 ### Committed files and the drift check
