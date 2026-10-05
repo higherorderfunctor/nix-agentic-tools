@@ -25,6 +25,7 @@ from jsonschema import Draft202012Validator
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 MAX_BYTES = 2 * 1024 * 1024
+NIX_ENV = {**os.environ, "NIX_CONFIG": os.environ.get("NIX_CONFIG", "") + "\nmax-jobs = 1\ncores = 2\n"}
 SIZING = ("runtime", "family", "model", "effort", "technique")
 WRAPPER = (
     "This is a routing simulation. The skill and scenario below describe a "
@@ -74,17 +75,24 @@ def strict_json(raw):
     return result
 
 
-def load_cases(path):
+def load_cases(path, attr):
     if path:
         return json.loads(Path(path).read_text())
     result = subprocess.run(
-        ["nix", "eval", "--json", ".#checks.x86_64-linux.delegate-routing-eval-structure.cases"],
+        ["nix", "eval", "--json", f".#checks.x86_64-linux.{attr}.cases"],
         cwd=REPO, capture_output=True, text=True, timeout=300, check=False,
-        env={**os.environ, "NIX_CONFIG": os.environ.get("NIX_CONFIG", "") + "\nmax-jobs = 1\ncores = 2\n"},
+        env=NIX_ENV,
     )
     if result.returncode:
         raise ValueError(f"fixture evaluation failed: {result.stderr}")
     return json.loads(result.stdout)
+
+
+def select_cases(cases, ids):
+    selected = set(ids) - {"all"}
+    if selected - {case["id"] for case in cases}:
+        raise ValueError("unknown cases")
+    return [case for case in cases if not selected or case["id"] in selected]
 
 
 def validate_fixtures(cases, schema):
@@ -291,6 +299,8 @@ def grade(case, raw, validator):
         if not technique:
             continue
         external = technique["kind"] == "external"
+        if record is selection:
+            require(external == (answer["shape"] in {"external_root", "external_cli_graph"}), f"{label}: technique kind disagrees with shape")
         launched_mode = "headless" if external or answer["shape"] == "external_root" and record in answer["stages"] else scenario["mode"]
         require(launched_mode in technique["modes"], f"{label}: technique unavailable in mode")
         available = scenario["commandsOnPath"] if external else scenario["visibleTools"]
@@ -408,14 +418,18 @@ def disabled_adapter(runtime):
     raise ValueError(f"UNSUPPORTED_SAFE_PLAN_MODE: {runtime} adapter is disabled; independently verified suppression and terminal capture are required")
 
 
-def provenance(args, cases, schema):
+def repository_state():
+    if not shutil.which("git"):
+        return {"dirtyPatchHash": None, "repositoryCommit": "UNKNOWN"}
     def git(*argv):
         result = subprocess.run(["git", *argv], cwd=REPO, capture_output=True, check=False)
         return result.stdout
-    diff = git("diff", "HEAD")
+    return {"repositoryCommit": git("rev-parse", "HEAD").decode().strip(), "dirtyPatchHash": digest(git("diff", "HEAD"))}
+
+
+def provenance(args, cases, schema):
     return {
-        "startedAt": utc(), "repositoryCommit": git("rev-parse", "HEAD").decode().strip(),
-        "dirtyPatchHash": digest(diff), "fixtureHash": digest(encode(cases)), "schemaHash": digest(encode(schema)),
+        **repository_state(), "startedAt": utc(), "fixtureHash": digest(encode(cases)), "schemaHash": digest(encode(schema)),
         "rubricHash": digest((HERE / "rubric.md").read_bytes()) if (HERE / "rubric.md").exists() else None,
         "evaluator": {"runtime": args.runtime, "requestedModel": args.model, "requestedEffort": args.effort, "resolvedModel": "UNKNOWN", "resolvedEffort": "UNKNOWN", "version": "UNKNOWN", "executable": "UNKNOWN"},
         "adapters": "disabled: suppression and terminal capture unverified", "judge": "pending; no authenticated calls",
@@ -451,16 +465,12 @@ def main():
             parser.error("live evaluation requires explicit --runtime --model --effort")
         disabled_adapter(args.runtime)
     schema = json.loads((HERE / "plan.schema.json").read_text())
-    cases = load_cases(args.fixtures)
+    cases = load_cases(args.fixtures, "delegate-routing-eval-structure")
     validate_fixtures(cases, schema)
     if args.validate_fixtures:
         print(f"Validated schema and {len(cases)} fixtures; no account access.")
         return 0
-    chosen = set(args.case) - {"all"}
-    unknown = chosen - {case["id"] for case in cases}
-    if unknown:
-        parser.error(f"unknown cases: {sorted(unknown)}")
-    cases = [case for case in cases if not chosen or case["id"] in chosen]
+    cases = select_cases(cases, args.case)
     out = safe_output(args.out)
     metadata = provenance(args, cases, schema)
     manifest = json.loads(args.grade_existing.read_text()) if args.grade_existing else None
