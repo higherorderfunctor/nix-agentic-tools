@@ -8,7 +8,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-05 — `ai.extraSystemPrompt` fans out to Claude,
-> Codex, Kimchi and Kiro; Copilot is an explicit exclusion.
+> Codex, Kimchi (an `APPEND_SYSTEM.md` file) and Kiro, with delivery-matrix
+> rows; Copilot is an explicit exclusion.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -525,14 +526,16 @@ scope or a non-empty list for `fileMatch` content.
   passed to delivery callbacks already joined as `extraSystemPrompt`, or null so
   an empty pool changes nothing. Delivery: Claude's launcher adds
   `--append-system-prompt-file <store file>`; Codex gets
-  `developer_instructions` at `mkDefault`; Kimchi's launcher adds
-  `--append-system-prompt <store file>` (Pi reads an existing path as the text);
-  Kiro appends it to the `prompt` of every typed agent (`native.agents`, which
-  normalized `ai.agents` lower into). Copilot leaves it out of `supportedPools`,
-  so `ai.copilot.extraSystemPrompt` does not exist. Known limits: Kimchi
-  dispatches its own subcommands only from argv[0], so a leading launcher flag
-  turns `kimchi setup` into a chat message; Kiro's raw agent files and its
-  built-in default agent do not receive the text.
+  `developer_instructions` at `mkDefault`; Kimchi gets pi's own
+  `APPEND_SYSTEM.md` in its harness directory; Kiro appends it to the `prompt`
+  of every typed agent (`native.agents`, which normalized `ai.agents` lower
+  into). Copilot leaves it out of `supportedPools`, so
+  `ai.copilot.extraSystemPrompt` does not exist, and its delivery-matrix row
+  records the exclusion. Kimchi takes a file rather than pi's
+  `--append-system-prompt` flag because a leading launcher flag would turn every
+  Kimchi subcommand into a chat message: Kimchi dispatches them only from
+  argv[0]. Known limits: Kiro's raw agent files and its built-in default agent
+  do not receive the text.
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools

@@ -27,7 +27,7 @@
   get = path: lib.attrByPath path null config;
   live = surface: pool:
     lib.filterAttrs
-    (_: value: value != null && (surface != "rules" || value.enable != false))
+    (_: value: value != null && (!(builtins.elem surface ["extraSystemPrompt" "rules"]) || value.enable != false))
     pool;
   nonEmpty = value:
     if value == null

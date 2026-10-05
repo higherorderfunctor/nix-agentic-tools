@@ -74,6 +74,10 @@
       kimchi = lib.genAttrs modes (mode: wrapper mode "kimchi");
       kiro = lib.genAttrs modes (mode: wrapper mode "kiro-cli");
     };
+    extraSystemPrompt = {
+      claude = lib.genAttrs modes (mode: wrapper mode "claude" // {target = "claude argv --append-system-prompt-file (store launcher)";});
+      copilot = both (absent "Copilot's supportedPools excludes extraSystemPrompt: it has no lossless native mapping for an appended system prompt, and its instruction files are context, which ai.context delivers.");
+    };
     hooks = {
       copilot = both (absent "Copilot's supportedPools excludes hooks and no native hook writer exists.");
       # Kimchi's own lifecycle reader takes only a trusted project's
@@ -120,6 +124,9 @@
     }
     // lib.optionalAttrs (key row == "settings/kiro/devenv") {
       deliveryConstraint = "Only the pinned workspace-allowlisted setting keys are accepted; global-only settings fail module assertions.";
+    }
+    // lib.optionalAttrs (row.surface == "extraSystemPrompt" && row.ecosystem == "kiro") {
+      condition = "Typed agents only: raw agent files are delivered verbatim, and Kiro's built-in default agent has no declarative surface.";
     }
     // lib.optionalAttrs (key row == "rules/kiro/devenv") {
       condition = "Always-on unscoped rules join sharedAgentsMd; scoped/manual rules stay in steering.";
