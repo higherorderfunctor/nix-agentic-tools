@@ -44,6 +44,6 @@
   },
   "runtime": "copilot",
   "runtimeVersion": "1.0.91",
-  "source": "runtime-evidence.md: Copilot findings (installed help)",
+  "source": "GitHub Copilot CLI 1.0.91: `copilot --help`, `copilot help config`",
   "technique": "fleet"
 }
