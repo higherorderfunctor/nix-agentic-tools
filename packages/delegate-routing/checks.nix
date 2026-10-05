@@ -1,5 +1,5 @@
 {
-  imports = [./checks/module-eval.nix];
+  imports = [./checks/capabilities.nix ./checks/module-eval.nix];
   testing.moduleProbes = [
     {
       ai = {
