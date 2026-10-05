@@ -1,11 +1,13 @@
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-04 — the settings extractor follows Claude
+> **Last verified:** 2026-10-05 — `ai.*` wraps Claude only to pass
+> `--append-system-prompt-file` for `ai.extraSystemPrompt`; with no entry the
+> installed package is the bare binary. The settings extractor follows Claude
 > 2.1.286's one-hop whole-schema wrapper when the `$schema` description lives in
 > its descriptor factory. `ai.*` delivers Claude's plugins itself: the MCP/LSP
 > personal plugin as per-file links under `home-manager/`, consumer plugins as
-> one directory link each. `$out/bin/claude` is the unwrapped binary. Enabling
-> the backend's own Claude module beside `ai.claude` fails evaluation.
+> one directory link each. Enabling the backend's own Claude module beside
+> `ai.claude` fails evaluation.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -14,15 +16,19 @@ Claude Code ships as a **pre-built compiled binary** (a Bun single-exec). The
 base package (`packages/claude-code/packages/ai/claude-code/package.nix`)
 installs it directly as `$out/bin/claude`.
 
-### There is no wrapper
+### The only wrapper carries the extra system prompt
 
 `$out/bin/claude` is the pre-built binary itself, installed by the shared
-backend transform on both backends. Claude Code 2.1.157 and later discovers a
-plugin as a personal plugin at `<configDir>/skills/<name>` (yes, `skills/`, not
-`plugins/`), so nothing needs a `--plugin-dir` argument. Home Manager's own
-Claude module wraps the binary for older versions; `ai.*` does not use that
-module and does not port the wrapper, so a package override older than 2.1.157
-loses personal plugins.
+backend transform on both backends. The one exception is `ai.extraSystemPrompt`:
+with an entry set, `installPackage` wraps the binary as `claude-code-wrapped`,
+whose only flag is `--append-system-prompt-file <store file>`. With no entry
+`mkLauncher` returns the bare package. Nothing else rides the wrapper: the
+process environment goes through `settings.env`. Claude Code 2.1.157 and later
+discovers a plugin as a personal plugin at `<configDir>/skills/<name>` (yes,
+`skills/`, not `plugins/`), so nothing needs a `--plugin-dir` argument. Home
+Manager's own Claude module wraps the binary for older versions; `ai.*` does not
+use that module and does not port the wrapper, so a package override older than
+2.1.157 loses personal plugins.
 
 The two cannot run side by side. With `ai.claude.enable` on, Home Manager's
 `programs.claude-code.enable` or devenv's `claude.code.enable` fails evaluation

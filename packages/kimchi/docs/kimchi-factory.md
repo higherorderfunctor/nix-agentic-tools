@@ -1,8 +1,9 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-04 — workflows is an independent external pi
-> extension, delivered as a named package link on both backends; Kimchi removes
-> its static registration and resource toggle before compilation.
+> **Last verified:** 2026-10-05 — `ai.extraSystemPrompt` lands as pi's own
+> `APPEND_SYSTEM.md` in the harness directory, never as a launcher flag;
+> workflows is an independent external pi extension, delivered as a named
+> package link on both backends.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -171,7 +172,11 @@ when a supplied package differs from it. The extractor also checks that the
 hash-pinned source URL names the same release tag recorded in provenance;
 Kimchi's source `package.json` intentionally retains the `0.0.0` development
 placeholder. It no longer extracts the CLI: the wrapper passes no flags, so that
-surface had no reader.
+surface had no reader. `ai.extraSystemPrompt` keeps it that way: pi's
+`--append-system-prompt` would have to lead argv, and Kimchi dispatches its
+subcommands (`setup`, `mcp`, package commands) only from argv[0]
+(`src/commands/dispatch.ts`), so the text goes to `APPEND_SYSTEM.md` instead. A
+trusted project's file shadows the user one; pi reads only one.
 
 ## User and project paths (the load-bearing fact)
 
@@ -179,25 +184,26 @@ surface had no reader.
 `.config/kimchi`). It does not control devenv project paths. The backend split
 is:
 
-| pool             | Home Manager user path                            | devenv project path                    |
-| ---------------- | ------------------------------------------------- | -------------------------------------- |
-| context          | `<configDir>/harness/AGENTS.md`                   | root `AGENTS.md`                       |
-| rules            | `<configDir>/harness/AGENTS.md`                   | shared root `AGENTS.md`                |
-| MCP servers      | `<configDir>/harness/mcp.json`                    | `.kimchi/mcp.json`                     |
-| skills           | `<configDir>/harness/skills/<name>`               | `.kimchi/skills/<name>`                |
-| Kimchi settings  | `<configDir>/config.json`                         | `.kimchi/config.json`                  |
-| harness settings | `<configDir>/harness/settings.json`               | `.config/kimchi/harness/settings.json` |
-| permissions      | `.config/kimchi/harness/permissions.json` (fixed) | `.kimchi/permissions.json`             |
-| agents           | `<configDir>/harness/agents/<name>.md`            | `.kimchi/agents/<name>.md`             |
-| hooks            | none (explicit exclusion)                         | `.kimchi/hooks.json`                   |
-| project trust    | `<configDir>/harness/trust.json`                  | none (rejected: user scope)            |
+| pool             | Home Manager user path                            | devenv project path                       |
+| ---------------- | ------------------------------------------------- | ----------------------------------------- |
+| context          | `<configDir>/harness/AGENTS.md`                   | root `AGENTS.md`                          |
+| rules            | `<configDir>/harness/AGENTS.md`                   | shared root `AGENTS.md`                   |
+| MCP servers      | `<configDir>/harness/mcp.json`                    | `.kimchi/mcp.json`                        |
+| skills           | `<configDir>/harness/skills/<name>`               | `.kimchi/skills/<name>`                   |
+| Kimchi settings  | `<configDir>/config.json`                         | `.kimchi/config.json`                     |
+| harness settings | `<configDir>/harness/settings.json`               | `.config/kimchi/harness/settings.json`    |
+| permissions      | `.config/kimchi/harness/permissions.json` (fixed) | `.kimchi/permissions.json`                |
+| agents           | `<configDir>/harness/agents/<name>.md`            | `.kimchi/agents/<name>.md`                |
+| hooks            | none (explicit exclusion)                         | `.kimchi/hooks.json`                      |
+| extra prompt     | `<configDir>/harness/APPEND_SYSTEM.md`            | `.config/kimchi/harness/APPEND_SYSTEM.md` |
+| project trust    | `<configDir>/harness/trust.json`                  | none (rejected: user scope)               |
 
-Project Kimchi settings, MCP servers, harness settings, permissions, agents, and
-hooks are exact-cwd readers. The devenv wrapper rejects launches below the
-devenv root instead of silently missing them. It does not `cd` to the root
-instead, because that would also change the working directory Kimchi's tools
-see. Context and skills walk ancestors, so a devenv that declares none of the
-exact-cwd files leaves the launch directory unrestricted. Locked by
+Project Kimchi settings, MCP servers, harness settings, permissions, agents,
+hooks, and `APPEND_SYSTEM.md` are exact-cwd readers. The devenv wrapper rejects
+launches below the devenv root instead of silently missing them. It does not
+`cd` to the root instead, because that would also change the working directory
+Kimchi's tools see. Context and skills walk ancestors, so a devenv that declares
+none of the exact-cwd files leaves the launch directory unrestricted. Locked by
 `module-kimchi-devenv-exact-cwd-guard`, which checks both arms.
 
 The project harness directory is deliberately fixed. pi derives

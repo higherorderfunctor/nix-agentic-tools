@@ -15,7 +15,7 @@
   # leaves inside. `raw` is the default because most files carry their bytes
   # directly.
   formats = ["json" "markdown" "raw" "toml" "yaml"];
-  surfaces = ["agents" "context" "hooks" "mcpServers" "rules" "settings" "skills"];
+  surfaces = ["agents" "context" "extraSystemPrompt" "hooks" "mcpServers" "rules" "settings" "skills"];
 
   # A consumer fact usually holds on both backends. When it does not, the
   # exception is keyed by backend; `either` keeps the common case a bare bool
