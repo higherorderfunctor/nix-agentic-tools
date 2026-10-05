@@ -8,9 +8,9 @@
 > acceptance suite (`eval/`, one real-session runner for all four harnesses with
 > one root baseline table and requested/observed controls and source-attributed
 > startup checks); techniques hand-declare `runsOwnSubagents` from map rows.
-> Always-on entries reach each runtime's system prompt through
-> `ai.<runtime>.extraSystemPrompt.delegate-routing` instead of `ai.rules`, and a
-> per-turn `UserPromptSubmit` reminder replaces Claude's
+> Always-on entries reach Claude, Codex and Kimchi through
+> `ai.<runtime>.extraSystemPrompt.delegate-routing` and Kiro through its
+> always-on rule, and a per-turn `UserPromptSubmit` reminder replaces Claude's
 > `delegationClampMitigation`.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing`,
@@ -163,15 +163,23 @@ skills. Both project-scoped roots load only when Kimchi trusts the project. A
 trusted project's `.claude/skills/delegate-routing` can override the Home
 Manager harness copy through default config paths.
 
-Every supported runtime has `extraSystemPrompt` delivery, so always-on entries
-no longer use `ai.rules`. Claude gets them through its launcher's
-`--append-system-prompt-file`, Codex through `developer_instructions`, Kimchi
-through the harness `APPEND_SYSTEM.md` and Kiro in the prompt of every typed
-agent. Two gaps follow from those channels. Kiro's built-in default agent and
-raw agent files receive nothing. Claude's and Kimchi's subagents do not receive
-the main session's appended prompt. The entry is written at `mkDefault`, so
+Always-on entries reach Claude, Codex and Kimchi through
+`ai.<runtime>.extraSystemPrompt.delegate-routing`: Claude's launcher
+`--append-system-prompt-file`, Codex's `developer_instructions` and Kimchi's
+harness `APPEND_SYSTEM.md`. Kiro's `extraSystemPrompt` reaches typed agents
+only, never its built-in default agent, so Kiro keeps them as the always-on
+`ai.kiro.rules.delegate-routing-router`. Under devenv that rule lands in the
+shared `AGENTS.md`, which Codex also reads beside its `developer_instructions`.
+
+Those channels leave gaps. Claude gets nothing without the managed launcher:
+`ai.claude.package = null`, or a `claude` started outside the wrapper. An
+explicit `ai.codex.native.settings.developer_instructions` replaces the Codex
+entry wholesale. Claude's and Kimchi's subagents do not receive the main
+session's appended prompt. The entry is written at `mkDefault`, so
 `ai.<runtime>.extraSystemPrompt.delegate-routing.enable = false` withholds it
-from one runtime. The content package injects packaged usage helper paths into
+from one runtime. For Claude, Codex and Kimchi, a consumer override of
+`ai.<runtime>.rules.delegate-routing-router` is now a standalone rule beside
+that entry. The content package injects packaged usage helper paths into
 technique defaults. The Claude helper carries curl and jq; the Codex helper
 carries timeout, jq and Python, while the consumer supplies the Codex CLI.
 
@@ -202,6 +210,9 @@ Delivery is per backend. Home Manager writes Claude, Codex and Kiro; devenv adds
 Kimchi's `.kimchi/hooks.json`, since Kimchi has no user-scope hook file.
 `runtimes.<runtime>.reminder.enable` overrides the portable `enable` for one
 runtime, and null inherits it. A disabled program on a runtime writes no hook.
+The reminder is on whenever the program is, and Codex rejects `ai.codex.hooks`
+beside inline `ai.codex.native.settings.hooks`; such a consumer moves those
+hooks to `ai.codex.hooks` or sets `runtimes.codex.reminder.enable = false`.
 
 The text stays first-person and user-attributed on purpose. It also answers
 Claude Code's `heron_brook` delegation clamp, which a system-attributed channel

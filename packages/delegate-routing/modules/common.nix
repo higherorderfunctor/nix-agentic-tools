@@ -32,14 +32,12 @@
     routing = entries.resolveRouting portable.routing local.routing;
     workflows = entries.resolveWorkflows portable.workflows local.workflows;
   };
-  enabled = runtime:
-    config.ai.programs.delegate-routing.runtimes.${runtime}.enable
-    or null;
-  # Mirror program.nix's B4 resolveOverride: null inherits the portable value; keep in sync.
+  inherit (import ../../../lib/ai/ai-common.nix {inherit lib;}) resolveOverride;
   programEnabled = runtime:
-    if enabled runtime == null
-    then config.ai.programs.delegate-routing.enable
-    else enabled runtime;
+    resolveOverride {
+      topValue = portable.enable;
+      cliValue = portable.runtimes.${runtime}.enable;
+    };
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
   # The skill's Kiro evidence covers the v3 engine only. Default v3 on only
@@ -49,12 +47,14 @@
     && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
   supportedRuntimes;
   kiroV3Declared = lib.hasAttrByPath ["ai" "kiro" "v3"] options;
-  reminderEnabled = runtime: let
-    local = portable.runtimes.${runtime}.reminder.enable;
-  in
-    if local == null
-    then portable.reminder.enable
-    else local;
+  reminderEnabled = runtime:
+    resolveOverride {
+      topValue = portable.reminder.enable;
+      cliValue = portable.runtimes.${runtime}.reminder.enable;
+    };
+  # Kiro's extraSystemPrompt reaches typed agents only, never its built-in
+  # default agent, so Kiro keeps the always-on entries as an always-on rule.
+  ruleRuntimes = ["kiro"];
   # The always-on entries for one runtime, or null when none is enabled.
   alwaysText = runtime:
     import ../router.nix {
@@ -177,12 +177,18 @@ in {
           system-attributed channel was measured not to do; see
           `packages/claude-code/docs/heron-brook-clamp.md` before rewording it.
           It is cumulative context: one line per turn.
+
+          Enabling the program enables the reminder. On Codex it is a definition
+          of `ai.codex.hooks`, which cannot be combined with inline hooks in
+          `ai.codex.native.settings.hooks`: move those to `ai.codex.hooks`, or set
+          `runtimes.codex.reminder.enable = false`.
         '';
       };
       runtimes = lib.genAttrs supportedRuntimes runtimeOptions;
     };
 
-  # Emit one portable enable option and a skill for each supported runtime.
+  # Emit one portable enable option, a skill for each supported runtime and
+  # Kiro's always-on rule.
   imports = [
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "delegate-routing";
@@ -196,6 +202,15 @@ in {
           inherit (config.ai.programs.delegate-routing.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
         }}";
       };
+      rules = {runtime, ...}: let
+        text = alwaysText runtime;
+      in
+        lib.optionalAttrs (builtins.elem runtime ruleRuntimes && text != null) {
+          delegate-routing-router = {
+            description = "Load delegate-routing before delegating work";
+            inherit text;
+          };
+        };
     })
   ];
 
@@ -218,8 +233,8 @@ in {
       (lib.optionalAttrs kiroV3Declared {
         kiro.v3 = lib.mkIf (reachesKiro && config.ai.kiro.package != null) (lib.mkDefault true);
       })
-      # Always-on entries reach each runtime's own system prompt.
-      (lib.genAttrs (present "extraSystemPrompt" supportedRuntimes) (runtime: let
+      # Always-on entries reach the other runtimes' own system prompts.
+      (lib.genAttrs (present "extraSystemPrompt" (lib.subtractLists ruleRuntimes supportedRuntimes)) (runtime: let
         text = alwaysText runtime;
       in
         lib.mkIf (programEnabled runtime && text != null) {

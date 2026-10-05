@@ -1175,7 +1175,8 @@
     Workflows expose named `steps` with the same entry fields, so a consumer can
     change one step.
     Entries with `always = true` are appended to each runtime's own system prompt
-    through `ai.<runtime>.extraSystemPrompt.delegate-routing`; other entries live in
+    through `ai.<runtime>.extraSystemPrompt.delegate-routing` (Kiro: an always-on
+    rule, since its default agent takes no appended prompt); other entries live in
     the skill.
     Ordering uses named `before` and `after` edges. Missing or disabled anchors are
     ignored, cycles fail, and ties have no promised order.
@@ -1201,7 +1202,9 @@
     research, which answers Claude Code's undocumented `heron_brook` delegation
     clamp ([anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988)).
     Replace it with `reminder.text` or `reminder.source`, or turn it off per runtime
-    with `runtimes.<runtime>.reminder.enable = false`. See
+    with `runtimes.<runtime>.reminder.enable = false`. On Codex the hook cannot
+    sit beside inline `ai.codex.native.settings.hooks`; move those to
+    `ai.codex.hooks`. See
     `packages/claude-code/docs/heron-brook-clamp.md` before rewording it.
 
     </details>
