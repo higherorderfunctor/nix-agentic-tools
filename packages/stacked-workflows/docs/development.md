@@ -1,7 +1,7 @@
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > Full lineage:
 > `git show 89dce4c4:packages/stacked-workflows/docs/development.md`.
@@ -75,7 +75,7 @@ skills into the PER-RUNTIME `ai.<runtime>.skills` pool of every supported
 runtime present in the evaluation. The `stacked-workflows-router` rule also fans
 into each runtime's `ai.<runtime>.rules` pool, including Kimchi's AGENTS.md
 aggregate. Each enabled AI CLI installs its contribution at its native path.
-`ai.programs.stacked-workflows.settings.<runtime>.enable = false` disables that
+`ai.programs.stacked-workflows.runtimes.<runtime>.enable = false` disables that
 runtime's contribution only. Both backend modules delegate to the shared
 `lib/ai/mkSkillPackageModule` factory; those pools are per-`evalModules`, so the
 HM (user-global) and devenv (project-local) contributions are independent.

@@ -146,7 +146,7 @@ in {
       hm = evalHm {};
       devenv = evalDevenv {};
       rootOptions = evaluated: evaluated.options.ai.programs.semble;
-      runtimeOptions = (rootOptions hm).settings.kiro;
+      runtimeOptions = (rootOptions hm).runtimes.kiro;
       entryOptions = evaluated: removeAttrs ((rootOptions evaluated).models.type.nestedTypes.elemType.getSubOptions []) ["_module"];
       options = entryOptions hm;
       root = rootOptions hm;
@@ -178,10 +178,29 @@ in {
         mcpPathMappingsGone = rejected {ai.programs.semble.mcp.pathMappings = [];};
       };
 
-    module-program-reserves-settings = mkTest "program-reserves-settings" (!(builtins.tryEval
+    module-program-allows-settings = let
+      program = programFactory.mkProgram {
+        name = "fixture";
+        options.settings = lib.mkOption {
+          type = lib.types.str;
+          default = "default";
+        };
+        supportedRuntimes = ["claude"];
+      };
+      evaluated = lib.evalModules {
+        modules = [
+          program.module
+          {ai.programs.fixture.settings = "portable";}
+        ];
+      };
+      result = builtins.tryEval (program.resolve evaluated.config "claude").settings;
+    in
+      mkTest "program-allows-settings" (result.success && result.value == "portable");
+
+    module-program-reserves-runtimes = mkTest "program-reserves-runtimes" (!(builtins.tryEval
       (programFactory.mkProgram {
         name = "x";
-        options.settings = lib.mkOption {type = lib.types.str;};
+        options.runtimes = lib.mkOption {type = lib.types.str;};
         supportedRuntimes = ["claude"];
       }).module).success);
 
@@ -204,7 +223,7 @@ in {
             program.module
             {
               ai.programs.fixture.entries = ["root-a" "root-b"];
-              ai.programs.fixture.settings.claude.entries = ["runtime-a"];
+              ai.programs.fixture.runtimes.claude.entries = ["runtime-a"];
             }
           ];
         };
@@ -216,7 +235,7 @@ in {
                 enable = true;
                 models = [docs];
                 defaultContent = "docs";
-                settings = {
+                runtimes = {
                   codex.models = [];
                   kiro.models = [codeConfig];
                 };

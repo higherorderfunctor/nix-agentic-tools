@@ -19,7 +19,7 @@ args @ {
   inherit (familyFunctions) automatic candidates select;
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   enabled = runtime:
-    config.ai.programs.delegate-routing.settings.${runtime}.enable
+    config.ai.programs.delegate-routing.runtimes.${runtime}.enable
     or null;
   # Mirror program.nix's B4 resolveOverride: null inherits the portable value; keep in sync.
   programEnabled = runtime:
@@ -27,8 +27,8 @@ args @ {
     then config.ai.programs.delegate-routing.enable
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
-  models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.settings.${runtime}.models);
-  techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.settings.${runtime}.techniques);
+  models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
+  techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.techniques);
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
   names = lib.unique (map (family: family.name) flattenedFamilies);
@@ -45,7 +45,7 @@ args @ {
 
   # Declare runtime-only controls alongside the factory's enable override.
   runtimeOptions = runtime: let
-    runtimeConfig = config.ai.programs.delegate-routing.settings.${runtime};
+    runtimeConfig = config.ai.programs.delegate-routing.runtimes.${runtime};
     automaticRuntimes = automatic {
       inherit runtime;
       inherit (runtimeConfig) extraRuntimes manualExternalDelegates;
@@ -167,7 +167,7 @@ in {
       default = {};
       description = "Rules at the top of the skill. Replace with text or source, or disable them.";
     };
-    settings = lib.genAttrs supportedRuntimes runtimeOptions;
+    runtimes = lib.genAttrs supportedRuntimes runtimeOptions;
     whenToDelegate = lib.mkOption {
       inherit (whenToDelegateOptions) type;
       default = {};
@@ -188,7 +188,7 @@ in {
           inherit (portable) families;
           rules = lib.optionalString portable.rules.enable portable.rules.text;
           procedure = lib.optionalString portable.procedure.enable portable.procedure.text;
-          inherit (config.ai.programs.delegate-routing.settings.${runtime}) extraRuntimes manualExternalDelegates roles;
+          inherit (config.ai.programs.delegate-routing.runtimes.${runtime}) extraRuntimes manualExternalDelegates roles;
         }}";
       };
       rules = _:
@@ -214,7 +214,7 @@ in {
           };
         }
         {
-          programs.delegate-routing.settings = lib.genAttrs supportedRuntimes (runtime: {
+          programs.delegate-routing.runtimes = lib.genAttrs supportedRuntimes (runtime: {
             techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
           });
         }
@@ -234,10 +234,10 @@ in {
             }
           ]
           ++ lib.concatMap (runtime: let
-            path = "ai.programs.delegate-routing.settings.${runtime}";
+            path = "ai.programs.delegate-routing.runtimes.${runtime}";
             sourceEnabled = programEnabled runtime && runtimeEnabled runtime;
-            extraRuntimes = config.ai.programs.delegate-routing.settings.${runtime}.extraRuntimes;
-            manualExternalDelegates = config.ai.programs.delegate-routing.settings.${runtime}.manualExternalDelegates;
+            extraRuntimes = config.ai.programs.delegate-routing.runtimes.${runtime}.extraRuntimes;
+            manualExternalDelegates = config.ai.programs.delegate-routing.runtimes.${runtime}.manualExternalDelegates;
             requiredTargets = lib.unique ([runtime] ++ extraRuntimes ++ manualExternalDelegates);
           in
             map (target: {
@@ -247,7 +247,7 @@ in {
             (automatic {inherit runtime extraRuntimes manualExternalDelegates;})
             ++ map (target: {
               assertion = !sourceEnabled || select portable.families models.${target} != [];
-              message = "ai.programs.delegate-routing.settings.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
+              message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
             })
             requiredTargets
             ++ map (selector: {
