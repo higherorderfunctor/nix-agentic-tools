@@ -11,10 +11,12 @@ unknown versions.
 Nix check. Schema collection is auth-free. Other cases require
 `--authenticated`, `--model` and `--effort`; they consume a model turn and use
 existing permissions. No trust or permission bypass is added. Output is a new
-JSON file, with exact argv, version, date and bounded result metadata; existing
-files are refused. Raw stdout/stderr are discarded. A timeout kills the process
-group and leaves the execution result unknown. Effective controls and native
-execution stay unknown until an operator inspects authoritative tool events.
+JSON file, with exact argv, version, date and result metadata; existing files
+are refused. Authenticated stdout/stderr are retained beside the output as
+`<output>.events.stdout` and `<output>.events.stderr`, operator-held and not for
+commit. A timeout kills the process group and leaves the execution result
+unknown. Effective controls and native execution stay unknown until an operator
+inspects authoritative tool events.
 
 ## Automated headless cases
 
@@ -34,8 +36,8 @@ The child case records the named native technique; other cases record the
 external launcher. CLI help proves syntax exposure only. Authenticated cases ask
 the runtime to use its native tools and forbid writes, commits and account
 queries. A missing tool or failed permission is evidence about that exact
-context, not all clients. Inspect the actual tool trace before changing an
-unknown result. A root's native children and a child's grandchildren are
+context, not all clients. Native claims stay unknown until the publishing rule
+below is satisfied. A root's native children and a child's grandchildren are
 separate results.
 
 ## Probe cases and operator steps
@@ -63,6 +65,26 @@ Run one build at a time. These probes never run `nix flake check` or build a
 package output.
 
 ## Publishing an observation
+
+Every source, context, replay and evidence string must cite public primary
+evidence: a repo-relative committed file, a version-pinned public vendor
+artifact with a content identity and relative paths/lines, or a command with
+fixed output for a pinned public version. Operator-specific paths,
+session/worker identifiers, unpublished notes, model self-reports and circular
+citations to the technique declaration are not evidence.
+
+To promote a native claim, commit a sanitized extract of terminal tool events
+under `fixtures/capabilities/evidence/` and cite its repo-relative path.
+Otherwise the claim stays unknown. Before relying on `--json`, confirm the
+events file actually contains the child tool call. Whether Codex JSON emits
+collaboration items is unknown; its session rollout under `$CODEX_HOME/sessions`
+is a possible primary that still needs verification.
+
+Without a publishable primary, retain the claim as unknown with a one-line
+evidence note: "Historical report (date, version if known): what was claimed,
+including requested/resolved values; raw events not publishable." Set requested
+and observed controls to null, moving their historical values into that note,
+and keep only re-run steps in replay.
 
 The fixture schema is enforced by `lib/capabilities.nix`. Copy one existing
 fixture as a template, then fill runtime/version/date, mode, technique, client

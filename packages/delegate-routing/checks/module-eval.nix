@@ -469,6 +469,7 @@
       lib.all (heading: lib.hasInfix heading claude) [
         "Pins model (declared input control)"
         "Pins effort (declared input control)"
+        "Declared modes"
         "Availability by mode"
         "Runs own subagents"
         "Nesting depth"
@@ -476,28 +477,28 @@
         "Effective model pin"
         "Effective effort pin"
       ]
-      && capabilityCell codex "codex exec" 4 == "acp: unknown; headless: supported; interactive: unknown"
-      && capabilityCell codex "codex exec" 5 == "acp: unknown; headless: supported; interactive: unknown"
+      && capabilityCell codex "codex exec" 5 == "acp: unknown; headless: unknown; interactive: unknown"
       && capabilityCell codex "codex exec" 6 == "acp: unknown; headless: unknown; interactive: unknown"
       && capabilityCell codex "codex exec" 7 == "acp: unknown; headless: unknown; interactive: unknown"
       && capabilityCell codex "codex exec" 8 == "acp: unknown; headless: unknown; interactive: unknown"
       && capabilityCell codex "codex exec" 9 == "acp: unknown; headless: unknown; interactive: unknown"
-      && capabilityCell claude "Agent" 9 == "acp: unknown; headless: unknown; interactive: unsupported"
-      && capabilityCell kimchi "Agent" 5 == "acp: unknown; headless: unsupported; interactive: unknown"
-      && capabilityCell kiro "invoke_sub_agent" 6 == "acp: supported (5); headless: unknown; interactive: unknown"
+      && capabilityCell codex "codex exec" 10 == "acp: unknown; headless: unknown; interactive: unknown"
+      && capabilityCell claude "Agent" 10 == "acp: unknown; headless: unknown; interactive: unknown"
+      && capabilityCell kimchi "Agent" 6 == "acp: unknown; headless: unsupported; interactive: unknown"
+      && capabilityCell kiro "invoke_sub_agent" 7 == "acp: supported (5); headless: unknown; interactive: unknown"
       && lib.hasInfix "**codex runtime orchestrator-delegate assessment:**" claude
-      && lib.hasInfix "supported (native delegate available)" claude
+      && lib.hasInfix "raw events not publishable" claude
       && lib.hasInfix "**kiro runtime orchestrator-delegate assessment:**" claude
       && hasProse "The child tool's own nesting capability is a separate observation" claude
       && lib.hasInfix "**codex exec / headless evidence:**" claude
       && lib.hasInfix "Requested controls:" claude
       && lib.hasInfix "Observed controls:" claude
       && lib.hasInfix "Replay:" claude
-      && hasProse "An omitted observation or declared mode is unknown, not unsupported" claude
+      && hasProse "A missing observation is unknown, not unsupported" claude
       && hasProse "effective pins describe observed behavior" claude
       && lib.all (index:
         capabilityCell modifiedNode "codex exec" index
-        == "acp: unknown (declared, not observed); headless: unknown (declared, not observed); interactive: unknown (declared, not observed)") [4 5 6 7 8 9]
+        == "acp: unknown (declared, not observed); headless: unknown (declared, not observed); interactive: unknown (declared, not observed)") [5 6 7 8 9 10]
       && !(lib.hasInfix "**codex exec / headless evidence:**" modifiedNode)
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (

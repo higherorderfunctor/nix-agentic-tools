@@ -1,8 +1,8 @@
 {
   "capabilities": {
     "available": {
-      "evidence": "MEASURED archived workflow completed with native workers on 2026-08-27.",
-      "result": "supported"
+      "evidence": "Historical report (2026-08-27, version unknown): archived run completed, agentCount 3, requested opus with effort omitted, worker resolved claude-opus-5/high; raw events not publishable.",
+      "result": "unknown"
     },
     "linkedWorktreeCommit": {
       "evidence": "No execution or resolved-value evidence was recovered.",
@@ -14,12 +14,12 @@
       "value": null
     },
     "pinsEffort": {
-      "evidence": "Worker recorded high, but the script omitted effort; explicit effort pinning was not tested.",
+      "evidence": "Historical report (2026-08-27, version unknown): archived run completed, agentCount 3, requested opus with effort omitted, worker resolved claude-opus-5/high; raw events not publishable.",
       "result": "unknown"
     },
     "pinsModel": {
-      "evidence": "MEASURED worker requested opus and resolved claude-opus-5.",
-      "result": "supported"
+      "evidence": "Historical report (2026-08-27, version unknown): archived run completed, agentCount 3, requested opus with effort omitted, worker resolved claude-opus-5/high; raw events not publishable.",
+      "result": "unknown"
     },
     "runsOwnSubagents": {
       "evidence": "No execution or resolved-value evidence was recovered.",
@@ -30,20 +30,18 @@
   "date": "2026-08-27",
   "mode": "interactive",
   "observed": {
-    "effort": "high",
-    "model": "claude-opus-5"
+    "effort": null,
+    "model": null
   },
   "replay": [
-    "Inspect private/usage-ledger/history/2026-08-27/claude-build-session/44be477f-1d60-45fb-a14f-d9a24a26547d/workflows/wf_a820c88d-84c.json:1.",
-    "Inspect that session subagents/workflows/wf_a820c88d-84c/agent-a433cf7ffd750ccec.meta.json:1 and agent-a433cf7ffd750ccec.jsonl:4.",
     "Replay the archived parallel/agent script with agent(prompt, {model: \"opus\"}); no effort argument was passed."
   ],
   "requested": {
     "effort": null,
-    "model": "opus"
+    "model": null
   },
   "runtime": "claude",
   "runtimeVersion": null,
-  "source": "runtime-evidence.md: Claude archived workflow and native workers",
+  "source": "historical archived run 2026-08-27; no publishable primary",
   "technique": "Workflow"
 }
