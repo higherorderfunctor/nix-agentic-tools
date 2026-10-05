@@ -1177,7 +1177,6 @@
     ai.programs.delegate-routing.settings.claude = {
       extraRuntimes = ["codex"];
       manualExternalDelegates = ["kiro"];
-      roles.default = {effort = "medium"; use = "strong";};
     };
     ```
 
@@ -1198,21 +1197,28 @@
     delegate-routing program with `ai.programs.delegate-routing.settings.kiro.enable = false`.
     Copilot is excluded because its delegation controls are unestablished.
 
-    Runtime `roles.default`, `roles.writer` and `roles.reviewer` optionally select a
-    tier or a family, with effort `low`, `medium`, `high`, `xhigh` or `max`.
-    All roles default to null. `use` takes a static tier or a family that this
-    runtime or an automatic extra selects. Family names must be unique across
-    vendors and cannot equal tiers. The default role sets the starting tier.
-    The default role's tier is the ceiling; a family resolves to its own tier. Writer and reviewer
-    effort inherits the default when unset. Explicit writer and reviewer choices
-    may exceed that default ceiling. Manual-only families are ineligible.
+    Portable `routing.<name>` entries carry `enable`, `always`, `before`, `after`
+    and `text` or `source`. Four routing defaults and the always-on load-skill stub
+    ship enabled. Enable the optional "Orchestrator session" entry with
+    `routing."Orchestrator session".enable` or either review workflow through
+    `workflows.<name>.enable`. Workflows expose named
+    `steps` with the same entry fields, so a consumer can change one step.
+    Entries with `always = true` become runtime rules; other entries live in the skill.
+    Ordering uses named `before` and `after` edges. Missing or disabled anchors are
+    ignored, cycles fail, and ties have no promised order.
+
+    Runtime `settings.<runtime>.routing` and `workflows` compose with portable maps
+    by key. A present runtime entry replaces the portable entry atomically; an
+    absent key inherits. Workflow headers and their step maps compose separately;
+    runtime steps replace portable steps by name while retaining siblings.
+    Within one scope, fields merge and different same-priority
+    text definitions conflict. Disable an inherited entry with `enable = false`.
 
     Runtime `techniques` describe workflows, subagents, external launches, model
     introspection and usage. Override a node's fields or disable it with
     `enable = false`. Pick the highest-version model matching a family's pattern from the live
-    runtime list, using its own spelling. Portable `rules` and `procedure` accept
-    replacement `text` or `source`, or `enable = false`. Both Home Manager and devenv
-    expose the same options.
+    runtime list, using its own spelling. Usage commands come from the existing
+    technique catalog. Both Home Manager and devenv expose the same options.
 
     </details>
 

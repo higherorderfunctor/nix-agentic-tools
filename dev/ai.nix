@@ -17,11 +17,12 @@
   pkgs,
   ...
 }: let
-  defaultDelegateRole = {
-    effort = "medium";
-    use = "strong";
-  };
   gen = import ./generate.nix {inherit lib pkgs;};
+  subtractionReview = after: {
+    after = [after];
+    before = ["Rounds"];
+    source = ../packages/delegate-routing/fragments/subtraction-review.md;
+  };
   # The stacked-workflows program is not imported (see devenv.nix), but its
   # always-on routing rule is wanted: deliver it from the program's source.
   swsRouter = import ../packages/stacked-workflows/router.nix {inherit lib pkgs;};
@@ -132,27 +133,39 @@ in {
           };
         };
       };
+      routing = {
+        "Local limits" = {
+          always = true;
+          source = ../packages/delegate-routing/fragments/local-limits.md;
+        };
+        "Orchestrator session".enable = true;
+      };
       settings = {
         claude = {
           extraRuntimes = ["codex"];
           manualExternalDelegates = ["kimchi" "kiro"];
-          roles.default = defaultDelegateRole;
+          routing."Pool drain" = {
+            after = ["Size the work"];
+            always = true;
+            source = ../packages/delegate-routing/fragments/pool-drain.md;
+          };
         };
-        codex.roles.default = defaultDelegateRole;
         kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
         # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
         # only, and not Fable, which this account does not have.
         kiro = {
           models = [{families = ["haiku" "opus" "sonnet"];}];
-          roles.default = defaultDelegateRole;
         };
       };
-      # Enable the package's own guidance here because this repository is its primary consumer.
-      whenToDelegate = {
-        "Launch independent work together".enable = true;
-        "Orchestrator session".enable = true;
-        "Prefer the flat-rate pool".enable = true;
-        "Verify by the artifact".enable = true;
+      workflows = {
+        "Review: one reviewer" = {
+          enable = true;
+          steps."Subtraction review" = subtractionReview "Review";
+        };
+        "Review: prosecute, defend, judge" = {
+          enable = true;
+          steps."Subtraction review" = subtractionReview "Judge";
+        };
       };
     };
 

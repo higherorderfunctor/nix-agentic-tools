@@ -385,9 +385,8 @@ in {
         programParity "delegate-routing" {
           enable = "boolean";
           families = "attribute set of attribute set of (submodule)";
-          procedure = "submodule";
-          rules = "submodule";
-          whenToDelegate = "attribute set of (submodule)";
+          routing = "attribute set of (submodule)";
+          workflows = "attribute set of (submodule)";
         } ["claude" "codex" "kimchi" "kiro"]
         && programParity "stacked-workflows" {enable = "boolean";} harnessNames
         && hm.options.stacked-workflows ? gitPreset
