@@ -156,7 +156,7 @@ in {
     module-kimchi-docs-skill-runtime-override = mkTest "kimchi-docs-skill-runtime-override" (
       let
         result = evalHm (lib.recursiveUpdate enable {
-          ai.programs.kimchi-docs.settings.kimchi.enable = false;
+          ai.programs.kimchi-docs.runtimes.kimchi.enable = false;
         });
       in
         !(result.config.ai.kimchi.skills ? kimchi-docs)

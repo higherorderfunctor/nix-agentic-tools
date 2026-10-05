@@ -1,7 +1,7 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 
 `ai.programs.delegate-routing.families` is the portable decision table, keyed by
 vendor and family. Each family has a capability tier, task and effort guidance,
@@ -13,7 +13,7 @@ models, so a consumer declares those families; this repository does in
 `dev/ai.nix`.
 
 Each runtime chooses families through
-`ai.programs.delegate-routing.settings.<runtime>.models`. Selectors are
+`ai.programs.delegate-routing.runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
 tier and family name. Claude defaults to Anthropic, Codex to OpenAI, and Kimchi
 and Kiro to no selection, so the package builds no default skill for either.
@@ -49,7 +49,7 @@ occurs in both lists. Selected families appear once per tier with all applicable
 native and external reaches. A cross-vendor review sentence appears only when
 automatic candidates span multiple vendors.
 
-`ai.programs.delegate-routing.settings.<runtime>.techniques` is a keyed set of
+`ai.programs.delegate-routing.runtimes.<runtime>.techniques` is a keyed set of
 workflow, subagent, external, introspect and usage nodes. Delegate nodes declare
 whether they pin model and effort and where they are available: interactive,
 headless or ACP. Assertions require both pin fields to be non-null exactly for

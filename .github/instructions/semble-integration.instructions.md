@@ -7,8 +7,8 @@ applyTo: "packages/semble/**"
 
 # Semble integrations
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -80,9 +80,9 @@ ai = {
   };
 
   # Program-level on/off replaces runtime lists.
-  programs.semble.settings.claude.enable = false;
-  programs.semble.settings.codex.subagent.enable = true;
-  programs.semble.settings.kiro.mcp.enable = false;
+  programs.semble.runtimes.claude.enable = false;
+  programs.semble.runtimes.codex.subagent.enable = true;
+  programs.semble.runtimes.kiro.mcp.enable = false;
 };
 ```
 
@@ -93,7 +93,7 @@ feature value, an explicit runtime program value, the portable feature value,
 then the portable program value. CLI instructions and the subagent are portable
 boolean opt-ins instead: a runtime program `false` retracts them, a runtime
 feature value can differ, and runtime program `true` does not turn them on
-implicitly. This makes `ai.programs.semble.settings.<runtime>.enable = false`
+implicitly. This makes `ai.programs.semble.runtimes.<runtime>.enable = false`
 the replacement for removing a runtime from the former selector even when a
 portable feature is explicitly enabled; an explicit runtime feature value can
 still make just that feature differ. There is no `runtimes` selector. Program
@@ -189,7 +189,7 @@ CLI rule instead defaults each content field: a consumer's higher-priority
 `text` overrides the packaged `source`, which remains visible on the resolved
 rule. Set `ai.<runtime>.rules.semble.enable = false` to retract it at the
 normalized pool, or disable
-`ai.programs.semble.settings.<runtime>.cli.instructions` at its package gate.
+`ai.programs.semble.runtimes.<runtime>.cli.instructions` at its package gate.
 Kiro takes the same portable record on `ai.kiro.agents.semble-search`, plus its
 native fields (capability-tag `tools`, and for the MCP interface
 `includeMcpJson` and the agent-scoped server) on
