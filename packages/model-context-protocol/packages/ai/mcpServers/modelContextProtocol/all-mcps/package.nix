@@ -11,12 +11,12 @@
   bun = pkgs.ai.generic.bun;
   vu = packageLib;
 
-  rev = "f46d9578190b476b3501923ea8977d899e8db2cb";
+  rev = "5abed86c5317b833dd59907492d56c65981642aa";
   src = fetchFromGitHub {
     owner = "modelcontextprotocol";
     repo = "servers";
     inherit rev;
-    hash = "sha256-Ujfrz/0WOJpiVTJ6VdeUoEiJ1wo3/AUoLn8jJ4hla5I=";
+    hash = "sha256-qwDGp9cohSkvx6kPPIJQxxw9IAd8ClkDTmczrG0jBcE=";
   };
 
   # Helper: compute version string from a sub-package's upstream version.
