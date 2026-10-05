@@ -148,9 +148,9 @@
     modifiedNode = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
     invalidNode = node: change {ai.programs.delegate-routing.runtimes.claude.techniques.Invalid = node;};
     techniqueRow = text: technique: lib.findFirst (lib.hasInfix "`${technique}`") "" (lib.splitString "\n" text);
-    kiroInvoke = techniqueRow kiro "invoke_sub_agent";
-    # Technique, kind, pins model, pins effort and modes, without table padding.
-    techniqueCells = text: technique: lib.sublist 1 5 (map lib.trim (lib.splitString "|" (techniqueRow text technique)));
+    # Technique, kind and declared pin controls, without table padding.
+    techniqueCells = text: technique: lib.sublist 1 4 (map lib.trim (lib.splitString "|" (techniqueRow text technique)));
+    capabilityCell = text: technique: index: builtins.elemAt (map lib.trim (lib.splitString "|" (techniqueRow text technique))) (index + 1);
     ruleText = value: value.config.ai.claude.rules.delegate-routing-router.text;
     ordered = text: names: let
       headings = lib.filter (line: lib.hasPrefix "### " line) (lib.splitString "\n" text);
@@ -439,19 +439,21 @@
       })
     );
     "module-delegate-routing-${name}-techniques" = mkTest "delegate-routing-${name}-techniques" (
-      !(lib.hasInfix "`Agent`" disabledNode)
+      # Disabling Claude Agent leaves the external Kimchi Agent visible.
+      techniqueCells disabledNode "Agent"
+      == ["`Agent`" "subagent (inside the external root)" "true" "true"]
       && lib.hasInfix "`Workflow`" disabledNode
       && lib.hasInfix "CUSTOM CODEX COMMAND" modifiedNode
       && !(lib.hasInfix "| workflow" codex)
-      && lib.hasInfix "headless+acp" kiroInvoke
       && lib.hasInfix "/bin/claude-usage`" claude
       && lib.hasInfix "/bin/codex-usage`" codex
       && !(lib.hasInfix "(usage)" kiro)
-      && !(lib.hasInfix "`spawn_agent`" claude)
-      && !(lib.hasInfix "`invoke_sub_agent`" claude)
+      && techniqueCells claude "spawn_agent" == ["`spawn_agent`" "subagent (inside the external root)" "true" "true"]
+      && techniqueCells claude "invoke_sub_agent" == ["`invoke_sub_agent`" "subagent (inside the external root)" "false" "false"]
+      && techniqueCells claude "run_workflow" == ["`run_workflow`" "workflow (inside the external root)" "true" "true"]
       && lib.hasInfix "kiro-cli chat --no-interactive --model <id> --effort <effort>" claude
       && lib.hasInfix "always pass `thinking` explicitly" (techniqueRow kimchi "Agent")
-      && techniqueCells kimchi "Agent" == ["`Agent`" "subagent" "true" "true" "acp+headless+interactive"]
+      && techniqueCells kimchi "Agent" == ["`Agent`" "subagent" "true" "true"]
       && lib.hasInfix "**models (introspect):** `kimchi --list-models`" kimchi
       && !(lib.hasInfix "(usage)" kimchi)
       && lib.hasInfix "### kimchi techniques" claude
@@ -459,9 +461,44 @@
       && !(lib.hasInfix "`/workflow`" claude)
       && hasProse "comparing version numbers segment by segment (6.1 > 6 > 5.6)" claude
       && hasProse "Use a technique only if it appears in your tool list" claude
-      && hasProse "an agent cannot reliably tell which mode it is in, but it can see its tools" claude
-      && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
+      && hasProse "Availability and delegate capabilities are recorded separately for ACP, headless and interactive modes" claude
+      && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false"]
       && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
+    );
+    "module-delegate-routing-${name}-capabilities" = mkTest "delegate-routing-${name}-capabilities" (
+      lib.all (heading: lib.hasInfix heading claude) [
+        "Pins model (declared input control)"
+        "Pins effort (declared input control)"
+        "Availability by mode"
+        "Runs own subagents"
+        "Nesting depth"
+        "Linked worktree commit"
+        "Effective model pin"
+        "Effective effort pin"
+      ]
+      && capabilityCell codex "codex exec" 4 == "acp: unknown; headless: supported; interactive: unknown"
+      && capabilityCell codex "codex exec" 5 == "acp: unknown; headless: supported; interactive: unknown"
+      && capabilityCell codex "codex exec" 6 == "acp: unknown; headless: unknown; interactive: unknown"
+      && capabilityCell codex "codex exec" 7 == "acp: unknown; headless: unknown; interactive: unknown"
+      && capabilityCell codex "codex exec" 8 == "acp: unknown; headless: unknown; interactive: unknown"
+      && capabilityCell codex "codex exec" 9 == "acp: unknown; headless: unknown; interactive: unknown"
+      && capabilityCell claude "Agent" 9 == "acp: unknown; headless: unknown; interactive: unsupported"
+      && capabilityCell kimchi "Agent" 5 == "acp: unknown; headless: unsupported; interactive: unknown"
+      && capabilityCell kiro "invoke_sub_agent" 6 == "acp: supported (5); headless: unknown; interactive: unknown"
+      && lib.hasInfix "**codex runtime orchestrator-delegate assessment:**" claude
+      && lib.hasInfix "supported (native delegate available)" claude
+      && lib.hasInfix "**kiro runtime orchestrator-delegate assessment:**" claude
+      && hasProse "The child tool's own nesting capability is a separate observation" claude
+      && lib.hasInfix "**codex exec / headless evidence:**" claude
+      && lib.hasInfix "Requested controls:" claude
+      && lib.hasInfix "Observed controls:" claude
+      && lib.hasInfix "Replay:" claude
+      && hasProse "An omitted observation or declared mode is unknown, not unsupported" claude
+      && hasProse "effective pins describe observed behavior" claude
+      && lib.all (index:
+        capabilityCell modifiedNode "codex exec" index
+        == "acp: unknown (declared, not observed); headless: unknown (declared, not observed); interactive: unknown (declared, not observed)") [4 5 6 7 8 9]
+      && !(lib.hasInfix "**codex exec / headless evidence:**" modifiedNode)
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (
       failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false"
