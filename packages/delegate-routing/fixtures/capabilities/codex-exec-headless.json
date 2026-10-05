@@ -1,0 +1,50 @@
+{
+  "capabilities": {
+    "available": {
+      "evidence": "MEASURED: evidence was produced inside the requested codex exec design run.",
+      "result": "supported"
+    },
+    "linkedWorktreeCommit": {
+      "evidence": "No execution or resolved-value evidence was recovered.",
+      "result": "unknown"
+    },
+    "nestingDepth": {
+      "evidence": "Maximum native nesting depth was not exercised.",
+      "result": "unknown",
+      "value": null
+    },
+    "pinsEffort": {
+      "evidence": "No execution or resolved-value evidence was recovered.",
+      "result": "unknown"
+    },
+    "pinsModel": {
+      "evidence": "No execution or resolved-value evidence was recovered.",
+      "result": "unknown"
+    },
+    "runsOwnSubagents": {
+      "evidence": "MEASURED external root called spawn_agent and read completed child artifacts; grandchildren not tested.",
+      "result": "supported"
+    }
+  },
+  "context": "Existing headless design root, requested gpt-6-astra/high; root had native collaboration tools. Full launcher command and permission posture were not recorded.",
+  "date": "2026-10-04",
+  "mode": "headless",
+  "observed": {
+    "effort": null,
+    "model": null
+  },
+  "replay": [
+    "Run codex --version; recorded output: codex-cli 0.160.0.",
+    "Inside the codex exec root call collaboration.spawn_agent with task_name surface_facts, fork_turns none, model gpt-6-luna, reasoning_effort medium and a bounded read-only message. The original message was omitted from the recorded evidence; reproduce those exact settings with a fresh bounded read-only brief.",
+    "Observe returned {\"task_name\":\"/root/surface_facts\"}; read the child completion artifact and collaboration.list_agents({}) status.",
+    "Recorded during a 2026-10-04 codex exec design run (codex-cli 0.160.0); the raw transcript was not retained in the repository. Replay with probes/README.md."
+  ],
+  "requested": {
+    "effort": "high",
+    "model": "gpt-6-astra"
+  },
+  "runtime": "codex",
+  "runtimeVersion": "0.160.0",
+  "source": "native-subagent-probe.md: parent invocation context (2026-10-04)",
+  "technique": "codex exec"
+}
