@@ -1,11 +1,11 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — capability observations join technique
-> **Last verified:** 2026-10-04 — capability observations join technique
-> declarations by runtime, technique and mode and cite only publishable
-> evidence; the manual evaluation suite renders delivered policy through the
-> module harness, a separate vendor set captures real repository delivery, and
-> model turns stay outside structural checks.
+> **Last verified:** 2026-10-04 — capability observations join technique **Last
+> verified:** 2026-10-04 — capability observations join technique declarations
+> by runtime, technique and mode and cite only publishable evidence; the manual
+> evaluation suite renders delivered policy through the module harness, a
+> separate vendor set captures real repository delivery, and model turns stay
+> outside structural checks.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
