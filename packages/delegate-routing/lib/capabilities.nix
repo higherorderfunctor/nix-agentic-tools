@@ -26,7 +26,11 @@
     "pinsModel"
     "runsOwnSubagents"
   ];
-  validate = value:
+  validate = value: let
+    publishable = text:
+      nonemptyString text
+      && builtins.match ".*(^|[^A-Za-z0-9_.$}-])(/nix/store/|/home/|/Users/|/tmp/|private/).*" text == null;
+  in
     exactKeys [
       "capabilities"
       "context"
@@ -49,14 +53,15 @@
     && nonemptyString value.technique
     && builtins.isList value.replay
     && value.replay != []
-    && builtins.all nonemptyString value.replay
+    && builtins.all publishable value.replay
     && pins value.requested
     && pins value.observed
-    && nonemptyString value.context
-    && nonemptyString value.source
+    && publishable value.context
+    && publishable value.source
     && exactKeys (ordinaryCapabilities ++ ["nestingDepth"]) value.capabilities
     && builtins.all (name: resultRecord value.capabilities.${name}) ordinaryCapabilities
-    && depthRecord value.capabilities.nestingDepth;
+    && depthRecord value.capabilities.nestingDepth
+    && builtins.all (record: publishable record.evidence) (builtins.attrValues value.capabilities);
 
   directory = ../fixtures/capabilities;
   entries = builtins.readDir directory;
@@ -85,28 +90,11 @@
   observations = builtins.deepSeq checked (map (record: record.value) checked);
   find = runtime: technique: mode:
     lib.findFirst (value: sameIdentity value {inherit runtime technique mode;}) null observations;
-  display = value:
-    if value == null
+  header = observation: "${observation.runtime} ${
+    if observation.runtimeVersion == null
     then "unknown"
-    else toString value;
-  format = observation: capability:
-    if observation == null
-    then "unknown (no recorded observation)"
-    else let
-      record = observation.capabilities.${capability};
-      pinField =
-        if capability == "pinsModel"
-        then "model"
-        else if capability == "pinsEffort"
-        then "effort"
-        else null;
-      detail =
-        if pinField != null
-        then "; requested ${pinField}=${display observation.requested.${pinField}}, observed ${pinField}=${display observation.observed.${pinField}}"
-        else if capability == "nestingDepth"
-        then "; depth=${display record.value}"
-        else "";
-    in "${record.result} (${observation.runtime} ${display observation.runtimeVersion}; ${observation.date}; ${observation.source}): ${record.evidence}${detail}";
+    else observation.runtimeVersion
+  }; ${observation.date}; ${observation.source}";
 in {
-  inherit find format observations validate;
+  inherit find header observations validate;
 }
