@@ -4,13 +4,10 @@
 # The engine bundle is NOT in the nix store. `kiro-cli` carries it as an
 # embedded asset and unpacks it on first use into
 # `$KIRO_DATA_DIR/kas/<version>-<sha256>/`, so at build time there is nothing to
-# patch. Extraction cannot be moved into a derivation either: the binary checks
-# authentication BEFORE it unpacks, so a sandbox with no credentials and no
-# network never produces a bundle (measured -- `error: You are not logged in`,
-# then a bare `os error 2` once an API key is present). Anything that got past
-# those gates would be relying on undocumented behavior of a proprietary binary
-# inside CI, which is a worse drift risk than the one this option exists to
-# avoid.
+# patch directly. A dummy KIRO_API_KEY with `acp --agent-engine v3` does unpack
+# a bundle without credentials or network in a sandbox (the steering drift
+# check uses this). Identity replacement stays at launch so it patches the
+# user's actual engine bundle, including after CLI upgrades.
 #
 # So the patch is applied where the bundle actually exists: on the user's
 # machine, at launch, into a cache keyed by (engine bundle, replacement text).
