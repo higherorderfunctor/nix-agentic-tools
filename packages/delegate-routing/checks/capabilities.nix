@@ -64,6 +64,9 @@
   replaceCapability = name: record:
     sample // {capabilities = sample.capabilities // {${name} = record;};};
   invalid = [
+    (sample // {context = "from /home/u/repo";})
+    (sample // {source = "private/x.md";})
+    (sample // {replay = ["cat /nix/store/abc-x/y"];})
     (sample // {date = "2026/10/04";})
     (sample // {mode = "batch";})
     (sample
@@ -109,7 +112,6 @@
     })
   ];
   workflow = capabilities.find "claude" "Workflow" "interactive";
-  workflowPin = capabilities.format workflow "pinsModel";
   # Exercise the catalog renderer directly; Copilot is not a module runtime.
   copilot = render {
     runtime = "copilot";
@@ -146,29 +148,29 @@ in {
     && lib.all (name: !capabilities.validate (builtins.removeAttrs sample [name])) (builtins.attrNames sample)
     && capabilities.find "missing-runtime" "Agent" "interactive" == null
     && capabilities.find "claude" "Agent" "acp" == null
-    && capabilities.format null "available" == "unknown (no recorded observation)"
     && lib.hasInfix "acp: unknown" (row "Agent" native)
     && lib.hasInfix "| `Agent` | subagent |" native
+    && lib.hasInfix "| Declared modes |" native
+    && lib.hasInfix "| headless |" (row "claude -p" native)
     && lib.hasInfix "| Runs own subagents |" native
     && lib.all (mode: lib.hasInfix "${mode}:" (row "Agent" native)) ["acp" "headless" "interactive"]
     && lib.hasInfix "declared, not observed" (row "consumer" custom)
     && !(lib.hasInfix "**consumer /" custom)
     && lib.hasInfix "subagent (inside the external root)" (row "spawn_agent" external)
     && lib.hasInfix "Runtime can own delegates" external
-    && lib.hasInfix "headless: supported" (row "spawn_agent" external)
+    && lib.hasInfix "raw events not publishable" external
     && lib.hasInfix "headless: unknown" (row "spawn_agent" external)
     && lib.all (text:
       lib.hasInfix "declared, not observed" (row "Workflow" text)
       && !(lib.hasInfix "**Workflow / interactive evidence:**" text))
     changed
     && lib.hasInfix "**Workflow / interactive evidence:**" native
-    && lib.hasInfix "requested model=opus, observed model=claude-opus-5" workflowPin
-    && lib.hasInfix workflow.source workflowPin
-    && lib.hasInfix workflow.date workflowPin
-    && lib.hasInfix "Requested controls:" native
+    && lib.hasInfix workflow.source native
+    && lib.hasInfix workflow.date native
+    && lib.hasInfix ''Requested controls: `{"effort":null,"model":null}`'' native
     && lib.hasInfix "Observed controls:" native
     && lib.hasInfix "**fleet / headless evidence:**" copilot
-    && lib.hasInfix "runtime-evidence.md: Copilot findings (installed help)" copilot
+    && lib.hasInfix "GitHub Copilot CLI 1.0.91: `copilot --help`, `copilot help config`" copilot
     && lib.hasInfix "HELP exposes per-agent model config and inherit; resolved values unknown." copilot
     && lib.hasInfix "HELP exposes effortLevel config and inherit; resolved values unknown." copilot
     && lib.hasInfix "headless: unknown;" (row "fleet" copilot)
