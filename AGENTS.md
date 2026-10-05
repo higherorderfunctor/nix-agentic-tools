@@ -363,59 +363,41 @@ for it. When several entries match, their guidance composes.
 
 <!-- rule: delegate-routing-router -->
 
-## Delegate Routing
+# Delegate routing
 
-Before calling a subagent, spawning a delegate, or building a workflow, load the
-`delegate-routing` skill when your harness provides it and size the model and
-effort explicitly; a delegate never inherits the session's model and effort.
+### Load delegate-routing
 
-### Launch independent work together
+Before you hand work to a subagent, another CLI or a workflow, load the
+delegate-routing skill. It lists the models and tools you can use, and how to
+set model and effort for each.
 
-Before launching a delegate, ask what else is ready to run now. Briefs that
-share no state go out in one message, not in consecutive turns.
+### Local limits
 
-A dependency graph deeper than two steps belongs in a workflow script, so stages
-overlap instead of queueing.
-
-Concurrency is still bounded: at most two external CLI delegates on one machine,
-and never two against the same working tree before the first has committed.
+On this machine, run at most two external CLI delegates at once.
 
 ### Orchestrator session
 
-Keep the main session conversational. It reasons with the operator, decides, and
-delegates the doing.
+Keep this session for talking with the user, deciding, and checking results.
+Hand bulk reading, searching, measuring and edit-and-test loops to delegates.
+Have them write large output to files and report a short summary with its
+evidence. Give each delegate one task: one part of the system, or one question.
 
-Delegate bulk reading, searching and measurement, every edit-verify loop, and
-any run longer than a few minutes. Keep the decision, the brief, and the
-verification of what came back.
+### Verify the result
 
-Read a file into the session only to reason about it with the operator. Bulk
-output goes to disk and the delegate reports the conclusion.
+Give each delegate one clear goal and say what result proves it's done. Require
+an evidence chain for every claim it reports: file and line, or the exact
+command and its output. Each claim comes back as verified, retracted (checked
+and not an issue, with the reason), or unknown (not checked, with what would
+settle it). Delegates never drop a claim silently.
 
-One task per delegate context. A brief carries one surface, one finding group or
-one probe set; a brief that needs numbered sections is several briefs. Tasks
-that share a working tree go to successive delegates, each committing before the
-next starts. Judges follow the same rule: one judge per surface, not one over
-the whole diff. A delegate does not split its own brief; the split is the
-orchestrator's job.
-
-### Prefer the flat-rate pool
-
-When one pool bills per token and another is flat-rate, send long, iterative or
-context-heavy work to the flat-rate pool. Offloading there is not a budget
-trade-off.
-
-An unused allowance does not carry over. Spending it is free; hoarding it is a
-loss.
-
-### Verify by the artifact
-
-A delegate's exit code reports whether its process ended, not whether it did the
-work. Verify by the tree, the diff or the artifact it was asked to produce.
-
-Ask what else in the repository is derived from or gated on the files it
-touched, and check those too. Reviewing the diff proves the diff is good; it
-does not prove the tree is consistent.
+At each level of orchestration, judge those claims before passing them up.
+Re-run the commands the important claims depend on. An exit code of 0 alone
+isn't proof. Check whatever depends on the changed files, such as generated
+files and tests. When something fails, name why: a concept problem needs a
+stronger model, missing evidence needs fetching, an execution slip needs fixing.
+Fix small things yourself, and drop what turned out not to be an issue. Bring
+the user only what's real and needs their decision, written the way their
+communication rules ask, if they have any.
 
 <!-- rule: semble -->
 
