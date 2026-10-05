@@ -84,17 +84,19 @@ harness `settings.json` it declares:
     `module-kimchi-auto-model-default`.
 
 `packages/kimchi/extracted.json` measures the two native settings surfaces and
-the environment variables Kimchi and pi read, and `lib/extracted.nix` is its
-only reader. It generates the closed `native.settings` (from `config.*`) and
-`native.harnessSettings` (from `harness.*`, resolving `harness.definitions`)
-option trees: scalars and enums map directly, objects with properties become
-closed submodules, `additionalProperties` becomes `attrsOf`, and arrays keep
-untyped elements unless they are scalars, because `filterNulls` does not recurse
-into lists. So a key upstream adds to pi's `Settings` or to config.ts's
-`readConfigExtras` becomes an option at the next re-extraction, and a key it
-removes fails its consumer as an unknown option instead of writing bytes nothing
-reads. Every option is `nullOr` with a null default. Config annotations may name
-an `aliasFor` or the exact `introduced` release. The extractor validates every
+the environment variables Kimchi and pi read, and pi’s `virtualPackages` from
+its loader’s literal `VIRTUAL_MODULES` keys (deduplicated npm package names).
+`lib/extracted.nix` is its only reader. It generates the closed
+`native.settings` (from `config.*`) and `native.harnessSettings` (from
+`harness.*`, resolving `harness.definitions`) option trees: scalars and enums
+map directly, objects with properties become closed submodules,
+`additionalProperties` becomes `attrsOf`, and arrays keep untyped elements
+unless they are scalars, because `filterNulls` does not recurse into lists. So a
+key upstream adds to pi's `Settings` or to config.ts's `readConfigExtras`
+becomes an option at the next re-extraction, and a key it removes fails its
+consumer as an unknown option instead of writing bytes nothing reads. Every
+option is `nullOr` with a null default. Config annotations may name an
+`aliasFor` or the exact `introduced` release. The extractor validates every
 annotation before release gating, then includes only active rows in its census
 and generated sidecar. Alias keys and inert keys have no option. A key is inert
 when upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
@@ -640,25 +642,25 @@ in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
 update target and `updateScript` resolve the release tag to a commit, refresh
 the source hash and fix the pnpm dependency hash. The build uses
 `pkgs.ai.generic.pnpm_10`, stamps upstream's placeholder version, generates
-distribution metadata, and compiles TypeScript. No prebuilt npm distribution is
-substituted. Metadata formatting uses `BIOME_BINARY` to select Nixpkgs' Biome
-instead of npm's unpatched Linux executable. The locked Biome 2.5.6 and Nixpkgs
-2.5.14 produce identical distribution metadata at this pin; the build generates
-that file before TypeScript and does not run `dist:check`. Linux fixup uses
-`autoPatchelfHook` and the compiler runtime for Vitest's Rolldown and Lightning
-CSS native bindings in the installed runtime graph. TypeScript 7's Linux
-compiler is static and needs no ELF fixup. Darwin selects native Mach-O
-dependencies and does not use the Linux hook.
+distribution metadata, and compiles TypeScript. Metadata formatting uses
+`BIOME_BINARY` to select Nixpkgs' Biome instead of npm's unpatched Linux
+executable. Linux fixup uses `autoPatchelfHook` and the compiler runtime for
+Vitest's Rolldown and Lightning CSS native bindings in the installed runtime
+graph. TypeScript 7's Linux compiler is static and needs no ELF fixup. Darwin
+selects native Mach-O dependencies and does not use the Linux hook.
 
 The installed package has `package.json` with `pi.extensions`, `src/`, `dist/`,
 `bin/`, docs and examples. Its `node_modules` holds the locked runtime
 dependency closure, including TypeScript and Vitest because the workflow
 verification path uses them. The installation helper copies dependencies and
 their dependency/peer links once per physical package, without development
-dependencies or a network install. Pi and typebox peers are omitted from that
-graph: Kimchi's compiled pi loader supplies those specifiers as virtual modules,
-including typebox subpaths. The extension's root manifest retains its peer
-declarations and source entry. See the
+dependencies or a network install. Packages named by pi’s literal
+`VIRTUAL_MODULES` keys are omitted from that graph: the extractor collapses
+subpaths to npm package names in `extracted.json.virtualPackages`, consumed
+through `lib/extracted.nix`. The installer checks every manifest extension entry
+exists inside the output and every `node_modules` symlink resolves inside it.
+The extension's root manifest retains its peer declarations and source entry.
+See the
 [pinned workflows manifest](https://github.com/getkimchi/kimchi-workflows/blob/7a6765ccc4aa417f38cecce1216dd8dcd3b9fab7/package.json).
 
 Declare the package with:
@@ -722,8 +724,6 @@ CI builds both packages on Linux and Darwin through package discovery. Checks:
 
 - `kimchi-workflows-source` runs the same exact substitutions on the two source
   files and rejects leftover registrations, without compiling Kimchi.
-- `kimchi-workflows-payload` checks the installed entries, pin identity,
-  manifest and runtime roots, including absent virtual peers.
 - `module-kimchi-external-workflows` checks both backends: empty delivery, one
   and two package links with store context, raw package composition, and
   rejection of strings as extension packages.
@@ -737,10 +737,3 @@ CI builds both packages on Linux and Darwin through package discovery. Checks:
   settings. An absent-package control also consumes unknown input before model
   dispatch. Fresh HOME/XDG paths isolate resource and credential state; each
   process has a 60-second deadline.
-
-The smoke is feasible offline because slash commands dispatch before credential
-validation and these cases need no model. It still must pass in CI's Nix
-sandbox: the operator's external-entry and settings probes proved loading and
-model-backed workflow completion in the real environment, not this patched
-build's sandbox behavior. No local compile or Kimchi execution is part of this
-change's validation.
