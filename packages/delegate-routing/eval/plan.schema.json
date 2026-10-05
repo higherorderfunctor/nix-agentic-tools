@@ -1,0 +1,373 @@
+{
+  "$defs": {
+    "limitation": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+          "type": "string"
+        },
+        "explanation": {
+          "$ref": "#/$defs/nonemptyString"
+        }
+      },
+      "required": ["code", "explanation"],
+      "type": "object"
+    },
+    "nonemptyString": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "type": "string"
+    },
+    "review": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "delegates": {
+                "minItems": 1
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "workflow": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "delegates": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "delegates": {
+          "items": {
+            "$ref": "#/$defs/reviewDelegate"
+          },
+          "type": "array"
+        },
+        "workflow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/nonemptyString"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["delegates", "workflow"],
+      "type": "object"
+    },
+    "reviewDelegate": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sizedSelection"
+        }
+      ],
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/nonemptyString"
+        },
+        "role": {
+          "enum": ["defender", "judge", "prosecutor", "reviewer"]
+        },
+        "usageBefore": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "required": ["actor", "role", "usageBefore"],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "selection": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sizedSelection"
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "sizedSelection": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "effort": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "effortSource": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "effortSource": {
+                "const": "not_applicable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "effort": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "effort": {
+          "enum": ["low", "medium", "high", "xhigh", "max", "ultra", null]
+        },
+        "effortSource": {
+          "enum": ["explicit", "known_inherited", "not_applicable", "unknown"]
+        },
+        "family": {
+          "$ref": "#/$defs/nonemptyString"
+        },
+        "model": {
+          "$ref": "#/$defs/nonemptyString"
+        },
+        "runtime": {
+          "enum": ["claude", "codex", "kimchi", "kiro"]
+        },
+        "technique": {
+          "$ref": "#/$defs/nonemptyString"
+        }
+      },
+      "required": [
+        "effort",
+        "effortSource",
+        "family",
+        "model",
+        "runtime",
+        "technique"
+      ],
+      "type": "object"
+    },
+    "stage": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/sizedSelection"
+        }
+      ],
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/nonemptyString"
+        },
+        "dependsOn": {
+          "$ref": "#/$defs/stringList"
+        },
+        "id": {
+          "$ref": "#/$defs/nonemptyString"
+        },
+        "usageBefore": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "required": ["actor", "dependsOn", "id", "usageBefore"],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "stringList": {
+      "items": {
+        "$ref": "#/$defs/nonemptyString"
+      },
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "properties": {
+          "selection": {
+            "$ref": "#/$defs/selection"
+          },
+          "shape": {
+            "not": {
+              "const": "blocked"
+            }
+          },
+          "stages": {
+            "minItems": 1
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "blocked"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "limitations": {
+            "minItems": 1
+          },
+          "review": {
+            "properties": {
+              "delegates": {
+                "maxItems": 0
+              },
+              "workflow": {
+                "type": "null"
+              }
+            }
+          },
+          "selection": {
+            "type": "null"
+          },
+          "shape": {
+            "const": "blocked"
+          },
+          "stages": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "shape": {
+            "const": "session_steps"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "owner": {
+            "const": "session"
+          },
+          "selection": {
+            "properties": {
+              "technique": {
+                "const": "inline"
+              }
+            }
+          },
+          "stages": {
+            "items": {
+              "properties": {
+                "actor": {
+                  "const": "session"
+                },
+                "technique": {
+                  "const": "inline"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "shape": {
+            "const": "native_child"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "stages": {
+            "maxItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "description": "Strict planning-only answer contract. Fixture grading checks inventory, concrete model identity, effort controls, distinct actor IDs, dependency references and completion ownership.",
+  "properties": {
+    "caseId": {
+      "$ref": "#/$defs/nonemptyString"
+    },
+    "limitations": {
+      "items": {
+        "$ref": "#/$defs/limitation"
+      },
+      "type": "array"
+    },
+    "owner": {
+      "$ref": "#/$defs/nonemptyString"
+    },
+    "rationale": {
+      "$ref": "#/$defs/nonemptyString"
+    },
+    "review": {
+      "$ref": "#/$defs/review"
+    },
+    "selection": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/selection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "shape": {
+      "enum": [
+        "native_child",
+        "native_children",
+        "native_workflow",
+        "external_root",
+        "external_cli_graph",
+        "session_steps",
+        "blocked"
+      ]
+    },
+    "stages": {
+      "items": {
+        "$ref": "#/$defs/stage"
+      },
+      "type": "array"
+    },
+    "status": {
+      "enum": ["blocked", "planned"]
+    },
+    "usageInspections": {
+      "$ref": "#/$defs/stringList"
+    },
+    "verification": {
+      "$ref": "#/$defs/nonemptyString"
+    }
+  },
+  "required": [
+    "caseId",
+    "limitations",
+    "owner",
+    "rationale",
+    "review",
+    "selection",
+    "shape",
+    "stages",
+    "status",
+    "usageInspections",
+    "verification"
+  ],
+  "title": "Delegate routing simulation plan",
+  "type": "object"
+}
