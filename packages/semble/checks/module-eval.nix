@@ -64,10 +64,12 @@ in {
             ai.codex.native.settings.sandbox_mode = "workspace-write";
             ai.programs.semble.settings.claude.enable = true;
           }).config;
-        profileConfig.ai.codex = {
-          enable = true;
-          native.settings.default_permissions = "project-edit";
-          programs.semble.enable = true;
+        profileConfig.ai = {
+          codex = {
+            enable = true;
+            native.settings.default_permissions = "project-edit";
+          };
+          programs.semble.settings.codex.enable = true;
         };
         profileOnly = (evalDevenv profileConfig).config;
         profileDenied =
