@@ -4,9 +4,8 @@
   families,
   models,
   techniques,
-  rules,
-  procedure,
-  roles,
+  routing ? {},
+  workflows ? {},
   extraRuntimes ? [],
   manualExternalDelegates ? [],
 }: let
@@ -18,27 +17,9 @@
   selected = target: select families models.${target};
   targets = family: builtins.filter (target: builtins.elem family (selected target)) runtimes;
   candidates = selection.candidates families models runtimes;
-  roleTier = role:
-    if builtins.elem role.use tiers
-    then role.use
-    else (lib.findFirst (family: family.name == role.use) (throw "roles: ${role.use} is not a tier or a rendered family") candidates).tier;
-  roleText = name: let
-    role = roles.${name} or null;
-    effort = lib.findFirst (value: value != null) null [(role.effort or null) (roles.default.effort or null)];
-  in
-    lib.optionalString (role != null) "${
-      if name == "default"
-      then "Default for reasoning work"
-      else lib.toSentenceCase name
-    }: ${role.use}${lib.optionalString (effort != null) " at ${effort}"}.";
-  rolesText = lib.concatStringsSep " " (lib.filter (text: text != "") [
-    (roleText "default")
-    ceiling
-    (lib.optionalString ((roles.writer or null) != null || (roles.reviewer or null) != null) "Configured writer and reviewer roles count as the user asking.")
-    (roleText "writer")
-    (roleText "reviewer")
-  ]);
-  ceiling = lib.optionalString ((roles.default or null) != null) (let name = roleTier roles.default; in "${lib.toSentenceCase name} is the ceiling: go above it only when the user asks. Mechanical work still goes to the small tier (rule 1).");
+  entryRenderer = import ./render-entries.nix {inherit lib;};
+  routingText = entryRenderer.routing false routing;
+  workflowText = entryRenderer.workflows false workflows;
   cell = lib.replaceStrings ["|" "\n"] ["\\|" " "];
   row = cells: "| ${lib.concatMapStringsSep " | " cell cells} |";
   table = columns: rows:
@@ -104,34 +85,21 @@
     Not a candidate for auto-selection; use only when the user names it.
   '';
 in ''
-  ${rules}
+  ## Routing
 
-  Use this skill for delegates and workflow nodes. Size each stage separately. If a model has no effort control, record effort as not applicable.
+  ${routingText}
 
-  Launch delegate CLIs from the current directory: it determines their permissions and configuration. Copilot has no per-delegate model or effort controls; work inline or use an external delegate.
-
-  Sizing is a budget decision, not a rigor decision: a cheaper delegate still owes the same evidence. Size up a task that cannot meet the bar.
-
-  ${lib.optionalString (extras != [] || manualExternalDelegates != []) "If one model stands out, use it unless its pool is exhausted; among close candidates, prefer the pool with more remaining allowance. Check usage with the runtime's command; if none is available, prefer the other pool among close candidates."}
-
-  **Prefer workflows.** When work has more than one stage or several independent pieces, build it as a workflow graph with model and effort set on every node, not as a series of single subagent calls. Use a lone subagent only for one self-contained task, through a technique that pins its model and effort. If this runtime has no workflow technique, build the graph from pinned subagents or external launches.
-
-  **Inheritance.** A technique that does not pin a value inherits it from the session. An interactive session cannot reliably know its own model or effort (`/model` and `/effort` change them), so treat an inheriting technique as unsized there. A headless delegate inherits what it was launched with: state the model and effort in every external launch brief, and a delegate told its launch values may use an inheriting technique when those values match its choice.
+  ${lib.optionalString (workflowText != "") "## Common workflows\n\n${workflowText}"}
 
   ## delegate sizing
 
   Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (Claude's interactive tools take the alias, e.g. `opus`).
-
-  ${lib.optionalString (rolesText != "") "**Roles.** ${rolesText}"}
-
-  ${lib.optionalString (builtins.length (lib.unique (map (family: family.vendor) candidates)) > 1) "Rows span more than one vendor, so a reviewer may come from a different vendor than the writer."}
 
   ${lib.concatMapStringsSep "\n" tier tiers}
   Use a technique only if it appears in your tool list; an external technique's command must be on PATH. The Modes column says where each tool usually appears; an agent cannot reliably tell which mode it is in, but it can see its tools.
 
   ${techniqueBlock runtime false}
   ${lib.concatMapStringsSep "\n" (target: techniqueBlock target true) extras}
-  ${procedure}
 
   ${lib.optionalString (manualExternalDelegates != [])
     ("## manual-only external delegates\n\n" + lib.concatMapStringsSep "\n" manual (lib.unique manualExternalDelegates))}
