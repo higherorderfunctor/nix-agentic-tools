@@ -1,7 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-05 — `ai.extraSystemPrompt` fans out to Claude,
+> Codex, Kimchi and Kiro; Copilot is an explicit exclusion.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -184,12 +184,13 @@ The ai module fans out TWO kinds of configuration:
 
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
   `ai.kimchi.package` / `ai.kiro.package` — package override. All five are
-  installed by the shared backend transform unless set to `null`. Four supply an
-  `installPackage` callback that wraps the selected package when the runtime
-  needs env or flag injection and installs it bare otherwise — wrapping is
-  conditional, not automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's own
-  wrappers, return the bare package when there is nothing to bake in). The
-  process environment each one bakes in is the builder's `launcherEnvironment`.
+  installed by the shared backend transform unless set to `null`. All five
+  supply an `installPackage` callback that wraps the selected package when the
+  runtime needs env or flag injection and installs it bare otherwise — wrapping
+  is conditional, not automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's
+  own wrappers, return the bare package when there is nothing to bake in). The
+  process environment each one bakes in is the builder's `launcherEnvironment`;
+  Claude's bakes none, and wraps only for `ai.extraSystemPrompt`.
 - `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an
@@ -501,8 +502,8 @@ scope or a non-empty list for `fileMatch` content.
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
   is a different thing and still is — that filters what SPAWNED commands
   inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
-  native equivalent.
+  exclusion: its wrapper exists only to carry `ai.extraSystemPrompt`, and
+  `ai.claude.native.settings.env` is its native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of
@@ -511,6 +512,20 @@ scope or a non-empty list for `fileMatch` content.
   own session and every other process in it. Wrappers are inherited across
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
+
+- `ai.extraSystemPrompt` — keyed text-source entries appended to each runtime's
+  own system prompt, joined in attribute-name order (no other ordering), and
+  passed to delivery callbacks already joined as `extraSystemPrompt`, or null so
+  an empty pool changes nothing. Delivery: Claude's launcher adds
+  `--append-system-prompt-file <store file>`; Codex gets
+  `developer_instructions` at `mkDefault`; Kimchi's launcher adds
+  `--append-system-prompt <store file>` (Pi reads an existing path as the text);
+  Kiro appends it to the `prompt` of every typed agent (`native.agents`, which
+  normalized `ai.agents` lower into). Copilot leaves it out of `supportedPools`,
+  so `ai.copilot.extraSystemPrompt` does not exist. Known limits: Kimchi
+  dispatches its own subcommands only from argv[0], so a leading launcher flag
+  turns `kimchi setup` into a chat message; Kiro's raw agent files and its
+  built-in default agent do not receive the text.
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
@@ -526,10 +541,11 @@ shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
 
-Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
-`mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat
-AGENTS.md handling: Home Manager writes the user harness file, while devenv
-contributes keyed units to the single repository aggregate.
+Kimchi supports `agents`, `context`, `environmentVariables`,
+`extraSystemPrompt`, `hooks`, `mcpServers`, `rules`, `settings`, and `skills`.
+Its rules share Codex's flat AGENTS.md handling: Home Manager writes the user
+harness file, while devenv contributes keyed units to the single repository
+aggregate.
 
 A non-empty ROOT request is SILENT whenever nothing per-runtime can withdraw it
 — no assertion, and no activation warning either. That covers an excluded pool

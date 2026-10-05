@@ -1,7 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-05 — `extraSystemPrompt` is a supported keyed pool;
+> Claude's launcher wraps only to carry it.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -185,8 +185,9 @@ three runtimes demonstrably do not perform.
   backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
-  fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
-  has no wrapper here and `native.settings.env` is its native equivalent.
+  fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — its
+  wrapper carries only `ai.extraSystemPrompt`, and `native.settings.env` is its
+  native equivalent.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more
