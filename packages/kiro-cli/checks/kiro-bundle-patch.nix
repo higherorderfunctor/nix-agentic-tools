@@ -31,8 +31,12 @@
       both = materializer {
         cliVersion = "1.0.0";
         inherit identity;
+        stripVendorWorktreeSteering = true;
       };
-      worktree = materializer {cliVersion = "1.0.0";};
+      worktree = materializer {
+        cliVersion = "1.0.0";
+        stripVendorWorktreeSteering = true;
+      };
     }
   ));
 in {

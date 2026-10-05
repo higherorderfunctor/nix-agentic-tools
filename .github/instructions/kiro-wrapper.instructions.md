@@ -260,8 +260,8 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-04 — identity and worktree steering share one
-> exact-match bundle patcher; drift fails CI and warns at launch. The v3
+> **Last verified:** 2026-10-05 — `ai.kiro.tweaks` holds the opt-in bundle
+> patches, all off by default; drift fails CI and warns at launch. The v3
 > trust-flag conflict measurements below remain from kiro-cli 2.24.1.
 >
 > **Settled — do not relitigate.** Full lineage:
@@ -359,12 +359,12 @@ Two different rules, for two different reasons — do not "make them consistent"
 
 ### `KIRO_KAS_SERVER_PATH` — an ENV injection, not a flag
 
-`ai.kiro.identity` adds a third thing the wrapper does. It is deliberately not
-in the table above, because it is not argv at all:
+`ai.kiro.tweaks` adds a third thing the wrapper does. It is deliberately not in
+the table above, because it is not argv at all:
 
-| Binary                         | Variable               | When                                             |
-| ------------------------------ | ---------------------- | ------------------------------------------------ |
-| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `identity.enable` or `normalizeWorktreeSteering` |
+| Binary                         | Variable               | When                                                             |
+| ------------------------------ | ---------------------- | ---------------------------------------------------------------- |
+| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `tweaks.identity.enable` or `tweaks.stripVendorWorktreeSteering` |
 
 Four properties worth knowing before touching it:
 
@@ -373,13 +373,14 @@ Four properties worth knowing before touching it:
   `kiro-cli-chat` invoked directly is a supported entry point, and it is the
   binary that actually spawns node. Exporting in one place only patches the
   composed path and silently misses the direct one.
-- **Identity prose may be inline or source-backed.** `identity.text` supplies
-  inline text and `identity.source` reads a packaged file.
-  `identity.enable = false` disables either form explicitly. The separate
-  boolean `ai.kiro.normalizeWorktreeSteering` defaults to true and removes the
-  vendor paragraph assigning worktree setup and a `mainline` fast-forward to
-  workflows. Repository instructions supply the git workflow. Set it to false to
-  retain that paragraph; identity remains opt-in.
+- **Every tweak is opt-in; the default is the stock bundle.** With no tweak
+  enabled there is no materializer, no wrapper reason and no patched copy.
+  `tweaks.identity.text` supplies inline identity prose and
+  `tweaks.identity.source` reads a packaged file;
+  `tweaks.identity.enable = false` disables either form explicitly. The boolean
+  `tweaks.stripVendorWorktreeSteering` (default false) removes the vendor
+  paragraph assigning worktree setup and a `mainline` fast-forward to workflows,
+  for repositories whose own instructions supply the git workflow.
 - **It is computed at LAUNCH, not at eval.** The value is the stdout of a
   materializer that resolves the installed engine bundle, applies selected
   exact-byte replacements to a mirrored copy, and caches the result. The engine
@@ -406,8 +407,8 @@ stay unchanged. A failed patch never marks the cache ready.
 JavaScript execution, cache reuse and warnings with successful fallback through
 both launch entry points. `kiro-bundle-patch-drift` materializes the pinned KAS
 bundle offline and requires both exact sources once, even if the consuming
-configuration disables a patch. The module checks cover opt-in identity and
-default-on worktree normalization on both backends.
+configuration disables a patch. The module checks cover the stock default and
+each opt-in tweak selecting the patched path on both backends.
 
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 

@@ -712,10 +712,10 @@
         # launch intentionally falls back after a patch error, and a rejected
         # identity belongs at the configuration site rather than at launch.
         assertion =
-          !cfg.identity.enable
-          || builtins.match ".*[.!?][[:space:]]*" cfg.identity.text != null;
+          !cfg.tweaks.identity.enable
+          || builtins.match ".*[.!?][[:space:]]*" cfg.tweaks.identity.text != null;
         message = ''
-          ai.kiro: `identity` must end with sentence punctuation (`.`, `!` or
+          ai.kiro: `tweaks.identity` must end with sentence punctuation (`.`, `!` or
           `?`). It replaces the FIRST SENTENCE of the vendor identity and the
           preserved remainder is re-joined directly after it, so a value that
           does not close its own sentence runs INTO that remainder instead of
@@ -914,15 +914,15 @@
   # package (a rollout-unlocked variant is a different derivation but the same
   # version) rather than from `cfg.package`.
   resolveBundleMaterializer = cfg:
-    if !cfg.identity.enable && !cfg.normalizeWorktreeSteering
+    if !cfg.tweaks.identity.enable && !cfg.tweaks.stripVendorWorktreeSteering
     then null
     else
       mkBundleMaterializer {
         identity =
-          if cfg.identity.enable
-          then cfg.identity.text
+          if cfg.tweaks.identity.enable
+          then cfg.tweaks.identity.text
           else null;
-        inherit (cfg) normalizeWorktreeSteering;
+        inherit (cfg.tweaks) stripVendorWorktreeSteering;
         cliVersion = (resolvePackage cfg).version;
       };
 
@@ -1272,49 +1272,56 @@ in
           `native.settings`.
         '';
       };
-      identity = lib.mkOption {
-        type = aiTypes.optionalTextSource {
-          description = "the replacement for the first sentence of the kiro-cli identity";
-          enableDefault = false;
+      # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
+      # off, and with none enabled the managed install launches the stock
+      # bundle: no materializer, no patched copy, no wrapper reason.
+      tweaks = {
+        identity = lib.mkOption {
+          type = aiTypes.optionalTextSource {
+            description = "the replacement for the first sentence of the kiro-cli identity";
+            enableDefault = false;
+          };
+          default = {};
+          example.text = "You are Atlas, a senior systems engineer working in a terminal.";
+          description = ''
+            Replace the FIRST SENTENCE of the kiro-cli identity in the engine's
+            system prompt. The rest of the vendor block — the prose about running
+            in a terminal with no graphical editor, referring to files by path,
+            and surfacing command output directly — is preserved byte-for-byte,
+            because that is the part that keeps the agent behaving like a terminal
+            program.
+
+            This is the very first segment of msg0, ahead of steering, learnings
+            and file tree, so it is the highest-leverage place to state what the
+            agent IS.
+
+            Mechanically: the patched engine bundle is materialized under
+            `$XDG_CACHE_HOME/nix-agentic-tools/kiro-bundle/` at launch and
+            selected via `KIRO_KAS_SERVER_PATH`. Vendor state is never modified.
+            The exact vendor sentence is defined in `kiro-bundle-patch.py` and
+            checked against the pinned bundle in CI.
+
+            FAIL-OPEN: if the engine bundle cannot be resolved or the vendor
+            source text no longer occurs exactly once, a named warning goes to stderr and the
+            CLI launches UNPATCHED rather than refusing to start.
+
+            May not contain a backtick or `''${` — the value is spliced into a JS
+            template literal.
+          '';
         };
-        default = {};
-        example.text = "You are Atlas, a senior systems engineer working in a terminal.";
-        description = ''
-          Replace the FIRST SENTENCE of the kiro-cli identity in the engine's
-          system prompt. The rest of the vendor block — the prose about running
-          in a terminal with no graphical editor, referring to files by path,
-          and surfacing command output directly — is preserved byte-for-byte,
-          because that is the part that keeps the agent behaving like a terminal
-          program.
-
-          This is the very first segment of msg0, ahead of steering, learnings
-          and file tree, so it is the highest-leverage place to state what the
-          agent IS.
-
-          Mechanically: the patched engine bundle is materialized under
-          `$XDG_CACHE_HOME/nix-agentic-tools/kiro-bundle/` at launch and
-          selected via `KIRO_KAS_SERVER_PATH`. Vendor state is never modified.
-          The exact vendor sentence is defined in `kiro-bundle-patch.py` and
-          checked against the pinned bundle in CI.
-
-          FAIL-OPEN: if the engine bundle cannot be resolved or the vendor
-          source text no longer occurs exactly once, a named warning goes to stderr and the
-          CLI launches UNPATCHED rather than refusing to start.
-
-          May not contain a backtick or `''${` — the value is spliced into a JS
-          template literal.
-        '';
-      };
-      normalizeWorktreeSteering = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = ''
-          Remove the vendor workflow worktree paragraph at launch. Repository
-          instructions supply the git workflow. Uses the same exact-match
-          bundle materializer as `identity`, on Home Manager and devenv.
-          A source-text drift prints a warning and launches Kiro unpatched;
-          the pinned-bundle CI check fails on either missing or duplicate text.
-        '';
+        stripVendorWorktreeSteering = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Remove the vendor workflow worktree paragraph (worktrees under
+            `.worktrees/`, rebased onto `mainline`) at launch, for repositories
+            whose own instructions supply the git workflow. Uses the same
+            exact-match bundle materializer as `tweaks.identity`, on Home
+            Manager and devenv. A source-text drift prints a warning and
+            launches Kiro unpatched; the pinned-bundle CI check fails on either
+            missing or duplicate text.
+          '';
+        };
       };
       # Config directory (HOME-relative for HM, project-relative for
       # devenv). All file writes use this as root prefix. Exposed as an
@@ -1658,14 +1665,14 @@ in
             name = "ai.gitSshConfigWorkaround";
           }
           {
-            active = cfg.identity.enable;
-            explicit = explicitAt [["ai" "kiro" "identity" "enable"]];
-            name = "ai.kiro.identity";
+            active = cfg.tweaks.identity.enable;
+            explicit = explicitAt [["ai" "kiro" "tweaks" "identity" "enable"]];
+            name = "ai.kiro.tweaks.identity";
           }
           {
-            active = cfg.normalizeWorktreeSteering;
-            explicit = explicitAt [["ai" "kiro" "normalizeWorktreeSteering"]];
-            name = "ai.kiro.normalizeWorktreeSteering";
+            active = cfg.tweaks.stripVendorWorktreeSteering;
+            explicit = explicitAt [["ai" "kiro" "tweaks" "stripVendorWorktreeSteering"]];
+            name = "ai.kiro.tweaks.stripVendorWorktreeSteering";
           }
           {
             active = resolvedShell != null;

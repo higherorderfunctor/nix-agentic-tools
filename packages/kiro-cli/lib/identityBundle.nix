@@ -33,19 +33,19 @@
 }: let
   patcher = ./kiro-bundle-patch.py;
 in
-  # Both backends select the same identity text source and normalization flag.
+  # Both backends select the same `ai.kiro.tweaks`; every tweak defaults off.
   {
     cliVersion,
     identity ? null,
-    normalizeWorktreeSteering ? true,
+    stripVendorWorktreeSteering ? false,
   }: let
     patchKey = builtins.hashString "sha256" (builtins.toJSON {
-      inherit identity normalizeWorktreeSteering;
+      inherit identity stripVendorWorktreeSteering;
       source = builtins.readFile patcher;
     });
     replacementNames = lib.concatStringsSep ", " (
       lib.optional (identity != null) "identity"
-      ++ lib.optional normalizeWorktreeSteering "worktree"
+      ++ lib.optional stripVendorWorktreeSteering "worktree"
     );
   in
     pkgs.writeShellApplication {
@@ -136,7 +136,7 @@ in
         # handles this status explicitly and still starts Kiro unpatched.
         "$python" "$patcher" "$src" "$server" \
           ${lib.optionalString (identity != null) "--identity-file ${lib.escapeShellArg (pkgs.writeText "kiro-identity.txt" identity)}"} \
-          ${lib.optionalString (!normalizeWorktreeSteering) "--keep-worktree-steering"} || exit 1
+          ${lib.optionalString stripVendorWorktreeSteering "--strip-worktree-steering"} || exit 1
         "$coreutils"/bin/touch "$out/.ready"
         printf %s "$server"
       '';

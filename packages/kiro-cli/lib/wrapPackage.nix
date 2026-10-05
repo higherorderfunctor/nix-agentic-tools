@@ -84,7 +84,7 @@
   }: {
     bundle = {
       active = bundleMaterializer != null;
-      name = "ai.kiro.identity / ai.kiro.normalizeWorktreeSteering";
+      name = "ai.kiro.tweaks";
     };
     environmentVariables = {
       active = environmentVariables != {};

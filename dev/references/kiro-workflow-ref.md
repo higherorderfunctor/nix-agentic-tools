@@ -1,7 +1,8 @@
 # Kiro Workflow Engine — Working Notes
 
-> **Last verified:** 2026-10-04 — per-turn reminders and the steering decoder
-> are removed; launch-time normalization removes the vendor worktree paragraph.
+> **Last verified:** 2026-10-05 — per-turn reminders and the steering decoder
+> are removed; the opt-in `ai.kiro.tweaks.stripVendorWorktreeSteering` removes
+> the vendor worktree paragraph at launch.
 
 ## What this is, and how much to trust it
 
@@ -1526,12 +1527,12 @@ the check agree without any interpolation. Since at least 2.21.4 the vendor's
 workflow-creator prompt prescribes absolute `{{worktree_path}}/…` paths. These
 fail for sibling worktrees outside the workspace. Require workspace-relative
 fileCheck paths in the `workflowPrompt` brief. The repository no longer injects
-per-turn workflow reminders or decodes the vendor steering. Its launch-time
-bundle patcher instead removes the vendor paragraph assigning worktree setup and
-a `mainline` fast-forward to workflows, leaving git workflow to repository
-instructions. `ai.kiro.normalizeWorktreeSteering` defaults to true; exact source
-text drift fails CI and warns at launch. This does not change the workflow
-creator's path-template behavior described above. And `stopWhen`'s
+per-turn workflow reminders or decodes the vendor steering. With the opt-in
+`ai.kiro.tweaks.stripVendorWorktreeSteering`, its launch-time bundle patcher
+removes the vendor paragraph assigning worktree setup and a `mainline`
+fast-forward to workflows, leaving git workflow to repository instructions;
+exact source text drift fails CI and warns at launch. This does not change the
+workflow creator's path-template behavior described above. And `stopWhen`'s
 `"{{id.output}} contains <text>"` form matches against _captured output_, so it
 inherits the empty-capture hazard wholesale — under a cheap model the condition
 can never match and the loop silently runs to `maxIterations` (ledger §7.6).

@@ -14,7 +14,7 @@ IDENTITY_SENTENCE = b"You are Kiro CLI, an agentic AI software engineer that run
 WORKTREE_PARAGRAPH = b"When a task should run in a worktree, the **workflow owns the worktree setup** \\u2014 do NOT create the worktree yourself. Say in the `workflowPrompt` brief that a worktree is needed and let the generated workflow\\'s first step create it (`git worktree add .worktrees/<name> -b <branch> mainline`) and run all later steps targeting that worktree. Derive a descriptive `<name>`/`<branch>` from the task. The workflow\\'s final step rebases the branch onto `mainline` and fast-forwards `mainline`; you remove the worktree and branch after the run completes (an in-worktree step can\\'t safely delete the directory it is running in).\\n\\n"
 
 
-def replacements(identity=None, normalize_worktree=True):
+def replacements(identity=None, strip_worktree=False):
     items = []
     if identity is not None:
         identity = identity.strip()
@@ -23,7 +23,7 @@ def replacements(identity=None, normalize_worktree=True):
         if b"`" in identity or b"${" in identity:
             raise ValueError("identity: replacement may not contain a backtick or `${`")
         items.append(("identity", IDENTITY_SENTENCE, identity))
-    if normalize_worktree:
+    if strip_worktree:
         items.append(("worktree", WORKTREE_PARAGRAPH, b""))
     return items
 
@@ -49,14 +49,14 @@ def main():
     parser.add_argument("destination", nargs="?", type=Path)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--identity-file", type=Path)
-    parser.add_argument("--keep-worktree-steering", action="store_true")
+    parser.add_argument("--strip-worktree-steering", action="store_true")
     args = parser.parse_args()
     if not args.check and args.destination is None:
         parser.error("destination is required unless --check is set")
     try:
         identity = (IDENTITY_SENTENCE if args.check else
                     args.identity_file.read_bytes() if args.identity_file else None)
-        items = replacements(identity, args.check or not args.keep_worktree_steering)
+        items = replacements(identity, args.check or args.strip_worktree_steering)
         result = patch(args.source.read_bytes(), items)
         if args.check:
             print("PASS: identity and worktree exact sources each occur once")
