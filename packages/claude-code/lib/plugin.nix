@@ -1,5 +1,5 @@
-# cspell:ignore dotglob
 # Claude plugins as personal-plugin directories.
+# cspell:ignore dotglob
 #
 # Claude Code 2.1.157+ loads every directory under `<configDir>/skills/` that
 # carries a `.claude-plugin/plugin.json` as a personal plugin. The manifest's
