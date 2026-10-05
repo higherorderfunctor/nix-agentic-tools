@@ -52,8 +52,14 @@ with `kimchi install` on activation; declare those packages in
 `native.harnessSettings.packages`. Pi reads the package manifest's
 `pi.extensions`; Nix carries no extension entry metadata. Removing a key
 withdraws its link and settings entry. Delivery requires `ai.kimchi.enable`.
-Devenv's project settings engage the existing exact-cwd launcher guard and
-require project approval.
+Devenv's project settings engage the existing exact-cwd launcher guard and load
+only in a trusted project: pi drops untrusted project settings
+(`dist/core/settings-manager.js:189`), and Home Manager's
+`defaultProjectTrust = "never"` never prompts. Trust the root with
+`ai.kimchi.projectTrust."<abs dir>" = true` (or `--approve` per session). Kimchi
+still lists an untrusted project package as an enabled Plugins row, because its
+discovery builds settings with trust defaulted on
+(`src/resources/package-resources.ts:36`).
 
 Pi 0.85.1 resolves local package sources from its agent directory for user scope
 and `<cwd>/<CONFIG_DIR_NAME>` for project scope
