@@ -60,7 +60,7 @@
 
   directory = ../fixtures/capabilities;
   entries = builtins.readDir directory;
-  files = builtins.filter (name: lib.hasSuffix ".json" name) (builtins.attrNames entries);
+  fixtureNames = builtins.filter (name: lib.hasSuffix ".json" name) (builtins.attrNames entries);
   records = map (filename: let
     value = builtins.fromJSON (builtins.readFile (directory + "/${filename}"));
   in
@@ -69,7 +69,7 @@
     else if !validate value
     then throw "delegate-routing capability observation ${filename}: invalid observation schema"
     else {inherit filename value;})
-  files;
+  fixtureNames;
   sameIdentity = left: right:
     left.runtime
     == right.runtime
