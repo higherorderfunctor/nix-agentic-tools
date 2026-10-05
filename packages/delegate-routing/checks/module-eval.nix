@@ -5,26 +5,8 @@
   lib,
   ...
 }: let
-  inherit (harness) evalDevenv evalDevenvWithSpecialArgs evalHm evalHmWithSpecialArgs hmLib mkTest;
+  inherit (harness) evalDevenv evalHm mkTest;
   runtimes = ["claude" "codex" "kimchi" "kiro"];
-  testRenames."Old guidance" = "New guidance";
-  warningMarker = "delegate-routing fallback warning: ";
-  evalDevenvWarnings = evalDevenvWithSpecialArgs {
-    delegateRoutingRenames = testRenames;
-    lib =
-      hmLib
-      // {
-        warn = warning: value:
-          value
-          ++ [
-            {
-              assertion = true;
-              message = "${warningMarker}${warning}";
-            }
-          ];
-      };
-  };
-  evalHmWarnings = evalHmWithSpecialArgs {delegateRoutingRenames = testRenames;};
   scenario.ai = {
     claude.enable = true;
     codex.enable = true;
@@ -57,14 +39,12 @@
       };
     };
   };
-  hasLoadInstruction = text: lib.hasInfix "load the `delegate-routing` skill" (lib.replaceStrings ["\n"] [" "] text);
-  crossVendor = "Rows span more than one vendor";
+  hasLoadInstruction = text: lib.hasInfix "load the delegate-routing skill" (lib.replaceStrings ["\n" "`"] [" " ""] text);
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
   optionTree = result: path: lib.getAttrFromPath path result.options;
   checkBackend = {
     name,
     evaluate,
-    evaluateWarnings ? evaluate,
   }: let
     result = evaluate scenario;
     claude = readSkill result "claude";
@@ -77,35 +57,7 @@
     passes = evaluation: lib.all (item: item.assertion) evaluation.config.assertions;
     failsWith = evaluation: option: lib.any (item: !item.assertion && lib.hasInfix option item.message) evaluation.config.assertions;
     evaluationFails = evaluation: !(builtins.tryEval (builtins.deepSeq evaluation.config.ai.programs.delegate-routing.runtimes.claude true)).success;
-    roleScenario = roles: extras: manual:
-      change {
-        ai.programs.delegate-routing.runtimes.claude = {
-          inherit roles;
-          extraRuntimes = extras;
-          manualExternalDelegates = manual;
-        };
-      };
-    configuredRoles = {
-      default = {
-        effort = "medium";
-        use = "strong";
-      };
-      reviewer = {
-        effort = "high";
-        use = "opus";
-      };
-      writer = {use = "sol";};
-    };
     hasProse = needle: text: lib.hasInfix needle (lib.replaceStrings ["\n"] [" "] text);
-    rolesSkill = readSkill (roleScenario configuredRoles ["codex"] []) "claude";
-    loneRuntime = runtime:
-      readSkill (change {
-        ai.programs.delegate-routing.runtimes.${runtime} = {
-          extraRuntimes = [];
-          manualExternalDelegates = [];
-        };
-      })
-      runtime;
     native = change {ai.programs.delegate-routing.runtimes.claude.extraRuntimes = [];};
     nativeClaude = readSkill native "claude";
     disabled = evaluate {
@@ -194,197 +146,183 @@
     disabledNode = skill {ai.programs.delegate-routing.runtimes.claude.techniques.Agent.enable = false;};
     modifiedNode = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
     invalidNode = node: change {ai.programs.delegate-routing.runtimes.claude.techniques.Invalid = node;};
-    replacedText = key: field: value: skill {ai.programs.delegate-routing.${key}.${field} = value;};
     techniqueRow = text: technique: lib.findFirst (lib.hasInfix "`${technique}`") "" (lib.splitString "\n" text);
     kiroInvoke = techniqueRow kiro "invoke_sub_agent";
     # Technique, kind, pins model, pins effort and modes, without table padding.
     techniqueCells = text: technique: lib.sublist 1 5 (map lib.trim (lib.splitString "|" (techniqueRow text technique)));
-    noEntries = evaluate scenario;
-    shippedEntries = noEntries.config.ai.programs.delegate-routing.whenToDelegate;
-    shippedEntryNames = builtins.attrNames shippedEntries;
-    shippedEntryFieldDefinitions = preset:
-      lib.modules.mergeAttrDefinitionsWithPrio {
-        type = lib.types.attrsOf lib.types.raw;
-        definitionsWithLocations =
-          map
-          (definition: {
-            inherit (definition) file;
-            value = definition.value.${preset};
-          })
-          (builtins.filter
-            (definition:
-              builtins.hasAttr preset definition.value)
-            noEntries.options.ai.programs.delegate-routing.whenToDelegate.definitionsWithLocations);
-      };
-    shippedEntryPrioritiesChecked = assert lib.assertMsg
-    (lib.all
-      (preset:
-        lib.all
-        (field: field.highestPrio == (lib.mkDefault null).priority)
-        (builtins.attrValues (shippedEntryFieldDefinitions preset)))
-      shippedEntryNames)
-    "delegate-routing-${name}: every field defined by package whenToDelegate defaults must use lib.mkDefault"; true;
-    shippedEntriesDisabledChecked = assert lib.assertMsg
-    (lib.all (preset: !shippedEntries.${preset}.enable) shippedEntryNames)
-    "delegate-routing-${name}: package whenToDelegate defaults must remain disabled until consumer content overrides them"; true;
-    enabledShippedEntries = lib.genAttrs shippedEntryNames (preset:
-      evaluate (lib.recursiveUpdate scenario {
-        ai.programs.delegate-routing.whenToDelegate.${preset}.enable = true;
-      }));
-    consumerEntry = evaluate (lib.recursiveUpdate scenario {
-      ai.programs.delegate-routing.whenToDelegate.Consumer = {
-        text = "Delegate when the task is independently verifiable.";
-      };
-    });
-    overriddenShippedEntryName = builtins.head shippedEntryNames;
-    overriddenShippedEntryText = "Consumer replacement guidance.";
-    overriddenShippedEntry = evaluate (lib.recursiveUpdate scenario {
-      ai.programs.delegate-routing.whenToDelegate.${overriddenShippedEntryName}.text = overriddenShippedEntryText;
-    });
-    disabledPreset = evaluate (lib.recursiveUpdate scenario {
-      ai.programs.delegate-routing.whenToDelegate.Preset = {
-        enable = lib.mkDefault false;
-        text = lib.mkDefault "Delegate a preset task.";
-      };
-    });
-    enabledPreset = evaluate (lib.recursiveUpdate scenario {
-      ai.programs.delegate-routing.whenToDelegate.Preset = {
-        enable = true;
-        text = lib.mkDefault "Delegate a preset task.";
-      };
-    });
-    explicitlyDisabled = evaluate (lib.recursiveUpdate scenario {
-      ai.programs.delegate-routing.whenToDelegate.Intentional = {
-        enable = lib.mkMerge [(lib.mkDefault false) false];
-        text = "Consumer guidance.";
-      };
-    });
-    packageWhenToDelegateOptions = import ../lib/when-to-delegate.nix {
-      inherit lib;
-      renames = import ../lib/when-to-delegate-renames.nix;
-    };
-    presetSource = ../fragments/skill-routing.md;
-    sourcePreset = packageWhenToDelegateOptions.mkPreset {source = presetSource;};
-    textPreset = packageWhenToDelegateOptions.mkPreset {text = "Delegate a preset task.";};
-    presetEvaluation = lib.evalModules {
-      modules = [
-        {
-          options.entries = lib.mkOption {
-            inherit (packageWhenToDelegateOptions) type;
-            default = {};
-          };
-          config.entries = {
-            Source = sourcePreset;
-            Text = textPreset;
-          };
-        }
-      ];
-    };
-    presetConstructorContract = let
-      defaultPriority = (lib.mkDefault null).priority;
-      entriesDisabledChecked = assert lib.assertMsg
-      (!presetEvaluation.config.entries.Source.enable && !presetEvaluation.config.entries.Text.enable)
-      "delegate-routing mkPreset content must not auto-enable preset entries"; true;
-      neitherFailed = !(builtins.tryEval (packageWhenToDelegateOptions.mkPreset {})).success;
-      sourceDefaultChecked = assert lib.assertMsg
-      (
-        sourcePreset.source.priority
-        == defaultPriority
-        && sourcePreset.source.content == presetSource
-        && presetEvaluation.config.entries.Source.source == presetSource
-      )
-      "delegate-routing mkPreset source must use mkDefault priority and preserve its value"; true;
-      textDefaultChecked = assert lib.assertMsg
-      (
-        textPreset.text.priority
-        == defaultPriority
-        && textPreset.text.content == "Delegate a preset task."
-        && presetEvaluation.config.entries.Text.text == "Delegate a preset task."
-      )
-      "delegate-routing mkPreset text must use mkDefault priority and preserve its value"; true;
-      bothFailed =
-        !(builtins.tryEval (packageWhenToDelegateOptions.mkPreset {
-          source = presetSource;
-          text = "Conflicting preset task.";
-        })).success;
-    in
-      entriesDisabledChecked
-      && sourceDefaultChecked
-      && textDefaultChecked
-      && bothFailed
-      && neitherFailed;
-    packageRenamed = evaluateWarnings (lib.recursiveUpdate scenario {
-      ai.programs.delegate-routing.whenToDelegate."Old guidance".text = "Renamed consumer guidance.";
-    });
-    packageRenameWarning = "ai.programs.delegate-routing.whenToDelegate.Old guidance has been renamed to ai.programs.delegate-routing.whenToDelegate.New guidance; update the attribute name.";
-    testWhenToDelegateOptions = import ../lib/when-to-delegate.nix {
-      inherit lib;
-      renames."Old guidance" = "New guidance";
-    };
-    renamed = lib.evalModules {
-      modules = [
-        {
-          options.entries = lib.mkOption {
-            inherit (testWhenToDelegateOptions) type;
-            default = {};
-            apply = testWhenToDelegateOptions.rename;
-          };
-          config.entries."Old guidance".text = "Renamed consumer guidance.";
-        }
-      ];
-    };
-    renamedEntries = renamed.config.entries;
-    renamedRuleText =
-      (import ../router.nix {
-        entries = renamedEntries;
-        inherit lib;
-      }).delegate-routing-router.text;
-    renamedWarnings = testWhenToDelegateOptions.warnings renamedEntries;
     ruleText = value: value.config.ai.claude.rules.delegate-routing-router.text;
-    whenToDelegateWarnings = value: packageWhenToDelegateOptions.warnings value.config.ai.programs.delegate-routing.whenToDelegate;
-    warningDeliveryContract = label: evaluation: warning:
-      if evaluation.options ? warnings
-      then
-        if evaluation.config.warnings == [warning]
-        then true
-        else throw "delegate-routing-${name}: ${label} warning was not exposed through config.warnings"
-      else let
-        captured = map (item: lib.removePrefix warningMarker item.message) (
-          builtins.filter
-          (item: lib.hasPrefix warningMarker item.message)
-          evaluation.config.assertions
-        );
-      in
-        if captured == [warning]
-        then true
-        else throw "delegate-routing-${name}: ${label} warning did not use the lib.warn fallback";
-    protectionContract =
-      if whenToDelegateWarnings explicitlyDisabled != []
-      then throw "delegate-routing-${name}: explicitly disabled consumer entry unexpectedly warned"
-      else if lib.hasInfix "### Intentional" (ruleText explicitlyDisabled)
-      then throw "delegate-routing-${name}: explicitly disabled consumer entry rendered"
-      else if !(lib.hasInfix "### New guidance\n\nRenamed consumer guidance." renamedRuleText)
-      then throw "delegate-routing-${name}: renamed entry did not render under the new key"
-      else if lib.hasInfix "### Old guidance" renamedRuleText
-      then throw "delegate-routing-${name}: renamed entry still rendered under the old key"
-      else if renamedWarnings != ["ai.programs.delegate-routing.whenToDelegate.Old guidance has been renamed to ai.programs.delegate-routing.whenToDelegate.New guidance; update the attribute name."]
-      then throw "delegate-routing-${name}: rename did not produce exactly one warning"
-      else if !(warningDeliveryContract "rename" packageRenamed packageRenameWarning)
-      then false
-      else true;
+    ordered = text: names: let
+      headings = lib.filter (line: lib.hasPrefix "### " line) (lib.splitString "\n" text);
+      selected = lib.filter (line: lib.elem (lib.removePrefix "### " line) names) headings;
+    in
+      selected == map (entry: "### ${entry}") names;
+    routingDefaults = result.config.ai.programs.delegate-routing.routing;
+    routingDisabled = change {ai.programs.delegate-routing.routing."Size the work".enable = false;};
+    routingReplaced = change {ai.programs.delegate-routing.routing."Follow the request".text = "CUSTOM REQUEST GUIDANCE";};
+    routingInserted = change {
+      ai.programs.delegate-routing.routing."Consumer guidance" = {
+        after = ["Size the work" "Missing anchor"];
+        before = ["Choose execution"];
+        text = "CUSTOM INSERTED GUIDANCE";
+      };
+    };
+    runtimeRouting = change {
+      ai.programs.delegate-routing = {
+        routing."Portable guidance" = {
+          always = true;
+          text = "PORTABLE GUIDANCE";
+        };
+        runtimes.claude.routing = {
+          "Portable guidance".text = "CLAUDE GUIDANCE";
+          "Size the work".enable = false;
+        };
+      };
+    };
+    workflowName = "Review: one reviewer";
+    workflowEnabled = change {ai.programs.delegate-routing.workflows.${workflowName}.enable = true;};
+    runtimeCatalogEnabled = change {
+      ai.programs.delegate-routing.runtimes.claude.workflows.${workflowName}.enable = true;
+    };
+    runtimeCatalogHeader = change {
+      ai.programs.delegate-routing.runtimes.claude.workflows.${workflowName} = {
+        enable = true;
+        text = "CLAUDE CATALOG INTRO";
+      };
+    };
+    catalogOverridden = change {
+      ai.programs.delegate-routing = {
+        routing."Orchestrator session".text = "CUSTOM ORCHESTRATOR GUIDANCE";
+        workflows.${workflowName}.text = "CUSTOM REVIEW INTRO";
+      };
+    };
+    alwaysDisabled = change {
+      ai.programs.delegate-routing.routing = {
+        "Load delegate-routing".enable = false;
+        "Verify the result".enable = false;
+      };
+    };
+    workflowInserted = change {
+      ai.programs.delegate-routing.workflows.${workflowName} = {
+        enable = true;
+        steps."Consumer step" = {
+          after = ["Rubric"];
+          before = ["Review"];
+          text = "CUSTOM WORKFLOW STEP";
+        };
+      };
+    };
+    runtimeWorkflow = change {
+      ai.programs.delegate-routing = {
+        workflows.Consumer = {
+          always = true;
+          text = "PORTABLE WORKFLOW INTRO";
+          steps = {
+            First.text = "PORTABLE FIRST STEP";
+            Last = {
+              after = ["First"];
+              text = "PORTABLE LAST STEP";
+            };
+          };
+        };
+        runtimes.claude.workflows.Consumer = {
+          text = "CLAUDE WORKFLOW INTRO";
+          steps = {
+            First.text = "CLAUDE FIRST STEP";
+            Middle = {
+              after = ["First"];
+              before = ["Last"];
+              text = "CLAUDE MIDDLE STEP";
+            };
+          };
+        };
+      };
+    };
+    runtimeWorkflowDisabled = change {
+      ai.programs.delegate-routing = {
+        workflows.${workflowName}.enable = true;
+        runtimes.claude.workflows.${workflowName}.enable = false;
+      };
+    };
+    disabledAnchor = change {
+      ai.programs.delegate-routing.routing = {
+        Anchor = {
+          enable = false;
+          after = ["Consumer"];
+        };
+        Consumer = {
+          always = true;
+          after = ["Anchor"];
+          text = "DISABLED ANCHOR GUIDANCE";
+        };
+      };
+    };
+    selfCycle = edge:
+      ruleText (change {
+        ai.programs.delegate-routing.routing.Self = {
+          always = true;
+          ${edge} = ["Self"];
+          text = "SELF CYCLE";
+        };
+      });
+    selfCycleStep = edge:
+      ruleText (change {
+        ai.programs.delegate-routing.workflows.Self = {
+          always = true;
+          steps.Self = {
+            ${edge} = ["Self"];
+            text = "SELF STEP CYCLE";
+          };
+        };
+      });
+    cyclicRouting = change {
+      ai.programs.delegate-routing.routing = {
+        CycleA = {
+          always = true;
+          after = ["CycleB"];
+          text = "CYCLE A";
+        };
+        CycleB = {
+          always = true;
+          after = ["CycleA"];
+          text = "CYCLE B";
+        };
+      };
+    };
+    cyclicWorkflow = change {
+      ai.programs.delegate-routing.workflows.Cycle = {
+        always = true;
+        steps = {
+          CycleA = {
+            after = ["CycleB"];
+            text = "CYCLE A";
+          };
+          CycleB = {
+            after = ["CycleA"];
+            text = "CYCLE B";
+          };
+        };
+      };
+    };
+    identicalContent = evaluate (lib.mkMerge [
+      scenario
+      {ai.programs.delegate-routing.routing.Conflict.text = "IDENTICAL CONTENT";}
+      {ai.programs.delegate-routing.routing.Conflict.text = "IDENTICAL CONTENT";}
+    ]);
+    contentConflict = evaluate (lib.mkMerge [
+      scenario
+      {ai.programs.delegate-routing.routing.Conflict.text = "FIRST CONTENT";}
+      {ai.programs.delegate-routing.routing.Conflict.text = "SECOND CONTENT";}
+    ]);
   in {
     "module-delegate-routing-${name}-content" = mkTest "delegate-routing-${name}-content" (
       passes result
       && lib.all (family: lib.hasInfix "${family} (anthropic)" nativeClaude) ["fable" "haiku" "opus" "sonnet"]
       && lib.hasInfix "native" nativeClaude
       && !(lib.hasInfix "(openai)" nativeClaude)
-      && !(lib.hasInfix crossVendor nativeClaude)
       && lib.all (family: lib.hasInfix "${family} (openai)" claude) ["astra" "luna" "sol" "terra"]
       && lib.hasInfix "via codex external" claude
-      && lib.hasInfix crossVendor claude
       && lib.hasInfix "(openai)" codex
       && !(lib.hasInfix "(anthropic)" codex)
-      && !(lib.hasInfix crossVendor codex)
       && lib.hasInfix "## manual-only external delegates" claude
       && lib.hasInfix "Not a candidate for auto-selection; use only when the user names it." claude
       && lib.hasInfix "claude-opus-*" claude
@@ -452,78 +390,23 @@
       in
         lib.hasInfix "haiku (anthropic)" union && lib.hasInfix "sol (openai)" union && !(lib.hasInfix "opus (anthropic)" union))
     );
-    "module-delegate-routing-${name}-roles" = mkTest "delegate-routing-${name}-roles" (
-      evaluationFails (roleScenario {default.use = "asdf";} [] [])
-      && evaluationFails (roleScenario {default.use = "sol";} [] [])
-      && evaluationFails (roleScenario {default.use = "sol";} ["codex"] ["codex"])
-      && evaluationFails (roleScenario {
-        default = {
-          effort = "ultra";
-          use = "strong";
-        };
-      } [] [])
-      && passes (roleScenario {default.use = "strong";} [] [])
-      && passes (roleScenario {default.use = "opus";} [] [])
-      && passes (roleScenario {default.use = "sol";} ["codex"] [])
-      && passes (roleScenario {
-        default.use = "small";
-        reviewer.use = "frontier";
-        writer.use = "opus";
-      } [] [])
-      && hasProse "Strong is the ceiling:" (readSkill (roleScenario {default.use = "opus";} [] []) "claude")
-      && failsWith (change {
-        ai.programs.delegate-routing.families.example.strong = {
-          match = "example-*";
-          tier = "small";
-        };
-      }) "family names must be unique across vendors and must not equal a capability tier"
-      && failsWith (change {
-        ai.programs.delegate-routing.families.example.opus = {
-          match = "example-opus-*";
-          tier = "small";
-        };
-      }) "family names must be unique across vendors and must not equal a capability tier"
-      && hasProse "Default for reasoning work: strong at medium" rolesSkill
-      && hasProse "Writer: sol at medium" rolesSkill
-      && hasProse "Reviewer: opus at high" rolesSkill
-      && hasProse "Strong is the ceiling: go above it only when the user asks" rolesSkill
-      && hasProse "Mechanical work still goes to the small tier (rule 1)" rolesSkill
-      && hasProse "Configured writer and reviewer roles count as the user asking." rolesSkill
-      && (let
-        writerOnly = readSkill (roleScenario {
-          writer = {
-            effort = "high";
-            use = "opus";
-          };
-        } [] []) "claude";
-      in
-        hasProse "Writer: opus at high." writerOnly
-        && hasProse "Configured writer and reviewer roles count as the user asking." writerOnly)
-      && hasProse "Configured writer and reviewer roles count as the user asking." (readSkill (roleScenario {reviewer.use = "opus";} [] []) "claude")
-      && !(hasProse "is the ceiling:" (readSkill (roleScenario {writer.use = "opus";} [] []) "claude"))
-      && hasProse "Reviewer: opus at medium." (readSkill (roleScenario {
-        default = {
-          effort = "medium";
-          use = "opus";
-        };
-        reviewer.use = "opus";
-      } [] []) "claude")
-      && !(hasProse "**Roles.**" claude)
-      && lib.all (runtime: !(hasProse "among close candidates, prefer the pool" (loneRuntime runtime))) ["claude" "kiro"]
-      && hasProse "among close candidates, prefer the pool" claude
-      && !(hasProse "among close candidates, prefer the pool" (readSkill (roleScenario {} [] []) "claude"))
-      && hasProse "comparing version numbers segment by segment (6.1 > 6 > 5.6)" claude
-      && hasProse "Use a technique only if it appears in your tool list" claude
-      && hasProse "an agent cannot reliably tell which mode it is in, but it can see its tools" claude
-      && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
-      && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
-      && lib.all (runtime: let value = result.config.ai.programs.delegate-routing.runtimes.${runtime}.roles; in value.default == null && value.writer == null && value.reviewer == null) runtimes
-    );
     "module-delegate-routing-${name}-families" = mkTest "delegate-routing-${name}-families" (
       lib.hasInfix "CUSTOM OPUS TASK" familyOverride
       && lib.hasInfix "x (example)" addedFamily
       && lib.hasInfix "example-x-*" addedFamily
       && lib.hasInfix "CUSTOM FAMILY TASK" addedFamily
+      && passes (change {
+        ai.programs.delegate-routing.families.example.strong = {
+          match = "example-*";
+          tier = "small";
+        };
+      })
+      && failsWith (change {
+        ai.programs.delegate-routing.families.example.opus = {
+          match = "example-opus-*";
+          tier = "small";
+        };
+      }) "family names must be unique across vendors"
     );
     "module-delegate-routing-${name}-technique-assertions" = mkTest "delegate-routing-${name}-technique-assertions" (
       failsWith (invalidNode {
@@ -573,22 +456,11 @@
       && lib.hasInfix "### kimchi techniques" claude
       && lib.hasInfix "kimchi -p --mode json --no-session --model <id> --thinking <level>" claude
       && !(lib.hasInfix "`/workflow`" claude)
-    );
-    "module-delegate-routing-${name}-text" = mkTest "delegate-routing-${name}-text" (
-      lib.all (key: let
-        marker =
-          if key == "rules"
-          then "Size every delegate"
-          else "## procedure";
-        replacement = replacedText key "text" "CUSTOM TEXT BLOCK";
-        sourced = replacedText key "source" ../fragments/skill-routing.md;
-        omitted = replacedText key "enable" false;
-      in
-        lib.hasInfix "CUSTOM TEXT BLOCK" replacement
-        && !(lib.hasInfix marker replacement)
-        && hasLoadInstruction sourced
-        && !(lib.hasInfix marker sourced)
-        && !(lib.hasInfix marker omitted)) ["rules" "procedure"]
+      && hasProse "comparing version numbers segment by segment (6.1 > 6 > 5.6)" claude
+      && hasProse "Use a technique only if it appears in your tool list" claude
+      && hasProse "an agent cannot reliably tell which mode it is in, but it can see its tools" claude
+      && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
+      && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (
       failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false"
@@ -605,28 +477,19 @@
       let
         portable = optionTree result ["ai" "programs" "delegate-routing"];
         perRuntime = portable.runtimes.claude;
-        roleOptions = perRuntime.roles.type.getSubOptions [];
-        defaultRole = roleOptions.default.type.getSubOptions [];
       in
         portable ? enable
-        && portable ? whenToDelegate
         && portable ? families
-        && portable ? rules
-        && portable ? procedure
+        && portable ? routing
+        && portable ? workflows
         && !(portable ? extraRuntimes)
         && !(portable ? manualExternalDelegates)
-        && !(portable ? roles)
         && !(portable ? models)
         && !(portable ? techniques)
         && perRuntime ? extraRuntimes
         && perRuntime ? manualExternalDelegates
-        && perRuntime ? roles
-        && builtins.attrNames (builtins.removeAttrs roleOptions ["_module"]) == ["default" "reviewer" "writer"]
-        && defaultRole.use.type.name == "enum"
-        && lib.hasInfix "strong" defaultRole.use.type.description
-        && lib.hasInfix "opus" defaultRole.use.type.description
-        && lib.hasInfix "sol" defaultRole.use.type.description
-        && !(lib.hasInfix "flash" defaultRole.use.type.description)
+        && perRuntime ? routing
+        && perRuntime ? workflows
         && perRuntime ? models
         && perRuntime ? techniques
         && portable.runtimes ? kimchi
@@ -639,58 +502,131 @@
       && !(result.config.ai.skills ? delegate-routing)
       && !(result.config.ai.rules ? delegate-routing-router)
     );
-    "module-delegate-routing-${name}-preset-priorities" = mkTest "delegate-routing-${name}-preset-priorities" (
-      shippedEntriesDisabledChecked && shippedEntryPrioritiesChecked
-    );
-    "module-delegate-routing-${name}-stub" = mkTest "delegate-routing-${name}-stub" (
-      builtins.length (lib.splitString "\n" (lib.removeSuffix "\n" stub))
-      <= 10
+    "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
+      builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
+      == ["Choose execution" "Follow the request" "Load delegate-routing" "Size the work" "Verify the result"]
+      && !routingDefaults."Orchestrator session".enable
+      && routingDefaults."Load delegate-routing".always
+      && routingDefaults."Verify the result".always
+      && ordered claude ["Follow the request" "Size the work" "Choose execution"]
+      && lib.hasInfix "## Routing" claude
       && hasLoadInstruction stub
-      && !(lib.hasInfix "Size every delegate" stub)
-      && lib.all (runtime: let
-        text = readSkill result runtime;
-      in
-        builtins.length (lib.splitString "Size every delegate" text) == 2 && !(hasLoadInstruction text))
-      runtimes
+      && lib.hasInfix "### Verify the result" stub
+      && !(lib.hasInfix "### Load delegate-routing" claude)
+      && !(lib.hasInfix "### Verify the result" claude)
+      && !(lib.hasInfix "### Size the work" stub)
+      && !(lib.hasInfix "## Common workflows" claude)
+      && lib.trim (ruleText alwaysDisabled) == "# Delegate routing"
+      && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-routing-router.text == stub) runtimes
     );
-    "module-delegate-routing-${name}-when-to-delegate" = mkTest "delegate-routing-${name}-when-to-delegate" (
-      ruleText noEntries
-      == builtins.readFile ../fragments/skill-routing.md
-      && lib.hasInfix "### Consumer\n\nDelegate when the task is independently verifiable." (ruleText consumerEntry)
-      && lib.hasInfix "### ${overriddenShippedEntryName}\n\n${overriddenShippedEntryText}" (ruleText overriddenShippedEntry)
-      && !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedEntries.${overriddenShippedEntryName}.source)) (ruleText overriddenShippedEntry))
-      && !(lib.hasInfix "### Preset" (ruleText disabledPreset))
-      && lib.hasInfix "### Preset\n\nDelegate a preset task." (ruleText enabledPreset)
-      && lib.all
-      (preset: let
-        declaredSource = shippedEntries.${preset}.source;
-        text = ruleText enabledShippedEntries.${preset};
-      in
-        lib.hasInfix
-        "### ${preset}\n\n${lib.removeSuffix "\n" (builtins.readFile declaredSource)}"
-        text
-        && lib.all
-        (other:
-          other
-          == preset
-          || !(lib.hasInfix (lib.removeSuffix "\n" (builtins.readFile shippedEntries.${other}.source)) text))
-        shippedEntryNames)
-      shippedEntryNames
+    "module-delegate-routing-${name}-routing-consumer" = mkTest "delegate-routing-${name}-routing-consumer" (
+      !(lib.hasInfix "### Size the work" (readSkill routingDisabled "claude"))
+      && lib.hasInfix "### Follow the request" (readSkill routingDisabled "claude")
+      && lib.hasInfix "### Choose execution" (readSkill routingDisabled "claude")
+      && lib.hasInfix "CUSTOM REQUEST GUIDANCE" (readSkill routingReplaced "claude")
+      && lib.hasInfix "### Size the work" (readSkill routingReplaced "claude")
+      && lib.hasInfix "### Choose execution" (readSkill routingReplaced "claude")
+      && ordered (readSkill routingInserted "claude") ["Follow the request" "Size the work" "Consumer guidance" "Choose execution"]
+      && lib.hasInfix "CUSTOM INSERTED GUIDANCE" (readSkill routingInserted "claude")
     );
-    "module-delegate-routing-${name}-when-to-delegate-preset-constructor" = mkTest "delegate-routing-${name}-when-to-delegate-preset-constructor" presetConstructorContract;
-    "module-delegate-routing-${name}-when-to-delegate-protection" = mkTest "delegate-routing-${name}-when-to-delegate-protection" protectionContract;
+    "module-delegate-routing-${name}-routing-runtime" = mkTest "delegate-routing-${name}-routing-runtime" (
+      lib.hasInfix "CLAUDE GUIDANCE" (readSkill runtimeRouting "claude")
+      && !(lib.hasInfix "PORTABLE GUIDANCE" (readSkill runtimeRouting "claude"))
+      && !(lib.hasInfix "### Portable guidance" (ruleText runtimeRouting))
+      && lib.hasInfix "PORTABLE GUIDANCE" runtimeRouting.config.ai.codex.rules.delegate-routing-router.text
+      && !(lib.hasInfix "### Size the work" (readSkill runtimeRouting "claude"))
+      && lib.hasInfix "### Size the work" (readSkill runtimeRouting "codex")
+    );
+    "module-delegate-routing-${name}-workflows" = mkTest "delegate-routing-${name}-workflows" (
+      !result.config.ai.programs.delegate-routing.workflows.${workflowName}.enable
+      && !result.config.ai.programs.delegate-routing.workflows."Review: prosecute, defend, judge".enable
+      && lib.hasInfix "## Common workflows" (readSkill workflowEnabled "claude")
+      && lib.hasInfix "### ${workflowName}" (readSkill workflowEnabled "claude")
+      && lib.hasInfix "### ${workflowName}" (readSkill runtimeCatalogEnabled "claude")
+      && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogEnabled "claude")
+      && lib.hasInfix "4. **Rounds:**" (readSkill runtimeCatalogEnabled "claude")
+      && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeCatalogEnabled "codex"))
+      && lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "claude")
+      && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogHeader "claude")
+      && lib.hasInfix "4. **Rounds:**" (readSkill runtimeCatalogHeader "claude")
+      && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "codex"))
+      && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "claude"))
+      && lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "codex")
+      && !catalogOverridden.config.ai.programs.delegate-routing.routing."Orchestrator session".enable
+      && !catalogOverridden.config.ai.programs.delegate-routing.workflows.${workflowName}.enable
+      && !(lib.hasInfix "CUSTOM ORCHESTRATOR GUIDANCE" (readSkill catalogOverridden "claude"))
+      && !(lib.hasInfix "CUSTOM REVIEW INTRO" (readSkill catalogOverridden "claude"))
+      && lib.hasInfix "CUSTOM WORKFLOW STEP" (readSkill workflowInserted "claude")
+      && (let
+        text = readSkill workflowInserted "claude";
+        rubric = builtins.head (lib.splitString "CUSTOM WORKFLOW STEP" text);
+        remainder = builtins.elemAt (lib.splitString "CUSTOM WORKFLOW STEP" text) 1;
+      in
+        lib.hasInfix "Rubric" rubric && lib.hasInfix "Review" remainder)
+    );
+    "module-delegate-routing-${name}-workflow-runtime" = mkTest "delegate-routing-${name}-workflow-runtime" (
+      let
+        text = readSkill runtimeWorkflow "claude";
+        codexRule = runtimeWorkflow.config.ai.codex.rules.delegate-routing-router.text;
+      in
+        lib.hasInfix "CLAUDE WORKFLOW INTRO" text
+        && !(lib.hasInfix "PORTABLE WORKFLOW INTRO" text)
+        && lib.hasInfix "CLAUDE FIRST STEP" text
+        && !(lib.hasInfix "PORTABLE FIRST STEP" text)
+        && lib.hasInfix "CLAUDE MIDDLE STEP" text
+        && lib.hasInfix "PORTABLE LAST STEP" text
+        && lib.hasInfix "1. **First:**" text
+        && lib.hasInfix "2. **Middle:**" text
+        && lib.hasInfix "3. **Last:**" text
+        && lib.hasInfix "PORTABLE WORKFLOW INTRO" codexRule
+        && lib.hasInfix "PORTABLE FIRST STEP" codexRule
+        && !(lib.hasInfix "CLAUDE MIDDLE STEP" codexRule)
+    );
+    "module-delegate-routing-${name}-content-validation" = mkTest "delegate-routing-${name}-content-validation" (
+      !(builtins.tryEval (builtins.deepSeq
+        (change {
+          ai.programs.delegate-routing.routing.Empty = {
+            enable = true;
+            text = "";
+          };
+        }).config.ai.programs.delegate-routing.routing.Empty.text
+        true)).success
+      && !(builtins.tryEval (builtins.deepSeq contentConflict.config.ai.programs.delegate-routing.routing.Conflict.text true)).success
+      && identicalContent.config.ai.programs.delegate-routing.routing.Conflict.text == "IDENTICAL CONTENT"
+      && !(builtins.tryEval (builtins.deepSeq
+        (change {
+          ai.programs.delegate-routing.workflows.Empty = {
+            always = true;
+            enable = true;
+            text = "";
+          };
+        }).config.ai.claude.rules.delegate-routing-router.text
+        true)).success
+      && !(builtins.tryEval (builtins.deepSeq
+        (change {
+          ai.programs.delegate-routing.workflows.Consumer.steps.Empty = {
+            enable = true;
+            text = "";
+          };
+        }).config.ai.programs.delegate-routing.workflows.Consumer.steps.Empty.text
+        true)).success
+      && !(builtins.tryEval (builtins.deepSeq (ruleText cyclicRouting) true)).success
+      && !(builtins.tryEval (builtins.deepSeq (ruleText cyclicWorkflow) true)).success
+      && lib.all (edge: !(builtins.tryEval (builtins.deepSeq (selfCycle edge) true)).success) ["after" "before"]
+      && lib.all (edge: !(builtins.tryEval (builtins.deepSeq (selfCycleStep edge) true)).success) ["after" "before"]
+      && passes routingInserted
+      && lib.hasInfix "DISABLED ANCHOR GUIDANCE" (ruleText disabledAnchor)
+    );
   };
 in {
   checks =
     checkBackend {
       name = "devenv";
       evaluate = evalDevenv;
-      evaluateWarnings = evalDevenvWarnings;
     }
     // checkBackend {
       name = "hm";
       evaluate = evalHm;
-      evaluateWarnings = evalHmWarnings;
     };
 }
