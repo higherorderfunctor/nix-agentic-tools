@@ -605,18 +605,18 @@
 
       # pi resolves package sources relative to the scope's harness directory.
       # Kimchi filters disabled packages by metadata.source before loading them,
-      # so the stable source name also works for a directory link to the store.
+      # so the stable source name also works for a directory of package links.
       (lib.mkIf (cfg.extensions != {}) {
-        ai.kimchi = {
-          native.harnessSettings.packages = map (name: "extensions/${name}") (builtins.attrNames cfg.extensions);
-          files = lib.mapAttrs' (name: extension:
-            lib.nameValuePair "${harness}/extensions/${name}" {
-              content.source = extension;
-              executable = null;
-            })
-          cfg.extensions;
-        };
+        ai.kimchi.native.harnessSettings.packages = map (name: "extensions/${name}") (builtins.attrNames cfg.extensions);
       })
+      {
+        ai.kimchi.files = lib.mapAttrs' (name: extension:
+          lib.nameValuePair "${harness}/extensions/${name}" {
+            content.source = lib.ai.linkDirectory pkgs "kimchi-extension-${name}" extension;
+            executable = null;
+          })
+        cfg.extensions;
+      }
 
       # pi 0.85.1's ThinkingLevel is a superset of the normalized enum and
       # pi reads `defaultThinkingLevel` from the merged user and project

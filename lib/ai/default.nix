@@ -14,6 +14,7 @@ in {
   # `guards pkgs`: the generated-file guards as programs and a check builder
   # for a consumer's own files (lib/markdown/guards.nix).
   guards = (import ../markdown/guards.nix {inherit lib;}).consumer;
+  linkDirectory = import ../link-directory.nix {inherit lib;};
   # `mkLauncher pkgs {package, name, exe, …}`: the shared launcher wrapper.
   mkLauncher = import ./launcher.nix;
   mcpServer = import ./mcpServer {inherit lib;};

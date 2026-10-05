@@ -1,5 +1,4 @@
 # Claude plugins as personal-plugin directories.
-# cspell:ignore dotglob
 #
 # Claude Code 2.1.157+ loads every directory under `<configDir>/skills/` that
 # carries a `.claude-plugin/plugin.json` as a personal plugin. The manifest's
@@ -19,23 +18,20 @@ in {
   # agent and command the plugin ships. The result is delivered as a single
   # directory link for the same reason.
   mkPluginEntry = name: plugin:
-    pkgs.runCommand "claude-code-plugin-${lib.strings.sanitizeDerivationName name}" {} ''
-      ${pkgs.coreutils}/bin/mkdir -p "$out"
-
-      shopt -s dotglob nullglob
-      for entry in "${plugin}"/*; do
-        ln -s "$entry" "$out/$(basename "$entry")"
-      done
-
-      if [[ ! -e $out/.claude-plugin/plugin.json ]]; then
-        # Replace the linked manifest directory with a real one so the
-        # generated manifest can sit beside any existing contents.
-        ${pkgs.coreutils}/bin/rm -f "$out/.claude-plugin"
-        ${pkgs.coreutils}/bin/mkdir -p "$out/.claude-plugin"
-        for entry in "${plugin}"/.claude-plugin/*; do
-          ln -s "$entry" "$out/.claude-plugin/$(basename "$entry")"
-        done
-        install -m644 ${jsonFormat.generate "claude-code-plugin-${lib.strings.sanitizeDerivationName name}.json" {inherit name;}} "$out/.claude-plugin/plugin.json"
-      fi
-    '';
+    (lib.ai.linkDirectory pkgs "claude-code-plugin-${name}" plugin).overrideAttrs (_: old: {
+      buildCommand =
+        old.buildCommand
+        + ''
+          if [[ ! -e $out/.claude-plugin/plugin.json ]]; then
+            # Replace the linked manifest directory with a real one so the
+            # generated manifest can sit beside any existing contents.
+            ${pkgs.coreutils}/bin/rm -f "$out/.claude-plugin"
+            ${pkgs.coreutils}/bin/mkdir -p "$out/.claude-plugin"
+            for entry in "${plugin}"/.claude-plugin/*; do
+              ${pkgs.coreutils}/bin/ln -s "$entry" "$out/.claude-plugin/$(${pkgs.coreutils}/bin/basename "$entry")"
+            done
+            ${pkgs.coreutils}/bin/install -m644 ${jsonFormat.generate "claude-code-plugin-${lib.strings.sanitizeDerivationName name}.json" {inherit name;}} "$out/.claude-plugin/plugin.json"
+          fi
+        '';
+    });
 }

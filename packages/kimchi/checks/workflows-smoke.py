@@ -1,13 +1,15 @@
 """Credential-free package registration, toggle and slash-command contract."""
 import json
 import os
+import shutil
 import signal
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 
-kimchi, package, observer = sys.argv[1:]
+kimchi, package, observer, delivery = sys.argv[1:]
+delivered = {entry["name"]: entry for entry in json.loads(Path(delivery).read_text())}
 source = "extensions/workflows"
 
 
@@ -69,8 +71,15 @@ with tempfile.TemporaryDirectory() as scratch:
             settings = (cwd if project else home) / ".config/kimchi/harness/settings.json"
             link = settings.parent / source
             link.parent.mkdir(parents=True)
-            link.symlink_to(package, target_is_directory=True)
-            settings.write_text(json.dumps({"packages": [source]}))
+            artifact = Path(delivered[name]["extension"])
+            # Every entry is an absolute link into the original package, with
+            # no dependency payload copied into the generated delivery tree.
+            entries = list(artifact.iterdir())
+            assert {entry.name for entry in entries} == {entry.name for entry in Path(package).iterdir()}, artifact
+            for entry in entries:
+                assert entry.is_symlink() and entry.readlink() == Path(package) / entry.name, entry
+            link.symlink_to(artifact, target_is_directory=True)
+            shutil.copyfile(delivered[name]["settings"], settings)
         trust_args = ["--approve"] if project else []
         listing_args = [kimchi, "resources", "list", *trust_args]
         listing = run(listing_args, cwd, env)

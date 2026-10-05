@@ -8,6 +8,30 @@
 }: let
   inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
+  workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
+  workflowsHarness = ".config/kimchi/harness";
+  # Reuse these module evaluations for the structural check and runtime smoke.
+  workflowsBackends = map (backend:
+    backend
+    // {
+      one = backend.evaluate {
+        ai.kimchi = {
+          enable = true;
+          extensions = {inherit workflows;};
+        };
+      };
+    }) [
+    {
+      name = "global";
+      evaluate = evalHm;
+      settings = hmHarnessSettings;
+    }
+    {
+      name = "project";
+      evaluate = evalDevenv;
+      settings = projectHarnessSettings;
+    }
+  ];
   # The Home Manager user config.json shared document.
   hmConfigDocument = evaluated: let
     path = "${evaluated.config.ai.kimchi.configDir}/config.json";
@@ -233,10 +257,45 @@ in {
   ];
 
   checks = {
+    # Slash commands dispatch before model/credential validation. Feed the
+    # smoke production delivery, including HM's serialized shared-document
+    # declaration and devenv's rendered settings file in the generated tree.
+    kimchi-workflows-smoke = let
+      delivered =
+        map (backend: let
+          files = deliveredFiles backend.one.config;
+          settingsPath = "${workflowsHarness}/settings.json";
+          settings =
+            if backend.name == "global"
+            then
+              pkgs.writeText "kimchi-workflows-global-settings.json"
+              (lib.head (lib.filter (target: target.path == settingsPath)
+                  (ownPlan "kimchi" "kimchiFiles" backend.one).targets)).units.text
+            else files.${settingsPath}.source;
+        in {
+          inherit (backend) name;
+          inherit settings;
+          extension = files."${workflowsHarness}/extensions/workflows".source;
+        })
+        workflowsBackends;
+    in
+      pkgs.runCommand "kimchi-workflows-smoke" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${pkgs.python3}/bin/python3 ${./workflows-smoke.py} ${pkgs.ai.kimchi}/bin/kimchi ${workflows} ${./workflows-observer.ts} \
+          ${pkgs.writeText "kimchi-workflows-delivery.json" (builtins.toJSON delivered)}
+        echo PASS > "$out"
+      '';
+
     module-kimchi-external-workflows = mkTest "kimchi-external-workflows" (
       let
-        workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
-        checkBackend = evaluate: settings: harnessDir: let
+        checkBackend = {
+          evaluate,
+          one,
+          settings,
+          ...
+        }: let
+          harnessDir = workflowsHarness;
           withExtensions = extensions:
             evaluate {
               ai.kimchi = {
@@ -246,7 +305,6 @@ in {
               };
             };
           empty = evaluate {ai.kimchi.enable = true;};
-          one = withExtensions {inherit workflows;};
           two = withExtensions {
             another = workflows;
             inherit workflows;
@@ -262,7 +320,6 @@ in {
             in
               fromGeneratedTree path file
               && builtins.hasContext file.source
-              && evaluated.config.ai.kimchi.files.${path}.content.source == workflows
               && !(file.recursive or false))
             names;
           rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "/string/package";}).config.ai.kimchi.extensions true);
@@ -272,12 +329,11 @@ in {
           && !((settings empty) ? packages)
           && checkLinks one ["workflows"]
           && checkLinks two ["another" "workflows"]
-          && lib.sort builtins.lessThan (settings one).packages == ["/consumer/package" "extensions/workflows"]
+          && (settings one).packages == ["extensions/workflows"]
           && lib.sort builtins.lessThan (settings two).packages == ["/consumer/package" "extensions/another" "extensions/workflows"]
           && !rejected.success;
       in
-        checkBackend evalHm hmHarnessSettings ".config/kimchi/harness"
-        && checkBackend evalDevenv projectHarnessSettings ".config/kimchi/harness"
+        lib.all checkBackend workflowsBackends
     );
 
     # `supportedPools` now owns every normalized per-runtime option gate, not

@@ -89,6 +89,7 @@ disjointness
 docbook
 docsite
 dogfood
+dotglob
 drvs
 dsolve
 dunder

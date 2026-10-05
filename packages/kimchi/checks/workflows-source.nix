@@ -37,15 +37,6 @@ in {
       echo PASS > "$out"
     '';
 
-    # Slash commands dispatch before model/credential validation. The observer
-    # intercepts unrecognized input, so the negative cannot make a model turn.
-    kimchi-workflows-smoke = pkgs.runCommand "kimchi-workflows-smoke" {nativeBuildInputs = [pkgs.python3];} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      python ${./workflows-smoke.py} ${kimchi}/bin/kimchi ${workflows} ${./workflows-observer.ts}
-      echo PASS > "$out"
-    '';
-
     # Copies only the two registration files: no Kimchi compile or dependency
     # build. The same exact substitutions run in Kimchi's postPatch phase.
     kimchi-workflows-source = pkgs.runCommand "kimchi-externalized-extensions-source-check" {} ''
