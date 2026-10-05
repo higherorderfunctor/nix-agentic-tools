@@ -11,7 +11,7 @@ import shlex
 import subprocess
 import sys
 
-from run import MAX_BYTES, REPO, digest, encode, safe_output, strict_json, utc, write_json
+from run import MAX_BYTES, NIX_ENV, REPO, digest, encode, load_cases, repository_state, safe_output, select_cases, strict_json, utc, write_json
 
 SCHEMA = {
     "type": "object",
@@ -23,7 +23,7 @@ SCHEMA = {
         "contextSources": {"type": "array", "items": {"type": "string"}},
         "delegates": {"type": "array", "items": {"type": "object", "additionalProperties": False,
             "required": ["runtime", "model", "effort", "technique"],
-            "properties": {key: {"type": "string"} for key in ("effort", "model", "runtime", "technique")}}},
+            "properties": {key: {"type": "string", "minLength": 1} for key in ("effort", "model", "runtime", "technique")}}},
         "lane": {"enum": ["claude", "codex", "kiro", "UNKNOWN"]},
         "rationale": {"type": "string"},
     },
@@ -154,7 +154,7 @@ def render(case, directory, trial):
     identity = {
         "argv": argv, "caseId": case["id"], "configurationSource": case["configurationSource"], "configHash": digest(encode(config)),
         "date": utc(), "generatedConfigHash": generated_hash,
-        "safetyProfileHash": digest(encode(config).replace(str(directory), "<TRIAL>")),
+        "safetyProfileHash": digest(encode({"config": config, "denyScript": DENY_SCRIPT, "argv": argv[:-1]}).replace(str(directory), "<TRIAL>")),
         "contextSources": sources + [
             {"path": "prompt.txt", "sha256": digest(prompt), "status": "INJECTED"},
             {"path": "deny-tools.py", "sha256": digest(DENY_SCRIPT), "status": "SAFETY OVERLAY"},
@@ -169,11 +169,17 @@ def render(case, directory, trial):
     return root, identity
 
 
+class SuppressionFailure(Exception):
+    pass
+
+
 def attempted_delegates(events, hook_log):
     # Inspect structured calls, never a substring in an answer's prose.
-    calls = []
+    calls, executed = [], []
     def visit(node):
         if isinstance(node, dict):
+            if (node.get("type") == "tool_result" and node.get("is_error") is not True) or (node.get("sessionUpdate") == "tool_call_update" and node.get("status") != "failed"):
+                executed.append(node)
             if node.get("type") in {"tool_use", "tool_call", "toolCall"} or "toolCallId" in node:
                 calls.append(node)
             for value in node.values():
@@ -192,13 +198,10 @@ def attempted_delegates(events, hook_log):
     for call in calls:
         name = str(call.get("name", call.get("tool_name", call.get("toolName", call.get("title", "")))))
         body = encode(call).lower()
-        external = re.search(r"\b(?:codex\s+exec|claude\s+-p|kiro-cli\s+chat)\b", body)
-        if external or any(word in name.lower() for word in ("agent", "delegate", "workflow", "task")) or (
-            any(word in name.lower() for word in ("bash", "shell", "execute")) and
-            any(word in body for word in ("codex exec", "claude -p", "kiro-cli chat", "delegate"))
-        ):
+        external = re.search(r"\b(?:codex\s+exec|claude\s+-p|kimchi\s+-p|kiro-cli\s+chat)\b", body)
+        if external or any(word in name.lower() for word in ("agent", "delegate", "workflow", "task")):
             delegate_calls.append(call)
-    return {"calls": calls, "delegateCalls": delegate_calls, "attemptedDelegate": bool(delegate_calls)}
+    return {"calls": calls, "executedResults": executed, "delegateCalls": delegate_calls, "attemptedDelegate": bool(delegate_calls)}
 
 
 def capture(case, root, identity, directory):
@@ -212,6 +215,8 @@ def capture(case, root, identity, directory):
     log = directory / "denied-tools.jsonl"
     attempts = attempted_delegates(events, log.read_text() if log.exists() else "")
     write_json(directory / "attempts.json", attempts)
+    if attempts["executedResults"]:
+        raise SuppressionFailure("tool execution observed despite suppression")
     # Claude's terminal result and Kiro's ACP message chunks are separate
     # formats. Do not repair prose or extract an arbitrary embedded JSON blob.
     terminal = [event for event in events if event.get("type") == "result"]
@@ -244,7 +249,7 @@ def capture(case, root, identity, directory):
     choice = answer["choice"]
     expected = case["expected"]
     passed = answer["caseId"] == case["id"] and {
-        "codex-lane": choice in {"delegate", "external_root", "workflow"} and answer["lane"] == "codex" and any(item["runtime"] == "codex" for item in answer["delegates"]),
+        "codex-lane": choice in {"delegate", "external_root", "workflow"} and answer["lane"] == "codex" and any(item["runtime"] == "codex" and item["technique"] != "inline" for item in answer["delegates"]),
         "delegate": (choice in {"delegate", "external_root", "workflow"} and bool(answer["delegates"])) or attempts["attemptedDelegate"],
         "observe": True,
         "one-delegate": choice == "delegate" and len(answer["delegates"]) == 1,
@@ -261,31 +266,21 @@ def run_vendor(args):
         raise ValueError("vendor runtimes are case-defined: Claude Opus and Kiro's configured model/effort (resolution recorded as UNKNOWN)")
     if not (args.render_only or args.validate_fixtures) and not (args.allow_paid and args.safety_preflight):
         raise ValueError("vendor live run requires --allow-paid and --safety-preflight; no model started")
-    if args.fixtures:
-        cases = json.loads(args.fixtures.read_text())
-    else:
-        result = subprocess.run(["nix", "eval", "--json", ".#checks.x86_64-linux.delegate-routing-vendor-structure.cases"],
-                                cwd=REPO, capture_output=True, text=True, timeout=300, check=False,
-                                env={**os.environ, "NIX_CONFIG": "max-jobs = 1\ncores = 2"})
-        if result.returncode:
-            raise ValueError(result.stderr)
-        cases = json.loads(result.stdout)
+    cases = load_cases(args.fixtures, "delegate-routing-vendor-structure")
     validate(cases)
     if not args.validate_fixtures and any("sourcePath" in file and not os.path.lexists(file["sourcePath"]) for case in cases for file in case["files"]):
         # Realize only the structural check: its fixture references retain all
         # generated-config dependencies. No package output or model is started.
         drv = subprocess.run(["nix", "eval", "--raw", ".#checks.x86_64-linux.delegate-routing-vendor-structure.drvPath"], cwd=REPO,
-                             capture_output=True, text=True, timeout=300, check=True, env={**os.environ, "NIX_CONFIG": "max-jobs = 1\ncores = 2"})
+                             capture_output=True, text=True, timeout=300, check=True, env=NIX_ENV)
         subprocess.run(["nix-store", "--realise", drv.stdout.strip()], cwd=REPO, check=True, timeout=300,
-                       env={**os.environ, "NIX_CONFIG": "max-jobs = 1\ncores = 2"})
+                       env=NIX_ENV)
     if args.validate_fixtures:
         print(f"Validated {len(cases)} real-harness vendor variants; no model calls")
         return 0
-    selected = set(args.case) - {"all"}
-    if selected - {case["id"] for case in cases}:
-        raise ValueError("unknown vendor case")
-    cases = [case for case in cases if not selected or case["id"] in selected]
+    cases = select_cases(cases, args.case)
     out = safe_output(args.out)
+    write_json(out / "metadata.json", repository_state())
     preflight = json.loads(args.safety_preflight.read_text()) if args.safety_preflight else []
     identities = {} if args.render_only else {runtime: version(runtime) for runtime in {case["runtime"] for case in cases}}
     schedule = [(case, trial) for case in cases for trial in range(1, args.repeat + 1)]
@@ -301,7 +296,7 @@ def run_vendor(args):
         if not args.render_only:
             if identity["version"] == "UNKNOWN" or not any(
                 all(record.get(key) == identity[key] for key in ("runtime", "version", "executable", "generatedConfigHash", "safetyProfileHash"))
-                and record.get("allToolsDenied") is True and record.get("terminalCaptureVerified") is True
+                and record.get("allToolsDenied") is True and record.get("terminalCaptureVerified") is True and record.get("hookExecutionVerified") is True
                 and record.get("evidenceTranscript") and Path(record["evidenceTranscript"]).is_file()
                 for record in preflight
             ):
@@ -317,6 +312,9 @@ def run_vendor(args):
         else:
             try:
                 record.update(capture(case, root, identity, directory))
+            except SuppressionFailure as error:
+                write_json(directory / "verdict.json", {**record, "suppressionFailure": str(error)})
+                raise
             except (ValueError, OSError, subprocess.TimeoutExpired) as error:
                 record["infrastructureError"] = str(error)
         write_json(directory / "verdict.json", record)
