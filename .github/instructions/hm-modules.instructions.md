@@ -7,22 +7,22 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-04 — module sites read this flake's roots from
+> **Last verified:** 2026-10-05 — module sites read this flake's roots from
 > `ai.internal.roots` (`ai.internal.packages` is its `ai`), this flake's build
 > checked by the module's own nixpkgs unless the overlay is applied. Kimchi's
 > user config.json and harness settings.json are shared documents;
 > stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
 > options. JSON document targets retire independently; no runtime flips an
 > upstream `programs.<cli>.enable`; skills reach Claude through `mkSkillFiles`,
-> and Claude has no wrapper. Claude's devenv `.claude/settings.json` and
-> `.mcp.json`, Copilot's settings files, and Kiro's and Kimchi's settings copies
-> are written only when something is declared; other devenv writes are
-> unconditional. Settings are read-only copies or symlinks where the CLI's write
-> primitive permits; only Claude and Copilot retain writable state documents
-> with Nix-owned leaves. The JSON document reconciler has no TOML codec,
-> document mode or native-writer lock. Semble's `pathMappings` and model routing
-> live at the program root. Native file settings live under
-> `ai.<runtime>.native` (`native.settings`; Kimchi also
+> and Claude wraps only to carry `ai.extraSystemPrompt`. Claude's devenv
+> `.claude/settings.json` and `.mcp.json`, Copilot's settings files, and Kiro's
+> and Kimchi's settings copies are written only when something is declared;
+> other devenv writes are unconditional. Settings are read-only copies or
+> symlinks where the CLI's write primitive permits; only Claude and Copilot
+> retain writable state documents with Nix-owned leaves. The JSON document
+> reconciler has no TOML codec, document mode or native-writer lock. Semble's
+> `pathMappings` and model routing live at the program root. Native file
+> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
 > `native.harnessSettings`). Shared documents, each declared by
 > `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`

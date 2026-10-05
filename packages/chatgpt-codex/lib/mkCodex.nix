@@ -1089,6 +1089,7 @@ in
       "agents"
       "context"
       "environmentVariables"
+      "extraSystemPrompt"
       "hooks"
       "mcpServers"
       "rules"
@@ -1269,6 +1270,7 @@ in
       backend,
       cfg,
       config,
+      extraSystemPrompt,
       hasMergedContext,
       mergedContext,
       mergedRules,
@@ -1363,6 +1365,15 @@ in
           ai.codex.native.settings = lib.mkMerge [
             (lib.mkIf (resolvedSettings.reasoningEffort != null) {
               model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+            })
+            # Normalized → native, like the effort above: a consumer's own
+            # `developer_instructions` replaces it wholesale. The key is in the
+            # freeform tail, which takes no null, so withholding is per entry
+            # (`ai.codex.extraSystemPrompt.<name>.enable = false`).
+            # Codex layers config files by key, so a project value replaces a
+            # user-scope one rather than appending to it.
+            (lib.mkIf (extraSystemPrompt != null) {
+              developer_instructions = lib.mkDefault extraSystemPrompt;
             })
             # The byte limit alone would let a raised limit pass the build
             # while Codex still truncated at its own default. Codex honors

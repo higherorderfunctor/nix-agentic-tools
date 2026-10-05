@@ -275,6 +275,7 @@
   mkPrep = {
     backend,
     cfg,
+    extraSystemPrompt,
     launcherEnvironment,
     requiredProjectRoot ? null,
   }: let
@@ -320,8 +321,17 @@
     # resource ids, `--run` for the runtime secret export. Joined with a
     # single space on the continued line — never a backslash-newline, which
     # breaks multi-arg wrapping.
+    # Kimchi hands its argv to Pi, whose `--append-system-prompt` takes text
+    # or a file path and reads the file when one exists (pi-coding-agent
+    # core/resource-loader.js `resolvePromptInput`). A store file keeps
+    # multi-line text out of the wrapper's quoting. An explicit flag replaces
+    # Pi's own APPEND_SYSTEM.md discovery. The flag leads argv, and Kimchi
+    # dispatches its own subcommands (`setup`, `claude`, `mcp`, …) only from
+    # argv[0] (src/commands/dispatch.ts), so with an entry set those reach
+    # Pi as a chat message instead; run them through the unwrapped package.
     wrapArgs =
-      lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
+      lib.optional (extraSystemPrompt != null) "--add-flags ${lib.escapeShellArg "--append-system-prompt ${pkgs.writeText "kimchi-extra-system-prompt.md" extraSystemPrompt}"}"
+      ++ lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
       # KIMCHI_ENABLE_RESOURCES is an additive comma list (store.ts:45-61), so
       # the declared ids are appended to a caller's or an `ai.kimchi`
       # environment value instead of replacing it. Placed after `--set` so a
@@ -356,6 +366,7 @@
     backend,
     cfg,
     config,
+    extraSystemPrompt,
     launcherEnvironment,
     mergedAgents,
     mergedServers,
@@ -372,7 +383,7 @@
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
     (mkPrep {
-      inherit backend cfg launcherEnvironment;
+      inherit backend cfg extraSystemPrompt launcherEnvironment;
       requiredProjectRoot =
         if backend == "devenv" && hasExactCwdProjectFiles
         then config.devenv.root
@@ -773,6 +784,7 @@ in
       "agents"
       "context"
       "environmentVariables"
+      "extraSystemPrompt"
       "hooks"
       "mcpServers"
       "rules"

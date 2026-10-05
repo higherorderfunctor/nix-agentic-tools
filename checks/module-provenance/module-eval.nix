@@ -47,7 +47,7 @@ in {
 
     # Positive control for every normalized pool at BOTH root and per-runtime
     # scope. The fixture values intentionally use `anything`: this test targets
-    # provenance and ownership, not the six independently covered value schemas.
+    # provenance and ownership, not the independently covered value schemas.
     module-ai-package-pool-collision-guard-fires = mkTest "ai-package-pool-collision-guard-fires" (
       let
         poolOptions = lib.genAttrs normalizedPoolNames (_:
@@ -70,7 +70,7 @@ in {
         threw = !(builtins.tryEval (packagePoolsClean "probe" probe)).success;
       in
         builtins.length collisions
-        == 12
+        == 2 * builtins.length normalizedPoolNames
         && builtins.all namesEveryCollision normalizedPoolNames
         && threw
     );

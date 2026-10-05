@@ -31,6 +31,14 @@ in {
       checkRoot = value: value == "root";
       checkRuntime = value: value == "runtime";
     });
+    factory-pool-extraSystemPrompt-negation = mkTest "pool-extraSystemPrompt-negation" (poolMergeContract {
+      poolName = "extraSystemPrompt";
+      rootValue.text = "root";
+      runtimeValue.text = "runtime";
+      suppressionValue.enable = false;
+      checkRoot = value: value.text == "root";
+      checkRuntime = value: value.text == "runtime";
+    });
     factory-pool-lspServers-negation = mkTest "pool-lspServers-negation" (poolMergeContract {
       poolName = "lspServers";
       rootValue = {
