@@ -64,7 +64,6 @@
         "ai.codex.normalized"
         "ai.codex.package"
         "ai.codex.pinDaemonToPackage"
-        "ai.codex.programs"
         "ai.codex.projectDocMaxBytes"
         "ai.codex.rules"
         "ai.codex.rulesDir"
