@@ -52,7 +52,7 @@
     spawn_agent = {
       kind = "subagent";
       modes = ["interactive" "headless"];
-      notes = ''`collaboration.spawn_agent` with `fork_turns: "none"`, `model`, `reasoning_effort`, `task_name` and the full brief; without fork_turns "none" it inherits and refuses overrides; never select `ultra`'';
+      notes = ''`collaboration.spawn_agent` with `fork_turns: "none"`, `model`, `reasoning_effort`, `task_name` and the full brief; `fork_turns: "none"` and positive integer partial-history forks accept model and effort overrides; full-history `fork_turns: "all"` (the default) inherits and refuses overrides; never select `ultra`'';
       pinsEffort = true;
       pinsModel = true;
     };

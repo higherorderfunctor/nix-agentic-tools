@@ -1,0 +1,49 @@
+{
+  "capabilities": {
+    "available": {
+      "evidence": "MEASURED archived workflow completed with native workers on 2026-08-27.",
+      "result": "supported"
+    },
+    "linkedWorktreeCommit": {
+      "evidence": "No execution or resolved-value evidence was recovered.",
+      "result": "unknown"
+    },
+    "nestingDepth": {
+      "evidence": "Maximum native nesting depth was not exercised.",
+      "result": "unknown",
+      "value": null
+    },
+    "pinsEffort": {
+      "evidence": "Worker recorded high, but the script omitted effort; explicit effort pinning was not tested.",
+      "result": "unknown"
+    },
+    "pinsModel": {
+      "evidence": "MEASURED worker requested opus and resolved claude-opus-5.",
+      "result": "supported"
+    },
+    "runsOwnSubagents": {
+      "evidence": "No execution or resolved-value evidence was recovered.",
+      "result": "unknown"
+    }
+  },
+  "context": "Archived workflow status completed, agentCount 3. Runtime version and original permission/config posture were not recorded; this is not evidence of the current installation.",
+  "date": "2026-08-27",
+  "mode": "interactive",
+  "observed": {
+    "effort": "high",
+    "model": "claude-opus-5"
+  },
+  "replay": [
+    "Inspect private/usage-ledger/history/2026-08-27/claude-build-session/44be477f-1d60-45fb-a14f-d9a24a26547d/workflows/wf_a820c88d-84c.json:1.",
+    "Inspect that session subagents/workflows/wf_a820c88d-84c/agent-a433cf7ffd750ccec.meta.json:1 and agent-a433cf7ffd750ccec.jsonl:4.",
+    "Replay the archived parallel/agent script with agent(prompt, {model: \"opus\"}); no effort argument was passed."
+  ],
+  "requested": {
+    "effort": null,
+    "model": "opus"
+  },
+  "runtime": "claude",
+  "runtimeVersion": null,
+  "source": "runtime-evidence.md: Claude archived workflow and native workers",
+  "technique": "Workflow"
+}
