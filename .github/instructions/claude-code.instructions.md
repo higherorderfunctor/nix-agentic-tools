@@ -125,13 +125,15 @@ Three things follow, and each of them is a trap if you assume the old shape:
 
 <!-- Fragment: packages/claude-code/docs/heron-brook-clamp.md -->
 
-## heron_brook Delegation Clamp — the opt-in mitigation
+## heron_brook Delegation Clamp — answered by the delegate-routing reminder
 
-> **Last verified:** 2026-09-21 — `defaultContent` supplies dormant packaged
-> prose while the shared type rejects enabled empty content.
+> **Last verified:** 2026-10-05 — the Claude-only `delegationClampMitigation`
+> option is gone; its permission grant now rides the per-turn delegate-routing
+> reminder (`ai.programs.delegate-routing.reminder`).
 >
-> **Settled — do not relitigate.** Full lineage:
-> `git show 3510a5db:packages/claude-code/docs/heron-brook-clamp.md`.
+> **Settled — do not relitigate.** The once-per-session hook pair, its marker
+> script and its checks, with the lineage before them:
+> `git show 4dd08e26:packages/claude-code/docs/heron-brook-clamp.md`.
 >
 > - **A per-update version tripwire was TRIED and REJECTED.** It compared the
 >   pinned claude-code version against a recorded `verifiedClaudeVersion`, so it
@@ -146,9 +148,9 @@ Three things follow, and each of them is a trap if you assume the old shape:
 >   red the moment a second tripwire added its own. The guard couples to the
 >   STEP NAME by design — rename the step and it throws.
 >
-> If you change `ai.claude.delegationClampMitigation`, the hook script, the
-> injected text, or the reminder and this fragment isn't updated in the same
-> commit, stop and fix it.
+> If you change the delegate-routing reminder's default text, its hook, or the
+> review tripwire and this fragment isn't updated in the same commit, stop and
+> fix it.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
@@ -158,25 +160,32 @@ disables it, and it **never appears in the transcript** — so a session with
 delegation suppressed looks identical to a normal one. It also contradicts
 `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
 
-With no content defined, the mitigation is off and its packaged prose remains
-dormant. Set `ai.claude.delegationClampMitigation.enable = true` to install both
-hooks with that packaged prose. Defining `delegationClampMitigation.text` (or
-packaging the request in `delegationClampMitigation.source`) automatically
-enables the mitigation and installs both hooks with the custom prose. To stage
-custom prose without activating it, define the content and explicitly set
-`delegationClampMitigation.enable = false`; neither hook is then installed.
+### Where the mitigation lives now
 
-### Why the mitigation is user-side context, not a patch
+The delegate-routing reminder (`packages/delegate-routing/lib/reminder.nix`) is
+one first-person line injected by a `UserPromptSubmit` hook on every turn. Its
+default asks the model to load the delegate-routing skill and grants permission
+for subagents, workflows and deep research. That grant is the request the
+clamp's escape clause asks for. The reminder is on by default whenever the
+delegate-routing program is enabled, and
+`ai.programs.delegate-routing.runtimes.claude.reminder.enable = false` turns it
+off for Claude alone.
 
-The clamp carries its own escape clause: _unless the user requested it_. The
-mitigation **satisfies** that clause rather than fighting it — it supplies the
-missing request. Nothing is patched and no flag is needed.
+A custom `reminder.text` replaces the whole line. Keep a grant in it, or the
+clamp is no longer answered on Claude.
+
+### Why user-side context, not a system prompt
+
+The mitigation **satisfies** the escape clause rather than fighting it — it
+supplies the missing request. Nothing is patched and no flag is needed.
 
 That dictates the event. `UserPromptSubmit`'s `additionalContext` lands inside
 the **human turn**; `SessionStart`'s carries a
 `SessionStart hook additional context:` prefix and reads as **system**-level.
-`SessionStart` is the obvious cheaper choice and it is wrong — the single most
-likely thing for a future session to "simplify" into a regression.
+The same holds for `ai.extraSystemPrompt`, which is why delegate-routing's
+always-on entries go there but the grant does not. Moving the grant to a system
+channel is the single most likely thing for a future session to "simplify" into
+a regression.
 
 **But not for the reason first written here**, and the difference matters if you
 reword the payload. The injection is not mistaken for typed input: a live
@@ -186,86 +195,51 @@ mechanism does not rely on concealment — the channel is plainly visible. The
 payload's **first-person voice** is what does the work, which is also why the
 worry about relayed instructions being discounted never materialized.
 
-### Why once per session, not per turn
+### Per turn, not once per session
 
-`additionalContext` persists in conversation history, so per-turn injection is
-not fixed overhead that expires — it is cumulative growth, the same paragraph
-once per turn for the life of the session.
+`additionalContext` persists in conversation history, so a per-turn injection is
+cumulative growth: the line once per turn for the life of the session. The old
+Claude-only hook injected a ~75-token paragraph once per session, keyed by a
+marker file, and re-armed itself from a `PreCompact` hook because compaction is
+the one event that erases the original injection.
 
-The injector therefore fires once, keyed by a marker at
-`${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/claude-delegation-clamp/<session_id>`, and
-a `PreCompact` hook deletes it. Compaction is the one event that can erase the
-original injection, so it is the one event that re-arms it.
+The reminder trades that for one short line every turn. It needs no marker, no
+`PreCompact` re-arm (the next turn re-injects after a compaction anyway) and no
+session-id parsing, so the script reduces to printing an eval-time payload. That
+also removes the old failure modes: a marker directory that is missing or cannot
+be written, a shared `/tmp`, and a degraded hook envelope.
 
-Degraded inputs (malformed stdin, absent `session_id`) fall back to a **fixed**
-key, never a varying one — a varying fallback would inject every turn and
-restore exactly the cost this avoids.
-`packages/claude-code/checks/claude-delegation-clamp.nix` pins that down.
-
-### Exit 0 is a hard contract, so every filesystem call is best-effort
-
-A non-zero `UserPromptSubmit` hook surfaces as an error to the user on **every
-turn**. Under `set -e` that makes an unguarded `mkdir`, `touch`, `rm`, `cat`, or
-`${VAR:?}` a latent per-turn error dialog, not a style nit. All are guarded.
-
-Marker bookkeeping is best-effort and the injection happens regardless. The
-realistic failure is a shared `/tmp` whose `claude-delegation-clamp/` is owned
-by another user, reachable when neither `XDG_RUNTIME_DIR` nor `TMPDIR` is set. A
-marker that cannot be written degrades toward **injecting**, never toward
-silence: losing the cadence costs tokens, losing the injection costs the
-mitigation itself. A missing payload file is the one case that lapses instead,
-since there is then nothing to inject.
+Exit 0 is still a hard contract. A non-zero `UserPromptSubmit` hook surfaces as
+an error to the user on **every turn**; printing a store file cannot fail short
+of a broken store.
 
 ### Why the model is not detected
 
 `UserPromptSubmit` stdin is
 `{session_id, prompt_id, cwd, permission_mode, prompt}` — **no `model`**. Only
 `SessionStart` carries it, so gating on Opus 5 would need a `SessionStart`
-companion writing session-keyed state. At once-per-session cadence the waste on
-other models is ~75 tokens once, cheaper than that state file and its staleness
-modes. So there is no gate, deliberately.
+companion writing session-keyed state. The reminder serves every model anyway,
+since it also carries the load-the-skill request.
 
-An Opus 5 / Sonnet 5 control pair confirmed the whole chain end-to-end: the hook
-fires, injects once, the clamp is present on Opus 5 and **absent on Sonnet 5**,
-and the escape clause resolves to "permitted". The gate is a measurement, not a
-reading of the binary. When re-verifying, trust the **marker** over the model's
-self-report — one file named for the session id after the first prompt, none
-after.
+An Opus 5 / Sonnet 5 control pair confirmed the whole chain end-to-end with the
+old once-per-session hook: the hook fired, the clamp was present on Opus 5 and
+**absent on Sonnet 5**, and the escape clause resolved to "permitted". The gate
+is a measurement, not a reading of the binary.
 
 ### Why it is a definition, not an option default
 
-`mkClaude.nix` emits the hook pair as a **definition** of `ai.claude.hooks`, not
-as that option's `default`. A `default` is discarded wholesale the moment a
-consumer defines the option at all, so it would have silently disabled the
-mitigation for exactly the consumers who use hooks most. As a definition it
-list-merges with consumer entries;
-`module-claude-delegation-clamp-composes-with-consumer-hook` pins that down.
+The reminder is written as a **definition** of `ai.claude.hooks`, not as that
+option's `default`. A `default` is discarded wholesale the moment a consumer
+defines the option at all, so it would silently disable the mitigation for
+exactly the consumers who use hooks most. As a definition it list-merges with
+consumer entries.
 
-The default prose follows the same rule inside
-`ai.claude.delegationClampMitigation`: the shared optional-text-source type's
-`defaultContent` parameter installs it as a `lib.mkDefault` submodule
-definition, rather than using `default = { text = <prose>; };` on the outer
-option. Otherwise the common `delegationClampMitigation.enable = true`
-definition would discard the complete outer default, leave `text = ""`, and the
-shared type would reject the enabled empty value. Default-priority prose does
-not auto-enable; explicit `text` or `source` content does, and an explicit
-source wins over the prose.
-
-Config parity is structural — both backends already lower `ai.claude.hooks` to
-`settings.json`, so one write serves HM and devenv. Claude-only, no `ai.*`
-fanout: `heron_brook` belongs to the Claude Code client's own system prompt,
-which Kiro and Copilot never load.
-
-A **dual setup** (HM global + devenv project-local) registers the hook twice.
-Harmless by construction — the first `inject` writes the marker and the second
-sees it, so exactly one injection happens however the scopes merge. Watch only
-for the two scopes resolving different store paths once their flake pins
-diverge; then whichever runs first supplies the payload.
+A **dual setup** (HM global + devenv project-local) registers the hook twice,
+and the line is injected twice per turn. There is no marker to deduplicate it.
 
 ### The injected text is load-bearing
 
-`ai.claude.delegationClampMitigation.text` resolves to a first-person standing
-request. Re-derive all four properties before rewording it:
+Re-derive all four properties before rewording the reminder's default:
 
 1. It **satisfies** the escape clause rather than contradicting it. A
    contradiction pits a user-message line against a system-prompt line, which
@@ -282,7 +256,10 @@ current builds and a live session flagged the mismatch, but the redundancy is
 deliberate: this package ships across versions that used either name, and a
 spare word is cheaper than a missed escape clause.
 
-### The reminder, and why it is not a check
+The shorter one-line wording has not been re-verified against a live Opus 5
+session; the measurements above used the old paragraph.
+
+### The review tripwire, and why it is not a check
 
 A mitigation for undocumented vendor behavior must not outlive its cause — but
 the check that used to enforce that was the wrong instrument. It compared the
@@ -318,5 +295,6 @@ What replaced it:
   a guard that quietly stops guarding.
 
 Discharging means bumping `reviewBy` ~90 days or — if upstream fixed it —
-**deleting the mitigation, the ci.yml step, and that guard together**. An
-expired justification is a finding, not a formality to bump past.
+**dropping the grant from the reminder's default text and deleting the ci.yml
+step and that guard together**. An expired justification is a finding, not a
+formality to bump past.
