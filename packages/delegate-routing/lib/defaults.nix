@@ -1,4 +1,5 @@
 {
+  lib,
   claudeUsageScript,
   codexUsageScript,
 }: {
@@ -17,12 +18,6 @@
     kimchi = [];
     kiro = [];
   };
-  procedure = builtins.readFile ./procedure.md;
-  roles = {
-    default = null;
-    reviewer = null;
-    writer = null;
-  };
-  rules = builtins.readFile ./rules.md;
+  inherit (import ./entries.nix {inherit lib;}) routing workflows;
   techniques = import ./techniques.nix {inherit claudeUsageScript codexUsageScript;};
 }
