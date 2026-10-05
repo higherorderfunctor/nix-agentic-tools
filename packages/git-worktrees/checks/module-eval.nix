@@ -26,8 +26,8 @@ in {
         && !config.ai.kiro.tweaks.stripVendorWorktreeSteering)
     );
 
-    # The default protocol reaches every supported runtime's own pool, never
-    # the root pool, with `{location}` rendered. The default location has a
+    # The default protocol reaches every supported runtime's own pool with
+    # `{location}` rendered. The default location has a
     # `{repo}` placeholder, which Claude's `worktree.location` cannot express.
     module-git-worktrees-enable = mkTest "git-worktrees-enable" (
       onBoth (enabled {}) (config:
@@ -39,7 +39,6 @@ in {
           && lib.hasInfix "`../{repo}-worktrees`" text
           && !(lib.hasInfix "{location}" text))
         runtimes
-        && !(config.ai.extraSystemPrompt ? git-worktrees)
         && claudeWorktree config == null
         && config.ai.kiro.tweaks.stripVendorWorktreeSteering)
     );
