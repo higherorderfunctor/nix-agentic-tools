@@ -9,6 +9,8 @@
   pkgs,
 }: let
   jsonFormat = pkgs.formats.json {};
+  # Imported directly: the plugin-entry check passes plain nixpkgs `lib`.
+  linkDirectory = import ../../../lib/link-directory.nix;
 in {
   # A consumer plugin, wrapped so a manifest can be synthesized for a source
   # that lacks one. Only the top-level entries are linked, so each component
@@ -18,7 +20,7 @@ in {
   # agent and command the plugin ships. The result is delivered as a single
   # directory link for the same reason.
   mkPluginEntry = name: plugin:
-    (lib.ai.linkDirectory pkgs "claude-code-plugin-${lib.strings.sanitizeDerivationName name}" plugin).overrideAttrs (_: old: {
+    (linkDirectory pkgs "claude-code-plugin-${lib.strings.sanitizeDerivationName name}" plugin).overrideAttrs (_: old: {
       buildCommand =
         old.buildCommand
         + ''
