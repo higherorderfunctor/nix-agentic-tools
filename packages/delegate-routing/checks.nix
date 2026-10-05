@@ -36,7 +36,7 @@ in {
         in ''
           echo '{"session_id":"probe"}' | ${command} > ${runtime}.json
           jq -e --arg expected "$expected" '.hookSpecificOutput == {hookEventName: "UserPromptSubmit", additionalContext: $expected}' ${runtime}.json
-        '') ["claude" "codex" "kimchi"]}
+        '') (lib.attrNames (removeAttrs reminderHooks ["kiro"]))}
         echo '{"session_id":"probe"}' | ${reminderHooks.kiro.hooks.delegate-routing-reminder.action.command} > kiro.txt
         [ "$(cat kiro.txt)" = "$expected" ]
         touch "$out"
