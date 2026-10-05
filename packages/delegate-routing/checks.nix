@@ -1,4 +1,23 @@
 {
+  harness,
+  lib,
+  pkgs,
+  ...
+}: let
+  cases = import ./eval/cases.nix {inherit harness lib;};
+  fixtures = pkgs.writeText "delegate-routing-eval-cases.json" (builtins.toJSON cases);
+  python = pkgs.python3.withPackages (packages: [packages.jsonschema]);
+in {
+  checks.delegate-routing-eval-structure =
+    pkgs.runCommand "delegate-routing-eval-structure" {
+      nativeBuildInputs = [python];
+      passthru = {inherit cases;};
+    } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      python ${./eval}/run.py --validate-fixtures --fixtures ${fixtures}
+      touch "$out"
+    '';
   imports = [./checks/capabilities.nix ./checks/module-eval.nix];
   testing.moduleProbes = [
     {
