@@ -366,15 +366,15 @@ in {
         programOptions = evaluated: package: evaluated.options.ai.programs.${package};
         optionShape = evaluated: package: shape (programOptions evaluated package);
         runtimeShape = evaluated: package: runtime:
-          shape (programOptions evaluated package).settings.${runtime};
+          shape (programOptions evaluated package).runtimes.${runtime};
         hm = evalHm {};
         devenv = evalDevenv {};
         gitPresetValues = evaluated:
           evaluated.options.stacked-workflows.gitPreset.type.functor.payload.values;
         programParity = package: expectedRootShape: runtimes:
-          builtins.removeAttrs (optionShape hm package) ["settings"]
+          builtins.removeAttrs (optionShape hm package) ["runtimes"]
           == expectedRootShape
-          && builtins.attrNames (programOptions hm package).settings == runtimes
+          && builtins.attrNames (programOptions hm package).runtimes == runtimes
           && optionShape hm package
           == optionShape devenv package
           && lib.all
@@ -410,7 +410,7 @@ in {
                 codex.enable = true;
                 programs.${package} = lib.mkMerge [
                   (priority {enable = true;})
-                  {settings.claude.enable = false;}
+                  {runtimes.claude.enable = false;}
                 ];
               };
             };

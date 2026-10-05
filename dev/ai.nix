@@ -132,7 +132,7 @@ in {
           };
         };
       };
-      settings = {
+      runtimes = {
         claude = {
           extraRuntimes = ["codex"];
           manualExternalDelegates = ["kimchi" "kiro"];

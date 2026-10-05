@@ -1,7 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-04 — programs and runtime settings are plain option
-> trees; whole-record priorities apply independently to each leaf.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -768,12 +768,12 @@ configuration independently; sharing code never shares option values.
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
 tree. The factory projects that into `ai.programs.<name>` plus only the listed
-`ai.programs.<name>.settings.<runtime>` paths. Runtime leaves are nullable and
+`ai.programs.<name>.runtimes.<runtime>` paths. Runtime leaves are nullable and
 resolve independently through `resolveOverride`: null inherits the portable
 value and a non-null value wins. This is the scalar B4 contract, not keyed-pool
 tombstone behavior. The program and runtime settings are plain option trees, not
 submodule options. Whole-record `mkDefault` and `mkForce` apply to each portable
-leaf independently and cannot override a runtime settings leaf. `settings` is
+leaf independently and cannot override a runtime settings leaf. `runtimes` is
 reserved for runtime overrides. These trees have no root options-doc entry;
 their leaf entries remain documented.
 
@@ -863,7 +863,7 @@ backends now contribute (each via `lib/ai/mkSkillPackageModule`).
 That helper declares `ai.programs.stacked-workflows.enable` through
 `lib.ai.program.mkProgram`. A root true enables every supported runtime whose
 pool exists in the current evaluation;
-`ai.programs.stacked-workflows.settings.<runtime>.enable = false` retracts that
+`ai.programs.stacked-workflows.runtimes.<runtime>.enable = false` retracts that
 runtime's package contribution without affecting siblings. The removed top-level
 package enable option has no alias. `stacked-workflows.gitPreset` is
 deliberately not part of the program tree: it sets the `git.*` options, which

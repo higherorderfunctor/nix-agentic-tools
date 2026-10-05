@@ -6,7 +6,7 @@
 # Option surface, following `packages/delegate-routing/modules/common.nix`:
 #
 #   ai.programs.kimchi-docs.enable            portable, default false
-#   ai.programs.kimchi-docs.settings.<runtime>.enable  per-runtime override, null inherits
+#   ai.programs.kimchi-docs.runtimes.<runtime>.enable  per-runtime override, null inherits
 #
 # and the mount is `ai.<runtime>.skills.kimchi-docs`, written by
 # `lib/ai/mkSkillPackageModule.nix` for every runtime whose skills pool exists in

@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-04 — programs and runtime settings are plain option
-> trees; whole-record priorities apply independently to each leaf.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -775,12 +775,12 @@ configuration independently; sharing code never shares option values.
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
 tree. The factory projects that into `ai.programs.<name>` plus only the listed
-`ai.programs.<name>.settings.<runtime>` paths. Runtime leaves are nullable and
+`ai.programs.<name>.runtimes.<runtime>` paths. Runtime leaves are nullable and
 resolve independently through `resolveOverride`: null inherits the portable
 value and a non-null value wins. This is the scalar B4 contract, not keyed-pool
 tombstone behavior. The program and runtime settings are plain option trees, not
 submodule options. Whole-record `mkDefault` and `mkForce` apply to each portable
-leaf independently and cannot override a runtime settings leaf. `settings` is
+leaf independently and cannot override a runtime settings leaf. `runtimes` is
 reserved for runtime overrides. These trees have no root options-doc entry;
 their leaf entries remain documented.
 
@@ -870,7 +870,7 @@ backends now contribute (each via `lib/ai/mkSkillPackageModule`).
 That helper declares `ai.programs.stacked-workflows.enable` through
 `lib.ai.program.mkProgram`. A root true enables every supported runtime whose
 pool exists in the current evaluation;
-`ai.programs.stacked-workflows.settings.<runtime>.enable = false` retracts that
+`ai.programs.stacked-workflows.runtimes.<runtime>.enable = false` retracts that
 runtime's package contribution without affecting siblings. The removed top-level
 package enable option has no alias. `stacked-workflows.gitPreset` is
 deliberately not part of the program tree: it sets the `git.*` options, which
@@ -901,8 +901,8 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -924,7 +924,7 @@ commit.
 | B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
 | B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
-| B4  | `ai.programs.<pkg>` ↔ `settings.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
+| B4  | `ai.programs.<pkg>` ↔ `runtimes.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
@@ -1102,7 +1102,7 @@ and out of the package provenance guard.
 - `ai.hooks` is an event map whose matcher-group lists append shared-first.
   Event keys identify additive lifecycle streams, not replaceable pool items.
 - `ai.shell`, normalized `ai.settings` fields, and generated
-  `ai.programs.<pkg>.settings.<runtime>` leaves are nullable scalars.
+  `ai.programs.<pkg>.runtimes.<runtime>` leaves are nullable scalars.
   `resolveOverride` interprets runtime null as **inherit**, not delete; a
   non-null runtime scalar wins.
 - `ai.<runtime>.files` is a final per-runtime output registry, not a portable
@@ -1806,8 +1806,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-04 — programs and runtime settings are plain option
-> trees; whole-record priorities apply independently to each leaf.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1864,12 +1864,12 @@ values have been resolved.
 `lib.ai.program.mkProgram` applies the same rule to every leaf of a program
 specification. Program roots and runtime settings are plain option trees rather
 than submodule options; whole-record priorities apply independently to each
-leaf. The portable specification cannot declare the reserved name `settings`.
+leaf. The portable specification cannot declare the reserved name `runtimes`.
 Root declarations retain their ordinary types and defaults; runtime declarations
 are generated as nullable versions of those declarations. The program module
 receives one recursively resolved record per supported runtime. The
 specification's `supportedRuntimes` list is the single capability source:
-unsupported `ai.programs.<pkg>.settings.<runtime>` paths do not exist.
+unsupported `ai.programs.<pkg>.runtimes.<runtime>` paths do not exist.
 
 Do not add a sibling runtime selector. Runtime program `enable = false` is the
 negation mechanism, and an individual runtime feature may override the portable
