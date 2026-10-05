@@ -30,42 +30,23 @@
     codexUsageScript = lib.getExe usageScripts.codex-usage;
   };
   techniqueType = import ../../lib/technique-type.nix {inherit lib;};
-  normalizedTechniques =
-    (lib.evalModules {
-      modules = [
-        {
-          options.techniques = lib.mkOption {
-            type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
-            default = rawDefaults.techniques;
-          };
-        }
-      ];
-    }).config.techniques;
   entryTypes = import ../../lib/entry-type.nix {inherit lib;};
-  normalizedEntries =
+  normalized =
     (lib.evalModules {
       modules = [
         {
-          options = {
-            routing = lib.mkOption {
-              type = lib.types.attrsOf entryTypes.entryType;
-              default = {};
+          options =
+            entryTypes.options
+            // {
+              techniques = lib.mkOption {
+                type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
+              };
             };
-            workflows = lib.mkOption {
-              type = lib.types.attrsOf entryTypes.workflowType;
-              default = {};
-            };
-          };
-          config = lib.mapAttrsRecursive (_: lib.mkDefault) {inherit (rawDefaults) routing workflows;};
+          config = lib.mapAttrsRecursive (_: lib.mkDefault) {inherit (rawDefaults) routing workflows techniques;};
         }
       ];
     }).config;
-  defaults =
-    rawDefaults
-    // {
-      techniques = normalizedTechniques;
-      inherit (normalizedEntries) routing workflows;
-    };
+  defaults = rawDefaults // {inherit (normalized) routing workflows techniques;};
   render = args: builtins.readFile "${mkSkill args}/SKILL.md";
   # The skill in the house prose style. No table check: this package set's
   # pkgs carries no overlay, so the overlay's linters are not in it.
