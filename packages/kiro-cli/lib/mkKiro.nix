@@ -18,12 +18,10 @@
   inherit (kiroWrapper) wrapperReasons;
   wrapKiroPackage = kiroWrapper.wrapPackage;
 
-  # Engine-bundle rewrites. Both reach INTO the KAS bundle, which is unpacked
-  # from the binary at runtime and never lands in the nix store, so both are
-  # runtime helpers rather than derivations. Each file's header records why
-  # build-time extraction is not available.
-  mkIdentityMaterializer = import ./identityBundle.nix {inherit lib pkgs;};
-  workflowReminder = import ./workflowReminder.nix {inherit lib pkgs;};
+  # One launch-time materializer patches the user's installed KAS bundle.
+  # CI can unpack the pinned bundle offline; launch must resolve the bundle
+  # actually installed, including after CLI upgrades. See identityBundle.nix.
+  mkBundleMaterializer = import ./identityBundle.nix {inherit lib pkgs;};
 
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
   frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
@@ -709,18 +707,10 @@
         message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
       }
       {
-        # The splice reassembles the literal as `replacement + " " + tail`. If
-        # the replacement does not close its own final sentence it MERGES into
-        # the vendor tail ("You are GLaDOS You operate in a terminal
-        # environment: …"), and the option stops meaning "replace the first
-        # sentence" at all.
-        #
-        # Asserted at EVAL, not left to the splicer's own guard (which stays as
-        # a backstop). The splicer runs on the LAUNCH path, and that path FAILS
-        # OPEN by design — so a value rejected there presents as "the identity
-        # silently did nothing", which is precisely the failure shape that let
-        # a multi-sentence identity ship broken. A config error belongs where
-        # the config is written.
+        # The exact sentence replacement leaves the following terminal prose
+        # intact, so the identity must close its own sentence. Validate at eval:
+        # launch intentionally falls back after a patch error, and a rejected
+        # identity belongs at the configuration site rather than at launch.
         assertion =
           !cfg.identity.enable
           || builtins.match ".*[.!?][[:space:]]*" cfg.identity.text != null;
@@ -923,12 +913,16 @@
   # The materializer is version-pinned, so it must be built from the RESOLVED
   # package (a rollout-unlocked variant is a different derivation but the same
   # version) rather than from `cfg.package`.
-  resolveIdentityMaterializer = cfg:
-    if !cfg.identity.enable
+  resolveBundleMaterializer = cfg:
+    if !cfg.identity.enable && !cfg.normalizeWorktreeSteering
     then null
     else
-      mkIdentityMaterializer {
-        identity = cfg.identity.text;
+      mkBundleMaterializer {
+        identity =
+          if cfg.identity.enable
+          then cfg.identity.text
+          else null;
+        inherit (cfg) normalizeWorktreeSteering;
         cliVersion = (resolvePackage cfg).version;
       };
 
@@ -1032,51 +1026,6 @@
   workflowsSettingImplication = cfg:
     lib.mkIf (builtins.elem "workflows" cfg.unlockedRolloutFeatures) {
       ai.kiro.native.settings.chat.enableWorkflows = lib.mkDefault true;
-    };
-
-  # `null` means auto: the reminder is meaningless without the feature, and the
-  # feature under-elicits without it, so they default on together.
-  workflowReminderEnabled = cfg:
-    if cfg.workflowReminder.enable != null
-    then cfg.workflowReminder.enable
-    else builtins.elem "workflows" cfg.unlockedRolloutFeatures;
-
-  # Contributed as an ordinary typed hook record, so it rides the existing
-  # envelope writer on both backends instead of adding a second hook path.
-  #
-  # `type = "agent"` appends the prompt straight to model context with no
-  # subprocess (and ignores `timeout`), which is why the SHORT reminder needs no
-  # script at all. The vendor-steering variant has to be `type = "command"`:
-  # its text lives in the runtime-unpacked engine bundle, so it cannot be a
-  # string known at eval time.
-  workflowReminderHooks = cfg:
-    lib.optionalAttrs (workflowReminderEnabled cfg && (!cfg.workflowReminder.includeVendorSteering || cfg.package != null)) {
-      workflow-reminder =
-        {
-          trigger = "UserPromptSubmit";
-          description = "Re-state the workflow orchestration contract each turn (position, not content — see workflowReminder.nix).";
-        }
-        // (
-          if cfg.workflowReminder.includeVendorSteering
-          then {
-            action = {
-              type = "command";
-              command = workflowReminder.mkVendorReminder {
-                cliVersion = (resolvePackage cfg).version;
-              };
-            };
-            # The extractor reads a 20 MB file on a cold cache; every later turn
-            # is a `cat`. Kiro's default is 60s, which is ample, but a hook that
-            # hangs blocks the turn, so this is bounded explicitly.
-            timeout = 30;
-          }
-          else {
-            action = {
-              type = "agent";
-              prompt.text = cfg.workflowReminder.text.text;
-            };
-          }
-        );
     };
 
   # Rendered mcp.json body (DRY: both backends AND the mkMcpJsonScript
@@ -1239,7 +1188,7 @@
             }.${name}.headers.${header}";
           }) (lib.filterAttrs (_: builtins.isAttrs) (server.headers or {})))
         mergedServers));
-      identityMaterializer = resolveIdentityMaterializer cfg;
+      bundleMaterializer = resolveBundleMaterializer cfg;
     };
 in
   lib.ai.app.mkRuntime {
@@ -1343,79 +1292,29 @@ in
           agent IS.
 
           Mechanically: the patched engine bundle is materialized under
-          `$XDG_CACHE_HOME/nix-agentic-tools/kiro-identity/` at launch and
+          `$XDG_CACHE_HOME/nix-agentic-tools/kiro-bundle/` at launch and
           selected via `KIRO_KAS_SERVER_PATH`. Vendor state is never modified.
-          The vendor sentence being replaced is written alongside the patch as
-          `vendor-sentence.txt`.
+          The exact vendor sentence is defined in `kiro-bundle-patch.py` and
+          checked against the pinned bundle in CI.
 
           FAIL-OPEN: if the engine bundle cannot be resolved or the vendor
-          prompt module has been restructured, the reason goes to stderr and the
+          source text no longer occurs exactly once, a named warning goes to stderr and the
           CLI launches UNPATCHED rather than refusing to start.
 
           May not contain a backtick or `''${` — the value is spliced into a JS
           template literal.
         '';
       };
-      workflowReminder = {
-        enable = lib.mkOption {
-          # `null` = auto, resolved by `workflowReminderEnabled` in the backend
-          # config blocks. It cannot be a computed default here: the record's
-          # shared `options` attrset is built in this file's scope, where the
-          # module fixpoint's `config` is not bound.
-          type = lib.types.nullOr lib.types.bool;
-          default = null;
-          defaultText = lib.literalExpression ''
-            null  # auto: true iff "workflows" is in unlockedRolloutFeatures
-          '';
-          description = ''
-            Install a `UserPromptSubmit` hook that re-states the workflow
-            orchestration contract on every turn. `null` (the default) means
-            AUTO: on exactly when `workflows` is unlocked, since the reminder is
-            meaningless without the feature and the feature under-elicits
-            without the reminder. Set `true`/`false` to force it either way.
-
-            Why a hook rather than more steering: when workflows are enabled the
-            engine ALREADY appends its own ~3.9k-token workflow-orchestration
-            steering (binding minified since at least 2.21.4; formerly `workflows_default`) to
-            the system prompt, and msg0 is computed once on turn one and
-            replayed byte-for-byte thereafter. The instruction never decays —
-            ATTENTION does. A hook lands as a context message beside each
-            prompt, so it buys position, not content.
-          '';
-        };
-        text = lib.mkOption {
-          type = aiTypes.textSource {
-            defaultContent.text = workflowReminder.defaultText;
-            description = "the reminder appended to model context on each turn";
-          };
-          default = {};
-          defaultText = lib.literalExpression ''
-            { text = <a short pointer at the workflow contract>; }
-          '';
-          description = ''
-            The reminder appended to model context on each turn. Deliberately
-            SHORT and deliberately a pointer rather than a summary: the vendor's
-            full contract is already in msg0, so restating its rules here would
-            fork a second source of truth that goes stale on the next engine
-            bump.
-          '';
-        };
-        includeVendorSteering = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = ''
-            Inject the vendor's COMPLETE workflow-orchestration steering text
-            (binding minified since at least 2.21.4; formerly `workflows_default`) every turn
-            instead of the short reminder, extracted from the installed engine
-            bundle and cached. The old binding-name extractor silently failed
-            since at least 2.21.4; extraction now anchors on the heading.
-
-            Off by default because it costs roughly 3.9k tokens PER TURN (~195k
-            across a 50-turn session) to repeat text the model already has in
-            msg0. Turn it on only if you have measured that the short reminder
-            is not enough.
-          '';
-        };
+      normalizeWorktreeSteering = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Remove the vendor workflow worktree paragraph at launch. Repository
+          instructions supply the git workflow. Uses the same exact-match
+          bundle materializer as `identity`, on Home Manager and devenv.
+          A source-text drift prints a warning and launches Kiro unpatched;
+          the pinned-bundle CI check fails on either missing or duplicate text.
+        '';
       };
       # Config directory (HOME-relative for HM, project-relative for
       # devenv). All file writes use this as root prefix. Exposed as an
@@ -1731,7 +1630,6 @@ in
       wrapperReasonPaths = {
         environmentVariables = [["ai" "environmentVariables"] ["ai" "kiro" "environmentVariables"]];
         extraPackages = [["ai" "kiro" "extraPackages"]];
-        identity = [["ai" "kiro" "identity" "enable"]];
         secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];
         trustedMcpTools = [["ai" "kiro" "trustedMcpTools"]];
         v3 = [["ai" "kiro" "v3"]];
@@ -1739,17 +1637,11 @@ in
       wrapperPackageReasons =
         lib.mapAttrsToList (key: reason:
           reason // {explicit = explicitAt wrapperReasonPaths.${key};})
-        (wrapperReasons {
+        (builtins.removeAttrs (wrapperReasons {
           environmentVariables = mergedEnvironmentVariables;
           inherit (cfg) extraPackages trustedMcpTools v3;
-          # Presence marker only: the reason list asks whether identity is on,
-          # not for the materializer the wrapper itself receives.
-          identityMaterializer =
-            if cfg.identity.enable
-            then {}
-            else null;
           inherit (kiroSecrets) secretEnv;
-        });
+        }) ["bundle"]);
       # Beside the wrapper's own reasons: package-dependent options the
       # wrapper itself does not read, but that still need the managed
       # package to do anything. `gitSshConfigWorkaround` defaults to `true`
@@ -1766,6 +1658,16 @@ in
             name = "ai.gitSshConfigWorkaround";
           }
           {
+            active = cfg.identity.enable;
+            explicit = explicitAt [["ai" "kiro" "identity" "enable"]];
+            name = "ai.kiro.identity";
+          }
+          {
+            active = cfg.normalizeWorktreeSteering;
+            explicit = explicitAt [["ai" "kiro" "normalizeWorktreeSteering"]];
+            name = "ai.kiro.normalizeWorktreeSteering";
+          }
+          {
             active = resolvedShell != null;
             # The selected shell reaches Kiro only as SHELL in the managed launcher.
             explicit = explicitAt [["ai" "shell"] ["ai" "kiro" "shell"]];
@@ -1776,12 +1678,6 @@ in
             # Rollout features rebuild the selected package through withRolloutFeatures.
             explicit = explicitAt [["ai" "kiro" "unlockedRolloutFeatures"]];
             name = "ai.kiro.unlockedRolloutFeatures";
-          }
-          {
-            active = workflowReminderEnabled cfg && cfg.workflowReminder.includeVendorSteering;
-            # Vendor steering is read from the managed package's unpacked engine bundle.
-            explicit = explicitAt [["ai" "kiro" "workflowReminder" "includeVendorSteering"]];
-            name = "ai.kiro.workflowReminder.includeVendorSteering";
           }
         ];
       # Defaults stay silent and nothing asserts on `package = null` alone —
@@ -1809,9 +1705,7 @@ in
       };
     in
       lib.mkMerge ([
-          # Both backends contribute the same typed reminder; only HM implies
-          # the user-global workflows setting.
-          {ai.kiro.hooks = workflowReminderHooks cfg;}
+          # Only HM can imply the user-global workflows setting.
           (lib.mkIf isHm (workflowsSettingImplication cfg))
           {
             assertions =

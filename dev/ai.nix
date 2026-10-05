@@ -362,11 +362,6 @@ in {
       identity.text = ''
         You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
       '';
-      # NOTE: `workflowReminder` is not set because it does not need to be — it
-      # defaults to AUTO, which is on exactly when `workflows` is unlocked, so
-      # the line above already installs a `UserPromptSubmit` hook restating the
-      # orchestration contract each turn. Set `workflowReminder.enable = false`
-      # to opt this shell out.
     };
 
     skills = let

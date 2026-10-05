@@ -4,7 +4,6 @@
   pkgs,
   ...
 }: let
-  reminder = (import ../../packages/kiro-cli/lib/workflowReminder.nix {inherit lib pkgs;}).mkVendorReminder {cliVersion = "1.0.0";};
   enabled = harness.evalDevenv {
     ai.codex = {
       # Not the default AGENTS.md: the observer's fallback for a runtime that
@@ -95,7 +94,6 @@ in {
       ${pkgs.python3}/bin/python ${./runtime.py} \
         ${../../lib/ai/file-warnings.py} \
         ${../../packages/claude-code/lib/memory-collision-guard.sh} \
-        ${lib.getExe reminder} \
         ${wrappers} \
         ${../../packages/claude-code/lib/delegation-clamp.sh} \
         ${observer "warning-observer-shell" enabled} \

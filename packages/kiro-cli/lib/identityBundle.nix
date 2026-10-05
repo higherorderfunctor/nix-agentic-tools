@@ -1,18 +1,18 @@
-# Materialize a KAS engine bundle whose kiro-cli identity sentence is replaced.
+# Materialize a KAS engine bundle with selected exact-match prompt patches.
 #
 # ── Why this is a LAUNCH-time materializer and not a derivation ──────────────
 # The engine bundle is NOT in the nix store. `kiro-cli` carries it as an
 # embedded asset and unpacks it on first use into
 # `$KIRO_DATA_DIR/kas/<version>-<sha256>/`, so at build time there is nothing to
 # patch directly. A dummy KIRO_API_KEY with `acp --agent-engine v3` does unpack
-# a bundle without credentials or network in a sandbox (the steering drift
-# check uses this). Identity replacement stays at launch so it patches the
+# a bundle without credentials or network in a sandbox (the bundle drift
+# check uses this). Prompt replacement stays at launch so it patches the
 # user's actual engine bundle, including after CLI upgrades.
 #
 # So the patch is applied where the bundle actually exists: on the user's
-# machine, at launch, into a cache keyed by (engine bundle, replacement text).
-# Both halves of that key matter -- a CLI upgrade ships a new bundle, and an
-# edited option must not be served a stale patch.
+# machine, at launch, into a cache keyed by the engine bundle, selected
+# replacements and patcher source. A CLI upgrade, edited option or patcher
+# change must not be served a stale patch.
 #
 # ── Why `KIRO_KAS_SERVER_PATH` rather than editing the vendor tree ───────────
 # The chat binary passes that variable to node as the entry module, with no hash
@@ -31,18 +31,25 @@
   lib,
   pkgs,
 }: let
-  splicer = ./kiro-identity-splice.py;
+  patcher = ./kiro-bundle-patch.py;
 in
-  # `identity` is the replacement sentence; `cliVersion` is the kiro-cli
-  # package version, used to pick the right engine bundle. Returns a package
-  # exposing `bin/kiro-identity-materialize`, which prints the patched server
-  # path on stdout and materializes it on first use.
+  # Both backends select the same identity text source and normalization flag.
   {
-    identity,
     cliVersion,
-  }:
+    identity ? null,
+    normalizeWorktreeSteering ? true,
+  }: let
+    patchKey = builtins.hashString "sha256" (builtins.toJSON {
+      inherit identity normalizeWorktreeSteering;
+      source = builtins.readFile patcher;
+    });
+    replacementNames = lib.concatStringsSep ", " (
+      lib.optional (identity != null) "identity"
+      ++ lib.optional normalizeWorktreeSteering "worktree"
+    );
+  in
     pkgs.writeShellApplication {
-      name = "kiro-identity-materialize";
+      name = "kiro-bundle-materialize";
       bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
       runtimeInputs = [];
       text = ''
@@ -52,22 +59,10 @@ in
         # may be spawned with a replaced or empty PATH (nix-standards).
         coreutils=${lib.escapeShellArg pkgs.coreutils}
         python=${lib.escapeShellArg (lib.getExe pkgs.python3)}
-        splice=${lib.escapeShellArg splicer}
+        patcher=${lib.escapeShellArg patcher}
 
         data_dir="''${KIRO_DATA_DIR:-''${XDG_DATA_HOME:-$HOME/.local/share}/kiro-cli}"
-        cache_root="''${XDG_CACHE_HOME:-$HOME/.cache}/nix-agentic-tools/kiro-identity"
-
-        # The replacement is written to a file rather than passed as argv so the
-        # sentence can contain anything the JS literal tolerates, and so the
-        # cache key is a hash of the exact bytes that will be spliced.
-        #
-        # `mktemp` is given an explicit template because BSD/macOS REQUIRES one
-        # (GNU supplies a default and succeeds, which is how this portability
-        # bug reaches a darwin user unnoticed).
-        repl_file="$("$coreutils"/bin/mktemp "''${TMPDIR:-/tmp}/kiro-identity.XXXXXX")"
-        cleanup() { "$coreutils"/bin/rm -f "$repl_file"; }
-        trap cleanup EXIT
-        printf %s ${lib.escapeShellArg identity} > "$repl_file"
+        cache_root="''${XDG_CACHE_HOME:-$HOME/.cache}/nix-agentic-tools/kiro-bundle"
 
         # Resolve the engine bundle deterministically, never by glob order.
         # Several bundles accumulate side by side (seven, on the machine this
@@ -102,13 +97,13 @@ in
             sys.exit(1)
         sys.stdout.write(max(candidates)[1] + "/")
         ' "$data_dir/kas" ${lib.escapeShellArg cliVersion} 2>/dev/null)" || {
-          echo "kiro-identity: no engine bundle at or below CLI version ${cliVersion} under $data_dir/kas; launching unpatched (the engine unpacks on first use, so this resolves itself after one run)" >&2
+          echo "WARNING: kiro-bundle-patch (${replacementNames}): no engine bundle at or below CLI version ${cliVersion} under $data_dir/kas; launching unpatched (the engine unpacks on first use, so this resolves itself after one run)" >&2
           exit 1
         }
         src="''${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
-        [ -f "$src" ] || { echo "kiro-identity: no acp-server.js under $kas; launching unpatched" >&2; exit 1; }
+        [ -f "$src" ] || { echo "WARNING: kiro-bundle-patch (${replacementNames}): no acp-server.js under $kas; launching unpatched" >&2; exit 1; }
 
-        key="$("$coreutils"/bin/basename "''${kas%/}")-$("$coreutils"/bin/sha256sum "$repl_file" | "$coreutils"/bin/cut -c1-16)"
+        key="$("$coreutils"/bin/basename "''${kas%/}")-${patchKey}"
         out="$cache_root/$key"
         server="$out/node_modules/@kiro/agent/dist/server/acp-server.js"
 
@@ -119,7 +114,7 @@ in
           exit 0
         fi
 
-        "$coreutils"/bin/rm -rf "$out"
+        if [ -e "$out" ]; then "$coreutils"/bin/rm -r "$out"; fi
         "$coreutils"/bin/mkdir -p "$out/node_modules/@kiro/agent/dist/server"
 
         link_all() { # srcdir dest skip
@@ -137,14 +132,11 @@ in
         link_all "$nm/@kiro/agent/dist"         "$out/node_modules/@kiro/agent/dist"        "server"
         link_all "$nm/@kiro/agent/dist/server"  "$out/node_modules/@kiro/agent/dist/server" "acp-server.js"
 
-        # Record what is being replaced, so the vendor sentence is readable
-        # without re-deriving it from a 20 MB bundle. This is the honest form of
-        # a "sidecar": it is produced where the bundle actually exists, and so
-        # it can never describe a version other than the installed one.
-        "$python" "$splice" "$src" --print > "$out/vendor-sentence.txt"
-        "$coreutils"/bin/cp "$repl_file" "$out/replacement-sentence.txt"
-
-        "$python" "$splice" "$src" "$server" "$repl_file"
+        # A drift miss must not mark an incomplete copy ready. The wrapper
+        # handles this status explicitly and still starts Kiro unpatched.
+        "$python" "$patcher" "$src" "$server" \
+          ${lib.optionalString (identity != null) "--identity-file ${lib.escapeShellArg (pkgs.writeText "kiro-identity.txt" identity)}"} \
+          ${lib.optionalString (!normalizeWorktreeSteering) "--keep-worktree-steering"} || exit 1
         "$coreutils"/bin/touch "$out/.ready"
         printf %s "$server"
       '';
