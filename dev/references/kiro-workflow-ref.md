@@ -807,23 +807,22 @@ without saying the word stopped it. The hook was added days later precisely
 because that coupling made the behavior unreliable.
 
 The elicitation source is therefore the **vendor's** workflow-orchestration
-steering (formerly `workflows_default`) — ~15.5k characters since 2.27.1 (~19.3k
-through 2.16.x), emphatic ("always delegate implementation to workflows"). What
-makes it topic-coupled is _where_ it sits, and `workflowReminder.nix`'s own
-header names the symptom exactly:
+steering — ~15.5k characters in the pinned release, emphatic ("always delegate
+implementation to workflows"). What makes it topic-coupled is _where_ it sits,
+and `workflowReminder.nix`'s own header names the symptom exactly:
 
 > What decays is ATTENTION: one block near the top of a growing conversation
 > loses out to everything since, which is exactly the reported symptom (the
 > model elects workflows while you are talking about workflows, and stops when
 > you stop).
 
-The workflow-orchestration steering (formerly `workflows_default`) lands in
-**msg0**, computed on the first turn and thereafter replayed byte-for-byte. It
-never decays in _content_; it decays in _position_, losing ground to everything
-said since — so the operator's own prompt is what re-activates a standing
-instruction that was there all along. A `UserPromptSubmit` hook lands beside
-each prompt, which is why it works where more steering would not: a second copy
-would sit in the same place, competing with the same context.
+The steering lands in **msg0**, computed on the first turn and thereafter
+replayed byte-for-byte. It never decays in _content_; it decays in _position_,
+losing ground to everything said since — so the operator's own prompt is what
+re-activates a standing instruction that was there all along. A
+`UserPromptSubmit` hook lands beside each prompt, which is why it works where
+more steering would not: a second copy would sit in the same place, competing
+with the same context.
 
 **That matters for where the pattern comes from.** Someone who sees
 `wf-planner → [repeat] → (wf-coder, semantic_reviewer)` appear without having
@@ -831,11 +830,11 @@ designed it is not seeing a bundled recipe run, and need not have any repo-local
 config at all — they are seeing bundled _agents_ assembled into a shape bundled
 _steering_ asked for. Three layers, easy to conflate:
 
-| Layer          | Bundled?                   | Evidence                                                                                                 |
-| -------------- | -------------------------- | -------------------------------------------------------------------------------------------------------- |
-| the agents     | **yes** — all ten, vendor  | ledger §3.5                                                                                              |
-| the pattern    | **yes** — vendor steering  | workflow-orchestration steering (formerly `workflows_default`) in msg0; elicited pre-hook, topic-coupled |
-| the definition | **no** — generated per run | matches no bundled recipe's plan; ids vary across runs (below)                                           |
+| Layer          | Bundled?                   | Evidence                                                       |
+| -------------- | -------------------------- | -------------------------------------------------------------- |
+| the agents     | **yes** — all ten, vendor  | ledger §3.5                                                    |
+| the pattern    | **yes** — vendor steering  | vendor steering in msg0; elicited pre-hook, topic-coupled      |
+| the definition | **no** — generated per run | matches no bundled recipe's plan; ids vary across runs (below) |
 
 This repo's hook amplifies the middle row by buying it position; it does not
 supply it.
@@ -1555,15 +1554,13 @@ every iteration it has. Never `/tmp`.
 
 Write the path **relative**: it resolves against the workspace root by
 construction, and step agents' cwd is that same root, so the writing step and
-the check agree without any interpolation. The vendor text instructs the
-opposite (2.16.x in the orchestrator steering; since 2.27.1 in the
-workflow-creator prompt) — interpolate an absolute `{{worktree_path}}/…` — which
-is wrong whenever worktrees are SIBLINGS of the checkout rather than
-subdirectories of it, which is this repo's own worktree convention. 2.27.1 moved
-that instruction into the creator prompt, so the reminder now tells the
-orchestrator to put the relative path in its `workflowPrompt` brief. The
-reminder's other correction is the 2.27.1 instruction to create worktrees INSIDE
-the checkout (`.worktrees/<name>`) off `mainline`. msg0 is frozen, so a bad
+the check agree without any interpolation. Since at least 2.21.4 the vendor's
+workflow-creator prompt prescribes absolute `{{worktree_path}}/…` paths. These
+fail for sibling worktrees outside the workspace. The reminder therefore puts
+the workspace-relative fileCheck requirement in the `workflowPrompt` brief. The
+steering binding has been minified since at least 2.21.4; the old binding-name
+extractor made `includeVendorSteering` silently dead since at least that
+release. Extraction now anchors on the heading. msg0 is frozen, so a bad
 instruction cannot be edited out, only contradicted later in context. And
 `stopWhen`'s `"{{id.output}} contains <text>"` form matches against _captured
 output_, so it inherits the empty-capture hazard wholesale — under a cheap model

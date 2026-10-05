@@ -203,17 +203,6 @@ rec {
       exec ${pkgs.nodejs}/bin/node ${../extract/settings.mjs} "$1" ${pkgs.typescript_5}/lib/node_modules/typescript
     '';
 
-  # Select each extractor and its imports without making unrelated extract/
-  # files inputs of its callers.
-  kiroExtractFiles = pkgs: names:
-    pkgs.lib.fileset.toSource {
-      root = ../extract;
-      fileset = pkgs.lib.fileset.unions (map (name: ../extract + "/${name}") names);
-    };
-
-  # The embedded-TUI materializer and the one sibling it imports.
-  kiroExtractTui = pkgs: kiroExtractFiles pkgs ["embedded-tui.py" "isolated_launch.py"];
-
   kiroFakeKasScript = pkgs:
     pkgs.writeTextFile {
       name = "kiro-extract-fake-kas";
@@ -289,10 +278,8 @@ rec {
     # launch. Since 2.23.0 the JS is no longer present as plaintext in the ELF,
     # so both settings fields come from that authoritative TUI source. The
     # materializer stops before agent startup and has only a fake KAS available.
-    # It is referenced through kiroExtractTui because it imports its sibling
-    # isolated_launch.py, which the KAS-bundle drift check shares.
     tuiJs="$PWD/kiro-tui.js"
-    "$python3" ${kiroExtractTui pkgs}/embedded-tui.py "$kiroChatBin" "$tuiJs" ${kiroFakeKasScript pkgs} ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+    "$python3" ${../extract/embedded-tui.py} tui "$kiroChatBin" "$tuiJs" ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt ${kiroFakeKasScript pkgs}
     settingsJson=$(${kiroSettingsExtractScript pkgs} "$tuiJs")
     # Model availability is server-side and account-dependent. Suggestions come
     # from the public documentation snapshot, refreshed independently of releases.

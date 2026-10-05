@@ -1376,7 +1376,7 @@ in
 
             Why a hook rather than more steering: when workflows are enabled the
             engine ALREADY appends its own ~3.9k-token workflow-orchestration
-            steering (minified since 2.27.1; formerly `workflows_default`) to
+            steering (binding minified since at least 2.21.4; formerly `workflows_default`) to
             the system prompt, and msg0 is computed once on turn one and
             replayed byte-for-byte thereafter. The instruction never decays —
             ATTENTION does. A hook lands as a context message beside each
@@ -1405,9 +1405,10 @@ in
           default = false;
           description = ''
             Inject the vendor's COMPLETE workflow-orchestration steering text
-            (minified since 2.27.1; formerly `workflows_default`) every turn
+            (binding minified since at least 2.21.4; formerly `workflows_default`) every turn
             instead of the short reminder, extracted from the installed engine
-            bundle and cached.
+            bundle and cached. The old binding-name extractor silently failed
+            since at least 2.21.4; extraction now anchors on the heading.
 
             Off by default because it costs roughly 3.9k tokens PER TURN (~195k
             across a 50-turn session) to repeat text the model already has in

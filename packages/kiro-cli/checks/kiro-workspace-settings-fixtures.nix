@@ -8,7 +8,7 @@
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       ${pkgs.python3}/bin/python3 ${./kiro-materializer-fixtures.py} \
-        ${vu.kiroExtractTui pkgs}/embedded-tui.py ${vu.kiroFakeKasScript pkgs} \
+        ${../extract/embedded-tui.py} ${vu.kiroFakeKasScript pkgs} \
         ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
       ${pkgs.coreutils}/bin/touch "$out"
     '';
