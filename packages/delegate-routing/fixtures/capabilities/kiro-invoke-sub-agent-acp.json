@@ -43,6 +43,6 @@
   },
   "runtime": "kiro",
   "runtimeVersion": "2.27.1",
-  "source": "runtime-evidence.md: Kiro findings and Agent retention and nesting",
+  "source": "kiro-cli 2.27.1 agent bundle `2.27.1-ce3fc784182c5b87c4dc63d4d48e4213d64f6bd1c382b47e559614d365b9a80a` `@kiro/agent/dist/server/acp-server.js:15919,15924,15930`",
   "technique": "invoke_sub_agent"
 }

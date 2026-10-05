@@ -59,10 +59,10 @@
         measured = observation target name node mode;
       in
         lib.optional (measured != null) ''
-          **${name} / ${mode} evidence:** ${capabilities.format measured "available"}
+          **${name} / ${mode} evidence:** ${capabilities.header measured}
           ${lib.concatMapStringsSep "; " (capability: let
             record = measured.capabilities.${capability};
-          in "${capability}: ${record.result} — ${record.evidence}") ["linkedWorktreeCommit" "nestingDepth" "pinsEffort" "pinsModel" "runsOwnSubagents"]}
+          in "${capability}: ${record.result} — ${record.evidence}") ["available" "linkedWorktreeCommit" "nestingDepth" "pinsEffort" "pinsModel" "runsOwnSubagents"]}
           Requested controls: `${builtins.toJSON measured.requested}`. Observed controls: `${builtins.toJSON measured.observed}`.
           Context: ${measured.context}. Replay: ${lib.concatMapStringsSep "; " (step: "`${step}`") measured.replay}.
         '')
@@ -130,13 +130,14 @@
       ### ${target} techniques
 
       ${lib.optionalString (delegates != {}) (table
-        (["Technique" "Kind" "Pins model (declared input control)" "Pins effort (declared input control)" "Availability by mode" "Runs own subagents" "Nesting depth" "Linked worktree commit" "Effective model pin" "Effective effort pin" "Notes"] ++ lib.optional hasCommand "Command")
+        (["Technique" "Kind" "Pins model (declared input control)" "Pins effort (declared input control)" "Declared modes" "Availability by mode" "Runs own subagents" "Nesting depth" "Linked worktree commit" "Effective model pin" "Effective effort pin" "Notes"] ++ lib.optional hasCommand "Command")
         (lib.mapAttrsToList (name: node:
           [
             "`${name}`"
             (node.kind + lib.optionalString (externalOnly && node.kind != "external") " (inside the external root)")
             (builtins.toJSON node.pinsModel)
             (builtins.toJSON node.pinsEffort)
+            (lib.concatStringsSep "+" node.modes)
             (modeSummary target name node "available")
             (modeSummary target name node "runsOwnSubagents")
             (modeSummary target name node "nestingDepth")
@@ -187,7 +188,7 @@ in ''
   Each row is a family: pick the id with the highest version that matches its pattern in the live model list, comparing version numbers segment by segment (6.1 > 6 > 5.6), and use the runtime's own spelling from the introspection step (Claude's interactive tools take the alias, e.g. `opus`).
 
   ${lib.concatMapStringsSep "\n" tier tiers}
-  Use a technique only if it appears in your tool list; an external technique's command must be on PATH. Availability and delegate capabilities are recorded separately for ACP, headless and interactive modes. An omitted observation or declared mode is unknown, not unsupported. Declared input controls describe the configured technique; effective pins describe observed behavior. Changed shipped techniques do not borrow recorded evidence: their command, kind, modes and pin controls must match the shipped declaration. Custom techniques use observations matching their runtime, technique and mode, within the recorded context; unmatched techniques are declared, not observed. Recorded results do not attest the current runtime installation. Any runtime version, client or configuration mismatch means current behavior is unknown until replayed. Runtime version, session context and replay steps below bound each observation; verify the tools present in this session.
+  Use a technique only if it appears in your tool list; an external technique's command must be on PATH. Availability and delegate capabilities are recorded separately for ACP, headless and interactive modes. A missing observation is unknown, not unsupported. Declared modes describe the configured contract. Declared input controls describe the configured technique; effective pins describe observed behavior. Changed shipped techniques do not borrow recorded evidence: their command, kind, modes and pin controls must match the shipped declaration. Custom techniques use observations matching their runtime, technique and mode, within the recorded context; unmatched techniques are declared, not observed. Recorded results do not attest the current runtime installation. Any runtime version, client or configuration mismatch means current behavior is unknown until replayed. Runtime version, session context and replay steps below bound each observation; verify the tools present in this session.
 
   ${techniqueBlock runtime false}
   ${lib.concatMapStringsSep "\n" (target: techniqueBlock target true) extras}

@@ -34,7 +34,7 @@
     "model": null
   },
   "replay": [
-    "Inspect /nix/store/60qgqsc2icai4k7j9a610zwwxiy8g05d-kimchi-1.5.1-source/src/extensions/agents/manager/agent-runner.ts:53-65,83-85.",
+    "Inspect kimchi v1.5.1 tag archive identified by packages/kimchi/sources.json extraction.kimchiSource url + hash, src/extensions/agents/manager/agent-runner.ts:53-65,83-85.",
     "Inspect the same source src/extensions/agents/index.ts:1533-1542,1703-1709,1858-1870 for pin inputs, foreground completion, and transport."
   ],
   "requested": {
@@ -43,6 +43,6 @@
   },
   "runtime": "kimchi",
   "runtimeVersion": "1.5.1",
-  "source": "runtime-evidence.md: Agent retention and nesting, Kimchi",
+  "source": "kimchi v1.5.1 tag archive pinned in packages/kimchi/sources.json (`extraction.kimchiSource` url + hash)",
   "technique": "Agent"
 }
