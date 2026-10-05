@@ -1,5 +1,6 @@
 """Check exact matching, byte preservation, and fail-open launch warnings."""
 
+import fcntl
 import importlib.util
 import json
 import os
@@ -17,6 +18,18 @@ IDENTITY = b"Custom identity. Another sentence!"
 BUNDLE = (b"function identity(){return `" + patcher.IDENTITY_SENTENCE
           + b" Terminal guidance.`}\nvar steering='Before\\n\\n"
           + patcher.WORKTREE_PARAGRAPH + b"After';\n")
+
+
+def prepare_bundle(root, data):
+    bundle = root / "data/kas/1.0.0-probe/node_modules/@kiro/agent/dist/server/acp-server.js"
+    bundle.parent.mkdir(parents=True)
+    sibling = root / "data/kas/1.0.0-probe/node_modules/vendor/probe.txt"
+    sibling.parent.mkdir()
+    sibling.write_text("sibling")
+    bundle.write_bytes(data)
+    env = os.environ | {"HOME": str(root), "XDG_CACHE_HOME": str(root / "cache"), "KIRO_DATA_DIR": str(root / "data")}
+    env.pop("KIRO_KAS_SERVER_PATH", None)
+    return bundle, env
 
 
 class PatchTests(unittest.TestCase):
@@ -62,15 +75,8 @@ class PatchTests(unittest.TestCase):
                 for count in (0, 1, 2):
                     with self.subTest(mode=mode, name=name, count=count), tempfile.TemporaryDirectory() as tmp:
                         root = Path(tmp)
-                        bundle = root / "data/kas/1.0.0-probe/node_modules/@kiro/agent/dist/server/acp-server.js"
-                        bundle.parent.mkdir(parents=True)
-                        sibling = root / "data/kas/1.0.0-probe/node_modules/vendor/probe.txt"
-                        sibling.parent.mkdir()
-                        sibling.write_text("sibling")
                         data = BUNDLE.replace(source, b"changed") if count == 0 else BUNDLE + source if count == 2 else BUNDLE
-                        bundle.write_bytes(data)
-                        env = os.environ | {"HOME": tmp, "XDG_CACHE_HOME": str(root / "cache"), "KIRO_DATA_DIR": str(root / "data")}
-                        env.pop("KIRO_KAS_SERVER_PATH", None)
+                        bundle, env = prepare_bundle(root, data)
                         result = subprocess.run([launchers["materializer"]], env=env, capture_output=True, text=True)
                         self.assertEqual(result.returncode, 0 if count == 1 else 1, result.stderr)
                         if count == 1:
@@ -83,6 +89,9 @@ class PatchTests(unittest.TestCase):
                             self.assertIn(f"WARNING: kiro-bundle-patch: {name}:", result.stderr)
                             self.assertEqual(result.stdout, "")
                             self.assertEqual(list(root.rglob(".ready")), [])
+                        # Managed success replaces an inherited override; failure
+                        # must clear it through either supported entry point.
+                        env["KIRO_KAS_SERVER_PATH"] = "/parent-cache/patched/acp-server.js"
                         for binary in ("kiro-cli", "kiro-cli-chat"):
                             launched = subprocess.run([f"{launchers['wrapper']}/bin/{binary}"], env=env, capture_output=True, text=True)
                             self.assertEqual(launched.returncode, 0, launched.stderr)
@@ -92,6 +101,50 @@ class PatchTests(unittest.TestCase):
                                 self.assertEqual(launched.stdout, "launched:stock\n")
                                 self.assertIn(f"WARNING: kiro-bundle-patch: {name}:", launched.stderr)
                         self.assertEqual(bundle.read_bytes(), data)
+
+
+    def test_concurrent_cold_launches_recheck_readiness_under_lock(self):
+        for mode, launchers in LAUNCHERS.items():
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                _, env = prepare_bundle(root, BUNDLE)
+                server = Path(subprocess.check_output([launchers["materializer"]], env=env, text=True))
+                out = server.parents[5]
+                staged = root / "staged"
+                out.rename(staged)
+                expected = (staged / server.relative_to(out)).read_bytes()
+                inode = (staged / server.relative_to(out)).stat().st_ino
+                processes = []
+                # Act as a publisher holding the shared lock. Both cold launches
+                # must wait; publish before releasing it to force the readiness
+                # recheck, rather than relying on scheduler luck to expose a race.
+                with Path(str(out) + ".lock").open("w") as lock:
+                    fcntl.flock(lock, fcntl.LOCK_EX)
+                    try:
+                        for binary in ("kiro-cli", "kiro-cli-chat"):
+                            processes.append(subprocess.Popen(
+                                [f"{launchers['wrapper']}/bin/{binary}"],
+                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            ))
+                        for process in processes:
+                            with self.assertRaises(subprocess.TimeoutExpired):
+                                process.communicate(timeout=0.5)
+                        self.assertFalse(out.exists())
+                        staged.rename(out)
+                    finally:
+                        fcntl.flock(lock, fcntl.LOCK_UN)
+                        for process in processes:
+                            try:
+                                stdout, stderr = process.communicate(timeout=10)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                                process.communicate()
+                                raise
+                            self.assertEqual(process.returncode, 0, stderr)
+                            self.assertEqual(stdout, f"launched:{server}\n")
+                            self.assertEqual(server.read_bytes(), expected)
+                            self.assertEqual(server.stat().st_ino, inode)
+                            self.assertEqual((server.parents[4] / "vendor/probe.txt").read_text(), "sibling")
 
 
 if __name__ == "__main__":

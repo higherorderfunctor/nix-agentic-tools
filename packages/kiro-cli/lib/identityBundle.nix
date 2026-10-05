@@ -107,6 +107,13 @@ in
         out="$cache_root/$key"
         server="$out/node_modules/@kiro/agent/dist/server/acp-server.js"
 
+        # Keep the per-key lock outside `out`: rebuilding deletes that directory.
+        # Recheck readiness only after acquiring it, so a waiting launch cannot
+        # delete a bundle another launch has already published and returned.
+        "$coreutils"/bin/mkdir -p "$cache_root"
+        exec 9>"$cache_root/$key.lock"
+        ${lib.getExe pkgs.flock} 9
+
         # `.ready` is written last, so an interrupted materialization is retried
         # rather than served half-built.
         if [ -f "$out/.ready" ]; then

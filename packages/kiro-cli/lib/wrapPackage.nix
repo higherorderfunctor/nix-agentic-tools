@@ -196,7 +196,7 @@
     # Materialization is LAZY (at launch) rather than at activation, because the
     # engine bundle is unpacked from the binary on first use: at activation time
     # on a fresh machine there is nothing to patch yet. It is idempotent and
-    # cached, so every later launch is a file test.
+    # cached, so every later launch checks readiness under the per-key lock.
     #
     # FAIL-OPEN, deliberately. The materializer writes a reason to stderr and
     # exits non-zero when it cannot resolve a bundle, and the launch then
@@ -211,6 +211,8 @@
     bundleInjection = lib.optionalString hasBundle ''
       if nat_kas_server="$(${lib.getExe bundleMaterializer})"; then
         export KIRO_KAS_SERVER_PATH="$nat_kas_server"
+      else
+        unset KIRO_KAS_SERVER_PATH
       fi
     '';
 

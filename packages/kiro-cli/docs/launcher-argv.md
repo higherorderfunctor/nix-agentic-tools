@@ -1,8 +1,9 @@
 # kiro-cli wrapper: the argv contract
 
 > **Last verified:** 2026-10-05 — `ai.kiro.tweaks` holds the opt-in bundle
-> patches, all off by default; drift fails CI and warns at launch. The v3
-> trust-flag conflict measurements below remain from kiro-cli 2.24.1.
+> patches, all off by default; cache publication is locked per key and failed
+> materialization clears inherited bundle overrides. The v3 trust-flag conflict
+> measurements below remain from kiro-cli 2.24.1.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -130,10 +131,11 @@ Four properties worth knowing before touching it:
 - **It FAILS OPEN.** The materializer writes a reason to stderr and exits
   non-zero when it cannot resolve a bundle or any selected source text occurs
   zero or multiple times. A warning names the missed replacement (`identity` or
-  `worktree`). The wrapper starts Kiro without selecting the failed copy. That
-  is a deliberate asymmetry with the argv injections, which cannot fail:
-  refusing to start would let a vendor reshuffle brick the CLI over a cosmetic
-  prompt edit. The stderr line is what keeps it from being SILENT.
+  `worktree`). The wrapper clears any inherited `KIRO_KAS_SERVER_PATH` and
+  starts Kiro with the stock bundle. That is a deliberate asymmetry with the
+  argv injections, which cannot fail: refusing to start would let a vendor
+  reshuffle brick the CLI over a cosmetic prompt edit. The stderr line is what
+  keeps it from being SILENT.
 
 Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`. Its cache
 key covers the engine bundle, selected replacements and patcher source. The
@@ -141,11 +143,15 @@ small replacement list in `kiro-bundle-patch.py` pins the exact identity
 sentence and escaped worktree paragraph from the vendor's JavaScript. One
 function checks each source occurs exactly once and replaces it; it does not
 parse function names or decode the steering block. Bytes outside those sources
-stay unchanged. A failed patch never marks the cache ready.
+stay unchanged. A failed patch never marks the cache ready. A per-key lock sits
+outside the rebuilt directory and covers the readiness check through
+publication, so concurrent launches cannot delete a bundle already returned to
+another launch.
 
 `kiro-bundle-patch` checks byte preservation, missing and duplicate sources,
-JavaScript execution, cache reuse and warnings with successful fallback through
-both launch entry points. `kiro-bundle-patch-drift` materializes the pinned KAS
+JavaScript execution, cache reuse, concurrent launch publication and warnings
+with successful fallback despite an inherited bundle override through both
+launch entry points. `kiro-bundle-patch-drift` materializes the pinned KAS
 bundle offline and requires both exact sources once, even if the consuming
 configuration disables a patch. The module checks cover the stock default and
 each opt-in tweak selecting the patched path on both backends.
