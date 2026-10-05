@@ -71,7 +71,9 @@
     shopt -s inherit_errexit 2>/dev/null || :
   '';
   exactCwdProjectRoot = pkgs.runCommand "kimchi-exact-cwd-project-root" {} ''
-    mkdir -p "$out/subdir"
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    ${pkgs.coreutils}/bin/mkdir -p "$out/subdir"
   '';
 
   mkDevenvKimchiPackage = extraConfig:
@@ -233,31 +235,49 @@ in {
   checks = {
     module-kimchi-external-workflows = mkTest "kimchi-external-workflows" (
       let
-        entry = "${pkgs.ai.kimchi-workflows}/src/host/extension.ts";
-        checkBackend = evaluate: settings: let
-          enabled = evaluate {
-            ai.kimchi = {
-              enable = true;
-              extensions.workflows.enable = true;
-              native.harnessSettings.extensions = ["/consumer/extension.ts"];
+        workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
+        checkBackend = evaluate: settings: harnessDir: let
+          withExtensions = extensions:
+            evaluate {
+              ai.kimchi = {
+                enable = true;
+                inherit extensions;
+                native.harnessSettings.packages = ["/consumer/package"];
+              };
             };
+          empty = evaluate {ai.kimchi.enable = true;};
+          one = withExtensions {inherit workflows;};
+          two = withExtensions {
+            another = workflows;
+            inherit workflows;
           };
-          disabled = evaluate {
-            ai.kimchi = {
-              enable = true;
-              extensions.workflows.enable = false;
-            };
-          };
+          extensionFiles = evaluated:
+            lib.filterAttrs (path: _: lib.hasPrefix "${harnessDir}/extensions/" path) (deliveredFiles evaluated.config);
+          checkLinks = evaluated: names:
+            builtins.attrNames (extensionFiles evaluated)
+            == map (name: "${harnessDir}/extensions/${name}") names
+            && lib.all (name: let
+              path = "${harnessDir}/extensions/${name}";
+              file = (extensionFiles evaluated).${path};
+            in
+              fromGeneratedTree path file
+              && builtins.hasContext file.source
+              && evaluated.config.ai.kimchi.files.${path}.content.source == workflows
+              && !(file.recursive or false))
+            names;
+          rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "/string/package";}).config.ai.kimchi.extensions true);
         in
-          lib.all (assertion: assertion.assertion) enabled.config.assertions
-          && lib.all (assertion: assertion.assertion) disabled.config.assertions
-          && builtins.elem entry (settings enabled).extensions
-          && builtins.elem "/consumer/extension.ts" (settings enabled).extensions
-          && builtins.hasContext (builtins.head (builtins.filter (value: value == entry) (settings enabled).extensions))
-          && !((settings disabled) ? extensions);
+          lib.all (evaluated: lib.all (assertion: assertion.assertion) evaluated.config.assertions) [empty one two]
+          && extensionFiles empty == {}
+          && !((settings empty) ? packages)
+          && checkLinks one ["workflows"]
+          && checkLinks two ["another" "workflows"]
+          && lib.sort builtins.lessThan (settings one).packages == ["/consumer/package" "extensions/workflows"]
+          && lib.sort builtins.lessThan (settings two).packages == ["/consumer/package" "extensions/another" "extensions/workflows"]
+          && !rejected.success;
       in
-        checkBackend evalHm hmHarnessSettings
-        && checkBackend evalDevenv projectHarnessSettings
+        checkBackend evalHm hmHarnessSettings ".config/kimchi/harness"
+        && checkBackend evalDevenv projectHarnessSettings ".config/kimchi/harness"
     );
 
     # `supportedPools` now owns every normalized per-runtime option gate, not

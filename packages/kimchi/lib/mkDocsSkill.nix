@@ -105,7 +105,7 @@
 
     The `workflows` directory beside this file is the source-built package for
     `@kimchi-dev/kimchi-workflows`, pinned independently of Kimchi and loaded
-    externally via `ai.kimchi.extensions.workflows.enable`. It is offline; no clone is needed.
+    externally via `ai.kimchi.extensions.workflows`. It is offline; no clone is needed.
     Read `workflows/README.md` first, then search `workflows/docs` for workflow
     authoring and execution guidance, `workflows/examples` for working examples,
     and `workflows/src` for implementation details. `workflows/dist` contains the

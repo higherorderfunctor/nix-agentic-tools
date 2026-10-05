@@ -1,8 +1,8 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-04 — workflows is an independent external pi
-> extension, enabled through shared harness settings on both backends; Kimchi
-> removes its static registration and resource toggle before compilation.
+> extension, delivered as a named package link on both backends; Kimchi removes
+> its static registration and resource toggle before compilation.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -533,15 +533,24 @@ line, and moving it would change the wrapper's store path.
 
 ## Source packaging
 
-`pkgs.ai.kimchi-workflows` is an independently pinned, source-built external pi
-extension. `ai.kimchi.extensions.workflows.enable` defaults to false and adds
-its store source entry to `native.harnessSettings.extensions` through the
-existing shared delivery. Home Manager owns
-`$HOME/.config/kimchi/harness/settings.json` (by default); devenv writes
-`<project>/.config/kimchi/harness/settings.json` and requires launch from that
-project root. The store string context installs the extension closure. Consumer
-extension entries merge normally. Turning the option off withdraws its entry;
-manually declared extension entries remain independent.
+`pkgs.ai.kimchiExtensions.kimchi-workflows` is an independently pinned,
+source-built external pi extension. The shared `ai.kimchi.extensions` option
+accepts a free-form map of derivations, empty by default. For example:
+
+```nix
+ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
+```
+
+Each key delivers a directory link through `ai.kimchi.files`:
+`<configDir>/harness/extensions/<key>` on Home Manager and
+`<project>/.config/kimchi/harness/extensions/<key>` on devenv. The link retains
+the package closure's string context. Sorted relative names populate
+`native.harnessSettings.packages` and merge with consumer package entries. Pi
+reads each package's `pi.extensions` manifest. Removing a key withdraws its link
+and package entry. Devenv requires approval and launch from the project root.
+Kimchi discovers the package in its Plugins tab; the user-scope resource toggle
+disables its extensions, including project packages. See the source citations
+and smoke contract in [external workflows](kimchi-workflows.md).
 
 Kimchi's source patch removes the workflows static import, managed factory
 entry, and resource definition. Its locked package may still be fetched, but

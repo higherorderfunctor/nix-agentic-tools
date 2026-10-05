@@ -3,8 +3,10 @@
   repoPath,
   ...
 }: {
-  documentation.aiCliDescriptions.kimchi = "Kimchi CLI with optional external source-built workflows (ai.kimchi.extensions.workflows.enable)";
-  documentation.skillDescriptions.kimchi-docs = "Search the pinned Kimchi docs snapshot and independently pinned workflows source, docs and examples; enable via ai.programs.kimchi-docs.enable";
+  documentation = {
+    aiCliDescriptions.kimchi = "Kimchi CLI with optional external source-built workflows (ai.kimchi.extensions.workflows)";
+    skillDescriptions.kimchi-docs = "Search the pinned Kimchi docs snapshot and independently pinned workflows source, docs and examples; enable via ai.programs.kimchi-docs.enable";
+  };
   # kimchi: two-tree factory (config.json + harness/), runtime SOPS
   # credential, wrapProgram separator + flattenDotKeys gotchas.
   fragments.categories.kimchi = {
@@ -29,6 +31,6 @@
   update.targets = {
     kimchi = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/kimchi/package.nix)];};
     kimchi-docs = {flags = ["--use-update-script"];};
-    kimchi-workflows = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/kimchi-workflows/package.nix)];};
+    kimchi-workflows = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/kimchiExtensions/kimchi-workflows/package.nix)];};
   };
 }

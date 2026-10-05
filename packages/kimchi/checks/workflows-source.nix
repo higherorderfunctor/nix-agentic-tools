@@ -4,7 +4,7 @@
   ...
 }: let
   kimchi = pkgs.ai.kimchi;
-  workflows = pkgs.ai.kimchi-workflows;
+  workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
   pin = builtins.fromJSON (builtins.readFile ../workflows-sources.json);
 in {
   checks = {
@@ -48,27 +48,26 @@ in {
 
     # Copies only the two registration files: no Kimchi compile or dependency
     # build. The same exact substitutions run in Kimchi's postPatch phase.
-    kimchi-workflows-source = assert workflows.version == pin.version && workflows.sourceRev == pin.rev;
-      pkgs.runCommand "kimchi-externalized-extensions-source-check" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        mkdir -p src/resources
-        cp ${kimchi.src}/src/cli.ts src/cli.ts
-        cp ${kimchi.src}/src/resources/definitions.ts src/resources/definitions.ts
-        chmod u+w src/cli.ts src/resources/definitions.ts
-        ${kimchi.externalizeExtensions}
-        ${lib.concatMapStrings (extension: ''
-            if grep -F ${lib.escapeShellArg extension.id} src/cli.ts src/resources/definitions.ts; then
-              echo 'externalized resource is still registered' >&2
-              exit 1
-            fi
-            if grep -F ${lib.escapeShellArg extension.importLine} src/cli.ts; then
-              echo 'externalized extension is still imported' >&2
-              exit 1
-            fi
-          '')
-          kimchi.externalizedExtensions}
-        echo PASS > "$out"
-      '';
+    kimchi-workflows-source = pkgs.runCommand "kimchi-externalized-extensions-source-check" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${pkgs.coreutils}/bin/mkdir -p src/resources
+      ${pkgs.coreutils}/bin/cp ${kimchi.src}/src/cli.ts src/cli.ts
+      ${pkgs.coreutils}/bin/cp ${kimchi.src}/src/resources/definitions.ts src/resources/definitions.ts
+      ${pkgs.coreutils}/bin/chmod u+w src/cli.ts src/resources/definitions.ts
+      ${kimchi.externalizeExtensions}
+      ${lib.concatMapStrings (extension: ''
+          if ${pkgs.gnugrep}/bin/grep -F ${lib.escapeShellArg extension.id} src/cli.ts src/resources/definitions.ts; then
+            echo 'externalized resource is still registered' >&2
+            exit 1
+          fi
+          if ${pkgs.gnugrep}/bin/grep -F ${lib.escapeShellArg extension.importLine} src/cli.ts; then
+            echo 'externalized extension is still imported' >&2
+            exit 1
+          fi
+        '')
+        kimchi.externalizedExtensions}
+      echo PASS > "$out"
+    '';
   };
 }

@@ -10,7 +10,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
-  workflowsSource = pkgs.ai.kimchi-workflows;
+  workflowsSource = pkgs.ai.kimchiExtensions.kimchi-workflows;
 
   # Home Manager delivers the skill to the user harness; devenv delivers it to
   # the project's `.kimchi/skills`, the native project-scope root.

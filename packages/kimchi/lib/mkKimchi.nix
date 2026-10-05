@@ -603,10 +603,19 @@
         };
       }
 
-      # Native harness delivery preserves string context and merges consumers'
-      # other entries on both backends. Devenv's exact-cwd guard sees this file.
-      (lib.mkIf cfg.extensions.workflows.enable {
-        ai.kimchi.native.harnessSettings.extensions = ["${pkgs.ai.kimchi-workflows}/src/host/extension.ts"];
+      # pi resolves package sources relative to the scope's harness directory.
+      # Kimchi filters disabled packages by metadata.source before loading them,
+      # so the stable source name also works for a directory link to the store.
+      (lib.mkIf (cfg.extensions != {}) {
+        ai.kimchi = {
+          native.harnessSettings.packages = map (name: "extensions/${name}") (builtins.attrNames cfg.extensions);
+          files = lib.mapAttrs' (name: extension:
+            lib.nameValuePair "${harness}/extensions/${name}" {
+              content.source = extension;
+              executable = null;
+            })
+          cfg.extensions;
+        };
       })
 
       # pi 0.85.1's ThinkingLevel is a superset of the normalized enum and
@@ -792,7 +801,12 @@ in
       '';
     };
     options = {
-      extensions.workflows.enable = lib.mkEnableOption "the independently pinned external workflows extension";
+      extensions = lib.mkOption {
+        type = with lib.types; attrsOf (addCheck package lib.isDerivation);
+        default = {};
+        description = "Pi extension packages, linked under the harness extensions directory and loaded through harness settings packages. Each key names its link; presence enables the package.";
+        example = lib.literalExpression "{ workflows = pkgs.ai.kimchiExtensions.kimchi-workflows; }";
+      };
       permissions = lib.mkOption {
         # No freeform keys: Kimchi validates the file with a `.strict()` zod
         # schema (src/extensions/permissions/config.ts:11-19), so one unknown

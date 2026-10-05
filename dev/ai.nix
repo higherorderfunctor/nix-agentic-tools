@@ -292,7 +292,7 @@ in {
     # The external extension lands in trusted project harness settings.
     kimchi = {
       enable = true;
-      extensions.workflows.enable = true;
+      extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
       # Managed built-ins still use Kimchi's resource enable-list.
       native.harnessSettings.resources = {
         "extensions.ferment-v2" = true;

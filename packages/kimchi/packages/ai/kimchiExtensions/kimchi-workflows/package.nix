@@ -7,8 +7,8 @@
 }: let
   inherit (pkgs) lib;
   pnpm = pkgs.ai.generic.pnpm_10;
-  sources = builtins.fromJSON (builtins.readFile ../../../workflows-sources.json);
-  sourcesFile = repoPath ../../../workflows-sources.json;
+  sources = builtins.fromJSON (builtins.readFile ../../../../workflows-sources.json);
+  sourcesFile = repoPath ../../../../workflows-sources.json;
   versionedName = "kimchi-workflows-${sources.version}-${builtins.substring 0 7 sources.rev}";
   fixPnpmDepsHash = packageLib.mkHashFix {
     attr = "kimchi-workflows";
@@ -61,9 +61,9 @@ in
     '';
     installPhase = ''
       runHook preInstall
-      mkdir -p "$out"
-      cp -r bin dist docs examples src package.json README.md LICENSE NOTICE "$out/"
-      node ${../../../src/install-runtime.mjs} "$out"
+      ${pkgs.coreutils}/bin/mkdir -p "$out"
+      ${pkgs.coreutils}/bin/cp -r bin dist docs examples src package.json README.md LICENSE NOTICE "$out/"
+      node ${../../../../src/install-runtime.mjs} "$out"
       runHook postInstall
     '';
     passthru = {
