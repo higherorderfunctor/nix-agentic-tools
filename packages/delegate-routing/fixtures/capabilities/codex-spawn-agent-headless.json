@@ -1,48 +1,47 @@
 {
   "capabilities": {
     "available": {
-      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): child requested gpt-6-luna/medium, resolved values unknown; native child reportedly returned its task name and completed; model-written note, no captured collaboration events; raw events not publishable.",
+      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
       "result": "unknown"
     },
     "linkedWorktreeCommit": {
-      "evidence": "No execution or resolved-value evidence was recovered.",
+      "evidence": "Not exercised in this capture.",
       "result": "unknown"
     },
     "nestingDepth": {
-      "evidence": "Maximum native nesting depth was not exercised.",
+      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
       "result": "unknown",
       "value": null
     },
     "pinsEffort": {
-      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): child requested gpt-6-luna/medium, resolved values unknown; native child reportedly returned its task name and completed; model-written note, no captured collaboration events; raw events not publishable.",
+      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
       "result": "unknown"
     },
     "pinsModel": {
-      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): child requested gpt-6-luna/medium, resolved values unknown; native child reportedly returned its task name and completed; model-written note, no captured collaboration events; raw events not publishable.",
+      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
       "result": "unknown"
     },
     "runsOwnSubagents": {
-      "evidence": "Historical report (2026-10-04, codex-cli 0.160.0): child requested gpt-6-luna/medium, resolved values unknown; native child reportedly returned its task name and completed; model-written note, no captured collaboration events; raw events not publishable.",
+      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
       "result": "unknown"
     }
   },
-  "context": "Historical model-written report only; no captured collaboration events or retained launch/config and permission posture.",
-  "date": "2026-10-04",
+  "context": "P4a and P4b: headless codex exec roots, no trust or permission bypass flags; empty wait events and parent prose only.",
+  "date": "2026-10-05",
   "mode": "headless",
   "observed": {
     "effort": null,
     "model": null
   },
   "replay": [
-    "Run codex --version; recorded output: codex-cli 0.160.0.",
-    "Inside a codex exec root call collaboration.spawn_agent with fork_turns none, model gpt-6-luna, reasoning_effort medium and a fresh bounded read-only brief; capture the child tool call, terminal completion and resolved worker metadata."
+    "Launch codex exec --model gpt-6-luna --config 'model_reasoning_effort=\"medium\"' --json; request one spawn_agent child plus a bounded follow-up, then separately request a child that spawns a grandchild; retain native tool calls and terminal child results."
   ],
   "requested": {
-    "effort": null,
-    "model": null
+    "effort": "medium",
+    "model": "gpt-6-luna"
   },
   "runtime": "codex",
   "runtimeVersion": "0.160.0",
-  "source": "historical report 2026-10-04, codex-cli 0.160.0; no publishable primary",
+  "source": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md",
   "technique": "spawn_agent"
 }

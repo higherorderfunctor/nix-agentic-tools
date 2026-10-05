@@ -1,0 +1,47 @@
+{
+  "capabilities": {
+    "available": {
+      "evidence": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md (P7): captured response and launcher rc=0 verify the external launcher only.",
+      "result": "supported"
+    },
+    "linkedWorktreeCommit": {
+      "evidence": "Not exercised in this capture.",
+      "result": "unknown"
+    },
+    "nestingDepth": {
+      "evidence": "Not exercised in this capture.",
+      "result": "unknown",
+      "value": null
+    },
+    "pinsEffort": {
+      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
+      "result": "unknown"
+    },
+    "pinsModel": {
+      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
+      "result": "unknown"
+    },
+    "runsOwnSubagents": {
+      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
+      "result": "unknown"
+    }
+  },
+  "context": "P7: claude -p root, no trust or permission bypass flags; plain output only, no captured native tool events.",
+  "date": "2026-10-05",
+  "mode": "headless",
+  "observed": {
+    "effort": null,
+    "model": null
+  },
+  "replay": [
+    "Launch claude -p --model sonnet --effort low; request a native two-node workflow with a producer and dependent child, each requesting sonnet/low; capture tool calls, terminal results and resolved worker controls."
+  ],
+  "requested": {
+    "effort": "low",
+    "model": "sonnet"
+  },
+  "runtime": "claude",
+  "runtimeVersion": "2.1.289",
+  "source": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md",
+  "technique": "claude -p"
+}
