@@ -18,7 +18,7 @@ in {
   # agent and command the plugin ships. The result is delivered as a single
   # directory link for the same reason.
   mkPluginEntry = name: plugin:
-    (lib.ai.linkDirectory pkgs "claude-code-plugin-${name}" plugin).overrideAttrs (_: old: {
+    (lib.ai.linkDirectory pkgs "claude-code-plugin-${lib.strings.sanitizeDerivationName name}" plugin).overrideAttrs (_: old: {
       buildCommand =
         old.buildCommand
         + ''

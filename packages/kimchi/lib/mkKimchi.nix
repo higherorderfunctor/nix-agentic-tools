@@ -612,7 +612,7 @@
       {
         ai.kimchi.files = lib.mapAttrs' (name: extension:
           lib.nameValuePair "${harness}/extensions/${name}" {
-            content.source = lib.ai.linkDirectory pkgs "kimchi-extension-${name}" extension;
+            content.source = lib.ai.linkDirectory pkgs "kimchi-extension-${lib.strings.sanitizeDerivationName name}" extension;
             executable = null;
           })
         cfg.extensions;

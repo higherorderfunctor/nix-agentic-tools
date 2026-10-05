@@ -1,6 +1,6 @@
 # Link whole top-level entries so delivery copies links, not package payloads.
-{lib}: pkgs: name: source:
-pkgs.runCommand (lib.strings.sanitizeDerivationName name) {} ''
+pkgs: name: source:
+pkgs.runCommand name {} ''
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
   ${pkgs.coreutils}/bin/mkdir -p "$out"
