@@ -13,6 +13,7 @@
       shorthandOnlyDefinesConfig = true;
     };
   mkTextSource = {
+    allowEmptyText ? (_: false),
     defaultContent ? {},
     description,
     textType ? lib.types.lines,
@@ -65,7 +66,7 @@
               then builtins.readFile config.source
               else value;
           in
-            if !sourceIsEffective && (config.enable or true) && effective == ""
+            if !sourceIsEffective && (config.enable or true) && effective == "" && !allowEmptyText config
             then throw "`${lib.showOption options.text.loc}` must be non-empty when its text source is enabled or required."
             else effective;
         };
@@ -76,6 +77,7 @@
       config = lib.mapAttrs (_: lib.mkDefault) defaultContent;
     };
   mkEnableModule = {
+    autoEnable,
     description,
     enableDefault,
     enableOnMkDefault,
@@ -118,15 +120,15 @@
       enable = lib.mkOption {
         type = lib.types.bool;
         default = enableDefault;
-        description = "Whether to include ${description}. Content supplied through non-empty `text` or a `source` at ${
+        description = "Whether to include ${description}. ${lib.optionalString autoEnable "Content supplied through non-empty `text` or a `source` at ${
           if enableOnMkDefault
           then "any priority, `mkDefault` included,"
           else "consumer priority"
-        } enables it automatically; setting `enable = false` omits it while retaining that content. An enabled or required text source without content is an evaluation error.";
+        } enables it automatically; "}setting `enable = false` omits it while retaining its content. An enabled or required text source without content is an evaluation error.";
       };
     };
 
-    config.enable = lib.mkIf (contentIsExplicit && contentIsPresent) (lib.mkDefault true);
+    config.enable = lib.mkIf (autoEnable && contentIsExplicit && contentIsPresent) (lib.mkDefault true);
   };
   textSourceUsesSource = value:
     value._sourceWins or (!(value ? text) && (value.source or null) != null);
@@ -149,17 +151,19 @@ in {
     else {inherit (value) text;};
 
   optionalTextSource = {
+    allowEmptyText ? (_: false),
+    autoEnable ? true,
     defaultContent ? {},
     description,
     enableDefault ? false,
     enableOnMkDefault ? false,
     textType ? lib.types.lines,
   }: let
-    baseType = mkTextSource {inherit defaultContent description textType;};
+    baseType = mkTextSource {inherit defaultContent description textType allowEmptyText;};
   in
     if enableOnMkDefault && defaultContent != {}
     then throw "optionalTextSource: `enableOnMkDefault` would enable its own `defaultContent` (${description}); a record carries at most one of them."
-    else extendSubmodule baseType (mkEnableModule {inherit description enableDefault enableOnMkDefault;});
+    else extendSubmodule baseType (mkEnableModule {inherit autoEnable description enableDefault enableOnMkDefault;});
 
   textSource = mkTextSource;
 }
