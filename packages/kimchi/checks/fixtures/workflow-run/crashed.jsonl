@@ -1,0 +1,3 @@
+{"type":"run-started","runId":"workflow-one-step-d0f7b35b","workflowName":"one-step","at":"2026-10-04T08:19:40.172Z"}
+{"type":"step-started","runId":"workflow-one-step-d0f7b35b","path":"answer","at":"2026-10-04T08:19:40.173Z"}
+{"type":"run-crashed","runId":"workflow-one-step-d0f7b35b","path":"answer","error":"step \"answer\" exceeded its 4000-token budget (used 31913)","at":"2026-10-04T08:19:42.458Z","executionId":"bcaa5753-2722-4a04-a978-2e69d8797956"}

@@ -89,6 +89,8 @@ disjointness
 docbook
 docsite
 dogfood
+dountil
+dowhile
 drvs
 dsolve
 dunder
@@ -177,10 +179,12 @@ kagimcp
 kagisearch
 kasdirs
 kasid
+killable
 killpg
 kimi
 kiro
 kirocli
+kirocrew
 kirodotdev
 ldflags
 libc
@@ -393,6 +397,7 @@ tsgo
 tsgolint
 tummychow
 turbofish
+typebox
 ufcs
 ugrep
 ultracode

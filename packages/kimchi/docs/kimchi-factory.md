@@ -1,25 +1,26 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-03 — pinned to Kimchi 1.5.1, which retired the
-> `autoDefaultApplied` marker and rolls an Auto-entitled account back to Auto on
-> every fresh main launch; the marker is gone from the factory, extractor and
-> checks, and Home Manager still defaults the model pair to Auto. The 1.5.0
-> source build adds resource controls for teleport and remote-run and anchors
-> pi's fd/rg lookup to Nix packages. The extractor binds patch-added source
-> before resolving environment aliases and classifies Kimchi 1.5.0's versioned
-> config and environment additions before the package pin moves. A normalized
-> agent's `tools` list is dropped with a warning instead of failing evaluation.
-> Kimchi shares Home Manager's user config.json and harness/settings.json with
-> the runtime; the remaining files and every devenv file stay read-only copies.
-> Its rules use the shared flat AGENTS.md renderer and repository aggregate.
-> Region is required; Home Manager delivers it and telemetry through global
-> config.json only. Devenv accepts harness `resources` and appends the
-> true-valued ids to `KIMCHI_ENABLE_RESOURCES`, rejecting a false value or a
-> malformed id. The pinned pi dependency is 0.85.1. Agents are read-only copies
-> from the runtime's generated Markdown tree; the opt-in docs skill uses the
-> shared frontmatter text renderer and a guarded generated-file tree that
-> formats whole files and compares parsed header values; a store-path string is
-> an input just as a path is. Full lineage:
+> **Last verified:** 2026-10-04 — workflow launch and reader guidance lives in
+> the separately scoped `kimchi-workflow.md` fragment. Pinned to Kimchi 1.5.1,
+> which retired the `autoDefaultApplied` marker and rolls an Auto-entitled
+> account back to Auto on every fresh main launch; the marker is gone from the
+> factory, extractor and checks, and Home Manager still defaults the model pair
+> to Auto. The 1.5.0 source build adds resource controls for teleport and
+> remote-run and anchors pi's fd/rg lookup to Nix packages. The extractor binds
+> patch-added source before resolving environment aliases and classifies Kimchi
+> 1.5.0's versioned config and environment additions before the package pin
+> moves. A normalized agent's `tools` list is dropped with a warning instead of
+> failing evaluation. Kimchi shares Home Manager's user config.json and
+> harness/settings.json with the runtime; the remaining files and every devenv
+> file stay read-only copies. Its rules use the shared flat AGENTS.md renderer
+> and repository aggregate. Region is required; Home Manager delivers it and
+> telemetry through global config.json only. Devenv accepts harness `resources`
+> and appends the true-valued ids to `KIMCHI_ENABLE_RESOURCES`, rejecting a
+> false value or a malformed id. The pinned pi dependency is 0.85.1. Agents are
+> read-only copies from the runtime's generated Markdown tree; the opt-in docs
+> skill uses the shared frontmatter text renderer and a guarded generated-file
+> tree that formats whole files and compares parsed header values; a store-path
+> string is an input just as a path is. Full lineage:
 > `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
