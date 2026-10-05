@@ -1,0 +1,49 @@
+{
+  "capabilities": {
+    "available": {
+      "evidence": "HELP declares --fleet -p; no executed fleet trace.",
+      "result": "unknown"
+    },
+    "linkedWorktreeCommit": {
+      "evidence": "No execution or resolved-value evidence was recovered.",
+      "result": "unknown"
+    },
+    "nestingDepth": {
+      "evidence": "Maximum native nesting depth was not exercised.",
+      "result": "unknown",
+      "value": null
+    },
+    "pinsEffort": {
+      "evidence": "HELP exposes effortLevel config and inherit; resolved values unknown.",
+      "result": "unknown"
+    },
+    "pinsModel": {
+      "evidence": "HELP exposes per-agent model config and inherit; resolved values unknown.",
+      "result": "unknown"
+    },
+    "runsOwnSubagents": {
+      "evidence": "No execution or resolved-value evidence was recovered.",
+      "result": "unknown"
+    }
+  },
+  "context": "Auth-free help inspection only; fleet execution, permissions, effective child pins and recursion not exercised.",
+  "date": "2026-10-04",
+  "mode": "headless",
+  "observed": {
+    "effort": null,
+    "model": null
+  },
+  "replay": [
+    "Run copilot --version; recorded output: GitHub Copilot CLI 1.0.91.",
+    "Run copilot --help; inspect --fleet combining with -i, -p, or piped stdin.",
+    "Run copilot help config; inspect subagents.agents.<agent-name> model, effortLevel, contextTier and inherit values."
+  ],
+  "requested": {
+    "effort": null,
+    "model": null
+  },
+  "runtime": "copilot",
+  "runtimeVersion": "1.0.91",
+  "source": "runtime-evidence.md: Copilot findings (installed help)",
+  "technique": "fleet"
+}
