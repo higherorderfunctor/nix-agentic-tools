@@ -7,9 +7,9 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — named routing and workflow entries compose by
-> runtime under `runtimes`; workflow steps inherit placement, empty routers are
-> omitted, and content defaults share one option evaluation.
+> **Last verified:** 2026-10-04 — capability observations join technique
+> declarations by runtime, technique and mode; external sections expose native
+> children, and authenticated probes remain manual.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -106,19 +106,54 @@ use that runtime's spelling. Claude's interactive tools take aliases such as
 `opus`.
 
 `runtimes.<runtime>.techniques` is a keyed set of workflow, subagent, external,
-introspect and usage nodes. Delegate nodes describe model and effort pinning,
-and mode availability. Modes describe usual availability, not session-mode
-detection; use only tools present in the current session and external commands
-on PATH. Introspection and usage nodes describe how to obtain live evidence.
-Usage commands remain part of the existing technique catalog. Each package field
-uses `mkDefault`; consumers can override fields, add nodes or disable a node.
+introspect and usage nodes. Delegate nodes declare model and effort input
+controls and usual modes. These declarations are separate from observations; use
+only tools present in the current session and external commands on PATH.
+Introspection and usage nodes describe how to obtain live evidence. Usage
+commands remain part of the existing technique catalog. Each package field uses
+`mkDefault`; consumers can override fields, add nodes or disable a node.
 
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
 command without a model tool; `dev/ai.nix` enables its interactive resource
-separately. External and manual runtime sections include external, introspect
-and usage nodes. Kimchi has no usage node because no command reads usage without
-a model turn. Shared table rendering escapes cells once.
+separately. External and manual runtime sections include native child tools
+marked as callable inside the external root, alongside external, introspect and
+usage nodes. Kimchi has no usage node because no command reads usage without a
+model turn. Shared table rendering escapes cells once.
+
+## Capability evidence
+
+`lib/techniques.nix` owns declarations. `fixtures/capabilities/*.json` owns
+observations; `lib/capabilities.nix` validates and joins them by runtime,
+technique and mode. One record per identity prevents ambiguous selection. Each
+record retains runtime version (null only when historical evidence lacks it),
+date, context, source, replay steps, requested and observed controls, and six
+capability records. Results are supported, unsupported or unknown; nesting depth
+also carries a nullable number. Evidence notes distinguish execution,
+source/help declarations and historical reports. Accepted arguments are not
+evidence of effective backend pins. Linked-worktree commits remain a separate
+capability.
+
+The renderer shows all three modes, the "Runs own subagents" column and
+effective pin results. Missing observations render unknown. A custom technique
+without an observation renders "declared, not observed"; a recorded custom
+identity joins normally. Changes to a shipped command, kind, modes or pin
+controls cannot borrow its old evidence. Notes and enable changes do not change
+the launch contract. Observation details retain provenance and replay steps;
+version and context bound the result and do not attest a different installation.
+
+An external root owning children differs from a native child delegating again.
+External sections assess root ownership from native tool availability and retain
+the separate child nesting observations. Source restrictions can establish an
+unsupported nesting path; source registration alone does not prove successful
+execution. Copilot evidence is recorded without adding a fifth program runtime.
+
+`checks/capabilities.nix` validates the recorded schema and rendering without
+authentication. `probes/run.py` is an explicit local runner, never a CI step or
+an evaluation side effect. See `probes/README.md` for automated headless and
+HITL cases. The runner creates a new observation file; an operator must review
+its evidence before replacing an existing identity. No refresh daemon or
+implicit account query exists.
 
 ## Delivery and previews
 
