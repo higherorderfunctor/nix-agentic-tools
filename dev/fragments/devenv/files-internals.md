@@ -6,8 +6,8 @@
 > are gone. Copilot, Kiro and Kimchi settings and Codex daemon settings are
 > owned copies. Recursive leaf links target one source-tree store root while
 > retaining per-file input contexts. The symlink guard uses devenv's final file
-> target, follows all runtime writers before file creation, and reports every
-> conflict before failing.
+> target, follows its own runtime's writers before file creation, and reports
+> every conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -99,13 +99,17 @@ to a directory is followed, so a changed target attempts to create a link inside
 the old read-only store directory and fails. The delivery router's devenv-only
 `ai:<runtime>:guard-symlink-updates` task uses its lowered symlink entries to
 unlink only changed links whose current target is under `/nix/store/`. It fails
-loudly on a non-store link or a real file or directory at a delivered path,
-where devenv would only warn and skip the entry. The guard runs after
-`devenv:files:cleanup` and all owned and command writers of its runtime ordered
-before `devenv:files`, then before `devenv:files`. There is one guard per
-runtime with symlink entries; no file-type probing is needed. Its desired target
-is `config.files.<path>.file`, including devenv's executable wrapper, rather
-than the source-tree path. The guard reports every offending path before
+loudly on a real file or directory at a delivered path, where devenv would only
+warn and skip the entry. For a non-store link, devenv overwrote it with
+`ln -sf`, following it if it pointed at a writable directory; the guard now
+refuses instead. The guard runs after `devenv:files:cleanup` and all owned and
+command writers of its runtime ordered before `devenv:files`, then before
+`devenv:files`. There is one guard per runtime with symlink entries; no
+file-type probing is needed. A cross-owner handoff from an owned copy to a
+symlink can fail the guard for one shell entry until the other owner's
+retraction has run. Its desired target is `config.files.<path>.file` for entries
+whose final `copyMode` is `symlink`, including devenv's executable wrapper,
+rather than the source-tree path. The guard reports every offending path before
 failing. A failed guard makes `devenv:files` and `devenv:enterShell`
 `DependencyFailed`: shell entry continues with a warning, but no `files.*` entry
 from any runtime or the user is created or updated, and `devenv test` fails.

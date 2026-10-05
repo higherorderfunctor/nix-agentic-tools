@@ -1,22 +1,22 @@
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-10-04 — devenv symlink guards use the final file
-> target, follow all runtime writers before file creation, and report every
-> conflict before failing. A record's `agentNativeType` + `agentTransformer`
-> give it a typed `native.agents` layer below the normalized agents pool; every
-> agents runtime gets `agentsDir`, and a runtime extends the builder's `agents`
-> description only through `agentsDescriptionSuffix`. Rule inclusion resolves
-> from one portable priority list and runtime support table before L4 rendering.
-> The shared AGENTS.md notice resolves each runtime's effective limit at shell
-> entry. Claude delivers every surface through `ai.claude.files`; its
-> settings.json and devenv .mcp.json are read-only links. Every delivered entry
-> is a file the layer writes. L5 is the delivery router plus one adapter per
-> backend; every runtime describes delivery once through the record-level
-> `config`, which `mkRuntime` makes the only delivery callback, and the delivery
-> matrix is generated from the layer for every runtime's files. Normalized pools
-> carry only a text-source record's winning arm. Claude's devenv rules and
-> Codex's execpolicy rules are read-only copies whose writers survive a disable.
-> Copilot's settings files are read-only copies of one
+> target, follow their own runtime's writers before file creation, and report
+> every conflict before failing. A record's `agentNativeType` +
+> `agentTransformer` give it a typed `native.agents` layer below the normalized
+> agents pool; every agents runtime gets `agentsDir`, and a runtime extends the
+> builder's `agents` description only through `agentsDescriptionSuffix`. Rule
+> inclusion resolves from one portable priority list and runtime support table
+> before L4 rendering. The shared AGENTS.md notice resolves each runtime's
+> effective limit at shell entry. Claude delivers every surface through
+> `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
+> Every delivered entry is a file the layer writes. L5 is the delivery router
+> plus one adapter per backend; every runtime describes delivery once through
+> the record-level `config`, which `mkRuntime` makes the only delivery callback,
+> and the delivery matrix is generated from the layer for every runtime's files.
+> Normalized pools carry only a text-source record's winning arm. Claude's
+> devenv rules and Codex's execpolicy rules are read-only copies whose writers
+> survive a disable. Copilot's settings files are read-only copies of one
 > `materialize-copilot-config` writer; its only reconciled document is the HM
 > `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
 > `mcp.json` are read-only copies in one directory ledger. Kimchi shares its HM
@@ -184,16 +184,19 @@ not move them back.
   `recursive = false` because Codex discovers directory symlinks.
 - **devenv guards native link updates.** For a runtime with symlink entries, the
   router emits `ai:<runtime>:guard-symlink-updates` from the lowered file map,
-  including recursive leaves, using `config.files.<path>.file` as the desired
-  target (including executable wrappers). It runs after file cleanup and all
-  owned and command writers of its runtime ordered before file creation, then
-  before `devenv:files`. It removes stale store-backed links, and fails loudly
-  on a non-store link or a real file or directory at a delivered path, where
-  devenv itself would only warn and skip. It reports every offender before
-  failing. A failed guard makes `devenv:files` and `devenv:enterShell`
-  `DependencyFailed`: shell entry continues with a warning, but no `files.*`
-  entry from any runtime or the user is created or updated, and `devenv test`
-  fails.
+  including recursive leaves whose final `copyMode` is `symlink`, using
+  `config.files.<path>.file` as the desired target (including executable
+  wrappers). It runs after file cleanup and all owned and command writers of its
+  runtime ordered before file creation, then before `devenv:files`. It removes
+  stale store-backed links, and fails loudly on a real file or directory at a
+  delivered path, where devenv itself would only warn and skip. For a non-store
+  link, devenv overwrote it with `ln -sf`, following it if it pointed at a
+  writable directory; the guard now refuses instead. A cross-owner handoff from
+  an owned copy to a symlink can fail the guard for one shell entry until the
+  other owner's retraction has run. It reports every offender before failing. A
+  failed guard makes `devenv:files` and `devenv:enterShell` `DependencyFailed`:
+  shell entry continues with a warning, but no `files.*` entry from any runtime
+  or the user is created or updated, and `devenv test` fails.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` and
   Copilot's HM `config.json` are writable state files with Nix-owned leaves. The
   adapter runs their JSON bundles on activation and retains unowned state.

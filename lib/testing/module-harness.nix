@@ -111,7 +111,7 @@
 
   # Stub devenv's files option and the other options the factory config
   # callbacks set, without importing the full devenv module graph.
-  # Compute only upstream's linked targets; retain the stub's declared fields
+  # Compute upstream's linked targets and copy modes; retain the declared fields
   # so factory snapshots do not acquire upstream's function-valued formats.
   devenvFileTargets = files:
     (lib.evalModules {
@@ -161,7 +161,7 @@
         apply = files: let
           targets = devenvFileTargets files;
         in
-          lib.mapAttrs (path: entry: entry // {inherit (targets.${path}) file;}) files;
+          lib.mapAttrs (path: entry: entry // {inherit (targets.${path}) copyMode file;}) files;
         default = {};
       };
       packages = lib.mkOption {

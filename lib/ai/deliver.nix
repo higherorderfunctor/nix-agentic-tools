@@ -364,7 +364,7 @@ in
               failed=1
             fi
           }
-          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (path: _entry: "guard_link ${lib.escapeShellArgs [path config.files.${path}.file]}") symlinkEntries)}
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (path: _entry: "guard_link ${lib.escapeShellArgs [path config.files.${path}.file]}") (lib.filterAttrs (path: _entry: config.files.${path}.copyMode == "symlink") symlinkEntries))}
           if [ "$failed" -ne 0 ]; then
             false
           fi
