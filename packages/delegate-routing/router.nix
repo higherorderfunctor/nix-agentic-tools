@@ -8,9 +8,10 @@
     (renderer.routing true entries)
     (renderer.workflows true workflows)
   ]);
-in {
-  delegate-routing-router = {
-    description = "Load delegate-routing before delegating work";
-    text = "# Delegate routing\n" + lib.optionalString (rendered != "") "\n${rendered}";
-  };
-}
+in
+  lib.optionalAttrs (rendered != "") {
+    delegate-routing-router = {
+      description = "Load delegate-routing before delegating work";
+      text = "# Delegate routing\n\n${rendered}";
+    };
+  }
