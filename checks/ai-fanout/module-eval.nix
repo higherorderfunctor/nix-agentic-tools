@@ -42,8 +42,9 @@ in {
         #
         # Every harness wraps on devenv because `gitSshConfigWorkaround` defaults
         # on and contributes `GIT_SSH_COMMAND`. Home Manager wraps only when a
-        # launcher has something to inject, which a bare `enable = true` gives
-        # none of them: kimchi's `region` and `telemetry.enabled` reach its
+        # launcher has something to inject: Kiro's default worktree steering
+        # normalization supplies a bundle path. The other runtimes stay bare:
+        # kimchi's `region` and `telemetry.enabled` reach its
         # global config.json on Home Manager, not the launcher environment.
         # `claude` has no wrapper anywhere (its env rides
         # `.claude/settings.json`, never process env), so it installs `cfg.package`
@@ -61,7 +62,7 @@ in {
             codex = "bare";
             copilot = "bare";
             kimchi = "bare";
-            kiro = "bare";
+            kiro = "wrapped";
           };
         };
         installedBy = {

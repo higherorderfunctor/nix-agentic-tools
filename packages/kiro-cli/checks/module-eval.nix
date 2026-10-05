@@ -186,6 +186,22 @@ in {
         && evaluated.config.warnings == []
     );
 
+    module-kiro-package-null-explicit-normalization-warns = mkTest "kiro-package-null-explicit-normalization-warns" (
+      let
+        warnings = normalizeWorktreeSteering:
+          (evalDevenv {
+            ai.kiro = {
+              enable = true;
+              inherit normalizeWorktreeSteering;
+              package = null;
+            };
+          }).config.warnings;
+      in
+        warnings true
+        == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.normalizeWorktreeSteering. Unset them or set ai.kiro.package."]
+        && warnings false == []
+    );
+
     module-kiro-package-null-explicit-ssh-workaround-warns = mkTest "kiro-package-null-explicit-ssh-workaround-warns" (
       let
         evaluated = evalDevenv {
@@ -976,15 +992,15 @@ in {
         soleFork a b
     );
 
-    # The default MUST leave the package untouched. This is what protects every
-    # cachix hit: an unconditional patch step would fork the drvPath for every
-    # consumer, including those who never asked for a dark-shipped feature.
-    module-kiro-rollout-default-is-stock = mkTest "kiro-rollout-default-is-stock" (
-      let
-        packages = (evalHm {ai.kiro.enable = true;}).config.home.packages;
-      in
-        lib.any (p: (p.drvPath or null) == pkgs.ai.kiro-cli.drvPath) packages
-    );
+    # Default normalization may add a thin launcher wrapper, but its exec target
+    # must retain the stock kiro-cli derivation. Forking that expensive payload
+    # would lose cachix hits and require another roughly 556 MB build.
+    module-kiro-rollout-default-is-stock = mkWrapperGrepTest {
+      name = "kiro-rollout-default-is-stock";
+      package = builtins.head (evalHm {ai.kiro.enable = true;}).config.home.packages;
+      bin = "kiro-cli";
+      needles = [''exec -a "$0" ${lib.escapeShellArg "${pkgs.ai.kiro-cli}/bin/kiro-cli"} "$@"''];
+    };
 
     # A duplicated entry must NOT fork the derivation — otherwise two configs
     # that mean the same thing produce two store paths and two 556 MB builds.
@@ -1051,41 +1067,6 @@ in {
         asserts != [] && (builtins.head asserts).assertion == true
     );
 
-    # The FHS compatibility wrapper remains the default. Opting out selects the
-    # overlay's pinned payload rather than a second independently packaged Kiro.
-    module-kiro-hm-fhs-opt-out-selects-unwrapped = mkTest "kiro-hm-fhs-opt-out-selects-unwrapped" (
-      let
-        result = evalHm {
-          ai.gitSshConfigWorkaround = false;
-          ai.kiro = {
-            enable = true;
-            useFhsSandbox = false;
-          };
-        };
-        packages = result.config.home.packages;
-      in
-        builtins.length packages
-        == 1
-        && (builtins.head packages).drvPath == pkgs.ai.kiro-cli.unwrapped.drvPath
-    );
-
-    # Devenv shares the same option and package-selection seam.
-    module-kiro-devenv-fhs-opt-out-selects-unwrapped = mkTest "kiro-devenv-fhs-opt-out-selects-unwrapped" (
-      let
-        result = evalDevenv {
-          ai.gitSshConfigWorkaround = false;
-          ai.kiro = {
-            enable = true;
-            useFhsSandbox = false;
-          };
-        };
-        packages = result.config.packages;
-      in
-        builtins.length packages
-        == 1
-        && (builtins.head packages).drvPath == pkgs.ai.kiro-cli.unwrapped.drvPath
-    );
-
     # When another option still requires a wrapper, the opt-out must change the
     # wrapper's exec target rather than merely changing the empty-wrapper case.
     # Devenv's default Git SSH export supplies that production-shaped wrapper.
@@ -1105,6 +1086,24 @@ in {
         absentNeedles = ["${pkgs.ai.kiro-cli}/bin/kiro-cli"];
       };
 
+    # Home Manager's default normalization also needs a wrapper; opting out of
+    # FHS must make that launcher execute the same pinned unwrapped payload.
+    module-kiro-hm-fhs-opt-out-wrapper-targets-unwrapped = let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          useFhsSandbox = false;
+        };
+      };
+    in
+      mkWrapperGrepTest {
+        name = "kiro-hm-fhs-opt-out-wrapper-targets-unwrapped";
+        package = builtins.head result.config.home.packages;
+        bin = "kiro-cli";
+        needles = ["${pkgs.ai.kiro-cli.unwrapped}/bin/kiro-cli"];
+        absentNeedles = ["${pkgs.ai.kiro-cli}/bin/kiro-cli"];
+      };
+
     # #956's exact backend: with no unrelated wrapper reason, trustedMcpTools
     # must fork the FHS payload itself. The former outer symlinkJoin had no
     # `fhsenv` passthru and was unreachable during launcher dispatch.
@@ -1114,6 +1113,8 @@ in {
           ai.gitSshConfigWorkaround = false;
           ai.kiro = {
             enable = true;
+            # Isolate package selection from the default bundle normalization wrapper.
+            normalizeWorktreeSteering = false;
             trustedMcpTools = ["fs_read"];
           };
         };
@@ -1605,9 +1606,8 @@ in {
         soleFork a b
     );
 
-    # The default must stay byte-identical to stock. An option that silently
-    # wrapped every consumer would cost the cache hit it exists to preserve.
-    module-kiro-identity-default-is-stock = mkTest "kiro-identity-default-is-stock" (
+    # Identity remains opt-in; both configs still normalize worktree steering.
+    module-kiro-identity-default-is-disabled = mkTest "kiro-identity-default-is-disabled" (
       let
         a =
           kiroWrappedDrvs
@@ -1638,12 +1638,33 @@ in {
         soleSame a b
     );
 
-    # The splice re-joins the preserved vendor text directly after the
-    # replacement, so an identity that does not close its own final sentence
-    # MERGES into it. Caught at EVAL rather than by the splicer's backstop,
-    # because the splicer runs on a FAIL-OPEN launch path — a value rejected
-    # there presents as "the identity silently did nothing", which is the exact
-    # shape that let a multi-sentence identity ship broken.
+    # Both backends normalize worktree steering by default; an explicit false
+    # opts out through the same bundle materializer selection.
+    module-kiro-worktree-normalization-default-and-parity = mkTest "kiro-worktree-normalization-default-and-parity" (
+      let
+        forks = eval: select: let
+          a = eval {
+            ai.kiro = {
+              enable = true;
+              v3 = true;
+            };
+          };
+          b = eval {
+            ai.kiro = {
+              enable = true;
+              normalizeWorktreeSteering = false;
+              v3 = true;
+            };
+          };
+        in
+          a.config.ai.kiro.normalizeWorktreeSteering && soleFork (kiroWrappedDrvs (select a)) (kiroWrappedDrvs (select b));
+      in
+        forks evalHm (v: v.config.home.packages)
+        && forks evalDevenv (v: v.config.packages)
+    );
+
+    # Sentence punctuation is a configuration constraint. The launch patcher's
+    # fail-open backstop must not be the first place an invalid value is caught.
     module-kiro-identity-requires-sentence-punctuation = mkTest "kiro-identity-requires-sentence-punctuation" (
       let
         ev = evalHm {
@@ -1684,124 +1705,6 @@ in {
         && failing "Are you sure about that?" == []
     );
 
-    # ── workflow reminder ──────────────────────────────────────────────────────
-    # AUTO means "on iff workflows is unlocked". All four corners of the tri-state
-    # are pinned, because null/true/false is exactly where an off-by-default and
-    # an on-by-default implementation look identical from any single test.
-    module-kiro-workflow-reminder-auto-on-with-workflows = mkTest "kiro-workflow-reminder-auto-on-with-workflows" (
-      let
-        hooks =
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = ["workflows"];
-            };
-          })
-        .config
-        .ai
-        .kiro
-        .hooks;
-      in
-        hooks ? workflow-reminder
-        && hooks.workflow-reminder.trigger == "UserPromptSubmit"
-        # `agent` is the no-subprocess action: the short reminder is a static
-        # string, so it needs no script and ignores timeout.
-        && hooks.workflow-reminder.action.type == "agent"
-        && hooks.workflow-reminder.action.prompt.enable
-        && hooks.workflow-reminder.action.prompt.text != ""
-    );
-
-    module-kiro-workflow-reminder-absent-without-workflows =
-      mkTest "kiro-workflow-reminder-absent-without-workflows" (!((evalHm {
-        ai.kiro = {
-          enable = true;
-          v3 = true;
-        };
-      })
-      .config
-      .ai
-      .kiro
-      .hooks
-      ? workflow-reminder));
-
-    # Explicit `false` must beat the auto-on inference.
-    module-kiro-workflow-reminder-forced-off =
-      mkTest "kiro-workflow-reminder-forced-off" (!((evalHm {
-        ai.kiro = {
-          enable = true;
-          v3 = true;
-          unlockedRolloutFeatures = ["workflows"];
-          workflowReminder.enable = false;
-        };
-      })
-      .config
-      .ai
-      .kiro
-      .hooks
-      ? workflow-reminder));
-
-    # Explicit `true` must beat the auto-off inference — the reminder is still
-    # useful on a build where workflows were unlocked by some path other than
-    # this option (KIRO_ENABLED_FEATURES, say).
-    module-kiro-workflow-reminder-forced-on =
-      mkTest "kiro-workflow-reminder-forced-on" (
-        (evalHm {
-          ai.kiro = {
-            enable = true;
-            v3 = true;
-            workflowReminder.enable = true;
-          };
-        })
-    .config
-    .ai
-    .kiro
-    .hooks
-    ? workflow-reminder
-      );
-
-    # The vendor-steering variant CANNOT be an `agent` action: its text lives in
-    # the runtime-unpacked engine bundle, so it is not knowable at eval time and
-    # has to shell out.
-    module-kiro-workflow-reminder-vendor-steering-is-command = mkTest "kiro-workflow-reminder-vendor-steering-is-command" (
-      let
-        hook =
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = ["workflows"];
-              workflowReminder.includeVendorSteering = true;
-            };
-          })
-        .config
-        .ai
-        .kiro
-        .hooks
-        .workflow-reminder;
-      in
-        hook.action.type == "command" && hook.action.command != null
-    );
-
-    # devenv parity for the reminder: same option, same contributed record.
-    module-kiro-devenv-workflow-reminder-parity = mkTest "kiro-devenv-workflow-reminder-parity" (
-      let
-        hooks =
-          (evalDevenv {
-            ai.kiro = {
-              enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = ["workflows"];
-            };
-          })
-        .config
-        .ai
-        .kiro
-        .hooks;
-      in
-        hooks ? workflow-reminder && hooks.workflow-reminder.action.type == "agent"
-    );
-
     # Devenv parity: v3 must wrap here too. Disable the Git SSH default so v3 is
     # the sole wrapper reason; otherwise this passes vacuously on the environment
     # export even if the flag wiring disappears.
@@ -1811,6 +1714,7 @@ in {
           ai.gitSshConfigWorkaround = false;
           ai.kiro = {
             enable = true;
+            normalizeWorktreeSteering = false;
             v3 = true;
           };
         };
@@ -1840,7 +1744,10 @@ in {
     module-kiro-devenv-no-flags-no-wrap = mkTest "kiro-devenv-no-flags-no-wrap" (
       let
         result = evalDevenv {
-          ai.kiro.enable = true;
+          ai.kiro = {
+            enable = true;
+            normalizeWorktreeSteering = false;
+          };
           ai.gitSshConfigWorkaround = false;
         };
         packages = result.config.packages;
@@ -2194,7 +2101,10 @@ in {
     module-kiro-hm-no-wrapper-when-nothing-to-wrap = mkTest "kiro-hm-no-wrapper-when-nothing-to-wrap" (
       let
         result = evalHm {
-          ai.kiro.enable = true;
+          ai.kiro = {
+            enable = true;
+            normalizeWorktreeSteering = false;
+          };
         };
         packages = result.config.home.packages;
         first = builtins.head packages;

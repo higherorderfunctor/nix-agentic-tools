@@ -108,8 +108,8 @@ sys.stdout.write(tied[0])
 # class it already covered silently lapsing. Widening it to cover control flow
 # is a separate, unstarted piece of work.
 #
-# `packages/kiro-cli/lib/{identityBundle,workflowReminder}.nix` resolve the
-# bundle by this same highest-not-exceeding rule; keep all three in step.
+# `packages/kiro-cli/lib/identityBundle.nix` resolves the
+# bundle by this same highest-not-exceeding rule; keep both in step.
 #
 # Prints "<kasid>\t<bundle-path>".
 kiro_resolve_bundle() {

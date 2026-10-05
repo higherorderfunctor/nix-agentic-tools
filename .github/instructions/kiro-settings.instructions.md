@@ -8,8 +8,8 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 ## Kiro settings: a flat format with object values, and where the key stops
 
 > **Last verified:** 2026-10-04 — one tui/kas materializer serves settings
-> extraction and vendor-steering drift; settings extraction evaluates the
-> shipped TUI registry and workspace allowlist after sandboxed source
+> extraction and exact-match bundle-patch drift; settings extraction evaluates
+> the shipped TUI registry and workspace allowlist after sandboxed source
 > materialization; native file settings live under `ai.<runtime>.native`
 > (`native.settings`; Kimchi also `native.harnessSettings`). Kiro excludes the
 > normalized settings pool, so `ai.kiro.settings` does not exist and a root
