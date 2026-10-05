@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -23,7 +23,7 @@ commit.
 | B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
 | B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
-| B4  | `ai.programs.<pkg>` ↔ `settings.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
+| B4  | `ai.programs.<pkg>` ↔ `runtimes.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
@@ -201,7 +201,7 @@ and out of the package provenance guard.
 - `ai.hooks` is an event map whose matcher-group lists append shared-first.
   Event keys identify additive lifecycle streams, not replaceable pool items.
 - `ai.shell`, normalized `ai.settings` fields, and generated
-  `ai.programs.<pkg>.settings.<runtime>` leaves are nullable scalars.
+  `ai.programs.<pkg>.runtimes.<runtime>` leaves are nullable scalars.
   `resolveOverride` interprets runtime null as **inherit**, not delete; a
   non-null runtime scalar wins.
 - `ai.<runtime>.files` is a final per-runtime output registry, not a portable

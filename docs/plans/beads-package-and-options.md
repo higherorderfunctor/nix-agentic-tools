@@ -70,7 +70,7 @@ Concretely:
 | 3b    | Git-ref Dolt remote options + qualified checkpoint/push flow | OD-M4; encrypted variants additionally OD-D1         |
 
 Phase 3's namespace question is settled: #1024 shipped `ai.programs.<pkg>` /
-`ai.programs.<pkg>.settings.<runtime>` with generated per-leaf runtime
+`ai.programs.<pkg>.runtimes.<runtime>` with generated per-leaf runtime
 overrides. Beads' options should land in that shape. The remaining phase-3 gates
 are the operator decisions and probes named above, not an interface migration.
 
@@ -315,7 +315,7 @@ ruling; owner **measure** = a probe or experiment settles it.
   row); this decision does not create an HM lifecycle surface.
 - **OD-M6 — resolved by #1024:** the option namespace is `ai.programs.beads`,
   with generated per-runtime leaves under
-  `ai.programs.beads.settings.<runtime>`. Do not introduce a standalone
+  `ai.programs.beads.runtimes.<runtime>`. Do not introduce a standalone
   `beads.*` namespace.
 
 ### Deferred (nothing before phase 3b depends on these; revisit when a consumer arrives)

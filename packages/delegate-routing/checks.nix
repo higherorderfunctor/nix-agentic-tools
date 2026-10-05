@@ -8,7 +8,7 @@
         # keep the probe config valid.
         programs.delegate-routing = {
           enable = true;
-          settings = {
+          runtimes = {
             kimchi.models = [{vendors = ["anthropic"];}];
             kiro.models = [{vendors = ["anthropic"];}];
           };

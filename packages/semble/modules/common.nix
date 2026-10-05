@@ -75,7 +75,7 @@
 
   mkState = runtime: let
     portable = config.ai.programs.semble;
-    override = config.ai.programs.semble.settings.${runtime};
+    override = config.ai.programs.semble.runtimes.${runtime};
     cfg = program.resolve config runtime;
     selected = featureName: featureEnabled portable override featureName;
   in
@@ -343,12 +343,12 @@ in {
           assertions = lib.concatMap (state:
             map (message: {
               assertion = false;
-              message = "ai.programs.semble.settings.${state.runtime}: ${message}";
+              message = "ai.programs.semble.runtimes.${state.runtime}: ${message}";
             })
             state.errors
             ++ lib.optional (mcpSubagent state && !(state.selected "mcp")) {
               assertion = state.runtime == "kiro";
-              message = "ai.programs.semble.settings.${state.runtime}: subagent.interface = \"mcp\" with mcp.enable = false needs an MCP server private to the agent, which only Kiro supports. ${state.runtime} cannot scope a server to one agent: enable mcp or use subagent.interface = \"cli\".";
+              message = "ai.programs.semble.runtimes.${state.runtime}: subagent.interface = \"mcp\" with mcp.enable = false needs an MCP server private to the agent, which only Kiro supports. ${state.runtime} cannot scope a server to one agent: enable mcp or use subagent.interface = \"cli\".";
             })
           stateList;
         }
