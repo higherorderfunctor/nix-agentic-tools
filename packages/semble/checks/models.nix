@@ -146,7 +146,7 @@ in {
       hm = evalHm {};
       devenv = evalDevenv {};
       rootOptions = evaluated: evaluated.options.ai.programs.semble.type.getSubOptions [];
-      runtimeOptions = hm.options.ai.kiro.programs.semble.type.getSubOptions [];
+      runtimeOptions = (rootOptions hm).settings.kiro.type.getSubOptions [];
       entryOptions = evaluated: removeAttrs ((rootOptions evaluated).models.type.nestedTypes.elemType.getSubOptions []) ["_module"];
       options = entryOptions hm;
       root = rootOptions hm;
@@ -197,7 +197,7 @@ in {
             program.module
             {
               ai.programs.fixture.entries = ["root-a" "root-b"];
-              ai.claude.programs.fixture.entries = ["runtime-a"];
+              ai.programs.fixture.settings.claude.entries = ["runtime-a"];
             }
           ];
         };
@@ -209,9 +209,11 @@ in {
                 enable = true;
                 models = [docs];
                 defaultContent = "docs";
+                settings = {
+                  codex.models = [];
+                  kiro.models = [codeConfig];
+                };
               };
-              kiro.programs.semble.models = [codeConfig];
-              codex.programs.semble.models = [];
             };
           }).config.home.packages;
         tables = lib.mapAttrs (_: package: package.sembleModels.MODELS or null) installed.sembleRuntimePackages;

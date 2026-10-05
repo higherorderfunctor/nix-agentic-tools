@@ -61,13 +61,15 @@ in {
     inherit name options spec supportedRuntimes;
 
     module = {
-      options.ai =
-        {
-          programs.${name} = mkProgramOption options "Portable defaults for the ${name} program integration.";
-        }
-        // lib.genAttrs supportedRuntimes (runtime: {
-          programs.${name} = mkProgramOption overrideOptions "${runtime} overrides for the ${name} program integration.";
-        });
+      options.ai.programs.${name} =
+        mkProgramOption
+        (options
+          // {
+            settings =
+              lib.genAttrs supportedRuntimes (runtime:
+                mkProgramOption overrideOptions "${runtime} overrides for the ${name} program integration.");
+          })
+        "Portable defaults and runtime settings for the ${name} program integration.";
     };
 
     resolve = config: runtime:
@@ -76,6 +78,6 @@ in {
         resolveTree
         options
         config.ai.programs.${name}
-        config.ai.${runtime}.programs.${name};
+        config.ai.programs.${name}.settings.${runtime};
   };
 }
