@@ -7,11 +7,12 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-06 — validation separates command and reading
-> claims; both review workflows share a worker/review loop capped at 3 rounds;
-> capability validation rejects operator paths and public primary citations
-> bound observations; the skill renders only a "Runs own subagents" column from
-> them, and manual probes retain operator-held event streams.
+> **Last verified:** 2026-10-04 — capability observations join technique **Last
+> verified:** 2026-10-04 — capability observations join technique declarations
+> by runtime, technique and mode and cite only publishable evidence; the manual
+> evaluation suite renders delivered policy through the module harness, a
+> separate vendor set captures real repository delivery, and model turns stay
+> outside structural checks.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -23,7 +24,7 @@ expose the same surface.
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
 `source`. Names become headings. The package ships the always-on "Load
 delegate-routing" stub and four enabled entries: "Follow the request", "Size the
-work", "Choose execution" and "Validate the result". "Validate the result" is
+work", "Choose execution" and "Verify the result". "Verify the result" is
 always-on too. The "Orchestrator session" catalog entry ships disabled. Policy
 belongs in these entries rather than renderer string literals.
 
@@ -31,9 +32,8 @@ belongs in these entries rather than renderer string literals.
 routing entry fields except `always`; the workflow's `always` places its steps.
 The package ships disabled "Review: one reviewer" and "Review: prosecute,
 defend, judge" workflows. Enable a workflow, then add, replace, disable or
-reorder a step by key. Both workflows read shared Rubric and Loop sources. Each
-runs the worker and review inside a loop of at most 3 rounds. A workflow can
-have introductory text or only steps; an enabled step needs content.
+reorder a step by key. Both workflows read one shared Rubric source. A workflow
+can have introductory text or only steps; an enabled step needs content.
 
 Entries with `always = true` render through the existing per-runtime `ai.rules`
 fan-out. Other entries render in the generated skill. A workflow's `always`
@@ -75,10 +75,9 @@ keep a terminal step last when inserting a new step, give the new step a
 This repository enables "Orchestrator session" and both review workflows in
 `dev/ai.nix`. Its portable "Local limits" entry caps external CLI delegates at
 two. Its Claude-only "Pool drain" entry follows "Size the work" and asks for
-usage before each batch of delegates, choosing allowance left per hour until
-reset. Each review workflow adds a shared "Subtraction review" step after Review
-or Defend and before Loop. These house entries are consumer policy, not shipped
-defaults.
+usage before each delegate. Each review workflow adds a shared "Subtraction
+review" step after Review or Judge and before Rounds. These house entries are
+consumer policy, not shipped defaults.
 
 ## Families and runtime capabilities
 
@@ -120,9 +119,10 @@ commands remain part of the existing technique catalog. Each package field uses
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
 command without a model tool; `dev/ai.nix` enables its interactive resource
-separately. External and manual runtime sections list external, introspect and
-usage nodes only. Kimchi has no usage node because no command reads usage
-without a model turn. Shared table rendering escapes cells once.
+separately. External and manual runtime sections include native child tools
+marked as callable inside the external root, alongside external, introspect and
+usage nodes. Kimchi has no usage node because no command reads usage without a
+model turn. Shared table rendering escapes cells once.
 
 ## Capability evidence
 
@@ -137,14 +137,20 @@ source/help declarations and historical reports. Accepted arguments are not
 evidence of effective backend pins. Linked-worktree commits remain a separate
 capability.
 
-The skill carries no evidence. Its technique tables add one "Runs own subagents"
-column: each known result with the modes it was observed in, or unknown.
-Provenance, replay steps, contexts and controls stay in the fixtures, for probe,
-validation and regression runs. Changes to a shipped command, kind, modes or pin
-controls cannot borrow its old result; notes and enable changes do not change
-the launch contract. Source restrictions can establish an unsupported nesting
-path; source registration alone does not prove successful execution. Copilot
-evidence is recorded without adding a fifth program runtime.
+The renderer shows the declared mode contract beside observations for all three
+modes, the "Runs own subagents" column and effective pin results. Missing
+observations render unknown. A custom technique without an observation renders
+"declared, not observed"; a recorded custom identity joins normally. Changes to
+a shipped command, kind, modes or pin controls cannot borrow its old evidence.
+Notes and enable changes do not change the launch contract. Observation details
+retain provenance and replay steps; version and context bound the result and do
+not attest a different installation.
+
+An external root owning children differs from a native child delegating again.
+External sections assess root ownership from native tool availability and retain
+the separate child nesting observations. Source restrictions can establish an
+unsupported nesting path; source registration alone does not prove successful
+execution. Copilot evidence is recorded without adding a fifth program runtime.
 
 Sources must be publicly retrievable primary evidence: committed repo-relative
 extracts, pinned public vendor artifacts with content identities, or
@@ -160,11 +166,10 @@ an evaluation side effect. See `probes/README.md` for automated headless and
 HITL cases. The runner creates a new observation file and retains authenticated
 stdout/stderr beside it as operator-held streams named by basename only.
 Promoting native claims requires a sanitized terminal tool-event extract
-committed under `fixtures/capabilities/evidence/`, or an executed case id from
-the delegate reference's replay index under `probes/delegates/<runtime>/`.
-Launcher templates mirror the material flags in `lib/techniques.nix`; change
-both together. An operator must review evidence before replacing an existing
-identity. No refresh daemon or implicit account query exists.
+committed under `fixtures/capabilities/evidence/`. Launcher templates mirror the
+material flags in `lib/techniques.nix`; change both together. An operator must
+review evidence before replacing an existing identity. No refresh daemon or
+implicit account query exists.
 
 ## Delivery and previews
 
@@ -200,3 +205,37 @@ nix eval --raw .#delegate-routing-content.skills.codex.text
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
+
+## Planning regression suite
+
+`eval/` contains a manual routing simulation: named Nix cases render the actual
+delivered skill and router rule through the existing module harness. Fictional
+inventories, capabilities and executed usage mocks provide the observations;
+independent expected tuples stay out of prompts. Pool cases consume this
+worktree's house rule sources. Child-support observations are synthetic test
+configuration, not measurements of real runtimes. Missing-usage fallback remains
+a partial expectation until its policy is decided.
+
+`eval/run.py` renders without authentication and grades strict saved JSON plans
+against `eval/plan.schema.json`; `eval/rubric.md` owns prose criteria and
+separate calibration samples. Runtime adapters stay disabled until verified
+tool/context suppression and terminal capture establish safe planning mode.
+Outputs default outside checkouts. Pending prose and policy decisions remain
+separate from exact scores, with infrastructure failures retained in end-to-end
+rates.
+
+The owner check `delegate-routing-eval-structure` evaluates and renders all
+cases, validates the schema, and checks expected field references. Its `cases`
+passthru is the runner's fixture export boundary. It never starts a model
+process. Existing module checks own Home Manager/devenv delivery parity; the
+manual suite owns behavioral evidence. See `eval/README.md` for replay commands.
+
+The separate `eval/vendor-cases.nix` set evaluates `dev/ai.nix` through the
+devenv module harness and exports the actual delivered files for each
+experimental switch. `run.py --set vendor --render-only` materializes those
+files and a tool-denial overlay, retaining vendor system steering for manually
+authorized live capture. Configured hook content and observed sources are
+distinguished from hidden vendor text, which stays UNKNOWN. The vendor
+structural check renders every variant without starting a runtime. See the
+evaluation guide for safety preflight requirements, provenance, paired
+comparisons and paid-turn counts.
