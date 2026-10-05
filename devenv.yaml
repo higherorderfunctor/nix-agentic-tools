@@ -51,7 +51,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   serena:
-    url: github:oraios/serena/a8e30ff531a0092ece01c3a2bb9bb2833c7aa41a
+    url: github:oraios/serena/3155fd67e9b7336a4a4cbf51ac111bba88fa53d7
     inputs:
       nixpkgs:
         follows: nixpkgs
