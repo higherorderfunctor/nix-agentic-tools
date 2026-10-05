@@ -27,10 +27,10 @@ in
       # exists only when the project declares files at all.
       before =
         delivery.beforeEdges writer
-        ++ lib.optional (delivery.hasFiles && builtins.elem "shell" writer.before) "devenv:files";
+        ++ lib.optional (delivery.writerPrecedesFiles writer) "devenv:files";
       exec = delivery.commandBody writer;
     });
-    tasks = delivery.owned.tasks // commandTasks // delivery.symlinkTasks commandTasks;
+    tasks = delivery.owned.tasks // commandTasks // delivery.symlinkTasks;
   in
     lib.mkMerge [
       {

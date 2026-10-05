@@ -260,7 +260,7 @@ in
               lib.listToAttrs (map (entry: lib.nameValuePair entry.path entry.content.value)
                 (lib.filter (entry: entry.method == "shared" && entry.content.value != null) (claimsOf name)));
             entryNames = entryNamesFor name writer;
-            hasFiles = (config.files or {}) != {};
+            inherit hasFiles;
             python = pkgs.python3;
             targets = targetsFor name writer;
           }
@@ -270,6 +270,18 @@ in
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
     mergeBundles = path: lib.foldl' (merged: bundle: merged // lib.attrByPath path {} bundle) {} bundles;
+    # Keep the conditional file-creation edge and the guard's dependencies in
+    # the router. Owned writers always precede file creation when it exists.
+    # `tasks."devenv:files"` exists only when the project declares files, and
+    # devenv's runner hard-errors on a dangling reference, so that edge stays
+    # conditional. It is read here, in a value the file buckets never consult,
+    # because a fragment that decided WHETHER to write `config.files` by
+    # reading `config.files` is a genuine cycle.
+    hasFiles = (config.files or {}) != {};
+    writerPrecedesFiles = writer: hasFiles && (writer.command == null || lib.elem "shell" writer.before);
+    writersBeforeFiles =
+      lib.mapAttrsToList (name: writer: (entryNamesFor name writer).write)
+      (lib.filterAttrs (_name: writerPrecedesFiles) cfg.activation);
     symlinkEntries =
       lib.concatMapAttrs (
         path: entry:
@@ -312,14 +324,7 @@ in
       )
       (lib.filterAttrs (_name: writer: writer.command != null) cfg.activation);
 
-    # `tasks."devenv:files"` exists only when the project declares files, and
-    # devenv's runner hard-errors on a dangling reference, so that edge stays
-    # conditional. It is read here, in a value the file buckets never consult,
-    # because a fragment that decided WHETHER to write `config.files` by
-    # reading `config.files` is a genuine cycle.
-    hasFiles = (config.files or {}) != {};
-
-    inherit nameFor tree treefmt;
+    inherit hasFiles nameFor tree treefmt writerPrecedesFiles;
 
     # The backend's own store-symlink primitive, in the shape both file sinks
     # take. Home Manager recurses a directory source itself; devenv has no such
@@ -330,39 +335,42 @@ in
     # Reuse the lowered file map, including recursive leaves. Upstream's
     # ln -sf follows an existing directory link; remove only stale store links
     # before it runs. Migration commands validate and move legacy content first.
-    symlinkTasks = commandTasks:
-      lib.optionalAttrs (backend == "devenv" && symlinkEntries != {}) {
-        "ai:${runtime}:guard-symlink-updates" = {
-          after =
-            ["devenv:files:cleanup"]
-            ++ lib.attrNames (lib.filterAttrs (_name: task: lib.elem "devenv:files" task.before) commandTasks);
-          before = ["devenv:files"];
-          exec = ''
-            set -euETo pipefail
-            shopt -s inherit_errexit 2>/dev/null || :
+    symlinkTasks = lib.optionalAttrs (backend == "devenv" && symlinkEntries != {}) {
+      "ai:${runtime}:guard-symlink-updates" = {
+        after =
+          ["devenv:files:cleanup"]
+          ++ writersBeforeFiles;
+        before = ["devenv:files"];
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
 
-            # Fail loudly where devenv would only warn and skip the entry.
-            guard_link() {
-              local path="$1" desired="$2" target
-              if [ -L "$path" ]; then
-                target="$(${pkgs.coreutils}/bin/readlink -- "$path")"
-                case "$target" in
-                  "$desired") ;;
-                  /nix/store/*) ${pkgs.coreutils}/bin/rm -f -- "$path" ;;
-                  *)
-                    echo "ERROR: $path links outside the Nix store ($target); remove it so devenv can manage it" >&2
-                    false
-                    ;;
-                esac
-              elif [ -e "$path" ]; then
-                echo "ERROR: $path exists and is not a link; move it aside so devenv can manage it" >&2
-                false
-              fi
-            }
-            ${lib.concatStringsSep "\n" (lib.mapAttrsToList (path: entry: "guard_link ${lib.escapeShellArgs [path entry.source]}") symlinkEntries)}
-          '';
-        };
+          failed=0
+          # Report every conflict before failing the file-creation dependency.
+          guard_link() {
+            local path="$1" desired="$2" target
+            if [ -L "$path" ]; then
+              target="$(${pkgs.coreutils}/bin/readlink -- "$path")"
+              case "$target" in
+                "$desired") ;;
+                /nix/store/*) ${pkgs.coreutils}/bin/rm -f -- "$path" ;;
+                *)
+                  echo "ERROR: $path links outside the Nix store ($target); remove it so devenv can manage it" >&2
+                  failed=1
+                  ;;
+              esac
+            elif [ -e "$path" ]; then
+              echo "ERROR: $path exists and is not a link; move it aside so devenv can manage it" >&2
+              failed=1
+            fi
+          }
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (path: _entry: "guard_link ${lib.escapeShellArgs [path config.files.${path}.file]}") symlinkEntries)}
+          if [ "$failed" -ne 0 ]; then
+            false
+          fi
+        '';
       };
+    };
 
     owned = {
       activation = mergeBundles ["home" "activation"];

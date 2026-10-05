@@ -249,7 +249,7 @@ in {
     # nixpkgs with `injectAi = false`.
     harnessFor = args:
       import ../testing/module-harness.nix ({
-          inherit lib moduleInternals;
+          inherit inputs lib moduleInternals;
           inherit (context) pkgs;
           inherit (world) testing;
           moduleImports = backend: facets.moduleImports {inherit backend index;};
