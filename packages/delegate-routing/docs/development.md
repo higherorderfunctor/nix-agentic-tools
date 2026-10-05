@@ -1,8 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — capability observations join technique
-> declarations by runtime, technique and mode; external sections expose native
-> children, and authenticated probes remain manual.
+> **Last verified:** 2026-10-04 — capability validation rejects operator paths;
+> public primary citations bound observations, declared modes remain visible,
+> and manual probes retain operator-held event streams.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -127,13 +127,14 @@ source/help declarations and historical reports. Accepted arguments are not
 evidence of effective backend pins. Linked-worktree commits remain a separate
 capability.
 
-The renderer shows all three modes, the "Runs own subagents" column and
-effective pin results. Missing observations render unknown. A custom technique
-without an observation renders "declared, not observed"; a recorded custom
-identity joins normally. Changes to a shipped command, kind, modes or pin
-controls cannot borrow its old evidence. Notes and enable changes do not change
-the launch contract. Observation details retain provenance and replay steps;
-version and context bound the result and do not attest a different installation.
+The renderer shows the declared mode contract beside observations for all three
+modes, the "Runs own subagents" column and effective pin results. Missing
+observations render unknown. A custom technique without an observation renders
+"declared, not observed"; a recorded custom identity joins normally. Changes to
+a shipped command, kind, modes or pin controls cannot borrow its old evidence.
+Notes and enable changes do not change the launch contract. Observation details
+retain provenance and replay steps; version and context bound the result and do
+not attest a different installation.
 
 An external root owning children differs from a native child delegating again.
 External sections assess root ownership from native tool availability and retain
@@ -141,11 +142,23 @@ the separate child nesting observations. Source restrictions can establish an
 unsupported nesting path; source registration alone does not prove successful
 execution. Copilot evidence is recorded without adding a fifth program runtime.
 
+Sources must be publicly retrievable primary evidence: committed repo-relative
+extracts, pinned public vendor artifacts with content identities, or
+fixed-output commands for pinned versions. Validation applies its
+publishable-path predicate to source, context, every replay step and every
+capability evidence note. Unpublishable historical claims become unknown with
+requested/resolved values preserved in a one-line historical note; control
+fields become null. A declaration cannot serve as its own observation.
+
 `checks/capabilities.nix` validates the recorded schema and rendering without
 authentication. `probes/run.py` is an explicit local runner, never a CI step or
 an evaluation side effect. See `probes/README.md` for automated headless and
-HITL cases. The runner creates a new observation file; an operator must review
-its evidence before replacing an existing identity. No refresh daemon or
+HITL cases. The runner creates a new observation file and retains authenticated
+stdout/stderr beside it as operator-held streams named by basename only.
+Promoting native claims requires a sanitized terminal tool-event extract
+committed under `fixtures/capabilities/evidence/`. Launcher templates mirror the
+material flags in `lib/techniques.nix`; change both together. An operator must
+review evidence before replacing an existing identity. No refresh daemon or
 implicit account query exists.
 
 ## Delivery and previews
