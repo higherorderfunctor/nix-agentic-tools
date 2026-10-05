@@ -1,6 +1,6 @@
 # ai.extraSystemPrompt: one keyed text-source pool, four delivery mechanisms,
 # one explicit exclusion. Every check reads the evaluated module (launcher
-# `postBuild`, file entries, normalized pools), never a realized package, so
+# `buildCommand`, file entries, normalized pools), never a realized package, so
 # none of them builds a runtime.
 {
   lib,
@@ -8,7 +8,7 @@
   harness,
   ...
 }: let
-  inherit (harness) evalDevenv evalHm mkTest;
+  inherit (harness) evalDevenv evalHm hasLiteral mkTest;
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
 
   backends = {
@@ -24,14 +24,6 @@
     alpha.text = "First by name.";
   };
   joined = "First by name.\n\nSecond by name.";
-
-  # Literal search without regex compilation; the context of a store path
-  # does not matter to a substring test.
-  contains = needle: hay:
-    builtins.length (lib.splitString
-      (builtins.unsafeDiscardStringContext needle)
-      (builtins.unsafeDiscardStringContext hay))
-    > 1;
 
   packagesOf = evaluated:
     if evaluated.config ? home
@@ -54,6 +46,9 @@
     if evaluated.config ? home
     then hmCodexSettings evaluated
     else evaluated.config.ai.codex.files.".codex/config.toml".content.value or {};
+
+  # pi's append file, at the default harness directory on both backends.
+  kimchiAppendFile = evaluated: evaluated.config.ai.kimchi.files.".config/kimchi/harness/APPEND_SYSTEM.md" or null;
 
   kiroAgent = name: evaluated:
     builtins.fromJSON evaluated.config.ai.kiro.files.".kiro/agents/${name}.json".content.text;
@@ -89,7 +84,7 @@ in {
       let
         inert = evaluated:
           !(isWrapped "claude-code" evaluated)
-          && !(contains "--append-system-prompt" (buildCommandOf "kimchi" evaluated))
+          && kimchiAppendFile evaluated == null
           && !((codexSettings evaluated) ? developer_instructions)
           && (kiroAgent "native-only" evaluated).prompt == "Own prompt."
           && !((kiroAgent "no-prompt" evaluated) ? prompt)
@@ -113,7 +108,7 @@ in {
         ai.extraSystemPrompt = entries;
       } (evaluated:
         isWrapped "claude-code" evaluated
-        && contains
+        && hasLiteral
         "--append-system-prompt-file ${pkgs.writeText "claude-extra-system-prompt.md" joined}"
         (buildCommandOf "claude-code" evaluated))
     );
@@ -134,17 +129,13 @@ in {
       } (evaluated: (codexSettings evaluated).developer_instructions or null == "Native wins.")
     );
 
-    # Kimchi: the launcher passes `--append-system-prompt` with a store file
-    # (Pi reads a path that exists as the prompt's contents).
-    module-ai-extra-system-prompt-kimchi-flag = mkTest "ai-extra-system-prompt-kimchi-flag" (
+    # Kimchi: pi's own APPEND_SYSTEM.md carries the entries joined in name
+    # order.
+    module-ai-extra-system-prompt-kimchi-file = mkTest "ai-extra-system-prompt-kimchi-file" (
       onBoth {
         ai.kimchi.enable = true;
         ai.extraSystemPrompt = entries;
-      } (evaluated:
-        isWrapped "kimchi" evaluated
-        && contains
-        "--append-system-prompt ${pkgs.writeText "kimchi-extra-system-prompt.md" joined}"
-        (buildCommandOf "kimchi" evaluated))
+      } (evaluated: (kimchiAppendFile evaluated).content.text or null == joined)
     );
 
     # Kiro: every typed agent — lowered from `ai.agents`, native-only, or with
