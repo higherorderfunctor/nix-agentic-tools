@@ -1,15 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-30 — devenv's Codex launcher always passes
-> `--no-daemon`, so it always wraps. The builder entry point is
-> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
-> callback. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
-> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
-> a runtime-specific implicit shell default. `ai.shell` stays null; see below
-> for the standing decision and the override rule it shares with normalized
-> `settings`. The builder merges every launcher's process environment once, as
-> `launcherEnvironment`; Codex and Copilot wrap through `lib.ai.mkLauncher`.
+> **Last verified:** 2026-10-04 — program runtime settings live under
+> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -68,7 +60,7 @@ specification. Root declarations retain their ordinary types and defaults;
 runtime declarations are generated as nullable versions of those declarations.
 The program module receives one recursively resolved record per supported
 runtime. The specification's `supportedRuntimes` list is the single capability
-source: unsupported `ai.<runtime>.programs.<pkg>` paths do not exist.
+source: unsupported `ai.programs.<pkg>.settings.<runtime>` paths do not exist.
 
 Do not add a sibling runtime selector. Runtime program `enable = false` is the
 negation mechanism, and an individual runtime feature may override the portable
