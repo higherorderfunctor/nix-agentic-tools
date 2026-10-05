@@ -2,11 +2,11 @@
 {lib}: let
   ecosystems = import ../lib/ai/runtimes.nix;
   modes = ["devenv" "hm"];
-  surfaces = ["agents" "context" "environmentVariables" "hooks" "lspServers" "mcpServers" "permissions" "rules" "settings" "skills"];
+  surfaces = ["agents" "context" "environmentVariables" "extraSystemPrompt" "hooks" "lspServers" "mcpServers" "permissions" "rules" "settings" "skills"];
   # Pools whose root entries a runtime can withdraw one name at a time
   # (`ai.<runtime>.<pool>.<name> = null`). The others compose root and
   # per-runtime values, so a root request for them has no per-runtime remedy.
-  keyedSurfaces = ["agents" "environmentVariables" "lspServers" "mcpServers" "rules" "skills"];
+  keyedSurfaces = ["agents" "environmentVariables" "extraSystemPrompt" "lspServers" "mcpServers" "rules" "skills"];
   primitives = ["notApplicable" "ownLeaves" "ownPathDeclarative" "ownPathManaged" "ownWrapper"];
   imperativePrimitives = ["ownLeaves" "ownPathManaged"];
   key = row: "${row.surface}/${row.ecosystem}/${row.mode}";
