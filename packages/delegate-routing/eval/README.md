@@ -37,13 +37,13 @@ devenv module harness, with only the case's switches changed, and exports every
 delivered file. The prompt is the task plus synthetic usage numbers; the
 expected behavior never enters it.
 
-| Cases                                                   | Switch or shape                                        | Assertion      |
-| ------------------------------------------------------- | ------------------------------------------------------ | -------------- |
-| `claude-clamp-off`, `claude-clamp-on`                   | `ai.claude.delegationClampMitigation.enable`           | `delegate`     |
-| `claude-ultracode-drain-off`                            | ultracode on, clamp on, `Pool drain` routing entry off | `observe`      |
-| `claude-ultracode-drain-on`                             | ultracode on, clamp on, `Pool drain` routing entry on  | `codex-lane`   |
-| `codex-single`, `kimchi-single`, `kiro-single`          | one task                                               | `one-delegate` |
-| `codex-dependent`, `kimchi-dependent`, `kiro-dependent` | dependent chain                                        | `workflow`     |
+| Cases                                                   | Switch or shape                                                | Assertion      |
+| ------------------------------------------------------- | -------------------------------------------------------------- | -------------- |
+| `claude-reminder-off`, `claude-reminder-on`             | `ai.programs.delegate-routing.runtimes.claude.reminder.enable` | `delegate`     |
+| `claude-ultracode-drain-off`                            | ultracode on, reminder on, `Pool drain` routing entry off      | `observe`      |
+| `claude-ultracode-drain-on`                             | ultracode on, reminder on, `Pool drain` routing entry on       | `codex-lane`   |
+| `codex-single`, `kimchi-single`, `kiro-single`          | one task                                                       | `one-delegate` |
+| `codex-dependent`, `kimchi-dependent`, `kiro-dependent` | dependent chain                                                | `workflow`     |
 
 The two Claude pairs are on/off pairs: the switch is the only difference. The
 drain cases supply more Codex headroom than Claude headroom.
@@ -112,12 +112,12 @@ live run refuses a directory under `~` or `/tmp`, or one with an `AGENTS.md` or
 `CLAUDE.md` above it: Kimchi and Claude load ancestor context files, and Codex
 refuses helper binaries under a temporary directory.
 
-| Harness | Launch                                                                                                                                                                                                          | Login                                                                                                                                                 | Normal-session settings carried over                                                                                 |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Claude  | `claude -p --setting-sources project`, overlay `--settings`, `--model opus --effort medium --permission-mode auto`, scratch `CLAUDE_CONFIG_DIR`, memory, org memory, policy skills and claude.ai connectors off | `CLAUDE_CODE_OAUTH_TOKEN` from a `claude setup-token` token (`--claude-token-file` or the variable). `~/.claude` credentials are never read or copied | `enableWorkflows`, `ultracode`; the fixture's `.mcp.json` servers are enabled; the clamp hook comes from the fixture |
-| Codex   | `codex exec --json` with apps, plugins, remote plugins and memories disabled; scratch `CODEX_HOME`                                                                                                              | `auth.json` symlinked, never copied: Codex rewrites it in place, so a refresh reaches the real file                                                   | `default_permissions`, `permissions`, `features`, `agents`; the fixture trusted in the scratch `config.toml`         |
-| Kimchi  | `kimchi -p --mode json --approve --auto -- <task>`                                                                                                                                                              | `KIMCHI_API_KEY` from `~/.config/kimchi/config.json`, session-only                                                                                    | `harness/settings.json` with the memory extension forced off                                                         |
-| Kiro    | `kiro-cli chat --v3 --no-interactive --trust-all-tools --output-format stream-json` through the operator's wrapper                                                                                              | the real data dir (`KIRO_DATA_DIR`), shared, so a refresh lands in the database the operator already uses                                             | `chat.enableCheckpoint`, `chat.enableTangentMode`, `chat.enableWorkflows`                                            |
+| Harness | Launch                                                                                                                                                                                                          | Login                                                                                                                                                 | Normal-session settings carried over                                                                                    |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Claude  | `claude -p --setting-sources project`, overlay `--settings`, `--model opus --effort medium --permission-mode auto`, scratch `CLAUDE_CONFIG_DIR`, memory, org memory, policy skills and claude.ai connectors off | `CLAUDE_CODE_OAUTH_TOKEN` from a `claude setup-token` token (`--claude-token-file` or the variable). `~/.claude` credentials are never read or copied | `enableWorkflows`, `ultracode`; the fixture's `.mcp.json` servers are enabled; the reminder hook comes from the fixture |
+| Codex   | `codex exec --json` with apps, plugins, remote plugins and memories disabled; scratch `CODEX_HOME`                                                                                                              | `auth.json` symlinked, never copied: Codex rewrites it in place, so a refresh reaches the real file                                                   | `default_permissions`, `permissions`, `features`, `agents`; the fixture trusted in the scratch `config.toml`            |
+| Kimchi  | `kimchi -p --mode json --approve --auto -- <task>`                                                                                                                                                              | `KIMCHI_API_KEY` from `~/.config/kimchi/config.json`, session-only                                                                                    | `harness/settings.json` with the memory extension forced off                                                            |
+| Kiro    | `kiro-cli chat --v3 --no-interactive --trust-all-tools --output-format stream-json` through the operator's wrapper                                                                                              | the real data dir (`KIRO_DATA_DIR`), shared, so a refresh lands in the database the operator already uses                                             | `chat.enableCheckpoint`, `chat.enableTangentMode`, `chat.enableWorkflows`                                               |
 
 Vendor-bundled skills and system prompts are kept: they are vendor surface.
 Claude and Kiro also get a log-only `PreToolUse` hook that appends each request
@@ -198,6 +198,6 @@ managed settings (Claude, Codex), organization hooks, steering and MCP servers
 3. `python3 packages/delegate-routing/eval/suite.py --dry-run` and read the
    launches.
 4. One trivial run per harness to prove the login and the checks:
-   `--case claude-clamp-off --claude-token-file <file>`, then
+   `--case claude-reminder-off --claude-token-file <file>`, then
    `--case codex-single`, `--case kimchi-single`, `--case kiro-single`.
 5. The whole suite once. Every case must end `PASS` or `FAIL`.

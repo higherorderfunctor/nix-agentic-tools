@@ -368,7 +368,6 @@ in {
       ${pkgs.coreutils}/bin/mkdir "$nat_codex_default_home"
       CODEX_HOME="$nat_codex_default_home" "$nat_codex_bin" debug prompt-input probe > "$nat_codex_default_home/prompt.json"
       for nat_needle in 'Before editing a path that matches an entry below, read every document listed' \
-                        '<!-- rule: delegate-routing-router -->' \
                         '<!-- rule: semble -->' \
                         '<!-- rule: stacked-workflows-router -->'; do
         ${pkgs.gnugrep}/bin/grep -Fq -- "$nat_needle" "$nat_codex_default_home/prompt.json" || { echo "FAIL: at Codex's default project_doc_max_bytes, AGENTS.md lost '$nat_needle'"; exit 1; }

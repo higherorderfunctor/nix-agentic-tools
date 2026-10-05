@@ -356,6 +356,18 @@
     contains needle (evaluate mode (lib.recursiveUpdate enabled input))
     && !contains needle (evaluate mode enabled)
     && evaluate mode input == [];
+  # A command hook leaves the agent prompt record at its default.
+  kiroCommandHookSilent =
+    evaluate "devenv" {
+      ai.kiro = {
+        enable = true;
+        hooks.probe = {
+          action.command = "true";
+          trigger = "UserPromptSubmit";
+        };
+      };
+    }
+    == [];
   kiroManualPrioritySilent = lib.all (config: evaluate "devenv" config == []) [
     {
       ai = {
@@ -467,6 +479,7 @@ in {
     ai-warnings-delivery = harness.mkTest "ai-warnings-delivery" (
       lib.all (row: assert lib.assertMsg (rowCase row) "warning row ${policy.key row}"; true) gaps
       && lib.all (case: assert lib.assertMsg (casePass case) "warning case ${lib.concatStringsSep "." case.path}"; true) cases
+      && lib.assertMsg kiroCommandHookSilent "a Kiro command hook does not warn about its unset agent prompt"
       && lib.assertMsg kiroManualPrioritySilent "Kiro manual warnings follow the selected trigger and native replacement"
       && lib.assertMsg effortSilent "reasoning effort warns where the factory closes the gap or no per-runtime remedy exists"
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"

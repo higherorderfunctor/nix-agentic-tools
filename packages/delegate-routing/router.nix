@@ -1,3 +1,6 @@
+# The always-on entries (`always = true`), rendered as the text delivered
+# through `ai.<runtime>.extraSystemPrompt.delegate-routing`; null when no
+# always-on entry is enabled.
 {
   entries,
   lib,
@@ -9,9 +12,6 @@
     (renderer.workflows true workflows)
   ]);
 in
-  lib.optionalAttrs (rendered != "") {
-    delegate-routing-router = {
-      description = "Load delegate-routing before delegating work";
-      text = "# Delegate routing\n\n${rendered}";
-    };
-  }
+  if rendered == ""
+  then null
+  else "# Delegate routing\n\n${rendered}"

@@ -82,9 +82,9 @@
   claudePairs = lib.concatMap (on: [
     (mkCase {
       expect = "delegate";
-      id = "claude-clamp-${label on}";
+      id = "claude-reminder-${label on}";
       runtime = "claude";
-      switches.ai.claude.delegationClampMitigation.enable = lib.mkForce on;
+      switches.ai.programs.delegate-routing.runtimes.claude.reminder.enable = lib.mkForce on;
       task = single;
     })
     (mkCase {
@@ -96,8 +96,8 @@
       id = "claude-ultracode-drain-${label on}";
       runtime = "claude";
       switches.ai = {
-        claude.delegationClampMitigation.enable = lib.mkForce true;
         claude.ultracodeOnLaunch = lib.mkForce true;
+        programs.delegate-routing.runtimes.claude.reminder.enable = lib.mkForce true;
         programs.delegate-routing.runtimes.claude.routing."Pool drain".enable = lib.mkForce on;
       };
       task = dependent;

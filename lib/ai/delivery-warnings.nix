@@ -149,8 +149,13 @@
       lib.optional (hook.action.type == "agent" && hook.timeout != null)
       (message ["ai" "kiro" "hooks" name "timeout"] "Agent hook actions have no subprocess timeout.")
       ++ lib.concatMap (field:
-        lib.optional (nonEmpty hook.action.${field})
-        (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
+        # `prompt` is a text-source record whose internal fields are never empty.
+          lib.optional (
+            if field == "prompt"
+            then aiCommon.hasContent hook.action.prompt
+            else nonEmpty hook.action.${field}
+          )
+          (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
       ignored
     )) (builtins.attrNames cfg.hooks));
   # `--trust-tools` reaches the chat binary on BOTH backends, so this is a

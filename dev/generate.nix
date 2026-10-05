@@ -525,7 +525,7 @@
     | Package | Description |
     |---------|-------------|
     | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-    | `delegate-routing-content` | Per-runtime model/effort sizing skills and a short routing rule |
+    | `delegate-routing-content` | Per-runtime model/effort sizing skills and always-on routing guidance |
     | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
     Content packages are derivations with `passthru.fragments` for
@@ -1089,38 +1089,6 @@
     </details>
 
     <details>
-    <summary><strong>Claude Delegation-Clamp Mitigation (off by default)</strong></summary>
-
-    Claude Code injects a system-prompt section telling the model not to use
-    subagents, workflows, or deep research "unless the user requested it". It is
-    gated on a **model capability**, not on your configuration — on for Opus 5 —
-    and no setting, flag, or environment variable turns it off. It never appears
-    in the transcript, so a session with delegation silently suppressed looks
-    identical to a normal one. It also directly contradicts
-    `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
-
-    Opting in installs a mitigation that patches nothing: a `UserPromptSubmit`
-    hook supplies the request that the clamp's own escape clause is asking for,
-    as user-side context. It is injected once per session and re-armed by a
-    `PreCompact` hook, so the cost is roughly 75 tokens per session rather than
-    per turn.
-
-    ```nix
-    ai.claude.delegationClampMitigation = {
-      enable = true;          # off by default; set true to enable
-      text = "…";             # the standing request — wording is load-bearing
-    };
-    ```
-
-    Upstream: [anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988).
-    A dated CI step re-surfaces this roughly every 90 days, once
-    `config/heron-brook-tripwire.json`'s `reviewBy` passes, so the mitigation
-    does not outlive its cause. See
-    `packages/claude-code/docs/heron-brook-clamp.md`.
-
-    </details>
-
-    <details>
     <summary><strong>Claude Memory-Collision Guard (off by default)</strong></summary>
 
     Concurrent Claude Code sessions share one agent-memory directory and neither
@@ -1206,7 +1174,9 @@
     "Orchestrator session" entry with `routing."Orchestrator session".enable`.
     Workflows expose named `steps` with the same entry fields, so a consumer can
     change one step.
-    Entries with `always = true` become runtime rules; other entries live in the skill.
+    Entries with `always = true` are appended to each runtime's own system prompt
+    through `ai.<runtime>.extraSystemPrompt.delegate-routing`; other entries live in
+    the skill.
     Ordering uses named `before` and `after` edges. Missing or disabled anchors are
     ignored, cycles fail, and ties have no promised order.
 
@@ -1223,6 +1193,16 @@
     `enable = false`. Pick the highest-version model matching a family's pattern from the live
     runtime list, using its own spelling. Usage commands come from the existing
     technique catalog. Both Home Manager and devenv expose the same options.
+
+    `reminder` (on by default) injects one first-person line on every turn through
+    a `UserPromptSubmit` hook: Claude, Codex and Kiro on both backends, Kimchi on
+    devenv only. The default asks the model to load the skill and follow its
+    always-on guidance, and grants permission for subagents, workflows and deep
+    research, which answers Claude Code's undocumented `heron_brook` delegation
+    clamp ([anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988)).
+    Replace it with `reminder.text` or `reminder.source`, or turn it off per runtime
+    with `runtimes.<runtime>.reminder.enable = false`. See
+    `packages/claude-code/docs/heron-brook-clamp.md` before rewording it.
 
     </details>
 
