@@ -1202,9 +1202,9 @@ in {
             then option.type.description
             else optionShape option)
           (lib.filterAttrs (name: _: name != "_module") options);
-        programOptions = evaluated: evaluated.options.ai.programs.semble.type.getSubOptions [];
+        programOptions = evaluated: evaluated.options.ai.programs.semble;
         programShape = evaluated: optionShape (programOptions evaluated);
-        runtimeShape = evaluated: optionShape ((programOptions evaluated).settings.codex.type.getSubOptions []);
+        runtimeShape = evaluated: optionShape (programOptions evaluated).settings.codex;
         hm = evalHm {};
         devenv = evalDevenv {};
       in

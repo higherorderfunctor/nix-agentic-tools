@@ -1,7 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — programs and runtime settings are plain option
+> trees; whole-record priorities apply independently to each leaf.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -771,7 +771,11 @@ tree. The factory projects that into `ai.programs.<name>` plus only the listed
 `ai.programs.<name>.settings.<runtime>` paths. Runtime leaves are nullable and
 resolve independently through `resolveOverride`: null inherits the portable
 value and a non-null value wins. This is the scalar B4 contract, not keyed-pool
-tombstone behavior.
+tombstone behavior. The program and runtime settings are plain option trees, not
+submodule options. Whole-record `mkDefault` and `mkForce` apply to each portable
+leaf independently and cannot override a runtime settings leaf. `settings` is
+reserved for runtime overrides. These trees have no root options-doc entry;
+their leaf entries remain documented.
 
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
