@@ -428,8 +428,9 @@ The MCP adapter's scaffold, preset and install commands write their own project
 `.mcp.json` or user `~/.config/mcp/mcp.json`, not the Kimchi-owned `mcp.json`.
 Those destinations need their own owner if they are to be managed from Nix.
 `kimchi install` writes `packages` into harness `settings.json`; under Home
-Manager that write does not persist. Declare the package's settings from Nix
-instead.
+Manager that write does not persist when `packages` is declared from Nix
+(including via `extensions`). Declare those packages in
+`native.harnessSettings.packages` instead.
 
 A normalized record renders as `description:` frontmatter plus the instructions
 body, with no `name:`. Its Claude/Copilot `tools` list is dropped (Kimchi
@@ -457,8 +458,9 @@ the same one Claude's settings use. It takes the default facts and lands as a
 symlink. PermissionRequest is not a Kimchi event and the reader skips unknown
 events silently, so the factory leaves it out. Home Manager has no lifecycle
 sink it can own. A configured pi package's `hooks/hooks.json` would make Home
-Manager own `packages` in harness `settings.json` and clobber `kimchi install`.
-The opt-in Claude Code hook adapter (`extensions.claude-code-hook-adapter`,
+Manager own the `packages` leaf in harness `settings.json` for every `ai.hooks`
+user, rather than only consumers who opt into package ownership. The opt-in
+Claude Code hook adapter (`extensions.claude-code-hook-adapter`,
 `defaultEnabled: false`, `src/resources/definitions.ts:75-80`) reads
 `~/.claude/settings.json`
 (`src/extensions/claude-code-hook-adapter/definition.ts:25-28`), which Claude's
@@ -569,10 +571,10 @@ requirement; keeping it would advertise a toggle without a factory. See
 [external workflows](kimchi-workflows.md) for the pinned source evidence,
 runtime payload and CI contracts.
 
-The opt-in `kimchi-docs` skill links the external source build as `workflows`,
-with directions to README, docs, examples, src and dist. Both module backends
-use the repository package roots, so a host without an overlay and the module
-harness's stub executable receive the same pin.
+The opt-in `kimchi-docs` skill links the pinned source as `workflows`, with
+directions to README, docs, examples and src. Both module backends use the
+repository package roots, so a host without an overlay and the module harness's
+stub executable receive the same pin.
 
 The package builds upstream's Bun executable and its Go proxy helper from the
 same pinned release. That source is pinned once, as `extraction.kimchiSource` in
@@ -674,11 +676,15 @@ a directory link under the harness: Home Manager delivers
 absolute top-level links into the package, so generated-tree delivery copies
 only links and leaves the dependency payload in its original store path. Harness
 settings load those links through `packages = [ "extensions/<key>" ];`, sorted
-by key, alongside raw `native.harnessSettings.packages` entries. Pi reads the
-package manifest's `pi.extensions`; Nix carries no extension entry metadata.
-Removing a key withdraws its link and settings entry. Delivery requires
-`ai.kimchi.enable`. Devenv's project settings engage the existing exact-cwd
-launcher guard and require project approval.
+by key, alongside raw `native.harnessSettings.packages` entries. Under Home
+Manager, a non-empty `extensions` map or any `native.harnessSettings.packages`
+declaration owns the whole harness `packages` list, replacing packages added
+with `kimchi install` on activation; declare those packages in
+`native.harnessSettings.packages`. Pi reads the package manifest's
+`pi.extensions`; Nix carries no extension entry metadata. Removing a key
+withdraws its link and settings entry. Delivery requires `ai.kimchi.enable`.
+Devenv's project settings engage the existing exact-cwd launcher guard and
+require project approval.
 
 Pi 0.85.1 resolves local package sources from its agent directory for user scope
 and `<cwd>/<CONFIG_DIR_NAME>` for project scope

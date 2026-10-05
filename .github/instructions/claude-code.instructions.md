@@ -51,9 +51,9 @@ user-scope):
   whole-directory links work for these: recursive linking materializes a real
   directory of per-file symlinks, and Claude Code's `agents/` and `commands/`
   scanners accept only regular files, so every agent and command would be
-  silently dropped. `mkPluginEntry` uses the shared
-  `lib.ai.linkDirectory pkgs name source` builder for top-level links and
-  synthesizes `.claude-plugin/plugin.json` when the source has none.
+  silently dropped. `mkPluginEntry` uses the shared `lib/link-directory.nix`
+  builder (exported as `lib.ai.linkDirectory pkgs name source`) for top-level
+  links and synthesizes `.claude-plugin/plugin.json` when the source has none.
 
 ### `<name>` is the attribute key
 
