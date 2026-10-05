@@ -3,6 +3,7 @@
 {
   harness,
   lib,
+  pkgs,
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
@@ -516,7 +517,8 @@
       && !(lib.hasInfix "### Verify the result" claude)
       && !(lib.hasInfix "### Size the work" stub)
       && !(lib.hasInfix "## Common workflows" claude)
-      && lib.trim (ruleText alwaysDisabled) == "# Delegate routing"
+      && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)
+      && !(alwaysDisabled.config.ai.codex.rules ? delegate-routing-router)
       && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")
       && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-routing-router.text == stub) runtimes
     );
@@ -611,6 +613,14 @@
           };
         }).config.ai.programs.delegate-routing.workflows.Consumer.steps.Empty.text
         true)).success
+      && !(builtins.tryEval (builtins.deepSeq
+        (change {
+          ai.programs.delegate-routing.workflows.Consumer.steps.X = {
+            always = true;
+            text = "X";
+          };
+        }).config.ai.programs.delegate-routing.workflows
+        true)).success
       && !(builtins.tryEval (builtins.deepSeq (ruleText cyclicRouting) true)).success
       && !(builtins.tryEval (builtins.deepSeq (ruleText cyclicWorkflow) true)).success
       && lib.all (edge: !(builtins.tryEval (builtins.deepSeq (selfCycle edge) true)).success) ["after" "before"]
@@ -621,7 +631,43 @@
   };
 in {
   checks =
-    checkBackend {
+    {
+      # tryEval cannot expose the diagnostic; evaluate the resolver in a subprocess.
+      module-delegate-routing-cycle-message = let
+        probe = pkgs.writeText "delegate-routing-cycle.nix" ''
+          { selfCycle ? false }:
+          let
+            lib = import ${pkgs.path}/lib;
+            entries = import ${../lib/resolve-entries.nix} { inherit lib; };
+            entry = after: { inherit after; before = []; enable = true; };
+          in entries.sort "delegate-routing.routing" (
+            if selfCycle then { Self = entry ["Self"]; }
+            else { Alpha = entry ["Beta"]; Beta = entry ["Alpha"]; }
+          )
+        '';
+      in
+        pkgs.runCommandLocal "module-test-delegate-routing-cycle-message" {
+          nativeBuildInputs = [pkgs.nix];
+        } ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          export NIX_STATE_DIR="$TMPDIR/nix-state"
+          export USER="''${USER:-nixbld}"
+          mkdir -p "$NIX_STATE_DIR/profiles/per-user/$USER"
+          if nix-instantiate --eval --strict ${probe} --arg selfCycle false >actual.stdout 2>actual.stderr; then
+            echo "FAIL: routing cycle unexpectedly succeeded" >&2
+            exit 1
+          fi
+          grep -F 'delegate-routing.routing: ordering cycle involving Alpha, Beta' actual.stderr
+          if nix-instantiate --eval --strict ${probe} --arg selfCycle true >actual.stdout 2>actual.stderr; then
+            echo "FAIL: routing self-cycle unexpectedly succeeded" >&2
+            exit 1
+          fi
+          grep -F 'delegate-routing.routing: ordering cycle involving Self' actual.stderr
+          touch "$out"
+        '';
+    }
+    // checkBackend {
       name = "devenv";
       evaluate = evalDevenv;
     }
