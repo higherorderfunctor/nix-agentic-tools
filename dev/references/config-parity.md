@@ -41,8 +41,9 @@ them per-CLI.
 **Environment vars** -- `ai.environmentVariables` is baked into the launcher
 wrapper of every runtime that has one (Codex, Copilot, Kimchi, Kiro), on both
 backends. It never touches the Home Manager session or the devenv shell. Claude
-has no wrapper and does not consume the pool: its variables are
-`ai.claude.native.settings.env`, written into `.claude/settings.json`.
+does not consume the pool (its wrapper carries only `ai.extraSystemPrompt`): its
+variables are `ai.claude.native.settings.env`, written into
+`.claude/settings.json`.
 
 **Hooks** -- `ai.hooks` is the portable pool. It reaches Claude
 (`.claude/settings.json`) and Codex (`.codex/hooks.json`) on both backends, and

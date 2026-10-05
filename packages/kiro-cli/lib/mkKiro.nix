@@ -415,12 +415,21 @@
   # unless the record overrides it. The delivery-only `format` field never
   # reaches either Kiro file format. Null optionals and empty collections are
   # dropped so the emitted file stays minimal.
-  normalizeAgent = attrName: record: let
+  #
+  # `extraSystemPrompt` (joined text or null) follows the agent's own prompt.
+  # A Kiro agent prompt appends to the vendor instructions rather than
+  # replacing them (probed 2026-10-05), so an agent with no prompt of its own
+  # carries the extra text alone.
+  normalizeAgent = extraSystemPrompt: attrName: record: let
+    prompts = lib.filter (prompt: prompt != null) [(enabledTextOrNull record.prompt) extraSystemPrompt];
     named =
       removeAttrs record ["format"]
       // {
         name = record.name or null;
-        prompt = enabledTextOrNull record.prompt;
+        prompt =
+          if prompts == []
+          then null
+          else lib.concatStringsSep "\n\n" prompts;
         welcomeMessage = enabledTextOrNull record.welcomeMessage;
       };
     withName =
@@ -452,8 +461,8 @@
       !(frontmatterScalar value || (lib.isList value && builtins.all frontmatterScalar value)))
     (removeAttrs normalized ["prompt"]));
 
-  mkNativeAgentPlan = name: record: let
-    normalized = normalizeAgent name record;
+  mkNativeAgentPlan = extraSystemPrompt: name: record: let
+    normalized = normalizeAgent extraSystemPrompt name record;
   in {
     inherit normalized record;
     nestedFields = markdownNestedFields normalized;
@@ -1216,6 +1225,7 @@ in
       "agents"
       "context"
       "environmentVariables"
+      "extraSystemPrompt"
       "lspServers"
       "mcpServers"
       "rules"
@@ -1606,6 +1616,7 @@ in
     config = {
       backend,
       cfg,
+      extraSystemPrompt,
       mergedEnvironmentVariables,
       nativeAgents,
       rawAgents,
@@ -1622,7 +1633,7 @@ in
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       isHm = backend == "hm";
-      nativeAgentPlans = lib.mapAttrs mkNativeAgentPlan nativeAgents;
+      nativeAgentPlans = lib.mapAttrs (mkNativeAgentPlan extraSystemPrompt) nativeAgents;
       settingsDir = "${cfg.configDir}/settings";
       kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
       # "Did the consumer actually write this" test, shared with

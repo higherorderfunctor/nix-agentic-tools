@@ -1,4 +1,4 @@
-# Declares cross-app options (ai.context, ai.mcpServers,
+# Declares cross-app options (ai.context, ai.extraSystemPrompt, ai.mcpServers,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks), and formatting and guards: how
 # every runtime's generated files are formatted and checked.
 #
@@ -245,6 +245,51 @@ in {
           '';
         });
 
+    extraSystemPrompt = lib.mkOption {
+      type = lib.types.attrsOf aiCommon.optionalContentModule;
+      default = {};
+      description = ''
+        Text appended to each enabled runtime's own system prompt, keyed by a
+        name of your choosing. Entries are joined in attribute-name order,
+        separated by a blank line; there is no other ordering. Each entry is
+        the same `text` or `source` record as `ai.context`. Per-runtime
+        entries at `ai.<runtime>.extraSystemPrompt.<name>` replace root
+        entries at the same key; set `enable = false` to suppress an
+        inherited entry for that runtime. With no entry, nothing is delivered
+        and no runtime changes.
+
+        Delivery is per runtime, on both backends:
+        - Claude: the managed launcher passes
+          `--append-system-prompt-file <store file>`.
+        - Codex: `developer_instructions` in `config.toml`, at `mkDefault`, so
+          an explicit `ai.codex.native.settings.developer_instructions`
+          replaces it wholesale. To withhold an entry from Codex alone, set
+          `ai.codex.extraSystemPrompt.<name>.enable = false`.
+        - Kimchi: the managed launcher passes
+          `--append-system-prompt <store file>` first in argv. Kimchi then
+          skips its own `APPEND_SYSTEM.md` discovery, and its own
+          subcommands (`kimchi setup`, `kimchi mcp`, …) no longer dispatch
+          through the wrapper, because Kimchi reads them only from the first
+          argument.
+        - Kiro: appended to the `prompt` of every typed agent
+          (`ai.kiro.native.agents`, which normalized `ai.agents` lower into).
+          Raw agent files are delivered verbatim, and Kiro's built-in default
+          agent has no declarative surface, so neither receives it.
+
+        Copilot is an explicit exclusion: it has no lossless native mapping
+        for an appended system prompt (its instruction files are context,
+        which `ai.context` already delivers), so
+        `ai.copilot.extraSystemPrompt` does not exist and root entries do not
+        reach it.
+      '';
+      example = lib.literalExpression ''
+        {
+          house-style.text = "Answer in plain language.";
+          routing.source = ./routing.md;
+        }
+      '';
+    };
+
     mcpServers = lib.mkOption {
       type = lib.types.attrsOf (lib.types.nullOr (lib.types.submoduleWith {
         modules = [(import ./mcpServer/commonSchema.nix)];
@@ -486,9 +531,9 @@ in {
         thing again: it filters what SPAWNED commands inherit, not what
         Codex itself runs with.
 
-        Claude does NOT consume this pool — it has no wrapper here, and
-        `ai.claude.native.settings.env` is its native equivalent (written into
-        `.claude/settings.json`).
+        Claude does NOT consume this pool — its launcher wrapper carries only
+        `ai.extraSystemPrompt`, and `ai.claude.native.settings.env` is its
+        native equivalent (written into `.claude/settings.json`).
       '';
     };
 
