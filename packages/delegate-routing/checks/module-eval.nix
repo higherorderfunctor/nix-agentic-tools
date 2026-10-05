@@ -477,10 +477,10 @@
         "Effective model pin"
         "Effective effort pin"
       ]
-      && capabilityCell codex "codex exec" 5 == "acp: unknown; headless: unknown; interactive: unknown"
+      && capabilityCell codex "codex exec" 5 == "acp: unknown; headless: supported; interactive: unknown"
       && capabilityCell codex "codex exec" 6 == "acp: unknown; headless: unknown; interactive: unknown"
       && capabilityCell codex "codex exec" 7 == "acp: unknown; headless: unknown; interactive: unknown"
-      && capabilityCell codex "codex exec" 8 == "acp: unknown; headless: unknown; interactive: unknown"
+      && capabilityCell codex "codex exec" 8 == "acp: unknown; headless: supported; interactive: unknown"
       && capabilityCell codex "codex exec" 9 == "acp: unknown; headless: unknown; interactive: unknown"
       && capabilityCell codex "codex exec" 10 == "acp: unknown; headless: unknown; interactive: unknown"
       && capabilityCell claude "Agent" 10 == "acp: unknown; headless: unknown; interactive: unknown"
