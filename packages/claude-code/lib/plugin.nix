@@ -1,3 +1,4 @@
+# cspell:ignore dotglob
 # Claude plugins as personal-plugin directories.
 #
 # Claude Code 2.1.157+ loads every directory under `<configDir>/skills/` that
@@ -24,6 +25,7 @@ in {
       buildCommand =
         old.buildCommand
         + ''
+          shopt -s dotglob nullglob
           if [[ ! -e $out/.claude-plugin/plugin.json ]]; then
             # Replace the linked manifest directory with a real one so the
             # generated manifest can sit beside any existing contents.

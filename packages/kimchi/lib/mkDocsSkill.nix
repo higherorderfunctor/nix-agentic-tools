@@ -103,13 +103,13 @@
 
     ## Workflows source, documentation and examples
 
-    The `workflows` directory beside this file is the source-built package for
+    The `workflows` directory beside this file is the pinned source for
     `@kimchi-dev/kimchi-workflows`, pinned independently of Kimchi and loaded
     externally via `ai.kimchi.extensions.workflows`. It is offline; no clone is needed.
     Read `workflows/README.md` first, then search `workflows/docs` for workflow
     authoring and execution guidance, `workflows/examples` for working examples,
-    and `workflows/src` for implementation details. `workflows/dist` contains the
-    built JavaScript. These paths are relative to this skill's directory.
+    and `workflows/src` for implementation details. These paths are relative to
+    this skill's directory.
 
     ## When this snapshot is the right source, and when it is not
 

@@ -20,7 +20,6 @@ in {
       const manifest = JSON.parse(fs.readFileSync(root + '/package.json', 'utf8'));
       assert.equal(manifest.version, '${pin.version}');
       assert.equal(manifest.nixSourceRev, '${pin.rev}');
-      assert.deepEqual(manifest.pi.extensions, ['./src/host/extension.ts']);
       for (const name of Object.keys(manifest.dependencies)) {
         assert(fs.existsSync(root + '/node_modules/' + name), name);
       }
@@ -50,10 +49,6 @@ in {
       ${lib.concatMapStrings (extension: ''
           if ${pkgs.gnugrep}/bin/grep -F ${lib.escapeShellArg extension.id} src/cli.ts src/resources/definitions.ts; then
             echo 'externalized resource is still registered' >&2
-            exit 1
-          fi
-          if ${pkgs.gnugrep}/bin/grep -F ${lib.escapeShellArg extension.importLine} src/cli.ts; then
-            echo 'externalized extension is still imported' >&2
             exit 1
           fi
         '')

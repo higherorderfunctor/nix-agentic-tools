@@ -45,11 +45,15 @@ a directory link under the harness: Home Manager delivers
 absolute top-level links into the package, so generated-tree delivery copies
 only links and leaves the dependency payload in its original store path. Harness
 settings load those links through `packages = [ "extensions/<key>" ];`, sorted
-by key, alongside raw `native.harnessSettings.packages` entries. Pi reads the
-package manifest's `pi.extensions`; Nix carries no extension entry metadata.
-Removing a key withdraws its link and settings entry. Delivery requires
-`ai.kimchi.enable`. Devenv's project settings engage the existing exact-cwd
-launcher guard and require project approval.
+by key, alongside raw `native.harnessSettings.packages` entries. Under Home
+Manager, a non-empty `extensions` map or any `native.harnessSettings.packages`
+declaration owns the whole harness `packages` list, replacing packages added
+with `kimchi install` on activation; declare those packages in
+`native.harnessSettings.packages`. Pi reads the package manifest's
+`pi.extensions`; Nix carries no extension entry metadata. Removing a key
+withdraws its link and settings entry. Delivery requires `ai.kimchi.enable`.
+Devenv's project settings engage the existing exact-cwd launcher guard and
+require project approval.
 
 Pi 0.85.1 resolves local package sources from its agent directory for user scope
 and `<cwd>/<CONFIG_DIR_NAME>` for project scope

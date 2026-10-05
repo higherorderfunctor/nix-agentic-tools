@@ -804,7 +804,7 @@ in
       extensions = lib.mkOption {
         type = with lib.types; attrsOf (addCheck package lib.isDerivation);
         default = {};
-        description = "Pi extension packages, linked under the harness extensions directory and loaded through harness settings packages. Each key names its link; presence enables the package.";
+        description = "Pi extension packages, linked under the harness extensions directory and loaded through harness settings packages. Each key names its link; presence enables the package. Under Home Manager, a non-empty extensions map or any native.harnessSettings.packages declaration owns the whole harness packages list, replacing packages added with kimchi install on activation; declare those packages in native.harnessSettings.packages.";
         example = lib.literalExpression "{ workflows = pkgs.ai.kimchiExtensions.kimchi-workflows; }";
       };
       permissions = lib.mkOption {

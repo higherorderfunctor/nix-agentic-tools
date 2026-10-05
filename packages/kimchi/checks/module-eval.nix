@@ -322,7 +322,7 @@ in {
               && builtins.hasContext file.source
               && !(file.recursive or false))
             names;
-          rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "/string/package";}).config.ai.kimchi.extensions true);
+          rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "${workflows}";}).config.ai.kimchi.extensions true);
         in
           lib.all (evaluated: lib.all (assertion: assertion.assertion) evaluated.config.assertions) [empty one two]
           && extensionFiles empty == {}
