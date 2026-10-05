@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — programs and runtime settings are plain option
+> trees; whole-record priorities apply independently to each leaf.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -778,7 +778,11 @@ tree. The factory projects that into `ai.programs.<name>` plus only the listed
 `ai.programs.<name>.settings.<runtime>` paths. Runtime leaves are nullable and
 resolve independently through `resolveOverride`: null inherits the portable
 value and a non-null value wins. This is the scalar B4 contract, not keyed-pool
-tombstone behavior.
+tombstone behavior. The program and runtime settings are plain option trees, not
+submodule options. Whole-record `mkDefault` and `mkForce` apply to each portable
+leaf independently and cannot override a runtime settings leaf. `settings` is
+reserved for runtime overrides. These trees have no root options-doc entry;
+their leaf entries remain documented.
 
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
@@ -1802,8 +1806,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — programs and runtime settings are plain option
+> trees; whole-record priorities apply independently to each leaf.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1858,11 +1862,14 @@ keys and participates in native option-priority rules only after normalized
 values have been resolved.
 
 `lib.ai.program.mkProgram` applies the same rule to every leaf of a program
-specification. Root declarations retain their ordinary types and defaults;
-runtime declarations are generated as nullable versions of those declarations.
-The program module receives one recursively resolved record per supported
-runtime. The specification's `supportedRuntimes` list is the single capability
-source: unsupported `ai.programs.<pkg>.settings.<runtime>` paths do not exist.
+specification. Program roots and runtime settings are plain option trees rather
+than submodule options; whole-record priorities apply independently to each
+leaf. The portable specification cannot declare the reserved name `settings`.
+Root declarations retain their ordinary types and defaults; runtime declarations
+are generated as nullable versions of those declarations. The program module
+receives one recursively resolved record per supported runtime. The
+specification's `supportedRuntimes` list is the single capability source:
+unsupported `ai.programs.<pkg>.settings.<runtime>` paths do not exist.
 
 Do not add a sibling runtime selector. Runtime program `enable = false` is the
 negation mechanism, and an individual runtime feature may override the portable
