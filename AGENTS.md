@@ -67,6 +67,7 @@ for it. When several entries match, their guidance composes.
     - `packages/copilot-cli/lib/mkCopilot.nix`
     - `packages/copilot-cli/modules/**`
     - `packages/delegate-routing/modules/**`
+    - `packages/git-worktrees/modules/**`
     - `packages/kimchi/lib/mkKimchi.nix`
     - `packages/kiro-cli/lib/mkKiro.nix`
     - `packages/kiro-cli/modules/**`
