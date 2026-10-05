@@ -17,18 +17,7 @@
   entryDefaults = import ../lib/entries.nix {inherit lib;};
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
   entries = import ../lib/resolve-entries.nix {inherit lib;};
-  entryOptions = {
-    routing = lib.mkOption {
-      type = lib.types.attrsOf entryTypes.entryType;
-      default = {};
-      description = "Named routing guidance; runtime names atomically replace portable names.";
-    };
-    workflows = lib.mkOption {
-      type = lib.types.attrsOf entryTypes.workflowType;
-      default = {};
-      description = "Named workflows; runtime headers replace portable headers and steps compose by name.";
-    };
-  };
+  entryOptions = entryTypes.options;
   resolved = runtime: let
     local = portable.runtimes.${runtime};
   in {

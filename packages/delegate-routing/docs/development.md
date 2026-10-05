@@ -1,8 +1,8 @@
 # Delegate routing package
 
 > **Last verified:** 2026-10-04 — named routing and workflow entries compose by
-> runtime under `runtimes`, with plain program option trees and explicit
-> ordering and delivery.
+> runtime under `runtimes`; workflow steps inherit placement, empty routers are
+> omitted, and content defaults share one option evaluation.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -19,17 +19,18 @@ always-on too. The "Orchestrator session" catalog entry ships disabled. Policy
 belongs in these entries rather than renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
-routing entry fields. The package ships disabled "Review: one reviewer" and
-"Review: prosecute, defend, judge" workflows. Enable a workflow, then add,
-replace, disable or reorder a step by key. Both workflows read one shared Rubric
-source. A workflow can have introductory text or only steps; an enabled step
-needs content.
+routing entry fields except `always`; the workflow's `always` places its steps.
+The package ships disabled "Review: one reviewer" and "Review: prosecute,
+defend, judge" workflows. Enable a workflow, then add, replace, disable or
+reorder a step by key. Both workflows read one shared Rubric source. A workflow
+can have introductory text or only steps; an enabled step needs content.
 
 Entries with `always = true` render through the existing per-runtime `ai.rules`
 fan-out. Other entries render in the generated skill. A workflow's `always`
 selects the destination for its header and numbered steps together; steps retain
 their order within that workflow. The always-on stub tells the agent to load the
-skill before delegation. Keep model tables and harness details in the skill.
+skill before delegation. When the always-on render is empty, no router rule is
+emitted. Keep model tables and harness details in the skill.
 
 Within one scope, named submodules merge by key and package fields use
 `mkDefault`. An ordinary consumer definition overrides a shipped field while
