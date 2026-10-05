@@ -1,6 +1,12 @@
-{
+# Shared by both backends. `hookRuntimes` names the runtimes whose
+# UserPromptSubmit hook this backend can deliver: Kimchi reads lifecycle hooks
+# only from a trusted project's `.kimchi/hooks.json`, so Home Manager has no
+# file to put its reminder in.
+{hookRuntimes}: {
   config,
   lib,
+  options,
+  pkgs,
   ...
 }: let
   # Copilot's sizing controls are not established.
@@ -18,6 +24,8 @@
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
   entries = import ../lib/resolve-entries.nix {inherit lib;};
   entryOptions = entryTypes.options;
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
+  reminder = import ../lib/reminder.nix {inherit lib pkgs;};
   resolved = runtime: let
     local = portable.runtimes.${runtime};
   in {
@@ -33,6 +41,21 @@
     then config.ai.programs.delegate-routing.enable
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
+  reminderEnabled = runtime: let
+    local = portable.runtimes.${runtime}.reminder.enable;
+  in
+    if local == null
+    then portable.reminder.enable
+    else local;
+  # The always-on entries for one runtime, or null when none is enabled.
+  alwaysText = runtime:
+    import ../router.nix {
+      inherit lib;
+      entries = (resolved runtime).routing;
+      inherit (resolved runtime) workflows;
+    };
+  # Per-runtime writes need that runtime's module in this evaluation.
+  present = pool: lib.filter (runtime: lib.hasAttrByPath ["ai" runtime pool] options);
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.techniques);
   flattenedFamilies = familyFunctions.flatten portable.families;
@@ -76,6 +99,11 @@
         default = defaults.models.${runtime};
         description = "Alternative family selectors. Each non-empty field must match; an empty selector is invalid. Kimchi and Kiro require an explicit selection when their skill is enabled.";
       };
+      reminder.enable = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "Whether this runtime receives the per-turn reminder. null inherits `ai.programs.delegate-routing.reminder.enable`.";
+      };
       techniques = lib.mkOption {
         type = lib.types.attrsOf techniqueType;
         default = {};
@@ -117,10 +145,36 @@ in {
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
       };
+      reminder = lib.mkOption {
+        type = aiTypes.optionalTextSource {
+          defaultContent.text = reminder.defaultText;
+          description = "the per-turn reminder injected as user-side context";
+          enableDefault = true;
+        };
+        default = {};
+        defaultText = lib.literalExpression (lib.generators.toPretty {} {
+          enable = true;
+          text = reminder.defaultText;
+        });
+        description = ''
+          A short standing request, in the user's voice, injected on every turn by a
+          `UserPromptSubmit` hook as `additionalContext`: Claude, Codex and Kiro on
+          both backends, Kimchi on devenv only (Home Manager has no Kimchi hook
+          file). Disable it per runtime with `runtimes.<runtime>.reminder.enable`.
+
+          The default asks the model to load the delegate-routing skill and follow
+          its always-on guidance, and grants permission for subagents, workflows and
+          deep research. That grant satisfies the "unless the user requested it"
+          clause of Claude Code's `heron_brook` delegation clamp, which a
+          system-attributed channel was measured not to do; see
+          `packages/claude-code/docs/heron-brook-clamp.md` before rewording it.
+          It is cumulative context: one line per turn.
+        '';
+      };
       runtimes = lib.genAttrs supportedRuntimes runtimeOptions;
     };
 
-  # Emit one portable enable option and skills/rules for each supported runtime.
+  # Emit one portable enable option and a skill for each supported runtime.
   imports = [
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "delegate-routing";
@@ -134,12 +188,6 @@ in {
           inherit (config.ai.programs.delegate-routing.runtimes.${runtime}) extraRuntimes manualExternalDelegates;
         }}";
       };
-      rules = {runtime, ...}:
-        import ../router.nix {
-          inherit lib;
-          entries = (resolved runtime).routing;
-          inherit (resolved runtime) workflows;
-        };
     })
   ];
 
@@ -157,6 +205,19 @@ in {
           techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
         });
       }
+      # Always-on entries reach each runtime's own system prompt.
+      (lib.genAttrs (present "extraSystemPrompt" supportedRuntimes) (runtime: let
+        text = alwaysText runtime;
+      in
+        lib.mkIf (programEnabled runtime && text != null) {
+          extraSystemPrompt.delegate-routing = lib.mapAttrs (_: lib.mkDefault) {
+            enable = true;
+            inherit text;
+          };
+        }))
+      (lib.genAttrs (present "hooks" hookRuntimes) (runtime:
+        lib.mkIf (programEnabled runtime && reminderEnabled runtime)
+        (reminder.hooks.${runtime} portable.reminder.text)))
     ];
     assertions =
       [

@@ -52,7 +52,7 @@
     codex = readSkill result "codex";
     kimchi = readSkill result "kimchi";
     kiro = readSkill result "kiro";
-    stub = result.config.ai.claude.rules.delegate-routing-router.text;
+    stub = result.config.ai.claude.extraSystemPrompt.delegate-routing.text;
     change = config: evaluate (lib.recursiveUpdate scenario config);
     skill = config: readSkill (change config) "claude";
     passes = evaluation: lib.all (item: item.assertion) evaluation.config.assertions;
@@ -65,6 +65,25 @@
       ai.programs.delegate-routing.enable = true;
       ai.programs.delegate-routing.runtimes.codex.enable = false;
     };
+    # Kimchi has no Home Manager hook file, so only devenv delivers its reminder.
+    hookRuntimes =
+      if name == "hm"
+      then lib.remove "kimchi" runtimes
+      else runtimes;
+    reminderCommands = evaluation: runtime:
+      if runtime == "kiro"
+      then lib.optional (evaluation.config.ai.kiro.hooks ? delegate-routing-reminder) evaluation.config.ai.kiro.hooks.delegate-routing-reminder.action.command
+      else lib.concatMap (block: map (handler: handler.command) block.hooks) (evaluation.config.ai.${runtime}.hooks.UserPromptSubmit or []);
+    hasReminder = evaluation: runtime: lib.any (lib.hasInfix "delegate-routing-reminder") (reminderCommands evaluation runtime);
+    reminderOff = change {ai.programs.delegate-routing.reminder.enable = false;};
+    reminderOnlyClaude = change {
+      ai.programs.delegate-routing = {
+        reminder.enable = false;
+        runtimes.claude.reminder.enable = true;
+      };
+    };
+    reminderOffForCodex = change {ai.programs.delegate-routing.runtimes.codex.reminder.enable = false;};
+    reminderCustom = change {ai.programs.delegate-routing.reminder.text = "CUSTOM REMINDER";};
     manualScenario.ai = {
       claude.enable = true;
       kiro.enable = lib.mkForce false;
@@ -151,7 +170,7 @@
     # Technique, kind and declared pin controls, without table padding.
     techniqueCells = text: technique: lib.sublist 1 4 (map lib.trim (lib.splitString "|" (techniqueRow text technique)));
     capabilityCell = text: technique: index: builtins.elemAt (map lib.trim (lib.splitString "|" (techniqueRow text technique))) (index + 1);
-    ruleText = value: value.config.ai.claude.rules.delegate-routing-router.text;
+    ruleText = value: value.config.ai.claude.extraSystemPrompt.delegate-routing.text;
     ordered = text: names: let
       headings = lib.filter (line: lib.hasPrefix "### " line) (lib.splitString "\n" text);
       selected = lib.filter (line: lib.elem (lib.removePrefix "### " line) names) headings;
@@ -536,10 +555,10 @@
     );
     "module-delegate-routing-${name}-overrides" = mkTest "delegate-routing-${name}-overrides" (
       !(disabled.config.ai.codex.skills ? delegate-routing)
-      && !(disabled.config.ai.codex.rules ? delegate-routing-router)
+      && !(disabled.config.ai.codex.extraSystemPrompt ? delegate-routing)
       && disabled.config.ai.claude.skills ? delegate-routing
       && !(result.config.ai.skills ? delegate-routing)
-      && !(result.config.ai.rules ? delegate-routing-router)
+      && !(result.config.ai.extraSystemPrompt ? delegate-routing)
     );
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
@@ -555,10 +574,23 @@
       && !(lib.hasInfix "### Verify the result" claude)
       && !(lib.hasInfix "### Size the work" stub)
       && !(lib.hasInfix "## Common workflows" claude)
-      && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)
-      && !(alwaysDisabled.config.ai.codex.rules ? delegate-routing-router)
+      && !(alwaysDisabled.config.ai.claude.extraSystemPrompt ? delegate-routing)
+      && !(alwaysDisabled.config.ai.codex.extraSystemPrompt ? delegate-routing)
       && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")
-      && lib.all (runtime: result.config.ai.${runtime}.rules.delegate-routing-router.text == stub) runtimes
+      && lib.all (runtime: result.config.ai.${runtime}.extraSystemPrompt.delegate-routing.text == stub) runtimes
+    );
+    "module-delegate-routing-${name}-reminder" = mkTest "delegate-routing-${name}-reminder" (
+      result.config.ai.programs.delegate-routing.reminder.enable
+      && hasLoadInstruction result.config.ai.programs.delegate-routing.reminder.text
+      && lib.all (hasReminder result) hookRuntimes
+      && lib.all (runtime: !(hasReminder result runtime)) (lib.subtractLists hookRuntimes runtimes)
+      && lib.all (runtime: !(hasReminder reminderOff runtime)) runtimes
+      && hasReminder reminderOnlyClaude "claude"
+      && !(hasReminder reminderOnlyClaude "codex")
+      && !(hasReminder reminderOffForCodex "codex")
+      && hasReminder reminderOffForCodex "claude"
+      && !(hasReminder disabled "codex")
+      && reminderCommands reminderCustom "claude" != reminderCommands result "claude"
     );
     "module-delegate-routing-${name}-routing-consumer" = mkTest "delegate-routing-${name}-routing-consumer" (
       !(lib.hasInfix "### Size the work" (readSkill routingDisabled "claude"))
@@ -574,7 +606,7 @@
       lib.hasInfix "CLAUDE GUIDANCE" (readSkill runtimeRouting "claude")
       && !(lib.hasInfix "PORTABLE GUIDANCE" (readSkill runtimeRouting "claude"))
       && !(lib.hasInfix "### Portable guidance" (ruleText runtimeRouting))
-      && lib.hasInfix "PORTABLE GUIDANCE" runtimeRouting.config.ai.codex.rules.delegate-routing-router.text
+      && lib.hasInfix "PORTABLE GUIDANCE" runtimeRouting.config.ai.codex.extraSystemPrompt.delegate-routing.text
       && !(lib.hasInfix "### Size the work" (readSkill runtimeRouting "claude"))
       && lib.hasInfix "### Size the work" (readSkill runtimeRouting "codex")
     );
@@ -608,7 +640,7 @@
     "module-delegate-routing-${name}-workflow-runtime" = mkTest "delegate-routing-${name}-workflow-runtime" (
       let
         text = readSkill runtimeWorkflow "claude";
-        codexRule = runtimeWorkflow.config.ai.codex.rules.delegate-routing-router.text;
+        codexRule = runtimeWorkflow.config.ai.codex.extraSystemPrompt.delegate-routing.text;
       in
         lib.hasInfix "CLAUDE WORKFLOW INTRO" text
         && !(lib.hasInfix "PORTABLE WORKFLOW INTRO" text)
@@ -641,7 +673,7 @@
             enable = true;
             text = "";
           };
-        }).config.ai.claude.rules.delegate-routing-router.text
+        }).config.ai.claude.extraSystemPrompt.delegate-routing.text
         true)).success
       && !(builtins.tryEval (builtins.deepSeq
         (change {

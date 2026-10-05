@@ -362,44 +362,6 @@ for it. When several entries match, their guidance composes.
   - Read:
     - [`packages/stacked-workflows/docs/development.md`](packages/stacked-workflows/docs/development.md)
 
-<!-- rule: delegate-routing-router -->
-
-# Delegate routing
-
-### Load delegate-routing
-
-Before you hand work to a subagent, another CLI or a workflow, load the
-delegate-routing skill. It lists the models and tools you can use, and how to
-set model and effort for each.
-
-### Local limits
-
-On this machine, run at most two external CLI delegates at once.
-
-### Orchestrator session
-
-Keep this session for talking with the user, deciding, and checking results.
-Hand bulk reading, searching, measuring and edit-and-test loops to delegates.
-Have them write large output to files and report a short summary with its
-evidence. Give each delegate one task: one part of the system, or one question.
-
-### Verify the result
-
-Give each delegate one clear goal and say what result proves it's done. Require
-an evidence chain for every claim it reports: file and line, or the exact
-command and its output. Each claim comes back as verified, retracted (checked
-and not an issue, with the reason), or unknown (not checked, with what would
-settle it). Delegates never drop a claim silently.
-
-At each level of orchestration, judge those claims before passing them up.
-Re-run the commands the important claims depend on. An exit code of 0 alone
-isn't proof. Check whatever depends on the changed files, such as generated
-files and tests. When something fails, name why: a concept problem needs a
-stronger model, missing evidence needs fetching, an execution slip needs fixing.
-Fix small things yourself, and drop what turned out not to be an issue. Bring
-the user only what's real and needs their decision, written the way their
-communication rules ask, if they have any.
-
 <!-- rule: semble -->
 
 Use `semble search` to discover code by behavior or meaning. Use exact text
