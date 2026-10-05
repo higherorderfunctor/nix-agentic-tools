@@ -7,6 +7,11 @@
 }: let
   inherit (pkgs) lib;
   pnpm = pkgs.ai.generic.pnpm_10;
+  extracted = import ../../../../lib/extracted.nix {
+    inherit lib pkgs;
+    extracted = builtins.fromJSON (builtins.readFile ../../../../extracted.json);
+  };
+  virtualPackages = pkgs.writeText "pi-virtual-packages.json" (builtins.toJSON extracted.virtualPackages);
   sources = builtins.fromJSON (builtins.readFile ../../../../workflows-sources.json);
   sourcesFile = repoPath ../../../../workflows-sources.json;
   versionedName = "kimchi-workflows-${sources.version}-${builtins.substring 0 7 sources.rev}";
@@ -63,7 +68,7 @@ in
       runHook preInstall
       ${pkgs.coreutils}/bin/mkdir -p "$out"
       ${pkgs.coreutils}/bin/cp -r bin dist docs examples src package.json README.md LICENSE NOTICE "$out/"
-      node ${../../../../src/install-runtime.mjs} "$out"
+      node ${../../../../src/install-runtime.mjs} "$out" ${virtualPackages}
       runHook postInstall
     '';
     passthru = {

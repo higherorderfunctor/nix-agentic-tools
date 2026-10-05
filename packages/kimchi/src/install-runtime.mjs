@@ -1,18 +1,12 @@
-// Copy only the locked runtime graph. Pi supplies these peers as virtual modules
-// inside Kimchi's executable; shipping physical copies defeats that contract.
+// Copy only the locked runtime graph. Kimchi's pi supplies the virtual packages
+// inside its executable; a physical copy here would load a second pi.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 const output = path.resolve(process.argv[2]);
-const virtual = new Set([
-  "@earendil-works/pi-agent-core",
-  "@earendil-works/pi-ai",
-  "@earendil-works/pi-coding-agent",
-  "@earendil-works/pi-tui",
-  "typebox",
-]);
+const virtual = new Set(JSON.parse(fs.readFileSync(process.argv[3], "utf8")));
 const copied = new Map();
 const manifestAt = (directory) =>
   JSON.parse(fs.readFileSync(path.join(directory, "package.json"), "utf8"));
@@ -71,9 +65,18 @@ function copyPackage(source) {
 }
 
 copyDependencies(process.cwd(), output, manifestAt(process.cwd()));
-// The extension entry, distribution and manifest remain package-relative.
 const manifest = manifestAt(output);
-assert.deepEqual(manifest.pi.extensions, ["./src/host/extension.ts"]);
-for (const name of virtual) {
-  assert(!fs.existsSync(path.join(output, "node_modules", name)));
+assert(
+  Array.isArray(manifest.pi?.extensions) && manifest.pi.extensions.length > 0,
+);
+for (const entry of manifest.pi.extensions) {
+  const target = path.resolve(output, entry);
+  assert(target.startsWith(output + path.sep) && fs.existsSync(target), entry);
+}
+for (const name of fs.readdirSync(path.join(output, "node_modules"), {
+  recursive: true,
+})) {
+  const entry = path.join(output, "node_modules", name);
+  if (fs.lstatSync(entry).isSymbolicLink())
+    assert(fs.realpathSync(entry).startsWith(output + path.sep), entry);
 }

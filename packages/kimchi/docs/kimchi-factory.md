@@ -77,17 +77,19 @@ harness `settings.json` it declares:
     `module-kimchi-auto-model-default`.
 
 `packages/kimchi/extracted.json` measures the two native settings surfaces and
-the environment variables Kimchi and pi read, and `lib/extracted.nix` is its
-only reader. It generates the closed `native.settings` (from `config.*`) and
-`native.harnessSettings` (from `harness.*`, resolving `harness.definitions`)
-option trees: scalars and enums map directly, objects with properties become
-closed submodules, `additionalProperties` becomes `attrsOf`, and arrays keep
-untyped elements unless they are scalars, because `filterNulls` does not recurse
-into lists. So a key upstream adds to pi's `Settings` or to config.ts's
-`readConfigExtras` becomes an option at the next re-extraction, and a key it
-removes fails its consumer as an unknown option instead of writing bytes nothing
-reads. Every option is `nullOr` with a null default. Config annotations may name
-an `aliasFor` or the exact `introduced` release. The extractor validates every
+the environment variables Kimchi and pi read, and pi’s `virtualPackages` from
+its loader’s literal `VIRTUAL_MODULES` keys (deduplicated npm package names).
+`lib/extracted.nix` is its only reader. It generates the closed
+`native.settings` (from `config.*`) and `native.harnessSettings` (from
+`harness.*`, resolving `harness.definitions`) option trees: scalars and enums
+map directly, objects with properties become closed submodules,
+`additionalProperties` becomes `attrsOf`, and arrays keep untyped elements
+unless they are scalars, because `filterNulls` does not recurse into lists. So a
+key upstream adds to pi's `Settings` or to config.ts's `readConfigExtras`
+becomes an option at the next re-extraction, and a key it removes fails its
+consumer as an unknown option instead of writing bytes nothing reads. Every
+option is `nullOr` with a null default. Config annotations may name an
+`aliasFor` or the exact `introduced` release. The extractor validates every
 annotation before release gating, then includes only active rows in its census
 and generated sidecar. Alias keys and inert keys have no option. A key is inert
 when upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code

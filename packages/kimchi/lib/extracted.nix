@@ -6,7 +6,7 @@
 # poisons evaluation for every consumer. Freshness is the update job's and the
 # `kimchi-extracted` drift check's problem, not evaluation's.
 #
-# Three surfaces, each consumed:
+# Settings and environment surfaces:
 #
 #   config       → `ai.kimchi.native.settings` (config.json), plus the keys a
 #                  project config.json does not honor (devenv rejects them)
@@ -227,6 +227,8 @@
   variables = extracted.environment.variables;
   userScopeKeys = keys: builtins.attrNames (lib.filterAttrs (_: node: !(node.project or false)) keys);
 in {
+  inherit (extracted) virtualPackages;
+
   settingsOptions = generated.settings.options;
   harnessSettingsOptions = generated.harnessSettings.options;
 

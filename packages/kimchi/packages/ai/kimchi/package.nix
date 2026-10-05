@@ -18,7 +18,10 @@
   goFloor = sources.goFloor or packageLib.goFloorUnknown;
   goModPath = "tools/proxy-helper/go.mod";
 
-  fetchExtraction = source: fetchzip {inherit (source) hash url;};
+  fetchExtraction = source:
+    fetchzip {
+      inherit (source) hash url;
+    };
   # A fixed-output store path is a function of its name and declared hash
   # only. fetchzip defaults to the unversioned name "source" and
   # fetchPnpmDeps to "<pname>-pnpm-deps", so a bump that leaves a hash
@@ -64,7 +67,7 @@
 
   # `mkUpdateScript` records the version alone (`platforms = {}`), so this
   # runs first and writes every hash-verified source input: the release
-  # source that both the build and the extractor read, then the locked npm packages.
+  # source that both the build and the extractor read, then pi's packages.
   # The dependency fixers that follow it build against that source pin.
   refreshExtraction = ''
     kimchi_source_url="https://github.com/getkimchi/kimchi/archive/refs/tags/v$latest.tar.gz"

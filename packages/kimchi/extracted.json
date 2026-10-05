@@ -1473,8 +1473,20 @@
     }
   },
   "provenance": {
-    "extractorSchema": 3,
+    "extractorSchema": 4,
     "kimchiVersion": "1.5.1",
     "piVersion": "0.85.1"
-  }
+  },
+  "virtualPackages": [
+    "@earendil-works/pi-agent-core",
+    "@earendil-works/pi-ai",
+    "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-tui",
+    "@mariozechner/pi-agent-core",
+    "@mariozechner/pi-ai",
+    "@mariozechner/pi-coding-agent",
+    "@mariozechner/pi-tui",
+    "@sinclair/typebox",
+    "typebox"
+  ]
 }

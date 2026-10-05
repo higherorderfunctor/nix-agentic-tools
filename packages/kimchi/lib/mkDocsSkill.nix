@@ -145,7 +145,7 @@
   text = rendered;
 in
   pkgs.runCommand "kimchi-docs-skill-${search}" {
-    passthru = {inherit docs search text workflowsSource;};
+    passthru = {inherit docs search text;};
   } ''
     # Full strict mode is required here: stdenv does not set every flag (#909).
     set -euETo pipefail

@@ -295,7 +295,6 @@ in {
           settings,
           ...
         }: let
-          harnessDir = workflowsHarness;
           withExtensions = extensions:
             evaluate {
               ai.kimchi = {
@@ -310,12 +309,12 @@ in {
             inherit workflows;
           };
           extensionFiles = evaluated:
-            lib.filterAttrs (path: _: lib.hasPrefix "${harnessDir}/extensions/" path) (deliveredFiles evaluated.config);
+            lib.filterAttrs (path: _: lib.hasPrefix "${workflowsHarness}/extensions/" path) (deliveredFiles evaluated.config);
           checkLinks = evaluated: names:
             builtins.attrNames (extensionFiles evaluated)
-            == map (name: "${harnessDir}/extensions/${name}") names
+            == map (name: "${workflowsHarness}/extensions/${name}") names
             && lib.all (name: let
-              path = "${harnessDir}/extensions/${name}";
+              path = "${workflowsHarness}/extensions/${name}";
               file = (extensionFiles evaluated).${path};
             in
               fromGeneratedTree path file

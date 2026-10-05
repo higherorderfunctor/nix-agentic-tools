@@ -4,14 +4,12 @@
 > unfree-enabled, unchecked set CI builds; git-branchless joins the
 > source-measured sidecars. `fix_sidecar_hashes` also re-derives `pnpmDepsHash`,
 > but only when the stale output is not substitutable; kimchi versions its
-> pnpm-deps and src FOD names; independently pinned kimchi-workflows builds from
-> source and feeds harness settings and the docs skill without IFD; Kiro
-> settings extraction validates its materialized TUI registry and workspace
-> merge with AST checks; Kimchi attributes every config.ts JSON read to the file
-> it reads, censuses every resolved environment read, and no longer extracts a
-> CLI surface nothing read. pnpm_12 inherits nixpkgs' source-built Rust package
-> and nodejs-slim passthru, with sidecar source/cargo repair exposed as
-> fixVendorHash.
+> pnpm-deps and src FOD names; Kiro settings extraction validates its
+> materialized TUI registry and workspace merge with AST checks; Kimchi
+> attributes every config.ts JSON read to the file it reads, censuses every
+> resolved environment read, and no longer extracts a CLI surface nothing read.
+> pnpm_12 inherits nixpkgs' source-built Rust package and nodejs-slim passthru,
+> with sidecar source/cargo repair exposed as fixVendorHash.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -178,18 +176,6 @@ from its sidecar (`packages/kimchi/lib/extracted.nix`), and git-branchless's
 typed settings likewise (`lib/git-tool-settings`, called from each owner's
 `lib/default.nix`). `checks/<pkg>-extracted.nix` then compares committed against
 freshly built output to catch a stale sidecar.
-
-Kimchi's workflows extension is independently pinned in
-`packages/kimchi/workflows-sources.json`, with version, GitHub commit, source
-hash and pnpm dependency hash. Its own update target resolves stable release
-tags and refreshes those hashes without reading a derivation at evaluation time.
-The source build stamps upstream's placeholder version and distribution metadata
-before compiling and installs its runtime dependency closure without virtual pi
-or typebox peers. Kimchi removes the static registration instead of bundling
-this package. Both module backends add its store entry through harness settings,
-and the docs skill links the same external package through repository roots. The
-source-level registration check uses only Kimchi's source FOD; payload and smoke
-checks depend on the builds that CI already compiles.
 
 Kiro's `models` field is the exception to the binary source: it is derived from
 the committed public documentation snapshot, refreshed by the update job even
