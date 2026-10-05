@@ -133,7 +133,7 @@ Three things follow, and each of them is a trap if you assume the old shape:
 >
 > **Settled — do not relitigate.** The once-per-session hook pair, its marker
 > script and its checks, with the lineage before them:
-> `git show 4dd08e26:packages/claude-code/docs/heron-brook-clamp.md`.
+> `git show ec88f1b0:packages/claude-code/docs/heron-brook-clamp.md`.
 >
 > - **A per-update version tripwire was TRIED and REJECTED.** It compared the
 >   pinned claude-code version against a recorded `verifiedClaudeVersion`, so it
@@ -234,8 +234,10 @@ defines the option at all, so it would silently disable the mitigation for
 exactly the consumers who use hooks most. As a definition it list-merges with
 consumer entries.
 
-A **dual setup** (HM global + devenv project-local) registers the hook twice,
-and the line is injected twice per turn. There is no marker to deduplicate it.
+A **dual setup** (HM global + devenv project-local) registers the hook in two
+settings files. Claude Code runs an identical handler once, so the line is
+injected twice per turn only when the two backends build different hook store
+paths, for example from different nixpkgs pins or texts.
 
 ### The injected text is load-bearing
 
