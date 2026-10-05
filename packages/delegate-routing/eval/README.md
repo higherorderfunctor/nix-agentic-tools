@@ -173,11 +173,11 @@ run, verify denial of native delegates, workflows, external launchers and
 read/write tools, hook execution and terminal completion with the same flags.
 Save the transcript outside the repository. Supply a JSON array of preflight
 records with `runtime`, `version`, `executable`, `generatedConfigHash`,
-`safetyProfileHash`, `allToolsDenied: true`, `terminalCaptureVerified: true`,
-and `evidenceTranscript` pointing at that file. The safety-profile hash
-normalizes the trial directory so evidence can be reused across repeat
-directories. Do not assert these fields without observing them. No paid
-preflight or model turn is part of the structural checks.
+`safetyProfileHash`, `allToolsDenied: true`, `hookExecutionVerified: true`,
+`terminalCaptureVerified: true`, and `evidenceTranscript` pointing at that file.
+The safety-profile hash normalizes the trial directory so evidence can be reused
+across repeat directories. Do not assert these fields without observing them. No
+paid preflight or model turn is part of the structural checks.
 
 After those checks and explicit authorization, run manually:
 
