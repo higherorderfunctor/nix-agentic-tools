@@ -18,12 +18,10 @@
     ];
     failures = map (item: item.message) (lib.filter (item: !item.assertion) evaluated.config.assertions);
     program = evaluated.config.ai.programs.delegate-routing;
-    reminderEnabled = let
-      local = program.runtimes.${runtime}.reminder.enable;
-    in
-      if local == null
-      then program.reminder.enable
-      else local;
+    reminderEnabled = (import ../../../lib/ai/ai-common.nix {inherit lib;}).resolveOverride {
+      topValue = program.reminder.enable;
+      cliValue = program.runtimes.${runtime}.reminder.enable;
+    };
     selected = lib.filterAttrs (path: _:
       path
       == "AGENTS.md"
@@ -71,7 +69,7 @@
         // lib.optionalAttrs (runtime == "claude") {
           inherit (evaluated.config.ai.claude) ultracodeOnLaunch;
         };
-      # Always-on entries reach the runtime's system prompt, not a file.
+      # Always-on entries reach Claude's system prompt; Kiro's are a delivered rule file.
       systemPrompt = (evaluated.config.ai.${runtime}.extraSystemPrompt.delegate-routing or {text = null;}).text;
       usage = {
         claude = {

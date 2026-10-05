@@ -576,8 +576,12 @@
       && !(lib.hasInfix "## Common workflows" claude)
       && !(alwaysDisabled.config.ai.claude.extraSystemPrompt ? delegate-routing)
       && !(alwaysDisabled.config.ai.codex.extraSystemPrompt ? delegate-routing)
+      && !(alwaysDisabled.config.ai.kiro.rules ? delegate-routing-router)
       && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")
-      && lib.all (runtime: result.config.ai.${runtime}.extraSystemPrompt.delegate-routing.text == stub) runtimes
+      # Kiro keeps an always-on rule; the others take the system-prompt entry.
+      && lib.all (runtime: result.config.ai.${runtime}.extraSystemPrompt.delegate-routing.text == stub && !(result.config.ai.${runtime}.rules ? delegate-routing-router)) (lib.remove "kiro" runtimes)
+      && result.config.ai.kiro.rules.delegate-routing-router.text == stub
+      && !(result.config.ai.kiro.extraSystemPrompt ? delegate-routing)
     );
     "module-delegate-routing-${name}-reminder" = mkTest "delegate-routing-${name}-reminder" (
       result.config.ai.programs.delegate-routing.reminder.enable

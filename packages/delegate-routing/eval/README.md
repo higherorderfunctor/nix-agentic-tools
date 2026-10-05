@@ -158,10 +158,10 @@ model/effort and hidden vendor steering remain UNKNOWN unless exposed by the
 transcript. In particular, a delegation result cannot prove that heron_brook was
 present.
 
-The always-on routing entries are a system-prompt addition rather than a file.
-Claude receives them through `--append-system-prompt-file`, as its managed
-launcher passes them. Kiro carries them only in typed agents, so the default
-agent these trials run does not see them; that gap is recorded per trial.
+Claude's always-on routing entries are a system-prompt addition rather than a
+file; it receives them through `--append-system-prompt-file`, as its managed
+launcher passes them. Kiro's arrive as the `delegate-routing-router` rule among
+the delivered files, which its default agent loads.
 
 The safety overlay exposes native tools but denies all execution through a
 logging PreToolUse hook, plus noninteractive permission denial. Claude loads
