@@ -1,0 +1,47 @@
+{
+  "capabilities": {
+    "available": {
+      "evidence": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md (K6): Run Workflow completed, followed by workflow started, step completed and workflow completed events.",
+      "result": "supported"
+    },
+    "linkedWorktreeCommit": {
+      "evidence": "Not exercised in this capture.",
+      "result": "unknown"
+    },
+    "nestingDepth": {
+      "evidence": "Not exercised in this capture.",
+      "result": "unknown",
+      "value": null
+    },
+    "pinsEffort": {
+      "evidence": "Historical report (2026-10-05, K6): workflow and step completed, but no resolved worker controls or native grandchild trace were captured; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
+      "result": "unknown"
+    },
+    "pinsModel": {
+      "evidence": "Historical report (2026-10-05, K6): workflow and step completed, but no resolved worker controls or native grandchild trace were captured; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
+      "result": "unknown"
+    },
+    "runsOwnSubagents": {
+      "evidence": "Historical report (2026-10-05, K6): workflow and step completed, but no resolved worker controls or native grandchild trace were captured; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
+      "result": "unknown"
+    }
+  },
+  "context": "K6: kiro-cli chat --no-interactive in a scratch project; one-step workflow; no explicit model or effort requested; terminal lifecycle events retained.",
+  "date": "2026-10-05",
+  "mode": "headless",
+  "observed": {
+    "effort": null,
+    "model": null
+  },
+  "replay": [
+    "Run kiro-cli chat --no-interactive with a request to use run_workflow for one step that replies HELLO without editing files; retain tool and workflow completion events."
+  ],
+  "requested": {
+    "effort": null,
+    "model": null
+  },
+  "runtime": "kiro",
+  "runtimeVersion": "2.27.1",
+  "source": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md",
+  "technique": "run_workflow"
+}
