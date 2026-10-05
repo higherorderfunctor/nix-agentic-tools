@@ -52,15 +52,15 @@ in {
   }: let
     overrideOptions = mapOptionTree mkOverrideOption options;
   in
-    assert lib.assertMsg (!(options ? settings))
-    "mkProgram `${name}`: `settings` is reserved for per-runtime overrides."; {
+    assert lib.assertMsg (!(options ? runtimes))
+    "mkProgram `${name}`: `runtimes` is reserved for per-runtime overrides."; {
       inherit name options spec supportedRuntimes;
 
       module = {
         options.ai.programs.${name} =
           options
           // {
-            settings = lib.genAttrs supportedRuntimes (_: overrideOptions);
+            runtimes = lib.genAttrs supportedRuntimes (_: overrideOptions);
           };
       };
 
@@ -70,6 +70,6 @@ in {
           resolveTree
           options
           config.ai.programs.${name}
-          config.ai.programs.${name}.settings.${runtime};
+          config.ai.programs.${name}.runtimes.${runtime};
     };
 }

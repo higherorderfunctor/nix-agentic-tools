@@ -1,7 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-04 — programs and runtime settings are plain option
-> trees; whole-record priorities apply independently to each leaf.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -58,12 +58,12 @@ values have been resolved.
 `lib.ai.program.mkProgram` applies the same rule to every leaf of a program
 specification. Program roots and runtime settings are plain option trees rather
 than submodule options; whole-record priorities apply independently to each
-leaf. The portable specification cannot declare the reserved name `settings`.
+leaf. The portable specification cannot declare the reserved name `runtimes`.
 Root declarations retain their ordinary types and defaults; runtime declarations
 are generated as nullable versions of those declarations. The program module
 receives one recursively resolved record per supported runtime. The
 specification's `supportedRuntimes` list is the single capability source:
-unsupported `ai.programs.<pkg>.settings.<runtime>` paths do not exist.
+unsupported `ai.programs.<pkg>.runtimes.<runtime>` paths do not exist.
 
 Do not add a sibling runtime selector. Runtime program `enable = false` is the
 negation mechanism, and an individual runtime feature may override the portable

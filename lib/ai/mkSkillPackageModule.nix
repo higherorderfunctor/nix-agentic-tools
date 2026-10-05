@@ -2,7 +2,7 @@
 #
 # Uses `lib.ai.program.mkProgram` to declare
 # `ai.programs.<name>.enable` plus capability-gated
-# `ai.programs.<name>.settings.<runtime>.enable` overrides. Each resolved runtime that is
+# `ai.programs.<name>.runtimes.<runtime>.enable` overrides. Each resolved runtime that is
 # enabled receives skills (and optionally a router rule) in its PER-RUNTIME
 # `ai.<runtime>.*` pools — never in the root `ai.*` pools. See "Contributions
 # land PER RUNTIME" below for why that distinction is load-bearing rather than
@@ -52,7 +52,7 @@
 # ── Contributions land PER RUNTIME, never on the root pool ──
 #
 # `ai.programs.<name>.enable = true` enables every supported runtime by default.
-# `ai.programs.<name>.settings.<runtime>.enable = false` disables only that runtime; a
+# `ai.programs.<name>.runtimes.<runtime>.enable = false` disables only that runtime; a
 # null override inherits the portable value through B4 `resolveOverride`.
 #
 # Each skill value is wrapped in `lib.mkDefault`, so a consumer can override an
