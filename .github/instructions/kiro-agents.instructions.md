@@ -7,9 +7,10 @@ applyTo: "packages/kiro-cli/checks/module-eval.nix,packages/kiro-cli/lib/mkKiro.
 
 ## Kiro native agent formats
 
-> **Last verified:** 2026-09-30 — KAS/ACP loads and dispatches Markdown agent
-> profiles, while `kiro-cli agent list`, validation, and default selection use a
-> JSON-only registry.
+> **Last verified:** 2026-10-05 — every typed native agent's prompt carries the
+> joined `ai.extraSystemPrompt` text; raw agent files do not. KAS/ACP loads and
+> dispatches Markdown agent profiles, while `kiro-cli agent list`, validation,
+> and default selection use a JSON-only registry.
 
 Kiro has two agent-profile consumers with different file support. The KAS/ACP
 loader discovers both `.json` and `.md` profiles and can dispatch either by
@@ -38,6 +39,23 @@ Markdown profiles are written to `<configDir>/agents/<name>.md`. The shared
 `lib/frontmatter.nix` renderer receives each non-empty field except `prompt` as
 its raw Nix value. The prompt becomes the Markdown body, and `format` is not
 written into the profile.
+
+### Extra system prompt
+
+`normalizeAgent` appends the joined `ai.extraSystemPrompt` text, after a blank
+line, to every typed record's `prompt` in either format; an agent with no prompt
+of its own gets the text alone. Raw `ai.kiro.agents` strings and paths are
+written verbatim and do not receive it, and Kiro's built-in default agent has no
+declarative surface here.
+
+Open question: the operator's 2026-10-05 probe found an agent prompt appended to
+the vendor instructions. The KAS 2.15.1 research
+(`docs/plans/kiro-v3-research-raw/phase2/f16-system-prompt.md` §3.7-3.8) read
+the root path as replacing the base prompt and sub-agent dispatch as falling
+back to `getBasePrompt` only for an empty prompt. If that still holds in the
+pinned release, a prompt-less agent loses the base prompt once it carries the
+text. Settle it by dispatching a prompt-less JSON agent as a sub-agent, with and
+without an entry, and dumping the system prompt with f16's recipe.
 
 The frontmatter emitter supports scalars and lists of scalars. A Markdown agent
 with a nested non-null field fails module evaluation with an assertion naming

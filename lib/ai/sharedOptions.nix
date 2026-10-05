@@ -260,21 +260,26 @@ in {
 
         Delivery is per runtime, on both backends:
         - Claude: the managed launcher passes
-          `--append-system-prompt-file <store file>`.
+          `--append-system-prompt-file <store file>`. In a Remote Control
+          session Claude rejects a user's own `--append-system-prompt` beside
+          it.
         - Codex: `developer_instructions` in `config.toml`, at `mkDefault`, so
           an explicit `ai.codex.native.settings.developer_instructions`
           replaces it wholesale. To withhold an entry from Codex alone, set
           `ai.codex.extraSystemPrompt.<name>.enable = false`.
-        - Kimchi: the managed launcher passes
-          `--append-system-prompt <store file>` first in argv. Kimchi then
-          skips its own `APPEND_SYSTEM.md` discovery, and its own
-          subcommands (`kimchi setup`, `kimchi mcp`, …) no longer dispatch
-          through the wrapper, because Kimchi reads them only from the first
-          argument.
+        - Kimchi: pi's own `APPEND_SYSTEM.md` in the harness directory: the
+          user harness under Home Manager, the project harness under devenv,
+          which Kimchi reads only in a trusted project and only from the
+          devenv root, so the devenv launcher refuses other directories. A
+          project file shadows the user one.
         - Kiro: appended to the `prompt` of every typed agent
           (`ai.kiro.native.agents`, which normalized `ai.agents` lower into).
           Raw agent files are delivered verbatim, and Kiro's built-in default
           agent has no declarative surface, so neither receives it.
+
+        Only Kiro's agents each carry the text. Claude and Kimchi append it to
+        the main session alone: Claude's subagents take a separate flag this
+        option does not set, and Kimchi's subagents drop appended prompts.
 
         Copilot is an explicit exclusion: it has no lossless native mapping
         for an appended system prompt (its instruction files are context,

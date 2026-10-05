@@ -380,7 +380,7 @@ instruction building.
 | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
 | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
 | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
-| Extra system prompt | Per-CLI flags or config | `ai.extraSystemPrompt.<name>` (Claude + Codex + Kimchi + Kiro), joined in name order | Same. Claude and Kimchi get a launcher flag, Codex `developer_instructions`, Kiro every typed agent's `prompt`; Copilot is an explicit exclusion |
+| Extra system prompt | Per-CLI flags or config | `ai.extraSystemPrompt.<name>` (Claude + Codex + Kimchi + Kiro), joined in name order | Same. Claude gets a launcher flag, Codex `developer_instructions`, Kimchi pi's `APPEND_SYSTEM.md`, Kiro every typed agent's `prompt`; Copilot is an explicit exclusion |
 | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
