@@ -1,8 +1,10 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — capability validation rejects operator paths;
-> public primary citations bound observations, declared modes remain visible,
-> and manual probes retain operator-held event streams.
+> **Last verified:** 2026-10-04 — capability observations join technique
+> declarations by runtime, technique and mode and cite only publishable
+> evidence; the manual evaluation suite renders delivered policy through the
+> module harness, a separate vendor set captures real repository delivery, and
+> model turns stay outside structural checks.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -195,3 +197,27 @@ nix eval --raw .#delegate-routing-content.skills.codex.text
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
+
+## Planning regression suite
+
+`eval/` contains a manual routing simulation: named Nix cases render the actual
+delivered skill and router rule through the existing module harness. Fictional
+inventories, capabilities and executed usage mocks provide the observations;
+independent expected tuples stay out of prompts. Pool cases consume this
+worktree's house rule sources. Child-support observations are synthetic test
+configuration, not measurements of real runtimes. Missing-usage fallback remains
+a partial expectation until its policy is decided.
+
+`eval/run.py` renders without authentication and grades strict saved JSON plans
+against `eval/plan.schema.json`; `eval/rubric.md` owns prose criteria and
+separate calibration samples. Runtime adapters stay disabled until verified
+tool/context suppression and terminal capture establish safe planning mode.
+Outputs default outside checkouts. Pending prose and policy decisions remain
+separate from exact scores, with infrastructure failures retained in end-to-end
+rates.
+
+The owner check `delegate-routing-eval-structure` evaluates and renders all
+cases, validates the schema, and checks expected field references. Its `cases`
+passthru is the runner's fixture export boundary. It never starts a model
+process. Existing module checks own Home Manager/devenv delivery parity; the
+manual suite owns behavioral evidence. See `eval/README.md` for replay commands.
