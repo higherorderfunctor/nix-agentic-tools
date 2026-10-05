@@ -6,7 +6,7 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const EXTRACTOR_SCHEMA = 3;
+const EXTRACTOR_SCHEMA = 4;
 
 function fail(message) {
   throw new Error(`kimchi-extract: ${message}`);
@@ -2140,6 +2140,30 @@ async function extractEnvironment(
   return { variables: sortObject(variables) };
 }
 
+function virtualPackages(source, ts) {
+  const object = requireDeclaration(
+    declarationIndex([source], ts),
+    "VIRTUAL_MODULES",
+    (node) =>
+      ts.isVariableDeclaration(node) &&
+      node.initializer &&
+      ts.isObjectLiteralExpression(node.initializer),
+  ).initializer;
+  return [
+    ...new Set(
+      object.properties.map((property) => {
+        const key = property.name && syntaxName(property.name, ts);
+        if (!ts.isPropertyAssignment(property) || !key)
+          fail("pi VIRTUAL_MODULES has a non-literal module key");
+        return key
+          .split("/")
+          .slice(0, key.startsWith("@") ? 2 : 1)
+          .join("/");
+      }),
+    ),
+  ].sort();
+}
+
 async function main() {
   const args = parseArguments(process.argv.slice(2));
   const tsModule = await import(pathToFileURL(resolve(args.typescript)).href);
@@ -2362,6 +2386,10 @@ async function main() {
       kimchiVersion: args["kimchi-version"],
       piVersion,
     },
+    virtualPackages: virtualPackages(
+      requireSource(join(piRoot, "dist/core/extensions/loader.js")),
+      ts,
+    ),
   };
   const encoded = `${JSON.stringify(result, null, 2)}\n`;
   if (args.out === "-") process.stdout.write(encoded);

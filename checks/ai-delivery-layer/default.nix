@@ -924,6 +924,118 @@ in {
         && withoutFiles.tasks.probeDefaults.before == ["devenv:enterShell"]
     );
 
+    module-delivery-devenv-guards-symlink-updates = let
+      config = {
+        ai.kiro = {
+          enable = true;
+          activation = {
+            probeLate = {
+              before = [];
+              command = "true";
+            };
+            probeMigrate.command = "printf 'probe'";
+            probeOwned = {
+              ledgers."materialize/probe.manifest" = {
+                codec = "dir";
+                path = "probe-owned";
+              };
+              pruneEntry = "probeOwnedPrune";
+            };
+          };
+          files = {
+            "probe-copy".content.source = ./fixtures/probe-skill/SKILL.md;
+            "probe-dir".content.source = ./fixtures/probe-skill;
+            "probe-executable" = {
+              content.source = ./fixtures/probe-skill/scripts/executable-probe;
+              executable = true;
+            };
+            "probe-file".content.source = ./fixtures/probe-skill/SKILL.md;
+            "probe-leaves" = {
+              content.source = ./fixtures/probe-skill;
+              recursive = true;
+            };
+            "probe-owned/file" = {
+              content.text = "owned";
+              entry = "probeOwned";
+              ledger = "materialize/probe.manifest";
+              method = "copy-ro";
+            };
+          };
+        };
+      };
+      devenv = (evalDevenv (config // {files."probe-copy".copyMode = "copy";})).config;
+      hm = (evalHm config).config;
+      task = devenv.tasks."ai:kiro:guard-symlink-updates";
+      bare = (evalDevenv {ai.kiro.enable = true;}).config;
+      guardLines =
+        lib.filter (line: lib.hasPrefix "guard_link " line)
+        (map lib.strings.trim (lib.splitString "\n" task.exec));
+      desiredLines =
+        lib.mapAttrsToList (path: file: "guard_link ${lib.escapeShellArgs [path file.file]}")
+        (lib.filterAttrs (_path: file: file.copyMode == "symlink") devenv.files);
+      guardScript = pkgs.writeText "symlink-update-guard.sh" task.exec;
+    in
+      assert lib.assertMsg (
+        guardLines
+        == desiredLines
+        && devenv.files."probe-copy".copyMode == "copy"
+        && !(lib.any (line: lib.hasPrefix "guard_link probe-copy " line) guardLines)
+        && devenv.files."probe-executable".executable
+        && devenv.files."probe-executable".file != devenv.files."probe-executable".source
+        && lib.all (name: lib.elem name task.after) ["devenv:files:cleanup" "probeMigrate" "probeOwned"]
+        && !(lib.elem "probeLate" task.after)
+        && task.before == ["devenv:files"]
+        && !(bare.tasks ? "ai:kiro:guard-symlink-updates")
+        && !(hm.home.activation ? "ai:kiro:guard-symlink-updates")
+      ) "delivery-devenv-guards-symlink-updates: final targets and writer dependencies must match";
+        pkgs.runCommand "module-test-delivery-devenv-guards-symlink-updates" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          guard_cwd="$(${pkgs.coreutils}/bin/mktemp -d)"
+          cd "$guard_cwd"
+          # A copy-mode entry is a regular file and must pass the guard.
+          printf 'managed copy' > probe-copy
+          ${pkgs.bash}/bin/bash ${guardScript}
+          [ -f probe-copy ] && [ ! -L probe-copy ]
+
+          ${pkgs.coreutils}/bin/ln -s ${./fixtures/probe-skill} probe-dir
+          [ -d probe-dir ]
+          ${pkgs.coreutils}/bin/ln -s ${lib.escapeShellArg devenv.files."probe-executable".file} probe-executable
+          ${pkgs.bash}/bin/bash ${guardScript}
+          [ ! -L probe-dir ]
+          [ -L probe-executable ]
+          [ "$(${pkgs.coreutils}/bin/readlink probe-executable)" = ${lib.escapeShellArg devenv.files."probe-executable".file} ]
+
+          ${pkgs.coreutils}/bin/ln -s "$guard_cwd" probe-dir
+          printf 'user file' > probe-file
+          if ${pkgs.bash}/bin/bash ${guardScript} 2> guard-errors; then
+            echo "guard accepted a non-store link and a real file" >&2
+            false
+          fi
+          [ "$(${pkgs.coreutils}/bin/readlink probe-dir)" = "$guard_cwd" ]
+          [ -f probe-file ] && [ ! -L probe-file ]
+          errors="$(${pkgs.coreutils}/bin/cat guard-errors)"
+          [[ "$errors" == *"ERROR: probe-dir links outside the Nix store"* ]]
+          [[ "$errors" == *"ERROR: probe-file exists and is not a link"* ]]
+          ${pkgs.coreutils}/bin/rm -f probe-dir probe-file
+
+          # Prove each refusal independently as well as reporting both at once.
+          for state in link file; do
+            if [ "$state" = link ]; then
+              ${pkgs.coreutils}/bin/ln -s "$guard_cwd" probe-file
+            else
+              printf 'user file' > probe-file
+            fi
+            if ${pkgs.bash}/bin/bash ${guardScript}; then
+              echo "guard accepted conflicting $state" >&2
+              false
+            fi
+            ${pkgs.coreutils}/bin/rm -f probe-file
+          done
+          ${pkgs.coreutils}/bin/touch "$out"
+        '';
+
     # The opt-in must not accidentally activate ordinary command writers,
     # owned writers, file claims or packages when the runtime is disabled.
     module-delivery-disabled-runtime-keeps-only-opted-in-writers = mkTest "delivery-disabled-runtime-keeps-only-opted-in-writers" (

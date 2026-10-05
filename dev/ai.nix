@@ -289,19 +289,13 @@ in {
       enable = true;
       mcpServers.agnix = agnixMcp;
     };
-    # Kimchi's BINARY comes from this repo's overlay like every other runtime.
-    # Its config fanout is a separate, still-open problem: `configDir` is
-    # HOME-shaped while the writes land at a project path the binary does not
-    # read, so `.config/kimchi/**` is materialized-but-inert today. Enabling
-    # the runtime is still correct — it stops `kimchi` resolving to whatever
-    # the developer happens to have installed user-globally.
+    # The external extension lands in trusted project harness settings.
     kimchi = {
       enable = true;
-      # Not part of that inert fanout: devenv passes these through the
-      # launcher as KIMCHI_ENABLE_RESOURCES, which Kimchi reads.
+      extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
+      # Managed built-ins still use Kimchi's resource enable-list.
       native.harnessSettings.resources = {
         "extensions.ferment-v2" = true;
-        "extensions.workflows" = true;
       };
       programs.delegate-routing.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
     };

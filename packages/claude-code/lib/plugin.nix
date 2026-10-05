@@ -10,6 +10,8 @@
   pkgs,
 }: let
   jsonFormat = pkgs.formats.json {};
+  # Imported directly: the plugin-entry check passes plain nixpkgs `lib`.
+  linkDirectory = import ../../../lib/link-directory.nix;
 in {
   # A consumer plugin, wrapped so a manifest can be synthesized for a source
   # that lacks one. Only the top-level entries are linked, so each component
@@ -19,23 +21,21 @@ in {
   # agent and command the plugin ships. The result is delivered as a single
   # directory link for the same reason.
   mkPluginEntry = name: plugin:
-    pkgs.runCommand "claude-code-plugin-${lib.strings.sanitizeDerivationName name}" {} ''
-      ${pkgs.coreutils}/bin/mkdir -p "$out"
-
-      shopt -s dotglob nullglob
-      for entry in "${plugin}"/*; do
-        ln -s "$entry" "$out/$(basename "$entry")"
-      done
-
-      if [[ ! -e $out/.claude-plugin/plugin.json ]]; then
-        # Replace the linked manifest directory with a real one so the
-        # generated manifest can sit beside any existing contents.
-        ${pkgs.coreutils}/bin/rm -f "$out/.claude-plugin"
-        ${pkgs.coreutils}/bin/mkdir -p "$out/.claude-plugin"
-        for entry in "${plugin}"/.claude-plugin/*; do
-          ln -s "$entry" "$out/.claude-plugin/$(basename "$entry")"
-        done
-        install -m644 ${jsonFormat.generate "claude-code-plugin-${lib.strings.sanitizeDerivationName name}.json" {inherit name;}} "$out/.claude-plugin/plugin.json"
-      fi
-    '';
+    (linkDirectory pkgs "claude-code-plugin-${lib.strings.sanitizeDerivationName name}" plugin).overrideAttrs (_: old: {
+      buildCommand =
+        old.buildCommand
+        + ''
+          shopt -s dotglob nullglob
+          if [[ ! -e $out/.claude-plugin/plugin.json ]]; then
+            # Replace the linked manifest directory with a real one so the
+            # generated manifest can sit beside any existing contents.
+            ${pkgs.coreutils}/bin/rm -f "$out/.claude-plugin"
+            ${pkgs.coreutils}/bin/mkdir -p "$out/.claude-plugin"
+            for entry in "${plugin}"/.claude-plugin/*; do
+              ${pkgs.coreutils}/bin/ln -s "$entry" "$out/.claude-plugin/$(${pkgs.coreutils}/bin/basename "$entry")"
+            done
+            ${pkgs.coreutils}/bin/install -m644 ${jsonFormat.generate "claude-code-plugin-${lib.strings.sanitizeDerivationName name}.json" {inherit name;}} "$out/.claude-plugin/plugin.json"
+          fi
+        '';
+    });
 }

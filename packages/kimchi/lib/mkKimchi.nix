@@ -603,6 +603,21 @@
         };
       }
 
+      # pi resolves package sources relative to the scope's harness directory.
+      # Kimchi filters disabled packages by metadata.source before loading them,
+      # so the stable source name also works for a directory of package links.
+      (lib.mkIf (cfg.extensions != {}) {
+        ai.kimchi.native.harnessSettings.packages = map (name: "extensions/${name}") (builtins.attrNames cfg.extensions);
+      })
+      {
+        ai.kimchi.files = lib.mapAttrs' (name: extension:
+          lib.nameValuePair "${harness}/extensions/${name}" {
+            content.source = lib.ai.linkDirectory pkgs "kimchi-extension-${lib.strings.sanitizeDerivationName name}" extension;
+            executable = null;
+          })
+        cfg.extensions;
+      }
+
       # pi 0.85.1's ThinkingLevel is a superset of the normalized enum and
       # pi reads `defaultThinkingLevel` from the merged user and project
       # harness settings, so the lowering is lossless on both backends. It is
@@ -786,6 +801,12 @@ in
       '';
     };
     options = {
+      extensions = lib.mkOption {
+        type = with lib.types; attrsOf (addCheck package lib.isDerivation);
+        default = {};
+        description = "Pi extension packages, linked under the harness extensions directory and loaded through harness settings packages. Each key names its link; presence enables the package. Under Home Manager, a non-empty extensions map or any native.harnessSettings.packages declaration owns the whole harness packages list, replacing packages added with kimchi install on activation; declare those packages in native.harnessSettings.packages.";
+        example = lib.literalExpression "{ workflows = pkgs.ai.kimchiExtensions.kimchi-workflows; }";
+      };
       permissions = lib.mkOption {
         # No freeform keys: Kimchi validates the file with a `.strict()` zod
         # schema (src/extensions/permissions/config.ts:11-19), so one unknown

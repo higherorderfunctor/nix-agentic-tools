@@ -8,6 +8,30 @@
 }: let
   inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
+  workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
+  workflowsHarness = ".config/kimchi/harness";
+  # Reuse these module evaluations for the structural check and runtime smoke.
+  workflowsBackends = map (backend:
+    backend
+    // {
+      one = backend.evaluate {
+        ai.kimchi = {
+          enable = true;
+          extensions = {inherit workflows;};
+        };
+      };
+    }) [
+    {
+      name = "global";
+      evaluate = evalHm;
+      settings = hmHarnessSettings;
+    }
+    {
+      name = "project";
+      evaluate = evalDevenv;
+      settings = projectHarnessSettings;
+    }
+  ];
   # The Home Manager user config.json shared document.
   hmConfigDocument = evaluated: let
     path = "${evaluated.config.ai.kimchi.configDir}/config.json";
@@ -71,7 +95,9 @@
     shopt -s inherit_errexit 2>/dev/null || :
   '';
   exactCwdProjectRoot = pkgs.runCommand "kimchi-exact-cwd-project-root" {} ''
-    mkdir -p "$out/subdir"
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    ${pkgs.coreutils}/bin/mkdir -p "$out/subdir"
   '';
 
   mkDevenvKimchiPackage = extraConfig:
@@ -231,6 +257,84 @@ in {
   ];
 
   checks = {
+    # Slash commands dispatch before model/credential validation. Feed the
+    # smoke production delivery, including HM's serialized shared-document
+    # declaration and devenv's rendered settings file in the generated tree.
+    kimchi-workflows-smoke = let
+      delivered =
+        map (backend: let
+          files = deliveredFiles backend.one.config;
+          settingsPath = "${workflowsHarness}/settings.json";
+          settings =
+            if backend.name == "global"
+            then
+              pkgs.writeText "kimchi-workflows-global-settings.json"
+              (lib.head (lib.filter (target: target.path == settingsPath)
+                  (ownPlan "kimchi" "kimchiFiles" backend.one).targets)).units.text
+            else files.${settingsPath}.source;
+        in {
+          inherit (backend) name;
+          inherit settings;
+          extension = files."${workflowsHarness}/extensions/workflows".source;
+        })
+        workflowsBackends;
+    in
+      pkgs.runCommand "kimchi-workflows-smoke" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${pkgs.python3}/bin/python3 ${./workflows-smoke.py} ${pkgs.ai.kimchi}/bin/kimchi ${workflows} ${./workflows-observer.ts} \
+          ${pkgs.writeText "kimchi-workflows-delivery.json" (builtins.toJSON delivered)}
+        echo PASS > "$out"
+      '';
+
+    module-kimchi-external-workflows = mkTest "kimchi-external-workflows" (
+      let
+        checkBackend = {
+          evaluate,
+          one,
+          settings,
+          ...
+        }: let
+          withExtensions = extensions:
+            evaluate {
+              ai.kimchi = {
+                enable = true;
+                inherit extensions;
+                native.harnessSettings.packages = ["/consumer/package"];
+              };
+            };
+          empty = evaluate {ai.kimchi.enable = true;};
+          two = withExtensions {
+            another = workflows;
+            inherit workflows;
+          };
+          extensionFiles = evaluated:
+            lib.filterAttrs (path: _: lib.hasPrefix "${workflowsHarness}/extensions/" path) (deliveredFiles evaluated.config);
+          checkLinks = evaluated: names:
+            builtins.attrNames (extensionFiles evaluated)
+            == map (name: "${workflowsHarness}/extensions/${name}") names
+            && lib.all (name: let
+              path = "${workflowsHarness}/extensions/${name}";
+              file = (extensionFiles evaluated).${path};
+            in
+              fromGeneratedTree path file
+              && builtins.hasContext file.source
+              && !(file.recursive or false))
+            names;
+          rejected = builtins.tryEval (builtins.deepSeq (withExtensions {workflows = "${workflows}";}).config.ai.kimchi.extensions true);
+        in
+          lib.all (evaluated: lib.all (assertion: assertion.assertion) evaluated.config.assertions) [empty one two]
+          && extensionFiles empty == {}
+          && !((settings empty) ? packages)
+          && checkLinks one ["workflows"]
+          && checkLinks two ["another" "workflows"]
+          && (settings one).packages == ["extensions/workflows"]
+          && lib.sort builtins.lessThan (settings two).packages == ["/consumer/package" "extensions/another" "extensions/workflows"]
+          && !rejected.success;
+      in
+        lib.all checkBackend workflowsBackends
+    );
+
     # `supportedPools` now owns every normalized per-runtime option gate, not
     # shell alone. Each failure has an identical supported-runtime control so an
     # unrelated eval failure cannot make the exclusion look correct.
@@ -801,7 +905,7 @@ in {
           };
         enabled = {
           "extensions.ferment-v2" = true;
-          "extensions.workflows" = true;
+          "extensions.todos" = true;
         };
         shadowed = withKimchi {
           native.harnessSettings = {
@@ -1506,7 +1610,7 @@ in {
       unguardedPackages = [
         (mkDevenvKimchiPackage {})
         (mkDevenvKimchiPackage {
-          ai.kimchi.native.harnessSettings.resources."extensions.workflows" = true;
+          ai.kimchi.native.harnessSettings.resources."extensions.todos" = true;
         })
         (mkDevenvKimchiPackage {
           ai.kimchi.native.settings = {
@@ -1569,7 +1673,7 @@ in {
           enable = true;
           apiKey.file = "/run/secrets/kimchi-test";
           environmentVariables.KIMCHI_EXTRA = "yes";
-          native.harnessSettings.resources."extensions.workflows" = true;
+          native.harnessSettings.resources."extensions.todos" = true;
         };
       };
       wrapped = builtins.head result.config.home.packages;
@@ -1592,7 +1696,7 @@ in {
               package = resourcesStub;
               native.harnessSettings.resources = {
                 "extensions.ferment-v2" = true;
-                "extensions.workflows" = true;
+                "extensions.todos" = true;
               };
             }
             // extraKimchi;
@@ -1625,14 +1729,14 @@ in {
             exit 1
           fi
         }
-        expect_resources extensions.ferment-v2,extensions.workflows \
+        expect_resources extensions.ferment-v2,extensions.todos \
           env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesOnly}/bin/kimchi
         # Set but empty: no leading comma.
-        expect_resources extensions.ferment-v2,extensions.workflows \
+        expect_resources extensions.ferment-v2,extensions.todos \
           env KIMCHI_ENABLE_RESOURCES= ${devenvResourcesOnly}/bin/kimchi
-        expect_resources extensions.memory,extensions.ferment-v2,extensions.workflows \
+        expect_resources extensions.memory,extensions.ferment-v2,extensions.todos \
           env KIMCHI_ENABLE_RESOURCES=extensions.memory ${devenvResourcesOnly}/bin/kimchi
-        expect_resources extensions.teleport,extensions.ferment-v2,extensions.workflows \
+        expect_resources extensions.teleport,extensions.ferment-v2,extensions.todos \
           env -u KIMCHI_ENABLE_RESOURCES ${devenvResourcesWithEnvironment}/bin/kimchi
         # `! grep` never fails under errexit, so each absence is an explicit branch.
         if grep -qE "KIMCHI_(ENABLE_RESOURCES|REGION|TELEMETRY_ENABLED)" "$bin"; then

@@ -1,7 +1,7 @@
 # cspell:ignore lndir
 # Builds the opt-in `kimchi-docs` skill directory.
 #
-# Shape: `{ SKILL.md, snapshot -> <kimchi-docs> }`.
+# Shape: `{ SKILL.md, snapshot -> <kimchi-docs>, workflows -> <workflowsSource> }`.
 #
 # ── Symlink, not copy ──
 #
@@ -31,6 +31,7 @@
   pkgs,
   search,
   treefmt-nix,
+  workflowsSource,
 }: let
   frontmatter = import ../../../lib/frontmatter.nix {inherit lib;};
   generated = import ../../../lib/generated.nix {inherit lib;} pkgs;
@@ -100,6 +101,16 @@
 
     ${lib.removeSuffix "\n" searchBlock}
 
+    ## Workflows source, documentation and examples
+
+    The `workflows` directory beside this file is the pinned source for
+    `@kimchi-dev/kimchi-workflows`, pinned independently of Kimchi and loaded
+    externally via `ai.kimchi.extensions.workflows`. It is offline; no clone is needed.
+    Read `workflows/README.md` first, then search `workflows/docs` for workflow
+    authoring and execution guidance, `workflows/examples` for working examples,
+    and `workflows/src` for implementation details. These paths are relative to
+    this skill's directory.
+
     ## When this snapshot is the right source, and when it is not
 
     - Use it for anything upstream documents: CLI flags, settings keys, config
@@ -112,7 +123,7 @@
   '';
   rendered = frontmatter.render {
     data = {
-      description = "Answer a question about Kimchi itself — the Kimchi CLI, Kimchi Coding, Ferment, Kimchi Inference, the VS Code extension, or any docs.kimchi.dev setting, provider or reporting surface — from a pinned offline snapshot of docs.kimchi.dev. Use only for Kimchi product documentation; it says nothing about any other tool.";
+      description = "Answer a question about Kimchi itself — the Kimchi CLI, Kimchi Coding, Ferment, Kimchi Inference, the VS Code extension, or any docs.kimchi.dev setting, provider or reporting surface — from a pinned offline snapshot of docs.kimchi.dev. Read the external workflows package source, docs and examples for workflow authoring and execution questions. Use only for Kimchi product documentation; it says nothing about any other tool.";
       name = "kimchi-docs";
     };
     inherit body;
@@ -142,4 +153,5 @@ in
     ${pkgs.coreutils}/bin/mkdir -p "$out"
     ${pkgs.coreutils}/bin/install -m 644 ${skill}/SKILL.md "$out/SKILL.md"
     ${pkgs.coreutils}/bin/ln -s ${docs} "$out/snapshot"
+    ${pkgs.coreutils}/bin/ln -s ${workflowsSource} "$out/workflows"
   ''

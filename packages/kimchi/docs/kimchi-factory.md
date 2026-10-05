@@ -1,26 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-03 — pinned to Kimchi 1.5.1, which retired the
-> `autoDefaultApplied` marker and rolls an Auto-entitled account back to Auto on
-> every fresh main launch; the marker is gone from the factory, extractor and
-> checks, and Home Manager still defaults the model pair to Auto. The 1.5.0
-> source build adds resource controls for teleport and remote-run and anchors
-> pi's fd/rg lookup to Nix packages. The extractor binds patch-added source
-> before resolving environment aliases and classifies Kimchi 1.5.0's versioned
-> config and environment additions before the package pin moves. A normalized
-> agent's `tools` list is dropped with a warning instead of failing evaluation.
-> Kimchi shares Home Manager's user config.json and harness/settings.json with
-> the runtime; the remaining files and every devenv file stay read-only copies.
-> Its rules use the shared flat AGENTS.md renderer and repository aggregate.
-> Region is required; Home Manager delivers it and telemetry through global
-> config.json only. Devenv accepts harness `resources` and appends the
-> true-valued ids to `KIMCHI_ENABLE_RESOURCES`, rejecting a false value or a
-> malformed id. The pinned pi dependency is 0.85.1. Agents are read-only copies
-> from the runtime's generated Markdown tree; the opt-in docs skill uses the
-> shared frontmatter text renderer and a guarded generated-file tree that
-> formats whole files and compares parsed header values; a store-path string is
-> an input just as a path is. Full lineage:
-> `git show f5ecf77b:packages/kimchi/docs/kimchi-factory.md`.
+> **Last verified:** 2026-10-04 — workflows is an independent external pi
+> extension, delivered as a named package link on both backends; Kimchi removes
+> its static registration and resource toggle before compilation.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -95,17 +77,19 @@ harness `settings.json` it declares:
     `module-kimchi-auto-model-default`.
 
 `packages/kimchi/extracted.json` measures the two native settings surfaces and
-the environment variables Kimchi and pi read, and `lib/extracted.nix` is its
-only reader. It generates the closed `native.settings` (from `config.*`) and
-`native.harnessSettings` (from `harness.*`, resolving `harness.definitions`)
-option trees: scalars and enums map directly, objects with properties become
-closed submodules, `additionalProperties` becomes `attrsOf`, and arrays keep
-untyped elements unless they are scalars, because `filterNulls` does not recurse
-into lists. So a key upstream adds to pi's `Settings` or to config.ts's
-`readConfigExtras` becomes an option at the next re-extraction, and a key it
-removes fails its consumer as an unknown option instead of writing bytes nothing
-reads. Every option is `nullOr` with a null default. Config annotations may name
-an `aliasFor` or the exact `introduced` release. The extractor validates every
+the environment variables Kimchi and pi read, and pi’s `virtualPackages` from
+its loader’s literal `VIRTUAL_MODULES` keys (deduplicated npm package names).
+`lib/extracted.nix` is its only reader. It generates the closed
+`native.settings` (from `config.*`) and `native.harnessSettings` (from
+`harness.*`, resolving `harness.definitions`) option trees: scalars and enums
+map directly, objects with properties become closed submodules,
+`additionalProperties` becomes `attrsOf`, and arrays keep untyped elements
+unless they are scalars, because `filterNulls` does not recurse into lists. So a
+key upstream adds to pi's `Settings` or to config.ts's `readConfigExtras`
+becomes an option at the next re-extraction, and a key it removes fails its
+consumer as an unknown option instead of writing bytes nothing reads. Every
+option is `nullOr` with a null default. Config annotations may name an
+`aliasFor` or the exact `introduced` release. The extractor validates every
 annotation before release gating, then includes only active rows in its census
 and generated sidecar. Alias keys and inert keys have no option. A key is inert
 when upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
@@ -439,8 +423,9 @@ The MCP adapter's scaffold, preset and install commands write their own project
 `.mcp.json` or user `~/.config/mcp/mcp.json`, not the Kimchi-owned `mcp.json`.
 Those destinations need their own owner if they are to be managed from Nix.
 `kimchi install` writes `packages` into harness `settings.json`; under Home
-Manager that write does not persist. Declare the package's settings from Nix
-instead.
+Manager that write does not persist when `packages` is declared from Nix
+(including via `extensions`). Declare those packages in
+`native.harnessSettings.packages` instead.
 
 A normalized record renders as `description:` frontmatter plus the instructions
 body, with no `name:`. Its Claude/Copilot `tools` list is dropped (Kimchi
@@ -468,8 +453,9 @@ the same one Claude's settings use. It takes the default facts and lands as a
 symlink. PermissionRequest is not a Kimchi event and the reader skips unknown
 events silently, so the factory leaves it out. Home Manager has no lifecycle
 sink it can own. A configured pi package's `hooks/hooks.json` would make Home
-Manager own `packages` in harness `settings.json` and clobber `kimchi install`.
-The opt-in Claude Code hook adapter (`extensions.claude-code-hook-adapter`,
+Manager own the `packages` leaf in harness `settings.json` for every `ai.hooks`
+user, rather than only consumers who opt into package ownership. The opt-in
+Claude Code hook adapter (`extensions.claude-code-hook-adapter`,
 `defaultEnabled: false`, `src/resources/definitions.ts:75-80`) reads
 `~/.claude/settings.json`
 (`src/extensions/claude-code-hook-adapter/definition.ts:25-28`), which Claude's
@@ -550,6 +536,40 @@ context entry, because it never installs the package. The wrapper stays a local
 line, and moving it would change the wrapper's store path.
 
 ## Source packaging
+
+`pkgs.ai.kimchiExtensions.kimchi-workflows` is an independently pinned,
+source-built external pi extension. The shared `ai.kimchi.extensions` option
+accepts a free-form map of derivations, empty by default. For example:
+
+```nix
+ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
+```
+
+Each key delivers a directory link through `ai.kimchi.files`:
+`<configDir>/harness/extensions/<key>` on Home Manager and
+`<project>/.config/kimchi/harness/extensions/<key>` on devenv. The link retains
+the package closure's string context. Sorted relative names populate
+`native.harnessSettings.packages` and merge with consumer package entries. Pi
+reads each package's `pi.extensions` manifest. Removing a key withdraws its link
+and package entry. Devenv requires approval and launch from the project root.
+Kimchi discovers the package in its Plugins tab; the user-scope resource toggle
+disables its extensions, including project packages. See the source citations
+and smoke contract in [external workflows](kimchi-workflows.md).
+
+Kimchi's source patch removes the workflows static import, managed factory
+entry, and resource definition. Its locked package may still be fetched, but
+workflows is unreachable from the executable module graph and no built-in
+resource can load a second copy. `externalized-extensions.nix` is the single
+parameterized list for these exact substitutions and the cheap source check. The
+resource definition is metadata for the resource menu, not an external-loader
+requirement; keeping it would advertise a toggle without a factory. See
+[external workflows](kimchi-workflows.md) for the pinned source evidence,
+runtime payload and CI contracts.
+
+The opt-in `kimchi-docs` skill links the pinned source as `workflows`, with
+directions to README, docs, examples and src. Both module backends use the
+repository package roots, so a host without an overlay and the module harness's
+stub executable receive the same pin.
 
 The package builds upstream's Bun executable and its Go proxy helper from the
 same pinned release. That source is pinned once, as `extraction.kimchiSource` in

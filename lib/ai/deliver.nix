@@ -260,7 +260,7 @@ in
               lib.listToAttrs (map (entry: lib.nameValuePair entry.path entry.content.value)
                 (lib.filter (entry: entry.method == "shared" && entry.content.value != null) (claimsOf name)));
             entryNames = entryNamesFor name writer;
-            hasFiles = (config.files or {}) != {};
+            inherit hasFiles;
             python = pkgs.python3;
             targets = targetsFor name writer;
           }
@@ -270,6 +270,34 @@ in
     # comes from `cfg.activation` forces that option while the module system is
     # still collecting the definitions it is made of.
     mergeBundles = path: lib.foldl' (merged: bundle: merged // lib.attrByPath path {} bundle) {} bundles;
+    # Keep the conditional file-creation edge and the guard's dependencies in
+    # the router. Owned writers always precede file creation when it exists.
+    # `tasks."devenv:files"` exists only when the project declares files, and
+    # devenv's runner hard-errors on a dangling reference, so that edge stays
+    # conditional. It is read here, in a value the file buckets never consult,
+    # because a fragment that decided WHETHER to write `config.files` by
+    # reading `config.files` is a genuine cycle.
+    hasFiles = (config.files or {}) != {};
+    writerPrecedesFiles = writer: hasFiles && (writer.command == null || lib.elem "shell" writer.before);
+    writersBeforeFiles =
+      lib.mapAttrsToList (name: writer: (entryNamesFor name writer).write)
+      (lib.filterAttrs (_name: writerPrecedesFiles) cfg.activation);
+    symlinkEntries =
+      lib.concatMapAttrs (
+        path: entry:
+          if entry.recursive && backend == "devenv"
+          then
+            lib.mapAttrs (
+              leaf: _source:
+                runtimeFiles.sinkEntry (entry
+                  // {
+                    content.source = "${entry.rendered.source}/${lib.removePrefix "${path}/" leaf}";
+                    recursive = false;
+                  })
+            ) (formats.walk path entry.content.source)
+          else {${path} = runtimeFiles.sinkEntry (entry // {content = entry.rendered;});}
+      )
+      (bucket "symlink");
   in {
     afterEdges = writer: edges afterTokens writer.after;
     beforeEdges = writer: edges beforeTokens writer.before;
@@ -296,35 +324,53 @@ in
       )
       (lib.filterAttrs (_name: writer: writer.command != null) cfg.activation);
 
-    # `tasks."devenv:files"` exists only when the project declares files, and
-    # devenv's runner hard-errors on a dangling reference, so that edge stays
-    # conditional. It is read here, in a value the file buckets never consult,
-    # because a fragment that decided WHETHER to write `config.files` by
-    # reading `config.files` is a genuine cycle.
-    hasFiles = (config.files or {}) != {};
-
-    inherit nameFor tree treefmt;
+    inherit hasFiles nameFor tree treefmt writerPrecedesFiles;
 
     # The backend's own store-symlink primitive, in the shape both file sinks
     # take. Home Manager recurses a directory source itself; devenv has no such
     # primitive, so the router walks the tree and emits one entry per leaf —
     # the leaves are ordinary entries, so `recursive` is off for each of them.
-    symlinkEntries =
-      lib.concatMapAttrs (
-        path: entry:
-          if entry.recursive && backend == "devenv"
-          then
-            lib.mapAttrs (
-              leaf: _source:
-                runtimeFiles.sinkEntry (entry
-                  // {
-                    content.source = "${entry.rendered.source}/${lib.removePrefix "${path}/" leaf}";
-                    recursive = false;
-                  })
-            ) (formats.walk path entry.content.source)
-          else {${path} = runtimeFiles.sinkEntry (entry // {content = entry.rendered;});}
-      )
-      (bucket "symlink");
+    inherit symlinkEntries;
+
+    # Reuse the lowered file map, including recursive leaves. Upstream's
+    # ln -sf follows an existing directory link; remove only stale store links
+    # before it runs. Migration commands validate and move legacy content first.
+    symlinkTasks = lib.optionalAttrs (backend == "devenv" && symlinkEntries != {}) {
+      "ai:${runtime}:guard-symlink-updates" = {
+        after =
+          ["devenv:files:cleanup"]
+          ++ writersBeforeFiles;
+        before = ["devenv:files"];
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          failed=0
+          # Report every conflict before failing the file-creation dependency.
+          guard_link() {
+            local path="$1" desired="$2" target
+            if [ -L "$path" ]; then
+              target="$(${pkgs.coreutils}/bin/readlink -- "$path")"
+              case "$target" in
+                "$desired") ;;
+                /nix/store/*) ${pkgs.coreutils}/bin/rm -f -- "$path" ;;
+                *)
+                  echo "ERROR: $path links outside the Nix store ($target); remove it so devenv can manage it" >&2
+                  failed=1
+                  ;;
+              esac
+            elif [ -e "$path" ]; then
+              echo "ERROR: $path exists and is not a link; move it aside so devenv can manage it" >&2
+              failed=1
+            fi
+          }
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList (path: _entry: "guard_link ${lib.escapeShellArgs [path config.files.${path}.file]}") (lib.filterAttrs (path: _entry: config.files.${path}.copyMode == "symlink") symlinkEntries))}
+          if [ "$failed" -ne 0 ]; then
+            false
+          fi
+        '';
+      };
+    };
 
     owned = {
       activation = mergeBundles ["home" "activation"];

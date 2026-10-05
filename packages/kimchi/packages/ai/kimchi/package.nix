@@ -2,6 +2,7 @@
 # Keep upstream's bin/ + share/ layout: the compiled CLI resolves its assets
 # relative to the executable, including when the module wraps that executable.
 {
+  externalizedExtensions ? import ../../../externalized-extensions.nix,
   fd,
   packageLib,
   pkgs,
@@ -41,11 +42,14 @@
   piAiPackage = fetchExtraction extraction.piAiPackage;
   piPackage = fetchExtraction extraction.piPackage;
   piTuiPackage = fetchExtraction extraction.piTuiPackage;
+  externalizeExtensions = import ../../../lib/externalizeExtensions.nix {inherit externalizedExtensions lib;};
 
   extracted =
     pkgs.runCommand "kimchi-extracted.json" {
       nativeBuildInputs = [pkgs.nodejs pkgs.typescript_5];
     } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       ${pkgs.yq-go}/bin/yq -o=json '.' ${kimchiSource}/pnpm-lock.yaml > kimchi-lock.json
       ${pkgs.nodejs}/bin/node ${../../../extract/extract.mjs} \
         --annotations ${../../../extract/annotations.json} \
@@ -224,6 +228,7 @@ in
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
       ''
+      + externalizeExtensions
       + lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
         substituteInPlace scripts/build-binary.js \
           --replace-fail 'run("codesign (strip)", `codesign --remove-signature ''${binaryPath}`)' \
@@ -283,7 +288,7 @@ in
     '';
 
     passthru = {
-      inherit extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
+      inherit externalizedExtensions externalizeExtensions extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
       inherit (goUpdate) fixGoFloor fixVendorHash;
       extractionSources = {
         kimchi = kimchiSource;

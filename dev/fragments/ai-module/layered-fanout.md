@@ -1,6 +1,8 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-01 — a record's `agentNativeType` +
+> **Last verified:** 2026-10-04 — devenv symlink guards use the final file
+> target, follow their own runtime's writers before file creation, and report
+> every conflict before failing. A record's `agentNativeType` +
 > `agentTransformer` give it a typed `native.agents` layer below the normalized
 > agents pool; every agents runtime gets `agentsDir`, and a runtime extends the
 > builder's `agents` description only through `agentsDescriptionSuffix`. Rule
@@ -180,6 +182,23 @@ not move them back.
   Commands omit a final newline because the router supplies it, along with
   strict mode and a scoped subshell. Directory skill sources keep
   `recursive = false` because Codex discovers directory symlinks.
+- **devenv guards native link updates.** For a runtime with symlink entries, the
+  router emits `ai:<runtime>:guard-symlink-updates` from the lowered file map,
+  including recursive leaves whose final `copyMode` is `symlink`, using
+  `config.files.<path>.file` as the desired target (including executable
+  wrappers). It runs after file cleanup and all owned and command writers of its
+  runtime ordered before file creation, then before `devenv:files`. It removes
+  stale store-backed links, and fails loudly on a real file or directory at a
+  delivered path, where devenv itself would only warn and skip. For a non-store
+  link, devenv ran `ln -sf` without `-n`: a link to a file, or a dangling link,
+  was replaced, but a link to a writable directory was followed, leaving the old
+  link and adding a stray link inside that directory. The guard now refuses
+  both. A cross-owner handoff from an owned copy to a symlink can fail the guard
+  for one shell entry until the other owner's retraction has run. It reports
+  every offender before failing. A failed guard makes `devenv:files` and
+  `devenv:enterShell` `DependencyFailed`: shell entry continues with a warning,
+  but no `files.*` entry from any runtime or the user is created or updated, and
+  `devenv test` fails.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` and
   Copilot's HM `config.json` are writable state files with Nix-owned leaves. The
   adapter runs their JSON bundles on activation and retains unowned state.

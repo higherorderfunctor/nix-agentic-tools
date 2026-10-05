@@ -89,6 +89,7 @@ disjointness
 docbook
 docsite
 dogfood
+dotglob
 drvs
 dsolve
 dunder
@@ -199,6 +200,7 @@ libx
 licence
 licences
 lifecycles
+lightningcss
 lintable
 linuxbrew
 listdir
@@ -393,6 +395,7 @@ tsgo
 tsgolint
 tummychow
 turbofish
+typebox
 ufcs
 ugrep
 ultracode

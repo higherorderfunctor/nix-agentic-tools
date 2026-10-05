@@ -3,6 +3,7 @@
   # attribute injected, so a module default must come from
   # `ai.internal.roots` (this flake's build) or fail.
   injectAi ? true,
+  inputs,
   lib,
   moduleImports,
   moduleInternals,
@@ -109,7 +110,20 @@
   };
 
   # Stub devenv's files option and the other options the factory config
-  # callbacks set, so they evaluate without importing devenv.
+  # callbacks set, without importing the full devenv module graph.
+  # Compute upstream's linked targets and copy modes; retain the declared fields
+  # so factory snapshots do not acquire upstream's function-valued formats.
+  devenvFileTargets = files:
+    (lib.evalModules {
+      specialArgs = {inherit pkgs;};
+      modules = [
+        "${inputs.devenv}/src/modules/files.nix"
+        {
+          _module.check = false;
+          inherit files;
+        }
+      ];
+    }).config.files;
   devenvStubs = {
     options = {
       assertions = lib.mkOption {
@@ -144,6 +158,10 @@
       };
       files = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
+        apply = files: let
+          targets = devenvFileTargets files;
+        in
+          lib.mapAttrs (path: entry: entry // {inherit (targets.${path}) copyMode file;}) files;
         default = {};
       };
       packages = lib.mkOption {

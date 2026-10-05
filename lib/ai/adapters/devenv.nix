@@ -19,19 +19,18 @@ in
     };
     # ONE literal attribute path; see the note in adapters/hm.nix for why a
     # fragment per writer recurses.
-    tasks =
-      delivery.owned.tasks
-      // delivery.commandEntries (writer: {
-        after = delivery.afterEdges writer;
-        # The `devenv:files` edge is added beside the `shell` token rather
-        # than instead of it: `devenv:enterShell` is what unconditionally
-        # guarantees the body runs before the shell, and `devenv:files`
-        # exists only when the project declares files at all.
-        before =
-          delivery.beforeEdges writer
-          ++ lib.optional (delivery.hasFiles && builtins.elem "shell" writer.before) "devenv:files";
-        exec = delivery.commandBody writer;
-      });
+    commandTasks = delivery.commandEntries (writer: {
+      after = delivery.afterEdges writer;
+      # The `devenv:files` edge is added beside the `shell` token rather
+      # than instead of it: `devenv:enterShell` is what unconditionally
+      # guarantees the body runs before the shell, and `devenv:files`
+      # exists only when the project declares files at all.
+      before =
+        delivery.beforeEdges writer
+        ++ lib.optional (delivery.writerPrecedesFiles writer) "devenv:files";
+      exec = delivery.commandBody writer;
+    });
+    tasks = delivery.owned.tasks // commandTasks // delivery.symlinkTasks;
   in
     lib.mkMerge [
       {

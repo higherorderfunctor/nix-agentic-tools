@@ -171,12 +171,14 @@ this paragraph would rot the next time one is added.)
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-09-30 — Claude's skills are `ai.*` delivery entries.
+> **Last verified:** 2026-10-04 — Claude's skills are `ai.*` delivery entries.
 > The repository's instruction files are `ai.*`'s own read-only copies (`own`),
 > never `files.*` symlinks; the generator's materializer and the AGENTS.md seed
 > are gone. Copilot, Kiro and Kimchi settings and Codex daemon settings are
 > owned copies. Recursive leaf links target one source-tree store root while
-> retaining per-file input contexts.
+> retaining per-file input contexts. The symlink guard uses devenv's final file
+> target, follows its own runtime's writers before file creation, and reports
+> every conflict before failing.
 >
 > Full lineage: `git show 2ac8d522:dev/fragments/devenv/files-internals.md`.
 
@@ -262,7 +264,28 @@ createSymlinkScript = filename: fileOption: ''
 '';
 ```
 
-No recursion in this branch — one `ln -s` per entry.
+No recursion in this branch — one `ln -s` per entry. Upstream
+`src/modules/files.nix:115` updates with `ln -sf` without `-n`: an existing link
+to a directory is followed, so a changed target attempts to create a link inside
+the old read-only store directory and fails. The delivery router's devenv-only
+`ai:<runtime>:guard-symlink-updates` task uses its lowered symlink entries to
+unlink only changed links whose current target is under `/nix/store/`. It fails
+loudly on a real file or directory at a delivered path, where devenv would only
+warn and skip the entry. For a non-store link, devenv ran `ln -sf` without `-n`:
+a link to a file, or a dangling link, was replaced, but a link to a writable
+directory was followed, leaving the old link and adding a stray link inside that
+directory. The guard now refuses both. The guard runs after
+`devenv:files:cleanup` and all owned and command writers of its runtime ordered
+before `devenv:files`, then before `devenv:files`. There is one guard per
+runtime with symlink entries; no file-type probing is needed. A cross-owner
+handoff from an owned copy to a symlink can fail the guard for one shell entry
+until the other owner's retraction has run. Its desired target is
+`config.files.<path>.file` for entries whose final `copyMode` is `symlink`,
+including devenv's executable wrapper, rather than the source-tree path. The
+guard reports every offending path before failing. A failed guard makes
+`devenv:files` and `devenv:enterShell` `DependencyFailed`: shell entry continues
+with a warning, but no `files.*` entry from any runtime or the user is created
+or updated, and `devenv test` fails.
 
 The other branch does recurse. `createCopyScript` drops a previous
 store-symlink, then materializes with `cp -RL` followed by `chmod -R u+w`, so a

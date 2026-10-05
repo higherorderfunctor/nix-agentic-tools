@@ -10,6 +10,7 @@
   ...
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
+  workflowsSource = pkgs.ai.kimchiExtensions.kimchi-workflows.src;
 
   # Home Manager delivers the skill to the user harness; devenv delivers it to
   # the project's `.kimchi/skills`, the native project-scope root.
@@ -75,6 +76,10 @@ in {
         "grep -qx 'name: \"kimchi-docs\"' \"\$skill/SKILL.md\""
       require "the snapshot link does not point at the packaged docs.kimchi-docs derivation (${pkgs.docs.kimchi-docs})" \
         '[ "$(readlink "$skill/snapshot")" = ${pkgs.docs.kimchi-docs} ]'
+      require "the workflows link does not point at the independently pinned workflows source" \
+        '[ "$(readlink "$skill/workflows")" = ${workflowsSource} ]'
+      require "the workflows README is unreadable through the skill" '[ -s "$skill/workflows/README.md" ]'
+      require "SKILL.md omits the workflows source directions" 'grep -q workflows/src "$skill/SKILL.md"'
       for index in snapshot/llms.txt snapshot/docs/llms.txt; do
         require "the index $index is unreadable through the skill" '[ -s "$skill/$index" ]'
         require "the index $index does not name docs.kimchi.dev, so it is not the upstream index" \
@@ -136,15 +141,15 @@ in {
     );
 
     # Asserts: enabling it mounts the skill in every runtime's pool and
-    # materializes it on both backends — and that the snapshot stays ONE devenv
-    # entry (the symlink), not one per snapshot file.
+    # materializes it on both backends — and that snapshot and workflows each
+    # stay ONE devenv entry (the symlink), not one per source file.
     module-kimchi-docs-skill-delivered = mkTest "kimchi-docs-skill-delivered" (
       hmOn.config.ai.kimchi.skills
       ? kimchi-docs
       && hmOn.config.ai.claude.skills ? kimchi-docs
       && hmOn.config.home.file.${skillDir}.recursive
       && lib.sort lib.lessThan (devenvSkillKeys devenvOn)
-      == ["${devenvSkillDir}/SKILL.md" "${devenvSkillDir}/snapshot"]
+      == ["${devenvSkillDir}/SKILL.md" "${devenvSkillDir}/snapshot" "${devenvSkillDir}/workflows"]
     );
 
     # Asserts: a per-runtime `false` suppresses exactly that runtime.
