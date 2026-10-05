@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Manual, account-free rendering and strict replay grading of routing plans.
 
-All authenticated adapters are intentionally disabled. Enabling one requires
-independent tool-suppression and terminal-capture evidence, not a CLI switch.
+Isolated adapters are disabled. The separate vendor set requires explicit paid
+authorization and matching tool-suppression and terminal-capture evidence.
 """
 
 import argparse
@@ -429,6 +429,9 @@ def main():
     mode.add_argument("--render-only", action="store_true")
     mode.add_argument("--grade-existing", type=Path, metavar="MANIFEST")
     mode.add_argument("--validate-fixtures", action="store_true")
+    parser.add_argument("--set", choices=("isolated", "vendor"), default="isolated")
+    parser.add_argument("--allow-paid", action="store_true", help="explicitly authorize manual vendor turns")
+    parser.add_argument("--safety-preflight", type=Path, help="verified vendor suppression identity JSON")
     parser.add_argument("--fixtures", type=Path, help="exported cases JSON; otherwise evaluates the Nix check passthru")
     parser.add_argument("--case", action="append", default=[], help="case ID, repeatable; default all")
     parser.add_argument("--repeat", type=int, default=3)
@@ -440,6 +443,9 @@ def main():
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error("--repeat must be positive")
+    if args.set == "vendor":
+        from vendor import run_vendor
+        return run_vendor(args)
     if not (args.render_only or args.grade_existing or args.validate_fixtures):
         if not all((args.runtime, args.model, args.effort)):
             parser.error("live evaluation requires explicit --runtime --model --effort")
