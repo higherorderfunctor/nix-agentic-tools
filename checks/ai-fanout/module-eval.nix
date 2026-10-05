@@ -364,21 +364,23 @@ in {
             then option.type.description
             else shape option)
           (builtins.removeAttrs declarations ["_module"]);
-        optionShape = evaluated: path:
-          shape ((lib.getAttrFromPath path evaluated.options).type.getSubOptions []);
+        programOptions = evaluated: package: evaluated.options.ai.programs.${package}.type.getSubOptions [];
+        optionShape = evaluated: package: shape (programOptions evaluated package);
+        runtimeShape = evaluated: package: runtime:
+          shape ((programOptions evaluated package).settings.${runtime}.type.getSubOptions []);
         hm = evalHm {};
         devenv = evalDevenv {};
         gitPresetValues = evaluated:
           evaluated.options.stacked-workflows.gitPreset.type.functor.payload.values;
         programParity = package: expectedRootShape: runtimes:
-          optionShape hm ["ai" "programs" package]
-          == expectedRootShape
-          && optionShape hm ["ai" "programs" package]
-          == optionShape devenv ["ai" "programs" package]
+          optionShape hm package
+          == expectedRootShape // {settings = lib.genAttrs runtimes (_: "submodule");}
+          && optionShape hm package
+          == optionShape devenv package
           && lib.all
           (runtime:
-            optionShape hm ["ai" runtime "programs" package]
-            == optionShape devenv ["ai" runtime "programs" package])
+            runtimeShape hm package runtime
+            == runtimeShape devenv package runtime)
           runtimes;
       in
         programParity "delegate-routing" {

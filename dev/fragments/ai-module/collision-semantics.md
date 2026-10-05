@@ -1,16 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-09-30 — rule triggers resolve from one portable
-> priority list against one runtime support table before native rendering.
-> Semble's CLI rule gate is `cli.instructions`. A shared target's byte limit is
-> checked on the built final file, in the same delivery tree when that file is
-> `raw`. Merged pools are public `ai.<runtime>.normalized.<pool>` options fed
-> per-key defaults, and a text-source record crosses into them with only its
-> winning arm. Path claims fail across runtimes except the shared AGENTS.md
-> target, matched on the key each record's `sharedAgentsMd` callback declares.
-> Rules and context use entry-local `enable` suppression; delivery entries
-> default `content` alone, and `content.enable = false` suppresses every content
-> form.
+> **Last verified:** 2026-10-04 — program runtime settings live under
+> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -32,7 +23,7 @@ commit.
 | B1a | proxied MCP declaration → managed unit            | owner   | One used root owner; runtime declarations own directly; reused owner keys fail; an unused root owner emits nothing.                               |
 | B2  | root pool ↔ runtime pool, different keys          | entry   | Additive; both entries remain.                                                                                                                    |
 | B3  | fields inside one pool entry                      | field   | Never merge across levels; entries are atomic.                                                                                                    |
-| B4  | `ai.programs.<pkg>` ↔ runtime program override    | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
+| B4  | `ai.programs.<pkg>` ↔ `settings.<runtime>`        | option  | Resolve every generated leaf with `resolveOverride`: null inherits and non-null wins.                                                             |
 | B5  | `ai.settings` ↔ runtime settings                  | field   | Resolve each normalized field with `resolveOverride`.                                                                                             |
 | B5a | `ai.context` ↔ runtime context                    | content | Concatenate into one runtime artifact, root first; ordinary Nix merging arbitrates field writers.                                                 |
 | B6  | normalized → native                               | —       | Translate; normalized values never emit directly.                                                                                                 |
@@ -210,9 +201,9 @@ and out of the package provenance guard.
 - `ai.hooks` is an event map whose matcher-group lists append shared-first.
   Event keys identify additive lifecycle streams, not replaceable pool items.
 - `ai.shell`, normalized `ai.settings` fields, and generated
-  `ai.<runtime>.programs.<pkg>` leaves are nullable scalars. `resolveOverride`
-  interprets runtime null as **inherit**, not delete; a non-null runtime scalar
-  wins.
+  `ai.programs.<pkg>.settings.<runtime>` leaves are nullable scalars.
+  `resolveOverride` interprets runtime null as **inherit**, not delete; a
+  non-null runtime scalar wins.
 - `ai.<runtime>.files` is a final per-runtime output registry, not a portable
   root pool. Priority chooses one atomic nullable entry per backend-relative
   path; repeated text never concatenates. There is no root `ai.files` fanout.
