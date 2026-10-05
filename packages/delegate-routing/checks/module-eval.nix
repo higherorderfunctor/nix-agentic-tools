@@ -60,7 +60,7 @@
   hasLoadInstruction = text: lib.hasInfix "load the `delegate-routing` skill" (lib.replaceStrings ["\n"] [" "] text);
   crossVendor = "Rows span more than one vendor";
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
-  optionTree = result: path: (lib.getAttrFromPath path result.options).type.getSubOptions [];
+  optionTree = result: path: lib.getAttrFromPath path result.options;
   checkBackend = {
     name,
     evaluate,
@@ -209,13 +209,12 @@
           map
           (definition: {
             inherit (definition) file;
-            value = definition.value.whenToDelegate.${preset};
+            value = definition.value.${preset};
           })
           (builtins.filter
             (definition:
-              definition.value ? whenToDelegate
-              && builtins.hasAttr preset definition.value.whenToDelegate)
-            noEntries.options.ai.programs.delegate-routing.definitionsWithLocations);
+              builtins.hasAttr preset definition.value)
+            noEntries.options.ai.programs.delegate-routing.whenToDelegate.definitionsWithLocations);
       };
     shippedEntryPrioritiesChecked = assert lib.assertMsg
     (lib.all
@@ -402,7 +401,13 @@
     "module-delegate-routing-${name}-kimchi-models" = mkTest "delegate-routing-${name}-kimchi-models" (
       requiresSelection "kimchi"
       # Kimchi ships no default selection.
-      && failsWith (evaluate (lib.recursiveUpdate scenario {ai.programs.delegate-routing.settings.kimchi.models = [];})) "ai.programs.delegate-routing.settings.kimchi.models must select at least one"
+      && failsWith (evaluate (lib.updateManyAttrsByPath [
+          {
+            path = ["ai" "programs" "delegate-routing" "settings"];
+            update = settings: builtins.removeAttrs settings ["kimchi"];
+          }
+        ]
+        scenario)) "ai.programs.delegate-routing.settings.kimchi.models must select at least one"
       && result.config.ai.kimchi.skills ? delegate-routing
       && lib.hasInfix "flash (served)" kimchi
       && !(lib.hasInfix "(anthropic)" kimchi)
@@ -599,7 +604,7 @@
     "module-delegate-routing-${name}-options" = mkTest "delegate-routing-${name}-options" (
       let
         portable = optionTree result ["ai" "programs" "delegate-routing"];
-        perRuntime = portable.settings.claude.type.getSubOptions [];
+        perRuntime = portable.settings.claude;
         roleOptions = perRuntime.roles.type.getSubOptions [];
         defaultRole = roleOptions.default.type.getSubOptions [];
       in

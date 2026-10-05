@@ -117,71 +117,62 @@ args @ {
     };
   };
 in {
-  options.ai.programs.delegate-routing = lib.mkOption {
-    type = lib.types.submodule {
-      options = {
-        families = lib.mkOption {
-          type = lib.types.attrsOf (lib.types.attrsOf (lib.types.submodule {
-            options = {
-              avoidFor = lib.mkOption {
-                type = lib.types.str;
-                default = "";
-                description = "Tasks this family should avoid.";
-              };
-              effort = lib.mkOption {
-                type = lib.types.str;
-                default = "";
-                description = "Delegate effort guidance.";
-              };
-              match = lib.mkOption {
-                type = lib.types.str;
-                description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
-              };
-              tier = lib.mkOption {
-                type = lib.types.enum tierNames;
-                description = "Capability tier.";
-              };
-              useFor = lib.mkOption {
-                type = lib.types.str;
-                default = "";
-                description = "Tasks suited to this family.";
-              };
-            };
-          }));
-          default = {};
-          description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
-        };
-        procedure = lib.mkOption {
-          type = aiTypes.optionalTextSource {
-            defaultContent.text = defaults.procedure;
-            description = "delegate routing procedure";
-            enableDefault = true;
+  options.ai.programs.delegate-routing = {
+    families = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf (lib.types.submodule {
+        options = {
+          avoidFor = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Tasks this family should avoid.";
           };
-          default = {};
-          description = "Procedure at the end of the skill. Replace with text or source, or disable it.";
-        };
-        rules = lib.mkOption {
-          type = aiTypes.optionalTextSource {
-            defaultContent.text = defaults.rules;
-            description = "delegate sizing rules";
-            enableDefault = true;
+          effort = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Delegate effort guidance.";
           };
-          default = {};
-          description = "Rules at the top of the skill. Replace with text or source, or disable them.";
+          match = lib.mkOption {
+            type = lib.types.str;
+            description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
+          };
+          tier = lib.mkOption {
+            type = lib.types.enum tierNames;
+            description = "Capability tier.";
+          };
+          useFor = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Tasks suited to this family.";
+          };
         };
-        settings = lib.genAttrs supportedRuntimes (runtime:
-          # This merges with lib/ai/program.nix's override submodule only because it
-          # declares no default, description or example; adding any throws "already declared".
-            lib.mkOption {
-              type = lib.types.submodule {options = runtimeOptions runtime;};
-            });
-        whenToDelegate = lib.mkOption {
-          inherit (whenToDelegateOptions) type;
-          default = {};
-          apply = whenToDelegateOptions.rename;
-          description = "Always-on guidance describing when to delegate work.";
-        };
+      }));
+      default = {};
+      description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
+    };
+    procedure = lib.mkOption {
+      type = aiTypes.optionalTextSource {
+        defaultContent.text = defaults.procedure;
+        description = "delegate routing procedure";
+        enableDefault = true;
       };
+      default = {};
+      description = "Procedure at the end of the skill. Replace with text or source, or disable it.";
+    };
+    rules = lib.mkOption {
+      type = aiTypes.optionalTextSource {
+        defaultContent.text = defaults.rules;
+        description = "delegate sizing rules";
+        enableDefault = true;
+      };
+      default = {};
+      description = "Rules at the top of the skill. Replace with text or source, or disable them.";
+    };
+    settings = lib.genAttrs supportedRuntimes runtimeOptions;
+    whenToDelegate = lib.mkOption {
+      inherit (whenToDelegateOptions) type;
+      default = {};
+      apply = whenToDelegateOptions.rename;
+      description = "Always-on guidance describing when to delegate work.";
     };
   };
 

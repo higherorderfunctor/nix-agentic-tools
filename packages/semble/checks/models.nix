@@ -145,8 +145,8 @@ in {
     module-semble-models-option-shape = let
       hm = evalHm {};
       devenv = evalDevenv {};
-      rootOptions = evaluated: evaluated.options.ai.programs.semble.type.getSubOptions [];
-      runtimeOptions = (rootOptions hm).settings.kiro.type.getSubOptions [];
+      rootOptions = evaluated: evaluated.options.ai.programs.semble;
+      runtimeOptions = (rootOptions hm).settings.kiro;
       entryOptions = evaluated: removeAttrs ((rootOptions evaluated).models.type.nestedTypes.elemType.getSubOptions []) ["_module"];
       options = entryOptions hm;
       root = rootOptions hm;
@@ -177,6 +177,13 @@ in {
         rootExposureGone = rejected {ai.programs.semble.mcp.rootExposure = false;};
         mcpPathMappingsGone = rejected {ai.programs.semble.mcp.pathMappings = [];};
       };
+
+    module-program-reserves-settings = mkTest "program-reserves-settings" (!(builtins.tryEval
+      (programFactory.mkProgram {
+        name = "x";
+        options.settings = lib.mkOption {type = lib.types.str;};
+        supportedRuntimes = ["claude"];
+      }).module).success);
 
     # The program factory has no `pools` field (the keyed-models design needed
     # it; a list does not), and a runtime `models` list replaces the portable

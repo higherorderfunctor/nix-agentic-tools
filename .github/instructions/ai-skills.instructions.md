@@ -7,8 +7,8 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-10-04 — program runtime settings live under
-> `ai.programs.<program>.settings.<runtime>`; override semantics are unchanged.
+> **Last verified:** 2026-10-04 — programs and runtime settings are plain option
+> trees; whole-record priorities apply independently to each leaf.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -113,7 +113,10 @@ keeps standalone leaf identities as negative controls.
 ### Skill-package program gating
 
 `lib/ai/mkSkillPackageModule.nix` uses `lib.ai.program.mkProgram` for package
-enablement. Its portable option is `ai.programs.<name>.enable`; generated
+enablement. Program roots and runtime settings are plain option trees, so
+whole-record priorities apply separately to each leaf. A portable `mkForce` does
+not override `settings.<runtime>.enable`. Its portable option is
+`ai.programs.<name>.enable`; generated
 `ai.programs.<name>.settings.<runtime>.enable` leaves use B4 null-as-inherit
 semantics. A resolved false runtime receives no package skills or router rule,
 while siblings continue to inherit the portable value.

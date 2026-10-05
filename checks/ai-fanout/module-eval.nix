@@ -363,17 +363,18 @@ in {
             then option.type.description
             else shape option)
           (builtins.removeAttrs declarations ["_module"]);
-        programOptions = evaluated: package: evaluated.options.ai.programs.${package}.type.getSubOptions [];
+        programOptions = evaluated: package: evaluated.options.ai.programs.${package};
         optionShape = evaluated: package: shape (programOptions evaluated package);
         runtimeShape = evaluated: package: runtime:
-          shape ((programOptions evaluated package).settings.${runtime}.type.getSubOptions []);
+          shape (programOptions evaluated package).settings.${runtime};
         hm = evalHm {};
         devenv = evalDevenv {};
         gitPresetValues = evaluated:
           evaluated.options.stacked-workflows.gitPreset.type.functor.payload.values;
         programParity = package: expectedRootShape: runtimes:
-          optionShape hm package
-          == expectedRootShape // {settings = lib.genAttrs runtimes (_: "submodule");}
+          builtins.removeAttrs (optionShape hm package) ["settings"]
+          == expectedRootShape
+          && builtins.attrNames (programOptions hm package).settings == runtimes
           && optionShape hm package
           == optionShape devenv package
           && lib.all
@@ -394,6 +395,39 @@ in {
         && devenv.options.stacked-workflows ? gitPreset
         && gitPresetValues hm == ["full" "minimal" "none"]
         && gitPresetValues hm == gitPresetValues devenv
+    );
+
+    module-program-whole-record-priorities = mkTest "program-whole-record-priorities" (
+      lib.all
+      (evaluate:
+        lib.all
+        (package:
+          lib.all
+          (priority: let
+            evaluated = evaluate {
+              ai = {
+                claude.enable = true;
+                codex.enable = true;
+                programs.${package} = lib.mkMerge [
+                  (priority {enable = true;})
+                  {settings.claude.enable = false;}
+                ];
+              };
+            };
+            skillName =
+              if package == "stacked-workflows"
+              then "stack-plan"
+              else package;
+            contributes = runtime:
+              if package == "semble"
+              then evaluated.config.ai.${runtime}.mcpServers ? semble
+              else evaluated.config.ai.${runtime}.skills ? ${skillName};
+          in
+            assert lib.assertMsg (!(contributes "claude") && contributes "codex")
+            "${package}: portable=${builtins.toJSON evaluated.config.ai.programs.${package}.enable}, claude=${builtins.toJSON (contributes "claude")}, codex=${builtins.toJSON (contributes "codex")}"; true)
+          [lib.mkDefault lib.mkForce])
+        ["delegate-routing" "semble" "stacked-workflows"])
+      [evalHm evalDevenv]
     );
 
     # ── Priority-ordered rule triggers ─────────────────────────────

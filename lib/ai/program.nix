@@ -51,33 +51,25 @@ in {
     supportedRuntimes,
   }: let
     overrideOptions = mapOptionTree mkOverrideOption options;
-    mkProgramOption = optionDeclarations: description:
-      lib.mkOption {
-        type = lib.types.submodule {options = optionDeclarations;};
-        default = {};
-        inherit description;
-      };
-  in {
-    inherit name options spec supportedRuntimes;
+  in
+    assert lib.assertMsg (!(options ? settings))
+    "mkProgram `${name}`: `settings` is reserved for per-runtime overrides."; {
+      inherit name options spec supportedRuntimes;
 
-    module = {
-      options.ai.programs.${name} =
-        mkProgramOption
-        (options
+      module = {
+        options.ai.programs.${name} =
+          options
           // {
-            settings =
-              lib.genAttrs supportedRuntimes (runtime:
-                mkProgramOption overrideOptions "${runtime} overrides for the ${name} program integration.");
-          })
-        "Portable defaults and runtime settings for the ${name} program integration.";
-    };
+            settings = lib.genAttrs supportedRuntimes (_: overrideOptions);
+          };
+      };
 
-    resolve = config: runtime:
-      assert lib.assertMsg (builtins.elem runtime supportedRuntimes)
-      "Program `${name}` does not support runtime `${runtime}`.";
-        resolveTree
-        options
-        config.ai.programs.${name}
-        config.ai.programs.${name}.settings.${runtime};
-  };
+      resolve = config: runtime:
+        assert lib.assertMsg (builtins.elem runtime supportedRuntimes)
+        "Program `${name}` does not support runtime `${runtime}`.";
+          resolveTree
+          options
+          config.ai.programs.${name}
+          config.ai.programs.${name}.settings.${runtime};
+    };
 }
