@@ -21,7 +21,7 @@
   subtractionReview = after: {
     after = [after];
     before = ["Rounds"];
-    source = ../packages/delegate-routing/fragments/subtraction-review.md;
+    source = ./house-rules/subtraction-review.md;
   };
   # The stacked-workflows program is not imported (see devenv.nix), but its
   # always-on routing rule is wanted: deliver it from the program's source.
@@ -136,7 +136,7 @@ in {
       routing = {
         "Local limits" = {
           always = true;
-          source = ../packages/delegate-routing/fragments/local-limits.md;
+          source = ./house-rules/local-limits.md;
         };
         "Orchestrator session".enable = true;
       };
@@ -147,7 +147,7 @@ in {
           routing."Pool drain" = {
             after = ["Size the work"];
             always = true;
-            source = ../packages/delegate-routing/fragments/pool-drain.md;
+            source = ./house-rules/pool-drain.md;
           };
         };
         kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
