@@ -1679,10 +1679,10 @@ in {
         && forks evalDevenv (v: v.config.packages)
     );
 
-    # The splice re-joins the preserved vendor text directly after the
+    # The patch re-joins the preserved vendor text directly after the
     # replacement, so an identity that does not close its own final sentence
-    # MERGES into it. Caught at EVAL rather than by the splicer's backstop,
-    # because the splicer runs on a FAIL-OPEN launch path — a value rejected
+    # MERGES into it. Caught at EVAL rather than by the bundle patcher's
+    # backstop, because the patcher runs on a FAIL-OPEN launch path — a value rejected
     # there presents as "the identity silently did nothing", which is the exact
     # shape that let a multi-sentence identity ship broken.
     module-kiro-identity-requires-sentence-punctuation = mkTest "kiro-identity-requires-sentence-punctuation" (

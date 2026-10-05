@@ -354,8 +354,8 @@ in {
         #
         # This is segment 1 of msg0, ahead of steering, learnings and the file
         # tree. The value may not contain a backtick or a dollar-brace — it is
-        # spliced into a JS template literal, and the splicer refuses both rather
-        # than emitting a bundle that dies at engine spawn.
+        # spliced into a JS template literal, and the bundle patcher refuses
+        # both rather than emitting a bundle that dies at engine spawn.
         #
         # Expect flavor rather than behavior change: one line sits above the
         # vendor's terse-engineer prose AND (because `workflows` is unlocked

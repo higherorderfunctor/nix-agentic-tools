@@ -14,8 +14,6 @@ patcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(patcher)
 LAUNCHERS = json.loads(Path(sys.argv.pop(1)).read_text())
 IDENTITY = b"Custom identity. Another sentence!"
-# Launcher mode -> the (identity, strip_worktree) selection it was built with.
-MODES = {"both": (IDENTITY, True), "worktree": (None, True)}
 BUNDLE = (b"function identity(){return `" + patcher.IDENTITY_SENTENCE
           + b" Terminal guidance.`}\nvar steering='Before\\n\\n"
           + patcher.WORKTREE_PARAGRAPH + b"After';\n")
@@ -43,13 +41,13 @@ class PatchTests(unittest.TestCase):
         self.assertEqual(patcher.replacements(), [])
 
     def test_missing_and_duplicate_sources_fail_for_each_replacement(self):
-        for name, source, _ in patcher.replacements(*MODES["both"]):
+        for name, source, _ in patcher.replacements(IDENTITY, True):
             for data, count in ((BUNDLE.replace(source, b"changed"), 0), (BUNDLE + source, 2)):
                 with self.subTest(name=name, count=count):
                     with self.assertRaisesRegex(ValueError, f"{name}: .*found {count}"):
-                        patcher.patch(data, patcher.replacements(*MODES["both"]))
+                        patcher.patch(data, patcher.replacements(IDENTITY, True))
         with self.assertRaisesRegex(ValueError, "identity:.*worktree:"):
-            patcher.patch(b"both changed", patcher.replacements(*MODES["both"]))
+            patcher.patch(b"both changed", patcher.replacements(IDENTITY, True))
 
     def test_invalid_identity_is_rejected(self):
         for identity in (b"", b"no punctuation", b"Bad `identity`.", b"Bad ${identity}."):
@@ -58,7 +56,9 @@ class PatchTests(unittest.TestCase):
 
     def test_materializer_and_both_launch_entry_points(self):
         for mode, launchers in LAUNCHERS.items():
-            for name, source, _ in patcher.replacements(*MODES[mode]):
+            identity = launchers["identity"] and launchers["identity"].encode()
+            selected = patcher.replacements(identity, launchers["strip"])
+            for name, source, _ in selected:
                 for count in (0, 1, 2):
                     with self.subTest(mode=mode, name=name, count=count), tempfile.TemporaryDirectory() as tmp:
                         root = Path(tmp)
@@ -75,7 +75,7 @@ class PatchTests(unittest.TestCase):
                         self.assertEqual(result.returncode, 0 if count == 1 else 1, result.stderr)
                         if count == 1:
                             patched = Path(result.stdout)
-                            self.assertEqual(patched.read_bytes(), patcher.patch(data, patcher.replacements(*MODES[mode])))
+                            self.assertEqual(patched.read_bytes(), patcher.patch(data, selected))
                             self.assertEqual((patched.parents[4] / "vendor/probe.txt").read_text(), "sibling")
                             repeat = subprocess.run([launchers["materializer"]], env=env, capture_output=True, text=True)
                             self.assertEqual((repeat.returncode, repeat.stdout, repeat.stderr), (0, result.stdout, ""))
