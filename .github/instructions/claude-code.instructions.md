@@ -7,7 +7,7 @@ applyTo: "packages/claude-code/packages/ai/claude-code/package.nix,packages/clau
 
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-01 — the settings extractor follows Claude
+> **Last verified:** 2026-10-04 — the settings extractor follows Claude
 > 2.1.286's one-hop whole-schema wrapper when the `$schema` description lives in
 > its descriptor factory. `ai.*` delivers Claude's plugins itself: the MCP/LSP
 > personal plugin as per-file links under `home-manager/`, consumer plugins as
@@ -51,7 +51,8 @@ user-scope):
   whole-directory links work for these: recursive linking materializes a real
   directory of per-file symlinks, and Claude Code's `agents/` and `commands/`
   scanners accept only regular files, so every agent and command would be
-  silently dropped. `mkPluginEntry` links a source's top-level entries and
+  silently dropped. `mkPluginEntry` uses the shared
+  `lib.ai.linkDirectory pkgs name source` builder for top-level links and
   synthesizes `.claude-plugin/plugin.json` when the source has none.
 
 ### `<name>` is the attribute key

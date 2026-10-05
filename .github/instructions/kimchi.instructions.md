@@ -8,8 +8,8 @@ applyTo: "packages/kimchi/**"
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-04 — workflows is an independent external pi
-> extension, enabled through shared harness settings on both backends; Kimchi
-> removes its static registration and resource toggle before compilation.
+> extension, delivered as a named package link on both backends; Kimchi removes
+> its static registration and resource toggle before compilation.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -540,15 +540,24 @@ line, and moving it would change the wrapper's store path.
 
 ## Source packaging
 
-`pkgs.ai.kimchi-workflows` is an independently pinned, source-built external pi
-extension. `ai.kimchi.extensions.workflows.enable` defaults to false and adds
-its store source entry to `native.harnessSettings.extensions` through the
-existing shared delivery. Home Manager owns
-`$HOME/.config/kimchi/harness/settings.json` (by default); devenv writes
-`<project>/.config/kimchi/harness/settings.json` and requires launch from that
-project root. The store string context installs the extension closure. Consumer
-extension entries merge normally. Turning the option off withdraws its entry;
-manually declared extension entries remain independent.
+`pkgs.ai.kimchiExtensions.kimchi-workflows` is an independently pinned,
+source-built external pi extension. The shared `ai.kimchi.extensions` option
+accepts a free-form map of derivations, empty by default. For example:
+
+```nix
+ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
+```
+
+Each key delivers a directory link through `ai.kimchi.files`:
+`<configDir>/harness/extensions/<key>` on Home Manager and
+`<project>/.config/kimchi/harness/extensions/<key>` on devenv. The link retains
+the package closure's string context. Sorted relative names populate
+`native.harnessSettings.packages` and merge with consumer package entries. Pi
+reads each package's `pi.extensions` manifest. Removing a key withdraws its link
+and package entry. Devenv requires approval and launch from the project root.
+Kimchi discovers the package in its Plugins tab; the user-scope resource toggle
+disables its extensions, including project packages. See the source citations
+and smoke contract in [external workflows](kimchi-workflows.md).
 
 Kimchi's source patch removes the workflows static import, managed factory
 entry, and resource definition. Its locked package may still be fetched, but
@@ -621,13 +630,13 @@ the link targets.
 # External workflows
 
 > **Last verified:** 2026-10-04 — independent source package, virtual peers,
-> shared Home Manager/devenv extension settings, native dependency fixups, and
-> credential-free CI smoke.
+> shared top-level package links, native dependency fixups, and credential-free
+> CI smoke of evaluated backend delivery.
 
-`pkgs.ai.kimchi-workflows` is built from the commit and release in
-`workflows-sources.json`, independently of Kimchi's lock. Its owner-local update
-target and `updateScript` resolve the release tag to a commit, refresh the
-source hash and fix the pnpm dependency hash. The build uses
+`pkgs.ai.kimchiExtensions.kimchi-workflows` is built from the commit and release
+in `workflows-sources.json`, independently of Kimchi's lock. Its owner-local
+update target and `updateScript` resolve the release tag to a commit, refresh
+the source hash and fix the pnpm dependency hash. The build uses
 `pkgs.ai.generic.pnpm_10`, stamps upstream's placeholder version, generates
 distribution metadata, and compiles TypeScript. No prebuilt npm distribution is
 substituted. Metadata formatting uses `BIOME_BINARY` to select Nixpkgs' Biome
@@ -650,14 +659,39 @@ including typebox subpaths. The extension's root manifest retains its peer
 declarations and source entry. See the
 [pinned workflows manifest](https://github.com/getkimchi/kimchi-workflows/blob/7a6765ccc4aa417f38cecce1216dd8dcd3b9fab7/package.json).
 
-`ai.kimchi.extensions.workflows.enable = true` adds the store entry
-`<kimchi-workflows>/src/host/extension.ts` to harness `extensions`. The existing
-settings delivery writes the user harness file with Home Manager and the trusted
-project harness file with devenv; the entry's string context retains the
-package. Both backends default to disabled and merge other declared extensions.
-Devenv's project settings also engage its existing exact-cwd launcher guard. The
-option requires `ai.kimchi.enable` for delivery, just like the other Kimchi
-options.
+Declare the package with:
+
+```nix
+ai.kimchi.extensions.workflows = pkgs.ai.kimchiExtensions.kimchi-workflows;
+```
+
+`extensions` is a free-form map of derivations, empty by default. Each key names
+a directory link under the harness: Home Manager delivers
+`<configDir>/harness/extensions/<key>` and devenv delivers
+`<project>/.config/kimchi/harness/extensions/<key>`. The existing
+`ai.kimchi.files` writer retains each package's store context. The shared
+`lib.ai.linkDirectory pkgs name source` builder supplies a tiny directory of
+absolute top-level links into the package, so generated-tree delivery copies
+only links and leaves the dependency payload in its original store path. Harness
+settings load those links through `packages = [ "extensions/<key>" ];`, sorted
+by key, alongside raw `native.harnessSettings.packages` entries. Pi reads the
+package manifest's `pi.extensions`; Nix carries no extension entry metadata.
+Removing a key withdraws its link and settings entry. Delivery requires
+`ai.kimchi.enable`. Devenv's project settings engage the existing exact-cwd
+launcher guard and require project approval.
+
+Pi 0.85.1 resolves local package sources from its agent directory for user scope
+and `<cwd>/<CONFIG_DIR_NAME>` for project scope
+(`dist/core/package-manager.js:981-993,1048-1062,1785-1799`). Its path resolver
+normalizes paths without resolving symlinks (`dist/utils/paths.js:82-86`).
+Kimchi 1.5.1 discovers a Plugins row from each configured package
+(`src/resources/package-resources.ts:19-31,85-94`). Its disable filter matches
+both package paths and the original metadata source string before extension
+loading (`src/extensions/pi-package-lookup/native-compat.ts:151-159,277-284`),
+so the directory link preserves the package toggle. Resource overrides remain
+user scope even for project packages (`src/resources/store.ts:9-12,37-44`): Home
+Manager can declare the row's id under `native.harnessSettings.resources`;
+devenv cannot disable a user resource.
 
 `externalized-extensions.nix` is the one list the package's exact-match patch
 consumes. For workflows it removes
@@ -668,9 +702,9 @@ The
 [resource filter](https://github.com/getkimchi/kimchi/blob/v1.5.1/src/resources/filter.ts)
 only filters factories passed to it; the definition describes the menu/toggle.
 After removal it cannot control anything, so leaving it would expose a dead
-switch. Pi's separate settings extension loader needs neither registration nor
-resource metadata. Other Kimchi extensions and dependencies keep their upstream
-behavior; the original lockfile is left intact.
+switch. Pi's package loader reads the manifest and Kimchi discovers the package
+resource row independently. Other Kimchi extensions and dependencies keep their
+upstream behavior; the original lockfile is left intact.
 
 CI builds both packages on Linux and Darwin through package discovery. Checks:
 
@@ -678,15 +712,19 @@ CI builds both packages on Linux and Darwin through package discovery. Checks:
   files and rejects leftover registrations, without compiling Kimchi.
 - `kimchi-workflows-payload` checks the installed entries, pin identity,
   manifest and runtime roots, including absent virtual peers.
-- `module-kimchi-external-workflows` checks both backends: enabled entry with
-  store context, consumer-entry composition, and disabled entry absent.
-- `kimchi-workflows-smoke` launches patched Kimchi with global and project
-  `extensions` settings and an absent-extension control. It observes exact
-  command provenance and `/workflow list` dispatch, and asserts zero model
-  turns. Fresh HOME/XDG paths and empty inherited resource/credential state keep
-  it credential-free. A missing command is consumed by the observer before model
-  dispatch. The 60-second deadline and diagnostics/counter checks catch failures
-  that a session-header-only success would miss.
+- `module-kimchi-external-workflows` checks both backends: empty delivery, one
+  and two package links with store context, raw package composition, and
+  rejection of strings as extension packages.
+- `kimchi-workflows-smoke` launches patched Kimchi with global and approved
+  project scopes using the generated extension directories from the same
+  evaluated modules as the structural check. It verifies every top-level entry
+  links into the original package and installs Home Manager's serialized
+  shared-settings declaration or devenv's rendered harness settings. It checks
+  the Plugins package row, `/workflow list` dispatch with zero model turns, and
+  absence of `/workflow` when that row's resource id is disabled in user
+  settings. An absent-package control also consumes unknown input before model
+  dispatch. Fresh HOME/XDG paths isolate resource and credential state; each
+  process has a 60-second deadline.
 
 The smoke is feasible offline because slash commands dispatch before credential
 validation and these cases need no model. It still must pass in CI's Nix
