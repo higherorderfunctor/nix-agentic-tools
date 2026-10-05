@@ -107,6 +107,7 @@
     mergedArgByPool = {
       agents = "mergedAgents";
       environmentVariables = "mergedEnvironmentVariables";
+      extraSystemPrompt = "mergedExtraSystemPrompt";
       lspServers = "mergedLspServers";
       mcpServers = "mergedServers";
       rules = "mergedRules";

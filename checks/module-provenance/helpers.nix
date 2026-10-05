@@ -156,6 +156,7 @@
   normalizedPoolNames = [
     "agents"
     "environmentVariables"
+    "extraSystemPrompt"
     "lspServers"
     "mcpServers"
     "rules"

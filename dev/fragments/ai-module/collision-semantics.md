@@ -1,7 +1,7 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-05 — `extraSystemPrompt` is a seventh keyed pool,
+> suppressed like rules with `enable = false`.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -31,7 +31,7 @@ commit.
 | B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the file with `content.enable = false`. |
 | B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                    |
 | B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                            |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule or prompt entry after the shallow merge.                                |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit used to be
 the complete rendered native file; it is now the delivery entry's fields, and
@@ -40,18 +40,20 @@ That does not change the nullable-scalar inheritance contract in B4 or B5.
 
 ### Keyed-pool rule
 
-The six normalized keyed pools are:
+The seven normalized keyed pools are:
 
 - `agents`
 - `environmentVariables`
+- `extraSystemPrompt`
 - `lspServers`
 - `mcpServers`
 - `rules`
 - `skills`
 
 Five pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
-whose entries default `enable = true`. For a capable runtime, nullable-pool
-composition is:
+whose entries default `enable = true`, and `extraSystemPrompt` uses `attrsOf`
+the same auto-enabling text-source record as `ai.context`. For a capable
+runtime, nullable-pool composition is:
 
 ```nix
 lib.filterAttrs (_: value: value != null) (rootPool // runtimePool)
@@ -65,10 +67,10 @@ This ordering is load-bearing:
 4. null is filtered only after precedence, so it cannot disappear before doing
    that work.
 
-Rules preserve the same shallow `rootPool // runtimePool` precedence, then
-filter entries whose `enable` is false. Filtering after precedence is equally
-load-bearing: a disabled runtime rule must survive long enough to replace and
-suppress its inherited root rule.
+Rules and `extraSystemPrompt` preserve the same shallow
+`rootPool // runtimePool` precedence, then filter entries whose `enable` is
+false. Filtering after precedence is equally load-bearing: a disabled runtime
+rule must survive long enough to replace and suppress its inherited root rule.
 
 Entries are atomic across levels. Records are never recursively merged. A second
 runtime with no same-key entry continues to inherit the root value; keep that
@@ -215,18 +217,18 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
-every supported pool, additionally filters disabled rules, and contributes the
-result as per-key defaults beneath `ai.<runtime>.normalized.<pool>`, whose
-option default is `{}`. Ordinary extensions retain unrelated inherited keys;
-whole-pool `mkForce` replaces the merged input. Package callbacks and
-transformer arguments read those public options. A text-source record crosses
-into its normalized pool carrying only its winning arm, `text` or `source`, so
-the copy never reads a source to recompute a priority. For MCP,
-`lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
-scope while preserving null tombstones; only those client views cross the
-root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
-proxy owners, rejects reused keys before the module system can collide, and
-emits only unique active units.
+every supported pool, additionally filters disabled rules and
+`extraSystemPrompt` entries, and contributes the result as per-key defaults
+beneath `ai.<runtime>.normalized.<pool>`, whose option default is `{}`. Ordinary
+extensions retain unrelated inherited keys; whole-pool `mkForce` replaces the
+merged input. Package callbacks and transformer arguments read those public
+options. A text-source record crosses into its normalized pool carrying only its
+winning arm, `text` or `source`, so the copy never reads a source to recompute a
+priority. For MCP, `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy
+declarations at each scope while preserving null tombstones; only those client
+views cross the root/runtime merge. `lib/ai/sharedOptions.nix` separately
+aggregates explicit proxy owners, rejects reused keys before the module system
+can collide, and emits only unique active units.
 
 Context is the lazy exception: `mkBackendTransform.nix` derives
 `hasMergedContext` structurally from the two raw content records before calling
@@ -235,6 +237,13 @@ contribute a generated default; they must not probe `mergedContext != null`,
 because two-part composition reads source bytes and would force a default that
 B7 later replaces or disables. The composed value stays inside the lazy default
 until priority arbitration selects it.
+
+`extraSystemPrompt` reaches callbacks already joined, in attribute-name order,
+as `extraSystemPrompt` (null when no entry has content). Where it lands in a
+native key — Codex `developer_instructions` — the runtime contributes it at
+`mkDefault`, so B6 holds: a consumer's native value replaces it wholesale rather
+than concatenating, and withholding it from one runtime is per entry
+(`enable = false`), because that freeform key takes no null.
 
 `lib/ai/app/default.nix` selects `mkBackendTransform.nix` once per backend; pool
 logic lives only in that shared body.

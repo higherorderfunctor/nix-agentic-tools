@@ -86,6 +86,8 @@
   rawAgents = lib.optionalAttrs hasNativeAgents (lib.filterAttrs (_: value: !(agent.isSemantic value)) poolAgents);
   mergedAgents = removeAttrs poolAgents (builtins.attrNames rawAgents);
   mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
+  # Like rules, `enable = false` is the tombstone, filtered after precedence.
+  mergedExtraSystemPrompt = lib.filterAttrs (_: aiCommon.hasContent) (mergePool "extraSystemPrompt" config.ai.extraSystemPrompt (cfg.extraSystemPrompt or {}));
   mergedLspServers = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
   # Suppression applies after runtime entries replace root entries so a
   # runtime-local `enable = false` can retract an inherited root rule.
@@ -222,6 +224,7 @@
   normalizedKeyedPools = {
     agents = normalizedAgents;
     environmentVariables = mergedEnvironmentVariables;
+    extraSystemPrompt = lib.mapAttrs (_: toNormalizedTextSource) mergedExtraSystemPrompt;
     lspServers = mergedLspServers;
     mcpServers = mergedServers;
     rules = normalizedRules;
@@ -241,6 +244,9 @@
     };
     environmentVariables = {
       type = lib.types.attrsOf lib.types.str;
+    };
+    extraSystemPrompt = {
+      type = lib.types.attrsOf aiCommon.optionalContentModule;
     };
     hooks = {
       apply = lib.filterAttrs (_event: blocks: blocks != []);
@@ -376,6 +382,15 @@
     nativeAgents = lib.optionalAttrs hasNativeAgents cfg.native.agents;
     mergedContext = normalizedPool "context" null;
     mergedEnvironmentVariables = normalizedPool "environmentVariables" {};
+    mergedExtraSystemPrompt = normalizedPool "extraSystemPrompt" {};
+    # The entries joined in attribute-name order, or null when none has
+    # content, so a runtime adds no flag, key or prompt text for an empty pool.
+    extraSystemPrompt = let
+      composed = aiCommon.composeContent (builtins.attrValues callbackArgs.mergedExtraSystemPrompt);
+    in
+      if composed == null
+      then null
+      else composed.text;
     mergedLspServers = normalizedPool "lspServers" {};
     mergedRules = normalizedPool "rules" {};
     mergedServers = normalizedPool "mcpServers" {};
@@ -621,6 +636,19 @@ in {
     // poolOption "environmentVariables" {
       type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
       description = "Environment variables baked into the ${appRecord.name} launcher wrapper. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
+    }
+    // lib.optionalAttrs (supportsPool "extraSystemPrompt") {
+      extraSystemPrompt = lib.mkOption {
+        type = lib.types.attrsOf aiCommon.optionalContentModule;
+        default = {};
+        description = ''
+          ${appRecord.name}-specific system-prompt additions. Entries replace
+          top-level `ai.extraSystemPrompt` at the same key; set
+          `enable = false` to suppress an inherited entry. Every entry is
+          appended, in attribute-name order, to ${appRecord.name}'s own system
+          prompt.
+        '';
+      };
     }
     // poolOption "lspServers" {
       type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
