@@ -273,6 +273,81 @@
       ];
     }
     {
+      ecosystem = "codex";
+      mode = "devenv";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      surface = "extraSystemPrompt";
+      target = "$DEVENV_ROOT/.codex/config.toml";
+      writerAttr = [
+        "files"
+        ".codex/config.toml"
+      ];
+    }
+    {
+      ecosystem = "codex";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "extraSystemPrompt";
+      target = "$HOME/.codex/config.toml";
+      writerAttr = [
+        "home"
+        "file"
+        ".codex/config.toml"
+      ];
+    }
+    {
+      ecosystem = "kimchi";
+      mode = "devenv";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      surface = "extraSystemPrompt";
+      target = "$DEVENV_ROOT/.config/kimchi/harness/APPEND_SYSTEM.md";
+      writerAttr = [
+        "files"
+        ".config/kimchi/harness/APPEND_SYSTEM.md"
+      ];
+    }
+    {
+      ecosystem = "kimchi";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "extraSystemPrompt";
+      target = "$HOME/.config/kimchi/harness/APPEND_SYSTEM.md";
+      writerAttr = [
+        "home"
+        "file"
+        ".config/kimchi/harness/APPEND_SYSTEM.md"
+      ];
+    }
+    {
+      ecosystem = "kiro";
+      mode = "devenv";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "devenv:files:cleanup on SHELL ENTRY ONLY removes retired store symlinks; retained entries are regenerated. Real files are not pruned.";
+      surface = "extraSystemPrompt";
+      target = "$DEVENV_ROOT/.kiro/agents/<name>.json";
+      writerAttr = [
+        "files"
+        ".kiro/agents/probe.json"
+      ];
+    }
+    {
+      ecosystem = "kiro";
+      mode = "hm";
+      primitive = "ownPathDeclarative";
+      pruneTrigger = "Home Manager generation diff on switch; changed declarations replace the store symlink.";
+      surface = "extraSystemPrompt";
+      target = "$HOME/.kiro/agents/<name>.json";
+      writerAttr = [
+        "home"
+        "file"
+        ".kiro/agents/probe.json"
+      ];
+    }
+    {
       additionalWriters = [
         {
           primitive = "ownPathDeclarative";

@@ -349,8 +349,14 @@
   # needle containing `*` or `.` — which every glob does — silently matches
   # strings it should not (`"/*.json"` matches any `".json"`). `splitString`
   # escapes its separator, so this is a true literal search. Use it whenever
-  # the needle is shell syntax rather than prose.
-  hasLiteral = needle: hay: builtins.length (lib.splitString needle hay) > 1;
+  # the needle is shell syntax rather than prose. Both sides drop their string
+  # context: `splitString` refuses a store-path needle, and a substring test
+  # does not depend on it.
+  hasLiteral = needle: hay:
+    builtins.length (lib.splitString
+      (builtins.unsafeDiscardStringContext needle)
+      (builtins.unsafeDiscardStringContext hay))
+    > 1;
   # The `own` plan ONE writer applies, as recorded by `helpers.mkOwnBundle`:
   # `bash` plus the ordered targets, with each target's codec, path, ledger and
   # units. The plan FILE is a derivation, so reading it back would be

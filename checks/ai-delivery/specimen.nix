@@ -9,6 +9,7 @@
         };
         context.text = "probe";
         environmentVariables.PROBE = "value";
+        extraSystemPrompt.probe.text = "probe";
         hooks.PreToolUse = [{hooks = [{command = "true";}];}];
         lspServers.probe = {
           command = "true";
@@ -92,13 +93,16 @@
     else if lib.hasSuffix "/.claude-plugin/plugin.json" path
     then ["lspServers" "mcpServers"]
     else if path == ".codex/config.toml"
-    then ["mcpServers" "permissions" "settings"]
+    then ["extraSystemPrompt" "mcpServers" "permissions" "settings"]
+    else if lib.hasSuffix "/APPEND_SYSTEM.md" path
+    then ["extraSystemPrompt"]
     else if lib.hasSuffix "/.lsp.json" path || lib.hasSuffix "/lsp-config.json" path || lib.hasSuffix "/lsp.json" path
     then ["lspServers"]
     else if path == ".mcp.json" || lib.hasSuffix "/.mcp.json" path || lib.hasSuffix "/mcp-config.json" path || lib.hasSuffix "/mcp.json" path
     then ["mcpServers"]
+    # Kiro appends the extra system prompt to every typed agent's prompt.
     else if lib.hasInfix "/agents/" path || lib.hasSuffix "/agents" path
-    then ["agents"]
+    then ["agents"] ++ lib.optional (runtime == "kiro") "extraSystemPrompt"
     else if lib.hasInfix "/hooks/" path || lib.hasSuffix "/hooks" path || lib.hasSuffix "/hooks.json" path
     then ["hooks"]
     else if lib.hasInfix "/skills/" path || lib.hasSuffix "/skills" path
