@@ -18,9 +18,10 @@
   ...
 }: let
   gen = import ./generate.nix {inherit lib pkgs;};
-  subtractionReview = after: {
+  # Runs before the judging step, so the judge rules on its findings too.
+  subtractionReview = after: before: {
     after = [after];
-    before = ["Rounds"];
+    before = [before];
     source = ./house-rules/subtraction-review.md;
   };
   # The stacked-workflows program is not imported (see devenv.nix), but its
@@ -160,11 +161,11 @@ in {
       workflows = {
         "Review: one reviewer" = {
           enable = true;
-          steps."Subtraction review" = subtractionReview "Review";
+          steps."Subtraction review" = subtractionReview "Review" "Judge findings";
         };
         "Review: prosecute, defend, judge" = {
           enable = true;
-          steps."Subtraction review" = subtractionReview "Judge";
+          steps."Subtraction review" = subtractionReview "Defend" "Judge";
         };
       };
     };
