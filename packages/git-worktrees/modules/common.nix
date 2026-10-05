@@ -30,8 +30,9 @@
 
           Claude also gets it as `worktree.location` in its settings, but only
           when it is an absolute or `~/` path with no `{repo}`, the only shape
-          that key accepts. Claude Code reads that key only in its Desktop app,
-          for SSH sessions; its CLI does not.
+          that key accepts. Only the Claude Code Desktop app reads that key, for
+          SSH sessions, and only from user settings: the CLI ignores it, and the
+          devenv backend's project settings entry has no reader.
         '';
       };
       protocol = lib.mkOption {
@@ -73,7 +74,9 @@
       ++ lib.optional (runtime == "claude") (lib.mkIf (claudeValue != null) {
         ai.claude.native.settings.worktree.location = lib.mkDefault claudeValue;
       })
-      # The protocol replaces Kiro's own worktree steering.
+      # The protocol replaces Kiro's own worktree steering. The strip also
+      # applies to Kiro's built-in default agent, which gets no protocol: only
+      # typed agents receive `extraSystemPrompt`.
       ++ lib.optional (runtime == "kiro") {
         ai.kiro.tweaks.stripVendorWorktreeSteering = lib.mkDefault true;
       }));
