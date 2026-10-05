@@ -190,13 +190,15 @@ not move them back.
   runtime ordered before file creation, then before `devenv:files`. It removes
   stale store-backed links, and fails loudly on a real file or directory at a
   delivered path, where devenv itself would only warn and skip. For a non-store
-  link, devenv overwrote it with `ln -sf`, following it if it pointed at a
-  writable directory; the guard now refuses instead. A cross-owner handoff from
-  an owned copy to a symlink can fail the guard for one shell entry until the
-  other owner's retraction has run. It reports every offender before failing. A
-  failed guard makes `devenv:files` and `devenv:enterShell` `DependencyFailed`:
-  shell entry continues with a warning, but no `files.*` entry from any runtime
-  or the user is created or updated, and `devenv test` fails.
+  link, devenv ran `ln -sf` without `-n`: a link to a file, or a dangling link,
+  was replaced, but a link to a writable directory was followed, leaving the old
+  link and adding a stray link inside that directory. The guard now refuses
+  both. A cross-owner handoff from an owned copy to a symlink can fail the guard
+  for one shell entry until the other owner's retraction has run. It reports
+  every offender before failing. A failed guard makes `devenv:files` and
+  `devenv:enterShell` `DependencyFailed`: shell entry continues with a warning,
+  but no `files.*` entry from any runtime or the user is created or updated, and
+  `devenv test` fails.
 - **Shared documents reconcile harness state.** Claude's `.claude.json` and
   Copilot's HM `config.json` are writable state files with Nix-owned leaves. The
   adapter runs their JSON bundles on activation and retains unowned state.
