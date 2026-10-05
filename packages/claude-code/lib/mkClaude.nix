@@ -189,8 +189,9 @@
   #
   # Identical on both backends because both write the same settings tree,
   # so it is defined once here rather than duplicated per callback.
-  # Claude is the only harness here with no launcher wrapper, so its process
-  # environment is expressed through `settings.env` in settings.json. Both the
+  # Claude's launcher wrapper carries only its extra-system-prompt flag (see
+  # `installPackage`), so its process environment is expressed through
+  # `settings.env` in settings.json. Both the
   # typed shell and the module-contributed sandbox-safe SSH command ride it.
   #
   # mkDefault keeps an explicit `ai.claude.native.settings.env.<KEY>` winning, which
@@ -275,6 +276,7 @@ in
     supportedPools = [
       "agents"
       "context"
+      "extraSystemPrompt"
       "hooks"
       "lspServers"
       "mcpServers"
@@ -679,6 +681,23 @@ in
         '';
       };
     };
+    # The only launcher flag Claude takes: the extra system prompt, as a store
+    # file, which Claude appends in both `-p` and interactive sessions. With no
+    # entry `mkLauncher` returns the bare package, so nothing is wrapped.
+    installPackage = {
+      cfg,
+      extraSystemPrompt,
+      ...
+    }:
+      lib.ai.mkLauncher pkgs {
+        exe = "claude";
+        flags = lib.optionals (extraSystemPrompt != null) [
+          "--add-flags"
+          (lib.escapeShellArg "--append-system-prompt-file ${pkgs.writeText "claude-extra-system-prompt.md" extraSystemPrompt}")
+        ];
+        name = "claude-code-wrapped";
+        inherit (cfg) package;
+      };
     # Describe each delivered surface once; a per-backend difference reads
     # `backend`.
     config = {

@@ -56,6 +56,7 @@
         "ai.codex.enable"
         "ai.codex.environmentVariables"
         "ai.codex.execpolicyRules"
+        "ai.codex.extraSystemPrompt"
         "ai.codex.files"
         "ai.codex.hooks"
         "ai.codex.mcpServers"
