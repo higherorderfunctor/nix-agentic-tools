@@ -46,9 +46,9 @@ in {
         # normalization supplies a bundle path. The other runtimes stay bare:
         # kimchi's `region` and `telemetry.enabled` reach its
         # global config.json on Home Manager, not the launcher environment.
-        # `claude` has no wrapper anywhere (its env rides
-        # `.claude/settings.json`, never process env), so it installs `cfg.package`
-        # on both backends and MUST NOT gain a `-wrapped` suffix.
+        # `claude` wraps only for `ai.extraSystemPrompt` (its env rides
+        # `.claude/settings.json`, never process env), so without one it installs
+        # `cfg.package` on both backends and MUST NOT gain a `-wrapped` suffix.
         shapes = {
           devenv = {
             claude = "bare";

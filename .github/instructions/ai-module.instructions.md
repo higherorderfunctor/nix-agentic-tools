@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-05 — `ai.extraSystemPrompt` fans out to Claude,
+> Codex, Kimchi and Kiro; Copilot is an explicit exclusion.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -191,12 +191,13 @@ The ai module fans out TWO kinds of configuration:
 
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
   `ai.kimchi.package` / `ai.kiro.package` — package override. All five are
-  installed by the shared backend transform unless set to `null`. Four supply an
-  `installPackage` callback that wraps the selected package when the runtime
-  needs env or flag injection and installs it bare otherwise — wrapping is
-  conditional, not automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's own
-  wrappers, return the bare package when there is nothing to bake in). The
-  process environment each one bakes in is the builder's `launcherEnvironment`.
+  installed by the shared backend transform unless set to `null`. All five
+  supply an `installPackage` callback that wraps the selected package when the
+  runtime needs env or flag injection and installs it bare otherwise — wrapping
+  is conditional, not automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's
+  own wrappers, return the bare package when there is nothing to bake in). The
+  process environment each one bakes in is the builder's `launcherEnvironment`;
+  Claude's bakes none, and wraps only for `ai.extraSystemPrompt`.
 - `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
   both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
   visibility gap; it remains independent of `ai.shell`, which selects an
@@ -508,8 +509,8 @@ scope or a non-empty list for `fileMatch` content.
   joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
   is a different thing and still is — that filters what SPAWNED commands
   inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
-  native equivalent.
+  exclusion: its wrapper exists only to carry `ai.extraSystemPrompt`, and
+  `ai.claude.native.settings.env` is its native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of
@@ -518,6 +519,20 @@ scope or a non-empty list for `fileMatch` content.
   own session and every other process in it. Wrappers are inherited across
   `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
   NEVER write the shell environment.
+
+- `ai.extraSystemPrompt` — keyed text-source entries appended to each runtime's
+  own system prompt, joined in attribute-name order (no other ordering), and
+  passed to delivery callbacks already joined as `extraSystemPrompt`, or null so
+  an empty pool changes nothing. Delivery: Claude's launcher adds
+  `--append-system-prompt-file <store file>`; Codex gets
+  `developer_instructions` at `mkDefault`; Kimchi's launcher adds
+  `--append-system-prompt <store file>` (Pi reads an existing path as the text);
+  Kiro appends it to the `prompt` of every typed agent (`native.agents`, which
+  normalized `ai.agents` lower into). Copilot leaves it out of `supportedPools`,
+  so `ai.copilot.extraSystemPrompt` does not exist. Known limits: Kimchi
+  dispatches its own subcommands only from argv[0], so a leading launcher flag
+  turns `kimchi setup` into a chat message; Kiro's raw agent files and its
+  built-in default agent do not receive the text.
 
 Cross-ecosystem scalar defaults and package-generated per-entry fanouts use
 `mkDefault` so explicit values at the same scope take precedence. Keyed pools
@@ -533,10 +548,11 @@ shell resolution. A per-runtime pool write that the runtime cannot consume is
 therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
 
-Kimchi supports `agents`, `context`, `environmentVariables`, `hooks`,
-`mcpServers`, `rules`, `settings`, and `skills`. Its rules share Codex's flat
-AGENTS.md handling: Home Manager writes the user harness file, while devenv
-contributes keyed units to the single repository aggregate.
+Kimchi supports `agents`, `context`, `environmentVariables`,
+`extraSystemPrompt`, `hooks`, `mcpServers`, `rules`, `settings`, and `skills`.
+Its rules share Codex's flat AGENTS.md handling: Home Manager writes the user
+harness file, while devenv contributes keyed units to the single repository
+aggregate.
 
 A non-empty ROOT request is SILENT whenever nothing per-runtime can withdraw it
 — no assertion, and no activation warning either. That covers an excluded pool
@@ -901,8 +917,8 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-05 — `extraSystemPrompt` is a seventh keyed pool,
+> suppressed like rules with `enable = false`.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -932,7 +948,7 @@ commit.
 | B7  | generated native file ↔ runtime file entry        | field   | Generator defaults `content` alone; a consumer replaces the bytes, changes a sibling field, or suppresses the file with `content.enable = false`. |
 | B8  | two packages → same root key                      | key     | Fail by definition provenance.                                                                                                                    |
 | B9  | two packages → same runtime key                   | key     | Fail by definition provenance, exactly as at the root.                                                                                            |
-| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule after the shallow merge.                                                |
+| B10 | runtime negation of an inherited keyed-pool entry | entry   | A runtime null drops a nullable-pool entry; `enable = false` drops a rule or prompt entry after the shallow merge.                                |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong. B7's unit used to be
 the complete rendered native file; it is now the delivery entry's fields, and
@@ -941,18 +957,20 @@ That does not change the nullable-scalar inheritance contract in B4 or B5.
 
 ### Keyed-pool rule
 
-The six normalized keyed pools are:
+The seven normalized keyed pools are:
 
 - `agents`
 - `environmentVariables`
+- `extraSystemPrompt`
 - `lspServers`
 - `mcpServers`
 - `rules`
 - `skills`
 
 Five pools use `attrsOf (nullOr <valueType>)`; rules use `attrsOf <ruleModule>`,
-whose entries default `enable = true`. For a capable runtime, nullable-pool
-composition is:
+whose entries default `enable = true`, and `extraSystemPrompt` uses `attrsOf`
+the same auto-enabling text-source record as `ai.context`. For a capable
+runtime, nullable-pool composition is:
 
 ```nix
 lib.filterAttrs (_: value: value != null) (rootPool // runtimePool)
@@ -966,10 +984,10 @@ This ordering is load-bearing:
 4. null is filtered only after precedence, so it cannot disappear before doing
    that work.
 
-Rules preserve the same shallow `rootPool // runtimePool` precedence, then
-filter entries whose `enable` is false. Filtering after precedence is equally
-load-bearing: a disabled runtime rule must survive long enough to replace and
-suppress its inherited root rule.
+Rules and `extraSystemPrompt` preserve the same shallow
+`rootPool // runtimePool` precedence, then filter entries whose `enable` is
+false. Filtering after precedence is equally load-bearing: a disabled runtime
+rule must survive long enough to replace and suppress its inherited root rule.
 
 Entries are atomic across levels. Records are never recursively merged. A second
 runtime with no same-key entry continues to inherit the root value; keep that
@@ -1116,18 +1134,18 @@ and testing their distinct composition contracts.
 
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
-every supported pool, additionally filters disabled rules, and contributes the
-result as per-key defaults beneath `ai.<runtime>.normalized.<pool>`, whose
-option default is `{}`. Ordinary extensions retain unrelated inherited keys;
-whole-pool `mkForce` replaces the merged input. Package callbacks and
-transformer arguments read those public options. A text-source record crosses
-into its normalized pool carrying only its winning arm, `text` or `source`, so
-the copy never reads a source to recompute a priority. For MCP,
-`lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy declarations at each
-scope while preserving null tombstones; only those client views cross the
-root/runtime merge. `lib/ai/sharedOptions.nix` separately aggregates explicit
-proxy owners, rejects reused keys before the module system can collide, and
-emits only unique active units.
+every supported pool, additionally filters disabled rules and
+`extraSystemPrompt` entries, and contributes the result as per-key defaults
+beneath `ai.<runtime>.normalized.<pool>`, whose option default is `{}`. Ordinary
+extensions retain unrelated inherited keys; whole-pool `mkForce` replaces the
+merged input. Package callbacks and transformer arguments read those public
+options. A text-source record crosses into its normalized pool carrying only its
+winning arm, `text` or `source`, so the copy never reads a source to recompute a
+priority. For MCP, `lib/ai/mcpProxy.nix:lowerClientEntries` first lowers proxy
+declarations at each scope while preserving null tombstones; only those client
+views cross the root/runtime merge. `lib/ai/sharedOptions.nix` separately
+aggregates explicit proxy owners, rejects reused keys before the module system
+can collide, and emits only unique active units.
 
 Context is the lazy exception: `mkBackendTransform.nix` derives
 `hasMergedContext` structurally from the two raw content records before calling
@@ -1136,6 +1154,13 @@ contribute a generated default; they must not probe `mergedContext != null`,
 because two-part composition reads source bytes and would force a default that
 B7 later replaces or disables. The composed value stays inside the lazy default
 until priority arbitration selects it.
+
+`extraSystemPrompt` reaches callbacks already joined, in attribute-name order,
+as `extraSystemPrompt` (null when no entry has content). Where it lands in a
+native key — Codex `developer_instructions` — the runtime contributes it at
+`mkDefault`, so B6 holds: a consumer's native value replaces it wholesale rather
+than concatenating, and withholding it from one runtime is per entry
+(`enable = false`), because that freeform key takes no null.
 
 `lib/ai/app/default.nix` selects `mkBackendTransform.nix` once per backend; pool
 logic lives only in that shared body.
@@ -1825,8 +1850,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-05 — `extraSystemPrompt` is a supported keyed pool;
+> Claude's launcher wraps only to carry it.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -2010,8 +2035,9 @@ three runtimes demonstrably do not perform.
   backends install different store paths, this is why, and it is intended.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
-  fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
-  has no wrapper here and `native.settings.env` is its native equivalent.
+  fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — its
+  wrapper carries only `ai.extraSystemPrompt`, and `native.settings.env` is its
+  native equivalent.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more
