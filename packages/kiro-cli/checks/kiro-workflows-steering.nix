@@ -2,12 +2,11 @@
 {
   lib,
   pkgs,
-  self,
   ...
 }: let
   vu = import ../lib/packaging.nix;
   inherit (import ../lib/workflowReminder.nix {inherit lib pkgs;}) vendorAnchors;
-  inherit (pkgs.stdenv.hostPlatform) isLinux system;
+  inherit (pkgs.stdenv.hostPlatform) isLinux;
 in {
   checks =
     {
@@ -24,7 +23,7 @@ in {
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         python3=${pkgs.python3}/bin/python3
-        chat=$("$python3" ${vu.kiroLocateChatScript pkgs} ${self.packages.${system}.kiro-cli.unwrapped})
+        chat=$("$python3" ${vu.kiroLocateChatScript pkgs} ${pkgs.ai.kiro-cli.unwrapped})
         "$python3" ${../extract/embedded-tui.py} kas "$chat" "$TMPDIR/acp-server.js" \
           ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
         "$python3" ${../lib/kiro-workflows-steering.py} "$TMPDIR/acp-server.js" > "$TMPDIR/steering"
