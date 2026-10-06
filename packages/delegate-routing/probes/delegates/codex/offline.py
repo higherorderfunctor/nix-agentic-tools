@@ -101,6 +101,10 @@ def run_case(name, actions, extra=(), v1=False, nested=False):
     home.mkdir(parents=True, exist_ok=True)
     cwd.mkdir(exist_ok=True)
     (cwd / '.probe-root').touch()
+    if name == 'piD6':
+        (cwd / 'AGENTS.md').write_text('UNTRUSTED-AGENTS-8006\n')
+        (cwd / '.codex').mkdir(exist_ok=True)
+        (cwd / '.codex' / 'config.toml').write_text('developer_instructions = "UNTRUSTED-PROJ-8005"\n')
     cache = json.loads(PRIOR.read_text())
     for m in cache['models']:
         if v1:
@@ -120,6 +124,12 @@ def run_case(name, actions, extra=(), v1=False, nested=False):
     (root / 'stdout.jsonl').write_text(r.stdout)
     (root / 'stderr.txt').write_text(r.stderr)
     reqs = list(state['requests'])
+    if name == 'piD6':
+        wire_text = '\n'.join(messages(r['body']) for r in reqs)
+        assert r.returncode == 0, r.stderr
+        assert 'UNTRUSTED-AGENTS-8006' in wire_text, 'unknown trust must load AGENTS.md'
+        assert 'UNTRUSTED-PROJ-8005' not in wire_text, 'unknown trust must skip project config'
+        print('piD6: UNTRUSTED-AGENTS-8006 present; UNTRUSTED-PROJ-8005 absent')
     (root / 'requests.json').write_text(json.dumps(reqs, indent=2))
     summary = dict(case=name, exit=r.returncode, requests=len(reqs), wire=[dict(model=x['body'].get('model'), effort=x['body'].get('reasoning', {}).get('effort'), child='<multi_agent_role>You are an agent' in messages(x['body']), outputs=outputs(x['body'])) for x in reqs])
     (root / 'summary.json').write_text(json.dumps(summary, indent=2))
@@ -149,10 +159,12 @@ try:
     run_case('v2-resident-eviction', evict_actions, ['-c', 'features.multi_agent_v2.max_concurrent_threads_per_session=2'])
     run_case('v1-close-tree', [('spawn_agent', dict(message='CHILD_PROBE')), ('wait_agent', dict(targets=['$ID'], timeout_ms=10000)), ('close_agent', dict(target='$ID'))], ['-c', 'agents.max_depth=2'], v1=True, nested=True)
     if not sys.argv[1:] or 'v2-role-model' in sys.argv[1:]:
-        role_file = S / 'reader.toml'
+        role_file = OUT / 'v2-role-model' / 'reader.toml'
+        role_file.parent.mkdir(parents=True, exist_ok=True)
         role_file.write_text('model = "gpt-6-luna"\nmodel_reasoning_effort = "medium"\n')
         run_case('v2-role-model', [('spawn_agent', dict(spawn, agent_type='reader')), ('wait_agent', dict(timeout_ms=500))], ['-c', 'agents.reader.description="model pin probe"', '-c', f'agents.reader.config_file="{role_file}"'])
     run_case('exec-resume-fork', [])
+    run_case('piD6', [])
     run_case('v2-full-model', [('spawn_agent', dict(spawn, fork_turns='all', reasoning_effort='medium')), ('wait_agent', dict(timeout_ms=500))])
     run_case('v2-lastn-model', [('spawn_agent', dict(spawn, fork_turns='1')), ('wait_agent', dict(timeout_ms=500))])
     run_case('v2-nested-depth-zero', [('spawn_agent', spawn), ('wait_agent', dict(timeout_ms=500)), ('list_agents', {})], ['-c', 'agents.max_depth=0'], nested=True)

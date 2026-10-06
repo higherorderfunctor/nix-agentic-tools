@@ -1,9 +1,7 @@
 # Kimchi delegate replays
 
-Replays for the Kimchi 1.5.1 (Pi 0.85.1, patched) delegate reference, with
-kimchi-workflows 0.0.9. Case ids match the reference's Replay column: `claude:`
-= the Claude-side probes, `codex:` = the Codex-side probes (`codex-side/`),
-`judge:` = the judge's tie-breakers.
+Pins, evidence marks and case-prefix meanings:
+[evidence guide](../../../docs/delegates/evidence.md).
 
 Every script runs the repository's pinned `kimchi` and `kimchi-workflows` (built
 on demand; `KIMCHI_PKG` / `KIMCHI_WORKFLOWS_PKG` skip the build) and reads the
@@ -68,3 +66,13 @@ npm registry. No model provider is contacted.
 | codex:S                         | pointer only: the system-prompt reference                                                                                                                                                                                                                                                                                                                                | prompt composition per delegate kind                                                                                                                | not re-run                                                                                                            |
 | judge:J1                        | `drive` `s1-fg-pins`                                                                                                                                                                                                                                                                                                                                                     | custom-agent frontmatter `model:` is ignored                                                                                                        | `wt-agent` (frontmatter fake-b, thinking low) runs `fake-a` / `low`; explicit `model` fake-b reaches the wire         |
 | judge:J4                        | `grep -n DEFAULT_MAX_DURATION "$(nix build --no-link --print-out-paths .#ciPackages.x86_64-linux.kimchi.src)/src/extensions/agents/manager/agent-runner.ts"`                                                                                                                                                                                                             | default child wall timeout                                                                                                                          | `124:const DEFAULT_MAX_DURATION = 900`; `461: … ?? DEFAULT_MAX_DURATION`                                              |
+
+### Judge source replay
+
+| Case id  | Command                   | Expected excerpt                                                                |
+| -------- | ------------------------- | ------------------------------------------------------------------------------- |
+| judge:J3 | `python3 resume_guard.py` | `record.taskRef?.kind === "ferment_step" && attemptsForPurpose >= attemptLimit` |
+
+J3 is source evidence (A), not a wire execution. The ordinary-agent continuation
+execution is separately indexed as `codex:B`. `KIMCHI_SRC` may point at an
+already materialized pinned source for this source-only replay.

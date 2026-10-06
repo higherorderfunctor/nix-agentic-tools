@@ -1,0 +1,205 @@
+[
+  {
+    "events": [
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "general-task-execution",
+          "prompt": "STAGE_SENT_GENERAL_TASK_EXECUTION do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_0"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "inlagent",
+          "prompt": "STAGE_SENT_INLAGENT do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_1"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "noprompt",
+          "prompt": "STAGE_SENT_NOPROMPT do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_2"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "custom",
+          "prompt": "STAGE_SENT_CUSTOM do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_3"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "hooked",
+          "prompt": "STAGE_SENT_HOOKED do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_4"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "ad-hoc-undefined",
+          "prompt": "STAGE_SENT_AD_HOC_UNDEFINED do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_5"
+      }
+    ],
+    "match": "MAIN_KICKOFF"
+  },
+  {
+    "events": ["CHILD_DONE_general-task-execution"],
+    "match": "STAGE_SENT_GENERAL_TASK_EXECUTION do it"
+  },
+  {
+    "events": ["CHILD_DONE_inlagent"],
+    "match": "STAGE_SENT_INLAGENT do it"
+  },
+  {
+    "events": ["CHILD_DONE_noprompt"],
+    "match": "STAGE_SENT_NOPROMPT do it"
+  },
+  {
+    "events": ["CHILD_DONE_custom"],
+    "match": "STAGE_SENT_CUSTOM do it"
+  },
+  {
+    "events": ["CHILD_DONE_hooked"],
+    "match": "STAGE_SENT_HOOKED do it"
+  },
+  {
+    "events": ["CHILD_DONE_ad-hoc-undefined"],
+    "match": "STAGE_SENT_AD_HOC_UNDEFINED do it"
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  }
+]
