@@ -29,17 +29,6 @@
       // overrides);
   native = render {};
   external = render {extraRuntimes = ["codex"];};
-  custom = render {
-    techniques =
-      techniques
-      // {
-        claude =
-          techniques.claude
-          // {
-            consumer = techniques.claude.Agent;
-          };
-      };
-  };
   changed = map (override:
     render {
       techniques =
@@ -112,31 +101,9 @@
     })
   ];
   workflow = capabilities.find "claude" "Workflow" "interactive";
-  # Exercise the catalog renderer directly; Copilot is not a module runtime.
-  copilot = render {
-    runtime = "copilot";
-    models = defaults.models // {copilot = [{vendors = ["openai"];}];};
-    techniques =
-      techniques
-      // {
-        copilot.fleet = {
-          command = "copilot --fleet -p <prompt>";
-          enable = true;
-          kind = "external";
-          modes = ["headless"];
-          notes = "Consumer-declared Fleet technique with recorded help evidence";
-          pinsEffort = true;
-          pinsModel = true;
-        };
-      };
-  };
   kimchi = render {
     runtime = "kimchi";
     models = defaults.models // {kimchi = [{vendors = ["anthropic"];}];};
-  };
-  kiro = render {
-    runtime = "kiro";
-    models = defaults.models // {kiro = [{vendors = ["anthropic"];}];};
   };
 in {
   checks.module-delegate-routing-capabilities = harness.mkTest "delegate-routing-capabilities" (
@@ -148,35 +115,19 @@ in {
     && lib.all (name: !capabilities.validate (builtins.removeAttrs sample [name])) (builtins.attrNames sample)
     && capabilities.find "missing-runtime" "Agent" "interactive" == null
     && capabilities.find "claude" "Agent" "acp" == null
-    && lib.hasInfix "acp: unknown" (row "Agent" native)
-    && lib.hasInfix "| `Agent` | subagent |" native
-    && lib.hasInfix "| Declared modes |" native
-    && lib.hasInfix "| headless |" (row "claude -p" native)
     && lib.hasInfix "| Runs own subagents |" native
-    && lib.all (mode: lib.hasInfix "${mode}:" (row "Agent" native)) ["acp" "headless" "interactive"]
-    && lib.hasInfix "declared, not observed" (row "consumer" custom)
-    && !(lib.hasInfix "**consumer /" custom)
-    && lib.hasInfix "subagent (inside the external root)" (row "spawn_agent" external)
-    && lib.hasInfix "Runtime can own delegates" external
-    && lib.hasInfix "raw events not publishable" external
-    && lib.hasInfix "headless: unknown" (row "spawn_agent" external)
-    && lib.all (text:
-      lib.hasInfix "declared, not observed" (row "Workflow" text)
-      && !(lib.hasInfix "**Workflow / interactive evidence:**" text))
-    changed
-    && lib.hasInfix "**Workflow / interactive evidence:**" native
-    && lib.hasInfix workflow.source native
-    && lib.hasInfix workflow.date native
-    && lib.hasInfix ''Requested controls: `{"effort":null,"model":null}`'' native
-    && lib.hasInfix "Observed controls:" native
-    && lib.hasInfix "**fleet / headless evidence:**" copilot
-    && lib.hasInfix "GitHub Copilot CLI 1.0.91: `copilot --help`, `copilot help config`" copilot
-    && lib.hasInfix "HELP exposes per-agent model config and inherit; resolved values unknown." copilot
-    && lib.hasInfix "HELP exposes effortLevel config and inherit; resolved values unknown." copilot
-    && lib.hasInfix "headless: unknown;" (row "fleet" copilot)
-    && !(lib.hasInfix "headless: unknown (declared, not observed)" (row "fleet" copilot))
-    && lib.hasInfix "SOURCE transports explicit model; effective backend unknown." kimchi
-    && lib.hasInfix "acp: supported (5)" (row "invoke_sub_agent" kiro)
+    && lib.hasInfix "| unknown |" (row "Agent" native)
+    && lib.hasInfix "| supported (headless) |" (row "claude -p" native)
+    && lib.hasInfix "| unsupported (headless, interactive) |" (row "Workflow" native)
+    && lib.hasInfix "| unsupported (headless) |" (row "Agent" kimchi)
+    # External sections list only external, introspect and usage nodes.
+    && lib.hasInfix "| unknown |" (row "codex exec" external)
+    && !(lib.hasInfix "`spawn_agent`" external)
+    # A changed shipped launch contract does not borrow the recorded result.
+    && lib.all (text: lib.hasInfix "| unknown |" (row "Workflow" text)) changed
+    # Evidence stays in the fixtures, out of the skill.
+    && !(lib.hasInfix workflow.capabilities.runsOwnSubagents.evidence native)
+    && !(lib.hasInfix workflow.source native)
     && lib.all (family:
       lib.hasInfix "${family.name} (${family.vendor})" (render {
         models = defaults.models // {claude = [{vendors = lib.unique (map (item: item.vendor) families);}];};
