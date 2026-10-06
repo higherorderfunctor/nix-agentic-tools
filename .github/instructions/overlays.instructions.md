@@ -17,7 +17,6 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 > take bun and pnpm from `pkgs.ai.generic`. pnpm_12 and chatgpt-codex override
 > nixpkgs' source-built Rust packages with sidecar pins and the locked
 > toolchain; chatgpt-codex's update restores its hashes before regenerating.
-> `semble` is the only leaf built on a foreign input's nixpkgs.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:

@@ -3,8 +3,7 @@
 > **Last verified:** 2026-10-06 — recipes build on this flake's nixpkgs
 > (`natSets`) and the overlay re-exports them; main-tracking rev bumps are done
 > by `update-pkg.sh`; vendored npm lock locations follow their manual or
-> automatic updater; sympy, serena and the modelcontextprotocol reference
-> servers are no longer packaged.
+> automatic updater.
 >
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
 

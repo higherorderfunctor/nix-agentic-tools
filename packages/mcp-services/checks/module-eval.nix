@@ -23,10 +23,9 @@
         message = "second caller assertion failed";
       }
     ];
-    repository = "assertion-control";
   };
   expectedSettings = {
-    repository = "assertion-control";
+    repository = null;
   };
 in {
   checks = {

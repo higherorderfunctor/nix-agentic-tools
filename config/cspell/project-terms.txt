@@ -210,7 +210,6 @@ llms
 lockdown
 lockfiles
 manpages
-markdownify
 materializer
 mcpconfig
 mcps
@@ -269,7 +268,6 @@ openclaw
 opencode
 openhands
 openmemory
-oraios
 osmani
 oxalica
 oxlint
@@ -302,7 +300,6 @@ qiiiiii
 qwen
 rawfile
 rcodesign
-readabilipy
 reauthor
 recognised
 reflog
