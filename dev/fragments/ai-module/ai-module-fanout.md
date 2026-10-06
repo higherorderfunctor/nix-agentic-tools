@@ -1,8 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-05 — prompt presence stays structural for lazy
-> native overrides; Kimchi file metadata merges independently; Claude warns when
-> prompt delivery has no managed package.
+> **Last verified:** 2026-10-06 — git-worktrees renders keyed protocol entries;
+> Claude warns that native worktree.location is ignored by the CLI.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -909,3 +908,29 @@ retracts a skill; `enable = false` retracts a rule. A same-key root entry
 remains a portable default and is atomically replaced by the package's
 per-runtime value. Two packages claiming that per-runtime key fail the
 package-provenance guard (see `collision-semantics.md`).
+
+### Git worktree protocol
+
+`ai.programs.git-worktrees.protocol.<key>` uses the shared optional text-source
+entry type used by delegate-routing: `enable` and either `text` or `source`. The
+shipped entries render in isolate, base, request, draft, protect, cleanup order.
+Consumer-added entries follow in name order. Per-entry definitions replace
+shipped content or disable a key without replacing the whole map.
+
+```nix
+ai.programs.git-worktrees.protocol.draft.enable = false;
+ai.programs.git-worktrees.protocol.sign.text = "Sign every commit.";
+```
+
+Change where worktrees go with `ai.programs.git-worktrees.location`, never by
+rewriting `protocol.isolate`: other runtime settings derive from `location` and
+would silently disagree. `{location}` is replaced with that value; `{repo}`
+remains a placeholder for the repository top-level directory's name. Runtime
+protocol overrides replace the portable map, following the program factory's
+null-as-inherit rule.
+
+The program contributes instructions only, plus Kiro's vendor-steering strip. It
+does not write Claude's native `worktree.location`. Claude Code CLI 2.1.289
+ignores that setting and always uses `<repo>/.claude/worktrees`; only Claude
+Desktop SSH sessions read it from user settings. The extracted native option
+remains available; the Claude module warns when a consumer sets it.

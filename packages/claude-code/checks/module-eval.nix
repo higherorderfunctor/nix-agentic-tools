@@ -71,6 +71,20 @@
         claudeAssertionsPass (evalWithUpstream arm false)
         && claudeAssertionsPass (arm.eval {ai.claude.enable = true;})))
 
+      (perBackend "worktree-location-warning" (arm: let
+        withLocation = arm.eval {
+          ai.claude = {
+            enable = true;
+            native.settings.worktree.location = "~/worktrees";
+          };
+        };
+        withoutLocation = arm.eval {ai.claude.enable = true;};
+        warns = result: lib.any (lib.hasInfix "ai.claude.native.settings.worktree.location is ignored by the Claude Code CLI; only Claude Desktop SSH sessions read it from user settings.") result.config.warnings;
+      in
+        warns withLocation
+        && !warns withoutLocation
+        && (claudeSettings withLocation).worktree.location == "~/worktrees"))
+
       (perBackend "package-null-skips-install-keeps-files" (arm: let
         evaluated = arm.eval {
           ai.claude = {

@@ -14,18 +14,9 @@
     if value != null && value.enable
     then value.text
     else null;
-  # The generated settings tree declares every key, unset ones as null.
-  claudeWorktree = config: config.ai.claude.native.settings.worktree;
   enabled = extra: lib.recursiveUpdate {ai.programs.git-worktrees.enable = true;} extra;
 in {
   checks = {
-    module-git-worktrees-claude-absolute-location = mkTest "git-worktrees-claude-absolute-location" (
-      onBoth (enabled {ai.programs.git-worktrees.location = "~/worktrees";}) (config:
-        config.ai.claude.native.settings.worktree.location
-        == "~/worktrees"
-        && lib.hasInfix "`~/worktrees`" (delivered config "codex"))
-    );
-
     # Every contribution is a default a consumer definition replaces.
     module-git-worktrees-consumer-wins = mkTest "git-worktrees-consumer-wins" (
       onBoth (enabled {
@@ -44,13 +35,11 @@ in {
     module-git-worktrees-default-disabled = mkTest "git-worktrees-default-disabled" (
       onBoth {} (config:
         lib.all (runtime: delivered config runtime == null) runtimes
-        && claudeWorktree config == null
         && !config.ai.kiro.tweaks.stripVendorWorktreeSteering)
     );
 
     # The default protocol reaches every supported runtime's own pool with
-    # `{location}` rendered. The default location has a
-    # `{repo}` placeholder, which Claude's `worktree.location` cannot express.
+    # `{location}` rendered; `{repo}` remains available to the runtime.
     module-git-worktrees-enable = mkTest "git-worktrees-enable" (
       onBoth (enabled {}) (config:
         lib.all (runtime: let
@@ -58,11 +47,51 @@ in {
         in
           text
           != null
-          && lib.hasInfix "`../{repo}-worktrees`" text
+          && lib.hasInfix "../{repo}-worktrees" text
           && !(lib.hasInfix "{location}" text))
         runtimes
-        && claudeWorktree config == null
         && config.ai.kiro.tweaks.stripVendorWorktreeSteering)
+    );
+
+    module-git-worktrees-protocol-disabled = mkTest "git-worktrees-protocol-disabled" (
+      onBoth (enabled {
+        ai.programs.git-worktrees.protocol =
+          lib.genAttrs
+          ["base" "cleanup" "draft" "isolate" "protect" "request"]
+          (_: {enable = false;});
+      }) (config: lib.all (runtime: delivered config runtime == null) runtimes)
+    );
+
+    module-git-worktrees-protocol-keys = mkTest "git-worktrees-protocol-keys" (
+      onBoth (enabled {
+        ai.programs.git-worktrees.protocol = {
+          audit.text = "AUDIT";
+          base.text = "BASE";
+          cleanup.text = "CLEANUP";
+          draft.enable = false;
+          isolate.text = "ISOLATE {location}";
+          protect.text = "PROTECT";
+          request.text = "REQUEST";
+          sign.text = "Sign every commit.";
+        };
+      }) (config:
+        lib.all (runtime:
+          delivered config runtime == "ISOLATE ../{repo}-worktrees\n\nBASE\n\nREQUEST\n\nPROTECT\n\nCLEANUP\n\nAUDIT\n\nSign every commit.")
+        runtimes)
+    );
+
+    # A `source` file replaces the shipped text; its trailing newline is
+    # dropped, so the entry keeps single blank-line separators.
+    module-git-worktrees-protocol-source = mkTest "git-worktrees-protocol-source" (
+      onBoth (enabled {
+        ai.programs.git-worktrees.protocol.draft.source = ./draft.txt;
+      }) (config:
+        lib.all (runtime: let
+          text = delivered config runtime;
+        in
+          lib.hasInfix "\n\nDraft fixture: open every request as a draft.\n\n" text
+          && !(lib.hasInfix "Open pull or merge requests as drafts." text))
+        runtimes)
     );
 
     # A runtime override replaces one leaf for that runtime only.
@@ -70,7 +99,7 @@ in {
       onBoth (enabled {
         ai.programs.git-worktrees.runtimes = {
           codex.enable = false;
-          kimchi.protocol.text = "Worktrees: {location}";
+          kimchi.protocol.custom.text = "Worktrees: {location}";
           kiro.enable = false;
         };
       }) (config:

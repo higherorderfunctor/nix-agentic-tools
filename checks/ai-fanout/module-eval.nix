@@ -392,7 +392,7 @@ in {
         && programParity "git-worktrees" {
           enable = "boolean";
           location = "non-empty string";
-          protocol = "submodule";
+          protocol = "attribute set of (submodule)";
         } ["claude" "codex" "kimchi" "kiro"]
         && programParity "stacked-workflows" {enable = "boolean";} harnessNames
         && hm.options.stacked-workflows ? gitPreset

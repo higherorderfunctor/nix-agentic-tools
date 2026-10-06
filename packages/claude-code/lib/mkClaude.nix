@@ -788,7 +788,9 @@ in
         {
           warnings =
             lib.optional (hasExtraSystemPrompt && cfg.package == null)
-            "ai.claude.extraSystemPrompt is ineffective when ai.claude.package = null; set ai.claude.package to a managed package to deliver the extra system prompt.";
+            "ai.claude.extraSystemPrompt is ineffective when ai.claude.package = null; set ai.claude.package to a managed package to deliver the extra system prompt."
+            ++ lib.optional (lib.attrByPath ["worktree" "location"] null cfg.native.settings != null)
+            "ai.claude.native.settings.worktree.location is ignored by the Claude Code CLI; only Claude Desktop SSH sessions read it from user settings. The CLI always uses <repo>/.claude/worktrees.";
         }
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
