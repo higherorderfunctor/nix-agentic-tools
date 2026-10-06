@@ -147,6 +147,7 @@ in {
     ./packages/delegate-routing/modules/devenv
     ./packages/kimchi/modules/devenv
     ./packages/kiro-cli/modules/devenv
+    ./packages/peer-communication/modules/devenv
     ./packages/semble/modules/devenv
     # This repository's `ai.*` configuration. It consumes `ai.*` exactly as
     # any project would, fed the context and rules dev/generate.nix produces;

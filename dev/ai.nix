@@ -17,10 +17,6 @@
   pkgs,
   ...
 }: let
-  defaultDelegateRole = {
-    effort = "medium";
-    use = "strong";
-  };
   gen = import ./generate.nix {inherit lib pkgs;};
   # The stacked-workflows program is not imported (see devenv.nix), but its
   # always-on routing rule is wanted: deliver it from the program's source.
@@ -132,27 +128,29 @@ in {
           };
         };
       };
+      routing = {
+        "Local limits" = {
+          always = true;
+          source = ./house-rules/local-limits.md;
+        };
+        "Orchestrator session".enable = true;
+      };
       runtimes = {
         claude = {
           extraRuntimes = ["codex"];
           manualExternalDelegates = ["kimchi" "kiro"];
-          roles.default = defaultDelegateRole;
+          routing."Pool drain" = {
+            after = ["Size the work"];
+            always = true;
+            source = ./house-rules/pool-drain.md;
+          };
         };
-        codex.roles.default = defaultDelegateRole;
         kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
         # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
         # only, and not Fable, which this account does not have.
         kiro = {
           models = [{families = ["haiku" "opus" "sonnet"];}];
-          roles.default = defaultDelegateRole;
         };
-      };
-      # Enable the package's own guidance here because this repository is its primary consumer.
-      whenToDelegate = {
-        "Launch independent work together".enable = true;
-        "Orchestrator session".enable = true;
-        "Prefer the flat-rate pool".enable = true;
-        "Verify by the artifact".enable = true;
       };
     };
 

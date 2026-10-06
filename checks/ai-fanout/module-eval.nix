@@ -386,10 +386,10 @@ in {
         programParity "delegate-routing" {
           enable = "boolean";
           families = "attribute set of attribute set of (submodule)";
-          procedure = "submodule";
-          rules = "submodule";
-          whenToDelegate = "attribute set of (submodule)";
+          routing = "attribute set of (submodule)";
+          workflows = "attribute set of (submodule)";
         } ["claude" "codex" "kimchi" "kiro"]
+        && programParity "peer-communication" {enable = "boolean";} harnessNames
         && programParity "stacked-workflows" {enable = "boolean";} harnessNames
         && hm.options.stacked-workflows ? gitPreset
         && devenv.options.stacked-workflows ? gitPreset
@@ -426,7 +426,7 @@ in {
             assert lib.assertMsg (!(contributes "claude") && contributes "codex")
             "${package}: portable=${builtins.toJSON evaluated.config.ai.programs.${package}.enable}, claude=${builtins.toJSON (contributes "claude")}, codex=${builtins.toJSON (contributes "codex")}"; true)
           [lib.mkDefault lib.mkForce])
-        ["delegate-routing" "semble" "stacked-workflows"])
+        ["delegate-routing" "peer-communication" "semble" "stacked-workflows"])
       [evalHm evalDevenv]
     );
 

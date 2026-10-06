@@ -172,6 +172,7 @@ _: {
         "packages/kimchi/modules/**"
         "packages/kiro-cli/lib/mkKiro.nix"
         "packages/kiro-cli/modules/**"
+        "packages/peer-communication/modules/**"
         "packages/stacked-workflows/modules/**"
       ];
       sources = ["skills-fanout-pattern"];
@@ -382,7 +383,6 @@ _: {
         "change-propagation"
         "git-workflow"
         "linting"
-        "peer-communication"
         "project-overview"
       ];
     };

@@ -7,129 +7,148 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-06 — one enabled "Work and review" workflow ships
+> the Subtractive standard; a runtime workflow record without text keeps the
+> portable header.
 
-`ai.programs.delegate-routing.families` is the portable decision table, keyed by
-vendor and family. Each family has a capability tier, task and effort guidance,
-and a required normalized live-model pattern. Package fields use `mkDefault`, so
-consumers can override one field or add a family without replacing the table.
-`lib/families.nix` carries the eight package families; it contains no concrete
-model versions and no Kimchi-served vendors. Kimchi serves other vendors'
-models, so a consumer declares those families; this repository does in
-`dev/ai.nix`.
+`ai.programs.delegate-routing` exposes portable `families`, `routing` and
+`workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
+Kimchi and Kiro. Both Home Manager and devenv import `modules/common.nix` and
+expose the same surface.
 
-Each runtime chooses families through
-`ai.programs.delegate-routing.runtimes.<runtime>.models`. Selectors are
+## Named guidance
+
+`routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
+`source`. Names become headings. The package ships the always-on "Load
+delegate-routing" stub and four enabled entries: "Follow the user's request",
+"Size the work", "Choose execution" and "Validate the result". "Validate the
+result" is always-on too. The "Orchestrator session" catalog entry ships
+disabled. Policy belongs in these entries rather than renderer string literals.
+
+`workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
+routing entry fields except `always`; the workflow's `always` places its steps.
+The package ships one enabled workflow, "Work and review", with the steps
+Rubric, Subtractive, Work, Review, Prosecute, Defend, Judge and Loop chained by
+`after`. Review is one reviewer; Prosecute, Defend and Judge replace it for a
+change to a shared abstraction. The Subtractive step adds the subtraction
+standard to the rubric. Loop sends validated findings back to the worker for at
+most 3 rounds. Add, replace, disable or reorder a step by key. A workflow can
+have introductory text or only steps; an enabled step needs content.
+
+Entries with `always = true` render through the existing per-runtime `ai.rules`
+fan-out. Other entries render in the generated skill. A workflow's `always`
+selects the destination for its header and numbered steps together; steps retain
+their order within that workflow. The always-on stub tells the agent to load the
+skill before delegation. When the always-on render is empty, no router rule is
+emitted. Keep model tables and harness details in the skill.
+
+Within one scope, named submodules merge by key and package fields use
+`mkDefault`. An ordinary consumer definition overrides a shipped field while
+retaining its siblings. An explicit `enable = false` wins over content. `text`
+uses a non-concatenating string type: different same-priority definitions
+conflict. Use `mkForce` only when intentionally resolving such a conflict.
+Explicit non-empty `text` and `source` at the same priority conflict.
+Higher-priority content wins across those fields, so consumer text can replace a
+shipped source and consumer source can replace shipped text.
+
+Portable and runtime maps compose by key. An absent runtime key inherits; a
+present runtime entry replaces that portable entry atomically; different keys
+add. A disabled runtime entry suppresses the inherited entry. This is separate
+from Nix priority merging within one scope. A runtime replacement that needs the
+portable wording must supply that wording explicitly; do not copy evaluated
+records with internal fields. A runtime workflow record that sets text replaces
+the portable header; one that sets no text keeps it. Portable and runtime step
+maps compose separately by step name. A runtime step replaces its portable step
+atomically; sibling steps remain. Workflow content is required after these step
+maps compose: a runtime can enable a catalog workflow without introductory text
+or local steps when enabled inherited steps provide content. An enabled workflow
+with no effective introductory text or enabled steps fails with a named error.
+
+`before` and `after` name ordering anchors in the same map. Topological sorting
+honors both forms among enabled entries. Edges to absent or disabled entries are
+ignored; cycles, including self-cycles, fail with the involved names. Ties have
+no promised order. Ordering controls prose only, not override priority or
+executable first-match routing. Workflow steps have their own ordering map. To
+keep a terminal step last when inserting a new step, give the new step a
+`before` edge to that terminal step.
+
+This repository enables "Orchestrator session" in `dev/ai.nix`. Its portable
+"Local limits" entry caps external CLI delegates at two. Its Claude-only "Pool
+drain" entry follows "Size the work" and asks for usage before each batch of
+delegates, choosing allowance left per hour until reset. These house entries are
+consumer policy, not shipped defaults.
+
+## Families and runtime capabilities
+
+`families.<vendor>.<family>` is the portable decision table. Each record has a
+capability tier, task and effort guidance, and a required normalized live-model
+pattern. Package fields use `mkDefault`, so consumers can override a field or
+add a family. `lib/families.nix` carries the package families without concrete
+model versions or Kimchi-served vendors. Kimchi serves other vendors' models, so
+this repository declares those families in `dev/ai.nix`.
+
+Each runtime chooses families through `runtimes.<runtime>.models`. Selectors are
 alternatives; within a selector every non-empty field must match the vendor,
 tier and family name. Claude defaults to Anthropic, Codex to OpenAI, and Kimchi
-and Kiro to no selection, so the package builds no default skill for either.
-Empty selectors fail assertions. Vendor, tier and family selectors use dynamic
-enums from configured families, so selector tiers include only tiers used by
-those families. An enabled program on an enabled runtime must select at least
-one family. That program's `extraRuntimes` and `manualExternalDelegates` targets
-also need a family selection, even when a target runtime or program is disabled.
+and Kiro to no selection. Empty selectors fail assertions. Vendor, tier and
+family selectors use dynamic enums from configured families; selector tiers
+include only used tiers. Family names must be unique across vendors.
 
-Runtime `roles.default`, `roles.writer` and `roles.reviewer` are nullable
-records with required `use` and optional `effort`. All default to null. `use` is
-a dynamic enum of static tiers and families that this runtime or an automatic
-extra selects. Family names must be unique across vendors and cannot equal
-tiers. The default role sets the starting tier. The default role's tier is the
-ceiling; a family resolves to its own tier. Explicit writer and reviewer choices
-may exceed it. Manual-only families are ineligible. Rendering omits unset roles.
-The Roles paragraph states the ceiling only when `roles.default` is set.
-
-Writer and reviewer effort inherits the default when unset; efforts are low,
-medium, high, xhigh or max. Runtime reasoning settings retain their separate
-enum without max. The pool-choice paragraph in delegate sizing appears only with
-an automatic extra or a manual delegate.
-
-Resolve a concrete model at launch time: introspect the runtime's live list,
-choose the highest version matching the family's pattern by comparing version
-segments, and use that runtime's spelling. Claude's interactive tools take
-aliases such as `opus`.
-
+An enabled program on an enabled runtime must select at least one family. Its
+`extraRuntimes` and `manualExternalDelegates` targets also need a selection.
 `extraRuntimes` adds automatic external candidates and requires the target
-runtime to be enabled. `manualExternalDelegates` adds instructions for explicit
-user requests without requiring runtime enable. Manual-only wins if a target
-occurs in both lists. Selected families appear once per tier with all applicable
-native and external reaches. A cross-vendor review sentence appears only when
-automatic candidates span multiple vendors.
+runtime to be enabled. `manualExternalDelegates` requires an explicit user
+request and does not require runtime enable. Manual-only wins if a target occurs
+in both lists. Selected families appear once per tier with all applicable native
+and external reaches.
 
-`ai.programs.delegate-routing.runtimes.<runtime>.techniques` is a keyed set of
-workflow, subagent, external, introspect and usage nodes. Delegate nodes declare
-whether they pin model and effort and where they are available: interactive,
-headless or ACP. Assertions require both pin fields to be non-null exactly for
-delegate kinds, and a command for every external node. Each package field uses
-`mkDefault`; consumers can replace fields, add nodes or disable individual
-nodes. Techniques are usable only when present in the tool list, and external
-commands must be on PATH. Modes describe usual availability, not a reliable
-session-mode detector; some ACP clients expose Kiro `orchestrate_subagent`
-instead of `invoke_sub_agent`. External and manual runtime sections include only
-external, introspect and usage nodes. Codex and Kimchi have no workflow node;
-Kimchi has no usage node because no command reads usage without a model turn.
+Resolve concrete models at launch time: inspect the runtime's live list, compare
+version segments to find the highest version matching the family pattern, and
+use that runtime's spelling. Claude's interactive tools take aliases such as
+`opus`.
 
-Kimchi's nodes record Kimchi 1.5.1 probes and source. Its Agent tool pins model
-and thinking, but an omitted `thinking` falls back to the persona default rather
-than the parent's level, so the notes say to pass it. Kimchi's `/workflow` is a
-slash command with no model tool, so no delegate can call it and it has no node;
-`dev/ai.nix` still enables the `extensions.workflows` resource for interactive
-use. Shared table rendering escapes cells once for families and techniques.
+`runtimes.<runtime>.techniques` is a keyed set of workflow, subagent, external,
+introspect and usage nodes. Delegate nodes describe model and effort pinning,
+and mode availability. Modes describe usual availability, not session-mode
+detection; use only tools present in the current session and external commands
+on PATH. Introspection and usage nodes describe how to obtain live evidence.
+Usage commands remain part of the existing technique catalog. Each package field
+uses `mkDefault`; consumers can override fields, add nodes or disable a node.
 
-Portable `rules` and `procedure` use `lib.ai.types.optionalTextSource` with
-enabled package `defaultContent`. Set `text` or `source` to replace either, or
-`enable = false` to omit it. Rules lead the skill; the procedure follows its
-runtime techniques. The procedure includes review routing and requires the judge
-to review for subtraction.
+Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
+the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
+command without a model tool; `dev/ai.nix` enables its interactive resource
+separately. External and manual runtime sections include external, introspect
+and usage nodes. Kimchi has no usage node because no command reads usage without
+a model turn. Shared table rendering escapes cells once.
 
-Both Home Manager and devenv import `modules/common.nix`, which declares this
-option surface and imports `mkSkillPackageModule` once for Claude, Codex, Kimchi
-and Kiro. The Kimchi skill lands in Kimchi's own skill roots: devenv
-`.kimchi/skills`, Home Manager `harness/skills`. Kimchi's precedence is project
-(`.kimchi/skills`) over config paths over harness. The config paths include the
-cwd `.claude/skills` from the default `skillPaths`. Both project-scoped roots
-load only when Kimchi trusts the project. So under devenv the skill loads only
-in a trusted project, and under Home Manager a trusted project with its own
-`.claude/skills/delegate-routing` overrides the harness copy. Per-runtime
-program enable inherits portable enable through the same null-as-inherit rule as
-the factory. Skills and router rules contribute to per-runtime pools, never the
-portable pools. Runtime-only controls are not declared at the portable scope.
+## Delivery and previews
 
-The portable `whenToDelegate` entries are unchanged. Attribute names become
-headings in the always-on router rule. Entries use `optionalTextSource`:
-consumer content auto-enables an entry, while an explicit `enable = false` wins.
-Package defaults use `lib/when-to-delegate.nix`'s `mkPreset` with exactly one
-source or text; default-priority content stays dormant until enabled or
-overridden. Consumer entries must NOT use `mkPreset`: normal-priority content is
-what triggers auto-enable. Attribute renames merge under the new key and warn.
-An empty consumer `text` value does not auto-enable a default-disabled entry.
-Required entries and optional entries enabled explicitly or by default must
-resolve to non-empty `text` or a `source` path. Home Manager exposes warnings
-through its module option; devenv uses `lib.warn` during assertion evaluation.
+The common module imports `mkSkillPackageModule` once for the supported
+runtimes. Per-runtime program enable inherits portable enable through the
+factory's null-as-inherit rule. Skills and router rules contribute to
+per-runtime pools, never the portable pools. Runtime-only controls are not
+declared at portable scope. Copilot is excluded from this program.
 
-`fragments/skill-routing.md` is the short always-on stub. `router.nix` appends
-enabled `whenToDelegate` entries. With no enabled entries it is byte-identical
-to the stub. This repository enables the guidance and consumes it through
-`dev/ai.nix`. Kiro is enabled with its own skill selecting Anthropic families;
-Kimchi selects the consumer-declared Kimchi-served families. Both are
-manual-only external delegates for Claude. Copilot is excluded from this
-program. The router is delivered in `.claude/rules/delegate-routing-router.md`
-and inline in AGENTS.md for Codex, Kimchi and Kiro; under Home Manager, Kimchi's
-copy is in its user harness AGENTS.md. Byte-identical contributions deduplicate.
-Keep model tables and harness details in the generated skill.
+The Kimchi skill lands in devenv `.kimchi/skills` or Home Manager
+`harness/skills`. Project skills take precedence over config paths and harness
+skills. Both project-scoped roots load only when Kimchi trusts the project. A
+trusted project's `.claude/skills/delegate-routing` can override the Home
+Manager harness copy through default config paths.
 
-The content package injects packaged usage helper paths into technique defaults.
-The Claude helper carries curl and jq; the Codex helper carries timeout, jq and
-Python, while the consumer supplies the Codex CLI. `mkSkill`, `render` and
-`skills` use the same family, selector, technique, role and text inputs.
-Generated skill trees use `lib.ai.generated` and the shared Markdown formatter;
-previews read the built files. Package discovery supplies content, both backend
-modules and the module checks.
+The always-on routing rule uses the existing native Claude rules and AGENTS.md
+delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
+its user harness AGENTS.md. Byte-identical contributions deduplicate. The
+content package injects packaged usage helper paths into technique defaults. The
+Claude helper carries curl and jq; the Codex helper carries timeout, jq and
+Python, while the consumer supplies the Codex CLI.
 
-## Preview skills
+`mkSkill`, `render` and `skills` consume the same family, selector, technique
+and named-entry inputs. Generated skill trees use `lib.ai.generated` and the
+shared Markdown formatter; previews read the built files. Package discovery
+supplies content, both backend modules and checks.
 
-Run from the repository root. These commands print generated skills without
-launching delegates.
+Run these from the repository root to print skills without launching delegates:
 
 ```bash
 nix eval --raw .#delegate-routing-content.skills.claude.text

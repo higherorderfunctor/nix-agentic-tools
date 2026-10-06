@@ -219,7 +219,28 @@
         ++ [{ai.internal = moduleInternals;}]
         ++ modules;
     };
-  evalHmWithSpecialArgs = extraSpecialArgs: config: evalHmModulesWithSpecialArgs extraSpecialArgs [{inherit config;}];
+  # The config-attrset evaluators below start from `quietDefaults`; the
+  # whole-module evaluators (`eval*Modules`) do not.
+  #
+  # A default-on program contributes to every runtime with no configuration,
+  # so it would show up in every check that inspects a runtime's generated
+  # files, rules or warnings, whatever that check is about. These evaluators
+  # turn every program whose `enable` defaults to true off below the option
+  # default's priority, so a check's own `enable = true` (even at mkDefault)
+  # still wins. A check of a program's real default, and this repository's own
+  # configuration (instructions-drift), evaluate whole modules and see it on.
+  # Derived from `options` alone, so a composition without any default-on
+  # owner still evaluates and adds nothing.
+  quietDefaults = {options, ...}: let
+    programs = lib.attrByPath ["ai" "programs"] {} options;
+    defaultOn = lib.filter (name: let
+      enable = programs.${name}.enable or null;
+    in
+      lib.isOption enable && (enable.default or false) == true) (lib.attrNames programs);
+  in {
+    config.ai.programs = lib.genAttrs defaultOn (_: {enable = lib.mkOverride 1400 false;});
+  };
+  evalHmWithSpecialArgs = extraSpecialArgs: config: evalHmModulesWithSpecialArgs extraSpecialArgs [quietDefaults {inherit config;}];
   evalHm = evalHmWithSpecialArgs {};
   # A whole module rather than a config attrset, for a configuration that
   # declares options of its own (a stand-in for an upstream module).
@@ -244,7 +265,7 @@
         ++ [{ai.internal = moduleInternals;}]
         ++ modules;
     };
-  evalDevenvWithSpecialArgs = extraSpecialArgs: config: evalDevenvModulesWithSpecialArgs extraSpecialArgs [{inherit config;}];
+  evalDevenvWithSpecialArgs = extraSpecialArgs: config: evalDevenvModulesWithSpecialArgs extraSpecialArgs [quietDefaults {inherit config;}];
   evalDevenv = evalDevenvWithSpecialArgs {};
   # A whole module rather than a config attrset, for a configuration that reads
   # `config` or declares assertions of its own (this repository's dev/ai.nix).

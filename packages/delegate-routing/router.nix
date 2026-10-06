@@ -1,27 +1,17 @@
-let
-  baseRule = {
-    description = "Size model and effort before delegating";
-    text = builtins.readFile ./fragments/skill-routing.md;
-  };
-  render = {
-    entries,
-    lib,
-  }: let
-    enabledEntries = lib.filterAttrs (_: entry: entry.enable) entries;
-    renderedEntries = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: entry: ''
-        ### ${name}
-
-        ${lib.removeSuffix "\n" entry.text}
-      '')
-      enabledEntries);
-  in {
-    delegate-routing-router =
-      baseRule
-      // {
-        text = baseRule.text + lib.optionalString (renderedEntries != "") "\n${renderedEntries}";
-      };
-  };
-in {
-  __functor = _: render;
-  delegate-routing-router = baseRule;
-}
+{
+  entries,
+  lib,
+  workflows ? {},
+}: let
+  renderer = import ./lib/render-entries.nix {inherit lib;};
+  rendered = lib.concatStringsSep "\n" (lib.filter (text: text != "") [
+    (renderer.routing true entries)
+    (renderer.workflows true workflows)
+  ]);
+in
+  lib.optionalAttrs (rendered != "") {
+    delegate-routing-router = {
+      description = "Load delegate-routing before delegating work";
+      text = "# Delegate routing\n\n${rendered}";
+    };
+  }

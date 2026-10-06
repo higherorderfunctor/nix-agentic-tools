@@ -1,7 +1,11 @@
-# Peer Communication
+---
+name: peer-communication
+description: >-
+  How to write replies a person reads: answer first, plain words, easy to scan.
+  Load before your first reply in an interactive session.
+---
 
-> **Last verified:** 2026-09-23 — replaced with the operator-provided peer
-> communication guide.
+# Peer Communication
 
 Optimize communication for **low reader effort, fast understanding, and fast
 decision-making**.

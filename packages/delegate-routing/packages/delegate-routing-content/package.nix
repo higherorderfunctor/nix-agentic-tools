@@ -25,22 +25,28 @@
     codex-usage = mkUsageScript "codex-usage" [pkgs.coreutils pkgs.jq pkgs.python3];
   };
   rawDefaults = import ../../lib/defaults.nix {
+    inherit lib;
     claudeUsageScript = lib.getExe usageScripts.claude-usage;
     codexUsageScript = lib.getExe usageScripts.codex-usage;
   };
   techniqueType = import ../../lib/technique-type.nix {inherit lib;};
-  normalizedTechniques =
+  entryTypes = import ../../lib/entry-type.nix {inherit lib;};
+  normalized =
     (lib.evalModules {
       modules = [
         {
-          options.techniques = lib.mkOption {
-            type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
-            default = rawDefaults.techniques;
-          };
+          options =
+            entryTypes.options
+            // {
+              techniques = lib.mkOption {
+                type = lib.types.attrsOf (lib.types.attrsOf techniqueType);
+              };
+            };
+          config = lib.mapAttrsRecursive (_: lib.mkDefault) {inherit (rawDefaults) routing workflows techniques;};
         }
       ];
-    }).config.techniques;
-  defaults = rawDefaults // {techniques = normalizedTechniques;};
+    }).config;
+  defaults = rawDefaults // {inherit (normalized) routing workflows techniques;};
   render = args: builtins.readFile "${mkSkill args}/SKILL.md";
   # The skill in the house prose style. No table check: this package set's
   # pkgs carries no overlay, so the overlay's linters are not in it.
@@ -65,13 +71,13 @@ in
     passthru = {
       fragments = import ../../lib/fragments.nix {inherit fragmentsLib repoPath;};
       inherit mkSkill render skills usageScripts;
-      inherit (defaults) families models techniques rules procedure roles;
+      inherit (defaults) families models techniques routing workflows;
     };
   } ''
     # Full strict mode is required here: stdenv does not set every flag (#909).
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
     mkdir -p "$out/fragments" "$out/skills"
-    cp ${../../fragments/skill-routing.md} "$out/fragments/skill-routing.md"
+    cp ${../../fragments/load-delegate-routing.md} "$out/fragments/load-delegate-routing.md"
     ${lib.concatMapStringsSep "\n" (runtime: "cp -r ${skills.${runtime}} \"$out/skills/${runtime}\"") (builtins.attrNames skills)}
   ''

@@ -157,11 +157,12 @@ git-workflow orientation — do not restate them here.
 3. **Judge.** A third agent, given both cases and the diff, that rules per
    finding on the EVIDENCE rather than the rhetoric.
 
-If the judge cannot converge — it can neither confirm nor dismiss on the
-evidence presented — loop, at most three times total, each round narrowed to the
-unresolved findings and told what evidence was missing. Still unresolved after
-three: surface the split to the operator with both cases. Never self-adjudicate;
-that reintroduces the bias the structure exists to remove.
+The three roles run inside a loop of at most 3 rounds with the worker: the
+worker fixes the findings you validated, then the review runs again on the fix
+and what it touches. Findings inside the worker's task need no approval from the
+operator. If the same defect survives 2 rounds, change the brief instead of
+repeating it. At the cap, return the result, the open defects and the decision
+needed. A finding the judge cannot settle goes back to you to validate.
 
 Size the stages separately. Prosecute and defend are judgement work; the
 evidence-gathering underneath them is mechanical and belongs on a cheaper model.
