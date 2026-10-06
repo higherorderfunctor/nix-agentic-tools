@@ -192,6 +192,7 @@ git-branchless, git-absorb, and git-revise.
 |-------|-------------|
 | `/delegate-routing` | Size model and effort before calling subagents or building workflows |
 | `/kimchi-docs` | Search the pinned Kimchi docs snapshot and independently pinned workflows source, docs and examples; enable via ai.programs.kimchi-docs.enable |
+| `/peer-communication` | Write replies a person reads: answer first, plain words, easy to scan |
 | `/stack-fix` | Absorb fixes into correct stack commits |
 | `/stack-plan` | Plan and build a commit stack from description or existing commits |
 | `/stack-split` | Split a large commit into reviewable atomic commits |
@@ -362,6 +363,7 @@ instruction building.
 | Feature | Without Nix | Home-Manager | DevEnv |
 |---------|-------------|--------------|--------|
 | Delegate routing | Copy a generated runtime skill | `ai.programs.delegate-routing.enable` (Claude + Codex + Kimchi + Kiro) | Same; project-native paths |
+| Peer communication | Copy skills/ | On by default; `ai.programs.peer-communication.enable = false` or `.runtimes.<runtime>.enable = false` turns it off | Same; project-native paths |
 | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |

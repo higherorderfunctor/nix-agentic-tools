@@ -25,6 +25,13 @@
 #   name              : program key; declares `ai.programs.<name>.enable`
 #                       plus per-runtime overrides (string).
 #   enableDescription : mkEnableOption description (string).
+#   enableDefault     : default of `ai.programs.<name>.enable`. OPTIONAL;
+#                       false when omitted, so a package stays opt-in. Set it
+#                       true only for a package every session should carry
+#                       unless the consumer turns it off (peer-communication).
+#                       The per-runtime overrides still default to null and
+#                       inherit it, so `runtimes.<runtime>.enable = false`
+#                       turns a default-on program off for one runtime.
 #   supportedRuntimes : runtime capability set. OPTIONAL; defaults to every
 #                       registered runtime.
 #   skills            : moduleArgs -> attrsOf (path | str). The skill dirs to
@@ -89,7 +96,9 @@ spec: {
   program = programFactory.mkProgram {
     inherit (spec) name;
     supportedRuntimes = spec.supportedRuntimes or (import ./runtimes.nix);
-    options.enable = lib.mkEnableOption spec.enableDescription;
+    options.enable =
+      lib.mkEnableOption spec.enableDescription
+      // {default = spec.enableDefault or false;};
   };
 
   skillEntries = runtime: lib.mapAttrs (_: lib.mkDefault) (spec.skills (moduleArgs // {inherit runtime;}));

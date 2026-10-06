@@ -539,6 +539,7 @@
     | Feature | Without Nix | Home-Manager | DevEnv |
     |---------|-------------|--------------|--------|
     | Delegate routing | Copy a generated runtime skill | `ai.programs.delegate-routing.enable` (Claude + Codex + Kimchi + Kiro) | Same; project-native paths |
+    | Peer communication | Copy skills/ | On by default; `ai.programs.peer-communication.enable = false` or `.runtimes.<runtime>.enable = false` turns it off | Same; project-native paths |
     | Stacked workflow skills | Copy skills/ | `ai.programs.stacked-workflows.enable` | `ai.programs.stacked-workflows.enable` |
     | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
     | Unified MCP config | Manual native config | `ai.mcpServers.*` (all five CLIs) | `ai.mcpServers.*` (all five CLIs) |

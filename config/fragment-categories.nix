@@ -382,7 +382,6 @@ _: {
         "change-propagation"
         "git-workflow"
         "linting"
-        "peer-communication"
         "project-overview"
       ];
     };
