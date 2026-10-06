@@ -356,7 +356,7 @@
     backend,
     cfg,
     config,
-    extraSystemPrompt,
+    hasExtraSystemPrompt,
     launcherEnvironment,
     mergedAgents,
     mergedServers,
@@ -369,7 +369,7 @@
       || projectHarnessSettings cfg != {}
       || mergedServers != {}
       || mergedAgents != {}
-      || extraSystemPrompt != null
+      || hasExtraSystemPrompt
       || aiCommon.filterNulls cfg.permissions != {}
       || hasHookHandlers (projectHooksFor {inherit cfg topHooks;});
   in
@@ -388,6 +388,7 @@
     backend,
     cfg,
     extraSystemPrompt,
+    hasExtraSystemPrompt,
     hasMergedContext,
     mergedAgents,
     mergedContext,
@@ -704,14 +705,14 @@
       # both backends. A wrapper `--append-system-prompt` flag was rejected:
       # it would lead argv, and Kimchi dispatches its subcommands only from
       # argv[0] (src/commands/dispatch.ts).
-      (lib.mkIf (extraSystemPrompt != null) {
-        ai.kimchi.files."${harness}/APPEND_SYSTEM.md" = lib.mkDefault {
-          content = {
+      (lib.mkIf hasExtraSystemPrompt {
+        ai.kimchi.files."${harness}/APPEND_SYSTEM.md" = {
+          content = lib.mkDefault {
             _generated = true;
             _surface = "extraSystemPrompt";
             text = extraSystemPrompt;
           };
-          format = "markdown";
+          format = lib.mkDefault "markdown";
         };
       })
 
