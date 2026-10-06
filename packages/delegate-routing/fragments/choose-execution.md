@@ -1,7 +1,8 @@
 Use a tool from the table that exists in this session's mode. A single
 self-contained task needs one delegate. Use a workflow when the work has
 dependent steps, loops or parallel parts. Start independent tasks together. Run
-writers that share a working tree one at a time.
+writers that share a working tree one at a time. Launch delegate CLIs from the
+current directory. That directory decides their permissions and configuration.
 
 To give another runtime a multi-step job, hand the whole job to one delegate
 there that can run its own subagents (the table's "Runs own subagents" column).
