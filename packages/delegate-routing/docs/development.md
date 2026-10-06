@@ -198,3 +198,12 @@ observed sources are distinguished from hidden vendor text, which stays UNKNOWN.
 The vendor structural check renders every variant without starting a runtime.
 See the evaluation guide for safety preflight requirements, provenance, paired
 comparisons and paid-turn counts.
+
+## Delegate decision reference
+
+`docs/delegates/evidence.md` owns pins, evidence marks and capture methods. The
+other reference files own tools, controls, lifecycle and prompt reach.
+`probes/delegates/<harness>/README.md` indexes exact case commands and expected
+excerpts. Captured execution and source-only evidence stay separate. Probes
+write beneath a temporary case tree; Kiro needs an operator-supplied fixture
+home because this probe set does not define its serialized login schema.
