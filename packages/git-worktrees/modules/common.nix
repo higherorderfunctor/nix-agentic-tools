@@ -7,6 +7,35 @@
   ...
 }: let
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
+  # Shipped protocol entries in render order. Both the order and the
+  # defaults derive from this one list.
+  shipped = [
+    {
+      name = "isolate";
+      value = "Never author tracked or new files in the current checkout. Make every change in a git worktree under {location}. A relative location is relative to the repository's top-level directory, and {repo} is that directory's name.";
+    }
+    {
+      name = "base";
+      value = "Branch from the current checkout's branch unless told otherwise.";
+    }
+    {
+      name = "request";
+      value = "Push the branch and open a pull or merge request targeting the branch you started from.";
+    }
+    {
+      name = "draft";
+      value = "Open pull or merge requests as drafts.";
+    }
+    {
+      name = "protect";
+      value = "Never merge into or fast-forward the default branch locally.";
+    }
+    {
+      name = "cleanup";
+      value = "After the request merges, remove the worktree and delete the local branch.";
+    }
+  ];
+  protocolOrder = map (entry: entry.name) shipped;
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
   program = programFactory.mkProgram {
     name = "git-worktrees";
@@ -27,53 +56,56 @@
           relative to the repository's top-level directory, and `{repo}` stands
           for that directory's name. The protocol text receives it in place of
           `{location}`.
-
-          Claude also gets it as `worktree.location` in its settings, but only
-          when it is an absolute or `~/` path with no `{repo}`, the only shape
-          that key accepts. Only the Claude Code Desktop app reads that key, for
-          SSH sessions, and only from user settings: the CLI ignores it, and the
-          devenv backend's project settings entry has no reader.
         '';
       };
       protocol = lib.mkOption {
-        type = aiTypes.textSource {
-          defaultContent.source = ../protocol.md;
-          description = "the git worktree protocol";
-        };
+        type = lib.types.attrsOf (aiTypes.optionalTextSource {
+          autoEnable = false;
+          description = "git worktree guidance";
+          enableDefault = true;
+          textType = lib.types.str;
+        });
         default = {};
-        defaultText = lib.literalMD "the shipped protocol, `packages/git-worktrees/protocol.md`";
+        defaultText = lib.literalMD "shipped entries: ${lib.concatMapStringsSep ", " (key: "`${key}`") protocolOrder}";
+        example = lib.literalExpression ''
+          {
+            draft.enable = false;
+            sign.text = "Sign every commit.";
+          }
+        '';
         description = ''
           Instructions delivered as `ai.<runtime>.extraSystemPrompt.git-worktrees`.
-          Every `{location}` is replaced by `location`.
+          Entries support `enable` and either `text` or `source`, using the same
+          text-source type as delegate-routing entries. Shipped keys render in
+          ${lib.concatStringsSep ", " protocolOrder} order; added keys follow in
+          name order. Every `{location}` is replaced by `location`.
+
+          WARNING: change where worktrees go with `location`, never by rewriting
+          `isolate`. Other runtime settings derive from `location` and would
+          silently disagree.
         '';
       };
     };
   };
 
-  # The one shape `worktree.location` accepts (claude-code 2.1.289's settings
-  # description): absolute or `~/`, with no placeholder.
-  claudeLocation = location:
-    if (lib.hasPrefix "/" location || lib.hasPrefix "~/" location) && !(lib.hasInfix "{repo}" location)
-    then location
-    else null;
-
   runtimeConfig = runtime: let
     cfg = program.resolve config runtime;
-    claudeValue = claudeLocation cfg.location;
+    orderedKeys = protocolOrder ++ lib.subtractLists protocolOrder (lib.attrNames cfg.protocol);
+    text = lib.concatStringsSep "\n\n" (lib.concatMap (key:
+      lib.optional (cfg.protocol ? ${key} && cfg.protocol.${key}.enable)
+      (lib.removeSuffix "\n" cfg.protocol.${key}.text))
+    orderedKeys);
   in
     lib.mkIf cfg.enable (lib.mkMerge ([
         {
           # Field by field: a whole-entry mkDefault would be discarded by any
           # consumer definition of one field.
           ai.${runtime}.extraSystemPrompt.git-worktrees = lib.mapAttrs (_: lib.mkDefault) {
-            enable = true;
-            text = builtins.replaceStrings ["{location}"] [cfg.location] cfg.protocol.text;
+            enable = text != "";
+            text = builtins.replaceStrings ["{location}"] [cfg.location] text;
           };
         }
       ]
-      ++ lib.optional (runtime == "claude") (lib.mkIf (claudeValue != null) {
-        ai.claude.native.settings.worktree.location = lib.mkDefault claudeValue;
-      })
       # The protocol replaces Kiro's own worktree steering. The strip also
       # applies to Kiro's built-in default agent, which gets no protocol: only
       # typed agents receive `extraSystemPrompt`.
@@ -83,5 +115,14 @@
 in {
   imports = [program.module];
 
-  config = lib.mkMerge (map runtimeConfig program.supportedRuntimes);
+  config = lib.mkMerge ([
+      {
+        ai.programs.git-worktrees.protocol =
+          lib.mapAttrs (_: text: {
+            text = lib.mkDefault text;
+          })
+          (lib.listToAttrs shipped);
+      }
+    ]
+    ++ map runtimeConfig program.supportedRuntimes);
 }
