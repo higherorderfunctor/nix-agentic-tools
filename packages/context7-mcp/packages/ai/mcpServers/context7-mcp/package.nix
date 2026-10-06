@@ -10,12 +10,12 @@
 }: let
   vu = packageLib;
 
-  rev = "f2eef4f49da71a758c91cf6cb97640c8b262ef81";
+  rev = "16095a9f0940ac19942f210332e939fac2da0655";
   src = pkgs.fetchFromGitHub {
     owner = "upstash";
     repo = "context7";
     inherit rev;
-    hash = "sha256-fUvHVfAXszJJnwt4bVgeKrORbdt+oDTD/+sa3Cg1dlw=";
+    hash = "sha256-kKyptH0e+72aSnSoC28oatadNNyQuEzDGV8o5HRrrUc=";
   };
 in
   (pkgs.context7-mcp.override {pnpm_10 = pkgs.ai.generic.pnpm_10;}).overrideAttrs (finalAttrs: _prev: let
@@ -45,6 +45,6 @@ in
       inherit (finalAttrs) pname version src;
       pnpm = pkgs.ai.generic.pnpm_10;
       fetcherVersion = 3;
-      hash = "sha256-emh7xKjG9yKU9IYMXu9Ht424aR13qQzVjVtsxfhqNhg=";
+      hash = "sha256-aBLZ15M61DIaTz9OtQartJilwNZ5nxk6wDQT3B3sxbY=";
     };
   })
