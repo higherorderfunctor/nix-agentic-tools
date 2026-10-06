@@ -1,9 +1,7 @@
 # Kiro CLI delegate replays
 
-Replays for the Kiro CLI 2.27.1 (KAS `@kiro/agent` 0.66.22) delegate reference.
-Case ids match the reference's Replay column: `claude:` = the Claude-side
-probes, `codex:` = the Codex-side probes (`codex-side/`), `judge:` = the judge's
-tie-breakers.
+Pins, evidence marks and case-prefix meanings:
+[evidence guide](../../../docs/delegates/evidence.md).
 
 Every script runs the repository's pinned `kiro-cli` unwrapped binary (built on
 demand from `.#ciPackages.<system>.kiro-cli.unwrapped`; `KIRO_PKG=<store path>`
@@ -110,3 +108,21 @@ node codex-side/inspect.cjs session/new session/cancel session/set_mode session/
 
 Names such as `bCc` are minified identifiers of this exact bundle; `bundles.py`
 refuses any other bundle.
+
+### Prompt-map captures
+
+These commands use the same common fixtures as the delegate cases. `k3-dup` and
+`a3-invoke` add the original study's case-specific ACP data. Inspect
+`wire.jsonl` with `wiresum.py`; request numbers can change between runs.
+
+| Case id   | Command                                                                                             | Expected excerpt                                                             |
+| --------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| w-v3      | `T=90 ./wire2.sh w-v3 -- chat --v3 --no-interactive -a "hello USER_SENTINEL_1"`                     | Steering sentinels before the KAS base                                       |
+| k3-dup    | `T=120 ./wire2.sh k3-dup -- acp --agent-engine v3 --auth-method cli`                                | `GLOBAL_DUP_SENTINEL`, `WS_DUP_SENTINEL`, `INLINE_DUP_SENTINEL` all retained |
+| k3-hooked | `T=90 ./wire2.sh k3-hooked -- chat --v3 --no-interactive -a --agent hooked "hello USER_SENTINEL_1"` | `[Session Start Hook Output]`, `HOOK_AGENTSPAWN_SENTINEL`                    |
+| a3-invoke | `T=240 ./wire2.sh a3-invoke -- acp --agent-engine v3 --auth-method cli`                             | Hooked child: `HOOKED_PROMPT_SENTINEL`; no hook-output sentinel              |
+
+A fixture-login generator is not supplied: the probe code names the SQLite file
+but does not define its auth schema or serialized login value. The
+`KIRO_BASE_HOME` requirement remains; without it these captures cannot be
+replayed locally.
