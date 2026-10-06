@@ -1,7 +1,7 @@
 ## ai.skills Fanout Pattern
 
 > **Last verified:** 2026-10-06 — `enableDefault` makes a skill package
-> default-on; the config-form test evaluators turn peer-communication off.
+> default-on; the config-form test evaluators turn every default-on program off.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -115,14 +115,15 @@ semantics. A resolved false runtime receives no package skills or router rule,
 while siblings continue to inherit the portable value.
 
 The portable enable defaults to false. `enableDefault = true` makes a package
-default-on (peer-communication is the only one); its runtime overrides still
-default to null and inherit it. Because a default-on package contributes with no
-configuration, the harness's config-form evaluators (`evalHm`, `evalDevenv`)
-turn peer-communication off below the option default's priority (`quietDefaults`
-in `lib/testing/module-harness.nix`); without that, every check that inspects
-generated rules, AGENTS.md or warnings saw its router (22 checks failed
-evaluation when it was first added). A check of the real default uses
-`evalHmModules` / `evalDevenvModules`, as instructions-drift does.
+default-on; its runtime overrides still default to null and inherit it. Because
+a default-on package contributes with no configuration, the harness's
+config-form evaluators (`evalHm`, `evalDevenv`) turn every program whose
+`enable` defaults to true off below the option default's priority
+(`quietDefaults` in `lib/testing/module-harness.nix`, derived from `options`);
+without that, every check that inspects generated rules, AGENTS.md or warnings
+sees each default-on program's router (22 checks failed evaluation when the
+first one was added). A check of the real default uses `evalHmModules` /
+`evalDevenvModules`, as instructions-drift does.
 
 The factory passes `config`, `lib`, `pkgs` and `runtime` to both `skills` and
 `rules` callbacks. Import it once with the full supported runtime set; render

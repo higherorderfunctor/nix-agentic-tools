@@ -28,7 +28,7 @@
 #   enableDefault     : default of `ai.programs.<name>.enable`. OPTIONAL;
 #                       false when omitted, so a package stays opt-in. Set it
 #                       true only for a package every session should carry
-#                       unless the consumer turns it off (peer-communication).
+#                       unless the consumer turns it off.
 #                       The per-runtime overrides still default to null and
 #                       inherit it, so `runtimes.<runtime>.enable = false`
 #                       turns a default-on program off for one runtime.

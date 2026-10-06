@@ -92,6 +92,7 @@ for it. When several entries match, their guidance composes.
     - `packages/kimchi/modules/**`
     - `packages/kiro-cli/lib/mkKiro.nix`
     - `packages/kiro-cli/modules/**`
+    - `packages/peer-communication/modules/**`
     - `packages/stacked-workflows/modules/**`
   - Read:
     - [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)

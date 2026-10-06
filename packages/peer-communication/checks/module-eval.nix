@@ -1,6 +1,7 @@
 # The program is on by default: with no configuration both backends deliver the
 # skill to every runtime and the router rule to every runtime whose rules that
-# backend delivers. A per-runtime disable removes both from that runtime only.
+# backend delivers. A per-runtime disable removes both from that runtime only;
+# the global disable removes both everywhere.
 {
   lib,
   harness,
@@ -13,24 +14,26 @@
     devenv = config: evalDevenvModules [{inherit config;}];
     hm = config: evalHmModules [{inherit config;}];
   };
-  # Home Manager does not deliver Copilot rules, so the HM module writes none.
-  inertRules = {
-    devenv = [];
-    hm = ["copilot"];
-  };
+  # Runtimes whose rules a backend does not deliver by policy get no router:
+  # the same predicate the module applies (config/ai-delivery.nix).
+  policy = import ../../../config/ai-delivery.nix {inherit lib;};
+  inertRules = backend:
+    builtins.filter
+    (runtime: (policy.definitions.rules.${runtime}.${backend}.primitive or null) == "notApplicable")
+    harnessNames;
   hasSkill = result: runtime: result.config.ai.${runtime}.skills ? peer-communication;
   hasRule = result: runtime: result.config.ai.${runtime}.rules ? peer-communication-router;
   skillText = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.peer-communication}/SKILL.md";
   forBackends = prefix: test:
     lib.mapAttrs' (backend: evaluate: let
       ruleRuntimes = result:
-        lib.subtractLists inertRules.${backend}
+        lib.subtractLists (inertRules backend)
         (builtins.filter (runtime: result.options.ai.${runtime} ? rules) harnessNames);
     in
       lib.nameValuePair "module-peer-communication-${backend}-${prefix}"
       (mkTest "peer-communication-${backend}-${prefix}" (test {
         inherit evaluate ruleRuntimes;
-        inert = inertRules.${backend};
+        inert = inertRules backend;
       })))
     backends;
 in {
@@ -65,5 +68,15 @@ in {
       !(hasSkill result "claude")
       && !(hasRule result "claude")
       && lib.all (hasSkill result) others
-      && lib.all (hasRule result) (lib.remove "claude" (ruleRuntimes result)));
+      && lib.all (hasRule result) (lib.remove "claude" (ruleRuntimes result)))
+    # The documented off switch removes the skill and the router everywhere.
+    // forBackends "global-disable" ({
+      evaluate,
+      ruleRuntimes,
+      ...
+    }: let
+      result = evaluate {ai.programs.peer-communication.enable = false;};
+    in
+      !(lib.any (hasSkill result) harnessNames)
+      && !(lib.any (hasRule result) (ruleRuntimes result)));
 }

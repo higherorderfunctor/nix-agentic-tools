@@ -15,13 +15,16 @@
 # `ai.<runtime>.skills.peer-communication` and
 # `ai.<runtime>.rules.peer-communication-router`.
 #
-# `inertRuleRuntimes` names runtimes whose rules pool this backend does not
-# deliver. Home Manager passes Copilot: its HM rules are deliberately inert
-# (config/ai-delivery-facts.nix, `rules.copilot.hm`), so writing the router
-# there would only make every default HM evaluation with Copilot enabled warn
-# that a rule is set but not delivered. Copilot under HM still gets the skill,
-# whose description asks for it to be loaded in an interactive session.
-{inertRuleRuntimes ? []}: _: {
+# `backend` ("hm" or "devenv") selects which runtimes get the router: a
+# runtime whose rules this backend does not deliver by policy
+# (config/ai-delivery.nix, primitive "notApplicable" — today Copilot under
+# Home Manager) gets none, so a default evaluation does not warn that a rule
+# is set but not delivered. Such a runtime still gets the skill, whose
+# description asks for it to be loaded in an interactive session.
+{backend}: {lib, ...}: let
+  policy = import ../../../config/ai-delivery.nix {inherit lib;};
+  inert = runtime: (policy.definitions.rules.${runtime}.${backend}.primitive or null) == "notApplicable";
+in {
   imports = [
     (import ../../../lib/ai/mkSkillPackageModule.nix {
       name = "peer-communication";
@@ -32,11 +35,10 @@
         peer-communication = "${../skills/peer-communication}";
       };
       rules = {runtime, ...}:
-        if builtins.elem runtime inertRuleRuntimes
+        if inert runtime
         then {}
         else {
           peer-communication-router = {
-            description = "Load peer-communication before replying to a person";
             text = "# Peer communication\n\nWhen you are talking with a person, load the peer-communication skill before your first reply and follow it for every reply after. Skip it when your brief says you run non-interactively and report to an orchestrator.";
           };
         };

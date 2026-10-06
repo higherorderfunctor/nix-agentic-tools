@@ -225,15 +225,20 @@
   # A default-on program contributes to every runtime with no configuration,
   # so it would show up in every check that inspects a runtime's generated
   # files, rules or warnings, whatever that check is about. These evaluators
-  # turn such programs off below the option default's priority, so a check's
-  # own `enable = true` (even at mkDefault) still wins. A check of the
-  # program's real default, and this repository's own configuration
-  # (instructions-drift), evaluate whole modules and see it on.
-  # Gated on the option so a composition without that owner still evaluates.
-  quietDefaults = {options, ...}: {
-    config = lib.optionalAttrs (lib.hasAttrByPath ["ai" "programs" "peer-communication"] options) {
-      ai.programs.peer-communication.enable = lib.mkOverride 1400 false;
-    };
+  # turn every program whose `enable` defaults to true off below the option
+  # default's priority, so a check's own `enable = true` (even at mkDefault)
+  # still wins. A check of a program's real default, and this repository's own
+  # configuration (instructions-drift), evaluate whole modules and see it on.
+  # Derived from `options` alone, so a composition without any default-on
+  # owner still evaluates and adds nothing.
+  quietDefaults = {options, ...}: let
+    programs = lib.attrByPath ["ai" "programs"] {} options;
+    defaultOn = lib.filter (name: let
+      enable = programs.${name}.enable or null;
+    in
+      lib.isOption enable && (enable.default or false) == true) (lib.attrNames programs);
+  in {
+    config.ai.programs = lib.genAttrs defaultOn (_: {enable = lib.mkOverride 1400 false;});
   };
   evalHmWithSpecialArgs = extraSpecialArgs: config: evalHmModulesWithSpecialArgs extraSpecialArgs [quietDefaults {inherit config;}];
   evalHm = evalHmWithSpecialArgs {};

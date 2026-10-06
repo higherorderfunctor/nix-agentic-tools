@@ -1,1 +1,1 @@
-import ../common.nix {inertRuleRuntimes = ["copilot"];}
+import ../common.nix {backend = "hm";}
