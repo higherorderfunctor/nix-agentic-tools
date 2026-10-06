@@ -322,7 +322,6 @@ def run_vendor(args):
     write_json(out / "summary.json", {"set": "vendor", "trials": results, "comparisons": {
         "clamp": [item for item in results if item["caseId"].startswith("claude-clamp")],
         "poolDrain": [item for item in results if item["caseId"].startswith("claude-ultracode")],
-        "workflowReminder": [item for item in results if item["caseId"].startswith("kiro-")],
     }})
     print(f"Saved {len(results)} vendor trials to {out}; paid turns: {0 if args.render_only else len(results)}")
     return int(any(item.get("infrastructureError") or item.get("passed") is False for item in results))

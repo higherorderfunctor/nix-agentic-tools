@@ -63,12 +63,7 @@
           };
           ultracodeOnLaunch = evaluated.config.ai.claude.ultracodeOnLaunch;
         }
-        else {
-          workflowReminder = {
-            enabled = evaluated.config.ai.kiro.workflowReminder.enable;
-            text = evaluated.config.ai.kiro.workflowReminder.text.text;
-          };
-        };
+        else {};
       usage = {
         claude = {
           remainingPercent =
@@ -120,23 +115,21 @@ in
       task = dependent;
     })
   variants
-  ++ lib.concatMap (dependentTask:
-    map (on:
-      mkCase {
-        expected =
-          if dependentTask
-          then "workflow"
-          else "one-delegate";
-        id = "kiro-${
-          if dependentTask
-          then "dependent"
-          else "single"
-        }-reminder-${label on}";
-        runtime = "kiro";
-        switches.ai.kiro.workflowReminder.enable = lib.mkForce on;
-        task =
-          if dependentTask
-          then dependent
-          else single;
-      })
-    variants) [false true]
+  ++ map (dependentTask:
+    mkCase {
+      expected =
+        if dependentTask
+        then "workflow"
+        else "one-delegate";
+      id = "kiro-${
+        if dependentTask
+        then "dependent"
+        else "single"
+      }";
+      runtime = "kiro";
+      switches = {};
+      task =
+        if dependentTask
+        then dependent
+        else single;
+    }) [false true]
