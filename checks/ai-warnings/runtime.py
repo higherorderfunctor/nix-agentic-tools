@@ -112,22 +112,6 @@ def guard(script, root):
     assert result.stdout == ""
 
 
-def reminder(script, root):
-    root.mkdir()
-    env = os.environ | {"HOME": str(root), "XDG_CACHE_HOME": str(root / "cache"), "KIRO_DATA_DIR": str(root / "data")}
-    run([script], env=env, warning="ai.kiro.workflowReminder.includeVendorSteering: no compatible engine bundle")
-    bundle_root = root / "data/kas/1.0.0-probe"
-    bundle_root.mkdir(parents=True)
-    run([script], env=env, warning="engine script is missing")
-    bundle = bundle_root / "node_modules/@kiro/agent/dist/server/acp-server.js"
-    bundle.parent.mkdir(parents=True)
-    bundle.write_text("// no steering here")
-    run([script], env=env, warning="vendor steering extraction failed")
-    cache = root / "cache/nix-agentic-tools/kiro-workflow-steering/1.0.0-probe.md"
-    cache.write_text("vendor reminder positive control")
-    run([script], env=env, output="vendor reminder positive control")
-
-
 def credentials(manifest):
     for case, package in json.loads(Path(manifest).read_text()).items():
         for binary in ["kiro-cli", "kiro-cli-chat"]:
@@ -241,11 +225,10 @@ with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     files(sys.argv[1], root)
     guard(sys.argv[2], root / "guard")
-    reminder(sys.argv[3], root / "reminder")
-    credentials(sys.argv[4])
+    credentials(sys.argv[3])
     workflows(sys.argv[1], root / "workflows")
-    clamp(sys.argv[5], root / "clamp")
-    wiring(sys.argv[6])
-    kimchi_wiring(sys.argv[7])
-    shared_agents_md_wiring(sys.argv[8])
+    clamp(sys.argv[4], root / "clamp")
+    wiring(sys.argv[5])
+    kimchi_wiring(sys.argv[6])
+    shared_agents_md_wiring(sys.argv[7])
 print("PASS: file observations and optional hook warnings have firing and silent controls")

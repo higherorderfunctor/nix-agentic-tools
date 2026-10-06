@@ -260,10 +260,10 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-09-29 — v3 trust-flag conflicts re-measured on
-> kiro-cli 2.24.1: `chat` now accepts `--trust-all-tools`; `acp` still rejects
-> the five options it had on 2.15.2 and adds `--auth-method`, which works only
-> under v3.
+> **Last verified:** 2026-10-05 — `ai.kiro.tweaks` holds the opt-in bundle
+> patches, all off by default; cache publication is locked per key and failed
+> materialization clears inherited bundle overrides. The v3 trust-flag conflict
+> measurements below remain from kiro-cli 2.24.1.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -360,12 +360,12 @@ Two different rules, for two different reasons — do not "make them consistent"
 
 ### `KIRO_KAS_SERVER_PATH` — an ENV injection, not a flag
 
-`ai.kiro.identity` adds a third thing the wrapper does. It is deliberately not
-in the table above, because it is not argv at all:
+`ai.kiro.tweaks` adds a third thing the wrapper does. It is deliberately not in
+the table above, because it is not argv at all:
 
-| Binary                         | Variable               | When              |
-| ------------------------------ | ---------------------- | ----------------- |
-| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `identity.enable` |
+| Binary                         | Variable               | When                                                             |
+| ------------------------------ | ---------------------- | ---------------------------------------------------------------- |
+| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `tweaks.identity.enable` or `tweaks.stripVendorWorktreeSteering` |
 
 Four properties worth knowing before touching it:
 
@@ -374,39 +374,47 @@ Four properties worth knowing before touching it:
   `kiro-cli-chat` invoked directly is a supported entry point, and it is the
   binary that actually spawns node. Exporting in one place only patches the
   composed path and silently misses the direct one.
-- **Its prose may be inline or source-backed.** `identity.text` supplies inline
-  text and `identity.source` reads a packaged file. `identity.enable = false`
-  disables either form explicitly.
+- **Every tweak is opt-in; the default is the stock bundle.** With no tweak
+  enabled there is no materializer, no wrapper reason and no patched copy.
+  `tweaks.identity.text` supplies inline identity prose and
+  `tweaks.identity.source` reads a packaged file;
+  `tweaks.identity.enable = false` disables either form explicitly. The boolean
+  `tweaks.stripVendorWorktreeSteering` (default false) removes the vendor
+  paragraph assigning worktree setup and a `mainline` fast-forward to workflows,
+  for repositories whose own instructions supply the git workflow.
 - **It is computed at LAUNCH, not at eval.** The value is the stdout of a
-  materializer that resolves the installed engine bundle, splices the identity
-  sentence into a mirrored copy, and caches the result. The engine bundle is
-  unpacked from the binary on first use and never lands in the nix store, so
-  there is nothing to point at until the CLI has run once — on a fresh machine
-  the first launch is legitimately unpatched.
+  materializer that resolves the installed engine bundle, applies selected
+  exact-byte replacements to a mirrored copy, and caches the result. The engine
+  bundle is unpacked from the binary on first use and never lands in the nix
+  store, so there is nothing to point at until the CLI has run once — on a fresh
+  machine the first launch is legitimately unpatched.
 - **It FAILS OPEN.** The materializer writes a reason to stderr and exits
-  non-zero when it cannot resolve a bundle; the wrapper leaves the variable
-  unset and launches stock. That is a deliberate asymmetry with the argv
-  injections, which cannot fail: refusing to start would let a vendor reshuffle
-  brick the CLI over a cosmetic prompt edit. The stderr line is what keeps it
-  from being SILENT.
+  non-zero when it cannot resolve a bundle or any selected source text occurs
+  zero or multiple times. A warning names the missed replacement (`identity` or
+  `worktree`). The wrapper clears any inherited `KIRO_KAS_SERVER_PATH` and
+  starts Kiro with the stock bundle. That is a deliberate asymmetry with the
+  argv injections, which cannot fail: refusing to start would let a vendor
+  reshuffle brick the CLI over a cosmetic prompt edit. The stderr line is what
+  keeps it from being SILENT.
 
-Because it is an env export rather than a flag,
-`packages/kiro-cli/checks/kiro-wrapper-argv.nix` does not cover it. The
-module-eval tests do: `module-kiro-{hm,devenv}-identity-forks-package` assert
-the wrapper forks when the option is set, and
-`module-kiro-identity-default-is-stock` asserts it stays byte-identical to stock
-when it is not — which is what protects the cache hit. Bundle mechanics live in
-`packages/kiro-cli/lib/identityBundle.nix`.
+Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`. Its cache
+key covers the engine bundle, selected replacements and patcher source. The
+small replacement list in `kiro-bundle-patch.py` pins the exact identity
+sentence and escaped worktree paragraph from the vendor's JavaScript. One
+function checks each source occurs exactly once and replaces it; it does not
+parse function names or decode the steering block. Bytes outside those sources
+stay unchanged. A failed patch never marks the cache ready. A per-key lock sits
+outside the rebuilt directory and covers the readiness check through
+publication, so concurrent launches cannot delete a bundle already returned to
+another launch.
 
-The 2.21.1 and 2.21.2 engines minify the identity function: in the measured
-2.21.2 bundle, `xSs(e)` returns a CLI/IDE ternary and `VZ` inserts its result at
-the start of the shared prompt. The splicer matches that complete dispatch,
-including the IDE arm and the shared argument, without pinning either mangled
-name or vendor prose. Older bundles retain the `getIdentity`/`if` path. Multiple
-candidates or an unknown shape fail before writing a patched bundle.
-`packages/kiro-cli/checks/kiro-identity-splice.nix` exercises both forms, checks
-byte preservation outside the first sentence, and executes synthetic functions
-to verify the CLI, IDE, and fallback results.
+`kiro-bundle-patch` checks byte preservation, missing and duplicate sources,
+JavaScript execution, cache reuse, concurrent launch publication and warnings
+with successful fallback despite an inherited bundle override through both
+launch entry points. `kiro-bundle-patch-drift` materializes the pinned KAS
+bundle offline and requires both exact sources once, even if the consuming
+configuration disables a patch. The module checks cover the stock default and
+each opt-in tweak selecting the patched path on both backends.
 
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 

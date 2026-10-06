@@ -186,6 +186,22 @@ in {
         && evaluated.config.warnings == []
     );
 
+    module-kiro-package-null-explicit-worktree-tweak-warns = mkTest "kiro-package-null-explicit-worktree-tweak-warns" (
+      let
+        warnings = stripVendorWorktreeSteering:
+          (evalDevenv {
+            ai.kiro = {
+              enable = true;
+              package = null;
+              tweaks = {inherit stripVendorWorktreeSteering;};
+            };
+          }).config.warnings;
+      in
+        warnings true
+        == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.tweaks.stripVendorWorktreeSteering. Unset them or set ai.kiro.package."]
+        && warnings false == []
+    );
+
     module-kiro-package-null-explicit-ssh-workaround-warns = mkTest "kiro-package-null-explicit-ssh-workaround-warns" (
       let
         evaluated = evalDevenv {
@@ -1563,7 +1579,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity.text = "You are Atlas, a senior systems engineer.";
+              tweaks.identity.text = "You are Atlas, a senior systems engineer.";
             };
           })
         .config
@@ -1575,7 +1591,7 @@ in {
     );
 
     # devenv parity: the materializer is threaded through the SHARED
-    # `resolveIdentityMaterializer`, so a fork here proves both backends wire it.
+    # `resolveBundleMaterializer`, so a fork here proves both backends wire it.
     module-kiro-devenv-identity-forks-package = mkTest "kiro-devenv-identity-forks-package" (
       let
         a =
@@ -1595,7 +1611,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity.text = "You are Atlas, a senior systems engineer.";
+              tweaks.identity.text = "You are Atlas, a senior systems engineer.";
             };
           })
         .config
@@ -1627,7 +1643,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity.enable = false;
+              tweaks.identity.enable = false;
             };
           })
         .config
@@ -1638,10 +1654,35 @@ in {
         soleSame a b
     );
 
-    # The splice re-joins the preserved vendor text directly after the
+    # The worktree tweak is off by default; enabling it selects the bundle
+    # materializer through the same shared seam on both backends.
+    module-kiro-worktree-tweak-default-off-and-parity = mkTest "kiro-worktree-tweak-default-off-and-parity" (
+      let
+        forks = eval: select: let
+          a = eval {
+            ai.kiro = {
+              enable = true;
+              v3 = true;
+            };
+          };
+          b = eval {
+            ai.kiro = {
+              enable = true;
+              tweaks.stripVendorWorktreeSteering = true;
+              v3 = true;
+            };
+          };
+        in
+          !a.config.ai.kiro.tweaks.stripVendorWorktreeSteering && soleFork (kiroWrappedDrvs (select a)) (kiroWrappedDrvs (select b));
+      in
+        forks evalHm (v: v.config.home.packages)
+        && forks evalDevenv (v: v.config.packages)
+    );
+
+    # The patch re-joins the preserved vendor text directly after the
     # replacement, so an identity that does not close its own final sentence
-    # MERGES into it. Caught at EVAL rather than by the splicer's backstop,
-    # because the splicer runs on a FAIL-OPEN launch path — a value rejected
+    # MERGES into it. Caught at EVAL rather than by the bundle patcher's
+    # backstop, because the patcher runs on a FAIL-OPEN launch path — a value rejected
     # there presents as "the identity silently did nothing", which is the exact
     # shape that let a multi-sentence identity ship broken.
     module-kiro-identity-requires-sentence-punctuation = mkTest "kiro-identity-requires-sentence-punctuation" (
@@ -1650,7 +1691,7 @@ in {
           ai.kiro = {
             enable = true;
             v3 = true;
-            identity.text = "You are Atlas, a senior systems engineer";
+            tweaks.identity.text = "You are Atlas, a senior systems engineer";
           };
         };
         asserts =
@@ -1670,7 +1711,7 @@ in {
             ai.kiro = {
               enable = true;
               v3 = true;
-              identity.text = ident;
+              tweaks.identity.text = ident;
             };
           };
         in
@@ -1682,124 +1723,6 @@ in {
         == []
         && failing "You are Atlas! You judge silently." == []
         && failing "Are you sure about that?" == []
-    );
-
-    # ── workflow reminder ──────────────────────────────────────────────────────
-    # AUTO means "on iff workflows is unlocked". All four corners of the tri-state
-    # are pinned, because null/true/false is exactly where an off-by-default and
-    # an on-by-default implementation look identical from any single test.
-    module-kiro-workflow-reminder-auto-on-with-workflows = mkTest "kiro-workflow-reminder-auto-on-with-workflows" (
-      let
-        hooks =
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = ["workflows"];
-            };
-          })
-        .config
-        .ai
-        .kiro
-        .hooks;
-      in
-        hooks ? workflow-reminder
-        && hooks.workflow-reminder.trigger == "UserPromptSubmit"
-        # `agent` is the no-subprocess action: the short reminder is a static
-        # string, so it needs no script and ignores timeout.
-        && hooks.workflow-reminder.action.type == "agent"
-        && hooks.workflow-reminder.action.prompt.enable
-        && hooks.workflow-reminder.action.prompt.text != ""
-    );
-
-    module-kiro-workflow-reminder-absent-without-workflows =
-      mkTest "kiro-workflow-reminder-absent-without-workflows" (!((evalHm {
-        ai.kiro = {
-          enable = true;
-          v3 = true;
-        };
-      })
-      .config
-      .ai
-      .kiro
-      .hooks
-      ? workflow-reminder));
-
-    # Explicit `false` must beat the auto-on inference.
-    module-kiro-workflow-reminder-forced-off =
-      mkTest "kiro-workflow-reminder-forced-off" (!((evalHm {
-        ai.kiro = {
-          enable = true;
-          v3 = true;
-          unlockedRolloutFeatures = ["workflows"];
-          workflowReminder.enable = false;
-        };
-      })
-      .config
-      .ai
-      .kiro
-      .hooks
-      ? workflow-reminder));
-
-    # Explicit `true` must beat the auto-off inference — the reminder is still
-    # useful on a build where workflows were unlocked by some path other than
-    # this option (KIRO_ENABLED_FEATURES, say).
-    module-kiro-workflow-reminder-forced-on =
-      mkTest "kiro-workflow-reminder-forced-on" (
-        (evalHm {
-          ai.kiro = {
-            enable = true;
-            v3 = true;
-            workflowReminder.enable = true;
-          };
-        })
-    .config
-    .ai
-    .kiro
-    .hooks
-    ? workflow-reminder
-      );
-
-    # The vendor-steering variant CANNOT be an `agent` action: its text lives in
-    # the runtime-unpacked engine bundle, so it is not knowable at eval time and
-    # has to shell out.
-    module-kiro-workflow-reminder-vendor-steering-is-command = mkTest "kiro-workflow-reminder-vendor-steering-is-command" (
-      let
-        hook =
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = ["workflows"];
-              workflowReminder.includeVendorSteering = true;
-            };
-          })
-        .config
-        .ai
-        .kiro
-        .hooks
-        .workflow-reminder;
-      in
-        hook.action.type == "command" && hook.action.command != null
-    );
-
-    # devenv parity for the reminder: same option, same contributed record.
-    module-kiro-devenv-workflow-reminder-parity = mkTest "kiro-devenv-workflow-reminder-parity" (
-      let
-        hooks =
-          (evalDevenv {
-            ai.kiro = {
-              enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = ["workflows"];
-            };
-          })
-        .config
-        .ai
-        .kiro
-        .hooks;
-      in
-        hooks ? workflow-reminder && hooks.workflow-reminder.action.type == "agent"
     );
 
     # Devenv parity: v3 must wrap here too. Disable the Git SSH default so v3 is

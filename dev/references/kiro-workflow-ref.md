@@ -1,5 +1,9 @@
 # Kiro Workflow Engine — Working Notes
 
+> **Last verified:** 2026-10-05 — per-turn reminders and the steering decoder
+> are removed; the opt-in `ai.kiro.tweaks.stripVendorWorktreeSteering` removes
+> the vendor worktree paragraph at launch.
+
 ## What this is, and how much to trust it
 
 An **LLM synthesis** of Kiro workflow research already sitting in this
@@ -787,42 +791,11 @@ edges come with it:
   an empty response plus files is recorded as a **failed** stage. Every worker
   must return a non-empty receipt string.
 
-**Third: this repo already ships prescriptive guidance for the loop.**
-`packages/kiro-cli/lib/workflowReminder.nix` is a `UserPromptSubmit` hook
-injected every turn, and its default text says:
-
-> For anything a reviewer should sign off on, use the repeat loop: `wf-coder`
-> then `semantic_reviewer`, in that order, with a stopCondition on the review
-> verdict file. The reviewer is always last.
-
-That is live repo behavior, and it **auto-enables**: the reminder defaults on
-whenever `workflows` is in `unlockedRolloutFeatures` (`mkKiro.nix:792-795` —
-`null` means auto, "the feature under-elicits without it").
-
-**But the hook is a remedy, not the cause — and the difference is the whole
-mechanism.** Operator account, 2026-08, with the ordering established
-first-hand: the pattern was already appearing unprompted _before_ the hook
-existed. Talking about workflows elicited it; working on an unrelated task
-without saying the word stopped it. The hook was added days later precisely
-because that coupling made the behavior unreliable.
-
-The elicitation source is therefore the **vendor's** `workflows_default`
-steering — ~19.3k characters, emphatic ("always delegate implementation to
-workflows"). What makes it topic-coupled is _where_ it sits, and
-`workflowReminder.nix`'s own header names the symptom exactly:
-
-> What decays is ATTENTION: one block near the top of a growing conversation
-> loses out to everything since, which is exactly the reported symptom (the
-> model elects workflows while you are talking about workflows, and stops when
-> you stop).
-
-`workflows_default` lands in **msg0**, computed on the first turn and thereafter
-replayed byte-for-byte. It never decays in _content_; it decays in _position_,
-losing ground to everything said since — so the operator's own prompt is what
-re-activates a standing instruction that was there all along. A
-`UserPromptSubmit` hook lands beside each prompt, which is why it works where
-more steering would not: a second copy would sit in the same place, competing
-with the same context.
+The elicitation source is the vendor's workflow-orchestration steering in msg0.
+The operator observed the pattern appearing before the repository added any
+per-turn hook: talking about workflows elicited it, while unrelated tasks did
+not. msg0 is computed on the first turn and replayed byte-for-byte, so this is
+attention to a standing instruction rather than content disappearing.
 
 **That matters for where the pattern comes from.** Someone who sees
 `wf-planner → [repeat] → (wf-coder, semantic_reviewer)` appear without having
@@ -833,11 +806,8 @@ _steering_ asked for. Three layers, easy to conflate:
 | Layer          | Bundled?                   | Evidence                                                       |
 | -------------- | -------------------------- | -------------------------------------------------------------- |
 | the agents     | **yes** — all ten, vendor  | ledger §3.5                                                    |
-| the pattern    | **yes** — vendor steering  | `workflows_default` in msg0; elicited pre-hook, topic-coupled  |
+| the pattern    | **yes** — vendor steering  | vendor steering in msg0; elicited pre-hook, topic-coupled      |
 | the definition | **no** — generated per run | matches no bundled recipe's plan; ids vary across runs (below) |
-
-This repo's hook amplifies the middle row by buying it position; it does not
-supply it.
 
 The receipt for that last row, in two independent parts. First, two runs of the
 same shape observed 2026-08-05 carried **different loop ids** — `review-loop` in
@@ -1432,8 +1402,7 @@ do I get six of these" (§4).
 ### Pattern C — a writer → reviewer loop
 
 Build it as a `repeat` containing a `sequence` of two steps, and thread state
-through a **verdict file** — which is what this repo's own per-turn reminder
-prescribes (§3). Then:
+through a **verdict file**. Then:
 
 - Set `maxIterations` high enough up front and prefer
   `onMaxIterations: "abort"`, so work that cannot be approved fails fast.
@@ -1554,17 +1523,19 @@ every iteration it has. Never `/tmp`.
 
 Write the path **relative**: it resolves against the workspace root by
 construction, and step agents' cwd is that same root, so the writing step and
-the check agree without any interpolation. The vendor's bundled
-`workflows_default` steering instructs the opposite — interpolate an absolute
-`{{worktree_path}}/…` — and that is wrong whenever worktrees are SIBLINGS of the
-checkout rather than subdirectories of it, which is this repo's own worktree
-convention. This is why `packages/kiro-cli/lib/workflowReminder.nix` carries a
-correcting paragraph rather than a pointer: msg0 is frozen, so the bad
-instruction cannot be edited out, only contradicted later in context. And
-`stopWhen`'s `"{{id.output}} contains <text>"` form matches against _captured
-output_, so it inherits the empty-capture hazard wholesale — under a cheap model
-the condition can never match and the loop silently runs to `maxIterations`
-(ledger §7.6).
+the check agree without any interpolation. Since at least 2.21.4 the vendor's
+workflow-creator prompt prescribes absolute `{{worktree_path}}/…` paths. These
+fail for sibling worktrees outside the workspace. Require workspace-relative
+fileCheck paths in the `workflowPrompt` brief. The repository no longer injects
+per-turn workflow reminders or decodes the vendor steering. With the opt-in
+`ai.kiro.tweaks.stripVendorWorktreeSteering`, its launch-time bundle patcher
+removes the vendor paragraph assigning worktree setup and a `mainline`
+fast-forward to workflows, leaving git workflow to repository instructions;
+exact source text drift fails CI and warns at launch. This does not change the
+workflow creator's path-template behavior described above. And `stopWhen`'s
+`"{{id.output}} contains <text>"` form matches against _captured output_, so it
+inherits the empty-capture hazard wholesale — under a cheap model the condition
+can never match and the loop silently runs to `maxIterations` (ledger §7.6).
 
 ### Small things that save a run
 

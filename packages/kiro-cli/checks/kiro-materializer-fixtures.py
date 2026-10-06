@@ -16,13 +16,13 @@ layouts = [
 ]
 
 
-def write_assets(selected):
+def write_assets(selected, asset_name="tui.js"):
     """Fake-chat source that materializes a checksummed TUI in each layout."""
     return (
         f"for layout in {selected!r}:\n"
-        " asset=Path(os.environ['HOME'])/layout/'tui.js'\n"
+        f" asset=Path(os.environ['HOME'])/layout/{asset_name!r}\n"
         " asset.parent.mkdir(parents=True)\n"
-        " data=b'fixture-tui'*12000\n"
+        " data=b'staging' if '.incoming-' in layout else b'fixture-tui'*12000\n"
         " asset.write_bytes(data)\n"
         " asset.with_name('tui.js.sha256').write_text(hashlib.sha256(data).hexdigest())\n"
     )
@@ -32,6 +32,10 @@ for case, selected in [
     ("linux", layouts[:1]),
     ("darwin", layouts[1:]),
     ("ambiguous", layouts),
+    ("kas-staging", [
+        f".local/share/kiro-cli/kas/{version}/node_modules/@kiro/agent/dist/server"
+        for version in [".incoming-123", "2.27.1-complete"]
+    ]),
 ]:
     with tempfile.TemporaryDirectory(prefix=f"kiro-materializer-{case}-") as tmp:
         root = Path(tmp)
@@ -39,6 +43,7 @@ for case, selected in [
         ready = root / "descendant-ready"
         pid_file = root / "descendant.pid"
         destination = root / "tui.js"
+        mode = "kas" if case == "kas-staging" else "tui"
         child_code = (
             "import signal,time;from pathlib import Path;"
             "signal.signal(signal.SIGTERM,signal.SIG_IGN);"
@@ -53,13 +58,14 @@ for case, selected in [
             f"child=subprocess.Popen([sys.executable,'-c',{child_code!r}])\n"
             "pid_file.write_text(str(child.pid))\n"
             "while not ready.exists(): time.sleep(0.01)\n"
-            + write_assets(selected)
+            + write_assets(selected, "acp-server.js" if mode == "kas" else "tui.js")
             + "time.sleep(30)\n"
         )
         compile(binary.read_text(), str(binary), "exec")
         binary.chmod(0o755)
         result = subprocess.run(
-            [sys.executable, materializer, str(binary), str(destination), fake_kas, cert_file],
+            [sys.executable, materializer, mode, str(binary), str(destination), cert_file,
+             *([fake_kas] if mode == "tui" else [])],
             capture_output=True,
             text=True,
             timeout=10,
@@ -135,8 +141,8 @@ if Path("/proc/self/stat").exists():
             )
             binary.chmod(0o755)
             result = subprocess.run(
-                [sys.executable, "-c", shim, case, materializer, str(binary),
-                 str(destination), fake_kas, cert_file],
+                [sys.executable, "-c", shim, case, materializer, "tui", str(binary),
+                 str(destination), cert_file, fake_kas],
                 capture_output=True,
                 text=True,
                 timeout=10,
