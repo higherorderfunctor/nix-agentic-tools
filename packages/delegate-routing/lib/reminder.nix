@@ -5,18 +5,14 @@
   lib,
   pkgs,
 }: let
-  shellStrict = import ../../../config/shell-strict.nix;
+  strictShellApplication = import ../../../lib/strict-shell-application.nix pkgs;
   # One executable per payload, so every runtime's hook command is a bare
   # store path with no shell parsing. The payload is serialized at eval time.
   printer = name: payload:
-    lib.getExe (pkgs.writeShellApplication {
+    lib.getExe (strictShellApplication {
       inherit name;
-      inherit (shellStrict) bashOptions;
-      extraShellCheckFlags = shellStrict.shellcheckFlags;
-      runtimeInputs = [pkgs.coreutils];
       text = ''
-        ${shellStrict.shoptHeader}
-        cat -- ${pkgs.writeText "${name}-payload" payload}
+        ${pkgs.coreutils}/bin/cat -- ${pkgs.writeText "${name}-payload" payload}
       '';
     });
   # Claude, Codex and Kimchi read `hookSpecificOutput.additionalContext` from
