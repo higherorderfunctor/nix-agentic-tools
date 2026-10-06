@@ -59,7 +59,6 @@
     "test_nightly_only",
     "trust_classifier_shadow",
     "tui",
-    "v2_non_interactive",
     "v3_prompt",
     "voice",
     "workflows"
@@ -77,9 +76,9 @@
     "chat.enableCustomSpinnerVerbs",
     "chat.enableInfraSafetyEnforce",
     "chat.enableInfraSafetyMonitor",
-    "chat.enableMainAgentSubagentTool",
     "chat.enableNotifications",
     "chat.enableWorkflows",
+    "chat.fullscreenCopyOnSelect",
     "chat.fullscreenWheelRows",
     "chat.greeting.enabled",
     "chat.highPerformanceMode",
