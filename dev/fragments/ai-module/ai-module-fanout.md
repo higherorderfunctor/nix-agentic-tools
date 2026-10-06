@@ -1,8 +1,8 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-05 — `ai.extraSystemPrompt` fans out to Claude,
-> Codex, Kimchi (an `APPEND_SYSTEM.md` file) and Kiro, with delivery-matrix
-> rows; Copilot is an explicit exclusion.
+> **Last verified:** 2026-10-05 — prompt presence stays structural for lazy
+> native overrides; Kimchi file metadata merges independently; Claude warns when
+> prompt delivery has no managed package.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -516,14 +516,16 @@ scope or a non-empty list for `fileMatch` content.
 
 - `ai.extraSystemPrompt` — keyed text-source entries appended to each runtime's
   own system prompt, joined in attribute-name order (no other ordering), and
-  passed to delivery callbacks already joined as `extraSystemPrompt`, or null so
-  an empty pool changes nothing. Delivery: Claude's launcher adds
-  `--append-system-prompt-file <store file>`; Codex gets
-  `developer_instructions` at `mkDefault`; Kimchi gets pi's own
-  `APPEND_SYSTEM.md` in its harness directory; Kiro appends it to the `prompt`
-  of every typed agent (`native.agents`, which normalized `ai.agents` lower
-  into). Copilot leaves it out of `supportedPools`, so
-  `ai.copilot.extraSystemPrompt` does not exist, and its delivery-matrix row
+  passed to delivery callbacks as lazy joined `extraSystemPrompt` text, or null
+  so an empty pool changes nothing. The shared transform supplies structural
+  `hasExtraSystemPrompt` for delivery conditions, keeping discarded source bytes
+  unread. Delivery: Claude's launcher adds
+  `--append-system-prompt-file <store file>` and warns when an effective prompt
+  has `ai.claude.package = null`; Codex gets `developer_instructions` at
+  `mkDefault`; Kimchi gets pi's own `APPEND_SYSTEM.md` in its harness directory;
+  Kiro appends it to the `prompt` of every typed agent (`native.agents`, which
+  normalized `ai.agents` lower into). Copilot leaves it out of `supportedPools`,
+  so `ai.copilot.extraSystemPrompt` does not exist, and its delivery-matrix row
   records the exclusion. Kimchi takes a file rather than pi's
   `--append-system-prompt` flag because a leading launcher flag would turn every
   Kimchi subcommand into a chat message: Kimchi dispatches them only from
@@ -631,11 +633,10 @@ form.
 
 Every factory-owned content definition also carries internal `_generated = true`
 and `_surface`. `_generated` distinguishes a surviving factory definition from a
-consumer replacement for delivery warnings. `_surface` is one of `agents`,
-`context`, `hooks`, `mcpServers`, `rules`, `settings`, or `skills`, and routes
-the built file to the matching consumer check. A raw `ai.<runtime>.files` entry
-written directly by a consumer carries neither stamp and reaches no surface
-check.
+consumer replacement for delivery warnings. `_surface` routes the built file to
+the matching consumer check; `surfaces` in `lib/ai/delivery-options.nix` defines
+the categories. A raw `ai.<runtime>.files` entry written directly by a consumer
+carries neither stamp and reaches no surface check.
 
 Generated-file checks use replacing defaults between tiers; definitions at the
 same tier concatenate through `types.lines`: `ai.checks.all` defaults to empty,

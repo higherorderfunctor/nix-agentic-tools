@@ -113,6 +113,32 @@ in {
         (buildCommandOf "claude-code" evaluated))
     );
 
+    module-ai-extra-system-prompt-claude-no-package-warning = mkTest "ai-extra-system-prompt-claude-no-package-warning" (
+      let
+        config.ai.claude = {
+          enable = true;
+          package = null;
+        };
+        warns = evaluated:
+          packagesOf evaluated
+          == []
+          && builtins.length evaluated.config.warnings == 1
+          && hasLiteral "ai.claude.extraSystemPrompt" (builtins.head evaluated.config.warnings)
+          && hasLiteral "ai.claude.package" (builtins.head evaluated.config.warnings);
+      in
+        onBoth (lib.recursiveUpdate config {
+          ai.extraSystemPrompt.probe.source = /tmp/extra-system-prompt-missing;
+        })
+        warns
+        && onBoth config (evaluated: evaluated.config.warnings == [])
+        && onBoth (lib.recursiveUpdate config {
+          ai.extraSystemPrompt.probe = {
+            enable = false;
+            source = /tmp/extra-system-prompt-missing;
+          };
+        }) (evaluated: evaluated.config.warnings == [])
+    );
+
     # Codex: `developer_instructions` carries the joined text at mkDefault, so
     # a consumer's native value replaces it wholesale.
     module-ai-extra-system-prompt-codex-key = mkTest "ai-extra-system-prompt-codex-key" (
@@ -125,7 +151,7 @@ in {
           enable = true;
           native.settings.developer_instructions = "Native wins.";
         };
-        ai.extraSystemPrompt = entries;
+        ai.extraSystemPrompt.probe.source = /tmp/extra-system-prompt-missing;
       } (evaluated: (codexSettings evaluated).developer_instructions or null == "Native wins.")
     );
 
@@ -136,6 +162,16 @@ in {
         ai.kimchi.enable = true;
         ai.extraSystemPrompt = entries;
       } (evaluated: (kimchiAppendFile evaluated).content.text or null == joined)
+      && onBoth {
+        ai.kimchi = {
+          enable = true;
+          files.".config/kimchi/harness/APPEND_SYSTEM.md".format = "raw";
+        };
+        ai.extraSystemPrompt = entries;
+      } (evaluated:
+        (kimchiAppendFile evaluated).content.text
+        == joined
+        && (kimchiAppendFile evaluated).format == "raw")
     );
 
     # Kiro: every typed agent — lowered from `ai.agents`, native-only, or with

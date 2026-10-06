@@ -376,6 +376,7 @@
         SHELL = lib.getExe callbackArgs.resolvedShell;
       }
       // callbackArgs.mergedEnvironmentVariables;
+    hasExtraSystemPrompt = lib.any aiCommon.hasContent (builtins.attrValues callbackArgs.mergedExtraSystemPrompt);
     hasMergedContext = normalizedHasContext;
     mergedAgents = normalizedPool "agents" {};
     inherit rawAgents;
@@ -388,9 +389,9 @@
     extraSystemPrompt = let
       composed = aiCommon.composeContent (builtins.attrValues callbackArgs.mergedExtraSystemPrompt);
     in
-      if composed == null
-      then null
-      else composed.text;
+      if callbackArgs.hasExtraSystemPrompt
+      then composed.text
+      else null;
     mergedLspServers = normalizedPool "lspServers" {};
     mergedRules = normalizedPool "rules" {};
     mergedServers = normalizedPool "mcpServers" {};

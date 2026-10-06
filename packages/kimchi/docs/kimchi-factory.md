@@ -1,9 +1,9 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-05 — `ai.extraSystemPrompt` lands as pi's own
-> `APPEND_SYSTEM.md` in the harness directory, never as a launcher flag;
-> workflows is an independent external pi extension, delivered as a named
-> package link on both backends.
+> `APPEND_SYSTEM.md` in the harness directory with independently defaulted
+> content and format, never as a launcher flag; workflows is an independent
+> external pi extension, delivered as a named package link on both backends.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -176,7 +176,10 @@ surface had no reader. `ai.extraSystemPrompt` keeps it that way: pi's
 `--append-system-prompt` would have to lead argv, and Kimchi dispatches its
 subcommands (`setup`, `mcp`, package commands) only from argv[0]
 (`src/commands/dispatch.ts`), so the text goes to `APPEND_SYSTEM.md` instead. A
-trusted project's file shadows the user one; pi reads only one.
+trusted project's file shadows the user one; pi reads only one. Generated
+append-file content and format default independently, so a metadata-only
+override retains the prompt bytes. Structural prompt presence gates delivery
+without reading source-backed content.
 
 ## User and project paths (the load-bearing fact)
 
