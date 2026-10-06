@@ -14,32 +14,33 @@
       "value": 5
     },
     "pinsEffort": {
-      "evidence": "SOURCE gated inlineAgent accepts effort with clamping/fallback; effective level unknown.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/kiro/README.md case claude:k-pins: child requests carried the pinned agent's effort (low) and the inlineAgent's (medium). Client wire only; backend honoring is unverified.",
+      "result": "supported"
     },
     "pinsModel": {
-      "evidence": "SOURCE baseline lacks pins; gated inlineAgent supplies model. Client gate and resolved model unknown.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/kiro/README.md case claude:k-pins (ACP v3, settings.inlineAgents.enabled): child requests used the pinned agent's model (haiku/low) and the inlineAgent's (haiku/medium); an unpinned custom agent ran on sonnet/high. Client wire only; backend honoring is unverified.",
+      "result": "supported"
     },
     "runsOwnSubagents": {
       "evidence": "No execution or resolved-value evidence was recovered.",
       "result": "unknown"
     }
   },
-  "context": "Installed source inspection only; ACP client, grants, inlineAgentsEnabled and resolved pins were not measured.",
+  "context": "Installed source inspection for availability and depth; pins from the offline ACP v3 replay claude:k-pins against a recording provider with inline agents enabled.",
   "date": "2026-10-04",
   "mode": "acp",
   "observed": {
-    "effort": null,
-    "model": null
+    "effort": "medium",
+    "model": "claude-haiku-4.5"
   },
   "replay": [
     "Inspect $XDG_DATA_HOME/kiro-cli/kas/2.27.1-ce3fc784182c5b87c4dc63d4d48e4213d64f6bd1c382b47e559614d365b9a80a/node_modules/@kiro/agent/dist/server/acp-server.js:15924,15930.",
-    "In a callback-serving ACP client launch kiro-cli acp --agent-engine v3 --auth-method cli; inspect tool exposure and inlineAgentsEnabled before invoking a child."
+    "In a callback-serving ACP client launch kiro-cli acp --agent-engine v3 --auth-method cli; inspect tool exposure and inlineAgentsEnabled before invoking a child.",
+    "T=240 packages/delegate-routing/probes/delegates/kiro/wire2.sh k-pins ACP3"
   ],
   "requested": {
-    "effort": null,
-    "model": null
+    "effort": "medium",
+    "model": "claude-haiku-4.5"
   },
   "runtime": "kiro",
   "runtimeVersion": "2.27.1",

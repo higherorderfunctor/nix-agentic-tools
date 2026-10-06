@@ -90,11 +90,6 @@
   observations = builtins.deepSeq checked (map (record: record.value) checked);
   find = runtime: technique: mode:
     lib.findFirst (value: sameIdentity value {inherit runtime technique mode;}) null observations;
-  header = observation: "${observation.runtime} ${
-    if observation.runtimeVersion == null
-    then "unknown"
-    else observation.runtimeVersion
-  }; ${observation.date}; ${observation.source}";
 in {
-  inherit find header observations validate;
+  inherit find observations validate;
 }

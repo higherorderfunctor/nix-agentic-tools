@@ -1,47 +1,47 @@
 {
   "capabilities": {
     "available": {
-      "evidence": "Historical report (2026-08-27, version unknown): archived run completed, agentCount 3, requested opus with effort omitted, worker resolved claude-opus-5/high; raw events not publishable.",
+      "evidence": "Interactive Workflow availability was not replayed; the 2026-08-27 archived run's raw events are not publishable.",
       "result": "unknown"
     },
     "linkedWorktreeCommit": {
-      "evidence": "No execution or resolved-value evidence was recovered.",
+      "evidence": "Not exercised.",
       "result": "unknown"
     },
     "nestingDepth": {
-      "evidence": "Maximum native nesting depth was not exercised.",
-      "result": "unknown",
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: nodes have no Agent or Workflow tool; nested workflow() is grep-only evidence. Replayed under claude -p, which runs the same Workflow node runtime; no interactive-session replay exists.",
+      "result": "unsupported",
       "value": null
     },
     "pinsEffort": {
-      "evidence": "Historical report (2026-08-27, version unknown): archived run completed, agentCount 3, requested opus with effort omitted, worker resolved claude-opus-5/high; raw events not publishable.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: node A's request carried effort low; precedence against CLAUDE_CODE_EFFORT_LEVEL is unverified. Replayed under claude -p, which runs the same Workflow node runtime; no interactive-session replay exists.",
+      "result": "supported"
     },
     "pinsModel": {
-      "evidence": "Historical report (2026-08-27, version unknown): archived run completed, agentCount 3, requested opus with effort omitted, worker resolved claude-opus-5/high; raw events not publishable.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: node A requested sonnet/low and its request used sonnet; CLAUDE_CODE_SUBAGENT_MODEL_FORCE overrides node models (claude:wf_force). Replayed under claude -p, which runs the same Workflow node runtime; no interactive-session replay exists.",
+      "result": "supported"
     },
     "runsOwnSubagents": {
-      "evidence": "No execution or resolved-value evidence was recovered.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: workflow nodes receive no Agent or Workflow tool, so a node cannot start its own subagents. Replayed under claude -p, which runs the same Workflow node runtime; no interactive-session replay exists.",
+      "result": "unsupported"
     }
   },
-  "context": "Archived workflow status completed, agentCount 3. Runtime version and original permission/config posture were not recorded; this is not evidence of the current installation.",
-  "date": "2026-08-27",
+  "context": "Node behavior from offline claude -p replays of the pinned Claude Code 2.1.289 (claude:wf_allowed); interactive availability not replayed.",
+  "date": "2026-10-05",
   "mode": "interactive",
   "observed": {
-    "effort": null,
-    "model": null
+    "effort": "low",
+    "model": "sonnet"
   },
   "replay": [
-    "Replay the archived parallel/agent script with agent(prompt, {model: \"opus\"}); no effort argument was passed."
+    "python3 packages/delegate-routing/probes/delegates/claude/harness.py wf_allowed wf_force"
   ],
   "requested": {
-    "effort": null,
-    "model": null
+    "effort": "low",
+    "model": "sonnet"
   },
   "runtime": "claude",
-  "runtimeVersion": null,
-  "source": "historical archived run 2026-08-27; no publishable primary",
+  "runtimeVersion": "2.1.289",
+  "source": "packages/delegate-routing/probes/delegates/claude/README.md",
   "technique": "Workflow"
 }
