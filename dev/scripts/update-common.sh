@@ -504,16 +504,27 @@ run_nfb_build() {
   fi
 
   if [ "$failed" -eq 1 ] || [ "$incomplete" -eq 1 ]; then
-    # Failed attribute names, from the JSON rows and from nix-fast-build's
-    # own "Failed attributes:" summary (the only place an EVAL failure may
-    # be named). Best effort: an empty list is reported as unknown, never
-    # read as "nothing failed" -- the return status below decides that.
+    # Failed attribute names. Pinned nix-fast-build records EVAL failures in
+    # the result JSON too (workers.py puts a ResultType.EVAL row with
+    # success=false and the eval error for every throwing attribute), so the
+    # JSON rows name every failure whenever the file was written. The stderr
+    # "Failed attributes:" line is only a fallback for a run that died before
+    # writing the file or produced no failed rows. It spells each attribute as
+    # "<flake>#<fragment>.<attr>" (fragment = ciPackages.<system>), so strip
+    # that prefix to match the JSON spelling. Best effort: an empty list is
+    # reported as unknown, never read as "nothing failed" -- the return status
+    # below decides that.
     # shellcheck disable=SC2034 # read by update-input.sh, a sourcing caller
     NAT_VERIFY_FAILED_ATTRS=$(
-      {
-        [ ! -s "$rf" ] || jq -r '.results[]? | select(.success | not) | .attr' "$rf" 2>/dev/null || :
-        grep -oP 'Failed attributes: \K.*' "$stderr_log" | tr -s ' ,' '\n' || :
-      } | sed '/^$/d' | sort -u
+      names=""
+      if [ -s "$rf" ]; then
+        names=$(jq -r '.results[]? | select(.success | not) | .attr' "$rf" 2>/dev/null || :)
+      fi
+      if [ -z "$names" ]; then
+        names=$(grep -oP 'Failed attributes: \K.*' "$stderr_log" | tr -s ' ,' '\n' |
+          sed 's/^[^#]*#[^.]*\.[^.]*\.//' || :)
+      fi
+      printf '%s\n' "$names" | sed '/^$/d' | sort -u
     ) || NAT_VERIFY_FAILED_ATTRS=""
     log_failure "(forensic data preserved: $rf, $stderr_log)"
     [ "$incomplete" -eq 0 ] || return 4

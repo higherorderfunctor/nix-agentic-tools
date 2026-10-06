@@ -110,7 +110,7 @@ class MatrixTest(unittest.TestCase):
         self.assertLess(update.index("update-publish.sh"), verdict)
         self.assertLess(update.index("name: update-receipt-"), verdict)
         step = update[update.rindex("- name:", 0, verdict):verdict]
-        self.assertNotIn("if:", step)
+        self.assertIn("if: ${{ !cancelled() }}", step)
 
 
 class GitHubTest(unittest.TestCase):
