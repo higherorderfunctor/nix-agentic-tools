@@ -1,0 +1,77 @@
+{
+  "acp": true,
+  "args": ["--model", "kimchi-dev/fake-a", "--mode", "acp"],
+  "close_stdin": false,
+  "timeout": 25,
+  "stdin_lines": [
+    {
+      "at": 0.5,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": 1,
+          "clientCapabilities": {
+            "fs": {
+              "readTextFile": false,
+              "writeTextFile": false
+            },
+            "terminal": false
+          }
+        }
+      }
+    },
+    {
+      "at": 1,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "session/new",
+        "params": {
+          "cwd": "@PROJ@",
+          "mcpServers": []
+        }
+      }
+    },
+    {
+      "at": 3,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "session/prompt",
+        "params": {
+          "sessionId": "@SID@",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_ACPFG SLEEP=12\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": false}}]]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 6,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "_kimchi.dev/steering",
+        "params": {
+          "sessionId": "@SID@",
+          "prompt": "STEER_VIA_ACP_EXT"
+        }
+      }
+    },
+    {
+      "at": 8,
+      "line": {
+        "jsonrpc": "2.0",
+        "method": "session/cancel",
+        "params": {
+          "sessionId": "@SID@"
+        }
+      }
+    }
+  ]
+}

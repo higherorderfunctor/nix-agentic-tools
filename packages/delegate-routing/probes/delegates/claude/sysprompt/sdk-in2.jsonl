@@ -1,0 +1,2 @@
+{"type":"control_request","request_id":"init1","request":{"subtype":"initialize","systemPrompt":["SDK sys part one: SDKSYS-9393.","SDK sys part two: SDKSYSB-9494."]}}
+{"type":"user","message":{"role":"user","content":"hi"},"parent_tool_use_id":null,"session_id":""}

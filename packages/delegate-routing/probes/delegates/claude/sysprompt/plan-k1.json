@@ -1,0 +1,16 @@
+[
+  {
+    "match": "SPAWNI",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "gp",
+          "prompt": "Subtask GP: reply done.",
+          "subagent_type": "general-purpose",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]

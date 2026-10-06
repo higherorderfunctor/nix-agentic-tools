@@ -1,0 +1,61 @@
+{
+  "args": [
+    "chat",
+    "--v2",
+    "--no-interactive",
+    "--trust-tools=subagent",
+    "--model",
+    "claude-sonnet-4",
+    "ROOT_TASK"
+  ],
+  "agents": [
+    {
+      "name": "worker",
+      "description": "offline worker",
+      "prompt": "WORKER",
+      "tools": ["*"]
+    }
+  ],
+  "rules": [
+    {
+      "match": "ROOT_TASK",
+      "events": [
+        {
+          "toolUseId": "spawn",
+          "name": "subagent",
+          "input": {
+            "task": "ROOT_TASK",
+            "stages": [
+              {
+                "name": "first",
+                "role": "worker",
+                "model": "claude-haiku-4.5",
+                "prompt_template": "CHILD_STAGE"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "match": "CHILD_STAGE",
+      "events": [
+        {
+          "toolUseId": "shell",
+          "name": "shell",
+          "input": {
+            "command": "echo CHILD_SHELL"
+          }
+        }
+      ]
+    },
+    {
+      "match": "CHILD_STAGE",
+      "events": ["CHILD_FINISHED"]
+    },
+    {
+      "match": null,
+      "events": ["PARENT_FINISHED"]
+    }
+  ]
+}

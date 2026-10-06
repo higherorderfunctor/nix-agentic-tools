@@ -1,0 +1,17 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--approve",
+    "-p",
+    "/workflow run probe",
+    "AFTER_WORKFLOW_USER_TURN PLAN=[]"
+  ],
+  "timeout": 60,
+  "workflows": true,
+  "files": {
+    ".kimchi/workflows/probe.workflow.ts": "import { createAgentStep, createWorkflow } from \"@kimchi-dev/kimchi-workflows\"\n\nconst bg = createAgentStep({ name: \"bg-step\", model: \"kimchi-dev/fake-b\", background: true, prompt: () => \"WF_BG_STEP SLEEP=3\" })\nconst inSession = createAgentStep({ name: \"in-session-step\", model: \"kimchi-dev/fake-b\", prompt: () => \"WF_INSESSION_STEP\" })\nconst after = createAgentStep({ name: \"after-step\", prompt: () => \"WF_AFTER_STEP\" })\n\nexport default createWorkflow({ name: \"probe\", description: \"delegate probe\" }).then(bg).then(inSession).then(after).commit()\n"
+  }
+}

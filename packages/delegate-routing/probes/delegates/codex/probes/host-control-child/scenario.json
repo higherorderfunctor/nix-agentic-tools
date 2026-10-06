@@ -1,0 +1,19 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "a", "message": "TASK-A", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 30000 }, "collaboration"]] },
+    { "msg": "ROOT DONE" }
+  ],
+  "/root/a": [
+    { "sleep": 6, "calls": [["list_agents", {}, "collaboration"]] },
+    { "msg": "A DONE" }
+  ]
+}

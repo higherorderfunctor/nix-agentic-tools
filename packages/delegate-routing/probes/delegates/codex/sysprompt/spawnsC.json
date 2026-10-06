@@ -1,0 +1,13 @@
+[
+  {
+    "task_name": "c_r2",
+    "agent_type": "r2",
+    "fork_turns": "all",
+    "message": "child r2 task"
+  },
+  {
+    "task_name": "c_untyped",
+    "fork_turns": "all",
+    "message": "child untyped task"
+  }
+]

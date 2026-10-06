@@ -1,0 +1,18 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-b",
+    "--thinking",
+    "high",
+    "--mode",
+    "json",
+    "--approve",
+    "-p",
+    "/workflow run probe3"
+  ],
+  "timeout": 40,
+  "workflows": true,
+  "files": {
+    ".kimchi/workflows/probe3.workflow.ts": "import { createAgentStep, createWorkflow } from \"@kimchi-dev/kimchi-workflows\"\nconst bg = createAgentStep({ name: \"bg-step\", background: true, prompt: () => \"WF_BG_NOMODEL\" })\nexport default createWorkflow({ name: \"probe3\", description: \"no model\" }).then(bg).commit()\n"
+  }
+}

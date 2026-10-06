@@ -1,0 +1,9 @@
+{
+  "name": "wfA",
+  "description": "a",
+  "inputs": {},
+  "steps": [
+    { "type": "step", "id": "a1", "agent": "custom", "prompt": "WFA_1 do it" },
+    { "type": "step", "id": "a2", "agent": "custom", "prompt": "WFA_2 do it" }
+  ]
+}

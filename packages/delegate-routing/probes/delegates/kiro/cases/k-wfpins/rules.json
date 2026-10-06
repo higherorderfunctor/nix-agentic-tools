@@ -1,0 +1,96 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "events": [
+      {
+        "toolUseId": "tw1",
+        "name": "run_workflow",
+        "input": {
+          "workflowPath": "@RUN@/ws/.kiro/workflows/wf1.workflow.json",
+          "inputs": {}
+        }
+      },
+      {
+        "toolUseId": "tw2",
+        "name": "run_workflow",
+        "input": {
+          "workflowPath": "@RUN@/ws/.kiro/workflows/wf2.workflow.json",
+          "inputs": {}
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_S1"],
+    "events": [
+      {
+        "toolUseId": "sm_WFSTEP_S1",
+        "name": "send_message",
+        "input": { "severity": "success", "message": "DONE_WFSTEP_S1" }
+      }
+    ]
+  },
+  { "match": ["WFSTEP_S1"], "events": ["TXT_WFSTEP_S1"] },
+  { "match": ["WFSTEP_S1"], "events": ["TXT_WFSTEP_S1"] },
+  { "match": ["WFSTEP_S1"], "events": ["TXT_WFSTEP_S1"] },
+  {
+    "match": ["WFSTEP_S2"],
+    "events": [
+      {
+        "toolUseId": "sm_WFSTEP_S2",
+        "name": "send_message",
+        "input": { "severity": "success", "message": "DONE_WFSTEP_S2" }
+      }
+    ]
+  },
+  { "match": ["WFSTEP_S2"], "events": ["TXT_WFSTEP_S2"] },
+  { "match": ["WFSTEP_S2"], "events": ["TXT_WFSTEP_S2"] },
+  { "match": ["WFSTEP_S2"], "events": ["TXT_WFSTEP_S2"] },
+  {
+    "match": ["WFSTEP_S3"],
+    "events": [
+      {
+        "toolUseId": "sm_WFSTEP_S3",
+        "name": "send_message",
+        "input": { "severity": "success", "message": "DONE_WFSTEP_S3" }
+      }
+    ]
+  },
+  { "match": ["WFSTEP_S3"], "events": ["TXT_WFSTEP_S3"] },
+  { "match": ["WFSTEP_S3"], "events": ["TXT_WFSTEP_S3"] },
+  { "match": ["WFSTEP_S3"], "events": ["TXT_WFSTEP_S3"] },
+  {
+    "match": ["WFSTEP_T1"],
+    "events": [
+      {
+        "toolUseId": "sm_WFSTEP_T1",
+        "name": "send_message",
+        "input": { "severity": "success", "message": "DONE_WFSTEP_T1" }
+      }
+    ]
+  },
+  { "match": ["WFSTEP_T1"], "events": ["TXT_WFSTEP_T1"] },
+  { "match": ["WFSTEP_T1"], "events": ["TXT_WFSTEP_T1"] },
+  { "match": ["WFSTEP_T1"], "events": ["TXT_WFSTEP_T1"] },
+  { "match": "MAIN_KICKOFF", "events": ["MAIN_DONE"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] }
+]

@@ -1,0 +1,13 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--no-session",
+    "--auto",
+    "-p",
+    "go PLAN=[[{\"name\": \"bash\", \"args\": {\"command\": \"echo PARENT_BASH_RAN > parent_bash.txt\"}}], [{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_PERM CHILDPLAN=[[{\\\"name\\\": \\\"bash\\\", \\\"args\\\": {\\\"command\\\": \\\"echo CHILD_BASH_RAN > child_bash.txt\\\"}}, {\\\"name\\\": \\\"write\\\", \\\"args\\\": {\\\"path\\\": \\\"child_write.txt\\\", \\\"content\\\": \\\"x\\\"}}]]\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}]]"
+  ],
+  "timeout": 40
+}
