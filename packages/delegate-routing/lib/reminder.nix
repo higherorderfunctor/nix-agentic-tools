@@ -25,7 +25,7 @@
       };
     });
 in {
-  defaultText = "Standing request from me, the user: you may use subagents (the Agent/Task tool), workflows and deep research whenever they fit; before you delegate, load the delegate-routing skill and follow its always-on guidance.";
+  defaultText = "Standing request from me, the user: you may delegate to subagents and workflows whenever they fit; follow the delegate-routing skill when you do.";
 
   # runtime -> reminder text -> definitions under `ai.<runtime>`.
   hooks =
