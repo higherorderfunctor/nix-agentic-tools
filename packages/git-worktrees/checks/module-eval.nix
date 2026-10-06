@@ -23,19 +23,24 @@ in {
         ai = {
           claude.extraSystemPrompt.git-worktrees.enable = false;
           codex.extraSystemPrompt.git-worktrees.text = "own";
-          kiro.tweaks.stripVendorWorktreeSteering = false;
+          kiro.tweaks = {
+            relativeFileCheckPaths = false;
+            stripVendorWorktreeSteering = false;
+          };
         };
       }) (config:
         delivered config "claude"
         == null
         && delivered config "codex" == "own"
-        && !config.ai.kiro.tweaks.stripVendorWorktreeSteering)
+        && !config.ai.kiro.tweaks.stripVendorWorktreeSteering
+        && !config.ai.kiro.tweaks.relativeFileCheckPaths)
     );
 
     module-git-worktrees-default-disabled = mkTest "git-worktrees-default-disabled" (
       onBoth {} (config:
         lib.all (runtime: delivered config runtime == null) runtimes
-        && !config.ai.kiro.tweaks.stripVendorWorktreeSteering)
+        && !config.ai.kiro.tweaks.stripVendorWorktreeSteering
+        && !config.ai.kiro.tweaks.relativeFileCheckPaths)
     );
 
     # The default protocol reaches every supported runtime's own pool with
@@ -50,7 +55,8 @@ in {
           && lib.hasInfix "../{repo}-worktrees" text
           && !(lib.hasInfix "{location}" text))
         runtimes
-        && config.ai.kiro.tweaks.stripVendorWorktreeSteering)
+        && config.ai.kiro.tweaks.stripVendorWorktreeSteering
+        && config.ai.kiro.tweaks.relativeFileCheckPaths)
     );
 
     module-git-worktrees-protocol-disabled = mkTest "git-worktrees-protocol-disabled" (
