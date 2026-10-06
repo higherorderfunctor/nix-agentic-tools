@@ -1,0 +1,21 @@
+{
+  "new": {
+    "_meta": {
+      "kiro": {
+        "steering": [
+          {
+            "content": "INLINE_DUP_SENTINEL",
+            "inclusion": "always",
+            "name": "dup"
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "hello USER_SENTINEL_1"
+    }
+  ]
+}

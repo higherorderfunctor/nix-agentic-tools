@@ -1,9 +1,7 @@
 # Codex delegate replays
 
-Replays for the Codex 0.160.0 delegate reference. Case ids match the reference's
-Replay column: `claude:` = the Claude-side probes (`R0`–`R14`), `codex:` = the
-Codex-side probes (`R0`, `R1.<case>`, `R2`, `R4`), `judge:` = the judge's
-tie-breakers.
+Pins, evidence marks and case-prefix meanings:
+[evidence guide](../../../docs/delegates/evidence.md).
 
 Every script runs the repository's pinned `chatgpt-codex` with `--no-daemon`
 (built on demand; `CODEX_PKG=<store path>` skips the build) and reads the pinned
@@ -72,3 +70,14 @@ uv venv "$d/venv" && uv pip install --python "$d/venv/bin/python" tree-sitter==0
 | codex:R4                      | `sysprompt/wire.sh wireA`; `wireB`; `wireC`; `wireBase`; `wireL1`; `wireL2`                                              | the prior prompt study's wire captures (roles, `subagent_developer_instructions`, fork, base file)                    | `wireB`: root carries `MAIN-B-3001`, children `SUBDEV-B-3003` or `ROLE-R2-2002`                                                                |
 | judge:J1                      | `./toggles.sh probes/toggles/judge-variants.txt`                                                                         | explicit V2 enable overrides `agents.enabled=false`, also on a v1-catalog model                                       | `agents_enabled_false … tools=-`; both `agents_off_v2_on*` rows list the six `collaboration.*` tools                                           |
 | judge:J2                      | `python3 agents_schema.py`                                                                                               | `AgentsToml` keys in `core/config.schema.json`                                                                        | six keys ending `max_depth`; no `max_threads`, no `job_max_runtime_seconds`                                                                    |
+
+### Prompt-map captures
+
+| Case id | Command                   | Expected excerpt                                                  |
+| ------- | ------------------------- | ----------------------------------------------------------------- |
+| wireB   | `sysprompt/wire.sh wireB` | Root `MAIN-B-3001`; child `SUBDEV-B-3003` or `ROLE-R2-2002`       |
+| piD6    | `python3 offline.py piD6` | `piD6: UNTRUSTED-AGENTS-8006 present; UNTRUSTED-PROJ-8005 absent` |
+
+`piD6` reconstructs the original unknown-trust capture with the same project
+sentinels: a fresh home has no trust entry. Inspect `requests.json` to see the
+instruction-file sentinel and confirm the project-config sentinel is absent.

@@ -1,8 +1,7 @@
 # Claude Code delegate replays
 
-Replays for the Claude Code 2.1.289 delegate reference. Case ids match the
-reference's Replay column: `claude:` = the Claude-side probes, `codex:` = the
-Codex-side probes, `judge:` = the judge's tie-breakers.
+Pins, evidence marks and case-prefix meanings:
+[evidence guide](../../../docs/delegates/evidence.md).
 
 Every script runs the repository's pinned `claude-code` (built on demand from
 `.#ciPackages.<system>.claude-code`; set `CLAUDE_BIN=<path>/bin/claude` to skip
@@ -107,3 +106,15 @@ python3 agent/extract_schemas.py <sysprompt-work> <run>/transcript.json   # code
 `sysprompt/capture.sh` reconstructs the prior study's captures. Those runs
 recorded argv only, so the plan, stdin and env per case are inferred from the
 argv and the plan files' match tokens; `k8-compact` is not reproduced.
+
+### Prompt-map captures
+
+`p3` in the original study is the selector `p3-agent-named`. Run the three
+snapshot cases together so they share the temporary config and session.
+
+| Case id        | Command                                  | Expected excerpt                                          |
+| -------------- | ---------------------------------------- | --------------------------------------------------------- |
+| p3-agent-named | `sysprompt/capture.sh p3-agent-named`    | Main system: `SYSINLINE-2020` present; `NAMEDBODY` absent |
+| snap1          | `sysprompt/capture.sh snap1 snap2 snap3` | First system: `APPVONE-2121`                              |
+| snap2          | `sysprompt/capture.sh snap1 snap2 snap3` | Resumed system: `APPVONE-2121`, no `APPVTWO-2222`         |
+| snap3          | `sysprompt/capture.sh snap1 snap2 snap3` | Snapshot off: `APPVTHREE-2323`                            |
