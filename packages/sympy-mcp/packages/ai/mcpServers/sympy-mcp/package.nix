@@ -11,12 +11,12 @@
   inherit (pkgs) fetchFromGitHub makeWrapper python314;
   vu = packageLib;
 
-  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
+  rev = "59ac6f9ae03e6b2eaa31676f45239ed8a5ad3975";
   src = fetchFromGitHub {
     owner = "sdiehl";
     repo = "sympy-mcp";
     inherit rev;
-    hash = "sha256-AjRdiBtsF/ZpAUt+TPhvkT8VQ3y7rcJSogSSyQQXytI=";
+    hash = "sha256-w5qIgruGiZbJK3BCGselCRaoLdkktNmvJVzKa11Ul00=";
   };
 
   pythonEnv =
