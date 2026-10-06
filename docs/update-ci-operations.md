@@ -35,7 +35,12 @@ than one 100-item API page, because reports and receipts are separate artifacts.
 - `UPDATED` means preparation completed and publication returned successfully;
   inspect the PR and publisher log for whether it was created, refreshed,
   unchanged, or preserved by an ownership/human-hold guard. It does not prove
-  the PR passed its native checks or merged.
+  the PR passed its native checks or merged. A receipt that also carries
+  `verifyFailed` is an input whose build verification failed: its PR was still
+  published, and its worker then failed `Fail on failed build verification` with
+  an `::error::` naming the failed attributes and the PR. Before 2026-10-06 that
+  case only warned, so a sweep such as 37463596606 read green while pnpm_12
+  failed on the nixpkgs lane.
 
 The collector requires exactly one receipt per discovered target on the same
 base. Missing or duplicate receipts are incomplete evidence, even if some PRs

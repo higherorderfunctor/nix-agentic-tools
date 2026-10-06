@@ -388,6 +388,11 @@ nfb_eval_flags() {
 run_nfb_build() {
   local expected_packages=$1 rf stderr_log exit_code=0 failed=0 incomplete=0 unresolved_hash=0
   shift
+  # Global on purpose: the caller reads it after a red verification to name
+  # the failed attributes (record_verify_failure). Reset per call so a retry
+  # reports only its own failures.
+  # shellcheck disable=SC2034 # read by update-input.sh, a sourcing caller
+  NAT_VERIFY_FAILED_ATTRS=""
   # Return 2 when verification could not start and 3 when Nix reports a
   # fixed-output mismatch. Return 4 when the verifier ran but its result does
   # not cover the pre-enumerated package universe. Callers must distinguish all
@@ -499,6 +504,28 @@ run_nfb_build() {
   fi
 
   if [ "$failed" -eq 1 ] || [ "$incomplete" -eq 1 ]; then
+    # Failed attribute names. Pinned nix-fast-build records EVAL failures in
+    # the result JSON too (workers.py puts a ResultType.EVAL row with
+    # success=false and the eval error for every throwing attribute), so the
+    # JSON rows name every failure whenever the file was written. The stderr
+    # "Failed attributes:" line is only a fallback for a run that died before
+    # writing the file or produced no failed rows. It spells each attribute as
+    # "<flake>#<fragment>.<attr>" (fragment = ciPackages.<system>), so strip
+    # that prefix to match the JSON spelling. Best effort: an empty list is
+    # reported as unknown, never read as "nothing failed" -- the return status
+    # below decides that.
+    # shellcheck disable=SC2034 # read by update-input.sh, a sourcing caller
+    NAT_VERIFY_FAILED_ATTRS=$(
+      names=""
+      if [ -s "$rf" ]; then
+        names=$(jq -r '.results[]? | select(.success | not) | .attr' "$rf" 2>/dev/null || :)
+      fi
+      if [ -z "$names" ]; then
+        names=$(grep -oP 'Failed attributes: \K.*' "$stderr_log" | tr -s ' ,' '\n' |
+          sed 's/^[^#]*#[^.]*\.[^.]*\.//' || :)
+      fi
+      printf '%s\n' "$names" | sed '/^$/d' | sort -u
+    ) || NAT_VERIFY_FAILED_ATTRS=""
     log_failure "(forensic data preserved: $rf, $stderr_log)"
     [ "$incomplete" -eq 0 ] || return 4
     [ "$unresolved_hash" -eq 0 ] || return 3
@@ -739,6 +766,21 @@ regenerate_sidecars() {
   if [ -n "$sidecars" ]; then
     printf '%s\n' "$sidecars"
   fi
+}
+
+# Record that target $1 failed build verification while its PR still ships.
+# $2 is the failed attributes, newline-separated. The CI matrix reads this file
+# into the target's receipt (update-matrix.py prepare) and fails the lane only
+# AFTER publication (update-matrix.py verdict), so the red PR is still opened
+# or refreshed and the sweep still goes red. Local Ninja runs have no verdict
+# step; the log line is their signal. Returns non-zero when the record cannot
+# be written, so the caller can refuse to ship a failure nobody would see.
+record_verify_failure() {
+  local name=$1 attrs=${2:-}
+  [ -n "$attrs" ] || attrs="<failed attributes not reported>"
+  mkdir -p "$UPDATE_LOGS_DIR" || return 1
+  printf '%s\n' "$attrs" >"$UPDATE_LOGS_DIR/verify-failed-$name.txt" || return 1
+  log_failure "$name: build verification failed ($(paste -sd' ' <<<"$attrs")) -- the PR still opens; the CI lane fails after publishing it"
 }
 
 # ── Version parsing ───────────────────────────────────────────────────────────

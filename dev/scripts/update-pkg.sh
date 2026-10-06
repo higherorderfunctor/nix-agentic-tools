@@ -468,14 +468,17 @@ set +e
     exit 0
   fi
 
-  # Phase 2: Build verification — INFORMATIONAL, not a gate.
+  # Phase 2: Build verification — never withholds the PR.
   #
   # nix-update already derived every dependency hash the PR needs, and its
   # own failure exits above. So reaching here means the tree is complete
   # and committable: rev, src and hashes are all written. A build that
   # still fails means the update is well-formed but does not build —
   # a dependency floor the pinned nixpkgs cannot satisfy, say — and that
-  # is a red PR for branch CI to report, not a reason to withhold it.
+  # is a red PR for branch CI to report, not a reason to withhold it. The
+  # failure is recorded so a CI worker that ran this build fails after
+  # publishing; CI sets NAT_UPDATE_VERIFY_PACKAGES=0 today, so in practice
+  # only local Ninja runs reach the build.
   #
   # This USED to be the last command in the subshell, which is the only
   # reason a failing build held the package back: errexit is disabled for
@@ -485,8 +488,10 @@ set +e
   if [ "${NAT_UPDATE_VERIFY_PACKAGES:-1}" = "0" ]; then
     log_info "Prepared update — native PR CI will verify the build"
   elif ! run_build nix build ".#$(nat_attr "$name")" --no-link --log-format bar-with-logs; then
-    log_info "Build failed — opening the PR; branch CI is the gate"
-    echo "::warning::${name}: build verification failed, PR opens red"
+    if ! record_verify_failure "$name" "$(nat_attr "$name")"; then
+      log_failure "could not record the failed build verification"
+      exit 1
+    fi
   fi
   # Belt and braces: keep the subshell's exit status independent of the
   # build above even if a later edit adds a statement here.

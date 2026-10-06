@@ -83,6 +83,35 @@ class MatrixTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.collect(plan, receipts[:1], "base")
 
+    def test_failed_verification_rides_only_an_updated_receipt(self):
+        with tempfile.TemporaryDirectory() as logs:
+            self.assertIsNone(matrix.verify_failures(logs, "nixpkgs", "UPDATED"))
+            record = Path(logs) / "verify-failed-nixpkgs.txt"
+            record.write_text("ciPackages.x86_64-linux.pnpm_12\nciPackages.x86_64-linux.oxlint\n")
+            self.assertEqual(matrix.verify_failures(logs, "nixpkgs", "UPDATED"), ["ciPackages.x86_64-linux.pnpm_12", "ciPackages.x86_64-linux.oxlint"])
+            self.assertIsNone(matrix.verify_failures(logs, "nixpkgs", "HELD BACK"))
+            self.assertIsNone(matrix.verify_failures(logs, "other", "UPDATED"))
+            record.write_text("\n")
+            self.assertEqual(matrix.verify_failures(logs, "nixpkgs", "UPDATED"), ["<failed attributes not reported>"])
+
+    def test_verdict_names_target_attributes_and_pr_only_on_failure(self):
+        self.assertIsNone(matrix.verification_verdict({"name": "nixpkgs", "status": "UPDATED"}, "https://example.test/pull/7"))
+        lines = matrix.verification_verdict({"name": "nixpkgs", "status": "UPDATED", "verifyFailed": ["a", "b"]}, "https://example.test/pull/7")
+        self.assertIn("nixpkgs", lines[0])
+        self.assertIn("a, b", lines[1])
+        self.assertIn("https://example.test/pull/7", lines[2])
+        self.assertIn("none", matrix.verification_verdict({"name": "nixpkgs", "verifyFailed": ["a"]}, "")[2])
+
+    def test_verdict_runs_after_publication_and_receipt_without_cancelling_siblings(self):
+        workflow = WORKFLOW.read_text()
+        update = workflow.split("\n  update:\n", 1)[1].split("\n  cleanup:\n", 1)[0]
+        self.assertIn("fail-fast: false", update)
+        verdict = update.index('update-matrix.py" verdict')
+        self.assertLess(update.index("update-publish.sh"), verdict)
+        self.assertLess(update.index("name: update-receipt-"), verdict)
+        step = update[update.rindex("- name:", 0, verdict):verdict]
+        self.assertIn("if: ${{ !cancelled() }}", step)
+
 
 class GitHubTest(unittest.TestCase):
     def test_push_requires_authenticated_actor_exact_ref_and_head(self):
@@ -262,6 +291,24 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), self.git("rev-parse", "update/demo"))
         self.assertIn('["pr", "create"', (self.root / "calls").read_text())
         self.assertEqual((self.root / "touched-branches").read_text(), "update/demo\n")
+        self.assertEqual((self.root / "published-pr").read_text(), "https://github.com/example/example/pull/1\n")
+
+    def test_recorded_verification_failure_reaches_the_verdict_after_publication(self):
+        logs = self.repo / ".update-logs"
+        result = subprocess.run(
+            ["bash", "-c", 'source "$1"; record_verify_failure demo "$2"', "_", str(SCRIPTS / "update-common.sh"), "attr.one\nattr.two"],
+            cwd=self.repo, env=self.env, text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(matrix.verify_failures(logs, "demo", "UPDATED"), ["attr.one", "attr.two"])
+        (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one", "attr.two"]}))
+        published = self.publish()
+        self.assertEqual(published.returncode, 0, published.stderr)
+        verdict = subprocess.run(["python3", str(SCRIPTS / "update-matrix.py"), "verdict"], cwd=self.repo, env=self.env, text=True, capture_output=True)
+        self.assertNotEqual(verdict.returncode, 0)
+        self.assertIn("::error title=Update build verification failed::demo", verdict.stdout)
+        self.assertIn("attr.one, attr.two", verdict.stdout)
+        self.assertIn("https://github.com/example/example/pull/1", verdict.stdout)
 
     def test_new_pr_waits_for_matching_app_push_activity_before_arming(self):
         result = self.publish(ACTIVITY_EMPTY_ONCE="1")
@@ -358,6 +405,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.root / "touched-branches").read_text(), "update/demo\n")
         self.assertNotIn('["pr",', (self.root / "calls").read_text())
+        self.assertEqual((self.root / "published-pr").read_text(), "")
 
     def own_pr(self):
         return {"author": {"login": "app/nix-agentic-tools-bot"}, "baseRefName": "main", "headRefName": "update/demo", "headRepository": {"nameWithOwner": "example/example"}, "isCrossRepository": False, "mergeable": "MERGEABLE", "number": 1}
@@ -1254,7 +1302,10 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         self.assertEqual(result.returncode, 0, result.stderr)
         report = (self.repo / ".update-report.txt").read_text()
         self.assertIn("UPDATED: demo", report)
-        self.assertIn("build verification failed, PR opens red", result.stdout)
+        self.assertIn("build verification failed", result.stderr)
+        failed = matrix.verify_failures(self.repo / ".update-logs", "demo", "UPDATED")
+        self.assertEqual(len(failed), 1)
+        self.assertTrue(failed[0].endswith(".demo"), failed)
 
     def test_default_four_jobs_on_eight_gib_starts_the_verifier(self):
         command = 'source "$1"; verify_all_packages'
@@ -1331,7 +1382,8 @@ raise SystemExit(f'unhandled nix fixture arguments: {args}')
         self.assertEqual(result.returncode, 0, result.stderr)
         report = (self.repo / ".update-report.txt").read_text()
         self.assertIn("UPDATED: demo", report)
-        self.assertIn("build verification failed, PR opens red", result.stdout)
+        self.assertIn("build verification failed (oxlint)", result.stderr)
+        self.assertEqual(matrix.verify_failures(self.repo / ".update-logs", "demo", "UPDATED"), ["oxlint"])
 
 
 class HoldBackEscalationTest(unittest.TestCase):

@@ -285,6 +285,37 @@ def annotate(level, title, lines):
     print(f"::{level} title={title}::{message}")
 
 
+def verify_failures(logs, name, status):
+    """Failed attributes recorded by `record_verify_failure`, or None.
+
+    Only an UPDATED target ships a PR, so only it carries the record into its
+    receipt. A held-back target already has its own escalation path.
+    """
+    record = Path(logs) / f"verify-failed-{name}.txt"
+    if status != "UPDATED" or not record.exists():
+        return None
+    return [line for line in record.read_text().splitlines() if line.strip()] or ["<failed attributes not reported>"]
+
+
+def verification_verdict(prepared, published_pr):
+    """Annotation lines failing a lane whose PR shipped despite a red build, or None.
+
+    The PR is published first on purpose: a well-formed update that does not
+    build is a red PR for branch CI to judge, never a withheld one. This verdict
+    runs only after publication, so failing here cannot cost the target its PR,
+    and other matrix lanes are unaffected (`fail-fast: false`).
+    """
+    failed = prepared.get("verifyFailed")
+    if not failed:
+        return None
+    pr = published_pr or "none -- publication preserved an existing branch or PR; see the publish step's log"
+    return [
+        f"{prepared['name']}: build verification failed before publication.",
+        f"Failed attributes: {', '.join(failed)}",
+        f"PR: {pr}",
+    ]
+
+
 def collect(matrix, receipts, base):
     expected = sorted(row["name"] for row in matrix["include"])
     if sorted(r["name"] for r in receipts) != expected:
@@ -304,7 +335,7 @@ def collect(matrix, receipts, base):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["discover", "prepare", "receipt", "collect", "escalate"])
+    parser.add_argument("command", choices=["discover", "prepare", "receipt", "verdict", "collect", "escalate"])
     args = parser.parse_args()
     temp = Path(os.environ["RUNNER_TEMP"])
     if args.command == "discover":
@@ -329,11 +360,23 @@ def main():
         # `detail` is the whole completion line, including the parenthetical
         # reason category. The escalation gate quotes it so an annotation says
         # what happened without downloading anything.
-        (temp / "prepared.json").write_text(json.dumps({"base": os.environ["UPDATE_BASE_SHA"], "detail": report.strip(), "name": target["name"], "status": status}))
+        prepared = {"base": os.environ["UPDATE_BASE_SHA"], "detail": report.strip(), "name": target["name"], "status": status}
+        failed = verify_failures(".update-logs", target["name"], status)
+        if failed:
+            prepared["verifyFailed"] = failed
+        (temp / "prepared.json").write_text(json.dumps(prepared))
     elif args.command == "receipt":
         receipt = json.loads((temp / "prepared.json").read_text())
         receipt["touched"] = (temp / "touched-branches").read_text().splitlines()
         (temp / "update-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    elif args.command == "verdict":
+        published = temp / "published-pr"
+        lines = verification_verdict(json.loads((temp / "prepared.json").read_text()), published.read_text().strip() if published.exists() else "")
+        if lines is None:
+            print("Build verification did not fail for this target.")
+            return
+        annotate("error", "Update build verification failed", lines)
+        raise SystemExit(lines[0])
     elif args.command == "escalate":
         repo, run_id = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_RUN_ID"]
         receipts = [json.loads(p.read_text()) for p in downloaded("receipts", "update-receipt.json")]

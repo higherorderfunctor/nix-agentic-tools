@@ -50,7 +50,7 @@ git branch --list 'update/*' | while read -r branch; do
   git branch -D "$branch" 2>/dev/null || true
 done
 
-# Clear report from prior runs
-rm -f .update-report.txt
+# Clear report and verification records from prior runs
+rm -f .update-report.txt .update-logs/verify-failed-*.txt
 
 echo "  Ready."

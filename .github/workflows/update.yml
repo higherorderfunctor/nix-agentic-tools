@@ -179,6 +179,18 @@ jobs:
           name: update-receipt-${{ matrix.name }}
           path: ${{ runner.temp }}/update-receipt.json
           if-no-files-found: error
+      # A writable update whose build verification failed still publishes its
+      # PR above; only then does this lane go red. Placement after the receipt
+      # upload is load-bearing: cleanup needs every lane's receipt, and
+      # `fail-fast: false` keeps the other lanes running. `!cancelled()` keeps
+      # the verdict (and its ::error) when publish or auto-merge arming fails;
+      # step order alone still keeps it after publish.
+      - name: Fail on failed build verification
+        if: ${{ !cancelled() }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          python3 "$GITHUB_WORKSPACE/automation/dev/scripts/update-matrix.py" verdict
       - name: Upload update diagnostics
         if: always()
         uses: actions/upload-artifact@v7

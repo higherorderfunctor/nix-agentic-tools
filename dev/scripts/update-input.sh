@@ -197,9 +197,13 @@ set +e
       # The repair ran clean and the build still fails, so every hash we
       # can derive HAS been derived and the tree is complete and
       # committable. Well-formed but does not build is a red PR for
-      # branch CI to report, not a reason to withhold it.
-      log_info "Build still failing after a clean sidecar repair — opening the PR; branch CI is the gate"
-      echo "::warning::${name}: build verification failed, PR opens red"
+      # branch CI to report, not a reason to withhold it. It is ALSO a red
+      # lane: the record below makes the CI worker fail once the PR is
+      # published, so the sweep does not read green over a broken bump.
+      if ! record_verify_failure "$name" "${NAT_VERIFY_FAILED_ATTRS:-}"; then
+        log_failure "could not record the failed build verification"
+        exit 1
+      fi
     fi
   fi
 
@@ -240,7 +244,8 @@ set +e
   fi
 
   # Phase 3: Commit. NOT gated on a passing build — see the sidecar-hash
-  # repair above for why a failing build ships as a red PR instead.
+  # repair above for why a failing build ships as a red PR (and a red lane)
+  # instead.
   if ! git commit -m "chore: update input $name"; then
     log_failure "git commit failed"
     exit 1
