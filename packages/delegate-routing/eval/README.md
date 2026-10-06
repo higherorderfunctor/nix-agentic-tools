@@ -119,17 +119,16 @@ NIX_CONFIG=$'max-jobs = 1\ncores = 2' nix build .#checks.x86_64-linux.delegate-r
 ## Vendor steering set: real harness
 
 `--set vendor` evaluates `vendor-cases.nix` through `dev/ai.nix` and the real
-devenv delivery pipeline. Eight variants compare Claude Opus with the
-delegation-clamp hook on/off, Claude ultracode with Pool drain on/off, and Kiro
-single/dependent tasks with workflowReminder on/off. The Pool drain off variant
-is observational; no pool preference is imposed. Clamp cases supply greater
-Claude headroom so the house pool rule does not route around native Claude
-delegation. Ultracode cases supply greater Codex headroom. Clamp variants
-require a delegate plan or observed denied delegate attempt; single Kiro tasks
-require exactly one delegate; dependent tasks require a workflow. Pool drain on
-requires an external Codex delegate or Codex lane. Each variant gets its own
-pass/fail and the summary retains the paired observations. Expected answers
-never enter the prompt.
+devenv delivery pipeline. Six cases cover Claude Opus with the delegation-clamp
+hook on/off, Claude ultracode with Pool drain on/off, and Kiro single/dependent
+tasks. The Pool drain off variant is observational; no pool preference is
+imposed. Clamp cases supply greater Claude headroom so the house pool rule does
+not route around native Claude delegation. Ultracode cases supply greater Codex
+headroom. Clamp variants require a delegate plan or observed denied delegate
+attempt; single Kiro tasks require exactly one delegate; dependent tasks require
+a workflow. Pool drain on requires an external Codex delegate or Codex lane.
+Each variant gets its own pass/fail and the summary retains the paired
+observations. Expected answers never enter the prompt.
 
 Render every variant without an authenticated model turn:
 
@@ -162,9 +161,9 @@ The safety overlay exposes native tools but denies all execution through a
 logging PreToolUse hook, plus noninteractive permission denial. Claude loads
 project settings plus mandatory managed settings, so user-settings hooks cannot
 reverse its clamp toggle. Claude MCP enablement is disabled for the evaluation;
-Kiro trusts no tools. The real mitigation/reminder hooks remain installed.
-Native tool requests and external launcher calls in shell requests are recorded
-in `attempts.json`. A plan is graded separately from attempted calls; a refused
+Kiro trusts no tools. The real Claude mitigation hook remains installed. Native
+tool requests and external launcher calls in shell requests are recorded in
+`attempts.json`. A plan is graded separately from attempted calls; a refused
 attempt remains evidence, not successful delegation.
 
 Live adapters require suppression and terminal-capture evidence for the
@@ -185,10 +184,10 @@ After those checks and explicit authorization, run manually:
 python3 packages/delegate-routing/eval/run.py --set vendor --allow-paid --safety-preflight /tmp/vendor-preflight.json --repeat 1 --out /tmp/vendor-live
 ```
 
-This schedules eight paid candidate turns (24 at the default three repeats),
-with no judge or delegate turns. Real vendor prompts, repository instructions
-and Opus ultracode can make these considerably more expensive than isolated
-cases; no fixed monetary cost is claimed. Failed turns retain transcripts and
+This schedules six paid candidate turns (18 at the default three repeats), with
+no judge or delegate turns. Real vendor prompts, repository instructions and
+Opus ultracode can make these considerably more expensive than isolated cases;
+no fixed monetary cost is claimed. Failed turns retain transcripts and
 infrastructure errors. Unsupported Kiro stream formats or missing completion
 markers are infrastructure errors rather than inferred passes. Render-only
 proves assembly, not safety or vendor behavior.
