@@ -23,12 +23,10 @@
         message = "second caller assertion failed";
       }
     ];
-    userAgent = "assertion-control";
+    repository = "assertion-control";
   };
   expectedSettings = {
-    ignoreRobotsTxt = false;
-    proxyUrl = null;
-    userAgent = "assertion-control";
+    repository = "assertion-control";
   };
 in {
   checks = {
@@ -101,7 +99,7 @@ in {
         fileset = lib.fileset.unions [
           ../../../lib/credentials.nix
           ../../../lib/mcp.nix
-          ../../../packages/fetch-mcp/modules/mcp-server.nix
+          ../../../packages/git-intel-mcp/modules/mcp-server.nix
         ];
       };
       probe = pkgs.writeText "mcp-settings-assertions.nix" ''
@@ -114,7 +112,7 @@ in {
             then ${builtins.toJSON (builtins.toJSON (assertionSettings true))}
             else ${builtins.toJSON (builtins.toJSON (assertionSettings false))}
           );
-          result = mcpLib.evalSettings "fetch-mcp" settings;
+          result = mcpLib.evalSettings "git-intel-mcp" settings;
         in
           if passing
           then assert result == builtins.fromJSON ${builtins.toJSON (builtins.toJSON expectedSettings)}; true
@@ -136,7 +134,7 @@ in {
             cat actual.stderr >&2
             exit 1
           fi
-        '') (["MCP server fetch-mcp settings assertions failed:"] ++ map (entry: entry.message) (builtins.filter (entry: !entry.assertion) (assertionSettings false).assertions))}
+        '') (["MCP server git-intel-mcp settings assertions failed:"] ++ map (entry: entry.message) (builtins.filter (entry: !entry.assertion) (assertionSettings false).assertions))}
         if grep -F -- "passing assertion must not appear" actual.stderr; then
           echo "FAIL: diagnostic includes a passing assertion" >&2
           exit 1
@@ -147,8 +145,8 @@ in {
     # Exercise the same settings in both arms; equality also rejects leaked metadata.
     module-mcp-settings-assertions = mkTest "mcp-settings-assertions" (
       let
-        passing = builtins.tryEval (mcpLib.evalSettings "fetch-mcp" (assertionSettings true) == expectedSettings);
-        failing = builtins.tryEval (builtins.deepSeq (mcpLib.evalSettings "fetch-mcp" (assertionSettings false)) true);
+        passing = builtins.tryEval (mcpLib.evalSettings "git-intel-mcp" (assertionSettings true) == expectedSettings);
+        failing = builtins.tryEval (builtins.deepSeq (mcpLib.evalSettings "git-intel-mcp" (assertionSettings false)) true);
       in
         passing.success && passing.value && !failing.success
     );
@@ -163,7 +161,7 @@ in {
       in
         !(servers.context7-mcp.enable or true)
         && !(servers.github-mcp.enable or true)
-        && !(servers.serena-mcp.enable or true)
+        && !(servers.kagi-mcp.enable or true)
     );
 
     # Server option tree has expected structure.
@@ -174,16 +172,11 @@ in {
       in
         servers ? context7-mcp
         && servers ? effect-mcp
-        && servers ? fetch-mcp
         && servers ? git-intel-mcp
-        && servers ? git-mcp
         && servers ? github-mcp
         && servers ? gitlab-mcp
         && servers ? kagi-mcp
         && servers ? nixos-mcp
-        && servers ? sequential-thinking-mcp
-        && servers ? serena-mcp
-        && servers ? sympy-mcp
     );
 
     # tools output is empty when no servers enabled.

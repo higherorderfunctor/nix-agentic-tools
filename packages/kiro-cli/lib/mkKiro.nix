@@ -1533,7 +1533,7 @@ in
         type = lib.types.listOf lib.types.str;
         default = [];
         description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (both backends).";
-        example = ["@context7-mcp" "@git-mcp/git_diff" "subagent"];
+        example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
       };
       # V3 capability-based permissions -> `<configDir>/settings/permissions.yaml`.
       # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
@@ -1554,7 +1554,7 @@ in
           {
             capability = "mcp";
             effect = "allow";
-            match = ["context7-mcp/*" "git-mcp/git_diff"];
+            match = ["context7-mcp/*" "git-intel-mcp/hotspots"];
           }
         ];
       };

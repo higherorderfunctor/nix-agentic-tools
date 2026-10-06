@@ -1856,7 +1856,7 @@ in {
           ai.kiro = {
             enable = true;
             v3 = true;
-            trustedMcpTools = ["@openmemory" "@git-mcp/git_diff" "subagent" "use_aws"];
+            trustedMcpTools = ["@openmemory" "@git-intel-mcp/hotspots" "subagent" "use_aws"];
           };
         };
       in

@@ -1,9 +1,10 @@
 ## JS MCP Server Packaging — npm-workspaces gotcha
 
-> **Last verified:** 2026-05-20 (commit pending — follows the
-> modelcontextprotocol per-workspace `node_modules/` fix). If you touch any
-> overlay that builds a JS MCP server from an npm-workspaces monorepo and this
-> fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-10-06 — no recipe here builds from an npm-workspaces
+> monorepo since the `modelcontextprotocol/servers` set was removed; the traps
+> below apply to the next one. If you touch any overlay that builds a JS MCP
+> server from an npm-workspaces monorepo and this fragment isn't updated in the
+> same commit, stop and fix it.
 
 ### The non-hoisting trap
 
@@ -22,8 +23,9 @@ the root `node_modules/` into the output ships an incomplete dep tree. The
 binary loads and crashes on first import with `Cannot find module '...'` at
 runtime — never at build time.
 
-`@modelcontextprotocol/sdk` in `modelcontextprotocol/servers` is the canonical
-example; check the lockfile before assuming hoisting.
+`@modelcontextprotocol/sdk` in `modelcontextprotocol/servers` (packaged here
+until 2026-10-06) was the canonical example; check the lockfile before assuming
+hoisting.
 
 ### Pattern: merge per-workspace node_modules
 
@@ -54,8 +56,8 @@ timeout N "$bin" < /dev/null 2>&1 || true
 milliseconds, well inside the timeout, so the test passes even when the binary
 is fundamentally broken. This is how the
 `Cannot find module '@modelcontextprotocol/sdk/server/mcp.js'` regression
-shipped for sequential-thinking-mcp / filesystem-mcp / memory-mcp before being
-caught by manual user testing.
+shipped for that monorepo's sequential-thinking, filesystem and memory servers
+before being caught by manual user testing.
 
 ### Pattern: MCP initialize handshake smoke test
 

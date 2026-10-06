@@ -86,7 +86,7 @@
       jsNames;
     # Stop at derivations: namespaces include scopes and passthru attrs that
     # must not be interpreted as package trees. Helpers may contain nested
-    # components (all-mcps) as well as the pnpmDeps fetcher itself.
+    # components as well as the pnpmDeps fetcher itself.
     derivations = value:
       if lib.isDerivation value
       then [value]

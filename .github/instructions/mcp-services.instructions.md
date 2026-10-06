@@ -7,10 +7,10 @@ applyTo: "checks/*/factory-eval.nix,checks/*/module-eval.nix,lib/ai/mcpServer/mk
 
 ## Managed MCP Service Bind-Address Contract
 
-> **Last verified:** 2026-09-01 — the native-declaration table has one row
-> (`nixos-mcp`); `openmemory-mcp` was retired, taking with it the only
-> `honorsHost = true` backed by a repo-authored patch rather than an upstream
-> primitive. Full lineage:
+> **Last verified:** 2026-10-06 — six modules use bridge mode; the
+> native-declaration table has one row (`nixos-mcp`); `openmemory-mcp` was
+> retired, taking with it the only `honorsHost = true` backed by a repo-authored
+> patch rather than an upstream primitive. Full lineage:
 > `git show ed5898b1:dev/fragments/mcp-services/service-host-contract.md`.
 
 `services.mcp-servers.servers.<name>.service.host` is a security control, not
@@ -54,7 +54,7 @@ native HTTP transport requires Upstash Redis and exposes no bind-address knob.
 The proxy therefore fixes both the bind contract and the native mode's standing
 crash loop without patching upstream.
 
-Module-level coverage and binary-level exposure are different counts. Ten
+Module-level coverage and binary-level exposure are different counts. Six
 modules use bridge mode and are safe because the proxy owns the listener; some
 of their stdio binaries would bind every interface if switched directly to
 native HTTP. Never infer host support by searching for `service.host` references

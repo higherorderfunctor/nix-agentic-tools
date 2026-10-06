@@ -681,7 +681,7 @@ in {
               settings.credentials.file = "/run/secrets/context7-api-key";
             };
             effect-mcp.url = "http://127.0.0.1:19760/mcp";
-            git-mcp.package = pkgs.hello;
+            git-intel-mcp.package = pkgs.hello;
             github-mcp = {
               package = pkgs.hello;
               settings.credentials.file = "/run/secrets/github-token";
@@ -702,7 +702,7 @@ in {
         == [
           "context7-mcp"
           "effect-mcp"
-          "git-mcp"
+          "git-intel-mcp"
           "github-mcp"
           "nixos-mcp"
           "openmemory"

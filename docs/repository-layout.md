@@ -96,9 +96,7 @@ outputs; all of them hand out the same builds of this flake's own nixpkgs.
 `packages` holds the free leaves, `legacyPackages` every leaf plus the nested
 roots (unfree ones need the consumer's opt-in), and `ciPackages` is the
 unfree-enabled set CI builds. The flat outputs derive from native package
-basenames; the former `modelcontextprotocol-all-mcps` and
-`modelcontextprotocol-filesystem-mcp` names are now `all-mcps` and
-`filesystem-mcp`. Compatibility aliases are intentionally absent. Consumer
+basenames, with no compatibility aliases for earlier prefixed names. Consumer
 repository updates are separate from this repository redesign.
 
 For contribution contracts and the pitfalls that tests enforce, read

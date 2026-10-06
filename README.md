@@ -202,7 +202,7 @@ git-branchless, git-absorb, and git-revise.
 ## Packages
 
 <details>
-<summary><strong>MCP Servers</strong> (16 servers)</summary>
+<summary><strong>MCP Servers</strong> (11 servers)</summary>
 
 <!-- prettier-ignore -->
 | Server | Description | Credentials |
@@ -210,9 +210,7 @@ git-branchless, git-absorb, and git-revise.
 | `aihubmix-mcp` | AIHubMix image and video generation | Required |
 | `context7-mcp` | Library documentation lookup | None |
 | `effect-mcp` | Effect-TS documentation | None |
-| `fetch-mcp` | HTTP fetch + HTML-to-markdown | None |
 | `git-intel-mcp` | Git repository analytics | None |
-| `git-mcp` | Git operations | None |
 | `github-mcp` | GitHub platform integration | Required |
 | `gitlab-mcp` | GitLab platform integration | Required |
 | `kagi-mcp` | Kagi search and summarization | Required |
@@ -220,9 +218,6 @@ git-branchless, git-absorb, and git-revise.
 | `mcp-proxy` | stdio-to-HTTP bridge proxy | None |
 | `nixos-mcp` | NixOS and Nix documentation | None |
 | `semble-mcp` | Local semantic and lexical code search | None |
-| `sequential-thinking-mcp` | Step-by-step reasoning | None |
-| `serena-mcp` | Codebase-aware semantic tools | Optional |
-| `sympy-mcp` | Symbolic mathematics | None |
 
 ```bash
 nix build .#github-mcp
