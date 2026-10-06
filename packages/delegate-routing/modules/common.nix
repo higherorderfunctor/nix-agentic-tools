@@ -172,9 +172,8 @@ in {
           both backends, Kimchi on devenv only (Home Manager has no Kimchi hook
           file). Disable it per runtime with `runtimes.<runtime>.reminder.enable`.
 
-          The default asks the model to load the delegate-routing skill and follow
-          its always-on guidance, and grants permission for subagents, workflows and
-          deep research. That grant satisfies the "unless the user requested it"
+          The default grants permission to delegate to subagents and workflows and
+          names the delegate-routing skill to follow when it does. That grant satisfies the "unless the user requested it"
           clause of Claude Code's `heron_brook` delegation clamp, which a
           system-attributed channel was measured not to do; see
           `packages/claude-code/docs/heron-brook-clamp.md` before rewording it.

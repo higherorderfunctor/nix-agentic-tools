@@ -594,7 +594,7 @@
     );
     "module-delegate-routing-${name}-reminder" = mkTest "delegate-routing-${name}-reminder" (
       result.config.ai.programs.delegate-routing.reminder.enable
-      && hasLoadInstruction result.config.ai.programs.delegate-routing.reminder.text
+      && lib.hasInfix "delegate-routing skill" result.config.ai.programs.delegate-routing.reminder.text
       && lib.all (hasReminder result) hookRuntimes
       && lib.all (runtime: !(hasReminder result runtime)) (lib.subtractLists hookRuntimes runtimes)
       && lib.all (runtime: !(hasReminder reminderOff runtime)) runtimes
