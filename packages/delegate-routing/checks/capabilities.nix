@@ -100,11 +100,18 @@
       value = 5;
     })
   ];
-  workflow = capabilities.find "claude" "Workflow" "interactive";
   kimchi = render {
     runtime = "kimchi";
     models = defaults.models // {kimchi = [{vendors = ["anthropic"];}];};
   };
+  renders =
+    [native external kimchi]
+    ++ map (runtime: render {inherit runtime;}) ["codex" "kiro"];
+  evidence = lib.concatMap (record:
+    [record.context record.source]
+    ++ record.replay
+    ++ map (capability: capability.evidence) (builtins.attrValues record.capabilities))
+  capabilities.observations;
 in {
   checks.module-delegate-routing-capabilities = harness.mkTest "delegate-routing-capabilities" (
     # Force every shipped fixture, including observations outside the runtime catalog.
@@ -125,9 +132,8 @@ in {
     && !(lib.hasInfix "`spawn_agent`" external)
     # A changed shipped launch contract does not borrow the recorded result.
     && lib.all (text: lib.hasInfix "| unknown |" (row "Workflow" text)) changed
-    # Evidence stays in the fixtures, out of the skill.
-    && !(lib.hasInfix workflow.capabilities.runsOwnSubagents.evidence native)
-    && !(lib.hasInfix workflow.source native)
+    # Evidence stays in the fixtures, out of every runtime's skill.
+    && lib.all (text: lib.all (note: !(lib.hasInfix note text)) evidence) renders
     && lib.all (family:
       lib.hasInfix "${family.name} (${family.vendor})" (render {
         models = defaults.models // {claude = [{vendors = lib.unique (map (item: item.vendor) families);}];};
