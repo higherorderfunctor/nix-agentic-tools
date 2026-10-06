@@ -1271,6 +1271,7 @@ in
       cfg,
       config,
       extraSystemPrompt,
+      hasExtraSystemPrompt,
       hasMergedContext,
       mergedContext,
       mergedRules,
@@ -1372,7 +1373,7 @@ in
             # (`ai.codex.extraSystemPrompt.<name>.enable = false`).
             # Codex layers config files by key, so a project value replaces a
             # user-scope one rather than appending to it.
-            (lib.mkIf (extraSystemPrompt != null) {
+            (lib.mkIf hasExtraSystemPrompt {
               developer_instructions = lib.mkDefault extraSystemPrompt;
             })
             # The byte limit alone would let a raised limit pass the build
