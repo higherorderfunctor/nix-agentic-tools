@@ -2,7 +2,9 @@
 
 > **Last verified:** 2026-10-06 — one enabled "Work and review" workflow ships
 > the Subtractive standard; a runtime workflow record without text keeps the
-> portable header.
+> portable header. Delegate evidence is two parts: the map (`docs/delegates/`
+> plus `probes/delegates/`) and the acceptance suite (`eval/`); techniques
+> hand-declare `runsOwnSubagents` from map rows.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -108,6 +110,13 @@ on PATH. Introspection and usage nodes describe how to obtain live evidence.
 Usage commands remain part of the existing technique catalog. Each package field
 uses `mkDefault`; consumers can override fields, add nodes or disable a node.
 
+`runsOwnSubagents` fills the technique table's "Runs own subagents" column,
+which "Choose execution" points readers at. It is a hand-declared string,
+`"unknown"` by default; a shipped value names the mode it was seen in, such as
+`"supported (headless)"`, and a one-line comment in `lib/techniques.nix` cites
+the map row and case id that executed it. Change a value only with a map row
+behind it.
+
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
 command without a model tool; `dev/ai.nix` enables its interactive resource
@@ -150,15 +159,17 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
 
-## Planning regression suite
+## Acceptance suite
 
-`eval/` contains a manual routing simulation: named Nix cases render the actual
-delivered skill and router rule through the existing module harness. Fictional
-inventories, capabilities and executed usage mocks provide the observations;
-independent expected tuples stay out of prompts. Pool cases consume this
-worktree's house rule sources. Child-support observations are synthetic test
-configuration, not measurements of real runtimes. Missing-usage fallback remains
-a partial expectation until its policy is decided.
+`eval/` is the acceptance suite: it checks what the delivered skill makes an
+agent decide. Named Nix cases render the actual delivered skill and router rule
+through the existing module harness. Fictional inventories, capabilities and
+executed usage mocks provide the observations; independent expected tuples stay
+out of prompts. Pool cases consume this worktree's house rule sources. Only the
+review cases enable "Work and review"; the rest disable it so they test routing
+alone. Child-support observations are synthetic test configuration, not
+measurements of real runtimes. Missing-usage fallback remains a partial
+expectation until its policy is decided.
 
 `eval/run.py` renders without authentication and grades strict saved JSON plans
 against `eval/plan.schema.json`; `eval/rubric.md` owns prose criteria and
@@ -184,7 +195,7 @@ The vendor structural check renders every variant without starting a runtime.
 See the evaluation guide for safety preflight requirements, provenance, paired
 comparisons and paid-turn counts.
 
-## Delegate decision reference
+## Delegate map
 
 `docs/delegates/evidence.md` owns pins, evidence marks and capture methods. The
 other reference files own tools, controls, lifecycle and prompt reach.
@@ -192,3 +203,7 @@ other reference files own tools, controls, lifecycle and prompt reach.
 excerpts. Captured execution and source-only evidence stay separate. Probes
 write beneath a temporary case tree; Kiro needs an operator-supplied fixture
 home because this probe set does not define its serialized login schema.
+
+The repo-only `delegate-evidence` dev skill (`dev/skills/delegate-evidence/`)
+sends agents to the map and the suite before they state harness behavior or
+debug the skill.
