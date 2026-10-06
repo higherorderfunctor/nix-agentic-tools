@@ -1,9 +1,21 @@
 # gh — the GitHub CLI, re-pinned onto this repo's update cadence. A thin
 # `overrideAttrs` over nixpkgs' own `buildGoModule` derivation: only
-# `version`, `src`, `vendorHash` and `passthru` move, so nixpkgs' Makefile
-# build, its manpages and shell completions, the
-# `--set-default GH_TELEMETRY false` wrapper, `__structuredAttrs` and
-# `doCheck = false` all stay exactly as shipped.
+# `version`, `src`, `vendorHash` and `passthru` move. Everything else is
+# inherited as nixpkgs ships it, and so changes when nixpkgs changes it: the
+# Makefile build, manpages and shell completions, the
+# `--set-default GH_TELEMETRY false` wrapper, `__structuredAttrs`,
+# `separateDebugInfo`, the `go test ./...` check phase (nixpkgs 3631052940
+# turned `doCheck` on; it used to be off) and the versionCheckHook install
+# check.
+#
+# One upstream behavior is NOT inherited. nixpkgs' `src` carries a
+# `postCheckout` that writes `SOURCE_DATE_EPOCH` into the tree, which makes
+# it a git fetch; its `postPatch` reads that file for `gh --version`'s build
+# date. Our `src` is the tag's archive tarball, which the updateScript can
+# prefetch, so that file is absent, `SOURCE_DATE_EPOCH` is exported empty,
+# and script/build.go falls back to `time.Now()`: `gh --version` shows the
+# day the package was built, not the tag's commit date. This predates the
+# `fetchFromGitHub` switch; the fetchzip `src` behaved the same.
 #
 # TWO hashes here, unlike the Rust packages in this directory. A Go
 # package's vendor set is not derivable from a lockfile the way
@@ -43,17 +55,22 @@
 # not been root-caused. The old claim predated that measurement.
 #
 # Supporting package; its public role is encoded by the native recipe tree.
-# earmarked repo split can lift the subtree whole.
 {
   pkgs,
   packageLib,
   repoPath,
   ...
 }: let
-  inherit (pkgs) fetchzip lib;
+  inherit (pkgs) fetchFromGitHub lib;
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
+
+  # The release tags `src` fetches and the updateScript resolves, stated
+  # once for both.
+  owner = "cli";
+  repo = "cli";
+  tagPrefix = "v";
 
   # One mutable source path shared by the vendor fixer and update script.
   sourcesFile = repoPath ../../../../sources.json;
@@ -85,9 +102,23 @@ in
     pkgs.gh)
   .overrideAttrs (prev: {
     inherit (sources) version;
-    # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
-    # why the updateScript below prefetches with --unpack.
-    src = fetchzip {inherit (sources.src) url hash;};
+    # fetchFromGitHub with `tag`, the same shape as nixpkgs' own `src`, so
+    # the upstream expression's `finalAttrs.src.*` reads keep resolving:
+    # its `meta.changelog` interpolates `finalAttrs.src.tag`, and nix-update
+    # forces that field on every sweep. A bare fetchzip has no `tag`, which
+    # held the gh lane back once nixpkgs 6cce080774 started reading it.
+    # `checks/packaging/update-target-meta-eval.nix` now fails CI when a
+    # field nix-update reads stops evaluating.
+    #
+    # Without `postCheckout` this is fetchzip of the tag's archive tarball,
+    # so the hash is over the UNPACKED NAR — exactly what the updateScript
+    # below records with --unpack. The sidecar's `url` names the same
+    # tarball under its short `archive/v<version>` form and is not read.
+    src = fetchFromGitHub {
+      inherit owner repo;
+      tag = "${tagPrefix}${sources.version}";
+      inherit (sources.src) hash;
+    };
     vendorHash = sources.vendorHash or lib.fakeHash;
 
     # Merge, never replace: buildGoModule hangs `goModules` and
@@ -106,8 +137,8 @@ in
           extraExtract = "${goUpdate.extract}";
           inherit pkgs;
           pname = "gh";
-          repo = "cli/cli";
-          inherit sourcesFile;
+          repo = "${owner}/${repo}";
+          inherit sourcesFile tagPrefix;
         };
       };
   })

@@ -1,0 +1,86 @@
+# Every update target must survive nix-update's own evaluation of it.
+#
+# nix-update starts every package update with
+# `nix-instantiate --eval --json --strict nix_update/eval.nix`, which reads a
+# fixed set of fields off the package (`meta.changelog`, `src.tag`,
+# `goModules.outputHash`, ...) and forces every one. Builds and the rest of
+# `nix flake check` never force most of them, so a package can build green
+# and still fail every sweep. That happened to gh: nixpkgs 6cce080774 made
+# its `meta.changelog` read `finalAttrs.src.tag`, our fetchzip `src` had no
+# `tag`, and the lock bump merged green while the gh lane was held back with
+# "attribute 'tag' missing".
+#
+# The field list is NOT restated here. This evaluates the pinned nix-update
+# input's own eval.nix against each target, with the arguments its eval.py
+# passes for what update-pkg.sh hands it (`--flake ciPackages.<system>.<name>
+# --system <system>` plus the target's `flags`):
+#
+# - `isFlake = true`, as `--flake` sets. eval.nix then calls `getFlake`,
+#   which pure evaluation cannot, so `scopedImport` gives it a `builtins`
+#   whose `getFlake` returns this flake with `ciPackages.<system>` swapped
+#   for the set under test. eval.nix looks the target up where nix-update
+#   does: not in `packages.<system>`, so at the flake root.
+# - `sanitizePositions = !override_filename`, read from the same
+#   `updateTargets.<name>.flags` update-pkg.sh receives. Without
+#   `--override-filename`, eval.nix requires the target's `src` (or
+#   `version`) position to lie inside the flake, and throws otherwise.
+#
+# `toJSON` forces the result as deeply as `--json --strict` does. Its string
+# context is discarded so the check stays eval-only: a field such as a cargo
+# lockfile path can carry a derivation's context, and keeping it would make
+# this check build that derivation.
+#
+# The report forces every target WITHOUT `tryEval`, so a broken target fails
+# evaluation of every check on that system (lib/facets.nix collects them into
+# one attrset), with the target named in the error context. (`tryEval` would
+# not help there anyway: it catches `throw` and `assert`, not a missing
+# attribute.) The positive control below rigs one real target with a `throw`ing
+# `meta.changelog`, which `tryEval` does catch, to prove the same evaluation
+# path reaches the field.
+{
+  inputs,
+  lib,
+  pkgs,
+  self,
+  splitUpdateTargets,
+  ...
+}: {
+  checks.update-target-meta-eval = let
+    inherit (pkgs.stdenv.hostPlatform) system;
+    packages = self.ciPackages.${system};
+    presentTargets = (splitUpdateTargets self.updateTargets).present;
+
+    forced = set: name:
+      builtins.addErrorContext "while evaluating update target '${name}' the way nix-update's eval.nix does"
+      (builtins.unsafeDiscardStringContext (builtins.toJSON (
+        builtins.scopedImport {
+          builtins = builtins // {getFlake = _: self // {ciPackages = self.ciPackages // {${system} = set;};};};
+        } "${inputs.nix-update}/nix_update/eval.nix" {
+          attribute = builtins.toJSON ["ciPackages" system name];
+          importPath = self.outPath;
+          flakeImportPath = self.outPath;
+          isFlake = true;
+          sanitizePositions = !(builtins.elem "--override-filename" presentTargets.${name}.flags);
+          inherit system;
+        }
+      )));
+
+    # Positive control: one real target with a throwing meta.changelog must
+    # fail the same evaluation.
+    controlName = builtins.head (builtins.attrNames presentTargets);
+    controlPackages =
+      packages
+      // {
+        ${controlName} = packages.${controlName}.overrideAttrs (prev: {
+          meta = (prev.meta or {}) // {changelog = throw "positive control";};
+        });
+      };
+    controlCaught = !(builtins.tryEval (forced controlPackages controlName)).success;
+  in
+    assert lib.assertMsg (presentTargets != {}) "update-target-meta-eval: no update target is in ciPackages.${system}";
+    assert lib.assertMsg controlCaught
+    "update-target-meta-eval: rigging ${controlName}.meta.changelog to throw did not fail nix-update's evaluation; the check cannot fail";
+      pkgs.writeText "update-target-meta-eval" (
+        lib.concatMapStrings (name: "  ok  ${name}: ${forced packages name}\n") (builtins.attrNames presentTargets)
+      );
+}

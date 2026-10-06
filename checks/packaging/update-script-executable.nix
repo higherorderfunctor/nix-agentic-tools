@@ -19,6 +19,7 @@
   lib,
   pkgs,
   self,
+  splitUpdateTargets,
   ...
 }: {
   checks.update-script-executable = let
@@ -31,8 +32,9 @@
     scriptTargets = lib.filterAttrs (_: target: builtins.elem "--use-update-script" target.flags) self.updateTargets;
     # A target absent from this system's package set is not run here; list it
     # instead of dropping it silently.
-    absentTargets = builtins.filter (name: !(builtins.hasAttr name packages)) (builtins.attrNames scriptTargets);
-    presentTargets = lib.filterAttrs (name: _: builtins.hasAttr name packages) scriptTargets;
+    scriptTargetsHere = splitUpdateTargets scriptTargets;
+    absentTargets = scriptTargetsHere.absent;
+    presentTargets = scriptTargetsHere.present;
     missingScripts = builtins.filter (name: !(packages.${name} ? updateScript)) (builtins.attrNames presentTargets);
 
     # Builds the "name<TAB>argv0" table the check's shell loop consumes, from
