@@ -30,12 +30,13 @@
 # lockfile path can carry a derivation's context, and keeping it would make
 # this check build that derivation.
 #
-# A field that throws cannot be caught here — `tryEval` does not catch a
-# missing attribute — so a broken target fails evaluation of every check on
-# that system (lib/facets.nix collects them into one attrset), with the
-# target named in the error context. The positive control below rigs one real
-# target with a throwing `meta.changelog` and confirms the same evaluation
-# path reaches it.
+# The report forces every target WITHOUT `tryEval`, so a broken target fails
+# evaluation of every check on that system (lib/facets.nix collects them into
+# one attrset), with the target named in the error context. (`tryEval` would
+# not help there anyway: it catches `throw` and `assert`, not a missing
+# attribute.) The positive control below rigs one real target with a `throw`ing
+# `meta.changelog`, which `tryEval` does catch, to prove the same evaluation
+# path reaches the field.
 {
   inputs,
   lib,
