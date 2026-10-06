@@ -260,8 +260,8 @@ inside the required `test` job without evaluating or building Nix themselves.
 ## Fragment Pipeline Architecture
 
 > **Last verified:** 2026-10-05 — delegate-routing's always-on entries ride
-> `ai.extraSystemPrompt`, not `ai.rules`; stacked-workflows' router is still a
-> rule.
+> `ai.extraSystemPrompt` for Claude, Codex and Kimchi; Kiro retains an always-on
+> `ai.rules` entry, as does stacked-workflows' router.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -434,17 +434,18 @@ them.
 - **Monorepo profile vs scoped profile differs semantically**. Only `monorepo`
   gets commonFragments. Scoped categories are intentionally lean. The
   stacked-workflow routing rule is a separate `ai.*` rule and delegate-routing's
-  always-on entries are an `ai.*` system-prompt addition, never orientation
-  text. Don't "fix" this by re-adding commonFragments — that's the context-rot
-  bug that was removed.
+  always-on entries are an `ai.*` system-prompt addition for Claude, Codex and
+  Kimchi, and an always-on rule for Kiro. They are never orientation text. Don't
+  "fix" this by re-adding commonFragments — that's the context-rot bug that was
+  removed.
 
 <!-- Fragment: dev/fragments/pipeline/generation-architecture.md -->
 
 ## Generation Architecture
 
 > **Last verified:** 2026-10-05 — delegate-routing's always-on entries ride
-> `ai.<runtime>.extraSystemPrompt`; stacked-workflows' router is still a root
-> rule.
+> `ai.<runtime>.extraSystemPrompt` for Claude, Codex and Kimchi; Kiro retains an
+> always-on rule, as does stacked-workflows' router.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -494,8 +495,9 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
   the orientation.
 - `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the
   always-on routing guidance, delivered through `ai.*` rather than inlined into
-  the orientation: delegate-routing as a per-runtime `extraSystemPrompt` entry,
-  stacked-workflows as a root rule.
+  the orientation: delegate-routing as a per-runtime `extraSystemPrompt` entry
+  for Claude, Codex and Kimchi and an always-on rule for Kiro; stacked-workflows
+  as a root rule.
 - `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 
 ### Committed files and the drift check
