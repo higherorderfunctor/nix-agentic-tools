@@ -7,10 +7,9 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-05 — capability observations cite publishable
-> evidence; the manual evaluation suite renders delivered policy through the
-> module harness, the vendor set covers Claude switch pairs and one Kiro case
-> per task shape, and model turns stay outside structural checks.
+> **Last verified:** 2026-10-06 — delegate reference separates evidence
+> strengths and indexes prompt-map captures; probe scratch stays outside the
+> checkout.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -233,3 +232,12 @@ observed sources are distinguished from hidden vendor text, which stays UNKNOWN.
 The vendor structural check renders every variant without starting a runtime.
 See the evaluation guide for safety preflight requirements, provenance, paired
 comparisons and paid-turn counts.
+
+## Delegate decision reference
+
+`docs/delegates/evidence.md` owns pins, evidence marks and capture methods. The
+other reference files own tools, controls, lifecycle and prompt reach.
+`probes/delegates/<harness>/README.md` indexes exact case commands and expected
+excerpts. Captured execution and source-only evidence stay separate. Probes
+write beneath a temporary case tree; Kiro needs an operator-supplied fixture
+home because this probe set does not define its serialized login schema.
