@@ -1943,6 +1943,9 @@
       "httpHookAllowedEnvVars[]": {
         "type": "string"
       },
+      "idleCompaction": {
+        "type": "boolean"
+      },
       "includeCoAuthoredBy": {
         "type": "boolean"
       },
@@ -3431,6 +3434,7 @@
       "gcpAuthRefresh",
       "hooks",
       "httpHookAllowedEnvVars",
+      "idleCompaction",
       "includeCoAuthoredBy",
       "includeGitInstructions",
       "inputNeededNotifEnabled",
