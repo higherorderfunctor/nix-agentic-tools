@@ -199,7 +199,7 @@
     alwaysDisabled = change {
       ai.programs.delegate-routing.routing = {
         "Load delegate-routing".enable = false;
-        "Verify the result".enable = false;
+        "Validate the result".enable = false;
       };
     };
     workflowInserted = change {
@@ -505,16 +505,16 @@
     );
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
-      == ["Choose execution" "Follow the request" "Load delegate-routing" "Size the work" "Verify the result"]
+      == ["Choose execution" "Follow the request" "Load delegate-routing" "Size the work" "Validate the result"]
       && !routingDefaults."Orchestrator session".enable
       && routingDefaults."Load delegate-routing".always
-      && routingDefaults."Verify the result".always
+      && routingDefaults."Validate the result".always
       && ordered claude ["Follow the request" "Size the work" "Choose execution"]
       && lib.hasInfix "## Routing" claude
       && hasLoadInstruction stub
-      && lib.hasInfix "### Verify the result" stub
+      && lib.hasInfix "### Validate the result" stub
       && !(lib.hasInfix "### Load delegate-routing" claude)
-      && !(lib.hasInfix "### Verify the result" claude)
+      && !(lib.hasInfix "### Validate the result" claude)
       && !(lib.hasInfix "### Size the work" stub)
       && !(lib.hasInfix "## Common workflows" claude)
       && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)
@@ -547,11 +547,11 @@
       && lib.hasInfix "### ${workflowName}" (readSkill workflowEnabled "claude")
       && lib.hasInfix "### ${workflowName}" (readSkill runtimeCatalogEnabled "claude")
       && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogEnabled "claude")
-      && lib.hasInfix "4. **Rounds:**" (readSkill runtimeCatalogEnabled "claude")
+      && lib.hasInfix "3. **Loop:**" (readSkill runtimeCatalogEnabled "claude")
       && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeCatalogEnabled "codex"))
       && lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "claude")
       && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogHeader "claude")
-      && lib.hasInfix "4. **Rounds:**" (readSkill runtimeCatalogHeader "claude")
+      && lib.hasInfix "3. **Loop:**" (readSkill runtimeCatalogHeader "claude")
       && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "codex"))
       && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "claude"))
       && lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "codex")

@@ -32,10 +32,10 @@ in {
       after = ["Follow the request"];
       source = ../fragments/size-the-work.md;
     };
-    "Verify the result" = {
+    "Validate the result" = {
       after = ["Choose execution"];
       always = true;
-      source = ../fragments/verify-the-result.md;
+      source = ../fragments/validate-the-result.md;
     };
   };
   workflows = {
@@ -48,12 +48,8 @@ in {
           source = ../fragments/review-one-reviewer.md;
         }
         {
-          name = "Judge findings";
-          source = ../fragments/review-judge-findings.md;
-        }
-        {
-          name = "Rounds";
-          source = ../fragments/review-one-reviewer-rounds.md;
+          name = "Loop";
+          source = ../fragments/review-loop.md;
         }
       ];
     };
@@ -74,8 +70,8 @@ in {
           source = ../fragments/review-judge.md;
         }
         {
-          name = "Rounds";
-          source = ../fragments/review-disputed-rounds.md;
+          name = "Loop";
+          source = ../fragments/review-loop.md;
         }
       ];
     };
