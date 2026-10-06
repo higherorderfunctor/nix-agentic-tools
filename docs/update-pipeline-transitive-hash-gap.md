@@ -389,9 +389,10 @@ What the build actually catches, and what now happens:
 
 - **Mode C** — `pythonRuntimeDepsCheckHook` fires during the build's
   `pypaBuildPhase` follow-up and fails with the exact dep-floor message we saw
-  on #144. Every hash resolved, so the PR is writable: it opens RED and the
-  sweep emits a `::warning::`. Holding it back would have parked it for the four
-  to eight weeks the upstream dep floors needed, invisibly.
+  on #144. Every hash resolved, so the PR is writable: it opens RED, and once it
+  is published the lane fails with an `::error::` naming the failed attributes
+  and the PR. Holding it back would have parked it for the four to eight weeks
+  the upstream dep floors needed, invisibly.
 - **Mode D** — the build hits `ERR_PNPM_NO_OFFLINE_TARBALL` because the FOD
   output does not match. This one IS a hash we could not produce, so it still
   holds back — provided a fixer exists for that package. Kimchi now declares

@@ -9,6 +9,10 @@ gh auth setup-git --hostname github.com
 
 base_head="$UPDATE_BASE_SHA"
 : >"$RUNNER_TEMP/touched-branches"
+# The PR this run opened, refreshed or kept, for the post-publication verdict
+# (update-matrix.py verdict) to name when the target's build verification
+# failed. Empty when no PR was published for this target.
+: >"$RUNNER_TEMP/published-pr"
 # A held-back target has not disproved the usefulness of its existing PR.
 case $(jq -er .status "$RUNNER_TEMP/prepared.json") in
 "HELD BACK")
@@ -157,6 +161,10 @@ arm_auto_merge() {
     gh pr merge "$arm_pr" --disable-auto || echo "::warning::Could not confirm auto-merge is disabled on $arm_pr."
     return 1
   fi
+}
+
+record_published_pr() {
+  printf '%s\n' "$1" >"$RUNNER_TEMP/published-pr"
 }
 
 preserve_unverified_head() {
@@ -380,6 +388,7 @@ git branch --list "update/$UPDATE_TARGET" | while read -r branch; do
     # file, so a silent skip would make the pipeline close its
     # own valid PR and recreate it on the next run.
     echo "$branch" >>"$RUNNER_TEMP/touched-branches"
+    record_published_pr "${GITHUB_SERVER_URL:-https://github.com}/$GITHUB_REPOSITORY/pull/$existing_pr"
     if [ "$human_auto_merge_hold" -eq 0 ]; then
       arm_auto_merge "$existing_pr" "$branch" "$observed_head"
     fi
@@ -395,6 +404,7 @@ git branch --list "update/$UPDATE_TARGET" | while read -r branch; do
   if [ -n "$existing_pr" ]; then
     gh pr edit "$existing_pr" --title "$subject"
     echo "PR #$existing_pr updated for $branch"
+    record_published_pr "${GITHUB_SERVER_URL:-https://github.com}/$GITHUB_REPOSITORY/pull/$existing_pr"
     # Re-arm unless a human explicitly disabled it. Automatic conflict
     # disables and PRs opened before auto-merge existed still self-heal.
     if [ "$human_auto_merge_hold" -eq 0 ]; then
@@ -418,6 +428,7 @@ EOF
       --title "$subject" \
       --body-file "$RUNNER_TEMP/pr-body.md"); then
       echo "PR created for $branch: $pr_url"
+      record_published_pr "$pr_url"
       arm_auto_merge "$pr_url" "$branch" "$wt_head"
     else
       echo "PR creation failed for $branch"

@@ -7,7 +7,9 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-04 — discovery selects the absolute root
+> **Last verified:** 2026-10-06 — a worker whose input build verification failed
+> publishes its PR, uploads its receipt, then fails in
+> `Fail on failed build verification`; discovery selects the absolute root
 > `.#.updateTargets` with IFD disabled, before any package workers run.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
@@ -48,7 +50,11 @@ build (`NAT_UPDATE_VERIFY_PACKAGES=0`). Hash derivation and embedded-file
 extraction still run before publication. Input workers retain build verification
 and its hash-repair pass because those repairs can mutate the prepared branch. A
 writable update may open with failing build checks; an incomplete update is held
-back and its existing PR is preserved.
+back and its existing PR is preserved. A worker whose build verification failed
+still publishes and arms auto-merge, uploads its receipt, and then fails in
+`Fail on failed build verification` (`update-matrix.py verdict`) with an
+`::error::` naming the target, failed attributes and PR. The required checks
+keep auto-merge from landing that PR.
 
 `update-matrix.py` requires a normal target return and exactly one final report
 before permitting publication. An early rev/source commit alone proves nothing:
@@ -555,16 +561,15 @@ are ignored.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-04 — root metadata reads use absolute
-> `.#.updateTargets` paths to avoid package namespace lookup; every pipeline
-> read of a package by name goes through `ciPackages` (`nat_attr`, `ciAttr`);
-> rev bumps prefetch with the package's own fetcher mode (archive or fetchgit,
-> read from the evaluated `src`); rev-tracked Go packages refresh recipe-owned
-> floor literals before nix-update; both update paths regenerate committed
-> sidecars through `passthru.regenerateExtracted`: an input bump for every
-> package that input owns, a package target (rev bump or nix-update) for the
-> package itself; the hardcoded Semble block is gone. `--use-update-script` rows
-> must resolve `updateScript` to an executable file, gated by
+> **Last verified:** 2026-10-06 — a writable update whose build verification
+> fails still publishes its PR, and its CI lane then fails with `::error::`
+> (`record_verify_failure` → receipt `verifyFailed` →
+> `update-matrix.py verdict`); root metadata reads use absolute
+> `.#.updateTargets` paths; every pipeline read of a package by name goes
+> through `ciPackages` (`nat_attr`, `ciAttr`); rev bumps prefetch with the
+> package's own fetcher mode; both update paths regenerate committed sidecars
+> through `passthru.regenerateExtracted`; `--use-update-script` rows must
+> resolve `updateScript` to an executable file, gated by
 > `checks.update-script-executable`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
@@ -572,7 +577,9 @@ are ignored.
 > package — measured on PR #1527, red from 2026-09-07 to 2026-09-09 on a single
 > `versionCheckHook` mismatch — and it makes the sweep, not the PR list, the
 > thing a human has to poll. The Renovate shape is: the bot writes the change,
-> branch CI judges it.
+> branch CI judges it. A lane that published such a PR still goes red (decided
+> 2026-10-06, after sweep 37463596606 read green while pnpm_12 failed on the
+> nixpkgs lane under a `::warning::`).
 >
 > Full lineage: `git show ed5898b1:dev/fragments/pipeline/update-pipeline.md`.
 
@@ -826,21 +833,41 @@ Every target writes exactly one line to `.update-report.txt`:
 
 One rule: **hold back only when the PR cannot be written.**
 
-| Failure                             | PR writable?                                  | Outcome                                        |
-| ----------------------------------- | --------------------------------------------- | ---------------------------------------------- |
-| `nix flake update` fails            | no — no lock to commit                        | `HELD BACK`                                    |
-| source prefetch is incomplete       | no — source hash/markers are unresolved       | `HELD BACK`                                    |
-| a dependency hash cannot be derived | no — the PR needs a value that does not exist | `HELD BACK`                                    |
-| verifier setup cannot start         | no — validation never ran                     | `HELD BACK`                                    |
-| verifier result coverage incomplete | no — validation may have terminated early     | `HELD BACK`                                    |
-| formatter errors                    | no — tree left non-canonical                  | `HELD BACK`                                    |
-| `git add` / `git commit` fails      | no                                            | `HELD BACK`                                    |
-| everything written, build fails     | **yes**                                       | `UPDATED` — red PR, `::warning::` in the sweep |
+| Failure                             | PR writable?                                  | Outcome                             |
+| ----------------------------------- | --------------------------------------------- | ----------------------------------- |
+| `nix flake update` fails            | no — no lock to commit                        | `HELD BACK`                         |
+| source prefetch is incomplete       | no — source hash/markers are unresolved       | `HELD BACK`                         |
+| a dependency hash cannot be derived | no — the PR needs a value that does not exist | `HELD BACK`                         |
+| verifier setup cannot start         | no — validation never ran                     | `HELD BACK`                         |
+| verifier result coverage incomplete | no — validation may have terminated early     | `HELD BACK`                         |
+| formatter errors                    | no — tree left non-canonical                  | `HELD BACK`                         |
+| `git add` / `git commit` fails      | no                                            | `HELD BACK`                         |
+| everything written, build fails     | **yes**                                       | `UPDATED` — red PR, then a red lane |
 
 The last row is the whole point. A bump whose hashes all resolved is a complete,
 committable change; that it does not build is a fact about the code, and the six
 required checks on the PR are what report it. Withholding the PR there converts
 a visible red check into an invisible line in a sweep log.
+
+Publishing it is not the same as calling it green, though. The target calls
+`record_verify_failure` (`update-common.sh`), which writes the failed attributes
+to `.update-logs/verify-failed-<name>.txt`; `update-matrix.py prepare` copies
+them into the receipt as `verifyFailed`. The worker then publishes and arms
+auto-merge as usual, uploads its receipt, and only then runs
+`update-matrix.py verdict`, which fails the lane with an `::error::` naming the
+target, the failed attributes and the PR. Other lanes keep running
+(`fail-fast: false`) and `cleanup` still collects every receipt. A sweep with a
+red-build PR is therefore red, where it used to stay green behind a
+`::warning::`.
+
+In CI only input lanes verify; package lanes run with
+`NAT_UPDATE_VERIFY_PACKAGES=0` and leave the build to native PR CI, so they
+never record a failure. Local Ninja has no verdict step: the record's red log
+line is its signal.
+
+Hold-backs publish no new PR and are unchanged: the first one warns and stays
+green, and `Escalate repeated hold-backs` fails `cleanup` on the second
+consecutive sweep (see `ci-update-workflow.md`).
 
 **Errexit must stay ARMED inside a target body, and that is a property of the
 SHAPE.** Bash disables `errexit` for any command whose status it tests — an `if`

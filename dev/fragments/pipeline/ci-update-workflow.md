@@ -1,6 +1,8 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-04 — discovery selects the absolute root
+> **Last verified:** 2026-10-06 — a worker whose input build verification failed
+> publishes its PR, uploads its receipt, then fails in
+> `Fail on failed build verification`; discovery selects the absolute root
 > `.#.updateTargets` with IFD disabled, before any package workers run.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
@@ -41,7 +43,11 @@ build (`NAT_UPDATE_VERIFY_PACKAGES=0`). Hash derivation and embedded-file
 extraction still run before publication. Input workers retain build verification
 and its hash-repair pass because those repairs can mutate the prepared branch. A
 writable update may open with failing build checks; an incomplete update is held
-back and its existing PR is preserved.
+back and its existing PR is preserved. A worker whose build verification failed
+still publishes and arms auto-merge, uploads its receipt, and then fails in
+`Fail on failed build verification` (`update-matrix.py verdict`) with an
+`::error::` naming the target, failed attributes and PR. The required checks
+keep auto-merge from landing that PR.
 
 `update-matrix.py` requires a normal target return and exactly one final report
 before permitting publication. An early rev/source commit alone proves nothing:
