@@ -18,14 +18,14 @@
     ln -s ${stubBin} "$out/bin/kiro-cli"
     ln -s ${stubBin} "$out/bin/kiro-cli-chat"
   '';
-  # One tweak per mode, so each flag is rendered both on and off.
+  # Individual and combined modes exercise flag selection and partial drift.
   launchers = pkgs.writeText "kiro-bundle-patch-launchers.json" (builtins.toJSON (
     lib.mapAttrs (_: tweaks: let
       bundleMaterializer = materializer ({cliVersion = "1.0.0";} // tweaks);
     in {
       identity = tweaks.identity or null;
       materializer = lib.getExe bundleMaterializer;
-      strip = tweaks.stripVendorWorktreeSteering or false;
+      replace = tweaks.replace or [];
       wrapper = (import ../lib/wrapPackage.nix {inherit lib pkgs;}).wrapPackage {
         inherit bundleMaterializer;
         package = stub;
@@ -33,8 +33,13 @@
         v3 = false;
       };
     }) {
+      combined = {
+        inherit identity;
+        replace = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+      };
       identity = {inherit identity;};
-      worktree = {stripVendorWorktreeSteering = true;};
+      relativeFileCheckPaths = {replace = ["relativeFileCheckPaths"];};
+      stripVendorWorktreeSteering = {replace = ["stripVendorWorktreeSteering"];};
     }
   ));
 in {

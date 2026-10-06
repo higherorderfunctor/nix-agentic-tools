@@ -1,9 +1,9 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-05 — `ai.kiro.tweaks` holds the opt-in bundle
-> patches, all off by default; cache publication is locked per key and failed
-> materialization clears inherited bundle overrides. The v3 trust-flag conflict
-> measurements below remain from kiro-cli 2.24.1.
+> **Last verified:** 2026-10-06 — opt-in bundle replacements apply independently
+> and cached partial patches replay their skip warnings;
+> `relativeFileCheckPaths` keeps the stop-condition file workspace-relative for
+> writer and check. No successful replacement means stock launch.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -103,9 +103,9 @@ Two different rules, for two different reasons — do not "make them consistent"
 `ai.kiro.tweaks` adds a third thing the wrapper does. It is deliberately not in
 the table above, because it is not argv at all:
 
-| Binary                         | Variable               | When                                                             |
-| ------------------------------ | ---------------------- | ---------------------------------------------------------------- |
-| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `tweaks.identity.enable` or `tweaks.stripVendorWorktreeSteering` |
+| Binary                         | Variable               | When                                                                                              |
+| ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `tweaks.identity.enable`, `tweaks.relativeFileCheckPaths` or `tweaks.stripVendorWorktreeSteering` |
 
 Four properties worth knowing before touching it:
 
@@ -122,31 +122,42 @@ Four properties worth knowing before touching it:
   `tweaks.stripVendorWorktreeSteering` (default false) removes the vendor
   paragraph assigning worktree setup and a `mainline` fast-forward to workflows,
   for repositories whose own instructions supply the git workflow.
+  `tweaks.relativeFileCheckPaths` (default false) replaces the vendor workflow
+  paragraph that requires absolute stop-condition paths. The step writes the
+  stop-condition file, and `fileCheck.path` checks it, at the same plain path
+  relative to the workflow workspace root, without templates or an absolute
+  worktree prefix. Every other file in a step prompt keeps the absolute-path
+  guidance.
 - **It is computed at LAUNCH, not at eval.** The value is the stdout of a
   materializer that resolves the installed engine bundle, applies selected
   exact-byte replacements to a mirrored copy, and caches the result. The engine
   bundle is unpacked from the binary on first use and never lands in the nix
   store, so there is nothing to point at until the CLI has run once — on a fresh
   machine the first launch is legitimately unpatched.
-- **It FAILS OPEN.** The materializer writes a reason to stderr and exits
-  non-zero when it cannot resolve a bundle or any selected source text occurs
-  zero or multiple times. A warning names the missed replacement (`identity` or
-  `worktree`). The wrapper clears any inherited `KIRO_KAS_SERVER_PATH` and
-  starts Kiro with the stock bundle. That is a deliberate asymmetry with the
-  argv injections, which cannot fail: refusing to start would let a vendor
-  reshuffle brick the CLI over a cosmetic prompt edit. The stderr line is what
-  keeps it from being SILENT.
+- **It FAILS OPEN per replacement.** A source that occurs zero or multiple times
+  is skipped with a warning naming it (`identity`, `relativeFileCheckPaths` or
+  `stripVendorWorktreeSteering`). Healthy replacements still apply and the
+  wrapper uses the patched copy when at least one succeeds. The cached copy
+  keeps those warnings and replays them on every later launch. If none apply, or
+  bundle resolution or materialization fails, the wrapper clears any inherited
+  `KIRO_KAS_SERVER_PATH` and starts Kiro with the stock bundle. That is a
+  deliberate asymmetry with the argv injections, which cannot fail: refusing to
+  start would let a vendor reshuffle brick the CLI over a cosmetic prompt edit.
+  The stderr line is what keeps it from being SILENT. CI fails closed for each
+  source: every supported replacement must match exactly once in the pinned
+  bundle.
 
 Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`. Its cache
 key covers the engine bundle, selected replacements and patcher source. The
 small replacement list in `kiro-bundle-patch.py` pins the exact identity
-sentence and escaped worktree paragraph from the vendor's JavaScript. One
-function checks each source occurs exactly once and replaces it; it does not
-parse function names or decode the steering block. Bytes outside those sources
-stay unchanged. A failed patch never marks the cache ready. A per-key lock sits
-outside the rebuilt directory and covers the readiness check through
-publication, so concurrent launches cannot delete a bundle already returned to
-another launch.
+sentence, workflow file-check paragraph and escaped worktree paragraph from the
+vendor's JavaScript. One function checks each source against the original bytes
+and replaces each unique match; it does not parse function names or decode the
+steering block. Bytes outside those sources stay unchanged. A materialization
+with no successful replacement never marks the cache ready; a partial one stores
+its skip warnings in `.skipped` beside `.ready`. A per-key lock sits outside the
+rebuilt directory and covers the readiness check through publication, so
+concurrent launches cannot delete a bundle already returned to another launch.
 
 `kiro-bundle-patch` checks byte preservation, missing and duplicate sources,
 JavaScript execution, cache reuse, concurrent launch publication and warnings
