@@ -132,6 +132,21 @@ in {
           };
         };
       };
+      runtimes = {
+        claude = {
+          extraRuntimes = ["codex"];
+          manualExternalDelegates = ["kimchi" "kiro"];
+          roles.default = defaultDelegateRole;
+        };
+        codex.roles.default = defaultDelegateRole;
+        kimchi.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
+        # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
+        # only, and not Fable, which this account does not have.
+        kiro = {
+          models = [{families = ["haiku" "opus" "sonnet"];}];
+          roles.default = defaultDelegateRole;
+        };
+      };
       # Enable the package's own guidance here because this repository is its primary consumer.
       whenToDelegate = {
         "Launch independent work together".enable = true;
@@ -261,15 +276,9 @@ in {
           "Read(dev/references/**)"
         ];
       };
-      programs.delegate-routing = {
-        extraRuntimes = ["codex"];
-        manualExternalDelegates = ["kimchi" "kiro"];
-        roles.default = defaultDelegateRole;
-      };
     };
     codex = {
       enable = true;
-      programs.delegate-routing.roles.default = defaultDelegateRole;
       # AGENTS.md carries the whole orientation plus the path-scoped index,
       # well past Codex's 32 KiB default. `ai.*` fails the build of the
       # Markdown tree holding AGENTS.md (its install check) above this limit,
@@ -297,16 +306,9 @@ in {
       native.harnessSettings.resources = {
         "extensions.ferment-v2" = true;
       };
-      programs.delegate-routing.models = [{vendors = ["deepseek" "minimax" "moonshot" "nvidia" "zhipu"];}];
     };
     kiro = {
       enable = true;
-      # Operator choice: GPT models cost more credits on Kiro, so select Anthropic
-      # only, and not Fable, which this account does not have.
-      programs.delegate-routing = {
-        models = [{families = ["haiku" "opus" "sonnet"];}];
-        roles.default = defaultDelegateRole;
-      };
       mcpServers.agnix = agnixMcp;
       # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
       # a launcher-global option, so it reaches every subcommand including

@@ -1,63 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-01 — shared internal trees run root surface checks;
-> all factory-generated entries carry surface stamps, including Codex permission
-> rules under `settings`. Agents are layered: root `ai.agents` takes only the
-> normalized record, `ai.<runtime>.agents` a normalized record or a raw native
-> file, and a runtime record's `agentNativeType` + `agentTransformer` lower
-> normalized records into typed `ai.<runtime>.native.agents` (Kiro and Codex
-> today); callbacks get `rawAgents` and `nativeAgents` apart. Root
-> `ai.agentsDir` is gone; every runtime's `ai.<runtime>.agentsDir` expands into
-> raw per-runtime entries. Rule inclusion is a priority-ordered portable list
-> resolved once per runtime; Kiro keeps its scalar per-runtime override.
-> Stacked-workflows' Git preset is `mkDefault` sugar over the shared `git.*`
-> options. Claude delivers every surface as its own file through
-> `ai.claude.files` on both backends and fails evaluation beside its upstream
-> module, and every delivery method writes the file itself. Every enabled
-> runtime installs a package by default; `package = null` keeps configuration
-> enabled without installing one. Codex's `config.toml` is a read-only store
-> symlink on both backends, its daemon `settings.json` a Home Manager copy of
-> `native.daemonSettings`, and Nix declares the trust of every hook it
-> generates; Codex rejects a declared MCP OAuth client secret. AGENTS.md puts
-> the index and rules before the context. The repository AGENTS.md, Copilot's
-> devenv context and instruction files, and Kiro's devenv steering land as
-> read-only copies; Codex indexes scoped rules that name `references`; a unit
-> whose file is switched off or replaced warns, and so does a devenv Codex
-> AGENTS.md past 32 KiB under a raised limit. Semble derives a Kiro
-> agent-private MCP server from `mcp.enable = false` plus an MCP-backed
-> subagent. Every runtime describes delivery once through `mkRuntime`'s
-> record-level `config`, and both `mkRuntime` and the backend transforms reject
-> a backend spec carrying anything but `installPackage`, `migrationConfig` and
-> `options`, since an overridden or hand-built record reaches a transform
-> without the constructor. Kiro hook commands resolve packages through the
-> shared `commandType`. Launchers bake the builder's one `launcherEnvironment`.
-> Claude's and Codex's hook matcher groups share `mkMatcherBlockType`, and
-> Claude, Copilot and Kiro render rule files through `aiCommon.mkRuleFiles`.
-> Claude delivers `ai.agents` and `ai.claude.agentsDir` to
-> `.claude/agents/<name>.md`; every raw agent writer (Claude, Copilot, Kimchi,
-> Kiro) tests `agent.isPathLike`, through `agent.fileContent` where it copies,
-> so a store-path string is a file, never a body naming its own path. File
-> content at `mkDefault` enables its entry; `content.enable = false` suppresses
-> every content form. The builder entry point is `lib.ai.app.mkRuntime`. Native
-> file settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). A root request nothing per-runtime can withdraw
-> (excluded or non-keyed pool) never warns. Portable agents reach Kimchi as
-> owned read-only copies and portable hooks reach its project `hooks.json` on
-> devenv. Reasoning effort lowers to Claude, Codex, Copilot and Kimchi, and Kiro
-> declares no normalized settings pool; authored prose and final delivery share
-> one priority-aware text-source record with enable semantics. Ledger-owned
-> copies whose files nothing else retracts opt into `runWhenDisabled`.
-> `ai.lspServers` renders whole files with each runtime's envelope, Copilot/Kiro
-> require `extensions`, and Copilot constrains server names. `ai.formatter`
-> layers consumer configuration on the exported treefmt module for each
-> generated tree; devenv excludes every delivered path, using `<directory>/**`
-> for recursive entries, from its repository treefmt run. One guard table stamps
-> `ai.guards` and supplies each guard's phase, runtime, formatter-dependent
-> default and program to those trees; consumers configure them through
-> `ai.guards.<name>`. Consumer checks resolve through `ai.checks.all`, one
-> per-surface default, and one per-runtime surface leaf; only the leaf runs over
-> that surface's stamped files in the built runtime tree, while the shared
-> internal tree runs the root surface tier with `AI_RUNTIME=internal`.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -824,10 +768,14 @@ configuration independently; sharing code never shares option values.
 Portable program integrations use `lib.ai.program.mkProgram`. One specification
 declares the program name, its runtime capability set, and its nested option
 tree. The factory projects that into `ai.programs.<name>` plus only the listed
-`ai.<runtime>.programs.<name>` paths. Runtime leaves are nullable and resolve
-independently through `resolveOverride`: null inherits the portable value and a
-non-null value wins. This is the scalar B4 contract, not keyed-pool tombstone
-behavior.
+`ai.programs.<name>.runtimes.<runtime>` paths. Runtime leaves are nullable and
+resolve independently through `resolveOverride`: null inherits the portable
+value and a non-null value wins. This is the scalar B4 contract, not keyed-pool
+tombstone behavior. The program and runtime settings are plain option trees, not
+submodule options. Whole-record `mkDefault` and `mkForce` apply to each portable
+leaf independently and cannot override a runtime settings leaf. `runtimes` is
+reserved for runtime overrides. These trees have no root options-doc entry;
+their leaf entries remain documented.
 
 The program implementation consumes only resolved per-runtime records and may
 write `ai.<runtime>.<pool>` entries at `mkDefault` priority; it must never write
@@ -915,13 +863,13 @@ backends now contribute (each via `lib/ai/mkSkillPackageModule`).
 That helper declares `ai.programs.stacked-workflows.enable` through
 `lib.ai.program.mkProgram`. A root true enables every supported runtime whose
 pool exists in the current evaluation;
-`ai.<runtime>.programs.stacked-workflows.enable = false` retracts that runtime's
-package contribution without affecting siblings. The removed top-level package
-enable option has no alias. `stacked-workflows.gitPreset` is deliberately not
-part of the program tree: it sets the `git.*` options, which Home Manager
-delivers through `programs.git.settings` and devenv as a repository-local
-include. It has no runtime meaning, so both backends expose the same top-level
-companion instead of creating misleading runtime overrides.
+`ai.programs.stacked-workflows.runtimes.<runtime>.enable = false` retracts that
+runtime's package contribution without affecting siblings. The removed top-level
+package enable option has no alias. `stacked-workflows.gitPreset` is
+deliberately not part of the program tree: it sets the `git.*` options, which
+Home Manager delivers through `programs.git.settings` and devenv as a
+repository-local include. It has no runtime meaning, so both backends expose the
+same top-level companion instead of creating misleading runtime overrides.
 
 **The contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
 the factory writes `ai.<runtime>.skills` and `ai.<runtime>.rules` for every

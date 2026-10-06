@@ -26,43 +26,41 @@
   };
   evalHmWarnings = evalHmWithSpecialArgs {delegateRoutingRenames = testRenames;};
   scenario.ai = {
-    claude = {
-      enable = true;
-      programs.delegate-routing = {
-        extraRuntimes = ["codex"];
-        manualExternalDelegates = ["kimchi" "kiro"];
-      };
-    };
+    claude.enable = true;
     codex.enable = true;
-    # The package ships no Kimchi families, so the scenario declares one.
     kimchi = {
       enable = true;
       # Home Manager requires an account region.
       native.settings.region = "us";
-      programs.delegate-routing.models = [{vendors = ["served"];}];
     };
-    kiro = {
-      enable = true;
-      programs.delegate-routing.models = [
-        {
-          vendors = ["anthropic"];
-          tiers = ["strong" "small"];
-        }
-      ];
-    };
+    kiro.enable = true;
     programs.delegate-routing = {
       enable = true;
+      # The package ships no Kimchi families, so the scenario declares one.
       families.served.flash = {
         match = "test-flash-*";
         tier = "small";
         useFor = "TEST KIMCHI FAMILY";
+      };
+      runtimes = {
+        claude = {
+          extraRuntimes = ["codex"];
+          manualExternalDelegates = ["kimchi" "kiro"];
+        };
+        kimchi.models = [{vendors = ["served"];}];
+        kiro.models = [
+          {
+            vendors = ["anthropic"];
+            tiers = ["strong" "small"];
+          }
+        ];
       };
     };
   };
   hasLoadInstruction = text: lib.hasInfix "load the `delegate-routing` skill" (lib.replaceStrings ["\n"] [" "] text);
   crossVendor = "Rows span more than one vendor";
   readSkill = result: runtime: builtins.readFile "${result.config.ai.${runtime}.skills.delegate-routing}/SKILL.md";
-  optionTree = result: path: (lib.getAttrFromPath path result.options).type.getSubOptions [];
+  optionTree = result: path: lib.getAttrFromPath path result.options;
   checkBackend = {
     name,
     evaluate,
@@ -78,10 +76,10 @@
     skill = config: readSkill (change config) "claude";
     passes = evaluation: lib.all (item: item.assertion) evaluation.config.assertions;
     failsWith = evaluation: option: lib.any (item: !item.assertion && lib.hasInfix option item.message) evaluation.config.assertions;
-    evaluationFails = evaluation: !(builtins.tryEval (builtins.deepSeq evaluation.config.ai.claude.programs.delegate-routing true)).success;
+    evaluationFails = evaluation: !(builtins.tryEval (builtins.deepSeq evaluation.config.ai.programs.delegate-routing.runtimes.claude true)).success;
     roleScenario = roles: extras: manual:
       change {
-        ai.claude.programs.delegate-routing = {
+        ai.programs.delegate-routing.runtimes.claude = {
           inherit roles;
           extraRuntimes = extras;
           manualExternalDelegates = manual;
@@ -102,72 +100,68 @@
     rolesSkill = readSkill (roleScenario configuredRoles ["codex"] []) "claude";
     loneRuntime = runtime:
       readSkill (change {
-        ai.${runtime}.programs.delegate-routing = {
+        ai.programs.delegate-routing.runtimes.${runtime} = {
           extraRuntimes = [];
           manualExternalDelegates = [];
         };
       })
       runtime;
-    native = change {ai.claude.programs.delegate-routing.extraRuntimes = [];};
+    native = change {ai.programs.delegate-routing.runtimes.claude.extraRuntimes = [];};
     nativeClaude = readSkill native "claude";
     disabled = evaluate {
       ai.programs.delegate-routing.enable = true;
-      ai.codex.programs.delegate-routing.enable = false;
+      ai.programs.delegate-routing.runtimes.codex.enable = false;
     };
     manualScenario.ai = {
-      claude = {
-        enable = true;
-        programs.delegate-routing = {
-          enable = true;
-          manualExternalDelegates = ["kiro"];
-        };
-      };
+      claude.enable = true;
       kiro.enable = lib.mkForce false;
+      programs.delegate-routing.runtimes.claude = {
+        enable = true;
+        manualExternalDelegates = ["kiro"];
+      };
     };
     manualMissingModels = evaluate manualScenario;
     manualDisabled = evaluate (lib.recursiveUpdate manualScenario {
-      ai.kiro.programs.delegate-routing.models = [{vendors = ["anthropic"];}];
+      ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
     });
     manualOverlap = evaluate (lib.recursiveUpdate manualScenario {
-      ai.claude.programs.delegate-routing.extraRuntimes = ["kiro"];
-      ai.kiro.programs.delegate-routing.models = [{vendors = ["anthropic"];}];
+      ai.programs.delegate-routing.runtimes.claude.extraRuntimes = ["kiro"];
+      ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
     });
     invalid = evaluate (lib.recursiveUpdate manualScenario {
       ai = {
-        claude.programs.delegate-routing = {
+        programs.delegate-routing.runtimes.claude = {
           extraRuntimes = ["kiro"];
           manualExternalDelegates = [];
         };
-        kiro.programs.delegate-routing.models = [{vendors = ["anthropic"];}];
+        programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
       };
     });
     # A runtime with no default selection must choose one when its program and
     # runtime are enabled, and needs none once either is off and Claude no
     # longer names it.
     requiresSelection = target: let
-      unnamed.ai.claude.programs.delegate-routing.manualExternalDelegates =
-        lib.remove target scenario.ai.claude.programs.delegate-routing.manualExternalDelegates;
+      unnamed.ai.programs.delegate-routing.runtimes.claude.manualExternalDelegates =
+        lib.remove target scenario.ai.programs.delegate-routing.runtimes.claude.manualExternalDelegates;
     in
-      failsWith (change {ai.${target}.programs.delegate-routing.models = [];}) "ai.${target}.programs.delegate-routing.models must select at least one"
+      failsWith (change {ai.programs.delegate-routing.runtimes.${target}.models = [];}) "ai.programs.delegate-routing.runtimes.${target}.models must select at least one"
       && passes (change (lib.recursiveUpdate unnamed {
-        ai.${target} = {
-          enable = lib.mkForce false;
-          programs.delegate-routing.models = [];
-        };
+        ai.${target}.enable = lib.mkForce false;
+        ai.programs.delegate-routing.runtimes.${target}.models = [];
       }))
       && passes (change (lib.recursiveUpdate unnamed {
-        ai.${target}.programs.delegate-routing = {
+        ai.programs.delegate-routing.runtimes.${target} = {
           enable = false;
           models = [];
         };
       }));
     extraProgramDisabledKiroMissingModels = change {
       ai = {
-        claude.programs.delegate-routing = {
+        programs.delegate-routing.runtimes.claude = {
           extraRuntimes = ["kiro"];
           manualExternalDelegates = [];
         };
-        kiro.programs.delegate-routing = {
+        programs.delegate-routing.runtimes.kiro = {
           enable = false;
           models = [];
         };
@@ -175,17 +169,17 @@
     };
     extraProgramDisabledKiro = change {
       ai = {
-        claude.programs.delegate-routing = {
+        programs.delegate-routing.runtimes.claude = {
           extraRuntimes = ["kiro"];
           manualExternalDelegates = [];
         };
-        kiro.programs.delegate-routing = {
+        programs.delegate-routing.runtimes.kiro = {
           enable = false;
           models = [{vendors = ["anthropic"];}];
         };
       };
     };
-    selector = value: change {ai.claude.programs.delegate-routing.models = [value];};
+    selector = value: change {ai.programs.delegate-routing.runtimes.claude.models = [value];};
     familyOverride = skill {ai.programs.delegate-routing.families.anthropic.opus.useFor = "CUSTOM OPUS TASK";};
     addedFamily = skill {
       ai = {
@@ -194,12 +188,12 @@
           tier = "strong";
           useFor = "CUSTOM FAMILY TASK";
         };
-        claude.programs.delegate-routing.models = [{families = ["x"];}];
+        programs.delegate-routing.runtimes.claude.models = [{families = ["x"];}];
       };
     };
-    disabledNode = skill {ai.claude.programs.delegate-routing.techniques.Agent.enable = false;};
-    modifiedNode = skill {ai.codex.programs.delegate-routing.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
-    invalidNode = node: change {ai.claude.programs.delegate-routing.techniques.Invalid = node;};
+    disabledNode = skill {ai.programs.delegate-routing.runtimes.claude.techniques.Agent.enable = false;};
+    modifiedNode = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
+    invalidNode = node: change {ai.programs.delegate-routing.runtimes.claude.techniques.Invalid = node;};
     replacedText = key: field: value: skill {ai.programs.delegate-routing.${key}.${field} = value;};
     techniqueRow = text: technique: lib.findFirst (lib.hasInfix "`${technique}`") "" (lib.splitString "\n" text);
     kiroInvoke = techniqueRow kiro "invoke_sub_agent";
@@ -215,13 +209,12 @@
           map
           (definition: {
             inherit (definition) file;
-            value = definition.value.whenToDelegate.${preset};
+            value = definition.value.${preset};
           })
           (builtins.filter
             (definition:
-              definition.value ? whenToDelegate
-              && builtins.hasAttr preset definition.value.whenToDelegate)
-            noEntries.options.ai.programs.delegate-routing.definitionsWithLocations);
+              builtins.hasAttr preset definition.value)
+            noEntries.options.ai.programs.delegate-routing.whenToDelegate.definitionsWithLocations);
       };
     shippedEntryPrioritiesChecked = assert lib.assertMsg
     (lib.all
@@ -408,7 +401,13 @@
     "module-delegate-routing-${name}-kimchi-models" = mkTest "delegate-routing-${name}-kimchi-models" (
       requiresSelection "kimchi"
       # Kimchi ships no default selection.
-      && failsWith (evaluate {ai = scenario.ai // {kimchi = builtins.removeAttrs scenario.ai.kimchi ["programs"];};}) "ai.kimchi.programs.delegate-routing.models must select at least one"
+      && failsWith (evaluate (lib.updateManyAttrsByPath [
+          {
+            path = ["ai" "programs" "delegate-routing" "runtimes"];
+            update = runtimes: builtins.removeAttrs runtimes ["kimchi"];
+          }
+        ]
+        scenario)) "ai.programs.delegate-routing.runtimes.kimchi.models must select at least one"
       && result.config.ai.kimchi.skills ? delegate-routing
       && lib.hasInfix "flash (served)" kimchi
       && !(lib.hasInfix "(anthropic)" kimchi)
@@ -421,24 +420,24 @@
       && evaluationFails (change {
         ai = {
           programs.delegate-routing.families = lib.mapAttrs (_: lib.mapAttrs (_: _: {tier = "small";})) result.config.ai.programs.delegate-routing.families;
-          claude.programs.delegate-routing.models = [
+          programs.delegate-routing.runtimes.claude.models = [
             {families = ["opus"];}
             {tiers = ["frontier"];}
           ];
         };
       })
-      && failsWith (selector {}) "ai.claude.programs.delegate-routing.models contains an empty selector"
+      && failsWith (selector {}) "ai.programs.delegate-routing.runtimes.claude.models contains an empty selector"
       && failsWith (selector {
         vendors = ["openai"];
         families = ["opus"];
-      }) "ai.claude.programs.delegate-routing.models must select"
+      }) "ai.programs.delegate-routing.runtimes.claude.models must select"
       && passes (selector {
         vendors = ["anthropic"];
         tiers = ["strong" "small"];
       })
       && (let
         union = skill {
-          ai.claude.programs.delegate-routing = {
+          ai.programs.delegate-routing.runtimes.claude = {
             extraRuntimes = [];
             manualExternalDelegates = [];
             models = [
@@ -518,7 +517,7 @@
       && hasProse "an agent cannot reliably tell which mode it is in, but it can see its tools" claude
       && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
       && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
-      && lib.all (runtime: let value = result.config.ai.${runtime}.programs.delegate-routing.roles; in value.default == null && value.writer == null && value.reviewer == null) runtimes
+      && lib.all (runtime: let value = result.config.ai.programs.delegate-routing.runtimes.${runtime}.roles; in value.default == null && value.writer == null && value.reviewer == null) runtimes
     );
     "module-delegate-routing-${name}-families" = mkTest "delegate-routing-${name}-families" (
       lib.hasInfix "CUSTOM OPUS TASK" familyOverride
@@ -592,20 +591,20 @@
         && !(lib.hasInfix marker omitted)) ["rules" "procedure"]
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (
-      failsWith invalid "ai.claude.programs.delegate-routing.extraRuntimes includes `kiro`, but ai.kiro.enable is false"
-      && failsWith manualMissingModels "ai.kiro.programs.delegate-routing.models must select at least one"
+      failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false"
+      && failsWith manualMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
       && passes manualDisabled
       && lib.hasInfix "## manual-only external delegates\n\n### kiro\n\n-" (readSkill manualDisabled "claude")
       && lib.hasInfix "### kiro techniques" (readSkill manualDisabled "claude")
       && passes manualOverlap
       && readSkill manualOverlap "claude" == readSkill manualDisabled "claude"
-      && failsWith extraProgramDisabledKiroMissingModels "ai.kiro.programs.delegate-routing.models must select at least one"
+      && failsWith extraProgramDisabledKiroMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
       && passes extraProgramDisabledKiro
     );
     "module-delegate-routing-${name}-options" = mkTest "delegate-routing-${name}-options" (
       let
         portable = optionTree result ["ai" "programs" "delegate-routing"];
-        perRuntime = optionTree result ["ai" "claude" "programs" "delegate-routing"];
+        perRuntime = portable.runtimes.claude;
         roleOptions = perRuntime.roles.type.getSubOptions [];
         defaultRole = roleOptions.default.type.getSubOptions [];
       in
@@ -630,8 +629,8 @@
         && !(lib.hasInfix "flash" defaultRole.use.type.description)
         && perRuntime ? models
         && perRuntime ? techniques
-        && result.options.ai.kimchi.programs ? delegate-routing
-        && !(result.options.ai.copilot.programs ? delegate-routing)
+        && portable.runtimes ? kimchi
+        && !(portable.runtimes ? copilot)
     );
     "module-delegate-routing-${name}-overrides" = mkTest "delegate-routing-${name}-overrides" (
       !(disabled.config.ai.codex.skills ? delegate-routing)

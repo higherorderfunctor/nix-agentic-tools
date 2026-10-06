@@ -7,11 +7,8 @@ applyTo: "lib/ai/hm-helpers.nix,lib/ai/mkSkillPackageModule.nix,packages/chatgpt
 
 ## ai.skills Fanout Pattern
 
-> **Last verified:** 2026-09-30 — every runtime's skills go through
-> `mkSkillFiles`; no runtime delegates them to a native `programs.<cli>.skills`
-> option, and the delivery layer has no method that could. Kimchi's Layout B
-> directory is backend-specific, and recursive devenv leaves retain per-file
-> input contexts while targeting one shared store root.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > Full lineage:
 > `git show 25ec0738:dev/fragments/ai-skills/skills-fanout-pattern.md`.
@@ -116,10 +113,13 @@ keeps standalone leaf identities as negative controls.
 ### Skill-package program gating
 
 `lib/ai/mkSkillPackageModule.nix` uses `lib.ai.program.mkProgram` for package
-enablement. Its portable option is `ai.programs.<name>.enable`; generated
-`ai.<runtime>.programs.<name>.enable` leaves use B4 null-as-inherit semantics. A
-resolved false runtime receives no package skills or router rule, while siblings
-continue to inherit the portable value.
+enablement. Program roots and runtime settings are plain option trees, so
+whole-record priorities apply separately to each leaf. A portable `mkForce` does
+not override `runtimes.<runtime>.enable`. Its portable option is
+`ai.programs.<name>.enable`; generated
+`ai.programs.<name>.runtimes.<runtime>.enable` leaves use B4 null-as-inherit
+semantics. A resolved false runtime receives no package skills or router rule,
+while siblings continue to inherit the portable value.
 
 The factory passes `config`, `lib`, `pkgs` and `runtime` to both `skills` and
 `rules` callbacks. Import it once with the full supported runtime set; render

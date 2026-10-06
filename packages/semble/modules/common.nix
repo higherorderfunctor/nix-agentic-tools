@@ -75,7 +75,7 @@
 
   mkState = runtime: let
     portable = config.ai.programs.semble;
-    override = config.ai.${runtime}.programs.semble;
+    override = config.ai.programs.semble.runtimes.${runtime};
     cfg = program.resolve config runtime;
     selected = featureName: featureEnabled portable override featureName;
   in
@@ -308,33 +308,31 @@
 in {
   imports = [program.module];
 
-  # A second declaration of the portable program option, so the factory does
-  # not generate a per-runtime override for this read-only value.
-  options.ai.programs.semble = lib.mkOption {
-    type = lib.types.submodule {
-      # Portable only: installation is one decision for the whole backend, so
-      # a per-runtime override would be a silent no-op.
-      options.install = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = ''
-          Whether to install the Semble launchers and the cache guard that
-          clears stale indexes. With false, every runtime still gets its
-          selected Semble rule and agents, so the instruction files do not
-          depend on where the package is installed; the `semble` command must
-          then come from elsewhere. An MCP server or MCP-backed subagent still
-          references the package's store path.
-        '';
-      };
-      options.finalPackage = lib.mkOption {
-        type = lib.types.package;
-        readOnly = true;
-        description = ''
-          The Semble package built from the portable `ai.programs.semble`
-          config: grammars, path mappings and model routing applied, with the
-          module's cache location baked in.
-        '';
-      };
+  # Portable-only leaves extend the plain program option tree without
+  # generating per-runtime overrides.
+  options.ai.programs.semble = {
+    finalPackage = lib.mkOption {
+      type = lib.types.package;
+      readOnly = true;
+      description = ''
+        The Semble package built from the portable `ai.programs.semble`
+        config: grammars, path mappings and model routing applied, with the
+        module's cache location baked in.
+      '';
+    };
+    # Portable only: installation is one decision for the whole backend, so
+    # a per-runtime override would be a silent no-op.
+    install = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Whether to install the Semble launchers and the cache guard that
+        clears stale indexes. With false, every runtime still gets its
+        selected Semble rule and agents, so the instruction files do not
+        depend on where the package is installed; the `semble` command must
+        then come from elsewhere. An MCP server or MCP-backed subagent still
+        references the package's store path.
+      '';
     };
   };
 
@@ -345,12 +343,12 @@ in {
           assertions = lib.concatMap (state:
             map (message: {
               assertion = false;
-              message = "ai.${state.runtime}.programs.semble: ${message}";
+              message = "ai.programs.semble.runtimes.${state.runtime}: ${message}";
             })
             state.errors
             ++ lib.optional (mcpSubagent state && !(state.selected "mcp")) {
               assertion = state.runtime == "kiro";
-              message = "ai.${state.runtime}.programs.semble: subagent.interface = \"mcp\" with mcp.enable = false needs an MCP server private to the agent, which only Kiro supports. ${state.runtime} cannot scope a server to one agent: enable mcp or use subagent.interface = \"cli\".";
+              message = "ai.programs.semble.runtimes.${state.runtime}: subagent.interface = \"mcp\" with mcp.enable = false needs an MCP server private to the agent, which only Kiro supports. ${state.runtime} cannot scope a server to one agent: enable mcp or use subagent.interface = \"cli\".";
             })
           stateList;
         }

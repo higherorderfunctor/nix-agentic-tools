@@ -1,8 +1,7 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-03 — roles with a typed `use` and ceiling, selector
-> enums, tool-presence and highest-version selection, multi-runtime-only pool
-> paragraph.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 
 `ai.programs.delegate-routing.families` is the portable decision table, keyed by
 vendor and family. Each family has a capability tier, task and effort guidance,
@@ -14,14 +13,14 @@ models, so a consumer declares those families; this repository does in
 `dev/ai.nix`.
 
 Each runtime chooses families through
-`ai.<runtime>.programs.delegate-routing.models`. Selectors are alternatives;
-within a selector every non-empty field must match the vendor, tier and family
-name. Claude defaults to Anthropic, Codex to OpenAI, and Kimchi and Kiro to no
-selection, so the package builds no default skill for either. Empty selectors
-fail assertions. Vendor, tier and family selectors use dynamic enums from
-configured families, so selector tiers include only tiers used by those
-families. An enabled program on an enabled runtime must select at least one
-family. That program's `extraRuntimes` and `manualExternalDelegates` targets
+`ai.programs.delegate-routing.runtimes.<runtime>.models`. Selectors are
+alternatives; within a selector every non-empty field must match the vendor,
+tier and family name. Claude defaults to Anthropic, Codex to OpenAI, and Kimchi
+and Kiro to no selection, so the package builds no default skill for either.
+Empty selectors fail assertions. Vendor, tier and family selectors use dynamic
+enums from configured families, so selector tiers include only tiers used by
+those families. An enabled program on an enabled runtime must select at least
+one family. That program's `extraRuntimes` and `manualExternalDelegates` targets
 also need a family selection, even when a target runtime or program is disabled.
 
 Runtime `roles.default`, `roles.writer` and `roles.reviewer` are nullable
@@ -50,11 +49,11 @@ occurs in both lists. Selected families appear once per tier with all applicable
 native and external reaches. A cross-vendor review sentence appears only when
 automatic candidates span multiple vendors.
 
-`ai.<runtime>.programs.delegate-routing.techniques` is a keyed set of workflow,
-subagent, external, introspect and usage nodes. Delegate nodes declare whether
-they pin model and effort and where they are available: interactive, headless or
-ACP. Assertions require both pin fields to be non-null exactly for delegate
-kinds, and a command for every external node. Each package field uses
+`ai.programs.delegate-routing.runtimes.<runtime>.techniques` is a keyed set of
+workflow, subagent, external, introspect and usage nodes. Delegate nodes declare
+whether they pin model and effort and where they are available: interactive,
+headless or ACP. Assertions require both pin fields to be non-null exactly for
+delegate kinds, and a command for every external node. Each package field uses
 `mkDefault`; consumers can replace fields, add nodes or disable individual
 nodes. Techniques are usable only when present in the tool list, and external
 commands must be on PATH. Modes describe usual availability, not a reliable

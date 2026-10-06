@@ -1,19 +1,7 @@
 # Semble integrations
 
-> **Last verified:** 2026-09-30 — Semble's Kiro subagent is the portable record
-> on `ai.kiro.agents` plus per-field native fields on `ai.kiro.native.agents`.
-> The snapshots regenerate through `passthru.regenerateExtracted`. `install`
-> gates only the package, never the rules. `models` is a root list routed by
-> exact content set, with `defaultContent` and `defaultModel`; the CLI and the
-> MCP server route alike through `patches/models.patch`, and there is no
-> `--model`. `pathMappings` is an ordered root list of
-> `{ language; content; patterns; }` where the first match wins, validated
-> against `extracted.json`, and `language = null` means line chunking with no
-> parser. `mcp.content` and `mcp.rootExposure` are gone: `mcp.enable = false`
-> with an MCP-backed subagent is a Kiro agent-private server. Every installed
-> package is a bin-only launcher set that unsets PYTHONPATH. Model examples use
-> the flake's `lib.packaging.fetchHuggingFaceModel` and forward `files` as
-> `passthru.files`, which turns on the model2vec layout check.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -85,9 +73,9 @@ ai = {
   };
 
   # Program-level on/off replaces runtime lists.
-  claude.programs.semble.enable = false;
-  codex.programs.semble.subagent.enable = true;
-  kiro.programs.semble.mcp.enable = false;
+  programs.semble.runtimes.claude.enable = false;
+  programs.semble.runtimes.codex.subagent.enable = true;
+  programs.semble.runtimes.kiro.mcp.enable = false;
 };
 ```
 
@@ -98,11 +86,12 @@ feature value, an explicit runtime program value, the portable feature value,
 then the portable program value. CLI instructions and the subagent are portable
 boolean opt-ins instead: a runtime program `false` retracts them, a runtime
 feature value can differ, and runtime program `true` does not turn them on
-implicitly. This makes `ai.<runtime>.programs.semble.enable = false` the
-replacement for removing a runtime from the former selector even when a portable
-feature is explicitly enabled; an explicit runtime feature value can still make
-just that feature differ. There is no `runtimes` selector. Program options exist
-only for Semble's declared capability set: Claude, Codex, and Kiro.
+implicitly. This makes `ai.programs.semble.runtimes.<runtime>.enable = false`
+the replacement for removing a runtime from the former selector even when a
+portable feature is explicitly enabled; an explicit runtime feature value can
+still make just that feature differ. There is no `runtimes` selector. Program
+options exist only for Semble's declared capability set: Claude, Codex, and
+Kiro.
 
 The content values are `code`, `docs`, `config`, and `all`. A scalar is accepted
 as a one-element list and several categories may be combined. Empty lists,
@@ -192,10 +181,11 @@ the generated record atomically and `null` suppresses it for that runtime. The
 CLI rule instead defaults each content field: a consumer's higher-priority
 `text` overrides the packaged `source`, which remains visible on the resolved
 rule. Set `ai.<runtime>.rules.semble.enable = false` to retract it at the
-normalized pool, or disable `ai.<runtime>.programs.semble.cli.instructions` at
-its package gate. Kiro takes the same portable record on
-`ai.kiro.agents.semble-search`, plus its native fields (capability-tag `tools`,
-and for the MCP interface `includeMcpJson` and the agent-scoped server) on
+normalized pool, or disable
+`ai.programs.semble.runtimes.<runtime>.cli.instructions` at its package gate.
+Kiro takes the same portable record on `ai.kiro.agents.semble-search`, plus its
+native fields (capability-tag `tools`, and for the MCP interface
+`includeMcpJson` and the agent-scoped server) on
 `ai.kiro.native.agents.semble-search`, one `mkDefault` per field. Consumers
 replace those native fields there. A Kiro `null` on
 `ai.kiro.agents.semble-search` removes the subagent and its native fields

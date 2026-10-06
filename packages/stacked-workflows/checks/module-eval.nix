@@ -105,7 +105,7 @@ in {
       let
         result = evalHm {
           ai.programs.stacked-workflows.enable = true;
-          ai.codex.programs.stacked-workflows.enable = false;
+          ai.programs.stacked-workflows.runtimes.codex.enable = false;
         };
       in
         result.config.ai.claude.skills ? stack-fix
@@ -120,7 +120,7 @@ in {
     module-sws-git-preset-requires-portable-enable = mkTest "sws-git-preset-requires-portable-enable" (
       let
         config = {
-          ai.codex.programs.stacked-workflows.enable = true;
+          ai.programs.stacked-workflows.runtimes.codex.enable = true;
           stacked-workflows.gitPreset = "minimal";
         };
         hm = evalHm config;
@@ -140,7 +140,7 @@ in {
       let
         result = evalHm {
           ai.programs.stacked-workflows.enable = true;
-          ai.codex.programs.stacked-workflows.enable = false;
+          ai.programs.stacked-workflows.runtimes.codex.enable = false;
           stacked-workflows.gitPreset = "minimal";
         };
       in

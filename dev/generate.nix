@@ -900,7 +900,7 @@
     ```
 
     Portable defaults live at `ai.programs.semble`. Each supported runtime has
-    the same nullable option tree under `ai.<runtime>.programs.semble`: null
+    the same nullable option tree under `ai.programs.semble.runtimes.<runtime>`: null
     inherits the root value and a non-null value wins. Program-level enable
     overrides replace runtime lists:
 
@@ -916,9 +916,9 @@
         };
       };
 
-      claude.programs.semble.enable = false;
-      codex.programs.semble.subagent.enable = true;
-      kiro.programs.semble.mcp.enable = false;
+      programs.semble.runtimes.claude.enable = false;
+      programs.semble.runtimes.codex.subagent.enable = true;
+      programs.semble.runtimes.kiro.mcp.enable = false;
     };
     ```
 
@@ -1008,7 +1008,7 @@
     };
     ```
 
-    Semble does not declare `ai.copilot.programs.semble`; configure Copilot
+    Semble does not declare `ai.programs.semble.runtimes.copilot`; configure Copilot
     directly through `ai.copilot.*` with the same exported helpers when desired.
 
     </details>
@@ -1174,7 +1174,7 @@
 
     ```nix
     ai.programs.delegate-routing.enable = true;
-    ai.claude.programs.delegate-routing = {
+    ai.programs.delegate-routing.runtimes.claude = {
       extraRuntimes = ["codex"];
       manualExternalDelegates = ["kiro"];
       roles.default = {effort = "medium"; use = "strong";};
@@ -1195,7 +1195,7 @@
     Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
     Manual-only entries require an explicit user request and do not require runtime
     enable. If Kiro is enabled only for manual delegation, disable its own
-    delegate-routing program with `ai.kiro.programs.delegate-routing.enable = false`.
+    delegate-routing program with `ai.programs.delegate-routing.runtimes.kiro.enable = false`.
     Copilot is excluded because its delegation controls are unestablished.
 
     Runtime `roles.default`, `roles.writer` and `roles.reviewer` optionally select a
@@ -1227,7 +1227,7 @@
     stacked-workflows.gitPreset = "full"; # or "minimal" or "none"
 
     # Optional runtime override: null inherits, false disables one runtime.
-    ai.codex.programs.stacked-workflows.enable = false;
+    ai.programs.stacked-workflows.runtimes.codex.enable = false;
     ```
 
     See the `stacked-workflows` package for git presets and skill

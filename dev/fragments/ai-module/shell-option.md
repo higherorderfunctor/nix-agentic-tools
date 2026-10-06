@@ -1,15 +1,7 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-09-30 — devenv's Codex launcher always passes
-> `--no-daemon`, so it always wraps. The builder entry point is
-> `lib.ai.app.mkRuntime`, whose one record-level `config` is the only delivery
-> callback. Native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Resolves #877:
-> Kiro's FHS root supplies bash but hides a host zsh, and that does not justify
-> a runtime-specific implicit shell default. `ai.shell` stays null; see below
-> for the standing decision and the override rule it shares with normalized
-> `settings`. The builder merges every launcher's process environment once, as
-> `launcherEnvironment`; Codex and Copilot wrap through `lib.ai.mkLauncher`.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -64,11 +56,14 @@ keys and participates in native option-priority rules only after normalized
 values have been resolved.
 
 `lib.ai.program.mkProgram` applies the same rule to every leaf of a program
-specification. Root declarations retain their ordinary types and defaults;
-runtime declarations are generated as nullable versions of those declarations.
-The program module receives one recursively resolved record per supported
-runtime. The specification's `supportedRuntimes` list is the single capability
-source: unsupported `ai.<runtime>.programs.<pkg>` paths do not exist.
+specification. Program roots and runtime settings are plain option trees rather
+than submodule options; whole-record priorities apply independently to each
+leaf. The portable specification cannot declare the reserved name `runtimes`.
+Root declarations retain their ordinary types and defaults; runtime declarations
+are generated as nullable versions of those declarations. The program module
+receives one recursively resolved record per supported runtime. The
+specification's `supportedRuntimes` list is the single capability source:
+unsupported `ai.programs.<pkg>.runtimes.<runtime>` paths do not exist.
 
 Do not add a sibling runtime selector. Runtime program `enable = false` is the
 negation mechanism, and an individual runtime feature may override the portable

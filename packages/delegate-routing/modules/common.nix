@@ -19,7 +19,7 @@ args @ {
   inherit (familyFunctions) automatic candidates select;
   aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   enabled = runtime:
-    config.ai.${runtime}.programs.delegate-routing.enable
+    config.ai.programs.delegate-routing.runtimes.${runtime}.enable
     or null;
   # Mirror program.nix's B4 resolveOverride: null inherits the portable value; keep in sync.
   programEnabled = runtime:
@@ -27,8 +27,8 @@ args @ {
     then config.ai.programs.delegate-routing.enable
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
-  models = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-routing.models);
-  techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.${runtime}.programs.delegate-routing.techniques);
+  models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
+  techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.techniques);
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
   names = lib.unique (map (family: family.name) flattenedFamilies);
@@ -45,7 +45,7 @@ args @ {
 
   # Declare runtime-only controls alongside the factory's enable override.
   runtimeOptions = runtime: let
-    runtimeConfig = config.ai.${runtime}.programs.delegate-routing;
+    runtimeConfig = config.ai.programs.delegate-routing.runtimes.${runtime};
     automaticRuntimes = automatic {
       inherit runtime;
       inherit (runtimeConfig) extraRuntimes manualExternalDelegates;
@@ -117,73 +117,64 @@ args @ {
     };
   };
 in {
-  options.ai =
-    lib.genAttrs supportedRuntimes (runtime: {
-      # This merges with lib/ai/program.nix's override submodule only because it
-      # declares no default, description or example; adding any throws "already declared".
-      programs.delegate-routing = lib.mkOption {
-        type = lib.types.submodule {options = runtimeOptions runtime;};
-      };
-    })
-    // {
-      programs.delegate-routing = {
-        families = lib.mkOption {
-          type = lib.types.attrsOf (lib.types.attrsOf (lib.types.submodule {
-            options = {
-              avoidFor = lib.mkOption {
-                type = lib.types.str;
-                default = "";
-                description = "Tasks this family should avoid.";
-              };
-              effort = lib.mkOption {
-                type = lib.types.str;
-                default = "";
-                description = "Delegate effort guidance.";
-              };
-              match = lib.mkOption {
-                type = lib.types.str;
-                description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
-              };
-              tier = lib.mkOption {
-                type = lib.types.enum tierNames;
-                description = "Capability tier.";
-              };
-              useFor = lib.mkOption {
-                type = lib.types.str;
-                default = "";
-                description = "Tasks suited to this family.";
-              };
-            };
-          }));
-          default = {};
-          description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
-        };
-        procedure = lib.mkOption {
-          type = aiTypes.optionalTextSource {
-            defaultContent.text = defaults.procedure;
-            description = "delegate routing procedure";
-            enableDefault = true;
+  options.ai.programs.delegate-routing = {
+    families = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf (lib.types.submodule {
+        options = {
+          avoidFor = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Tasks this family should avoid.";
           };
-          default = {};
-          description = "Procedure at the end of the skill. Replace with text or source, or disable it.";
-        };
-        rules = lib.mkOption {
-          type = aiTypes.optionalTextSource {
-            defaultContent.text = defaults.rules;
-            description = "delegate sizing rules";
-            enableDefault = true;
+          effort = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Delegate effort guidance.";
           };
-          default = {};
-          description = "Rules at the top of the skill. Replace with text or source, or disable them.";
+          match = lib.mkOption {
+            type = lib.types.str;
+            description = "Normalized live model id pattern, resolved using the runtime's own spelling.";
+          };
+          tier = lib.mkOption {
+            type = lib.types.enum tierNames;
+            description = "Capability tier.";
+          };
+          useFor = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Tasks suited to this family.";
+          };
         };
-        whenToDelegate = lib.mkOption {
-          inherit (whenToDelegateOptions) type;
-          default = {};
-          apply = whenToDelegateOptions.rename;
-          description = "Always-on guidance describing when to delegate work.";
-        };
-      };
+      }));
+      default = {};
+      description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
     };
+    procedure = lib.mkOption {
+      type = aiTypes.optionalTextSource {
+        defaultContent.text = defaults.procedure;
+        description = "delegate routing procedure";
+        enableDefault = true;
+      };
+      default = {};
+      description = "Procedure at the end of the skill. Replace with text or source, or disable it.";
+    };
+    rules = lib.mkOption {
+      type = aiTypes.optionalTextSource {
+        defaultContent.text = defaults.rules;
+        description = "delegate sizing rules";
+        enableDefault = true;
+      };
+      default = {};
+      description = "Rules at the top of the skill. Replace with text or source, or disable them.";
+    };
+    runtimes = lib.genAttrs supportedRuntimes runtimeOptions;
+    whenToDelegate = lib.mkOption {
+      inherit (whenToDelegateOptions) type;
+      default = {};
+      apply = whenToDelegateOptions.rename;
+      description = "Always-on guidance describing when to delegate work.";
+    };
+  };
 
   # Emit one portable enable option and skills/rules for each supported runtime.
   imports = [
@@ -197,7 +188,7 @@ in {
           inherit (portable) families;
           rules = lib.optionalString portable.rules.enable portable.rules.text;
           procedure = lib.optionalString portable.procedure.enable portable.procedure.text;
-          inherit (config.ai.${runtime}.programs.delegate-routing) extraRuntimes manualExternalDelegates roles;
+          inherit (config.ai.programs.delegate-routing.runtimes.${runtime}) extraRuntimes manualExternalDelegates roles;
         }}";
       };
       rules = _:
@@ -222,9 +213,11 @@ in {
             };
           };
         }
-        (lib.genAttrs supportedRuntimes (runtime: {
-          programs.delegate-routing.techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
-        }))
+        {
+          programs.delegate-routing.runtimes = lib.genAttrs supportedRuntimes (runtime: {
+            techniques = lib.mapAttrsRecursive (_: lib.mkDefault) defaults.techniques.${runtime};
+          });
+        }
       ];
       assertions =
         (
@@ -241,10 +234,10 @@ in {
             }
           ]
           ++ lib.concatMap (runtime: let
-            path = "ai.${runtime}.programs.delegate-routing";
+            path = "ai.programs.delegate-routing.runtimes.${runtime}";
             sourceEnabled = programEnabled runtime && runtimeEnabled runtime;
-            extraRuntimes = config.ai.${runtime}.programs.delegate-routing.extraRuntimes;
-            manualExternalDelegates = config.ai.${runtime}.programs.delegate-routing.manualExternalDelegates;
+            extraRuntimes = config.ai.programs.delegate-routing.runtimes.${runtime}.extraRuntimes;
+            manualExternalDelegates = config.ai.programs.delegate-routing.runtimes.${runtime}.manualExternalDelegates;
             requiredTargets = lib.unique ([runtime] ++ extraRuntimes ++ manualExternalDelegates);
           in
             map (target: {
@@ -254,7 +247,7 @@ in {
             (automatic {inherit runtime extraRuntimes manualExternalDelegates;})
             ++ map (target: {
               assertion = !sourceEnabled || select portable.families models.${target} != [];
-              message = "ai.${target}.programs.delegate-routing.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
+              message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
             })
             requiredTargets
             ++ map (selector: {
