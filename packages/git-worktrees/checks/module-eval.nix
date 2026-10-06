@@ -19,6 +19,28 @@
   enabled = extra: lib.recursiveUpdate {ai.programs.git-worktrees.enable = true;} extra;
 in {
   checks = {
+    module-git-worktrees-claude-absolute-location = mkTest "git-worktrees-claude-absolute-location" (
+      onBoth (enabled {ai.programs.git-worktrees.location = "~/worktrees";}) (config:
+        config.ai.claude.native.settings.worktree.location
+        == "~/worktrees"
+        && lib.hasInfix "`~/worktrees`" (delivered config "codex"))
+    );
+
+    # Every contribution is a default a consumer definition replaces.
+    module-git-worktrees-consumer-wins = mkTest "git-worktrees-consumer-wins" (
+      onBoth (enabled {
+        ai = {
+          claude.extraSystemPrompt.git-worktrees.enable = false;
+          codex.extraSystemPrompt.git-worktrees.text = "own";
+          kiro.tweaks.stripVendorWorktreeSteering = false;
+        };
+      }) (config:
+        delivered config "claude"
+        == null
+        && delivered config "codex" == "own"
+        && !config.ai.kiro.tweaks.stripVendorWorktreeSteering)
+    );
+
     module-git-worktrees-default-disabled = mkTest "git-worktrees-default-disabled" (
       onBoth {} (config:
         lib.all (runtime: delivered config runtime == null) runtimes
@@ -43,13 +65,6 @@ in {
         && config.ai.kiro.tweaks.stripVendorWorktreeSteering)
     );
 
-    module-git-worktrees-claude-absolute-location = mkTest "git-worktrees-claude-absolute-location" (
-      onBoth (enabled {ai.programs.git-worktrees.location = "~/worktrees";}) (config:
-        config.ai.claude.native.settings.worktree.location
-        == "~/worktrees"
-        && lib.hasInfix "`~/worktrees`" (delivered config "codex"))
-    );
-
     # A runtime override replaces one leaf for that runtime only.
     module-git-worktrees-runtime-overrides = mkTest "git-worktrees-runtime-overrides" (
       onBoth (enabled {
@@ -63,21 +78,6 @@ in {
         == null
         && delivered config "kimchi" == "Worktrees: ../{repo}-worktrees"
         && delivered config "claude" != null
-        && !config.ai.kiro.tweaks.stripVendorWorktreeSteering)
-    );
-
-    # Every contribution is a default a consumer definition replaces.
-    module-git-worktrees-consumer-wins = mkTest "git-worktrees-consumer-wins" (
-      onBoth (enabled {
-        ai = {
-          claude.extraSystemPrompt.git-worktrees.enable = false;
-          codex.extraSystemPrompt.git-worktrees.text = "own";
-          kiro.tweaks.stripVendorWorktreeSteering = false;
-        };
-      }) (config:
-        delivered config "claude"
-        == null
-        && delivered config "codex" == "own"
         && !config.ai.kiro.tweaks.stripVendorWorktreeSteering)
     );
   };
