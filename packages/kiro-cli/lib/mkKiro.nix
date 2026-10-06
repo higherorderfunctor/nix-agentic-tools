@@ -913,8 +913,10 @@
   # The materializer is version-pinned, so it must be built from the RESOLVED
   # package (a rollout-unlocked variant is a different derivation but the same
   # version) rather than from `cfg.package`.
-  resolveBundleMaterializer = cfg:
-    if !cfg.tweaks.identity.enable && !cfg.tweaks.stripVendorWorktreeSteering
+  resolveBundleMaterializer = cfg: let
+    replace = enabledBooleanTweaks cfg;
+  in
+    if !cfg.tweaks.identity.enable && replace == []
     then null
     else
       mkBundleMaterializer {
@@ -922,9 +924,14 @@
           if cfg.tweaks.identity.enable
           then cfg.tweaks.identity.text
           else null;
-        inherit (cfg.tweaks) stripVendorWorktreeSteering;
+        inherit replace;
         cliVersion = (resolvePackage cfg).version;
       };
+
+  # Boolean `ai.kiro.tweaks` that each select one fixed-text bundle
+  # replacement; the names are the patcher's `FIXED` keys.
+  booleanTweaks = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
+  enabledBooleanTweaks = cfg: lib.filter (name: cfg.tweaks.${name}) booleanTweaks;
 
   # Kiro honors a PROJECT-LOCAL `.kiro/settings/cli.json` only for the keys on
   # the allowlist its TUI carries; everything else in that file is read and
@@ -1302,11 +1309,25 @@ in
             checked against the pinned bundle in CI.
 
             FAIL-OPEN: if the engine bundle cannot be resolved or the vendor
-            source text no longer occurs exactly once, a named warning goes to stderr and the
-            CLI launches UNPATCHED rather than refusing to start.
+            source text no longer occurs exactly once, a named warning goes to stderr.
+            Each drifted replacement is skipped independently; healthy replacements
+            still apply. With none applied, the CLI launches UNPATCHED.
 
             May not contain a backtick or `''${` — the value is spliced into a JS
             template literal.
+          '';
+        };
+        relativeFileCheckPaths = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Replace the vendor workflow instruction to use absolute stop-condition
+            paths: the step writes the stop-condition file, and `fileCheck.path`
+            checks it, at the same plain workspace-relative path, without
+            templates. Absolute worktree paths can be rejected for sibling worktrees.
+            Uses the shared exact-match bundle materializer on Home Manager and
+            devenv. Source drift warns and skips this replacement independently;
+            the pinned-bundle CI check fails on missing or duplicate source text.
           '';
         };
         stripVendorWorktreeSteering = lib.mkOption {
@@ -1318,7 +1339,8 @@ in
             whose own instructions supply the git workflow. Uses the same
             exact-match bundle materializer as `tweaks.identity`, on Home
             Manager and devenv. A source-text drift prints a warning and
-            launches Kiro unpatched; the pinned-bundle CI check fails on either
+            skips this replacement; healthy replacements still apply. With none
+            applied, Kiro launches unpatched. The pinned-bundle CI check fails on either
             missing or duplicate text.
           '';
         };
@@ -1669,11 +1691,14 @@ in
             explicit = explicitAt [["ai" "kiro" "tweaks" "identity" "enable"]];
             name = "ai.kiro.tweaks.identity";
           }
-          {
-            active = cfg.tweaks.stripVendorWorktreeSteering;
-            explicit = explicitAt [["ai" "kiro" "tweaks" "stripVendorWorktreeSteering"]];
-            name = "ai.kiro.tweaks.stripVendorWorktreeSteering";
-          }
+        ]
+        ++ map (name: {
+          active = cfg.tweaks.${name};
+          explicit = explicitAt [["ai" "kiro" "tweaks" name]];
+          name = "ai.kiro.tweaks.${name}";
+        })
+        booleanTweaks
+        ++ [
           {
             active = resolvedShell != null;
             # The selected shell reaches Kiro only as SHELL in the managed launcher.

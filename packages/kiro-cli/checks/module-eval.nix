@@ -186,20 +186,26 @@ in {
         && evaluated.config.warnings == []
     );
 
-    module-kiro-package-null-explicit-worktree-tweak-warns = mkTest "kiro-package-null-explicit-worktree-tweak-warns" (
+    module-kiro-package-null-explicit-tweaks-warn = mkTest "kiro-package-null-explicit-tweaks-warn" (
       let
-        warnings = stripVendorWorktreeSteering:
-          (evalDevenv {
-            ai.kiro = {
-              enable = true;
-              package = null;
-              tweaks = {inherit stripVendorWorktreeSteering;};
-            };
-          }).config.warnings;
+        warns = eval: name: let
+          warnings = active:
+            (eval {
+              ai.kiro = {
+                enable = true;
+                package = null;
+                tweaks.${name} = active;
+              };
+            }).config.warnings;
+        in
+          warnings true
+          == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.tweaks.${name}. Unset them or set ai.kiro.package."]
+          && warnings false == [];
       in
-        warnings true
-        == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.tweaks.stripVendorWorktreeSteering. Unset them or set ai.kiro.package."]
-        && warnings false == []
+        builtins.all (
+          eval:
+            builtins.all (warns eval) ["relativeFileCheckPaths" "stripVendorWorktreeSteering"]
+        ) [evalHm evalDevenv]
     );
 
     module-kiro-package-null-explicit-ssh-workaround-warns = mkTest "kiro-package-null-explicit-ssh-workaround-warns" (
@@ -1654,11 +1660,10 @@ in {
         soleSame a b
     );
 
-    # The worktree tweak is off by default; enabling it selects the bundle
-    # materializer through the same shared seam on both backends.
-    module-kiro-worktree-tweak-default-off-and-parity = mkTest "kiro-worktree-tweak-default-off-and-parity" (
+    # Both boolean tweaks default off and select the materializer on either backend.
+    module-kiro-boolean-tweaks-default-off-and-parity = mkTest "kiro-boolean-tweaks-default-off-and-parity" (
       let
-        forks = eval: select: let
+        forks = eval: select: name: let
           a = eval {
             ai.kiro = {
               enable = true;
@@ -1668,15 +1673,16 @@ in {
           b = eval {
             ai.kiro = {
               enable = true;
-              tweaks.stripVendorWorktreeSteering = true;
+              tweaks.${name} = true;
               v3 = true;
             };
           };
         in
-          !a.config.ai.kiro.tweaks.stripVendorWorktreeSteering && soleFork (kiroWrappedDrvs (select a)) (kiroWrappedDrvs (select b));
+          !a.config.ai.kiro.tweaks.${name} && soleFork (kiroWrappedDrvs (select a)) (kiroWrappedDrvs (select b));
+        names = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
       in
-        forks evalHm (v: v.config.home.packages)
-        && forks evalDevenv (v: v.config.packages)
+        builtins.all (forks evalHm (v: v.config.home.packages)) names
+        && builtins.all (forks evalDevenv (v: v.config.packages)) names
     );
 
     # The patch re-joins the preserved vendor text directly after the

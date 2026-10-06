@@ -34,19 +34,17 @@
   patcher = ./kiro-bundle-patch.py;
 in
   # Both backends select the same `ai.kiro.tweaks`; every tweak defaults off.
+  # `replace` names the enabled fixed-text tweaks (the patcher's `FIXED` keys).
   {
     cliVersion,
     identity ? null,
-    stripVendorWorktreeSteering ? false,
+    replace ? [],
   }: let
     patchKey = builtins.hashString "sha256" (builtins.toJSON {
-      inherit identity stripVendorWorktreeSteering;
+      inherit identity replace;
       source = builtins.readFile patcher;
     });
-    replacementNames = lib.concatStringsSep ", " (
-      lib.optional (identity != null) "identity"
-      ++ lib.optional stripVendorWorktreeSteering "worktree"
-    );
+    replacementNames = lib.concatStringsSep ", " (lib.optional (identity != null) "identity" ++ replace);
   in
     pkgs.writeShellApplication {
       name = "kiro-bundle-materialize";
@@ -115,8 +113,11 @@ in
         ${lib.getExe pkgs.flock} 9
 
         # `.ready` is written last, so an interrupted materialization is retried
-        # rather than served half-built.
+        # rather than served half-built. A ready bundle may still have skipped a
+        # drifted replacement; replay its warnings so every launch names it.
+        # `-s` refuses an absent or empty `.skipped`: nothing was skipped.
         if [ -f "$out/.ready" ]; then
+          if [ -s "$out/.skipped" ]; then "$coreutils"/bin/cat "$out/.skipped" >&2; fi
           printf %s "$server"
           exit 0
         fi
@@ -139,11 +140,16 @@ in
         link_all "$nm/@kiro/agent/dist"         "$out/node_modules/@kiro/agent/dist"        "server"
         link_all "$nm/@kiro/agent/dist/server"  "$out/node_modules/@kiro/agent/dist/server" "acp-server.js"
 
-        # A drift miss must not mark an incomplete copy ready. The wrapper
-        # handles this status explicitly and still starts Kiro unpatched.
+        # Publish when at least one replacement applies, keeping the patcher's
+        # skip warnings for later launches. If all selected sources drift, the
+        # wrapper handles the failure and starts Kiro with stock.
+        status=0
         "$python" "$patcher" "$src" "$server" \
           ${lib.optionalString (identity != null) "--identity-file ${lib.escapeShellArg (pkgs.writeText "kiro-identity.txt" identity)}"} \
-          ${lib.optionalString stripVendorWorktreeSteering "--strip-worktree-steering"} || exit 1
+          ${lib.concatMapStringsSep " " (name: "--replace ${lib.escapeShellArg name}") replace} \
+          2>"$out/.skipped" || status=$?
+        if [ -s "$out/.skipped" ]; then "$coreutils"/bin/cat "$out/.skipped" >&2; fi
+        [ "$status" -eq 0 ] || exit 1
         "$coreutils"/bin/touch "$out/.ready"
         printf %s "$server"
       '';
