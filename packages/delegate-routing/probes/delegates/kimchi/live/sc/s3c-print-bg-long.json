@@ -1,0 +1,12 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--no-session",
+    "-p",
+    "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_PBG SLEEP=15\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": true}}]]"
+  ],
+  "timeout": 40
+}

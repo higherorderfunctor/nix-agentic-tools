@@ -1,0 +1,58 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          {
+            "task_name": "a",
+            "message": "TASK-A",
+            "model": "gpt-6-sol",
+            "reasoning_effort": "high",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          {
+            "task_name": "b",
+            "agent_type": "r1",
+            "reasoning_effort": "high",
+            "message": "TASK-B",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 20000 }, "collaboration"]] },
+    { "calls": [["list_agents", {}, "collaboration"]] },
+    { "msg": "ROOT DONE" }
+  ],
+  "/root/a": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "g", "message": "TASK-G", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 15000 }, "collaboration"]] },
+    { "msg": "A DONE" }
+  ],
+  "/root/a/g": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "h", "message": "TASK-H", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "msg": "G DONE" }
+  ]
+}

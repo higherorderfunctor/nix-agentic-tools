@@ -1,0 +1,15 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--approve",
+    "-p",
+    "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_EXPLICIT do it\", \"description\": \"explicit pins\", \"subagent_type\": \"Explore\", \"model\": \"kimchi-dev/fake-b\", \"thinking\": \"high\"}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_DEFAULT do it\", \"description\": \"defaults\", \"subagent_type\": \"General-Purpose\"}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_CUSTOM do it\", \"description\": \"custom wt\", \"subagent_type\": \"wt-agent\"}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BADMODEL do it\", \"description\": \"bad model\", \"subagent_type\": \"Explore\", \"model\": \"kimchi-dev/nope-x\"}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BADTHINK do it\", \"description\": \"bad thinking\", \"subagent_type\": \"Explore\", \"thinking\": \"ultra\"}}]]"
+  ],
+  "timeout": 90,
+  "files": {
+    ".kimchi/agents/wt-agent.md": "---\ndescription: probe agent with worktree isolation and frontmatter pins\nmodel: kimchi-dev/fake-b\nthinking: low\nisolation: worktree\ntools: read, ls\n---\nCUSTOM_BODY_SENTINEL\n"
+  }
+}

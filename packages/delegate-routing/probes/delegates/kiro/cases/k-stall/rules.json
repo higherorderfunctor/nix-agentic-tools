@@ -1,0 +1,37 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>"],
+    "events": [
+      {
+        "toolUseId": "tu_s",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "custom",
+          "prompt": "CHILD_SLOW do it",
+          "explanation": "x"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_SLOW"],
+    "delay": 9,
+    "events": ["CHILD_LATE"]
+  },
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>"],
+    "events": ["MAIN_DONE"]
+  },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] }
+]

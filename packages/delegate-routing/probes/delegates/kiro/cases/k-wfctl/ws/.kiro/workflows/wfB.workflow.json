@@ -1,0 +1,9 @@
+{
+  "name": "wfB",
+  "description": "b",
+  "inputs": {},
+  "steps": [
+    { "type": "step", "id": "b1", "agent": "custom", "prompt": "WFB_1 do it" },
+    { "type": "step", "id": "b2", "agent": "custom", "prompt": "WFB_2 do it" }
+  ]
+}

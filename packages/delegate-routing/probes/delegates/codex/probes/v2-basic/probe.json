@@ -1,0 +1,6 @@
+{
+  "thread": {},
+  "turn": "ROOT-GO",
+  "timeout": 60,
+  "after": [{ "method": "thread/loaded/list", "params": {} }]
+}

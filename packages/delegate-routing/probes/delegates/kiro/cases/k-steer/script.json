@@ -1,0 +1,23 @@
+{
+  "capsMeta": {
+    "kiro": { "settings": { "inlineAgents": { "enabled": true } } }
+  },
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "MAIN_KICKOFF USER_SENTINEL_1",
+      "async": true,
+      "tag": "p1"
+    },
+    { "op": "sleep", "s": 3 },
+    {
+      "op": "call",
+      "method": "_session/steer",
+      "params": {
+        "sessionId": "$SID",
+        "message": "STEER_SENTINEL change course"
+      }
+    },
+    { "op": "wait", "tag": "p1", "timeout": 90 }
+  ]
+}

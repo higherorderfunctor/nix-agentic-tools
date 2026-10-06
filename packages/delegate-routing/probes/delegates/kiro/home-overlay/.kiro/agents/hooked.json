@@ -1,0 +1,10 @@
+{
+  "name": "hooked",
+  "description": "hook fixture",
+  "prompt": "HOOKED_PROMPT_SENTINEL",
+  "tools": ["*"],
+  "hooks": {
+    "agentSpawn": [{ "command": "echo HOOK_AGENTSPAWN_SENTINEL" }],
+    "userPromptSubmit": [{ "command": "echo HOOK_UPS_SENTINEL" }]
+  }
+}

@@ -1,0 +1,78 @@
+[
+  {
+    "match": "SPAWNALL",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "gp",
+          "prompt": "Subtask GP: reply done.",
+          "subagent_type": "general-purpose",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "explore",
+          "prompt": "Subtask EX: reply done.",
+          "subagent_type": "Explore",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "plan",
+          "prompt": "Subtask PL: reply done.",
+          "subagent_type": "Plan",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "named",
+          "prompt": "Subtask NA: reply done.",
+          "subagent_type": "named-agent",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "empty",
+          "prompt": "Subtask EM: reply done.",
+          "subagent_type": "empty-agent",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "ephemeral",
+          "prompt": "Subtask EP: reply done.",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "claudecatch",
+          "prompt": "Subtask CL: reply done.",
+          "subagent_type": "claude",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "fork",
+          "prompt": "Subtask FK: reply done.",
+          "subagent_type": "fork",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]

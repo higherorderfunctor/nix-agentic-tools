@@ -1,0 +1,14 @@
+{
+  "args": ["--model", "kimchi-dev/fake-a", "--mode", "rpc", "--no-session"],
+  "stdin_lines": [
+    {
+      "at": 1.5,
+      "line": {
+        "type": "prompt",
+        "message": "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_RDEF SLEEP=3\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}]]"
+      }
+    }
+  ],
+  "close_stdin": false,
+  "timeout": 15
+}
