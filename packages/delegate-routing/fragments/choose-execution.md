@@ -3,6 +3,8 @@ self-contained task needs one delegate. Use a workflow when the work has
 dependent steps, loops or parallel parts. Start independent tasks together. Run
 writers that share a working tree one at a time. Launch delegate CLIs from the
 current directory. That directory decides their permissions and configuration.
+Say in every external launch brief that the delegate is non-interactive and
+reports to an orchestrator, not a person.
 
 To give another runtime a multi-step job, hand the whole job to one delegate
 there that can run its own subagents (the table's "Runs own subagents" column).

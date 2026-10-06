@@ -1,3 +1,3 @@
-After the worker finishes, one reviewer checks the result. Pick the reviewer
-like any delegate: a family whose "use for" fits review, preferably not the
-worker's family.
+One reviewer checks the result, preferably not the worker's family. Use
+Prosecute, Defend and Judge in place of this step when the change touches a
+shared abstraction (library code or an option declaration).

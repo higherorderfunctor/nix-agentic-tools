@@ -159,7 +159,7 @@
       selected == map (entry: "### ${entry}") names;
     routingDefaults = result.config.ai.programs.delegate-routing.routing;
     routingDisabled = change {ai.programs.delegate-routing.routing."Size the work".enable = false;};
-    routingReplaced = change {ai.programs.delegate-routing.routing."Follow the request".text = "CUSTOM REQUEST GUIDANCE";};
+    routingReplaced = change {ai.programs.delegate-routing.routing."Follow the user's request".text = "CUSTOM REQUEST GUIDANCE";};
     routingInserted = change {
       ai.programs.delegate-routing.routing."Consumer guidance" = {
         after = ["Size the work" "Missing anchor"];
@@ -179,22 +179,28 @@
         };
       };
     };
-    workflowName = "Review: one reviewer";
-    workflowEnabled = change {ai.programs.delegate-routing.workflows.${workflowName}.enable = true;};
+    workflowName = "Work and review";
+    workflowHeader = "Use when a delegate makes a change someone will act on";
+    # A runtime replacement supplies the portable wording explicitly.
     runtimeCatalogEnabled = change {
-      ai.programs.delegate-routing.runtimes.claude.workflows.${workflowName}.enable = true;
+      ai.programs.delegate-routing.runtimes.claude.routing."Orchestrator session" = {
+        always = true;
+        enable = true;
+        source = ../fragments/orchestrator-session.md;
+      };
+    };
+    # A runtime workflow record that sets no text keeps the portable header.
+    runtimeWorkflowStep = change {
+      ai.programs.delegate-routing.runtimes.claude.workflows.${workflowName}.steps."Claude step" = {
+        after = ["Loop"];
+        text = "CLAUDE WORKFLOW STEP";
+      };
     };
     runtimeCatalogHeader = change {
-      ai.programs.delegate-routing.runtimes.claude.workflows.${workflowName} = {
-        enable = true;
-        text = "CLAUDE CATALOG INTRO";
-      };
+      ai.programs.delegate-routing.runtimes.claude.workflows.${workflowName}.text = "CLAUDE CATALOG INTRO";
     };
     catalogOverridden = change {
-      ai.programs.delegate-routing = {
-        routing."Orchestrator session".text = "CUSTOM ORCHESTRATOR GUIDANCE";
-        workflows.${workflowName}.text = "CUSTOM REVIEW INTRO";
-      };
+      ai.programs.delegate-routing.routing."Orchestrator session".text = "CUSTOM ORCHESTRATOR GUIDANCE";
     };
     alwaysDisabled = change {
       ai.programs.delegate-routing.routing = {
@@ -203,13 +209,10 @@
       };
     };
     workflowInserted = change {
-      ai.programs.delegate-routing.workflows.${workflowName} = {
-        enable = true;
-        steps."Consumer step" = {
-          after = ["Rubric"];
-          before = ["Review"];
-          text = "CUSTOM WORKFLOW STEP";
-        };
+      ai.programs.delegate-routing.workflows.${workflowName}.steps."Consumer step" = {
+        after = ["Rubric"];
+        before = ["Review"];
+        text = "CUSTOM WORKFLOW STEP";
       };
     };
     runtimeWorkflow = change {
@@ -239,10 +242,7 @@
       };
     };
     runtimeWorkflowDisabled = change {
-      ai.programs.delegate-routing = {
-        workflows.${workflowName}.enable = true;
-        runtimes.claude.workflows.${workflowName}.enable = false;
-      };
+      ai.programs.delegate-routing.runtimes.claude.workflows.${workflowName}.enable = false;
     };
     disabledAnchor = change {
       ai.programs.delegate-routing.routing = {
@@ -505,18 +505,17 @@
     );
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
-      == ["Choose execution" "Follow the request" "Load delegate-routing" "Size the work" "Validate the result"]
+      == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Size the work" "Validate the result"]
       && !routingDefaults."Orchestrator session".enable
       && routingDefaults."Load delegate-routing".always
       && routingDefaults."Validate the result".always
-      && ordered claude ["Follow the request" "Size the work" "Choose execution"]
+      && ordered claude ["Follow the user's request" "Size the work" "Choose execution"]
       && lib.hasInfix "## Routing" claude
       && hasLoadInstruction stub
       && lib.hasInfix "### Validate the result" stub
       && !(lib.hasInfix "### Load delegate-routing" claude)
       && !(lib.hasInfix "### Validate the result" claude)
       && !(lib.hasInfix "### Size the work" stub)
-      && !(lib.hasInfix "## Common workflows" claude)
       && !(alwaysDisabled.config.ai.claude.rules ? delegate-routing-router)
       && !(alwaysDisabled.config.ai.codex.rules ? delegate-routing-router)
       && lib.hasInfix "## Routing" (readSkill alwaysDisabled "claude")
@@ -524,12 +523,12 @@
     );
     "module-delegate-routing-${name}-routing-consumer" = mkTest "delegate-routing-${name}-routing-consumer" (
       !(lib.hasInfix "### Size the work" (readSkill routingDisabled "claude"))
-      && lib.hasInfix "### Follow the request" (readSkill routingDisabled "claude")
+      && lib.hasInfix "### Follow the user's request" (readSkill routingDisabled "claude")
       && lib.hasInfix "### Choose execution" (readSkill routingDisabled "claude")
       && lib.hasInfix "CUSTOM REQUEST GUIDANCE" (readSkill routingReplaced "claude")
       && lib.hasInfix "### Size the work" (readSkill routingReplaced "claude")
       && lib.hasInfix "### Choose execution" (readSkill routingReplaced "claude")
-      && ordered (readSkill routingInserted "claude") ["Follow the request" "Size the work" "Consumer guidance" "Choose execution"]
+      && ordered (readSkill routingInserted "claude") ["Follow the user's request" "Size the work" "Consumer guidance" "Choose execution"]
       && lib.hasInfix "CUSTOM INSERTED GUIDANCE" (readSkill routingInserted "claude")
     );
     "module-delegate-routing-${name}-routing-runtime" = mkTest "delegate-routing-${name}-routing-runtime" (
@@ -541,24 +540,27 @@
       && lib.hasInfix "### Size the work" (readSkill runtimeRouting "codex")
     );
     "module-delegate-routing-${name}-workflows" = mkTest "delegate-routing-${name}-workflows" (
-      !result.config.ai.programs.delegate-routing.workflows.${workflowName}.enable
-      && !result.config.ai.programs.delegate-routing.workflows."Review: prosecute, defend, judge".enable
-      && lib.hasInfix "## Common workflows" (readSkill workflowEnabled "claude")
-      && lib.hasInfix "### ${workflowName}" (readSkill workflowEnabled "claude")
-      && lib.hasInfix "### ${workflowName}" (readSkill runtimeCatalogEnabled "claude")
-      && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogEnabled "claude")
-      && lib.hasInfix "3. **Loop:**" (readSkill runtimeCatalogEnabled "claude")
-      && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeCatalogEnabled "codex"))
+      result.config.ai.programs.delegate-routing.workflows.${workflowName}.enable
+      && lib.hasInfix "## Common workflows" claude
+      && lib.hasInfix "### ${workflowName}" claude
+      && lib.hasInfix "### ${workflowName}" codex
+      && lib.hasInfix workflowHeader claude
+      && lib.hasInfix "1. **Rubric:**" claude
+      && lib.hasInfix "8. **Loop:**" claude
+      && lib.hasInfix "### Orchestrator session" (ruleText runtimeCatalogEnabled)
+      && !(lib.hasInfix "### Orchestrator session" runtimeCatalogEnabled.config.ai.codex.rules.delegate-routing-router.text)
+      && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
+      && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
+      && lib.hasInfix "8. **Loop:**" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "claude")
+      && !(lib.hasInfix workflowHeader (readSkill runtimeCatalogHeader "claude"))
       && lib.hasInfix "1. **Rubric:**" (readSkill runtimeCatalogHeader "claude")
-      && lib.hasInfix "3. **Loop:**" (readSkill runtimeCatalogHeader "claude")
+      && lib.hasInfix "8. **Loop:**" (readSkill runtimeCatalogHeader "claude")
       && !(lib.hasInfix "CLAUDE CATALOG INTRO" (readSkill runtimeCatalogHeader "codex"))
       && !(lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "claude"))
       && lib.hasInfix "### ${workflowName}" (readSkill runtimeWorkflowDisabled "codex")
       && !catalogOverridden.config.ai.programs.delegate-routing.routing."Orchestrator session".enable
-      && !catalogOverridden.config.ai.programs.delegate-routing.workflows.${workflowName}.enable
       && !(lib.hasInfix "CUSTOM ORCHESTRATOR GUIDANCE" (readSkill catalogOverridden "claude"))
-      && !(lib.hasInfix "CUSTOM REVIEW INTRO" (readSkill catalogOverridden "claude"))
       && lib.hasInfix "CUSTOM WORKFLOW STEP" (readSkill workflowInserted "claude")
       && (let
         text = readSkill workflowInserted "claude";

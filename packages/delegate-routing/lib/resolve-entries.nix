@@ -3,7 +3,15 @@
   resolveWorkflows = portable: runtime:
     portable
     // lib.mapAttrs (name: workflow:
-      workflow // {steps = (portable.${name}.steps or {}) // workflow.steps;})
+      workflow
+      // {
+        steps = (portable.${name}.steps or {}) // workflow.steps;
+        # A runtime record that sets no header keeps the portable one.
+        text =
+          if workflow.text == ""
+          then portable.${name}.text or ""
+          else workflow.text;
+      })
     runtime;
   sort = scope: entries: let
     enabled = lib.filterAttrs (_: entry: entry.enable) entries;

@@ -18,12 +18,6 @@
   ...
 }: let
   gen = import ./generate.nix {inherit lib pkgs;};
-  # Places subtraction review within each review round.
-  subtractionReview = after: before: {
-    after = [after];
-    before = [before];
-    source = ./house-rules/subtraction-review.md;
-  };
   # The stacked-workflows program is not imported (see devenv.nix), but its
   # always-on routing rule is wanted: deliver it from the program's source.
   swsRouter = import ../packages/stacked-workflows/router.nix {inherit lib pkgs;};
@@ -156,16 +150,6 @@ in {
         # only, and not Fable, which this account does not have.
         kiro = {
           models = [{families = ["haiku" "opus" "sonnet"];}];
-        };
-      };
-      workflows = {
-        "Review: one reviewer" = {
-          enable = true;
-          steps."Subtraction review" = subtractionReview "Review" "Loop";
-        };
-        "Review: prosecute, defend, judge" = {
-          enable = true;
-          steps."Subtraction review" = subtractionReview "Defend" "Loop";
         };
       };
     };

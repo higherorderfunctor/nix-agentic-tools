@@ -1200,18 +1200,19 @@
 
     Portable `routing.<name>` entries carry `enable`, `always`, `before`, `after`
     and `text` or `source`. Four routing defaults and the always-on load-skill stub
-    ship enabled. Enable the optional "Orchestrator session" entry with
-    `routing."Orchestrator session".enable` or either review workflow through
-    `workflows.<name>.enable`. Workflows expose named
-    `steps` with the same entry fields, so a consumer can change one step.
+    ship enabled, along with the "Work and review" workflow. Enable the optional
+    "Orchestrator session" entry with `routing."Orchestrator session".enable`.
+    Workflows expose named `steps` with the same entry fields, so a consumer can
+    change one step.
     Entries with `always = true` become runtime rules; other entries live in the skill.
     Ordering uses named `before` and `after` edges. Missing or disabled anchors are
     ignored, cycles fail, and ties have no promised order.
 
     Runtime `settings.<runtime>.routing` and `workflows` compose with portable maps
     by key. A present runtime entry replaces the portable entry atomically; an
-    absent key inherits. Workflow headers and their step maps compose separately;
-    runtime steps replace portable steps by name while retaining siblings.
+    absent key inherits. Workflow headers and their step maps compose separately:
+    a runtime record without text keeps the portable header, and runtime steps
+    replace portable steps by name while retaining siblings.
     Within one scope, fields merge and different same-priority
     text definitions conflict. Disable an inherited entry with `enable = false`.
 

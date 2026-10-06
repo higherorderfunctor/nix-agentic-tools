@@ -8,17 +8,13 @@
         };
       })
       records);
-  rubric = {
-    name = "Rubric";
-    source = ../fragments/review-rubric.md;
-  };
 in {
   routing = {
     "Choose execution" = {
       after = ["Size the work"];
       source = ../fragments/choose-execution.md;
     };
-    "Follow the request".source = ../fragments/follow-the-request.md;
+    "Follow the user's request".source = ../fragments/follow-the-users-request.md;
     "Load delegate-routing" = {
       always = true;
       source = ../fragments/load-delegate-routing.md;
@@ -29,7 +25,7 @@ in {
       source = ../fragments/orchestrator-session.md;
     };
     "Size the work" = {
-      after = ["Follow the request"];
+      after = ["Follow the user's request"];
       source = ../fragments/size-the-work.md;
     };
     "Validate the result" = {
@@ -38,42 +34,41 @@ in {
       source = ../fragments/validate-the-result.md;
     };
   };
-  workflows = {
-    "Review: one reviewer" = {
-      enable = false;
-      steps = steps [
-        rubric
-        {
-          name = "Review";
-          source = ../fragments/review-one-reviewer.md;
-        }
-        {
-          name = "Loop";
-          source = ../fragments/review-loop.md;
-        }
-      ];
-    };
-    "Review: prosecute, defend, judge" = {
-      enable = false;
-      steps = steps [
-        rubric
-        {
-          name = "Prosecute";
-          source = ../fragments/review-prosecute.md;
-        }
-        {
-          name = "Defend";
-          source = ../fragments/review-defend.md;
-        }
-        {
-          name = "Judge";
-          source = ../fragments/review-judge.md;
-        }
-        {
-          name = "Loop";
-          source = ../fragments/review-loop.md;
-        }
-      ];
-    };
+  workflows."Work and review" = {
+    source = ../fragments/work-and-review.md;
+    steps = steps [
+      {
+        name = "Rubric";
+        source = ../fragments/review-rubric.md;
+      }
+      {
+        name = "Subtractive";
+        source = ../fragments/review-subtractive.md;
+      }
+      {
+        name = "Work";
+        source = ../fragments/review-work.md;
+      }
+      {
+        name = "Review";
+        source = ../fragments/review-one-reviewer.md;
+      }
+      {
+        name = "Prosecute";
+        source = ../fragments/review-prosecute.md;
+      }
+      {
+        name = "Defend";
+        source = ../fragments/review-defend.md;
+      }
+      {
+        name = "Judge";
+        source = ../fragments/review-judge.md;
+      }
+      {
+        name = "Loop";
+        source = ../fragments/review-loop.md;
+      }
+    ];
   };
 }

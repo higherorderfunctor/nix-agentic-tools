@@ -1,7 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-06 — validation separates command and reading
-> claims; both review workflows share a worker/review loop capped at 3 rounds.
+> **Last verified:** 2026-10-06 — one enabled "Work and review" workflow ships
+> the Subtractive standard; a runtime workflow record without text keeps the
+> portable header.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -12,17 +13,19 @@ expose the same surface.
 
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
 `source`. Names become headings. The package ships the always-on "Load
-delegate-routing" stub and four enabled entries: "Follow the request", "Size the
-work", "Choose execution" and "Validate the result". "Validate the result" is
-always-on too. The "Orchestrator session" catalog entry ships disabled. Policy
-belongs in these entries rather than renderer string literals.
+delegate-routing" stub and four enabled entries: "Follow the user's request",
+"Size the work", "Choose execution" and "Validate the result". "Validate the
+result" is always-on too. The "Orchestrator session" catalog entry ships
+disabled. Policy belongs in these entries rather than renderer string literals.
 
 `workflows.<name>` has the same fields plus `steps.<name>`. Each step has the
 routing entry fields except `always`; the workflow's `always` places its steps.
-The package ships disabled "Review: one reviewer" and "Review: prosecute,
-defend, judge" workflows. Enable a workflow, then add, replace, disable or
-reorder a step by key. Both workflows read shared Rubric and Loop sources. Each
-runs the worker and review inside a loop of at most 3 rounds. A workflow can
+The package ships one enabled workflow, "Work and review", with the steps
+Rubric, Subtractive, Work, Review, Prosecute, Defend, Judge and Loop chained by
+`after`. Review is one reviewer; Prosecute, Defend and Judge replace it for a
+change to a shared abstraction. The Subtractive step adds the subtraction
+standard to the rubric. Loop sends validated findings back to the worker for at
+most 3 rounds. Add, replace, disable or reorder a step by key. A workflow can
 have introductory text or only steps; an enabled step needs content.
 
 Entries with `always = true` render through the existing per-runtime `ai.rules`
@@ -46,13 +49,13 @@ present runtime entry replaces that portable entry atomically; different keys
 add. A disabled runtime entry suppresses the inherited entry. This is separate
 from Nix priority merging within one scope. A runtime replacement that needs the
 portable wording must supply that wording explicitly; do not copy evaluated
-records with internal fields. Workflow headers follow the same atomic rule,
-while their portable and runtime step maps compose separately by step name. A
-runtime step replaces its portable step atomically; sibling steps remain.
-Workflow content is required after these step maps compose: a runtime can enable
-a catalog workflow without introductory text or local steps when enabled
-inherited steps provide content. An enabled workflow with no effective
-introductory text or enabled steps fails with a named error.
+records with internal fields. A runtime workflow record that sets text replaces
+the portable header; one that sets no text keeps it. Portable and runtime step
+maps compose separately by step name. A runtime step replaces its portable step
+atomically; sibling steps remain. Workflow content is required after these step
+maps compose: a runtime can enable a catalog workflow without introductory text
+or local steps when enabled inherited steps provide content. An enabled workflow
+with no effective introductory text or enabled steps fails with a named error.
 
 `before` and `after` name ordering anchors in the same map. Topological sorting
 honors both forms among enabled entries. Edges to absent or disabled entries are
@@ -62,13 +65,11 @@ executable first-match routing. Workflow steps have their own ordering map. To
 keep a terminal step last when inserting a new step, give the new step a
 `before` edge to that terminal step.
 
-This repository enables "Orchestrator session" and both review workflows in
-`dev/ai.nix`. Its portable "Local limits" entry caps external CLI delegates at
-two. Its Claude-only "Pool drain" entry follows "Size the work" and asks for
-usage before each batch of delegates, choosing allowance left per hour until
-reset. Each review workflow adds a shared "Subtraction review" step after Review
-or Defend and before Loop. These house entries are consumer policy, not shipped
-defaults.
+This repository enables "Orchestrator session" in `dev/ai.nix`. Its portable
+"Local limits" entry caps external CLI delegates at two. Its Claude-only "Pool
+drain" entry follows "Size the work" and asks for usage before each batch of
+delegates, choosing allowance left per hour until reset. These house entries are
+consumer policy, not shipped defaults.
 
 ## Families and runtime capabilities
 
