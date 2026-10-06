@@ -146,11 +146,14 @@
     };
     disabledNode = skill {ai.programs.delegate-routing.runtimes.claude.techniques.Agent.enable = false;};
     modifiedNode = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".command = "CUSTOM CODEX COMMAND";};
+    ownSubagentsOverride = skill {ai.programs.delegate-routing.runtimes.codex.techniques."codex exec".runsOwnSubagents = "CUSTOM OWN SUBAGENTS";};
     invalidNode = node: change {ai.programs.delegate-routing.runtimes.claude.techniques.Invalid = node;};
     techniqueRow = text: technique: lib.findFirst (lib.hasInfix "`${technique}`") "" (lib.splitString "\n" text);
     kiroInvoke = techniqueRow kiro "invoke_sub_agent";
     # Technique, kind, pins model, pins effort and modes, without table padding.
     techniqueCells = text: technique: lib.sublist 1 5 (map lib.trim (lib.splitString "|" (techniqueRow text technique)));
+    # The "Runs own subagents" cell, which follows Modes.
+    ownSubagents = text: technique: lib.trim (builtins.elemAt (lib.splitString "|" (techniqueRow text technique)) 6);
     ruleText = value: value.config.ai.claude.rules.delegate-routing-router.text;
     ordered = text: names: let
       headings = lib.filter (line: lib.hasPrefix "### " line) (lib.splitString "\n" text);
@@ -462,6 +465,11 @@
       && hasProse "an agent cannot reliably tell which mode it is in, but it can see its tools" claude
       && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
       && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
+      && lib.hasInfix "| Runs own subagents" claude
+      && ownSubagents claude "codex exec" == "supported (headless)"
+      && ownSubagents kimchi "Agent" == "unsupported (headless)"
+      && ownSubagents kiro "orchestrate_subagent" == "unknown"
+      && ownSubagents ownSubagentsOverride "codex exec" == "CUSTOM OWN SUBAGENTS"
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (
       failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false"

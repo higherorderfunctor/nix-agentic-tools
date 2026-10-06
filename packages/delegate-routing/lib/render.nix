@@ -61,7 +61,7 @@
       ### ${target} techniques
 
       ${lib.optionalString (delegates != {}) (table
-        (["Technique" "Kind" "Pins model" "Pins effort" "Modes" "Notes"] ++ lib.optional hasCommand "Command")
+        (["Technique" "Kind" "Pins model" "Pins effort" "Modes" "Runs own subagents" "Notes"] ++ lib.optional hasCommand "Command")
         (lib.mapAttrsToList (name: node:
           [
             "`${name}`"
@@ -69,6 +69,7 @@
             (builtins.toJSON node.pinsModel)
             (builtins.toJSON node.pinsEffort)
             (lib.concatStringsSep "+" node.modes)
+            node.runsOwnSubagents
             node.notes
           ]
           ++ lib.optional hasCommand (command node))
