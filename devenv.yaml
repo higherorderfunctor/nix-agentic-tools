@@ -29,7 +29,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   microvm:
-    url: github:microvm-nix/microvm.nix/a4251ae36520c59a31afc07ffc32aa4fd7f214d2
+    url: github:microvm-nix/microvm.nix/52860fa190bdecfe4a837de09b7f9e7babed4871
     inputs:
       nixpkgs:
         follows: nixpkgs
@@ -46,12 +46,12 @@ inputs:
   nixpkgs:
     url: github:NixOS/nixpkgs/151fa4e8ddfdd8dd25d945ad94ed54a13de9f6e4
   rust-overlay:
-    url: github:oxalica/rust-overlay/e60029353d0c48d216bc4b065168ccd4079c166f
+    url: github:oxalica/rust-overlay/b962e5d0c8cd97196c6a882d659fe451b52ad989
     inputs:
       nixpkgs:
         follows: nixpkgs
   serena:
-    url: github:oraios/serena/3155fd67e9b7336a4a4cbf51ac111bba88fa53d7
+    url: github:oraios/serena/b023b685cfdc5cb021cefcd9a47b52ce0deeeee7
     inputs:
       nixpkgs:
         follows: nixpkgs
