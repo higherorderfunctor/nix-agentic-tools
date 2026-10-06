@@ -108,9 +108,14 @@
       ]
       # The protocol replaces Kiro's own worktree steering. The strip also
       # applies to Kiro's built-in default agent, which gets no protocol: only
-      # typed agents receive `extraSystemPrompt`.
+      # typed agents receive `extraSystemPrompt`. With sibling worktrees the
+      # vendor's absolute `{{worktree_path}}` stop-condition path never
+      # resolves, so workflow loops spin to maxIterations; keep it relative.
       ++ lib.optional (runtime == "kiro") {
-        ai.kiro.tweaks.stripVendorWorktreeSteering = lib.mkDefault true;
+        ai.kiro.tweaks = {
+          relativeFileCheckPaths = lib.mkDefault true;
+          stripVendorWorktreeSteering = lib.mkDefault true;
+        };
       }));
 in {
   imports = [program.module];
