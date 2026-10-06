@@ -1,0 +1,24 @@
+{
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "MAIN_KICKOFF USER_SENTINEL_1",
+      "async": true,
+      "tag": "p1"
+    },
+    { "op": "sleep", "s": 3 },
+    {
+      "op": "grab",
+      "method": "_kiro.dev/subagent/list_update",
+      "path": "params.subagents.0.sessionId",
+      "as": "CHILD"
+    },
+    {
+      "op": "notify",
+      "method": "session/cancel",
+      "params": { "sessionId": "$CHILD" }
+    },
+    { "op": "wait", "tag": "p1", "timeout": 60 },
+    { "op": "sleep", "s": 3 }
+  ]
+}

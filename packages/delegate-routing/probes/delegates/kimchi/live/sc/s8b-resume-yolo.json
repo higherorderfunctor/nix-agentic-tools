@@ -1,0 +1,13 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--no-session",
+    "--yolo",
+    "-p",
+    "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_ONE first\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}], [{\"name\": \"resume_subagent\", \"args\": {\"agent_id\": \"@ID0@\", \"prompt\": \"CHILD_ONE_RESUMED STEER_RESUME\", \"max_turns\": 2, \"max_duration\": 30}}]]"
+  ],
+  "timeout": 40
+}

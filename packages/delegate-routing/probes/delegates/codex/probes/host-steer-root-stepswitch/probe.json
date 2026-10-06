@@ -1,0 +1,28 @@
+{
+  "thread": {},
+  "turn": "GO",
+  "timeout": 20,
+  "actions": [
+    {
+      "at": 1.5,
+      "method": "turn/steer",
+      "params": {
+        "threadId": "$THREAD",
+        "expectedTurnId": "$TURN",
+        "input": [
+          { "type": "text", "text": "STEER-ROOT-1", "text_elements": [] }
+        ]
+      }
+    },
+    {
+      "at": 2.0,
+      "method": "turn/settings/update",
+      "params": {
+        "threadId": "$THREAD",
+        "turnId": "$TURN",
+        "model": "gpt-6-sol",
+        "effort": "high"
+      }
+    }
+  ]
+}

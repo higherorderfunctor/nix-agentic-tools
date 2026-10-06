@@ -1,0 +1,46 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>"],
+    "events": [
+      {
+        "toolUseId": "tu_p",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "custom",
+          "prompt": "CHILD_PERM do it",
+          "explanation": "x"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_PERM"],
+    "events": [
+      {
+        "toolUseId": "cb1",
+        "name": "execute_bash",
+        "input": { "command": "echo CHILD_BASH_RAN", "explanation": "x" }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_PERM"],
+    "events": ["CHILD_AFTER_BASH"]
+  },
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>"],
+    "events": ["MAIN_DONE"]
+  },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] }
+]

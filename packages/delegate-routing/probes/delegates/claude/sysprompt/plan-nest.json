@@ -1,0 +1,30 @@
+[
+  {
+    "match": "SPAWN",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "outer",
+          "prompt": "Outer NESTGO: spawn.",
+          "subagent_type": "general-purpose",
+          "run_in_background": false
+        }
+      }
+    ]
+  },
+  {
+    "match": "NESTGO",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "inner",
+          "prompt": "Inner subtask: reply done.",
+          "subagent_type": "general-purpose",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]

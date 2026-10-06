@@ -1,0 +1,36 @@
+{
+  "new": {
+    "_meta": { "kiro": { "settings": { "workflows": { "enabled": true } } } }
+  },
+  "steps": [
+    { "op": "prompt", "text": "MAIN_KICKOFF USER_SENTINEL_1", "timeout": 60 },
+    { "op": "prompt", "text": "MAIN_SECOND", "timeout": 60 },
+    { "op": "sleep", "s": 2 },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/list",
+      "params": { "sessionId": "$SID" },
+      "save": {
+        "W0": "result.runs.0.workflowId",
+        "W1": "result.runs.1.workflowId"
+      }
+    },
+    {
+      "op": "notify",
+      "method": "session/cancel",
+      "params": { "sessionId": "$SID" }
+    },
+    { "op": "sleep", "s": 1 },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/cancel",
+      "params": { "workflowId": "$W0" }
+    },
+    { "op": "sleep", "s": 16 },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/list",
+      "params": { "sessionId": "$SID" }
+    }
+  ]
+}

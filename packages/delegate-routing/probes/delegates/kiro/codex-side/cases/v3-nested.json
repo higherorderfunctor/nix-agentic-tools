@@ -1,0 +1,95 @@
+{
+  "args": ["acp", "--agent-engine", "v3", "--auth-method", "cli"],
+  "acp": true,
+  "permission": "allow",
+  "initSettings": {
+    "inlineAgents": {
+      "enabled": true
+    }
+  },
+  "new": {
+    "_meta": {
+      "kiro": {
+        "modelId": "claude-sonnet-4"
+      }
+    }
+  },
+  "rules": [
+    {
+      "match": "NEST_ROOT",
+      "events": [
+        {
+          "toolUseId": "inline",
+          "name": "invoke_sub_agent",
+          "input": {
+            "name": "anonymous",
+            "prompt": "CHILD_TASK",
+            "explanation": "offline nesting",
+            "inlineAgent": {
+              "systemPrompt": "INLINE_SYSTEM",
+              "model": "claude-haiku-4.5"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "match": "CHILD_TASK",
+      "events": [
+        {
+          "toolUseId": "nested",
+          "name": "invoke_sub_agent",
+          "input": {
+            "name": "general-task-execution",
+            "prompt": "GRAND_TASK",
+            "explanation": "offline grandchild"
+          }
+        }
+      ]
+    },
+    {
+      "match": "GRAND_TASK",
+      "events": [
+        {
+          "toolUseId": "grandresult",
+          "name": "subagent_response",
+          "input": {
+            "response": "GRAND_RESULT",
+            "files": []
+          }
+        }
+      ]
+    },
+    {
+      "match": "CHILD_TASK",
+      "events": [
+        {
+          "toolUseId": "childresult",
+          "name": "subagent_response",
+          "input": {
+            "response": "CHILD_RESULT",
+            "files": []
+          }
+        }
+      ]
+    },
+    {
+      "match": null,
+      "events": ["ROOT_DONE"]
+    }
+  ],
+  "steps": [
+    {
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$SID",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "NEST_ROOT"
+          }
+        ]
+      }
+    }
+  ]
+}

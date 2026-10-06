@@ -1,0 +1,9 @@
+{
+  "name": "nosub",
+  "description": "no subagent",
+  "prompt": "P",
+  "tools": ["*"],
+  "toolsSettings": {},
+  "allowedTools": [],
+  "excludedTools": ["subagent"]
+}

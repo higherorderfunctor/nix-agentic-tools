@@ -1,0 +1,61 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "a", "message": "A", "fork_turns": "none" },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          {
+            "task_name": "b",
+            "message": "B",
+            "model": "nope-model",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          {
+            "task_name": "c",
+            "message": "C",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "ultra",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          {
+            "task_name": "d",
+            "message": "D",
+            "agent_type": "nonexistent",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          { "task_name": "e", "message": "E", "fork_context": true },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          {
+            "task_name": "f",
+            "message": "F",
+            "reasoning_effort": "xhigh",
+            "fork_turns": "2"
+          },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 10000 }, "collaboration"]] },
+    { "msg": "ROOT DONE" }
+  ]
+}

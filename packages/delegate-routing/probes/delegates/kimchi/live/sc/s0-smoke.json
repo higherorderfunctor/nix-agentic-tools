@@ -1,0 +1,12 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--no-session",
+    "-p",
+    "hello PLAN=[]"
+  ],
+  "timeout": 60
+}

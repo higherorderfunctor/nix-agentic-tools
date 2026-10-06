@@ -1,0 +1,93 @@
+{
+  "args": ["acp", "--agent-engine", "v3", "--auth-method", "cli"],
+  "acp": true,
+  "permission": "allow",
+  "initSettings": {
+    "workflows": "on",
+    "inlineAgents": "on"
+  },
+  "agents": [
+    {
+      "name": "worker",
+      "description": "offline worker",
+      "prompt": "WORKER",
+      "tools": ["*"]
+    }
+  ],
+  "new": {
+    "_meta": {
+      "kiro": {
+        "modelId": "claude-sonnet-4",
+        "settings": {
+          "workflows": "on"
+        }
+      }
+    }
+  },
+  "rules": [
+    {
+      "match": "WF_CHILD",
+      "delay": 8,
+      "events": ["WORKFLOW_RESULT"]
+    }
+  ],
+  "steps": [
+    {
+      "method": "_kiro/workflow/new",
+      "params": {
+        "parentSessionId": "$SID",
+        "workflow": {
+          "name": "offline",
+          "steps": [
+            {
+              "type": "step",
+              "id": "one",
+              "agent": "worker",
+              "prompt": "WF_CHILD",
+              "modelId": "claude-haiku-4.5",
+              "effortLevel": "low"
+            }
+          ]
+        },
+        "inputs": {}
+      }
+    },
+    {
+      "method": "_kiro/workflow/invoke",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "event": "workflow/run_started",
+      "seconds": 3
+    },
+    {
+      "sleep": 1
+    },
+    {
+      "method": "_kiro/workflow/inspect",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "method": "_kiro/workflow/pause",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "method": "_kiro/workflow/cancel",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "method": "_kiro/workflow/load",
+      "params": {
+        "workflowId": "$WF"
+      }
+    }
+  ]
+}

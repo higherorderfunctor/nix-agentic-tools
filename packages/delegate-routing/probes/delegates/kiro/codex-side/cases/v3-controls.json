@@ -1,0 +1,100 @@
+{
+  "rules": [
+    {
+      "match": "ROOT_TASK",
+      "events": [
+        {
+          "toolUseId": "spawn",
+          "name": "invoke_sub_agent",
+          "input": {
+            "name": "worker",
+            "prompt": "HOLD_CHILD",
+            "explanation": "offline lifecycle"
+          }
+        }
+      ]
+    },
+    {
+      "match": "HOLD_CHILD",
+      "delay": 8,
+      "events": ["CHILD_REPLY"]
+    }
+  ],
+  "agents": [
+    {
+      "name": "worker",
+      "description": "offline worker",
+      "prompt": "WORKER_PROMPT",
+      "tools": ["*"],
+      "model": "claude-sonnet-4"
+    }
+  ],
+  "args": ["acp", "--agent-engine", "v3", "--auth-method", "cli"],
+  "acp": true,
+  "initSettings": {
+    "inlineAgents": {
+      "enabled": true
+    }
+  },
+  "new": {
+    "_meta": {
+      "kiro": {
+        "modelId": "claude-sonnet-4"
+      }
+    }
+  },
+  "steps": [
+    {
+      "method": "_kiro/config/template"
+    },
+    {
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$SID",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "ROOT_TASK"
+          }
+        ]
+      },
+      "async": "prompt_run"
+    },
+    {
+      "event": "sub_agent_start",
+      "seconds": 3
+    },
+    {
+      "method": "_session/steer",
+      "params": {
+        "sessionId": "$SID",
+        "message": "MIDRUN_STEER"
+      }
+    },
+    {
+      "method": "session/set_config_option",
+      "params": {
+        "sessionId": "$SID",
+        "configId": "effortLevel",
+        "value": "low"
+      }
+    },
+    {
+      "method": "session/cancel",
+      "params": {
+        "sessionId": "$SID"
+      },
+      "notify": true
+    },
+    {
+      "wait": "prompt_run"
+    },
+    {
+      "method": "_kiro/session/history",
+      "params": {
+        "sessionId": "$SID"
+      }
+    }
+  ],
+  "permission": "allow"
+}

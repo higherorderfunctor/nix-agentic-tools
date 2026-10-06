@@ -1,0 +1,14 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--thinking",
+    "xhigh",
+    "--mode",
+    "json",
+    "--no-session",
+    "-p",
+    "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_GP_NOTHINK\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_PLAN_PERSONA\", \"description\": \"d\", \"subagent_type\": \"Plan\"}}]]"
+  ],
+  "timeout": 30
+}
