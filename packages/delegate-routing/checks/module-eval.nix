@@ -538,6 +538,8 @@
       && lib.hasInfix "PORTABLE GUIDANCE" runtimeRouting.config.ai.codex.rules.delegate-routing-router.text
       && !(lib.hasInfix "### Size the work" (readSkill runtimeRouting "claude"))
       && lib.hasInfix "### Size the work" (readSkill runtimeRouting "codex")
+      && lib.hasInfix "### Orchestrator session" (ruleText runtimeCatalogEnabled)
+      && !(lib.hasInfix "### Orchestrator session" runtimeCatalogEnabled.config.ai.codex.rules.delegate-routing-router.text)
     );
     "module-delegate-routing-${name}-workflows" = mkTest "delegate-routing-${name}-workflows" (
       result.config.ai.programs.delegate-routing.workflows.${workflowName}.enable
@@ -547,8 +549,6 @@
       && lib.hasInfix workflowHeader claude
       && lib.hasInfix "1. **Rubric:**" claude
       && lib.hasInfix "8. **Loop:**" claude
-      && lib.hasInfix "### Orchestrator session" (ruleText runtimeCatalogEnabled)
-      && !(lib.hasInfix "### Orchestrator session" runtimeCatalogEnabled.config.ai.codex.rules.delegate-routing-router.text)
       && lib.hasInfix workflowHeader (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "CLAUDE WORKFLOW STEP" (readSkill runtimeWorkflowStep "claude")
       && lib.hasInfix "8. **Loop:**" (readSkill runtimeWorkflowStep "claude")

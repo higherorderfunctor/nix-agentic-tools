@@ -1,7 +1,8 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
 > **Last verified:** 2026-10-06 — the worker and three review roles run inside a
-> loop of at most 3 rounds; unsettled findings go to the operator.
+> loop of at most 3 rounds; unsettled findings go back to the orchestrator to
+> validate.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -161,10 +162,12 @@ or `packages/*/packages/**/*.nix`; or a hunk under `packages/*/modules/**` or
 Everything else uses the single-reviewer default. Run the three-role protocol:
 an agent that prosecutes, a separate agent that defends, and a third that judges
 on evidence. The three roles run inside a loop of at most 3 rounds with the
-worker: the worker fixes, then the review runs again. If the same defect
-survives 2 rounds, change the brief instead of repeating it. At the cap, return
-the result, the open defects and the decision needed. A finding the judge cannot
-settle goes to the operator.
+worker: the worker fixes the findings you validated, then the review runs again
+on the fix and what it touches. Findings inside the worker's task need no
+approval from the operator. If the same defect survives 2 rounds, change the
+brief instead of repeating it. At the cap, return the result, the open defects
+and the decision needed. A finding the judge cannot settle goes back to you to
+validate.
 
 **Scope, deliberately narrow:**
 

@@ -158,11 +158,11 @@ git-workflow orientation — do not restate them here.
    finding on the EVIDENCE rather than the rhetoric.
 
 The three roles run inside a loop of at most 3 rounds with the worker: the
-worker fixes, then the review runs again. If the same defect survives 2 rounds,
-change the brief instead of repeating it. At the cap, return the result, the
-open defects and the decision needed. A finding the judge cannot settle goes to
-the operator. Never self-adjudicate; that reintroduces the bias the structure
-exists to remove.
+worker fixes the findings you validated, then the review runs again on the fix
+and what it touches. Findings inside the worker's task need no approval from the
+operator. If the same defect survives 2 rounds, change the brief instead of
+repeating it. At the cap, return the result, the open defects and the decision
+needed. A finding the judge cannot settle goes back to you to validate.
 
 Size the stages separately. Prosecute and defend are judgement work; the
 evidence-gathering underneath them is mechanical and belongs on a cheaper model.
