@@ -32,6 +32,7 @@
   lib,
   pkgs,
   self,
+  splitUpdateTargets,
   updateRegistry,
   ...
 }: {
@@ -39,7 +40,7 @@
     inherit (self) updateTargets;
     packages = self.ciPackages.${pkgs.stdenv.hostPlatform.system};
     versionedPackages = lib.filterAttrs (_: package: package ? version) packages;
-    targetPackageNames = builtins.filter (name: builtins.hasAttr name packages) (builtins.attrNames updateTargets);
+    targetPackageNames = builtins.attrNames (splitUpdateTargets updateTargets).present;
     targetPackages = map (name: packages.${name}) targetPackageNames;
 
     sourcePath = package: let
@@ -93,8 +94,7 @@
     # direction can fail rather than merely reporting the current registry.
     positiveControlName = "context7-mcp";
     positiveControlTargets = builtins.removeAttrs updateTargets [positiveControlName];
-    positiveControlTargetNames = builtins.filter (name: builtins.hasAttr name packages) (builtins.attrNames positiveControlTargets);
-    positiveControlPackages = map (name: packages.${name}) positiveControlTargetNames;
+    positiveControlPackages = map (name: packages.${name}) (builtins.attrNames (splitUpdateTargets positiveControlTargets).present);
     positiveControlPass =
       builtins.hasAttr positiveControlName packages
       && coverageFor positiveControlTargets positiveControlPackages positiveControlName packages.${positiveControlName} == null;

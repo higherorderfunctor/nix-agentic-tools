@@ -11,13 +11,19 @@
 # "attribute 'tag' missing".
 #
 # The field list is NOT restated here. This evaluates the pinned nix-update
-# input's own eval.nix against each target, so a field nix-update starts
-# reading is checked the day the input is bumped. `scopedImport` replaces the
-# one `import importPath` in eval.nix with a function returning this system's
-# `ciPackages`, which is the set update-pkg.sh points nix-update at
-# (`--flake ciPackages.<system>.<name>`). `isFlake = false` keeps eval.nix off
-# `getFlake`, which pure evaluation cannot call; on that branch it only skips
-# position sanitizing, which reads no package field.
+# input's own eval.nix against each target, with the arguments its eval.py
+# passes for what update-pkg.sh hands it (`--flake ciPackages.<system>.<name>
+# --system <system>` plus the target's `flags`):
+#
+# - `isFlake = true`, as `--flake` sets. eval.nix then calls `getFlake`,
+#   which pure evaluation cannot, so `scopedImport` gives it a `builtins`
+#   whose `getFlake` returns this flake with `ciPackages.<system>` swapped
+#   for the set under test. eval.nix looks the target up where nix-update
+#   does: not in `packages.<system>`, so at the flake root.
+# - `sanitizePositions = !override_filename`, read from the same
+#   `updateTargets.<name>.flags` update-pkg.sh receives. Without
+#   `--override-filename`, eval.nix requires the target's `src` (or
+#   `version`) position to lie inside the flake, and throws otherwise.
 #
 # `toJSON` forces the result as deeply as `--json --strict` does. Its string
 # context is discarded so the check stays eval-only: a field such as a cargo
@@ -25,45 +31,42 @@
 # this check build that derivation.
 #
 # A field that throws cannot be caught here — `tryEval` does not catch a
-# missing attribute — so a broken target fails evaluation of the check, with
-# the target named in the error context. The positive control below rigs one
-# real target with a throwing `meta.changelog` and confirms the same
-# evaluation path reaches it.
+# missing attribute — so a broken target fails evaluation of every check on
+# that system (lib/facets.nix collects them into one attrset), with the
+# target named in the error context. The positive control below rigs one real
+# target with a throwing `meta.changelog` and confirms the same evaluation
+# path reaches it.
 {
   inputs,
   lib,
   pkgs,
   self,
+  splitUpdateTargets,
   ...
 }: {
   checks.update-target-meta-eval = let
     inherit (pkgs.stdenv.hostPlatform) system;
     packages = self.ciPackages.${system};
-    evalNix = "${inputs.nix-update}/nix_update/eval.nix";
+    presentTargets = (splitUpdateTargets self.updateTargets).present;
 
-    # Targets absent from this system's package set are not evaluated here;
-    # list them instead of dropping them silently.
-    targetNames = builtins.attrNames self.updateTargets;
-    absentTargets = builtins.filter (name: !(builtins.hasAttr name packages)) targetNames;
-    presentTargets = builtins.filter (name: builtins.hasAttr name packages) targetNames;
-
-    # nix-update's eval.nix, called the way eval.py calls it, against `set`.
-    nixUpdateEval = set: name:
-      builtins.scopedImport {import = _: _: set;} evalNix {
-        attribute = builtins.toJSON [name];
-        importPath = "ciPackages.${system}";
-        isFlake = false;
-        inherit system;
-      };
     forced = set: name:
       builtins.addErrorContext "while evaluating update target '${name}' the way nix-update's eval.nix does"
-      (builtins.unsafeDiscardStringContext (builtins.toJSON (nixUpdateEval set name)));
-
-    report = lib.concatMapStrings (name: "  ok  ${name}: ${forced packages name}\n") presentTargets;
+      (builtins.unsafeDiscardStringContext (builtins.toJSON (
+        builtins.scopedImport {
+          builtins = builtins // {getFlake = _: self // {ciPackages = self.ciPackages // {${system} = set;};};};
+        } "${inputs.nix-update}/nix_update/eval.nix" {
+          attribute = builtins.toJSON ["ciPackages" system name];
+          importPath = self.outPath;
+          flakeImportPath = self.outPath;
+          isFlake = true;
+          sanitizePositions = !(builtins.elem "--override-filename" presentTargets.${name}.flags);
+          inherit system;
+        }
+      )));
 
     # Positive control: one real target with a throwing meta.changelog must
     # fail the same evaluation.
-    controlName = builtins.head presentTargets;
+    controlName = builtins.head (builtins.attrNames presentTargets);
     controlPackages =
       packages
       // {
@@ -73,12 +76,10 @@
       };
     controlCaught = !(builtins.tryEval (forced controlPackages controlName)).success;
   in
+    assert lib.assertMsg (presentTargets != {}) "update-target-meta-eval: no update target is in ciPackages.${system}";
     assert lib.assertMsg controlCaught
     "update-target-meta-eval: rigging ${controlName}.meta.changelog to throw did not fail nix-update's evaluation; the check cannot fail";
-    assert lib.assertMsg (presentTargets != []) "update-target-meta-eval: no update target is in ciPackages.${system}";
       pkgs.writeText "update-target-meta-eval" (
-        report
-        + lib.optionalString (absentTargets != [])
-        "not in this system's package set, not evaluated: ${lib.concatStringsSep " " absentTargets}\n"
+        lib.concatMapStrings (name: "  ok  ${name}: ${forced packages name}\n") (builtins.attrNames presentTargets)
       );
 }

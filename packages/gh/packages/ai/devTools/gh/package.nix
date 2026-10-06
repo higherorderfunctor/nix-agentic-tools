@@ -55,7 +55,6 @@
 # not been root-caused. The old claim predated that measurement.
 #
 # Supporting package; its public role is encoded by the native recipe tree.
-# earmarked repo split can lift the subtree whole.
 {
   pkgs,
   packageLib,
@@ -66,6 +65,12 @@
   vu = packageLib;
 
   sources = builtins.fromJSON (builtins.readFile ../../../../sources.json);
+
+  # The release tags `src` fetches and the updateScript resolves, stated
+  # once for both.
+  owner = "cli";
+  repo = "cli";
+  tagPrefix = "v";
 
   # One mutable source path shared by the vendor fixer and update script.
   sourcesFile = repoPath ../../../../sources.json;
@@ -101,17 +106,17 @@ in
     # the upstream expression's `finalAttrs.src.*` reads keep resolving:
     # its `meta.changelog` interpolates `finalAttrs.src.tag`, and nix-update
     # forces that field on every sweep. A bare fetchzip has no `tag`, which
-    # held the gh lane back once nixpkgs 6cce080774 started reading it;
-    # `checks/packaging/update-target-meta-eval.nix` gates the shape now.
+    # held the gh lane back once nixpkgs 6cce080774 started reading it.
+    # `checks/packaging/update-target-meta-eval.nix` now fails CI when a
+    # field nix-update reads stops evaluating.
     #
     # Without `postCheckout` this is fetchzip of the tag's archive tarball,
     # so the hash is over the UNPACKED NAR — exactly what the updateScript
     # below records with --unpack. The sidecar's `url` names the same
     # tarball under its short `archive/v<version>` form and is not read.
     src = fetchFromGitHub {
-      owner = "cli";
-      repo = "cli";
-      tag = "v${sources.version}";
+      inherit owner repo;
+      tag = "${tagPrefix}${sources.version}";
       inherit (sources.src) hash;
     };
     vendorHash = sources.vendorHash or lib.fakeHash;
@@ -132,8 +137,8 @@ in
           extraExtract = "${goUpdate.extract}";
           inherit pkgs;
           pname = "gh";
-          repo = "cli/cli";
-          inherit sourcesFile;
+          repo = "${owner}/${repo}";
+          inherit sourcesFile tagPrefix;
         };
       };
   })
