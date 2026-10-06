@@ -18,7 +18,7 @@
   ...
 }: let
   gen = import ./generate.nix {inherit lib pkgs;};
-  # Runs before the judging step, so the judge rules on its findings too.
+  # Places subtraction review within each review round.
   subtractionReview = after: before: {
     after = [after];
     before = [before];
@@ -161,11 +161,11 @@ in {
       workflows = {
         "Review: one reviewer" = {
           enable = true;
-          steps."Subtraction review" = subtractionReview "Review" "Judge findings";
+          steps."Subtraction review" = subtractionReview "Review" "Loop";
         };
         "Review: prosecute, defend, judge" = {
           enable = true;
-          steps."Subtraction review" = subtractionReview "Defend" "Judge";
+          steps."Subtraction review" = subtractionReview "Defend" "Loop";
         };
       };
     };

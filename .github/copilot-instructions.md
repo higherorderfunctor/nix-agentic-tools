@@ -412,9 +412,8 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-29 — prek hooks take their config from the
-> session's launch checkout; worktrees are materialized only by choice;
-> repository-level branchless initialization precedes prek hook installation.
+> **Last verified:** 2026-10-06 — the worker and three review roles run inside a
+> loop of at most 3 rounds; unsettled findings go to the operator.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -573,9 +572,11 @@ or `packages/*/packages/**/*.nix`; or a hunk under `packages/*/modules/**` or
 
 Everything else uses the single-reviewer default. Run the three-role protocol:
 an agent that prosecutes, a separate agent that defends, and a third that judges
-on evidence. If the judge cannot converge, loop — at most three rounds, each
-narrowed to what stayed unresolved. Surface a genuine split to the operator
-rather than adjudicating it yourself.
+on evidence. The three roles run inside a loop of at most 3 rounds with the
+worker: the worker fixes, then the review runs again. If the same defect
+survives 2 rounds, change the brief instead of repeating it. At the cap, return
+the result, the open defects and the decision needed. A finding the judge cannot
+settle goes to the operator.
 
 **Scope, deliberately narrow:**
 
