@@ -687,11 +687,12 @@ in
     installPackage = {
       cfg,
       extraSystemPrompt,
+      hasExtraSystemPrompt,
       ...
     }:
       lib.ai.mkLauncher pkgs {
         exe = "claude";
-        flags = lib.optionals (extraSystemPrompt != null) [
+        flags = lib.optionals hasExtraSystemPrompt [
           "--add-flags"
           (lib.escapeShellArg "--append-system-prompt-file ${pkgs.writeText "claude-extra-system-prompt.md" extraSystemPrompt}")
         ];
@@ -704,6 +705,7 @@ in
       backend,
       cfg,
       config,
+      hasExtraSystemPrompt,
       hasMergedContext,
       mergedAgents,
       mergedContext,
@@ -783,6 +785,11 @@ in
         (lib.mkIf (resolvedSettings.reasoningEffort != null) {
           ai.claude.native.settings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
         })
+        {
+          warnings =
+            lib.optional (hasExtraSystemPrompt && cfg.package == null)
+            "ai.claude.extraSystemPrompt is ineffective when ai.claude.package = null; set ai.claude.package to a managed package to deliver the extra system prompt.";
+        }
         (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
         # L2b → L3: expand `ai.claude.hookScriptsDir` into
         # `ai.claude.hookScripts`. Content is `readFile`'d into
