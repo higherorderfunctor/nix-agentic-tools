@@ -11,7 +11,8 @@
 > Always-on entries reach Claude, Codex and Kimchi through
 > `ai.<runtime>.extraSystemPrompt.delegate-routing` and Kiro through its
 > always-on rule, and a per-turn `UserPromptSubmit` reminder replaces Claude's
-> `delegationClampMitigation`.
+> `delegationClampMitigation`; effective runtime reminder enablement requires
+> nonempty inline content.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing`,
 `workflows` and `reminder`. Runtime controls live under `runtimes.<runtime>` for
@@ -203,16 +204,20 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 with the one-line text in `lib/reminder.nix`. A `UserPromptSubmit` command hook
 prints it on every turn. Claude, Codex and Kimchi read it as
 `hookSpecificOutput.additionalContext` JSON; Kiro takes plain stdout. Each
-payload is serialized at eval time into a store file that a strict-mode
-`writeShellApplication` prints, so every hook command is a bare store path.
+payload is serialized at eval time into a store file that the shared
+`lib/strict-shell-application.nix` helper prints with an absolute `cat` path, so
+every hook command is a bare store path.
 
 Delivery is per backend. Home Manager writes Claude, Codex and Kiro; devenv adds
 Kimchi's `.kimchi/hooks.json`, since Kimchi has no user-scope hook file.
 `runtimes.<runtime>.reminder.enable` overrides the portable `enable` for one
-runtime, and null inherits it. A disabled program on a runtime writes no hook.
-The reminder is on whenever the program is, and Codex rejects `ai.codex.hooks`
-beside inline `ai.codex.native.settings.hooks`; such a consumer moves those
-hooks to `ai.codex.hooks` or sets `runtimes.codex.reminder.enable = false`.
+runtime, and null inherits it. Any enabled runtime reminder hook requires
+nonempty inline text, even when the portable reminder is disabled; source-backed
+content retains the text-source type's allowance for an empty file. A disabled
+program on a runtime writes no hook. The reminder is on whenever the program is,
+and Codex rejects `ai.codex.hooks` beside inline
+`ai.codex.native.settings.hooks`; such a consumer moves those hooks to
+`ai.codex.hooks` or sets `runtimes.codex.reminder.enable = false`.
 
 The text stays first-person and user-attributed on purpose. It also answers
 Claude Code's `heron_brook` delegation clamp, which a system-attributed channel
