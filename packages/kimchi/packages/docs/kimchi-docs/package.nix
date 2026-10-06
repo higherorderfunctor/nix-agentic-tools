@@ -6,8 +6,8 @@
   inherit (pkgs) lib;
 
   snapshotDate = "2026-10-06";
-  contentHash = "sha256-iilvKO1O/KWCgz0fcpytZ8BlPrwfTU1EZ0ay4BIY4I4=";
-  hash = "sha256-u8eS4vZk0IU76d9cFb/gB/uI+0QA1JsalkIWT/J7cOE=";
+  contentHash = "sha256-9qtHcLNLHjSLziLc6wGAUko7u2I6fs81KB4I4U50lCk=";
+  hash = "sha256-w9cTpkdQ/fUt3Zuf5fBXCNwNWoCsmDahBDWjPonFSi0=";
   recipe = repoPath ./package.nix;
 
   fetchDocs = pkgs.writeShellApplication {
