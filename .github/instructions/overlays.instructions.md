@@ -16,7 +16,9 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 > a free leaf's dependencies are judged in CI by a no-config set. Recipes still
 > take bun and pnpm from `pkgs.ai.generic`. pnpm_12 and chatgpt-codex override
 > nixpkgs' source-built Rust packages with sidecar pins and the locked
-> toolchain; chatgpt-codex's update restores its hashes before regenerating.
+> toolchain; chatgpt-codex's update restores its hashes before regenerating. A
+> thin override keeps nixpkgs' `src` shape, and `checks.update-target-meta-eval`
+> runs nix-update's own eval.nix over every update target.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -334,6 +336,19 @@ reading such a file:
   repo's 4x/day update sweep instead of a nixpkgs channel bump, and the paths
   diverge the moment upstream moves. Do not "clean up" such a package on parity
   grounds.
+- **Keep `src` the shape nixpkgs gave it.** An `overrideAttrs` over a
+  `finalAttrs` recipe inherits every `finalAttrs.src.*` read in it, and `meta`
+  is where they hide. nixpkgs 6cce080774 made gh's `meta.changelog` read
+  `finalAttrs.src.tag`; our bare `fetchzip` had no `tag`, so gh still built and
+  passed `nix flake check` while nix-update, which forces `meta.changelog`,
+  failed every sweep. For a tagged release use
+  `fetchFromGitHub { owner; repo; tag; hash; }`: without fetchgit-only arguments
+  it fetches the same archive tarball, so the hash `ghArchiveUpdateScript`
+  records still matches and the output path does not move.
+  `checks.update-target-meta-eval` evaluates nix-update's own `eval.nix` against
+  every update target, so the next such read fails CI instead of the sweep.
+  Rev-tracked packages (git-revise, oxlint) have no tag to carry and keep their
+  `meta.changelog` override pointing at the rev.
 
 Measured for `pnpm_10` at landing: `pkgs.ai.generic.pnpm_10` and plain
 `pkgs.pnpm_10` share both `drvPath` and `outPath` (`…-pnpm-10.34.5.drv` /

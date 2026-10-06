@@ -570,7 +570,8 @@ are ignored.
 > package's own fetcher mode; both update paths regenerate committed sidecars
 > through `passthru.regenerateExtracted`; `--use-update-script` rows must
 > resolve `updateScript` to an executable file, gated by
-> `checks.update-script-executable`.
+> `checks.update-script-executable`; every update target must survive
+> nix-update's own `eval.nix`, gated by `checks.update-target-meta-eval`.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -781,11 +782,15 @@ registry every package contributes a row to. It replaced the flat, top-level
   an executable FILE: a `writeShellApplication` output is a directory and needs
   `lib.getExe`. `checks.update-script-executable` realizes argv[0] for every row
   present on the checking system and fails on a non-executable one (an absent
-  row is listed, not silently skipped). Multiple roles sharing a source have one
-  update target; Python source slices can declare `passthru.updateSource` so
-  completeness follows their common pin. Derive counts from
-  `nix eval --json .#.updateTargets`; the sweep also includes root input
-  targets, so that count is not the sweep's PR ceiling.
+  row is listed, not silently skipped). nix-update first evaluates the target
+  through its own `nix_update/eval.nix` with `--strict`, forcing fields a build
+  never reads, such as `meta.changelog`; `checks.update-target-meta-eval` runs
+  that same file from the pinned `nix-update` input over every target, so a
+  field that throws (gh's `src.tag`, 2026-10) fails CI rather than the sweep.
+  Multiple roles sharing a source have one update target; Python source slices
+  can declare `passthru.updateSource` so completeness follows their common pin.
+  Derive counts from `nix eval --json .#.updateTargets`; the sweep also includes
+  root input targets, so that count is not the sweep's PR ceiling.
 - **`.#.updateTargets`** — selected from `lib/facets/repository.nix`'s native
   module evaluation. It merges discovered owner registries with workspace policy
   ; ownership validation rejects competing package keys before priorities can
@@ -907,6 +912,7 @@ belt-and-braces, not the mechanism.
 | File                                            | Role                                                           |
 | ----------------------------------------------- | -------------------------------------------------------------- |
 | `checks/packaging/update-script-executable.nix` | Flake check: every `--use-update-script` argv[0] is executable |
+| `checks/packaging/update-target-meta-eval.nix`  | Flake check: nix-update's eval.nix forces every target         |
 | `checks/packaging/update-targets-parity.nix`    | Flake check: declared `file` == resolver output + inline rev   |
 | `config/generate-update-ninja.nix`              | Generates `.update.ninja` DAG from flake.lock + updateTargets  |
 | `config/update-targets.nix`                     | Workspace update exclusions                                    |
