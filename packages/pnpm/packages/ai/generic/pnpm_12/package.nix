@@ -45,25 +45,13 @@ in
     pnpm_12: packages/pnpm/sources-12.json records version "${sources.version}" (major ${sidecarMajor}), but this attribute is pnpm_12.
     Either point the sidecar back at a 12.x release, or add a pnpm_${sidecarMajor} attribute and move it there.
   '';
+  # No postPatch of our own: nixpkgs' generic-rust.nix now deletes upstream's
+  # "pnpm-managed cargo sources" block from .cargo/config.toml, which cargo
+  # otherwise rejects as a duplicate of cargoSetupHook's git source. Our
+  # former copy of that deletion ran second, found the block already gone
+  # and failed patchPhase:
+  # `git show a5475e4d:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
     package.overrideAttrs (finalAttrs: prev: {
-      # pnpm's .cargo/config.toml carries a "pnpm-managed cargo sources" block
-      # that points crates-io and its node-semver git source at a local
-      # .pnpm/crates vendor dir. cargoSetupHook defines the same git source
-      # for the Nix vendor tree, and cargo rejects the duplicate ("source
-      # `original-source-git-0` defines source ..., but that source is already
-      # defined"). Drop upstream's block by its own markers; nixpkgs' 12.3.4
-      # predates it.
-      postPatch =
-        (prev.postPatch or "")
-        + ''
-          (
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          grep -qxF '# >>> pnpm-managed cargo sources >>>' .cargo/config.toml
-          grep -qxF '# <<< pnpm-managed cargo sources <<<' .cargo/config.toml
-          sed -i '/^# >>> pnpm-managed cargo sources >>>$/,/^# <<< pnpm-managed cargo sources <<<$/d' .cargo/config.toml
-          )
-        '';
       doInstallCheck = true;
       # Upstream's passthru testVersion is separate from the package build.
       # Keep its install checks if introduced, and require our exact pin too.
