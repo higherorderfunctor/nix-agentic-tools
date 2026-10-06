@@ -91,9 +91,9 @@ fixture as a template, then fill runtime/version/date, mode, technique, client
 and permission context, source, exact replay, requested controls and observed
 controls. Observed values are null unless authoritative metadata records them.
 For each capability, keep a result of supported, unsupported or unknown plus the
-evidence note. `nestingDepth` also has `value`, null when unknown. A source
-limit must identify the source and say it was not exercised. Commit ability is
-independent of spawning.
+evidence note. `nestingDepth` also has `value`: the cap the evidence names, else
+the deepest level observed; null when unknown. A source limit must identify the
+source and say it was not exercised. Commit ability is independent of spawning.
 
 Interactive/HITL steps end with the operator filling a fixture file and
 reviewing its sanitized evidence. Add new files with `git add -N <file>` before

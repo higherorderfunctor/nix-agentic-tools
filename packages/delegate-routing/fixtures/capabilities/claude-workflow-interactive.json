@@ -9,8 +9,8 @@
       "result": "unknown"
     },
     "nestingDepth": {
-      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: nodes have no Agent or Workflow tool; nested workflow() is grep-only evidence. Replayed under claude -p, which runs the same Workflow node runtime; no interactive-session replay exists.",
-      "result": "unsupported",
+      "evidence": "Not executed: nested workflow() depth is grep-only in the delegate reference; nodes cannot start Agent children (see runsOwnSubagents).",
+      "result": "unknown",
       "value": null
     },
     "pinsEffort": {
