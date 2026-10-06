@@ -26,12 +26,12 @@
       "result": "supported"
     }
   },
-  "context": "Offline replays of the pinned Claude Code 2.1.289 against a local capture mock (claude:depth and claude:bg add --permission-mode bypassPermissions). The observed effort is the inheriting sonnet child's; Haiku root requests carry none. Availability comes from the P7 launcher capture.",
+  "context": "Offline replays of the pinned Claude Code 2.1.289 against a local capture mock (claude:depth, claude:bg, claude:model_effort and judge:judge_effort_env add --permission-mode bypassPermissions). The controls are the sonnet child's in claude:model_effort (Agent model sonnet under --effort high); Haiku requests carry no effort. Availability comes from the P7 launcher capture.",
   "date": "2026-10-05",
   "mode": "headless",
   "observed": {
     "effort": "high",
-    "model": "haiku"
+    "model": "sonnet"
   },
   "replay": [
     "python3 packages/delegate-routing/probes/delegates/claude/harness.py depth depth_env1 bg model_effort ctl judge_effort_env",
@@ -39,7 +39,7 @@
   ],
   "requested": {
     "effort": "high",
-    "model": "haiku"
+    "model": "sonnet"
   },
   "runtime": "claude",
   "runtimeVersion": "2.1.289",
