@@ -627,14 +627,16 @@ to any versioned attribute family:
   overrides nixpkgs' separate `generic-rust.nix` now that nixpkgs supplies a
   source-built pnpm_12 and the operator prefers compiling. `.override` moves the
   argument version, source/cargo hashes and locked Rust platform;
-  `overrideAttrs` merges our install checks, update passthru and one
-  `postPatch`. That `postPatch` deletes the `pnpm-managed cargo sources` block
-  from the source's `.cargo/config.toml`, by its own markers. Present in 12.8.1
-  and 12.9.1, absent in nixpkgs' 12.3.4, it redirects the node-semver-rs git
-  source to `.pnpm/crates`, and cargo rejects it as a duplicate of the same
-  source in the config cargoSetupHook writes one directory up. The argument
-  version controls the GitHub tag and major selector, so an attrs-only bump
-  would retain the old source tag. The vendor FOD name includes the version.
+  `overrideAttrs` merges our install checks and update passthru. It adds no
+  `postPatch`: nixpkgs' own `postPatch` (nixpkgs `214068de1f`, pnpm_12 12.3.4 ->
+  12.9.0, 2026-10-03) deletes upstream's `pnpm-managed cargo sources` block from
+  `.cargo/config.toml`, which redirects the node-semver-rs git source to
+  `.pnpm/crates` and which cargo rejects as a duplicate of the same source in
+  cargoSetupHook's config. Do not re-add our own deletion that asserts the
+  markers: it runs after nixpkgs' and fails patchPhase with no output, because
+  the block is already gone. The argument version controls the GitHub tag and
+  major selector, so an attrs-only bump would retain the old source tag. The
+  vendor FOD name includes the version.
 - pnpm_12 keeps a version/source/cargo sidecar and `mkUpdateScript`'s cheap
   no-op exit. A `mkHashFix` restores source then cargo hashes after a bump and
   is exposed as `fixVendorHash` for input-update repair. npm's `latest-12`
