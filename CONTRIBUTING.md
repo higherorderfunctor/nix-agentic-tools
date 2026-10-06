@@ -43,8 +43,8 @@ nix flake check       # linters + evaluation (does NOT build packages)
 ## Generation Architecture
 
 > **Last verified:** 2026-10-05 — delegate-routing's always-on entries ride
-> `ai.<runtime>.extraSystemPrompt`; stacked-workflows' router is still a root
-> rule.
+> `ai.<runtime>.extraSystemPrompt` for Claude, Codex and Kimchi; Kiro retains an
+> always-on rule, as does stacked-workflows' router.
 >
 > **Settled — do not relitigate.** Rendering and writing the instruction files
 > in the generator, beside `ai.*`, is what this replaced. The generator owned
@@ -94,8 +94,9 @@ rules of any runtime. Everything instruction-shaped goes through `ai.*`.
   the orientation.
 - `packages/delegate-routing/` and `packages/stacked-workflows/router.nix` — the
   always-on routing guidance, delivered through `ai.*` rather than inlined into
-  the orientation: delegate-routing as a per-runtime `extraSystemPrompt` entry,
-  stacked-workflows as a root rule.
+  the orientation: delegate-routing as a per-runtime `extraSystemPrompt` entry
+  for Claude, Codex and Kimchi and an always-on rule for Kiro; stacked-workflows
+  as a root rule.
 - `lib/ai/transformers/` — the per-runtime renderers `ai.*` uses.
 
 ### Committed files and the drift check

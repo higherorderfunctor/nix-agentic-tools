@@ -56,6 +56,8 @@
     };
   # Per-runtime writes need that runtime's module in this evaluation.
   present = pool: lib.filter (runtime: lib.hasAttrByPath ["ai" runtime pool] options);
+  reminderHookEnabled = runtime: programEnabled runtime && reminderEnabled runtime;
+  reminderRuntimes = present "hooks" hookRuntimes;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.techniques);
   flattenedFamilies = familyFunctions.flatten portable.families;
@@ -230,12 +232,16 @@ in {
             inherit text;
           };
         }))
-      (lib.genAttrs (present "hooks" hookRuntimes) (runtime:
-        lib.mkIf (programEnabled runtime && reminderEnabled runtime)
+      (lib.genAttrs reminderRuntimes (runtime:
+        lib.mkIf (reminderHookEnabled runtime)
         (reminder.hooks.${runtime} portable.reminder.text)))
     ];
     assertions =
       [
+        {
+          assertion = !lib.any reminderHookEnabled reminderRuntimes || portable.reminder._sourceWins || portable.reminder.text != "";
+          message = "ai.programs.delegate-routing.reminder.text must be non-empty when a runtime reminder hook is enabled, unless a source supplies the content.";
+        }
         {
           assertion = lib.allUnique (map (family: family.name) flattenedFamilies);
           message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";

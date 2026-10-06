@@ -1,8 +1,8 @@
 ## Fragment Pipeline Architecture
 
 > **Last verified:** 2026-10-05 — delegate-routing's always-on entries ride
-> `ai.extraSystemPrompt`, not `ai.rules`; stacked-workflows' router is still a
-> rule.
+> `ai.extraSystemPrompt` for Claude, Codex and Kimchi; Kiro retains an always-on
+> `ai.rules` entry, as does stacked-workflows' router.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 25ec0738:dev/fragments/pipeline/fragment-pipeline.md`.
@@ -175,6 +175,7 @@ them.
 - **Monorepo profile vs scoped profile differs semantically**. Only `monorepo`
   gets commonFragments. Scoped categories are intentionally lean. The
   stacked-workflow routing rule is a separate `ai.*` rule and delegate-routing's
-  always-on entries are an `ai.*` system-prompt addition, never orientation
-  text. Don't "fix" this by re-adding commonFragments — that's the context-rot
-  bug that was removed.
+  always-on entries are an `ai.*` system-prompt addition for Claude, Codex and
+  Kimchi, and an always-on rule for Kiro. They are never orientation text. Don't
+  "fix" this by re-adding commonFragments — that's the context-rot bug that was
+  removed.

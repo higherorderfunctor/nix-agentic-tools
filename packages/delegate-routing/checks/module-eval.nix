@@ -82,6 +82,15 @@
         runtimes.claude.reminder.enable = true;
       };
     };
+    reminderOnlyClaudeEmpty = change {
+      ai.programs.delegate-routing = {
+        reminder = {
+          enable = false;
+          text = "";
+        };
+        runtimes.claude.reminder.enable = true;
+      };
+    };
     reminderOffForCodex = change {ai.programs.delegate-routing.runtimes.codex.reminder.enable = false;};
     reminderCustom = change {ai.programs.delegate-routing.reminder.text = "CUSTOM REMINDER";};
     manualScenario.ai = {
@@ -549,6 +558,7 @@
       && lib.all (hasReminder result) hookRuntimes
       && lib.all (runtime: !(hasReminder result runtime)) (lib.subtractLists hookRuntimes runtimes)
       && lib.all (runtime: !(hasReminder reminderOff runtime)) runtimes
+      && failsWith reminderOnlyClaudeEmpty "ai.programs.delegate-routing.reminder.text"
       && hasReminder reminderOnlyClaude "claude"
       && !(hasReminder reminderOnlyClaude "codex")
       && !(hasReminder reminderOffForCodex "codex")
