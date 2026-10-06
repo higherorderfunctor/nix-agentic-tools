@@ -20,23 +20,23 @@
   # agnix requires Rust edition 2024 (>= 1.91)
   rustPlatform = vu.mkRustPlatform {inherit pkgs;};
 
-  rev = "ed9e01e53c22bff37e9a3d711f97a0cc745c4cd6";
+  rev = "afca63d553f6a6542a94488283a6dba8bc76f618";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-klk7iJZBkfy0LLebIgaDTC9ahMTePwoUfpEftnzBlAI=";
+    hash = "sha256-ranXuW/UUJNAe8Ej7UC0e9y7du1pA8Q6sCTRwNO3Ii4=";
   };
 in
   rustPlatform.buildRustPackage {
     pname = "agnix";
     version = vu.mkVersion {
       # upstream: readCargoWorkspaceVersion @ Cargo.toml
-      upstream = "0.56.5";
+      upstream = "0.56.6";
       inherit rev;
     };
     inherit src;
-    cargoHash = "sha256-FMmJ2pZUYbsuQXz8IWuhjFiM8G7BMwxdE186X/B7u/c=";
+    cargoHash = "sha256-YS5zYyUnpN8L8e6dc69A8MyqlsvqwkEqD/tTQsFKzh4=";
 
     nativeBuildInputs = [pkgs.pkg-config];
     buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
