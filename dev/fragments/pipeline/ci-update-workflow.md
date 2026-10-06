@@ -5,9 +5,10 @@
 > `Fail on failed build verification` only when its PR is new or its patch
 > changed, otherwise a notice skips the lane; the bot touches a branch only
 > while origin's live head (read with git) is its own last push, and otherwise
-> leaves it with one comment per head and no re-reads; escalation re-checks its
-> predecessor listing for freshness; discovery selects the absolute root
-> `.#.updateTargets` with IFD disabled, before any package workers run.
+> skips the lane with a notice and no re-reads, commenting once per head only on
+> a human edit; a failed PR view is red; escalation re-checks its predecessor
+> listing for freshness; discovery selects the absolute root `.#.updateTargets`
+> with IFD disabled, before any package workers run.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -118,24 +119,27 @@ this run's own push, the expected head is the one it pushed.
 Anything else is a skip, never red, even when build verification failed: non-bot
 commits, a head GitHub does not credit to the App or has no activity row for
 yet, origin moved to anyone's commits (other bot commits included), a lease
-rejected because origin moved, or a PR view that is unavailable or disagrees.
-`leave` then touches nothing, posts ONE comment on the open PR per head SHA
-(deduped by a marker carrying the branch and SHA in the bot's own comments)
-saying the branch changed since the bot last updated it and is left alone until
-it is deleted (merging deletes it), and writes the reason to the receipt's
-`skip` field with a `::notice::`. There are no re-read loops: at four sweeps a
-day the next sweep re-reads, so lag heals itself. `update-matrix.py verdict`
-turns `skip` into a notice, and `Escalate repeated hold-backs` neither counts a
-skipped hold-back nor treats it as the previous of two. The same `skip` field
-records an existing PR whose patch did not change.
+rejected because origin moved, or a PR view that disagrees with origin. Each
+touches nothing and writes the reason to the receipt's `skip` field with a
+`::notice::` (`skip_lane`). Only a human edit -- a head carrying commits the bot
+did not both author and commit -- also gets `leave_human_edit`'s ONE comment on
+the open PR per head SHA (deduped by a marker carrying the branch and SHA in the
+bot's own comments), saying the branch changed since the bot last updated it and
+is left alone until it is deleted (merging deletes it). Lag, a missing activity
+row and another bot push are a notice alone. There are no re-read loops: at four
+sweeps a day the next sweep re-reads, so lag heals itself.
+`update-matrix.py verdict` turns `skip` into a notice, and
+`Escalate repeated hold-backs` neither counts a skipped hold-back nor treats it
+as the previous of two. The same `skip` field records an existing PR whose patch
+did not change.
 
 Red is reserved for a NEW PR or a changed patch (`new_id != old_id`) whose
 verification failed, and for genuine errors: origin unreadable by
 `git ls-remote`, malformed auto-merge metadata, an auto-merge event that cannot
-be classified, a `gh pr create` failure, or a push that failed while origin did
-not move. `update-github.py push` exits 2 for "not the App's push" (a skip) and
-1 for an exception (an error), so an API failure is never read as someone else's
-edit.
+be classified, a failed `gh pr view` (an API exception, not lag), a
+`gh pr create` failure, or a push that failed while origin did not move.
+`update-github.py push` exits 2 for "not the App's push" (a skip) and 1 for an
+exception (an error), so an API failure is never read as someone else's edit.
 
 `update-publish.sh` compares stable patch IDs and merge bases. It skips a push
 only when the patch is identical, the remote branch already uses the current

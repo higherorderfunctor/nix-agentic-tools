@@ -53,11 +53,11 @@ than one 100-item API page, because reports and receipts are separate artifacts.
   origin moved (to anyone's commits), a lease rejected because origin moved,
   PR-view or push-activity lag, a human-closed identical proposal, or a non-App
   PR or one on another base. Such a lane stays green even with `verifyFailed`;
-  look for the `Update lane skipped` notice. For a head the bot does not own,
-  the PR carries one bot comment per head SHA saying so. There are no re-reads:
-  lag clears on the next sweep, and a branch someone else changed stays left
-  until it is deleted (merging deletes it). A skip during arming follows the
-  run's own push and title edit and undoes neither.
+  look for the `Update lane skipped` notice. Only a human edit (commits the bot
+  did not both author and commit) also gets one bot PR comment per head SHA.
+  There are no re-reads: lag clears on the next sweep, and a branch a human
+  changed stays left until it is deleted (merging deletes it). A skip during
+  arming follows the run's own push and title edit and undoes neither.
 - A red publish step is a genuine error, never someone else's edit: origin
   unreadable, malformed PR metadata, an unclassifiable auto-merge event, a
   failed `gh pr create`, a push that failed while origin did not move, or a

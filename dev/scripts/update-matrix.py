@@ -154,8 +154,10 @@ def escalation(held_back, previous):
 
     `held_back` maps target name -> its one-line completion report. `previous`
     maps those names -> the same target's status in the immediately preceding
-    scheduled sweep: that receipt's status, None when that sweep has no receipt
-    for the target, or UNREADABLE when it has one that could not be read.
+    scheduled sweep: that receipt's status, SKIPPED when that lane was skipped,
+    None when that sweep has no receipt for the target, or UNREADABLE when it
+    has one that could not be read. A SKIPPED predecessor counts as fresh: a
+    skipped hold-back is never the first of two.
 
     Only an ABSENT receipt makes a first offense -- a first-ever hold-back, a
     target new to the registry. An unreadable one is not evidence of a clean

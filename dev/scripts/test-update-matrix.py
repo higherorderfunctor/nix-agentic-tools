@@ -306,7 +306,8 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         return [call[call.index("--body") + 1] for call in calls if call[:2] == ["pr", "comment"]]
 
     def assert_left(self, result, reason, comment=True):
-        """Not the bot's own last push: skipped, nothing mutated, one marked comment."""
+        """Not the bot's own last push: skipped, nothing mutated, and one marked
+        comment only for a human edit (<comment>)."""
         self.assert_skipped(result, reason)
         calls = (self.root / "calls").read_text()
         for mutation in ('["pr", "edit"', '["pr", "merge"', '["pr", "create"'):
@@ -370,24 +371,30 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertEqual(calls.count('["pr", "view"'), 1)
         self.assertIn('"--auto"', calls)
 
-    def test_pr_view_lag_or_failure_is_left_once_without_retry(self):
-        # GitHub's PR view disagreeing with origin, or unavailable, is lag the
-        # next sweep self-heals. It is never retried and never red.
+    def test_pr_view_lag_is_skipped_and_failure_is_red_without_retry(self):
+        # GitHub's PR view disagreeing with origin is lag the next sweep
+        # self-heals: a quiet skip, no comment. A failed PR view is an API
+        # error: red. Neither is retried.
         (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
-        for env, reason in (({"PR_VIEW": json.dumps(dict(self.own_pr(), headRefOid=self.base))}, "another repository, base, head branch, author or head"), ({"PR_VIEW_FAIL": "1"}, "unavailable")):
-            with self.subTest(reason=reason):
+        for env, lag in (({"PR_VIEW": json.dumps(dict(self.own_pr(), headRefOid=self.base))}, True), ({"PR_VIEW_FAIL": "1"}, False)):
+            with self.subTest(lag=lag):
                 (self.root / "calls").unlink(missing_ok=True)
                 self.git("--git-dir", str(self.remote), "update-ref", "-d", "refs/heads/update/demo")
                 self.git("update-ref", "-d", "refs/remotes/origin/update/demo")
                 result = self.publish(**env)
-                self.assert_skipped(result, reason)
                 calls = (self.root / "calls").read_text()
                 self.assertEqual(calls.count('["pr", "view"'), 1)
                 self.assertNotIn('["pr", "merge"', calls)
-                self.assertEqual(len(self.comments()), 1)
-                verdict = self.matrix_command("verdict")
-                self.assertEqual(verdict.returncode, 0, verdict.stdout + verdict.stderr)
-                self.assertIn("::notice title=Update lane skipped::", verdict.stdout)
+                self.assertEqual(len(self.comments()), 0)
+                if lag:
+                    self.assert_skipped(result, "another repository, base, head branch, author or head")
+                    verdict = self.matrix_command("verdict")
+                    self.assertEqual(verdict.returncode, 0, verdict.stdout + verdict.stderr)
+                    self.assertIn("::notice title=Update lane skipped::", verdict.stdout)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("::error::Could not read GitHub's view of", result.stdout)
+                    self.assertEqual((self.root / "skip").read_text(), "")
 
     def test_human_auto_merge_disable_before_arming_is_retained(self):
         disabled = [{"__typename": "AutoMergeDisabledEvent", "actor": {"login": "human"}, "disabler": {"login": "human"}, "reason": None, "reasonCode": None}]
@@ -438,7 +445,8 @@ if sys.argv[1:3] == ['pr', 'reopen']:
     def test_origin_moved_after_checkout_is_left_whoever_moved_it(self):
         # Origin's live head is read with git before anything is touched. It
         # moved off the checkout's head -- created where none was, or advanced
-        # by a human or by other bot commits -- so the bot leaves it.
+        # by a human or by other bot commits -- so the bot leaves it. Only a
+        # human's commits on an open PR earn a comment.
         for existing, email in ((False, "human@example.test"), (True, "human@example.test"), (True, "bot@example.test")):
             with self.subTest(existing=existing, email=email):
                 for ref in ("refs/heads/update/demo", "refs/pull/1/head"):
@@ -451,7 +459,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
                 self.git("update-ref", *(["refs/remotes/origin/update/demo", bot_tip] if existing else ["-d", "refs/remotes/origin/update/demo"]))
                 result = self.publish(PR_LIST=json.dumps([self.own_pr()] if existing else []))
                 expected = bot_tip if existing else "(none)"
-                self.assert_left(result, f"origin's head is {tip}, not the bot's last push {expected}.", comment=existing)
+                self.assert_left(result, f"origin's head is {tip}, not the bot's last push {expected}.", comment=existing and email.startswith("human"))
                 self.assertTrue(self.git("ls-remote", "origin", "refs/heads/update/demo").startswith(tip))
 
     def test_rejected_push_after_origin_moved_is_left(self):
@@ -726,7 +734,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
                 self.assert_skipped(result, "GitHub shows 1 with another repository, base, head branch, author or head")
                 calls = (self.root / "calls").read_text()
                 self.assertNotIn('["pr", "merge"', calls)
-                self.assertEqual(len(self.comments()), 1)
+                self.assertEqual(len(self.comments()), 0)
                 if fresh_update:
                     self.assertIn('["pr", "edit", "1"', calls)
                 self.assertTrue(self.git("ls-remote", "origin", "refs/heads/update/demo").startswith(tip))
@@ -736,7 +744,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         tip = self.git("rev-parse", "update/demo")
         view = dict(self.own_pr(), baseRefName="another-base", headRefOid=tip)
         result = self.publish(PR_LIST=json.dumps([self.own_pr()]), PR_VIEW=json.dumps(view), AUTO_MERGE_ENABLED="1")
-        self.assert_left(result, "another repository, base")
+        self.assert_left(result, "another repository, base", comment=False)
         self.assertTrue(self.git("ls-remote", "origin", "refs/heads/update/demo").startswith(tip))
 
     def test_app_pr_on_another_base_preserves_the_stable_branch(self):
@@ -881,8 +889,9 @@ if sys.argv[1:3] == ['pr', 'reopen']:
     def test_head_github_does_not_credit_to_the_app_is_left(self):
         # Every commit is the bot's, but GitHub credits the push to someone
         # else, or has no activity row for it yet. Either way it is not the
-        # bot's own last push as far as it can tell: left, never re-read, never
-        # red, even when this target's build verification failed.
+        # bot's own last push as far as it can tell: skipped with a notice and
+        # no comment (no human commit), never re-read, never red, even when
+        # this target's build verification failed.
         self.git("push", "origin", "update/demo")
         tip = self.git("rev-parse", "update/demo")
         (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
@@ -890,7 +899,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
             with self.subTest(env=env):
                 (self.root / "calls").unlink(missing_ok=True)
                 result = self.publish(PR_LIST=json.dumps([self.own_pr()]), AUTO_MERGE_ENABLED="1", **env)
-                self.assert_left(result, f"GitHub does not credit {tip} to the App's push.")
+                self.assert_left(result, f"GitHub does not credit {tip} to the App's push.", comment=False)
                 self.assertEqual((self.root / "calls").read_text().count("/activity"), 1)
                 self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), tip)
                 self.assertFalse((self.root / "auto-merge-disabled").exists())

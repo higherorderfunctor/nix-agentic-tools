@@ -13,8 +13,8 @@ base_head="$UPDATE_BASE_SHA"
 # (update-matrix.py verdict) to name when the target's build verification
 # failed. Empty when no PR was published for this target.
 : >"$RUNNER_TEMP/published-pr"
-# Why this lane is SKIPPED, or empty. Two things write it: leave below (origin's
-# branch is not the bot's own last push) and an existing PR whose patch did not
+# Why this lane is SKIPPED, or empty. Two things write it: skip_lane below
+# (origin's branch is not the bot's own last push) and an existing PR whose patch did not
 # change (a rebase-only refresh or no push at all). The receipt carries it as
 # `skip`; a failed build verification then gives a notice instead of a red
 # lane, and a skipped hold-back is not counted toward escalation.
@@ -61,14 +61,27 @@ own_open_pr() {
   ' <<<"$candidates"
 }
 
-# Renovate's "modified branch" rule. Leave <branch> and its PR exactly as they
-# are and skip the lane. A failing update usually needs an outside fix that can
-# take more than a day, so whoever else moved the branch must never have it
-# rebased, force-pushed, retitled or re-armed under them. Post ONE comment per
-# <head> on the PR (<pr>, or the open one looked up here) saying so; the marker
-# carrying <head> dedupes it across sweeps. A comment failure is only a warning:
-# the lane is already skipped and the branch already untouched.
-leave() {
+# Short hashes, one per line, of the commits on <head> since its fork from base
+# that the bot did not both author and commit (a human amend can keep the
+# bot author while changing the content and committer). Fails on a git error.
+non_bot_commits() {
+  local fork_point
+  fork_point=$(git merge-base "$1" "$base_head" || true)
+  git log --format='%h %ae %ce' "${fork_point:-$base_head}..$1" |
+    awk -v bot="$bot_email" '$2 != bot || $3 != bot {print $1}'
+}
+
+# Renovate's "modified branch" rule, for a human edit only: <head> carries
+# commits the bot did not both author and commit. Leave <branch> and its PR
+# exactly as they are and skip the lane. A failing update usually needs an
+# outside fix that can take more than a day, so a human who moved the branch
+# must never have it rebased, force-pushed, retitled or re-armed under them.
+# Post ONE comment per <head> on the PR (<pr>, or the open one looked up here)
+# saying so; the marker carrying <head> dedupes it across sweeps. A comment
+# failure is only a warning: the lane is already skipped and the branch already
+# untouched. Every other reason the bot does not own a head (lag, no activity
+# row, another bot push) is skip_lane alone: a notice, no comment.
+leave_human_edit() {
   local leave_branch=$1 leave_pr=$2 head=$3 reason=$4 marker comments
   skip_lane "$leave_branch" "$reason"
   [ -n "$leave_pr" ] || leave_pr=$(own_open_pr "$leave_branch" | jq -r '.number // empty')
@@ -85,7 +98,7 @@ leave() {
   gh pr comment "$leave_pr" --body "$marker
 \`$leave_branch\` changed since this bot last updated it, so the bot left the branch and this PR untouched: $reason
 
-The bot changes this branch only while its head is the bot's own last push. Otherwise it leaves the branch alone until the branch is deleted; merging this PR deletes it." ||
+The bot changes this branch only while its head is the bot's own last push. Since someone else committed to it, the bot leaves it alone until the branch is deleted; merging this PR deletes it." ||
     echo "::warning::Could not comment on $leave_pr."
 }
 
@@ -93,48 +106,54 @@ The bot changes this branch only while its head is the bot's own last push. Othe
 # <branch>: push, edit the PR title, or change auto-merge. It may only while
 # origin's LIVE head, read with git and never GitHub's API, is exactly
 # <expected>, the bot's own last push (empty: the branch must still be
-# absent). Otherwise it leaves the branch (see leave) and returns 1. There are
-# no re-reads: at four sweeps a day the next one gets it. Origin that git
-# cannot read is a genuine error and fails the lane.
+# absent). Otherwise it skips the lane and returns 1, commenting only when the
+# new head carries a human's commits (see leave_human_edit). There are no
+# re-reads: at four sweeps a day the next one gets it. Origin that git cannot
+# read is a genuine error and fails the lane.
 bot_owns() {
-  local own_branch=$1 expected=$2 own_pr=$3 live
+  local own_branch=$1 expected=$2 own_pr=$3 live reason non_bot
   if ! live=$(git ls-remote origin "refs/heads/$own_branch"); then
     echo "::error::Could not read origin's $own_branch."
     exit 1
   fi
   live=${live%%[[:space:]]*}
   [ "$live" = "$expected" ] && return 0
-  leave "$own_branch" "$own_pr" "${live:-absent}" "origin's head is ${live:-absent}, not the bot's last push ${expected:-(none)}."
+  reason="origin's head is ${live:-absent}, not the bot's last push ${expected:-(none)}."
+  # Comment only on a human edit. A head that cannot be fetched (moved again)
+  # or carries only bot commits is skipped quietly; the next sweep re-reads.
+  if [ -n "$live" ] && git fetch --quiet --no-tags origin "$live" &&
+    non_bot=$(non_bot_commits "$live") && [ -n "$non_bot" ]; then
+    leave_human_edit "$own_branch" "$own_pr" "$live" "$reason"
+  else
+    skip_lane "$own_branch" "$reason"
+  fi
   return 1
 }
 
 # Is the head this job checked out (refs/remotes/origin/<branch>, or none) the
 # bot's own last push, and is origin still there? It must carry only commits
-# the bot both authored and committed (a human amend can keep the bot author
-# while changing the content and committer), and GitHub must credit its push
-# to the App, because commit identities are freely chosen. Sets checkout_head.
-# Returns 1 after leaving the branch; exits on a git or GitHub API error.
+# the bot both authored and committed, and GitHub must credit its push to the
+# App, because commit identities are freely chosen. Sets checkout_head.
+# Returns 1 after skipping the lane; exits on a git or GitHub API error.
 # Every check is explicit, so it holds even when called as a condition.
 checkout_head_owned() {
-  local own_branch=$1 own_pr=$2 fork_point non_bot push_status=0
+  local own_branch=$1 own_pr=$2 non_bot push_status=0
   checkout_head=$(git rev-parse --verify --quiet "refs/remotes/origin/$own_branch" || true)
   bot_owns "$own_branch" "$checkout_head" "$own_pr" || return 1
   [ -n "$checkout_head" ] || return 0
-  fork_point=$(git merge-base "$checkout_head" "$base_head" || true)
-  if ! non_bot=$(git log --format='%h %ae %ce' "${fork_point:-$base_head}..$checkout_head" |
-    awk -v bot="$bot_email" '$2 != bot || $3 != bot {print $1}'); then
+  if ! non_bot=$(non_bot_commits "$checkout_head"); then
     echo "::error::Could not read the commits on $own_branch."
     exit 1
   fi
   if [ -n "$non_bot" ]; then
-    leave "$own_branch" "$own_pr" "$checkout_head" "non-bot commits are on $checkout_head: ${non_bot//$'\n'/ }."
+    leave_human_edit "$own_branch" "$own_pr" "$checkout_head" "non-bot commits are on $checkout_head: ${non_bot//$'\n'/ }."
     return 1
   fi
   python3 "$(dirname "$0")/update-github.py" push "$own_branch" "$checkout_head" || push_status=$?
   case $push_status in
   0) ;;
   2)
-    leave "$own_branch" "$own_pr" "$checkout_head" "GitHub does not credit $checkout_head to the App's push."
+    skip_lane "$own_branch" "GitHub does not credit $checkout_head to the App's push."
     return 1
     ;;
   *)
@@ -149,8 +168,7 @@ case $(jq -er .status "$RUNNER_TEMP/prepared.json") in
 "HELD BACK")
   held_branch="update/$UPDATE_TARGET"
   # Origin's live head decides, not the job-start ref alone. A branch that is
-  # not the bot's own last push is left, and its hold-backs never escalate:
-  # they are expected until the branch is deleted.
+  # not the bot's own last push is skipped, and its hold-backs never escalate.
   if checkout_head_owned "$held_branch" ""; then
     # The bot still owns this branch, so the hold-back counts toward
     # escalation. Touching it only keeps cleanup off the earlier PR.
@@ -207,17 +225,18 @@ esac
 #
 # Arming goes through the ownership gate like every other touch: origin's live
 # head must be <expected_head>, the bot's own last push. A PR that GitHub shows
-# with another repository, base, head branch, author or head SHA is left the
-# same way, whether someone changed it or GitHub's PR view is lagging; the
-# next sweep re-reads. Malformed metadata or an unclassifiable auto-merge event
-# fails only this target. Matrix siblings still finish, and no successful
+# with another repository, base, head branch, author or head SHA is skipped with
+# a notice and no comment: origin already matched, so this is GitHub's PR view
+# lagging, and the next sweep re-reads. A failed PR view is an API error, not
+# lag. It, malformed metadata and an unclassifiable auto-merge event fail only
+# this target. Matrix siblings still finish, and no successful
 # receipt is emitted for a PR that still needs an automation retry.
 arm_auto_merge() {
   local arm_pr=$1 arm_branch=$2 expected_head=$3 current_pr retry_status after
   bot_owns "$arm_branch" "$expected_head" "$arm_pr" || return 0
   if ! current_pr=$(gh pr view "$arm_pr" --json author,autoMergeRequest,baseRefName,headRefName,headRefOid,headRepository,isCrossRepository); then
-    leave "$arm_branch" "$arm_pr" "$expected_head" "GitHub's view of $arm_pr is unavailable."
-    return 0
+    echo "::error::Could not read GitHub's view of $arm_pr ($arm_branch); auto-merge left unchanged."
+    return 1
   fi
   if ! jq -e '(.autoMergeRequest == null) or
     (.autoMergeRequest | type == "object" and (.enabledAt | type == "string"))' \
@@ -230,7 +249,7 @@ arm_auto_merge() {
      and .baseRefName == \$base and .headRefName == \$branch and .headRefOid == \$head
      and (.author.login | $bot_login)" \
     <<<"$current_pr" >/dev/null; then
-    leave "$arm_branch" "$arm_pr" "$expected_head" "GitHub shows $arm_pr with another repository, base, head branch, author or head than $expected_head."
+    skip_lane "$arm_branch" "GitHub shows $arm_pr with another repository, base, head branch, author or head than $expected_head."
     return 0
   fi
   if jq -e '.autoMergeRequest != null' <<<"$current_pr" >/dev/null; then
