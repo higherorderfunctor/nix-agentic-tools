@@ -1,0 +1,112 @@
+[
+  {
+    "match": "MAIN_KICKOFF USER_SENTINEL_1",
+    "events": [
+      {
+        "toolUseId": "twA",
+        "name": "run_workflow",
+        "input": {
+          "workflowPath": "@RUN@/ws/.kiro/workflows/wfA.workflow.json",
+          "inputs": {}
+        }
+      }
+    ]
+  },
+  {
+    "match": "MAIN_SECOND",
+    "events": [
+      {
+        "toolUseId": "twB",
+        "name": "run_workflow",
+        "input": {
+          "workflowPath": "@RUN@/ws/.kiro/workflows/wfB.workflow.json",
+          "inputs": {}
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFA_1"],
+    "delay": 12,
+    "events": [
+      {
+        "toolUseId": "sm_WFA_1",
+        "name": "send_message",
+        "input": { "severity": "success", "message": "DONE_WFA_1" }
+      }
+    ]
+  },
+  { "match": ["WFA_1"], "events": ["TXT_WFA_1"] },
+  { "match": ["WFA_1"], "events": ["TXT_WFA_1"] },
+  { "match": ["WFA_1"], "events": ["TXT_WFA_1"] },
+  {
+    "match": ["WFB_1"],
+    "delay": 12,
+    "events": [
+      {
+        "toolUseId": "sm_WFB_1",
+        "name": "send_message",
+        "input": { "severity": "success", "message": "DONE_WFB_1" }
+      }
+    ]
+  },
+  { "match": ["WFB_1"], "events": ["TXT_WFB_1"] },
+  { "match": ["WFB_1"], "events": ["TXT_WFB_1"] },
+  { "match": ["WFB_1"], "events": ["TXT_WFB_1"] },
+  {
+    "match": ["WFA_2"],
+    "events": [
+      {
+        "toolUseId": "sm_WFA_2",
+        "name": "send_message",
+        "input": { "severity": "success", "message": "DONE_WFA_2" }
+      }
+    ]
+  },
+  { "match": ["WFA_2"], "events": ["TXT_WFA_2"] },
+  { "match": ["WFA_2"], "events": ["TXT_WFA_2"] },
+  { "match": ["WFA_2"], "events": ["TXT_WFA_2"] },
+  {
+    "match": ["WFB_2"],
+    "events": [
+      {
+        "toolUseId": "sm_WFB_2",
+        "name": "send_message",
+        "input": { "severity": "success", "message": "DONE_WFB_2" }
+      }
+    ]
+  },
+  { "match": ["WFB_2"], "events": ["TXT_WFB_2"] },
+  { "match": ["WFB_2"], "events": ["TXT_WFB_2"] },
+  { "match": ["WFB_2"], "events": ["TXT_WFB_2"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] }
+]

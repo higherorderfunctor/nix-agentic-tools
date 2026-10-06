@@ -1,0 +1,21 @@
+{
+  "args": ["--model", "kimchi-dev/fake-a", "--mode", "rpc", "--no-session"],
+  "stdin_lines": [
+    {
+      "at": 1.5,
+      "line": {
+        "type": "prompt",
+        "message": "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BG0 SLEEP=4\", \"description\": \"bg 0\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": true}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BG1 SLEEP=4\", \"description\": \"bg 1\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": true}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BG2 SLEEP=4\", \"description\": \"bg 2\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": true}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BG3 SLEEP=4\", \"description\": \"bg 3\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": true}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BG4 SLEEP=4\", \"description\": \"bg 4\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": true}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BG5 SLEEP=4\", \"description\": \"bg 5\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": true}}], [{\"name\": \"steer_subagent\", \"args\": {\"agent_id\": \"@ID0@\", \"message\": \"STEER_FROM_PARENT\"}}], [{\"name\": \"get_subagent_result\", \"args\": {\"agent_id\": \"@ID5@\"}}]]"
+      }
+    },
+    {
+      "at": 25,
+      "line": {
+        "type": "get_state",
+        "id": "st"
+      }
+    }
+  ],
+  "close_stdin": false,
+  "timeout": 32
+}

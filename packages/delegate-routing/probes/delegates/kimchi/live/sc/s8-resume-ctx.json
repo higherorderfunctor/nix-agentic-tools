@@ -1,0 +1,12 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--no-session",
+    "-p",
+    "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_ONE first\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}], [{\"name\": \"resume_subagent\", \"args\": {\"agent_id\": \"@ID0@\", \"prompt\": \"CHILD_ONE_RESUMED STEER_RESUME\", \"max_turns\": 2, \"max_duration\": 30}}], [{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_INHERIT\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\", \"inherit_context\": true}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_ISOLATED\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\", \"isolated\": true}}], [{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_BGW SLEEP=2\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": true}}], [{\"name\": \"get_subagent_result\", \"args\": {\"agent_id\": \"@ID3@\", \"wait\": true, \"verbose\": true}}]]"
+  ],
+  "timeout": 40
+}

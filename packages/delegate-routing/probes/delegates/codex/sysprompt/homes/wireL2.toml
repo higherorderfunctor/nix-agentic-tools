@@ -1,0 +1,10 @@
+model = "gpt-5.5"
+model_provider = "fake"
+instructions = "LEGACY-INSTR-8101"
+developer_instructions = "L-DEV-8102"
+model_instructions_file = "@D@/basefile.md"
+[model_providers.fake]
+name = "fake"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"

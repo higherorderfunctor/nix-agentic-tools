@@ -1,0 +1,8 @@
+{
+  "capsMeta": {
+    "kiro": { "settings": { "inlineAgents": { "enabled": true } } }
+  },
+  "steps": [
+    { "op": "prompt", "text": "MAIN_KICKOFF USER_SENTINEL_1", "timeout": 90 }
+  ]
+}

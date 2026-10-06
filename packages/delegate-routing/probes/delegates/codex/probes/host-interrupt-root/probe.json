@@ -1,0 +1,14 @@
+{
+  "thread": {},
+  "turn": "GO",
+  "timeout": 40,
+  "settle": 5,
+  "actions": [
+    {
+      "at": 3,
+      "method": "turn/interrupt",
+      "params": { "threadId": "$THREAD", "turnId": "$TURN" }
+    }
+  ],
+  "after": [{ "method": "thread/loaded/list", "params": {} }]
+}

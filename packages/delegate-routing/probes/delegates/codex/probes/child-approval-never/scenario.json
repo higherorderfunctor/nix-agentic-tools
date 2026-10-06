@@ -1,0 +1,27 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "a", "message": "TASK-A", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 20000 }, "collaboration"]] },
+    { "msg": "ROOT DONE" }
+  ],
+  "/root/a": [
+    {
+      "calls": [
+        [
+          "exec",
+          "const r = await tools.exec_command({cmd: \"true\", sandbox_permissions: \"require_escalated\", justification: \"probe escalation\"}); text(JSON.stringify(r));",
+          "custom"
+        ]
+      ]
+    },
+    { "msg": "A DONE" }
+  ]
+}

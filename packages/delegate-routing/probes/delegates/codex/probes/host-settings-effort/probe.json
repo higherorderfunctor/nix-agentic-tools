@@ -1,0 +1,17 @@
+{
+  "thread": {},
+  "turn": "GO",
+  "timeout": 20,
+  "actions": [
+    {
+      "at": 1.5,
+      "method": "turn/settings/update",
+      "params": { "threadId": "$THREAD", "turnId": "$TURN", "effort": "high" }
+    },
+    {
+      "at": 2.0,
+      "method": "thread/settings/update",
+      "params": { "threadId": "$THREAD", "model": "gpt-6-sol", "effort": "low" }
+    }
+  ]
+}

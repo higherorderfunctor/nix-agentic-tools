@@ -1,0 +1,22 @@
+{
+  "name": "gate",
+  "description": "gate",
+  "prompt": "GATE_PROMPT",
+  "tools": ["*"],
+  "hooks": {
+    "preToolUse": [
+      {
+        "matcher": "subagent",
+        "command": "echo HOOK_BLOCKED_SUBAGENT >&2; exit 2"
+      },
+      {
+        "matcher": "orchestrate_subagent",
+        "command": "echo HOOK_BLOCKED_ORCH >&2; exit 2"
+      },
+      {
+        "matcher": "invoke_sub_agent",
+        "command": "echo HOOK_BLOCKED_INVOKE >&2; exit 2"
+      }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "args": ["--model", "kimchi-dev/fake-a", "--mode", "rpc", "--no-session"],
+  "stdin_lines": [
+    {
+      "at": 1.5,
+      "line": {
+        "type": "prompt",
+        "message": "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_FGABORT SLEEP=12\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\", \"run_in_background\": false}}]]"
+      }
+    },
+    {
+      "at": 5,
+      "line": {
+        "type": "abort",
+        "id": "ab"
+      }
+    }
+  ],
+  "close_stdin": false,
+  "timeout": 20
+}
