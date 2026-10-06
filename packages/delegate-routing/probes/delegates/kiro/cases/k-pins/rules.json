@@ -1,0 +1,67 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>"],
+    "events": [
+      {
+        "toolUseId": "tu_a",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "pinned",
+          "prompt": "CHILD_PINNED do it",
+          "explanation": "x"
+        }
+      },
+      {
+        "toolUseId": "tu_b",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "adhoc",
+          "prompt": "CHILD_INLINE do it",
+          "explanation": "x",
+          "inlineAgent": {
+            "systemPrompt": "INLINE_SP",
+            "model": "claude-haiku-4.5",
+            "effort": "medium"
+          }
+        }
+      },
+      {
+        "toolUseId": "tu_c",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "custom",
+          "prompt": "CHILD_CUSTOM do it",
+          "explanation": "x"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_PINNED"],
+    "events": ["CHILD_DONE_P"]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_INLINE"],
+    "events": ["CHILD_DONE_I"]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_CUSTOM"],
+    "events": ["CHILD_DONE_C"]
+  },
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>"],
+    "events": ["MAIN_DONE"]
+  },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] }
+]

@@ -1,0 +1,6 @@
+{
+  "/root": [
+    { "sleep": 5, "calls": [["list_agents", {}, "collaboration"]] },
+    { "msg": "ROOT DONE" }
+  ]
+}

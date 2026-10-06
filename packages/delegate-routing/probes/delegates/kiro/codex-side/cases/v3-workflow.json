@@ -1,0 +1,126 @@
+{
+  "args": ["acp", "--agent-engine", "v3", "--auth-method", "cli"],
+  "acp": true,
+  "permission": "allow",
+  "initSettings": {
+    "workflows": {
+      "enabled": true
+    },
+    "inlineAgents": {
+      "enabled": true
+    }
+  },
+  "agents": [
+    {
+      "name": "worker",
+      "description": "offline worker",
+      "prompt": "WORKER",
+      "tools": ["*"]
+    }
+  ],
+  "new": {
+    "_meta": {
+      "kiro": {
+        "modelId": "claude-sonnet-4",
+        "settings": {
+          "workflows": {
+            "enabled": true
+          }
+        }
+      }
+    }
+  },
+  "rules": [
+    {
+      "match": "WF_CHILD",
+      "delay": 8,
+      "events": ["WORKFLOW_RESULT"]
+    },
+    {
+      "match": "WF_CHILD",
+      "events": ["WORKFLOW_RETRY_DONE"]
+    },
+    {
+      "match": null,
+      "events": ["PARENT_NOTICE_DONE"]
+    },
+    {
+      "match": null,
+      "events": ["PARENT_NOTICE_DONE"]
+    }
+  ],
+  "steps": [
+    {
+      "method": "_kiro/workflow/new",
+      "params": {
+        "parentSessionId": "$SID",
+        "workflow": {
+          "name": "offline",
+          "steps": [
+            {
+              "type": "step",
+              "id": "one",
+              "agent": "worker",
+              "prompt": "WF_CHILD",
+              "modelId": "claude-haiku-4.5",
+              "effortLevel": "low"
+            }
+          ]
+        },
+        "inputs": {}
+      }
+    },
+    {
+      "method": "_kiro/workflow/invoke",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "event": "workflow/run_start",
+      "seconds": 1
+    },
+    {
+      "sleep": 1
+    },
+    {
+      "method": "_kiro/workflow/inspect",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "method": "_kiro/workflow/pause",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "method": "_kiro/workflow/cancel",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "method": "_kiro/workflow/load",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "method": "_kiro/workflow/retry",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "sleep": 1
+    },
+    {
+      "method": "_kiro/workflow/inspect",
+      "params": {
+        "workflowId": "$WF"
+      }
+    }
+  ]
+}

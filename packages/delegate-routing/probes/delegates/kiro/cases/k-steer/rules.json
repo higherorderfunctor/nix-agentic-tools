@@ -1,0 +1,47 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>"],
+    "events": [
+      {
+        "toolUseId": "tu_s",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "custom",
+          "prompt": "CHILD_SLOW do it",
+          "explanation": "x"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_SLOW"],
+    "delay": 6,
+    "events": [
+      {
+        "toolUseId": "c1",
+        "name": "report_progress",
+        "input": { "message": "PROG_1" }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_SLOW"],
+    "events": ["CHILD_DONE_AFTER_STEER"]
+  },
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>"],
+    "events": ["MAIN_DONE"]
+  },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] }
+]

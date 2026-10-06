@@ -1,0 +1,27 @@
+{
+  "name": "wf1",
+  "description": "pins",
+  "inputs": {},
+  "steps": [
+    {
+      "type": "step",
+      "id": "s1",
+      "agent": "custom",
+      "prompt": "WFSTEP_S1 do it"
+    },
+    {
+      "type": "step",
+      "id": "s2",
+      "agent": "pinned",
+      "prompt": "WFSTEP_S2 do it"
+    },
+    {
+      "type": "step",
+      "id": "s3",
+      "agent": "custom",
+      "prompt": "WFSTEP_S3 do it",
+      "modelId": "claude-haiku-4.5",
+      "effortLevel": "medium"
+    }
+  ]
+}

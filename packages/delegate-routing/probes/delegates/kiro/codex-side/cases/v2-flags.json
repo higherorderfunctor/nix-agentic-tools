@@ -1,0 +1,21 @@
+{
+  "args": [
+    "chat",
+    "--v2",
+    "--no-interactive",
+    "--model",
+    "claude-sonnet-4",
+    "FLAGS_TASK"
+  ],
+  "settings": {
+    "chat.enableSubagent": true,
+    "chat.enableDelegate": true,
+    "chat.enableMainAgentSubagentTool": true
+  },
+  "rules": [
+    {
+      "match": "FLAGS_TASK",
+      "events": ["DONE"]
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+name = "r1"
+description = "Declared role with no developer_instructions."
+model_reasoning_effort = "low"

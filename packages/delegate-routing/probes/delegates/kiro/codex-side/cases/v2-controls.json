@@ -1,0 +1,73 @@
+{
+  "rules": [
+    {
+      "match": "ROOT_TASK",
+      "delay": 8,
+      "events": ["ROOT_REPLY"]
+    }
+  ],
+  "agents": [
+    {
+      "name": "worker",
+      "description": "offline worker",
+      "prompt": "WORKER_PROMPT",
+      "tools": ["*"],
+      "model": "claude-sonnet-4"
+    }
+  ],
+  "args": ["acp", "--agent-engine", "v2"],
+  "acp": true,
+  "initSettings": {
+    "inlineAgents": true
+  },
+  "new": {
+    "_meta": {
+      "kiro": {
+        "modelId": "claude-sonnet-4"
+      }
+    }
+  },
+  "steps": [
+    {
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$SID",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "ROOT_TASK"
+          }
+        ]
+      },
+      "async": "prompt_run"
+    },
+    {
+      "sleep": 1
+    },
+    {
+      "method": "_session/steer",
+      "params": {
+        "sessionId": "$SID",
+        "message": "MIDRUN_STEER"
+      }
+    },
+    {
+      "method": "session/set_config_option",
+      "params": {
+        "sessionId": "$SID",
+        "configId": "effortLevel",
+        "value": "low"
+      }
+    },
+    {
+      "method": "session/cancel",
+      "params": {
+        "sessionId": "$SID"
+      },
+      "notify": true
+    },
+    {
+      "wait": "prompt_run"
+    }
+  ]
+}

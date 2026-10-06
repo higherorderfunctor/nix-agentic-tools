@@ -1,0 +1,25 @@
+[
+  {
+    "match": "SPAWN",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "sdk",
+          "prompt": "Subtask SD: reply done.",
+          "subagent_type": "sdkagent",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "gp",
+          "prompt": "Subtask GP: reply done.",
+          "subagent_type": "general-purpose",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]

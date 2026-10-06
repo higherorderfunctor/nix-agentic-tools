@@ -1,0 +1,22 @@
+{
+  "args": [
+    "--model",
+    "multi-model",
+    "--mode",
+    "json",
+    "-p",
+    "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_BUILDER\", \"description\": \"d\", \"subagent_type\": \"Builder\"}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_EXPLORE\", \"description\": \"d\", \"subagent_type\": \"Explore\"}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_OUTSIDE\", \"description\": \"d\", \"subagent_type\": \"Builder\", \"model\": \"kimchi-dev/fake-a\"}}]]"
+  ],
+  "timeout": 40,
+  "settings": {
+    "modelRoles": {
+      "orchestrator": "kimchi-dev/fake-b",
+      "planner": ["kimchi-dev/fake-a"],
+      "builder": ["kimchi-dev/fake-a"],
+      "reviewer": ["kimchi-dev/fake-a"],
+      "explorer": ["kimchi-dev/fake-a"],
+      "researcher": ["kimchi-dev/fake-a"],
+      "judge": ["kimchi-dev/fake-a"]
+    }
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "match": "SPAWN",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "gp",
+          "prompt": "Subtask GP: reply done.",
+          "subagent_type": "general-purpose",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "named",
+          "prompt": "Subtask NA: reply done.",
+          "subagent_type": "named-agent",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "explore",
+          "prompt": "Subtask EX: reply done.",
+          "subagent_type": "Explore",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]
