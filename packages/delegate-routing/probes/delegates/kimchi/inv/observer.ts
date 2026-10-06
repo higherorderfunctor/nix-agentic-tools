@@ -14,12 +14,10 @@ export default function observe(pi: any) {
     console.error(
       "INV_COMMANDS " +
         JSON.stringify(
-          pi
-            .getCommands()
-            .map((c: any) => ({
-              name: c.name,
-              source: c.sourceInfo?.source ?? null,
-            })),
+          pi.getCommands().map((c: any) => ({
+            name: c.name,
+            source: c.sourceInfo?.source ?? null,
+          })),
         ),
     );
   };
