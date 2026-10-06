@@ -1,11 +1,9 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — capability observations join technique **Last
-> verified:** 2026-10-04 — capability observations join technique declarations
-> by runtime, technique and mode and cite only publishable evidence; the manual
-> evaluation suite renders delivered policy through the module harness, a
-> separate vendor set captures real repository delivery, and model turns stay
-> outside structural checks.
+> **Last verified:** 2026-10-05 — capability observations cite publishable
+> evidence; the manual evaluation suite renders delivered policy through the
+> module harness, the vendor set covers Claude switch pairs and one Kiro case
+> per task shape, and model turns stay outside structural checks.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -224,11 +222,11 @@ process. Existing module checks own Home Manager/devenv delivery parity; the
 manual suite owns behavioral evidence. See `eval/README.md` for replay commands.
 
 The separate `eval/vendor-cases.nix` set evaluates `dev/ai.nix` through the
-devenv module harness and exports the actual delivered files for each
-experimental switch. `run.py --set vendor --render-only` materializes those
-files and a tool-denial overlay, retaining vendor system steering for manually
-authorized live capture. Configured hook content and observed sources are
-distinguished from hidden vendor text, which stays UNKNOWN. The vendor
-structural check renders every variant without starting a runtime. See the
-evaluation guide for safety preflight requirements, provenance, paired
+devenv module harness and exports the actual delivered files for each Claude
+experimental switch and Kiro task shape. `run.py --set vendor --render-only`
+materializes those files and a tool-denial overlay, retaining vendor system
+steering for manually authorized live capture. Configured hook content and
+observed sources are distinguished from hidden vendor text, which stays UNKNOWN.
+The vendor structural check renders every variant without starting a runtime.
+See the evaluation guide for safety preflight requirements, provenance, paired
 comparisons and paid-turn counts.
