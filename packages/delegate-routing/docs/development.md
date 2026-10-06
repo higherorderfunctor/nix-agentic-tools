@@ -175,11 +175,11 @@ process. Existing module checks own Home Manager/devenv delivery parity; the
 manual suite owns behavioral evidence. See `eval/README.md` for replay commands.
 
 The separate `eval/vendor-cases.nix` set evaluates `dev/ai.nix` through the
-devenv module harness and exports the actual delivered files for each
-experimental switch. `run.py --set vendor --render-only` materializes those
-files and a tool-denial overlay, retaining vendor system steering for manually
-authorized live capture. Configured hook content and observed sources are
-distinguished from hidden vendor text, which stays UNKNOWN. The vendor
-structural check renders every variant without starting a runtime. See the
-evaluation guide for safety preflight requirements, provenance, paired
+devenv module harness and exports the actual delivered files for each Claude
+experimental switch and Kiro task shape. `run.py --set vendor --render-only`
+materializes those files and a tool-denial overlay, retaining vendor system
+steering for manually authorized live capture. Configured hook content and
+observed sources are distinguished from hidden vendor text, which stays UNKNOWN.
+The vendor structural check renders every variant without starting a runtime.
+See the evaluation guide for safety preflight requirements, provenance, paired
 comparisons and paid-turn counts.
