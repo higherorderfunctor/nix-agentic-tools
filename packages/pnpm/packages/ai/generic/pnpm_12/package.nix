@@ -45,12 +45,8 @@ in
     pnpm_12: packages/pnpm/sources-12.json records version "${sources.version}" (major ${sidecarMajor}), but this attribute is pnpm_12.
     Either point the sidecar back at a 12.x release, or add a pnpm_${sidecarMajor} attribute and move it there.
   '';
-  # No postPatch of our own: nixpkgs' generic-rust.nix now deletes upstream's
-  # "pnpm-managed cargo sources" block from .cargo/config.toml, which cargo
-  # otherwise rejects as a duplicate of cargoSetupHook's git source. Our
-  # former copy of that deletion ran second, found the block already gone
-  # and failed patchPhase:
-  # `git show a5475e4d:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
+  # No postPatch of our own: nixpkgs strips the cargo-sources block itself.
+  # The removed copy: `git show f38b946f:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
     package.overrideAttrs (finalAttrs: prev: {
       doInstallCheck = true;
       # Upstream's passthru testVersion is separate from the package build.
