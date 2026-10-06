@@ -1,6 +1,6 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-04 — this flake's own nixpkgs builds every package
+> **Last verified:** 2026-10-06 — this flake's own nixpkgs builds every package
 > it ships: one `natSets.<system>` builds `packages`, `legacyPackages`,
 > `ciPackages`, the exported overlay's re-export and the module defaults, and
 > `checks.nat-overlay-parity` gates that they are one derivation. Unfree is
@@ -157,10 +157,10 @@ fragment.
 `natSets` rebuilds everything on the consumer's nixpkgs and still agrees with
 the module defaults. The consumer then owns the recipe breakage above.
 
-**One exception to "one nixpkgs builds everything":** `semble` and `serena-mcp`
-take `inputs.llm-agents.packages` and `inputs.serena.packages`, built on those
-inputs' nixpkgs. The re-export still hands consumers this flake's drv, so the
-overlay and module defaults still agree.
+**One exception to "one nixpkgs builds everything":** `semble` takes
+`inputs.llm-agents.packages`, built on that input's nixpkgs. The re-export still
+hands consumers this flake's drv, so the overlay and module defaults still
+agree.
 
 ### `checks.nat-overlay-parity`
 

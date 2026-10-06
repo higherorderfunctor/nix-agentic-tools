@@ -56,10 +56,6 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    serena = {
-      url = "github:oraios/serena";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";

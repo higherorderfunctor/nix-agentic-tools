@@ -48,16 +48,11 @@
   serverNames = [
     "context7-mcp"
     "effect-mcp"
-    "fetch-mcp"
     "git-intel-mcp"
-    "git-mcp"
     "github-mcp"
     "gitlab-mcp"
     "kagi-mcp"
     "nixos-mcp"
-    "sequential-thinking-mcp"
-    "serena-mcp"
-    "sympy-mcp"
   ];
 
   serverFiles =
@@ -67,20 +62,9 @@
     serverNames);
 
   # ── Package resolution ─────────────────────────────────────────────
-  # Defaults come from this flake's package tree (ai.internal.packages).
-  # Most servers live at mcpServers.<name>. Servers from the
-  # modelcontextprotocol mono-repo live under
-  # mcpServers.modelContextProtocol.<name>.
-  modelContextProtocolServers = [
-    "fetch-mcp"
-    "git-mcp"
-    "sequential-thinking-mcp"
-  ];
-
-  packagePath = name:
-    if builtins.elem name modelContextProtocolServers
-    then "mcpServers.modelContextProtocol.${name}"
-    else "mcpServers.${name}";
+  # Defaults come from this flake's package tree (ai.internal.packages),
+  # where every server lives at mcpServers.<name>.
+  packagePath = name: "mcpServers.${name}";
   resolvePackage = name: lib.getAttrFromPath (lib.splitString "." (packagePath name)) config.ai.internal.packages;
   packageText = name: import ../../../../lib/ai/nat-package-text.nix {inherit lib;} (packagePath name);
 

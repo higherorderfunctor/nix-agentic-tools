@@ -12,6 +12,11 @@
 > `dev/fragments/pipeline/update-pipeline.md` § What holds a target back is
 > authoritative. Read the mode analysis below as still-correct diagnosis and the
 > `HELD BACK` prescriptions as superseded.
+>
+> **Mode B / Gap 2 is moot, 2026-10-06.** The `modelcontextprotocol/servers` set
+> it diagnosed is no longer packaged, so the `packages/model-context-protocol`
+> paths below name a removed recipe. They stay as the record of the diagnosis;
+> the shared-let-binding trap applies to any future monorepo recipe.
 
 ## TL;DR
 

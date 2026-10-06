@@ -1,6 +1,6 @@
 ## MCP Server Packages
 
-> **Last verified:** 2026-10-04 — recipes build on this flake's nixpkgs
+> **Last verified:** 2026-10-06 — recipes build on this flake's nixpkgs
 > (`natSets`) and the overlay re-exports them; main-tracking rev bumps are done
 > by `update-pkg.sh`; vendored npm lock locations follow their manual or
 > automatic updater.
@@ -24,8 +24,8 @@ Servers use one of three Nix builders depending on upstream language:
 - **npm** (`buildNpmPackage` / pnpm override) — aihubmix-mcp, context7-mcp,
   effect-mcp, git-intel-mcp, gitlab-mcp. Require `pnpmDeps` or `npmDeps` hash
   inline in the owner recipe
-- **Python** (`buildPythonApplication`) — kagi-mcp, mcp-proxy, sympy-mcp. Some
-  use `pyproject = true` with hatchling or setuptools
+- **Python** (`buildPythonApplication`) — kagi-mcp, mcp-proxy. Some use
+  `pyproject = true` with hatchling or setuptools
 - **Go** (`buildGoModule`) — github-mcp. Requires `vendorHash` inline in the
   owner recipe
 

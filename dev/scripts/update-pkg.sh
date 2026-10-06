@@ -210,25 +210,24 @@ if [ -n "$git_url" ]; then
         # platform-tagged src drv and broke cross-platform eval on
         # PR CI). See .claude/rules/overlays.md § IFD Patterns.
         #
-        # One file can carry multiple markers (e.g.,
-        # modelcontextprotocol/default.nix has 7 sub-packages, and
-        # two of them happen to share the same manifest path). The
-        # Python filter indexes by LINE NUMBER so each marker drives
-        # its own replacement.
+        # One file can carry multiple markers (a monorepo recipe can
+        # pin several sub-packages, two of which may share the same
+        # manifest path). The Python filter indexes by LINE NUMBER so
+        # each marker drives its own replacement.
         if [ -n "$storePath" ] && grep -qE '^[[:space:]]*# upstream: ' "$target_file"; then
           # One pass classifies every line that ATTEMPTS a marker.
           #
           # "Attempts" is anchored to the start of the comment, so prose
-          # that merely mentions the convention mid-sentence (e.g.
-          # modelcontextprotocol/default.nix:25, "see # upstream:
-          # comments") is not mistaken for a marker — an unanchored
+          # that merely mentions the convention mid-sentence (e.g. a
+          # doc comment saying "see # upstream: comments") is not
+          # mistaken for a marker — an unanchored
           # match there would hold back a package over a doc comment.
           #
           # A line that attempts a marker but does not parse is
           # MALFORMED: a missing `@`, a non-alphabetic helper name, a
           # mangled path. Classifying per line rather than all-or-
           # nothing matters because a file can carry several markers
-          # (this one has 7) and one broken marker among six good ones
+          # and one broken marker among several good ones
           # would otherwise pass unnoticed — silently freezing exactly
           # one sub-package's version.
           classified=$(awk '
