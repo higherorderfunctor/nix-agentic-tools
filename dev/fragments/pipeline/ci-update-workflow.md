@@ -2,8 +2,11 @@
 
 > **Last verified:** 2026-10-06 — a worker whose input build verification failed
 > publishes its PR, uploads its receipt, then fails in
-> `Fail on failed build verification`; discovery selects the absolute root
-> `.#.updateTargets` with IFD disabled, before any package workers run.
+> `Fail on failed build verification` only when its PR is new or its patch
+> changed, otherwise a notice skips the lane; a take-over is read from origin's
+> live ref, never from lagging API views; escalation re-checks its predecessor
+> listing for freshness; discovery selects the absolute root `.#.updateTargets`
+> with IFD disabled, before any package workers run.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -11,6 +14,11 @@
 > rerun of `34729241702` finished preparation in 6m53s with cache hits. These
 > failures involved cold compilation and an expired publishing token, not a
 > demonstrated layout-induced cache invalidation.
+>
+> **Settled — do not relitigate.** Taking the first entry of a
+> `status=completed` scheduled-run listing as the escalation predecessor failed:
+> GitHub served a weeks-old snapshot headed by run `33844722138` (2026-09-04),
+> so every hold-back read as a first offense.
 >
 > Full lineage:
 > `git show ff610ca0:dev/fragments/pipeline/ci-update-workflow.md`.
@@ -46,8 +54,10 @@ writable update may open with failing build checks; an incomplete update is held
 back and its existing PR is preserved. A worker whose build verification failed
 still publishes and arms auto-merge, uploads its receipt, and then fails in
 `Fail on failed build verification` (`update-matrix.py verdict`) with an
-`::error::` naming the target, failed attributes and PR. The required checks
-keep auto-merge from landing that PR.
+`::error::` naming the target, failed attributes and PR -- when that PR is new
+or its patch changed. A PR that already proposed the same patch, and a preserved
+human-owned branch, are skips: a `::notice::`, and the lane stays green. The
+required checks keep auto-merge from landing a red PR.
 
 `update-matrix.py` requires a normal target return and exactly one final report
 before permitting publication. An early rev/source commit alone proves nothing:
@@ -94,11 +104,28 @@ actions do not inherit the workflow's run working directory.
 
 ### Renovate-style branch and cleanup protections
 
+**The contract: the bot never overwrites a human's commits. A branch a human has
+touched is never rebased, force-pushed or reset until the branch is deleted or
+its PR is merged, and the lane for it is SKIPPED, not failed.** Every guard
+below that "preserves" ends in `preserve` in `update-publish.sh`: a
+`::warning::` naming the branch, reason and PR, the branch kept touched, and the
+reason written to the receipt's `skip` field. `update-matrix.py verdict` reads
+it and emits a `::notice::` instead of failing a lane whose verification failed,
+and `Escalate repeated hold-backs` neither counts a preserved hold-back nor
+treats it as the previous of two. The same `skip` field records an existing PR
+whose patch did not change, so a lane goes red for its build only when it opened
+a PR or changed one's patch.
+
+Take-over is read from git alone: origin's live ref and its commits' author and
+committer. A PR view or push activity that disagrees with an unmoved origin is
+GitHub lagging behind the push; it is re-read and then fails red, never
+preserved. A preserve never changes auto-merge, so a human's pushed fix on a PR
+the bot already armed merges once green.
+
 `update-publish.sh` compares stable patch IDs and merge bases. It skips a push
 only when the patch is identical, the remote branch already uses the current
 base, and the PR is not conflicting. A behind-base or conflicting bot branch is
-rebuilt and pushed. Unchanged and human-protected PRs remain recorded as
-touched.
+rebuilt and pushed. Unchanged and preserved PRs remain recorded as touched.
 
 Only same-repository App-authored PRs may be edited or armed. Open PR discovery
 spans every base: a PR targeting a branch other than `main` preserves the shared
@@ -108,8 +135,11 @@ preserved. Before either rewriting or deleting a branch, `update-github.py`
 requires GitHub's repository activity to identify the update App as the pusher
 of that exact ref and head SHA. Commit metadata alone cannot prove ownership.
 Remote commits with a different author OR committer also prevent a rewrite; a
-human amend can retain the original bot author. Pushes use an explicit
-force-with-lease against the observed remote SHA to protect concurrent changes.
+human amend can retain the original bot author. The push's force-with-lease is
+the same remote head those checks observed (empty when the branch was absent),
+so a human push landing between the read and the push rejects it; the publisher
+then re-reads origin and preserves the branch if it now carries non-bot commits,
+or fails red (`Could not push`) if it did not move.
 
 Before any existing App PR can be re-armed, publication reads its latest
 auto-merge timeline event. An explicit human disable is retained through a safe
@@ -118,18 +148,22 @@ automatic disable with a GitHub reason, a bot disable, or a PR that has never
 been armed can still self-heal, and ordinary comments and reviews that do not
 block merging remain allowed. Immediately before arming, publication rechecks
 the current PR's repository, target base, App ownership, exact expected head,
-push actor, and commit identities. A changed or unverified head blocks the arm,
-preserves the ref, and fails the worker without changing an existing auto-merge
-request. An unavailable PR view or an empty repository activity result gets up
-to five reads, two seconds apart; a visible wrong identity, head, or pusher
-fails immediately. The final PR read validates `autoMergeRequest`, and the
-latest auto-merge event is checked again before a new enable. An existing
-request is retained without a redundant enable/rollback attempt, while a newly
-attempted request may still be disabled after an ambiguous enable failure. A
-human or unverifiable pusher discovered before patch comparison also preserves
-and touches the branch without changing its merge state. Pusher and commit
-identity authorize destructive ref updates; only an explicit human auto-merge
-disable expresses a merge-state hold. The merge command also receives
+push actor, and commit identities. A changed base or owner preserves the ref (a
+skip) without changing an existing auto-merge request. A PR head or push actor
+that disagrees with the expected head is checked against origin: unmoved is lag,
+re-read up to five times two seconds apart and then red; moved onto non-bot
+commits preserves; moved otherwise is red. An unavailable PR view also gets five
+reads, then fails the worker. Malformed auto-merge metadata fails the worker. A
+preserve here follows this run's own push and title edit; it does not undo them.
+The final PR read validates `autoMergeRequest`, and the latest auto-merge event
+is checked again before a new enable. An existing request is retained without a
+redundant enable/rollback attempt, while a newly attempted request may still be
+disabled after an ambiguous enable failure. Before patch comparison, non-bot
+commits on origin preserve and touch the branch without changing its merge
+state; a bot-only head GitHub will not attribute to the App fails the worker
+after five reads instead of being overwritten. Pusher and commit identity
+authorize destructive ref updates; only an explicit human auto-merge disable
+expresses a merge-state hold. The merge command also receives
 `--match-head-commit`.
 
 Before creating an absent open proposal, publication inspects the most recent
@@ -228,10 +262,11 @@ re-authoring and must not quietly become a swept hash-only update.
 For receipt-based diagnosis, retry evidence, and the measured rollout baseline,
 read the
 [operations guide](https://github.com/higherorderfunctor/nix-agentic-tools/blob/main/docs/update-ci-operations.md).
-A green sweep may contain held-back targets, but only once each. The first sweep
-that holds a target back warns and stays green; the
-`Escalate repeated hold-backs` step fails `cleanup` when the same target is held
-back on two consecutive SCHEDULED sweeps. That threshold exists because a
+A green sweep may contain held-back targets, but only once each, unless a
+human's commits are on the target's branch: that hold-back is preserved and
+never counted. The first sweep that holds a target back warns and stays green;
+the `Escalate repeated hold-backs` step fails `cleanup` when the same target is
+held back on two consecutive SCHEDULED sweeps. That threshold exists because a
 hold-back means no new PR or branch update was written for the attempt, so
 branch CI has nothing to judge for it and the condition cannot clear itself. Any
 update PR still open on a held-back target is an EARLIER proposal that
@@ -239,16 +274,23 @@ publication preserved, not the blocked one. Read receipt statuses before
 claiming every update was prepared successfully.
 
 Only the immediate predecessor's receipt is consulted, and only its ABSENCE
-makes a first offense. The step asks whether the receipt artifact exists before
-downloading it, because a failed download alone cannot tell "no receipt" from
-"receipt we failed to read". When that listing, the download or the parse still
-fails after `gh` retries, the target also fails `cleanup`, titled
-`Update hold-back count unknown`: counting it as a first offense would silently
-reset the counter and turn a repeat green. Every annotation states which
-predecessor it compared against and why. Every failing one quotes a preparation
-excerpt, or says why none could be read. The excerpt is the newest nix builder
-block, or, when nothing was built, the log tail with traceback frames and the
-pipeline's own trailer lines removed.
+makes a first offense. The predecessor is the newest scheduled run created
+before this one, read from a listing that includes running sweeps
+(`event=schedule&branch=main`, no `status=completed`). The listing must contain
+the current scheduled run, and the predecessor must be no older than one
+schedule interval plus half an interval, where the interval is derived from the
+cron in `update.yml`. A listing that fails either test is re-read with backoff
+and then reported as `Update hold-back count unknown`, never as a first sweep.
+The step runs under `!cancelled()`, so a failed cleanup step cannot skip it. The
+step asks whether the receipt artifact exists before downloading it, because a
+failed download alone cannot tell "no receipt" from "receipt we failed to read".
+When that listing, the download or the parse still fails after `gh` retries, the
+target also fails `cleanup`, titled `Update hold-back count unknown`: counting
+it as a first offense would silently reset the counter and turn a repeat green.
+Every annotation states which predecessor it compared against and why. Every
+failing one quotes a preparation excerpt, or says why none could be read. The
+excerpt is the newest nix builder block, or, when nothing was built, the log
+tail with traceback frames and the pipeline's own trailer lines removed.
 
 The Python fixture suites exercise package coverage, completion reports, cleanup
 receipts, and PR publication against disposable local Git repositories. They run

@@ -3,12 +3,14 @@
 > **Last verified:** 2026-10-06 — a writable update whose build verification
 > fails still publishes its PR, and its CI lane then fails with `::error::`
 > (`record_verify_failure` → receipt `verifyFailed` →
-> `update-matrix.py verdict`); root metadata reads use absolute
-> `.#.updateTargets` paths; every pipeline read of a package by name goes
-> through `ciPackages` (`nat_attr`, `ciAttr`); rev bumps prefetch with the
-> package's own fetcher mode; both update paths regenerate committed sidecars
-> through `passthru.regenerateExtracted`; `--use-update-script` rows must
-> resolve `updateScript` to an executable file, gated by
+> `update-matrix.py verdict`) only when the PR is new or its patch changed; a
+> same-patch PR or a PRESERVED human-owned branch is a skip (receipt `skip`, a
+> `::notice::`), and a preserved hold-back never escalates; root metadata reads
+> use absolute `.#.updateTargets` paths; every pipeline read of a package by
+> name goes through `ciPackages` (`nat_attr`, `ciAttr`); rev bumps prefetch with
+> the package's own fetcher mode; both update paths regenerate committed
+> sidecars through `passthru.regenerateExtracted`; `--use-update-script` rows
+> must resolve `updateScript` to an executable file, gated by
 > `checks.update-script-executable`; every update target must survive
 > nix-update's own `eval.nix`, gated by `checks.update-target-meta-eval`.
 >
@@ -299,7 +301,13 @@ to `.update-logs/verify-failed-<name>.txt`; `update-matrix.py prepare` copies
 them into the receipt as `verifyFailed`. The worker then publishes and arms
 auto-merge as usual, uploads its receipt, and only then runs
 `update-matrix.py verdict`, which fails the lane with an `::error::` naming the
-target, the failed attributes and the PR. Other lanes keep running
+target, the failed attributes and the PR, but only when this run proposed
+something new: a new PR, or an existing PR whose patch changed
+(`new_id != old_id`, the patch-id comparison in `update-publish.sh`). When the
+PR already proposes this exact patch -- a rebase-only refresh after `main`
+moved, or no push at all -- the publisher records that as the lane's `skip`, and
+the verdict is a `::notice::` naming the PR. Otherwise every push to `main`
+would turn the same known-red PR into a red lane again. Other lanes keep running
 (`fail-fast: false`) and `cleanup` still collects every receipt. A sweep with a
 red-build PR is therefore red, where it used to stay green behind a
 `::warning::`.
@@ -309,9 +317,46 @@ In CI only input lanes verify; package lanes run with
 never record a failure. Local Ninja has no verdict step: the record's red log
 line is its signal.
 
+**The bot never overwrites a human's commits. A branch a human has taken over is
+skipped, never rebased, force-pushed or reset.** This is Renovate's contract,
+and the reason is practical: a failing update usually needs an outside fix, and
+that fix can take more than a day. `update-publish.sh` PRESERVES the branch
+instead of publishing when:
+
+- the remote branch carries a commit the bot did not both author and commit;
+- a human closed a PR that proposed the identical patch;
+- the open PR is not the App's, or targets another base;
+- a human push lands while the run is publishing (a rejected
+  `--force-with-lease`) or arming auto-merge.
+
+**A take-over is decided only from git: origin's live ref and its commits'
+identities.** GitHub's PR view and push activity trail a push. When either
+disagrees with the head the run expects, the publisher re-reads origin
+(`remote_state`): unmoved means GitHub is lagging, so it re-reads up to five
+times and then fails the lane red; moved onto a non-bot commit is a take-over;
+moved with no such commit is unexplained and red. API lag never becomes a
+preserve, so a lane that just published cannot go green by mistake. A bot-only
+head GitHub never attributes to the App is red for the same reason.
+
+A preserve emits a `::warning::` naming the branch, the reason and the PR, keeps
+the branch touched so cleanup keeps its PR, and writes the reason to the lane's
+`skip`. The receipt carries it, `verdict` turns a failed verification into a
+`::notice::` instead of a red lane, and hold-back escalation does not count the
+target. A preserve found BEFORE publication means no push, no title edit and no
+auto-merge change. A preserve found while ARMING comes after this run already
+pushed and edited the PR; it stops only the arming and undoes nothing.
+
+Auto-merge is never touched by a preserve. If the bot armed it earlier, a
+human's pushed fix merges as soon as the required checks are green. The hold
+ends when the branch is deleted or its PR is merged; it cannot end any other
+way, because merges are squashes and the human's commits never appear on `main`
+by their own SHAs. A human close holds only the exact patch it saw; a newer
+upstream version is a different diff and is proposed again.
+
 Hold-backs publish no new PR and are unchanged: the first one warns and stays
 green, and `Escalate repeated hold-backs` fails `cleanup` on the second
-consecutive sweep (see `ci-update-workflow.md`).
+consecutive sweep (see `ci-update-workflow.md`). A hold-back on a branch with
+human commits is preserved instead and never counts.
 
 **Errexit must stay ARMED inside a target body, and that is a property of the
 SHAPE.** Bash disables `errexit` for any command whose status it tests — an `if`

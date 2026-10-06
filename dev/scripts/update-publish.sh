@@ -13,11 +13,97 @@ base_head="$UPDATE_BASE_SHA"
 # (update-matrix.py verdict) to name when the target's build verification
 # failed. Empty when no PR was published for this target.
 : >"$RUNNER_TEMP/published-pr"
+# Why this lane is SKIPPED, or empty. Two things write it: preserve below (a
+# human owns the branch) and an existing PR whose patch did not change (a
+# rebase-only refresh or no push at all). The receipt carries it as `skip`; a
+# failed build verification then gives a notice instead of a red lane, and a
+# preserved hold-back is not counted toward escalation.
+: >"$RUNNER_TEMP/skip"
+
+# Read back the identity git-bot-identity configured above; the
+# human-commit guard below compares every remote commit's author
+# against it. Assert it is non-empty rather than let it degrade:
+# an empty value makes EVERY commit look human, which would
+# silently stop the pipeline pushing anything at all.
+bot_email=$(git config user.email || true)
+if [ -z "$bot_email" ]; then
+  echo "::error::git user.email is unset — the human-commit guard cannot run"
+  exit 1
+fi
+
+# Record <branch> as touched so stale cleanup keeps its PR. Idempotent: the
+# receipt allows each target's branch exactly once.
+touch_branch() {
+  grep -qxF "$1" "$RUNNER_TEMP/touched-branches" || echo "$1" >>"$RUNNER_TEMP/touched-branches"
+}
+
+# Renovate's "modified branch" rule: leave <branch> exactly as it is and skip
+# this lane. A failing update usually needs an outside fix that can take more
+# than a day, so a human's in-progress commits must never be rebased,
+# force-pushed or reset. The branch stays touched, so cleanup keeps its PR.
+# Auto-merge is never changed here: a human's pushed fix merges once green.
+# A preserve during arming comes AFTER this run already pushed and edited the
+# PR; it stops only the arming, it does not undo the publication.
+preserve() {
+  local preserve_branch=$1 reason=$2
+  echo "::warning title=Update branch preserved::Preserving $preserve_branch: $reason"
+  touch_branch "$preserve_branch"
+  printf '%s\n' "$reason" >"$RUNNER_TEMP/skip"
+}
+
+# Print the commits on origin's copy of <branch> that the bot did not both
+# author and commit. Compare author AND committer: a human amend can retain
+# the bot author while changing the content and committer. Commits already on
+# the base are excluded. A failed merge-base falls back to base_head, which
+# only WIDENS the range.
+remote_human_commits() {
+  local remote_ref="refs/remotes/origin/$1" fork_point
+  git rev-parse --verify --quiet "$remote_ref" >/dev/null || return 0
+  fork_point=$(git merge-base "$remote_ref" "$base_head" || true)
+  git log --format='%H %ae %ce' "${fork_point:-$base_head}..$remote_ref" |
+    awk -v bot="$bot_email" '$2 != bot || $3 != bot {print $1}'
+}
+
+# Classify origin's LIVE copy of <branch> against the head this run expects:
+#   same       origin still points at <expected> (empty: still absent)
+#   human      it moved, and a commit the bot did not both author and commit
+#              is on it -- a human took the branch over
+#   moved      it moved or vanished with no such commit
+#   unreadable origin could not be read
+# It reads git itself, never GitHub's API, so API lag right after the bot's
+# own push, or a transient API error, can never look like a take-over. A
+# moved head is fetched into refs/remotes/origin/<branch> to read its commits.
+remote_state() {
+  local state_branch=$1 expected=$2 live
+  if ! live=$(git ls-remote origin "refs/heads/$state_branch" | cut -f1); then
+    echo unreadable
+  elif [ "$live" = "$expected" ]; then
+    echo same
+  elif [ -n "$live" ] &&
+    git fetch --quiet --no-tags origin "+refs/heads/$state_branch:refs/remotes/origin/$state_branch" &&
+    [ -n "$(remote_human_commits "$state_branch")" ]; then
+    echo human
+  else
+    echo moved
+  fi
+}
+
 # A held-back target has not disproved the usefulness of its existing PR.
 case $(jq -er .status "$RUNNER_TEMP/prepared.json") in
 "HELD BACK")
-  echo "update/$UPDATE_TARGET" >>"$RUNNER_TEMP/touched-branches"
-  echo "::warning::Preserving update/$UPDATE_TARGET: preparation held back."
+  held_branch="update/$UPDATE_TARGET"
+  held_human=$(remote_human_commits "$held_branch")
+  if [ -n "$held_human" ]; then
+    # A human is fixing it on the branch; repeated hold-backs are expected
+    # until the branch is deleted or its PR is merged, so this one must not
+    # escalate.
+    preserve "$held_branch" "preparation held back and $(wc -l <<<"$held_human" | tr -d ' ') non-bot commit(s) are on the remote branch."
+  else
+    # Not a preserve: the bot still owns this branch, so the hold-back counts
+    # toward escalation. Touching it only keeps cleanup off the earlier PR.
+    touch_branch "$held_branch"
+    echo "::warning::Keeping $held_branch and any open PR unchanged: preparation held back."
+  fi
   exit 0
   ;;
 "NO UPDATES")
@@ -30,17 +116,6 @@ UPDATED) ;;
   exit 1
   ;;
 esac
-
-# Read back the identity git-bot-identity configured above; the
-# human-commit guard below compares every remote commit's author
-# against it. Assert it is non-empty rather than let it degrade:
-# an empty value makes EVERY commit look human, which would
-# silently stop the pipeline pushing anything at all.
-bot_email=$(git config user.email || true)
-if [ -z "$bot_email" ]; then
-  echo "::error::git user.email is unset — the human-commit guard cannot run"
-  exit 1
-fi
 
 # Arm GitHub-native auto-merge on a bot update PR, squash method.
 #
@@ -81,53 +156,73 @@ fi
 # bot updates. A matching branch name by itself is not an identity check.
 # The activity endpoint separately verifies the authenticated pusher.
 #
-# Arming failure fails only this target. Matrix siblings still finish, and no
-# successful receipt is emitted for a PR that still needs an automation retry.
+# A human taking the PR over preserves the branch and skips the lane without
+# changing auto-merge: a non-bot commit, a PR moved to another base or owner,
+# or origin's live branch moving to a non-bot commit. A PR view or push
+# activity that disagrees with origin is GitHub lagging behind it: re-read,
+# then fail red. Any arming failure fails only this target. Matrix siblings
+# still finish, and no successful receipt is emitted for a PR that still needs
+# an automation retry.
 arm_auto_merge() {
   local arm_pr=$1 arm_branch=$2 expected_head=$3 current_pr human_commits reason push_status retry_status attempt
+  local unchanged="auto-merge on $arm_pr left unchanged"
   # Recheck after publication as well as before an unchanged PR is re-armed.
   # Commit identities are immutable at this SHA; GitHub separately records
-  # who pushed it. A validation failure blocks this arming attempt without
-  # treating pusher or commit identity as a request to change merge state.
-  if ! human_commits=$(git log --format='%H %ae %ce' "$base_head..$expected_head" |
-    awk -v bot="$bot_email" '$2 != bot || $3 != bot {print $1}') ||
-    [ -n "$human_commits" ]; then
-    echo "::error::Cannot verify bot commit identities for $arm_pr; preserving $arm_branch without changing auto-merge."
-    return 1
+  # who pushed it.
+  human_commits=$(git log --format='%H %ae %ce' "$base_head..$expected_head" |
+    awk -v bot="$bot_email" '$2 != bot || $3 != bot {print $1}')
+  if [ -n "$human_commits" ]; then
+    preserve "$arm_branch" "non-bot commits are in $expected_head; $unchanged."
+    return 0
   fi
-  # GitHub can acknowledge a new PR before its activity row is queryable.
-  # Re-read only an unavailable PR view or an empty activity result. Any
-  # observed wrong identity, base, head, or pusher fails immediately.
+  # GitHub can acknowledge a new PR, or a push, before its PR view and
+  # activity rows catch up. When either disagrees with expected_head, origin's
+  # live branch decides: unmoved means GitHub is lagging (re-read), moved onto
+  # a non-bot commit means a human took over (preserve), and moved with no
+  # such commit is unexplained (fail red).
   for attempt in 1 2 3 4 5; do
     reason=""
     if ! current_pr=$(gh pr view "$arm_pr" --json author,autoMergeRequest,baseRefName,headRefName,headRefOid,headRepository,isCrossRepository); then
       reason="PR view unavailable"
+    elif ! jq -e '(.autoMergeRequest == null) or
+      (.autoMergeRequest | type == "object" and (.enabledAt | type == "string"))' \
+      <<<"$current_pr" >/dev/null; then
+      echo "::error::Unrecognized auto-merge metadata on $arm_pr; $unchanged."
+      return 1
     elif ! jq -e --arg branch "$arm_branch" --arg repo "$GITHUB_REPOSITORY" --arg base "$BRANCH_NAME" \
       '.isCrossRepository == false and .headRepository.nameWithOwner == $repo
        and .baseRefName == $base and .headRefName == $branch
-       and (.author.login == "app/nix-agentic-tools-bot" or .author.login == "nix-agentic-tools-bot[bot]")
-       and ((.autoMergeRequest == null) or
-         (.autoMergeRequest | type == "object" and (.enabledAt | type == "string")))' \
+       and (.author.login == "app/nix-agentic-tools-bot" or .author.login == "nix-agentic-tools-bot[bot]")' \
       <<<"$current_pr" >/dev/null; then
-      echo "::error::PR identity or auto-merge metadata changed for $arm_pr; preserving $arm_branch without changing auto-merge."
-      return 1
+      preserve "$arm_branch" "the repository, base, head branch or author of $arm_pr changed; $unchanged."
+      return 0
     elif ! jq -e --arg head "$expected_head" '.headRefOid == $head' <<<"$current_pr" >/dev/null; then
-      echo "::error::PR head changed for $arm_pr; preserving $arm_branch without changing auto-merge."
-      return 1
+      reason="PR head is not yet $expected_head"
     else
       push_status=0
       python3 "$(dirname "$0")/update-github.py" push "$arm_branch" "$expected_head" || push_status=$?
       case "$push_status" in
       0) break ;;
       3) reason="App push activity unavailable" ;;
-      *)
-        echo "::error::App push activity does not verify $expected_head for $arm_pr; preserving $arm_branch without changing auto-merge."
+      *) reason="App push activity does not verify $expected_head" ;;
+      esac
+    fi
+    if [ "$reason" != "PR view unavailable" ]; then
+      case $(remote_state "$arm_branch" "$expected_head") in
+      human)
+        preserve "$arm_branch" "origin's $arm_branch moved off $expected_head onto non-bot commits; $unchanged."
+        return 0
+        ;;
+      moved)
+        echo "::error::origin's $arm_branch moved off $expected_head with no non-bot commit; $unchanged."
         return 1
         ;;
+      unreadable) reason="$reason, and origin could not be read" ;;
+      *) ;; # same: origin agrees with expected_head, so GitHub is lagging
       esac
     fi
     if [ "$attempt" -eq 5 ]; then
-      echo "::error::$reason after $attempt reads for $arm_pr; preserving $arm_branch without changing auto-merge."
+      echo "::error::$reason after $attempt reads for $arm_pr; $unchanged."
       return 1
     fi
     echo "::warning::$reason for $arm_pr (read $attempt/5); retrying before auto-merge."
@@ -167,10 +262,21 @@ record_published_pr() {
   printf '%s\n' "$1" >"$RUNNER_TEMP/published-pr"
 }
 
-preserve_unverified_head() {
-  local preserve_branch=$1 reason=$2
-  echo "::warning::Preserving $preserve_branch: $reason"
-  echo "$preserve_branch" >>"$RUNNER_TEMP/touched-branches"
+# Wait for GitHub to attribute <head> on <branch> to the App. Every non-match
+# is re-read, because the activity row trails the push; the caller decides
+# what a final non-match means.
+app_push_verified() {
+  local verify_branch=$1 verify_head=$2 attempt
+  for attempt in 1 2 3 4 5; do
+    if python3 "$(dirname "$0")/update-github.py" push "$verify_branch" "$verify_head"; then
+      return 0
+    fi
+    if [ "$attempt" -lt 5 ]; then
+      echo "::warning::App push activity does not yet verify $verify_head on $verify_branch (read $attempt/5); retrying."
+      sleep 2
+    fi
+  done
+  return 1
 }
 
 # Find all update/* branches with commits ahead of base
@@ -204,15 +310,15 @@ git branch --list "update/$UPDATE_TARGET" | while read -r branch; do
   existing_pr=$(jq -r '.number // empty' <<<"$pr_json")
   existing_base=$(jq -r '.baseRefName // empty' <<<"$pr_json")
   pr_mergeable=$(jq -r '.mergeable // "UNKNOWN"' <<<"$pr_json")
+  pr_note=${existing_pr:+ (PR #$existing_pr)}
   if [ -n "$existing_pr" ] && [ "$existing_base" != "$BRANCH_NAME" ]; then
-    preserve_unverified_head "$branch" "existing PR #$existing_pr targets $existing_base, not $BRANCH_NAME."
+    preserve "$branch" "existing PR #$existing_pr targets $existing_base, not $BRANCH_NAME."
     continue
   fi
   if [ -n "$existing_pr" ] && ! jq -e \
     '.author.login == "app/nix-agentic-tools-bot" or .author.login == "nix-agentic-tools-bot[bot]"' \
     <<<"$pr_json" >/dev/null; then
-    echo "::warning::Preserving $branch: existing PR #$existing_pr is not owned by the update App."
-    echo "$branch" >>"$RUNNER_TEMP/touched-branches"
+    preserve "$branch" "existing PR #$existing_pr is not owned by the update App."
     continue
   fi
 
@@ -265,42 +371,34 @@ git branch --list "update/$UPDATE_TARGET" | while read -r branch; do
   # engaged with, not whether to overwrite commits on its
   # branch.
   #
-  # Compare author AND committer against the identity: a human amend can
-  # retain the bot author while changing the content and committer. The identity is
-  # git-bot-identity configured for this job, and REFUSE the
-  # push when anything else authored a commit in range. A
-  # refusal is the honest outcome: replaying the commits onto
-  # a freshly re-derived tree could silently combine a human's
-  # hand-fix with a bot hash that superseded it, and the human
-  # is the only one who can say which wins. The branch simply
-  # stops auto-updating until they resolve it.
-  human_range=""
+  # PRESERVE the branch when anything but the bot authored or committed a
+  # commit on it. That is the only take-over signal: it is read from the
+  # commits themselves, so GitHub API lag cannot fake it. Replaying the
+  # commits onto a freshly re-derived tree could silently combine a human's
+  # hand-fix with a bot hash that superseded it, and the human is the only
+  # one who can say which wins. The hold ends when the branch is deleted or
+  # its PR is merged; until then every sweep skips this lane.
+  human_commits=$(remote_human_commits "$branch")
+  if [ -n "$human_commits" ]; then
+    printf '%s\n' "$human_commits" | while read -r sha; do
+      git log --no-walk --format='  %h %an <%ae>: %s' "$sha"
+    done
+    preserve "$branch" "$(wc -l <<<"$human_commits" | tr -d ' ') non-bot commit(s) are on the remote branch$pr_note."
+    continue
+  fi
+  # A bot-only head must also be a push GitHub attributes to the App. A
+  # mismatch that outlasts the re-reads is unexplained, not a take-over:
+  # unless origin has since moved onto non-bot commits, fail red.
+  observed_head=""
   if git rev-parse --verify --quiet "$remote_ref" >/dev/null; then
     observed_head=$(git rev-parse "$remote_ref")
-    if ! python3 "$(dirname "$0")/update-github.py" push "$branch" "$observed_head"; then
-      preserve_unverified_head "$branch" "its observed head is not a verified App push."
-      continue
-    fi
-    # Prefer the merge-base range; fall back to base_head when
-    # merge-base could not be computed. The fallback can only
-    # WIDEN the range, so it errs toward refusing to push.
-    human_range="${old_base:-$base_head}..$remote_ref"
-  fi
-  if [ -n "$human_range" ]; then
-    human_commits=$(git log --format='%H %ae %ce' "$human_range" |
-      awk -v bot="$bot_email" '$2 != bot || $3 != bot {print $1}')
-    if [ -n "$human_commits" ]; then
-      n=$(printf '%s\n' "$human_commits" | wc -l | tr -d ' ')
-      echo "::warning title=Update branch has human commits::" \
-        "Refusing to force-push $branch — $n non-bot commit(s)" \
-        "on the remote branch would be destroyed."
-      printf '%s\n' "$human_commits" | while read -r sha; do
-        git log --no-walk --format='  %h %an <%ae>: %s' "$sha"
-      done
-      # As with an unchanged patch, count it as
-      # touched so the stale-PR step does not close the PR.
-      preserve_unverified_head "$branch" "$n non-bot commit(s) are present on the remote branch."
-      continue
+    if ! app_push_verified "$branch" "$observed_head"; then
+      if [ "$(remote_state "$branch" "$observed_head")" = human ]; then
+        preserve "$branch" "origin's $branch moved off $observed_head onto non-bot commits$pr_note."
+        continue
+      fi
+      echo "::error::GitHub does not attribute $branch's head $observed_head to the App$pr_note; not publishing."
+      exit 1
     fi
   fi
 
@@ -343,11 +441,11 @@ git branch --list "update/$UPDATE_TARGET" | while read -r branch; do
           fi
         fi
         if [ -z "$closed_id" ] || [ -z "$new_id" ]; then
-          preserve_unverified_head "$branch" "human-closed PR #$closed_pr cannot be compared with the prepared proposal."
+          preserve "$branch" "human-closed PR #$closed_pr cannot be compared with the prepared proposal."
           continue
         fi
         if [ "$closed_id" = "$new_id" ]; then
-          preserve_unverified_head "$branch" "human-closed PR #$closed_pr already proposed this update."
+          preserve "$branch" "human-closed PR #$closed_pr already proposed this update."
           continue
         fi
         ;;
@@ -379,6 +477,15 @@ git branch --list "update/$UPDATE_TARGET" | while read -r branch; do
     esac
   fi
 
+  # The PR already proposes exactly this patch: a rebase onto a newer base, or
+  # no push at all, is not a new proposal. Record that as the lane's skip, so
+  # a failed build verification is a notice naming the PR rather than a red
+  # lane on every sweep after the base moves. Only a new PR or a changed patch
+  # (new_id != old_id) is judged red.
+  if [ -n "$existing_pr" ] && [ -n "$new_id" ] && [ "$new_id" = "$old_id" ]; then
+    printf '%s\n' "PR #$existing_pr already proposes this patch; only its base changed, if anything." >"$RUNNER_TEMP/skip"
+  fi
+
   if [ -n "$existing_pr" ] && [ -n "$new_id" ] && [ "$new_id" = "$old_id" ] &&
     [ "$pr_mergeable" != "CONFLICTING" ] &&
     [ "$old_base" = "$base_head" ]; then
@@ -387,7 +494,7 @@ git branch --list "update/$UPDATE_TARGET" | while read -r branch; do
     # closes and DELETES any update/* PR missing from this
     # file, so a silent skip would make the pipeline close its
     # own valid PR and recreate it on the next run.
-    echo "$branch" >>"$RUNNER_TEMP/touched-branches"
+    touch_branch "$branch"
     record_published_pr "${GITHUB_SERVER_URL:-https://github.com}/$GITHUB_REPOSITORY/pull/$existing_pr"
     if [ "$human_auto_merge_hold" -eq 0 ]; then
       arm_auto_merge "$existing_pr" "$branch" "$observed_head"
@@ -396,10 +503,18 @@ git branch --list "update/$UPDATE_TARGET" | while read -r branch; do
   fi
 
   echo "Pushing $branch ($subject)..."
-  # Refuse concurrent remote changes, including a human commit arriving
-  # after checkout. An absent remote branch requires an empty expected SHA.
-  old_tip=$(git rev-parse --verify --quiet "$remote_ref" || true)
-  git push --force-with-lease="refs/heads/$branch:$old_tip" origin "$branch"
+  # Refuse concurrent remote changes, including a human commit arriving after
+  # checkout: the lease is the head every check above observed, and an absent
+  # remote branch requires an empty expected SHA. A rejected lease is a
+  # take-over only when origin's branch now carries non-bot commits.
+  if ! git push --force-with-lease="refs/heads/$branch:$observed_head" origin "$branch"; then
+    if [ "$(remote_state "$branch" "$observed_head")" = human ]; then
+      preserve "$branch" "origin's $branch moved off ${observed_head:-<absent>} onto non-bot commits during publication$pr_note."
+      continue
+    fi
+    echo "::error::Could not push $branch."
+    exit 1
+  fi
 
   if [ -n "$existing_pr" ]; then
     gh pr edit "$existing_pr" --title "$subject"
@@ -436,5 +551,5 @@ EOF
     fi
   fi
 
-  echo "$branch" >>"$RUNNER_TEMP/touched-branches"
+  touch_branch "$branch"
 done
