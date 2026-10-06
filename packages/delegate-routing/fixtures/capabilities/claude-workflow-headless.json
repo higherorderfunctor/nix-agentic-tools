@@ -1,40 +1,40 @@
 {
   "capabilities": {
     "available": {
-      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md cases claude:wf_default and claude:wf_allowed: the default -p permission mode denies the Workflow call (\"Review dynamic workflow before running\", the P7 result); with --allowedTools Workflow the run starts and its nodes execute.",
+      "result": "supported"
     },
     "linkedWorktreeCommit": {
       "evidence": "Not exercised in this capture.",
       "result": "unknown"
     },
     "nestingDepth": {
-      "evidence": "Not exercised in this capture.",
-      "result": "unknown",
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: nodes have no Agent or Workflow tool; nested workflow() is grep-only evidence.",
+      "result": "unsupported",
       "value": null
     },
     "pinsEffort": {
-      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: node A's request carried effort low; precedence against CLAUDE_CODE_EFFORT_LEVEL is unverified.",
+      "result": "supported"
     },
     "pinsModel": {
-      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: node A requested sonnet/low and its request used sonnet; CLAUDE_CODE_SUBAGENT_MODEL_FORCE overrides node models (claude:wf_force).",
+      "result": "supported"
     },
     "runsOwnSubagents": {
-      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:wf_allowed: workflow nodes receive no Agent or Workflow tool, so a node cannot start its own subagents.",
+      "result": "unsupported"
     }
   },
-  "context": "P7: claude -p root, no trust or permission bypass flags; plain output only, no captured native tool events.",
+  "context": "Offline replays of the pinned Claude Code 2.1.289 claude -p --model haiku against a local capture mock, in the default permission mode (claude:wf_default) and with --allowedTools Workflow (claude:wf_allowed); the probe script pins node A to sonnet/low.",
   "date": "2026-10-05",
   "mode": "headless",
   "observed": {
-    "effort": null,
-    "model": null
+    "effort": "low",
+    "model": "sonnet"
   },
   "replay": [
-    "Launch claude -p --model sonnet --effort low; request a native two-node workflow with a producer and dependent child, each requesting sonnet/low; capture tool calls, terminal results and resolved worker controls."
+    "python3 packages/delegate-routing/probes/delegates/claude/harness.py wf_default wf_allowed wf_force"
   ],
   "requested": {
     "effort": "low",
@@ -42,6 +42,6 @@
   },
   "runtime": "claude",
   "runtimeVersion": "2.1.289",
-  "source": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md",
+  "source": "packages/delegate-routing/probes/delegates/claude/README.md",
   "technique": "Workflow"
 }

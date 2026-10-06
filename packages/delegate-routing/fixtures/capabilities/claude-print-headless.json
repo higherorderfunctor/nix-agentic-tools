@@ -9,39 +9,40 @@
       "result": "unknown"
     },
     "nestingDepth": {
-      "evidence": "Not exercised in this capture.",
-      "result": "unknown",
-      "value": null
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:depth: Agent children nest 3 levels below the claude -p root and the depth-3 child has no Agent tool; claude:depth_env1 shows CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH lowers the cap.",
+      "result": "supported",
+      "value": 3
     },
     "pinsEffort": {
-      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md case claude:model_effort: --effort high reached the inheriting sonnet child's output_config.effort; Haiku requests carry no effort and CLAUDE_CODE_EFFORT_LEVEL overrides --effort (judge:judge_effort_env).",
+      "result": "supported"
     },
     "pinsModel": {
-      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md cases claude:model_effort and claude:ctl: root requests carry the --model value; SDK set_model changes later requests.",
+      "result": "supported"
     },
     "runsOwnSubagents": {
-      "evidence": "Historical report (2026-10-05, P7): model reported \"Review dynamic workflow before running\" and no delegates launched; no tool trace verifies the gate, execution or resolved pins; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/claude/README.md cases claude:depth and claude:bg: the claude -p root starts foreground and background Agent children and waits for background ones before exiting; claude:wf_allowed runs Workflow nodes when --allowedTools Workflow is passed.",
+      "result": "supported"
     }
   },
-  "context": "P7: claude -p root, no trust or permission bypass flags; plain output only, no captured native tool events.",
+  "context": "Offline replays of the pinned Claude Code 2.1.289 against a local capture mock (claude:depth and claude:bg add --permission-mode bypassPermissions). The observed effort is the inheriting sonnet child's; Haiku root requests carry none. Availability comes from the P7 launcher capture.",
   "date": "2026-10-05",
   "mode": "headless",
   "observed": {
-    "effort": null,
-    "model": null
+    "effort": "high",
+    "model": "haiku"
   },
   "replay": [
+    "python3 packages/delegate-routing/probes/delegates/claude/harness.py depth depth_env1 bg model_effort ctl judge_effort_env",
     "Launch claude -p --model sonnet --effort low; request a native two-node workflow with a producer and dependent child, each requesting sonnet/low; capture tool calls, terminal results and resolved worker controls."
   ],
   "requested": {
-    "effort": "low",
-    "model": "sonnet"
+    "effort": "high",
+    "model": "haiku"
   },
   "runtime": "claude",
   "runtimeVersion": "2.1.289",
-  "source": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md",
+  "source": "packages/delegate-routing/probes/delegates/claude/README.md",
   "technique": "claude -p"
 }

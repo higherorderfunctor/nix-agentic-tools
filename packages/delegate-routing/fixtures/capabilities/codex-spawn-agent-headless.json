@@ -1,47 +1,49 @@
 {
   "capabilities": {
     "available": {
-      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/codex/README.md cases claude:R2 (codex app-server) and codex:R1.v2-nested-depth-zero (codex exec): the root's spawn_agent started children on the wire.",
+      "result": "supported"
     },
     "linkedWorktreeCommit": {
       "evidence": "Not exercised in this capture.",
       "result": "unknown"
     },
     "nestingDepth": {
-      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown",
-      "value": null
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/codex/README.md case claude:R2: agents nested 3 levels below the root (/root/a/g/h); codex:R1.v2-nested-depth-zero ran a grandchild with agents.max_depth=0, so no V2 cap was found.",
+      "result": "supported",
+      "value": 3
     },
     "pinsEffort": {
-      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/codex/README.md cases claude:R2 and claude:R12: the spawn_agent reasoning_effort reached the child's request and wins over agents.default_subagent_reasoning_effort; a role's effort overrides it (codex:R1.v2-role-model).",
+      "result": "supported"
     },
     "pinsModel": {
-      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/codex/README.md cases claude:R2 and claude:R12: the spawn_agent model reached the child's request and wins over agents.default_subagent_model; a declared role's model wins over spawn arguments.",
+      "result": "supported"
     },
     "runsOwnSubagents": {
-      "evidence": "Historical report (2026-10-05, P4a/P4b): only empty wait events and parent nonce text captured; child/follow-up/nested execution and resolved pins remain unverified; see packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md.",
-      "result": "unknown"
+      "evidence": "Executed (V): packages/delegate-routing/probes/delegates/codex/README.md cases claude:R2 and codex:R1.v2-nested-depth-zero: a spawned child spawned its own grandchild.",
+      "result": "supported"
     }
   },
-  "context": "P4a and P4b: headless codex exec roots, no trust or permission bypass flags; empty wait events and parent prose only.",
+  "context": "Offline replays of the pinned Codex 0.160.0 against a scripted Responses provider with a fresh CODEX_HOME and root model gpt-6-luna; claude:R2 drives codex app-server, codex:R1.v2-nested-depth-zero runs codex exec, both with the V2 collaboration tools. claude:R2 spawns child a with gpt-6-sol/high.",
   "date": "2026-10-05",
   "mode": "headless",
   "observed": {
-    "effort": null,
-    "model": null
+    "effort": "high",
+    "model": "gpt-6-sol"
   },
   "replay": [
-    "Launch codex exec --model gpt-6-luna --config 'model_reasoning_effort=\"medium\"' --json; request one spawn_agent child plus a bounded follow-up, then separately request a child that spawns a grandchild; retain native tool calls and terminal child results."
+    "packages/delegate-routing/probes/delegates/codex/run.sh v2-basic 18991",
+    "packages/delegate-routing/probes/delegates/codex/run.sh spawn-defaults-errors 19040",
+    "python3 packages/delegate-routing/probes/delegates/codex/offline.py v2-nested-depth-zero v2-role-model"
   ],
   "requested": {
-    "effort": "medium",
-    "model": "gpt-6-luna"
+    "effort": "high",
+    "model": "gpt-6-sol"
   },
   "runtime": "codex",
   "runtimeVersion": "0.160.0",
-  "source": "packages/delegate-routing/fixtures/capabilities/evidence/2026-10-05-probes.md",
+  "source": "packages/delegate-routing/probes/delegates/codex/README.md",
   "technique": "spawn_agent"
 }
