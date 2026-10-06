@@ -185,8 +185,9 @@ jobs:
       # A writable update whose build verification failed still publishes its
       # PR above; then this lane goes red only if that PR is new or its patch
       # changed. It is skipped with a notice (receipt `skip`) when the PR
-      # already proposed this patch, or when publication PRESERVED a
-      # human-owned branch (Renovate's modified-branch rule). Placement after the receipt
+      # already proposed this patch, or when publication left a branch whose
+      # live origin head was not the bot's own last push (Renovate's
+      # modified-branch rule). Placement after the receipt
       # upload is load-bearing: cleanup needs every lane's receipt, and
       # `fail-fast: false` keeps the other lanes running. `!cancelled()` keeps
       # the verdict (and its ::error) when publish or auto-merge arming fails;
@@ -269,8 +270,8 @@ jobs:
       # so branch CI has nothing to judge. That is correct and it is also how a
       # blocked target stayed invisible for three sweeps on 2026-09-16. This
       # step fails the sweep once a target has been held back TWICE running.
-      # A hold-back on a branch a human has taken over (receipt `skip`) is
-      # expected until that branch is deleted or its PR merges, and is never
+      # A hold-back on a branch that is not the bot's own last push (receipt
+      # `skip`) is expected until that branch is deleted, and is never
       # counted. A predecessor that cannot be identified freshly is reported
       # as an unknown count, never as a first sweep.
       #

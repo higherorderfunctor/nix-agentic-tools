@@ -144,8 +144,8 @@ def held_back_reason(log):
 UNREADABLE = "UNREADABLE"
 
 # previous_status() result for a receipt whose lane was skipped (`skip` in the
-# receipt). On a HELD BACK receipt only a preserved human-owned branch sets it,
-# so it never counts as the first of two hold-backs. See verification_verdict.
+# receipt). On a HELD BACK receipt only a branch that is not the bot's own last
+# push sets it, so it never counts as the first of two hold-backs.
 SKIPPED = "SKIPPED"
 
 
@@ -221,19 +221,15 @@ def schedule_interval_hours(workflow=WORKFLOW):
 
     The cron is the one source of truth for the cadence; a second constant here
     would drift from it. Only the shapes this workflow uses are understood: a
-    fixed minute, and an hour field that is `*`, `*/N` or a comma list, with
+    fixed minute and a comma list of hours,
     every day. Anything else raises rather than guessing.
     """
     crons = re.findall(r'^\s*-\s*cron:\s*"([^"]+)"', workflow.read_text(), re.MULTILINE)
     if len(crons) != 1:
         raise ValueError(f"expected exactly one cron in {workflow.name}, found {len(crons)}")
     minute, hour, *days = crons[0].split()
-    if not minute.isdigit() or days != ["*", "*", "*"]:
+    if not minute.isdigit() or not all(h.isdigit() for h in hour.split(",")) or days != ["*", "*", "*"]:
         raise ValueError(f"unsupported update cron {crons[0]!r}")
-    if hour == "*":
-        return 1
-    if hour.startswith("*/") and hour[2:].isdigit():
-        return int(hour[2:])
     hours = sorted(int(h) for h in hour.split(","))
     return max((b - a) % 24 or 24 for a, b in zip(hours, hours[1:] + hours[:1]))
 
@@ -298,8 +294,8 @@ def previous_sweep(repo, current_run_id):
 def previous_status(repo, run, name, workspace):
     """`name`'s status in that one sweep: (status, run_url, note).
 
-    status is the receipt's own status, SKIPPED when its lane was skipped, None when that sweep has no unexpired receipt
-    artifact for `name`, or UNREADABLE when it has one that could not be
+    status is the receipt's own status, SKIPPED when its lane was skipped, None
+    when that sweep has no unexpired receipt artifact for `name`, or UNREADABLE when it has one that could not be
     listed, downloaded or parsed. note says why whenever status is not a
     receipt's own, so neither outcome passes silently.
 
@@ -314,8 +310,6 @@ def previous_status(repo, run, name, workspace):
     """
     if run is None:
         return None, None, "there is no earlier scheduled sweep"
-    if run == UNREADABLE:
-        return UNREADABLE, None, "the previous scheduled sweep could not be identified"
     url, artifact = run["html_url"], f"update-receipt-{name}"
     try:
         listing = json.loads(gh("api", f"repos/{repo}/actions/runs/{run['id']}/artifacts?name={artifact}"))
@@ -335,8 +329,8 @@ def previous_status(repo, run, name, workspace):
     # match, so a mis-attached artifact cannot answer for a different target.
     if not isinstance(receipt, dict) or receipt.get("name") != name or not isinstance(receipt.get("status"), str):
         return UNREADABLE, url, f"its {artifact} artifact is not a receipt for {name}"
-    # A preserved hold-back was a human's branch, not the pipeline's failure, so
-    # it never counts as the first of two consecutive hold-backs.
+    # A skipped hold-back left a branch that was not the bot's own last push. It
+    # is not the pipeline's failure, so it never counts as the first of two consecutive hold-backs.
     return (SKIPPED if receipt.get("skip") else receipt["status"]), url, None
 
 
@@ -386,10 +380,12 @@ def verification_verdict(prepared, published_pr, skip):
 
     The lane is red only when it proposed something new: a new PR, or a changed
     patch on an existing one. `skip` is the publisher's reason it did not, and
-    then the lane gets a notice and stays green, Renovate-style. Either a human
-    owns the branch (usually fixing a failure that needs an outside fix that can
-    take days), or the PR already proposes this exact patch and at most its base
-    moved. A red lane every sweep would only repeat what is already known.
+    then the lane gets a notice and stays green, Renovate-style. Either origin's
+    branch is not the bot's own last push (someone else changed it, often with
+    an outside fix that can take days, or GitHub could not yet confirm the push),
+    so the bot left it untouched; or the PR already proposes this exact patch
+    and at most its base moved. The next sweep re-reads the branch, so a red
+    lane here would only repeat what is already known.
     """
     failed = prepared.get("verifyFailed")
     if not failed:
@@ -477,9 +473,9 @@ def main():
         repo, run_id = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_RUN_ID"]
         receipts = [json.loads(p.read_text()) for p in downloaded("receipts", "update-receipt.json")]
         held_back = [r for r in receipts if r["status"] == "HELD BACK"]
-        # On a HELD BACK receipt only a preserve sets `skip`: a human owns that
-        # branch, hold-backs there are expected until it is deleted or its PR
-        # merges, so they are never counted toward escalation.
+        # On a HELD BACK receipt only a left branch sets `skip`: origin's head is
+        # not the bot's own last push, so the bot leaves it alone until it is
+        # deleted (merging deletes it). Those hold-backs never count.
         for r in held_back:
             if r.get("skip"):
                 annotate("notice", "Update target held back on a preserved branch", [f"update/{r['name']}: {r['skip']}", "Not counted toward hold-back escalation."])
@@ -513,8 +509,8 @@ def main():
                 "judge for it -- any update PR still open is an EARLIER proposal, not this one.",
                 "It cannot clear itself; a person has to unblock preparation.",
             ]),
-            ("Update hold-back count unknown", "Held back with an unreadable predecessor receipt", unreadable, [
-                "Held back, and the previous sweep's receipt for this target could not be read, so",
+            ("Update hold-back count unknown", "Held back with an unknown predecessor", unreadable, [
+                "Held back, and the previous scheduled sweep, or its receipt for this target, could not be read, so",
                 "whether this is a first or a repeated hold-back is unknown. Counting it as a first",
                 "would silently reset the consecutive-hold counter, so this job fails instead.",
             ]),
