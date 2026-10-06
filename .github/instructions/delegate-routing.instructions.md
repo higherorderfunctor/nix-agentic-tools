@@ -7,9 +7,11 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — capability validation rejects operator paths;
-> public primary citations bound observations, declared modes remain visible,
-> and manual probes retain operator-held event streams.
+> **Last verified:** 2026-10-06 — validation separates command and reading
+> claims; both review workflows share a worker/review loop capped at 3 rounds;
+> capability validation rejects operator paths, public primary citations bound
+> observations, declared modes remain visible, and manual probes retain
+> operator-held event streams.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -21,7 +23,7 @@ expose the same surface.
 `routing.<name>` has `enable`, `always`, `before`, `after` and either `text` or
 `source`. Names become headings. The package ships the always-on "Load
 delegate-routing" stub and four enabled entries: "Follow the request", "Size the
-work", "Choose execution" and "Verify the result". "Verify the result" is
+work", "Choose execution" and "Validate the result". "Validate the result" is
 always-on too. The "Orchestrator session" catalog entry ships disabled. Policy
 belongs in these entries rather than renderer string literals.
 
@@ -29,8 +31,9 @@ belongs in these entries rather than renderer string literals.
 routing entry fields except `always`; the workflow's `always` places its steps.
 The package ships disabled "Review: one reviewer" and "Review: prosecute,
 defend, judge" workflows. Enable a workflow, then add, replace, disable or
-reorder a step by key. Both workflows read one shared Rubric source. A workflow
-can have introductory text or only steps; an enabled step needs content.
+reorder a step by key. Both workflows read shared Rubric and Loop sources. Each
+runs the worker and review inside a loop of at most 3 rounds. A workflow can
+have introductory text or only steps; an enabled step needs content.
 
 Entries with `always = true` render through the existing per-runtime `ai.rules`
 fan-out. Other entries render in the generated skill. A workflow's `always`
@@ -72,9 +75,10 @@ keep a terminal step last when inserting a new step, give the new step a
 This repository enables "Orchestrator session" and both review workflows in
 `dev/ai.nix`. Its portable "Local limits" entry caps external CLI delegates at
 two. Its Claude-only "Pool drain" entry follows "Size the work" and asks for
-usage before each delegate. Each review workflow adds a shared "Subtraction
-review" step after Review or Judge and before Rounds. These house entries are
-consumer policy, not shipped defaults.
+usage before each batch of delegates, choosing allowance left per hour until
+reset. Each review workflow adds a shared "Subtraction review" step after Review
+or Defend and before Loop. These house entries are consumer policy, not shipped
+defaults.
 
 ## Families and runtime capabilities
 

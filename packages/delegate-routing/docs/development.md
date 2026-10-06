@@ -1,8 +1,10 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-04 — capability validation rejects operator paths;
-> public primary citations bound observations, declared modes remain visible,
-> and manual probes retain operator-held event streams.
+> **Last verified:** 2026-10-06 — validation separates command and reading
+> claims; both review workflows share a worker/review loop capped at 3 rounds;
+> capability validation rejects operator paths, public primary citations bound
+> observations, declared modes remain visible, and manual probes retain
+> operator-held event streams.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
