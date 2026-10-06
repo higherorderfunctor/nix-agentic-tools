@@ -383,7 +383,7 @@ Hand bulk reading, searching, measuring and edit-and-test loops to delegates.
 Have them write large output to files and report a short summary with its
 evidence. Give each delegate one task: one part of the system, or one question.
 
-### Verify the result
+### Validate the result
 
 Give each delegate one clear goal and say what result proves it's done. Require
 an evidence chain for every claim it reports: file and line, or the exact
@@ -391,14 +391,21 @@ command and its output. Each claim comes back as verified, retracted (checked
 and not an issue, with the reason), or unknown (not checked, with what would
 settle it). Delegates never drop a claim silently.
 
-At each level of orchestration, judge those claims before passing them up.
-Re-run the commands the important claims depend on. An exit code of 0 alone
-isn't proof. Check whatever depends on the changed files, such as generated
-files and tests. When something fails, name why: a concept problem needs a
-stronger model, missing evidence needs fetching, an execution slip needs fixing.
-Fix small things yourself, and drop what turned out not to be an issue. Bring
-the user only what's real and needs their decision, written the way their
-communication rules ask, if they have any.
+At each level of orchestration, validate those claims before passing them up.
+Pick the check the claim needs:
+
+- A claim that rests on a command: re-run it, or have a separate step re-run it.
+  An exit code of 0 alone isn't proof. Check what depends on the changed files,
+  such as generated files and tests.
+- A claim that rests on reading: judge it with the full picture you hold. A
+  finding that only looks wrong from the reviewer's narrower scope, for example
+  two things that "conflict" where one is deliberately scoped, is retracted with
+  the reason, not escalated.
+
+When something fails, name why: a concept problem needs a stronger model,
+missing evidence needs fetching, an execution slip needs fixing. Fix small
+things yourself. Bring the user only what is real and needs their decision,
+written the way their communication rules ask, if they have any.
 
 <!-- rule: semble -->
 
@@ -888,9 +895,8 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-09-29 — prek hooks take their config from the
-> session's launch checkout; worktrees are materialized only by choice;
-> repository-level branchless initialization precedes prek hook installation.
+> **Last verified:** 2026-10-06 — the worker and three review roles run inside a
+> loop of at most 3 rounds; unsettled findings go to the operator.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -1049,9 +1055,11 @@ or `packages/*/packages/**/*.nix`; or a hunk under `packages/*/modules/**` or
 
 Everything else uses the single-reviewer default. Run the three-role protocol:
 an agent that prosecutes, a separate agent that defends, and a third that judges
-on evidence. If the judge cannot converge, loop — at most three rounds, each
-narrowed to what stayed unresolved. Surface a genuine split to the operator
-rather than adjudicating it yourself.
+on evidence. The three roles run inside a loop of at most 3 rounds with the
+worker: the worker fixes, then the review runs again. If the same defect
+survives 2 rounds, change the brief instead of repeating it. At the cap, return
+the result, the open defects and the decision needed. A finding the judge cannot
+settle goes to the operator.
 
 **Scope, deliberately narrow:**
 
