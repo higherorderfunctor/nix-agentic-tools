@@ -87,7 +87,8 @@ one() {
   census-mw-1p) FP1=1 run "$1" - -- "${P[@]}" --plugin-dir "$mw" "${APP[@]}" hi ;;
   gated-coordinator) CLAUDE_CODE_COORDINATOR_MODE=1 run "$1" "$here/plan-gated.json" -- "${P[@]}" --allowedTools Agent "${APP[@]}" "${SUB[@]}" COORD ;;
   gated-teammate) CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 run "$1" "$here/plan-gated.json" -- "${P[@]}" --allowedTools Agent "${APP[@]}" "${SUB[@]}" TEAM ;;
-  snap1) run "$1" - -- -p --model haiku --session-id "$SID" --append-system-prompt "Version one: APPVONE-2121." first ;;
+  # snap1 starts the session snap2 and snap3 resume; drop a previous run's copy so a re-run can reuse $SID
+  snap1) rm -f "$work"/config/projects/*/"$SID".jsonl && run "$1" - -- -p --model haiku --session-id "$SID" --append-system-prompt "Version one: APPVONE-2121." first ;;
   snap2) run "$1" - -- -p --model haiku --resume "$SID" --append-system-prompt "Version two: APPVTWO-2222." second ;;
   snap3) run "$1" - -- -p --model haiku --resume "$SID" --system-prompt-snapshot off --append-system-prompt "Version three: APPVTHREE-2323." third ;;
   *)
