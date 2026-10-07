@@ -28,10 +28,13 @@
     gitTokens = true;
     GLAB_CONFIG_DIR = false;
     host = false;
+    IDToken = true;
     job_token = true;
+    JWTSecret = true;
     keepRecentTokens = false;
     KIMCHI_API_KEY = true;
     maxTokens = false;
+    myAPIToken = true;
     oauth2_refresh_token = true;
     passwd = true;
     password = true;

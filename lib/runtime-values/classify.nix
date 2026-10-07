@@ -21,12 +21,18 @@
     "secret_key"
     "token"
   ];
+  # Word boundaries, applied in order: an acronym before a title-cased word
+  # (IDToken, myAPIToken), then a lower-case letter or digit before a capital.
+  boundaries = ["([A-Z]+)([A-Z][a-z])" "([a-z0-9])([A-Z])"];
   snake = name:
-    lib.concatMapStrings (part:
-      if builtins.isList part
-      then lib.concatStringsSep "_" part
-      else part)
-    (builtins.split "([a-z0-9])([A-Z])" name);
+    lib.foldl' (acc: boundary:
+      lib.concatMapStrings (part:
+        if builtins.isList part
+        then lib.concatStringsSep "_" part
+        else part)
+      (builtins.split boundary acc))
+    name
+    boundaries;
 in {
   classify = {
     hints ? {},
