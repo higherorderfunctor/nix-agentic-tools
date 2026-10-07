@@ -47,7 +47,8 @@ operator steps.
 
 ## When the operator reports the skill misbehaving
 
-1. Run the acceptance suite cases for the reported behavior.
+1. Give the operator the `suite.py --case <id>` command for the reported
+   behavior's cases.
 2. Run the map rows behind the failing behavior, to see what the harness really
    does at the pinned version.
 3. Fix the skill, the configuration, or the map.
