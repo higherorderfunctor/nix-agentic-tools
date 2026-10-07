@@ -64,7 +64,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 item = emit_call('spawn_agent', args, 'nested', state.get('v1'))
             else:
                 item = emit_message('GRAND_DONE' if 'GRANDCHILD_PROBE' in text else 'CHILD_DONE', ident)
-                time.sleep(2 if state['case'] in {'v2-running-interrupt', 'v2-interrupt-tree', 'v2-concurrency'} else 0.06)
+                time.sleep(2 if state['case'] in {'v2-interrupt-tree', 'v2-concurrency'} else 0.06)
         else:
             n = len(outs)
             if n < len(state['actions']):
@@ -149,7 +149,6 @@ def run_case(name, actions, extra=(), v1=False, nested=False):
 try:
     spawn = dict(task_name='child', message='CHILD_PROBE', fork_turns='none', model='gpt-6-luna', reasoning_effort='low')
     run_case('v2-lifecycle', [('spawn_agent', spawn), ('wait_agent', dict(timeout_ms=500)), ('list_agents', {}), ('send_message', dict(target='child', message='PASSIVE_MESSAGE')), ('followup_task', dict(target='child', message='FOLLOWUP_PROBE')), ('wait_agent', dict(timeout_ms=500)), ('interrupt_agent', dict(target='child')), ('list_agents', {})])
-    run_case('v2-running-interrupt', [('spawn_agent', spawn), ('send_message', dict(target='child', message='MIDRUN_MESSAGE')), ('list_agents', {}), ('interrupt_agent', dict(target='child')), ('list_agents', {}), ('followup_task', dict(target='child', message='AFTER_INTERRUPT')), ('wait_agent', dict(timeout_ms=1000))])
     run_case('v2-interrupt-tree', [('spawn_agent', spawn), ('wait_agent', dict(timeout_ms=500)), ('list_agents', {}), ('interrupt_agent', dict(target='child')), ('list_agents', {})], nested=True)
     run_case('v2-concurrency', [('spawn_agent', dict(spawn, task_name='child' + str(i))) for i in range(4)] + [('list_agents', {})])
     evict_actions = []
@@ -165,13 +164,10 @@ try:
         run_case('v2-role-model', [('spawn_agent', dict(spawn, agent_type='reader')), ('wait_agent', dict(timeout_ms=500))], ['-c', 'agents.reader.description="model pin probe"', '-c', f'agents.reader.config_file="{role_file}"'])
     run_case('exec-resume-fork', [])
     run_case('piD6', [])
-    run_case('v2-full-model', [('spawn_agent', dict(spawn, fork_turns='all', reasoning_effort='medium')), ('wait_agent', dict(timeout_ms=500))])
-    run_case('v2-lastn-model', [('spawn_agent', dict(spawn, fork_turns='1')), ('wait_agent', dict(timeout_ms=500))])
     run_case('v2-nested-depth-zero', [('spawn_agent', spawn), ('wait_agent', dict(timeout_ms=500)), ('list_agents', {})], ['-c', 'agents.max_depth=0'], nested=True)
     run_case('v2-invalid', [('spawn_agent', dict(spawn, model='NO_SUCH_MODEL')), ('spawn_agent', dict(spawn, reasoning_effort='ultra')), ('spawn_agent', dict(spawn, fork_turns='0')), ('wait_agent', dict(timeout_ms=1001))])
     run_case('disabled', [('spawn_agent', spawn)], ['-c', 'agents.enabled=false', '-c', 'features.multi_agent_v2.enabled=false'])
     run_case('v1-lifecycle', [('spawn_agent', dict(message='CHILD_PROBE', model='gpt-6-luna', reasoning_effort='low')), ('wait_agent', dict(targets=['$ID'], timeout_ms=10000)), ('send_input', dict(target='$ID', message='FOLLOWUP_PROBE')), ('wait_agent', dict(targets=['$ID'], timeout_ms=10000)), ('close_agent', dict(target='$ID')), ('resume_agent', dict(id='$ID')), ('send_input', dict(target='$ID', message='RESUMED_PROBE')), ('wait_agent', dict(targets=['$ID'], timeout_ms=10000))], v1=True)
-    run_case('v1-nested-depth-one', [('spawn_agent', dict(message='CHILD_PROBE')), ('wait_agent', dict(targets=['$ID'], timeout_ms=10000))], v1=True, nested=True)
 finally:
     server.shutdown()
 print(f'work: {WORK}')

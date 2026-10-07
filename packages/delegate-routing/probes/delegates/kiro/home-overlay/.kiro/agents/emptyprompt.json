@@ -1,6 +1,0 @@
-{
-  "name": "emptyprompt",
-  "description": "empty prompt fixture",
-  "prompt": "",
-  "tools": ["*"]
-}

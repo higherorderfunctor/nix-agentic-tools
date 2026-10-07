@@ -16,6 +16,9 @@ copied the operator's account-fetched `~/.codex/models_cache.json`; that file
 carries an account identity and is not committed. The per-model
 `multi_agent_version` is the same, except that `gpt-reserve` is absent.
 
+Set `PROBE_OUT` for the inventory + `inspect_ast.py` steps so both AST files
+land in the same directory.
+
 ## Harness
 
 | File                                           | Role                                                                                                                                                                |
