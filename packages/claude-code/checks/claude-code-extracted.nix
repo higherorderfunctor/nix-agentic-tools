@@ -12,13 +12,14 @@
 # dumping both documents — the sidecar carries the binary's whole settings
 # schema now, so a dump is ~86 KB twice and unreadable in a CI log.
 {
+  extractedLib,
   pkgs,
   self,
   ...
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.claude-code.passthru.extracted;
     committed = ../extracted.json;
   in

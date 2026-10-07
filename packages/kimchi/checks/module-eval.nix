@@ -1,9 +1,10 @@
 # End-to-end module contracts; the shared harness discovers every backend.
 # cspell:ignore batchmode sembleignore
 {
+  extractedLib,
+  harness,
   lib,
   pkgs,
-  harness,
   ...
 }: let
   inherit (harness) deliveredFiles evalDevenv fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
@@ -75,7 +76,7 @@
   # that becomes user-scope fails evaluation until someone adds one.
   userScopeOnlyHarnessSettingKeys =
     (import ../lib/extracted.nix {
-      inherit lib pkgs;
+      inherit extractedLib lib pkgs;
       extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
     }).userScopeHarnessKeys;
   userScopeOnlyHarnessSettingValues = {

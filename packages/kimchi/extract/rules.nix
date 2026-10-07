@@ -1,10 +1,11 @@
 # One surface table for consumers, regeneration and the drift check.
 {
   extracted ? builtins.fromJSON (builtins.readFile ../extracted.json),
+  extractedLib,
   pkgs,
 }: let
   inherit (pkgs) lib;
-  inherit (import ../../../lib/extracted {inherit pkgs;}) reconcile withAdded;
+  inherit (extractedLib {inherit pkgs;}) reconcile withAdded;
   annotations = ./annotations.json;
   rows = builtins.fromJSON (builtins.readFile annotations);
   results = reconcile {

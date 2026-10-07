@@ -7,9 +7,9 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-06 — all hand fields reject blank values;
-> environment string facts classify unrecorded secrets; collision rows name
-> their cause.
+> **Last verified:** 2026-10-06 — reconciliation uses the injected
+> `extractedLib`; the factory receives that helper independently of runtime
+> package replacements.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -97,7 +97,12 @@ becomes an option at the next re-extraction, and a key it removes fails its
 consumer as an unknown option instead of writing bytes nothing reads. Every
 option is `nullOr` with a null default. Config rows record acceptance and may
 carry `aliasFor` or `excluded`. `extract/rules.nix` defines the config and
-environment surfaces once, using `lib/extracted/default.nix`'s `reconcile`.
+environment surfaces once, using the shared `extractedLib` function’s
+`reconcile`. Recipes receive the function through `scopeArgs`, checks through
+module arguments. Both backend shims supply `ai.internal.extractedLib` to
+`mkKimchi`; the public library binds the same helper from the repository’s
+library context. The factory therefore evaluates with replacement runtime
+packages and does not import the shared extraction library by a relative path.
 Consumers merge those rows with the committed facts; extraction itself emits
 facts and clones alias types from the rows' `aliasFor` references. Alias keys
 and inert keys have no option. A key is inert when upstream tags its

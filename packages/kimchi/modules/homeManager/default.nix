@@ -19,7 +19,7 @@
 in {
   imports = [
     ../common.nix
-    (extLib.ai.app.hmTransform (import ../../lib/mkKimchi.nix {
+    (extLib.ai.app.hmTransform (import ../../lib/mkKimchi.nix {inherit (config.ai.internal) extractedLib;} {
       lib = extLib;
       # This flake's build unless the overlay is applied (ai.internal.packages).
       pkgs = pkgs // {ai = config.ai.internal.packages;};

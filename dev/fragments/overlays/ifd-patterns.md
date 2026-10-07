@@ -1,8 +1,7 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-06 — hand fields reject blank values; unrecorded
-> secrets fail even without required secret fields; one rows recipe serves drift
-> diagnostics and regeneration.
+> **Last verified:** 2026-10-06 — owners apply the injected `extractedLib`
+> function instead of importing the shared extraction library by relative path.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -170,7 +169,8 @@ minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
-Importing `lib/extracted/default.nix` with `{ inherit pkgs; }` provides
+Owners receive `extractedLib` through the repository’s recipe and check
+contexts; applying it with `{inherit pkgs;}` provides
 `mkDriftCheck { name; extracted; committed; sidecar; results ? {}; rows ? null; }`.
 The builder returns `{ "${name}-extracted" = drv; }`, so callers merge its
 result into their checks and cannot choose a conflicting attribute. This

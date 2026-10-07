@@ -5,13 +5,14 @@
 # packages/claude-code/checks/claude-code-extracted.nix; the build of passthru.extracted also enforces
 # the fail-loud (>=1 present) guard baked into vu.mkKiroExtract.
 {
+  extractedLib,
   pkgs,
   self,
   ...
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.kiro-cli.passthru.extracted;
     committed = ../extracted.json;
   in

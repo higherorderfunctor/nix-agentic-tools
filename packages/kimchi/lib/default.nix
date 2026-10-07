@@ -1,3 +1,3 @@
-{
-  ai.apps.mkKimchi = import ./mkKimchi.nix;
+{extractedLib, ...}: {
+  ai.apps.mkKimchi = import ./mkKimchi.nix {inherit extractedLib;};
 }

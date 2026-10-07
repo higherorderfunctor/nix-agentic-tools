@@ -7,6 +7,7 @@
 # widened — and require the option surface to move with it. Each case is named
 # in the failure message.
 {
+  extractedLib,
   harness,
   lib,
   pkgs,
@@ -15,7 +16,7 @@
   inherit (harness) evalDevenv;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   committed = builtins.fromJSON (builtins.readFile ../extracted.json);
-  surfaceFor = extracted: import ../lib/extracted.nix {inherit extracted lib pkgs;};
+  surfaceFor = extracted: import ../lib/extracted.nix {inherit extracted extractedLib lib pkgs;};
   real = surfaceFor committed;
   sorted = lib.sort (a: b: a < b);
 

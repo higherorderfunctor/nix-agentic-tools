@@ -16,13 +16,14 @@
 # env-var assertions, and the Go dump's panic on an unknown Scope or
 # ValueType constant.
 {
+  extractedLib,
   pkgs,
   self,
   ...
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.glab.passthru.extracted;
     committed = ../extracted.json;
   in

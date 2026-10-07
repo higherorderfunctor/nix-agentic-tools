@@ -10,9 +10,10 @@
       // lib.optionalAttrs (registryModules != null) {modules = registryModules;});
   inherit (registry) index repoPath;
   inherit (registry.config) update;
-  # The git tools' census builder, handed to owner packages and checks as an
-  # argument so an owner never reaches into lib/ by a relative path (the
+  # Shared extraction builders, handed to owner packages and checks as
+  # arguments so an owner never reaches into lib/ by a relative path (the
   # facet-owner-relocation check moves an owner and re-evaluates it).
+  extractedLib = import ../extracted;
   gitToolExtraction = import ../git-tool-settings/extraction.nix;
   packageWorldFor = pkgs: let
     system = pkgs.stdenv.hostPlatform.system;
@@ -20,11 +21,11 @@
     facets.realizePackages {
       inherit index inputs pkgs system;
       scopeArgs = {
-        inherit gitToolExtraction repoPath;
-        packageLib = import ../packaging.nix // import ../toolchains.nix {inherit inputs;};
+        inherit extractedLib gitToolExtraction repoPath;
         fragmentsLib = import ../fragments.nix {inherit lib;};
         # `generatedLib pkgs`: the builder generated files are formatted in.
         generatedLib = import ../generated.nix {inherit lib;};
+        packageLib = import ../packaging.nix // import ../toolchains.nix {inherit inputs;};
         traceSource = import ../traceSource.nix {inherit lib;};
       };
     };
@@ -172,7 +173,7 @@
     lib.genAttrs packageRoots (root: pkgs.${root} or (rootOf root));
   # Flake values the exported modules receive as `ai.internal`.
   moduleInternals = {
-    inherit rootsFor;
+    inherit extractedLib rootsFor;
     treefmtNix = inputs.treefmt-nix;
   };
 in {
@@ -181,7 +182,7 @@ in {
     facets.realizeLibrary {
       inherit index rootLibrary;
       rootSource = root + "/lib";
-      context = {inherit inputs lib repoPath;};
+      context = {inherit extractedLib inputs lib repoPath;};
     };
   packagesFor = {
     pkgs,
@@ -261,7 +262,7 @@ in {
       context =
         builtins.removeAttrs context ["rootModules"]
         // {
-          inherit buildOverlay gitToolExtraction harnessFor inputs lib natSystemOf rootsFor;
+          inherit buildOverlay extractedLib gitToolExtraction harnessFor inputs lib natSystemOf rootsFor;
           # The leaf paths the exported overlay re-exports on this system.
           claimedPaths = claimedPaths {
             inherit inputs lib;
