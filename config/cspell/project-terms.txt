@@ -176,6 +176,7 @@ inferera
 inlines
 inspectable
 ints
+ironsh
 isaacphi
 iterm
 jandedobbeleer
@@ -274,6 +275,7 @@ nvfetcher
 objectish
 ollama
 oneshot
+onepassword
 ONLN
 openat
 openclaw
@@ -284,6 +286,7 @@ osmani
 oxalica
 oxlint
 pandoc
+paradigmxyz
 parentheticals
 partialclone
 passteque

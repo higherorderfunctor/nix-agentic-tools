@@ -1,7 +1,9 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-07 — Semble exposes both extractors on package
-> passthru; `mkExtractRegen.extract` selects its templates snapshot.
+> **Last verified:** 2026-10-07 — Codex uses the injected `extractedLib` for
+> command, flag and root launcher-flag reconciliation alongside sidecar drift;
+> Semble exposes both extractors on package passthru, and
+> `mkExtractRegen.extract` selects its templates snapshot.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -492,16 +494,15 @@ binary", the other is "the package layout moved" — and a build that names the
 wrong one sends the next session hunting upstream for a change that never
 happened.
 
-Codex additionally carries a different kind of gate:
-`packages/chatgpt-codex/checks/chatgpt-codex-coverage.nix` compares the
-generated vocabulary with the human-authored categorical partition in
-`packages/chatgpt-codex/lib/extractedCoverage.nix`. Shape checks prove the
-extractor still recognizes upstream; this reverse check proves every recognized
-surface has an explicit Nix disposition. Keep those sources separate. If the
-update hook generated the classification too, the exact change needing review
-would bless itself. Model IDs and feature names may be policy-covered rather
-than copied item-for-item, but new command/flag identities, record fields,
-feature maturities, and config-key extraction fail closed.
+Codex's `extract/rules.nix` applies the injected `extractedLib` to reconcile
+committed command and canonical flag names with `extract/annotations.json`. The
+package exposes `passthru.extractedRules`, and `chatgpt-codex-extracted`
+consumes its results alongside sidecar drift. `mkExtractRegen` regenerates the
+facts and then adds derivable `{}` rows. Launcher flags come from
+`lib/launcher-flags.nix` and are recorded as `uses` of the root command's flags,
+so an upstream removal there requires updating the launcher. Feature maturity
+policy stays at the factory's `== "stable"` branch; record fields are extractor
+output rather than a second human ledger.
 
 ### Gotchas when adding new packages
 
