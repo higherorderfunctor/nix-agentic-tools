@@ -1,0 +1,15 @@
+{
+  "transport": "daemon",
+  "resume": "p1/thread_id",
+  "attach": false,
+  "turn": null,
+  "timeout": 1,
+  "settle": 0,
+  "after": [
+    { "method": "thread/loaded/list", "params": {} },
+    {
+      "method": "thread/read",
+      "params": { "threadId": "$THREAD", "includeTurns": true }
+    }
+  ]
+}

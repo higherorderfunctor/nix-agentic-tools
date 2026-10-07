@@ -1,0 +1,11 @@
+{
+  "/root": [
+    { "msg": "TURN ONE DONE" },
+    {
+      "raw": [
+        { "type": "compaction", "encrypted_content": "FAKE-COMPACTION-7201" }
+      ]
+    },
+    { "msg": "TURN TWO DONE" }
+  ]
+}

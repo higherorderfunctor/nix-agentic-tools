@@ -1,0 +1,16 @@
+{
+  "/root": [
+    { "calls": [["spawn_agent", { "message": "V1-TASK" }, "multi_agent_v1"]] },
+    {
+      "calls": [
+        [
+          "wait_agent",
+          { "targets": ["$AGENT_ID"], "timeout_ms": 15000 },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    { "msg": "ROOT DONE" }
+  ],
+  "v1c1": [{ "msg": "CHILD V1 DONE" }]
+}

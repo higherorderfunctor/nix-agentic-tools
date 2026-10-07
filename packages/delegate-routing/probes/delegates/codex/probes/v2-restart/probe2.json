@@ -1,0 +1,6 @@
+{
+  "resume": "as/thread_id",
+  "turn": "GO2",
+  "timeout": 40,
+  "after": [{ "method": "thread/loaded/list", "params": {} }]
+}

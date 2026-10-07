@@ -4,12 +4,15 @@
 usage: fp.py <port> <outdir> <scenario.json>
 
 scenario.json maps an agent name (from x-codex-turn-metadata.agent_name,
-e.g. "/root", "/root/a", "/root/a/g"; "root" when absent) or "*" (fallback for
-any unscripted agent) to a list of steps. The Nth request from an agent gets
+e.g. "/root", "/root/a", "/root/a/g"; "root" when absent; "guardian" for
+auto-review requests and "title" for the TUI's title side turn, each only when
+that key is present) or "*" (fallback for any
+unscripted agent) to a list of steps. The Nth request from an agent gets
 step N; past the end it gets a final message "DONE <agent>".
 
 step = {"calls": [[name, args_obj, namespace_or_null], ...],
         "msg": "text",            # final assistant message
+        "raw": [item, ...],       # extra output items sent verbatim (e.g. {"type": "compaction", ...})
         "sleep": seconds,         # hold the stream open before completing
         "sleep_before": seconds}  # delay before sending anything
 
@@ -70,6 +73,11 @@ class H(http.server.BaseHTTPRequestHandler):
         try: md = json.loads(cm.get("x-codex-turn-metadata", "{}"))
         except Exception: md = {}
         agent = md.get("agent_name") or "root"
+        # auto-review (guardian) requests carry the reviewed session's agent_name; a scenario with a
+        # "guardian" key scripts them separately instead of letting them consume that agent's steps
+        if "guardian" in scen and cm.get("x-openai-subagent") == "guardian": agent = "guardian"
+        # the TUI's title side turn reports the root's agent_name too; a "title" key scripts it apart
+        if "title" in scen and b"single-line task title" in raw: agent = "title"
         with lock:
             # V1 children report agent_name "/root"; label them v1c1, v1c2... by first-seen thread id
             if md.get("subagent_kind") == "thread_spawn" and agent == "/root":
@@ -107,6 +115,8 @@ class H(http.server.BaseHTTPRequestHandler):
         for k, c in enumerate(step.get("calls", [])):
             name, args = c[0], c[1]; ns = c[2] if len(c) > 2 else None
             evs.append(call(f"call_{i}_{k}", name, subst(args), ns))
+        for item in step.get("raw", []):
+            evs.append({"type": "response.output_item.done", "item": item})
         if "msg" in step: evs.append(msg(rid, step["msg"]))
         aborted = False
         try:

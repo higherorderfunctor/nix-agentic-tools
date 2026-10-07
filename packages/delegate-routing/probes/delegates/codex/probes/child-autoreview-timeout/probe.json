@@ -1,0 +1,7 @@
+{
+  "thread": {},
+  "turn": "GO",
+  "timeout": 150,
+  "settle": 100,
+  "approval": "none"
+}

@@ -1,0 +1,8 @@
+{
+  "transport": "daemon",
+  "resume": "p1/child_id",
+  "turn": null,
+  "timeout": 15,
+  "settle": 2,
+  "approval": "accept"
+}

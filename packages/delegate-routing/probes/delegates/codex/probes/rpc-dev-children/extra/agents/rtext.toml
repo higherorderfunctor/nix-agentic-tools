@@ -1,0 +1,3 @@
+name = "rtext"
+description = "Declared role with developer_instructions."
+developer_instructions = "ROLE-TEXT-5003"

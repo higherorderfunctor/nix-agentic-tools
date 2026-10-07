@@ -1,0 +1,14 @@
+model = "gpt-6-luna"
+model_provider = "fake"
+sandbox_mode = "read-only"
+approval_policy = "never"
+developer_instructions = "CFG-DEV-4000"
+compact_prompt = "COMPACT-PROMPT-7203"
+# Provider name "azure" makes the provider advertise remote compaction V2 (codex-api/src/provider.rs).
+[model_providers.fake]
+name = "azure"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"
+[[hooks.SessionStart]]
+hooks = [{ type = "command", command = "python3 @H@/hook.py" }]

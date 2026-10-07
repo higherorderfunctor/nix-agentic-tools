@@ -1,0 +1,13 @@
+check_for_update_on_startup = false
+model = "gpt-6-luna"
+model_provider = "fake"
+sandbox_mode = "read-only"
+approval_policy = "on-request"
+thread_unload_delay_secs = 20
+[features.multi_agent_v2]
+max_wait_timeout_ms = 3600000
+[model_providers.fake]
+name = "fake"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"
