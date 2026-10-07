@@ -6,8 +6,8 @@
 > defaults `ai.kiro.v3` on only when its package is managed. Delegate evidence
 > is two parts: the map (`docs/delegates/` plus `probes/delegates/`) and the
 > acceptance suite (`eval/`, one real-session runner for all four harnesses with
-> one root baseline table and requested/observed controls); techniques
-> hand-declare `runsOwnSubagents` from map rows.
+> one root baseline table and requested/observed controls and source-attributed
+> startup checks); techniques hand-declare `runsOwnSubagents` from map rows.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -188,7 +188,10 @@ one session under a scratch `HOME` that keeps only the login and carried-over
 settings; it hides config from the loader, not files from the model. It caps the
 session and asserts on the session's own event log. Root model and effort come
 from the single `ROOT_BASELINES` table at the operator’s strong-tier medium;
-Codex model/effort and Kiro default model are not copied. Kiro resolves the
+Codex model/effort and Kiro default model are not copied. Claude debug scope
+counts attribute bundled skills without a name allowlist; Codex resolves catalog
+paths, and Kiro reads workspace skill source metadata from CLI stream updates.
+Kimchi separates extension flags from the task with `--`. Kiro resolves the
 newest matching Opus model only for live runs. Results record requested controls
 separately from root event/log observations, with `not exposed` for missing
 fields. Harness differences live in its `HARNESSES` table; assertions in its
@@ -204,8 +207,9 @@ startup record) fails the run.
 The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch
 plan with no harness and no login. Its `cases` passthru is the runner's fixture
-export. No check starts a session. See `eval/README.md` for the isolation
-recipe, the caps and the operator steps.
+export. It also runs the offline source-attribution and event-schema regressions
+in `eval/test_suite.py`. No check starts a session. See `eval/README.md` for the
+isolation recipe, the caps and the operator steps.
 
 ## Delegate map
 

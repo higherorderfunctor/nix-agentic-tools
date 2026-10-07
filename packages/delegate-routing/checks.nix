@@ -17,6 +17,7 @@ in {
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       export HOME="$TMPDIR/home"
+      python ${./eval}/test_suite.py
       python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
       touch "$out"
     '';

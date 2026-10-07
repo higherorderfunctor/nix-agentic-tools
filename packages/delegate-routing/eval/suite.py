@@ -112,33 +112,98 @@ def toml_dump(table):
     return "\n".join(toml_lines(table)).strip() + "\n"
 
 
-def personal_names():
-    """Names of the operator's personal skills, MCP servers, plugins and agents.
-
-    Keeps names only; no credential store is opened."""
+def personal_skill_names():
+    """Names are only collision candidates; source evidence decides leaks."""
     names = set()
     for directory in PERSONAL_SKILL_DIRS:
         try:
             names |= {entry.name for entry in (REAL_HOME / directory).iterdir() if not entry.name.startswith(".")}
         except OSError:
             pass
-    claude_state = read_json(REAL_HOME / ".claude.json", {}) or {}
-    names |= set(claude_state.get("mcpServers", {}))
-    for project in (claude_state.get("projects") or {}).values():
-        names |= set((project or {}).get("mcpServers", {}))
-    for path in (REAL_HOME / ".kiro/settings/mcp.json", REAL_HOME / ".config/kimchi/harness/mcp.json"):
-        names |= set((read_json(path, {}) or {}).get("mcpServers", {}))
-    try:
-        names |= set(tomllib.loads((REAL_HOME / ".codex/config.toml").read_text()).get("mcp_servers", {}))
-    except (OSError, ValueError):
-        pass
-    names |= {name.split("@")[0] for name in (read_json(REAL_HOME / ".claude/settings.json", {}) or {}).get("enabledPlugins", {})}
-    for directory, suffix in ((".claude/agents", ".md"), (".kiro/agents", ".json")):
-        try:
-            names |= {entry.name.removesuffix(suffix) for entry in (REAL_HOME / directory).iterdir() if entry.name.endswith(suffix)}
-        except OSError:
-            pass
-    return {name for name in names if len(name) >= 4}
+    return names
+
+
+def personal_source(path):
+    """Check both the recorded path and its target; fixture store links are safe."""
+    path = Path(path.replace("~/", str(REAL_HOME) + "/", 1))
+    if not path.is_absolute():
+        return False
+    roots = [REAL_HOME / directory for directory in PERSONAL_SKILL_DIRS]
+    configs = [REAL_HOME / name for name in (".claude.json", ".codex/config.toml", ".kiro/settings/mcp.json",
+                                           ".config/kimchi/harness/mcp.json")]
+    return any(candidate in configs or any(candidate.is_relative_to(root) for root in roots)
+               for candidate in (path, path.resolve()))
+
+
+def prompt_texts(value):
+    if isinstance(value, dict):
+        if value.get("type") == "input_text":
+            yield value.get("text", "")
+        for item in value.values():
+            yield from prompt_texts(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from prompt_texts(item)
+
+
+def codex_sources(startup):
+    """Expand the catalog's path aliases, never match names in arbitrary prose."""
+    record = json.loads(startup)
+
+    def paths(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in {"config_path", "file", "file_path", "path", "source_path"} and isinstance(item, str):
+                    yield value.get("name", "skill/MCP entry"), item
+                elif key == "source" and isinstance(item, str) and item.startswith(("/", "~/")):
+                    yield value.get("name", "skill/MCP entry"), item
+                else:
+                    yield from paths(item)
+        elif isinstance(value, list):
+            for item in value:
+                yield from paths(item)
+
+    yield from paths(record)
+    for text in prompt_texts(record):
+        if not any(tag in text for tag in ("<skills_instructions>", "<mcp_instructions>", "<mcp_servers>")):
+            continue
+        roots = dict(re.findall(r"^- `([^`]+)` = `([^`]+)`$", text, re.MULTILINE))
+        entries = re.findall(r"^- ([^:]+):[^\n]*\(file: ([^)]+)\)$", text, re.MULTILINE)
+        for name, path in entries:
+            alias, _, tail = path.partition("/")
+            yield name, str(Path(roots[alias]) / tail) if alias in roots else path
+
+
+def claude_bundled(init, delivered, debug):
+    """Infer the vendor set only after the loader proves all disk skills are fixtures.
+
+    2.1.289 debug emits scope counts, not per-skill paths. Require every scope
+    count, zero non-project/plugin skills, and exactly the fixture skill count.
+    An absent or changed debug schema fails closed rather than granting a name
+    exemption. The init remainder is then evidence of bundled skills.
+    """
+    scopes = re.search(r"Loaded (\d+) unique skills \([^\n]*managed: (\d+), user: (\d+), project: (\d+), additional: (\d+), legacy commands: (\d+)\)", debug)
+    plugins = re.search(r"getSkills returning: (\d+) skill dir commands, (\d+) plugin skills, (\d+) bundled skills, (\d+) builtin plugin skills", debug)
+    if not scopes or not plugins:
+        raise ValueError("Claude skill source attribution unavailable in debug record")
+    total, managed, user, project, additional, legacy = map(int, scopes.groups())
+    directories, plugin, bundled, builtin = map(int, plugins.groups())
+    if managed or user or additional or legacy or plugin or total != project or project != len(delivered) or directories != project:
+        raise ValueError("Claude loaded non-fixture disk/plugin skills: " + scopes.group(0))
+    remainder = set(init.get("skills", [])) - delivered
+    if len(remainder) > bundled + builtin:
+        raise ValueError("Claude init skill list exceeds the source-attributed catalog")
+    return remainder
+
+
+def claude_leaks(init, delivered, bundled, personal, agents):
+    found = [f"personal skill {name!r} in the startup record"
+             for name in sorted(personal & set(init.get("skills", [])) - delivered - bundled)]
+    found += [f"non-builtin plugin {item.get('name')!r}" for item in init.get("plugins", [])
+              if item.get("path") != "builtin" or not item.get("source", "").endswith("@builtin")]
+    found += [f"non-project MCP server {item.get('name')!r}" for item in init.get("mcp_servers", []) if item.get("source") != "project"]
+    found += [f"non-fixture agent {name!r}" for name in sorted(set(init.get("agents", [])) - agents)]
+    return found
 
 
 # --- per-harness configuration ----------------------------------------------
@@ -160,7 +225,7 @@ def claude_setup(ctx):
         "argv": [ctx["exe"], "-p", "--setting-sources", "project", "--settings", str(ctx["dir"] / "claude-overlay.json"),
                  *ctx["baseline_argv"], "--permission-mode", "auto", "--max-turns", str(TURN_CAP),
                  "--max-budget-usd", str(BUDGET_USD), "--no-session-persistence", "--output-format", "stream-json",
-                 "--verbose", "--include-hook-events", "--forward-subagent-text", ctx["prompt"]],
+                 "--debug-file", str(ctx["logs"] / "claude-debug.log"), "--verbose", "--include-hook-events", "--forward-subagent-text", ctx["prompt"]],
         "env": {
             "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
             "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL": "1",
@@ -235,12 +300,15 @@ def kimchi_setup(ctx):
         "migrationState": "skip-forever", "region": "us", "telemetry": {"enabled": False},
         "skillPaths": [".config/kimchi/harness/skills", ".pi/agent/skills", ".claude/skills"],
     })
+    (harness.parent / "config.json").chmod(0o600)
     settings = read_json(REAL_HOME / ".config/kimchi/harness/settings.json", {}) or {}
     settings.setdefault("resources", {})["extensions.memory"] = False
     write_json(harness / "settings.json", settings)
     return {
         # --auto: the closest posture to a normal interactive session.
-        "argv": [ctx["exe"], "-p", *ctx["baseline_argv"], "--mode", "json", "--approve", "--auto", ctx["prompt"]],
+        # pi treats an unknown extension flag followed by text as value-taking.
+        # -- terminates flag parsing so --auto cannot swallow the task.
+        "argv": [ctx["exe"], "-p", *ctx["baseline_argv"], "--mode", "json", "--approve", "--auto", "--", ctx["prompt"]],
         "env": {"KIMCHI_NO_UPDATE_CHECK": "1", "KIMCHI_TAGS": f"suite:delegate-routing,case:{ctx['case']['id']}", "KIMCHI_TELEMETRY_ENABLED": "0"},
         # Session-only: an env key is never written back to the real config.
         "secrets": {"KIMCHI_API_KEY": ("json", REAL_HOME / ".config/kimchi/config.json", "apiKey")},
@@ -250,6 +318,16 @@ def kimchi_setup(ctx):
 
 def claude_init(events):
     return next((event for event in events if event.get("type") == "system" and event.get("subtype") == "init"), None)
+
+
+def kiro_update(event):
+    # The CLI wraps ACP notifications in {type: sessionUpdate, data: ...}.
+    return (event.get("data") or event.get("params") or {}).get("update") or {}
+
+
+def kiro_skills(events):
+    return [command for event in events for command in kiro_update(event).get("availableCommands", [])
+            if (command.get("_meta") or {}).get("kiro", {}).get("type") == "skill"]
 
 
 HARNESSES = {
@@ -284,7 +362,10 @@ HARNESSES = {
         "setup": kimchi_setup,
         "skill": ".kimchi/skills/delegate-routing/SKILL.md",
         "calls": lambda event: [{"id": event.get("toolCallId"), "name": event.get("toolName"), "input": event.get("args")}] if event.get("type") == "tool_execution_start" else [],
-        "answered": lambda events: any(event.get("type") == "agent_end" for event in events),
+        "answered": lambda events: any(event.get("type") == "agent_end" and event.get("messages") and
+                                      event["messages"][-1].get("role") == "assistant" and
+                                      event["messages"][-1].get("stopReason") == "stop" for event in events),
+        "finished": lambda event: event.get("type") == "agent_settled",
         # The JSON stream starts with a session header, not the loaded context.
         "startup": lambda events, logs: None,
         "archive": [".config/kimchi/harness/sessions"],
@@ -294,13 +375,15 @@ HARNESSES = {
         "exe": "kiro-cli",
         "setup": kiro_setup,
         "skill": ".kiro/skills/delegate-routing/SKILL.md",
-        "calls": lambda event: [{"id": update.get("toolCallId"), "name": [update.get(key) for key in ("name", "title", "toolName", "tool_name")] + [str(value) for value in (update.get("_meta") or {}).values()], "input": update.get("rawInput")}
-                                for update in [((event.get("params") or {}).get("update") or {})] if update.get("sessionUpdate") == "tool_call"],
-        "answered": lambda events: any(isinstance(event.get("result"), dict) and event["result"].get("stopReason") == "end_turn" for event in events),
-        "startup": lambda events, logs: (logs / "chat.log").read_text(errors="ignore") if (logs / "chat.log").is_file() else None,
+        "calls": lambda event: [{"id": update.get("toolCallId"), "name": [update.get(key) for key in ("name", "title", "toolName", "tool_name")] +
+                                [(update.get("_meta") or {}).get("kiro", {}).get("toolId")], "input": update.get("rawInput")}
+                                for update in [kiro_update(event)] if update.get("sessionUpdate") == "tool_call"],
+        "answered": lambda events: any(event.get("type") == "runFinished" and (event.get("data") or {}).get("status") == "success"
+                                      and (event.get("data") or {}).get("stopReason") == "end_turn" for event in events),
+        "startup": lambda events, logs: encode(kiro_skills(events)) if kiro_skills(events) else None,
         "archive": [".kiro/sessions"],
         # No native turn cap: the watcher stops the run at TURN_CAP tool calls.
-        "turns": lambda event: ((event.get("params") or {}).get("update") or {}).get("sessionUpdate") == "tool_call",
+        "turns": lambda event: kiro_update(event).get("sessionUpdate") == "tool_call",
     },
 }
 
@@ -367,6 +450,35 @@ def parse_lines(text):
     return [value for value in values if isinstance(value, dict)]
 
 
+def codex_root_records(events, logs):
+    """Only the root rollout; children may use the same delegate techniques."""
+    root_id = next((event.get("thread_id") for event in events if event.get("type") == "thread.started"), None)
+    if root_id:
+        for path in sorted((logs / "sessions").rglob("*.jsonl")):
+            session = parse_lines(path.read_text(errors="ignore"))
+            meta = next((event.get("payload") or {} for event in session if event.get("type") == "session_meta"), {})
+            if meta.get("id") == root_id:
+                return session
+    return []
+
+
+def session_calls(case, events, logs):
+    harness = HARNESSES[case["runtime"]]
+    calls = [call for event in events for call in harness["calls"](event)]
+    if case["runtime"] == "codex":
+        # exec's stream omits this build's collaboration.spawn_agent calls.
+        # Prefer the root's function-call record for native delegates, retaining
+        # stream commands for external launches. Never scan child rollouts.
+        native = {name for name, kind in case["techniques"]["codex"].items() if kind != "external"}
+        records = codex_root_records(events, logs)
+        if records:
+            calls = [call for call in calls if call["name"] not in native]
+            calls += [{"id": payload.get("call_id"), "name": payload.get("name"), "input": {}}
+                      for event in records for payload in [event.get("payload") or {}]
+                      if event.get("type") == "response_item" and payload.get("type") == "function_call" and payload.get("name") in native]
+    return calls
+
+
 def observed_controls(runtime, events, logs):
     """Reported root controls, never inferred from argv or copied settings.
 
@@ -384,12 +496,7 @@ def observed_controls(runtime, events, logs):
         records = [event.get("payload") or event.get("turn") or event.get("session") or event for event in own if event.get("type") in types]
         # exec's stream may omit controls; archived root turn_context exposes
         # them. Match the root thread, never a delegate's rollout.
-        root_id = next((event.get("thread_id") for event in own if event.get("type") == "thread.started"), None)
-        for path in sorted((logs / "sessions").rglob("*.jsonl")):
-            session = parse_lines(path.read_text(errors="ignore"))
-            meta = next((event.get("payload") or {} for event in session if event.get("type") == "session_meta"), {})
-            if root_id and meta.get("id") == root_id:
-                records += [event.get("payload") or {} for event in session if event.get("type") in types]
+        records += [event.get("payload") or {} for event in codex_root_records(own, logs) if event.get("type") in types]
     elif runtime == "kiro":
         path = logs / "chat.log"
         text = path.read_text(errors="ignore") if path.is_file() else ""
@@ -603,22 +710,32 @@ def kill_group(process, grace):
         kill_group(process, 0)
 
 
-def launch(argv, env, cwd, logs, turns):
+def launch(argv, env, cwd, logs, turns, finished=None):
     """Run one session in its own process group under the caps."""
-    stop = []
+    stop, cleanup = [], []
+    cleanup_timer = None
     with (logs / "events.jsonl").open("wb") as events, (logs / "stderr.txt").open("wb") as stderr:
         process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=stderr, start_new_session=True)
 
         def pump():
+            nonlocal cleanup_timer
             count = 0
             for line in process.stdout:
                 events.write(line)
                 events.flush()
-                if turns:
+                if turns or finished:
                     try:
-                        count += bool(turns(json.loads(line)))
+                        event = json.loads(line)
                     except ValueError:
-                        pass
+                        continue
+                    count += bool(turns and turns(event))
+                    if finished and finished(event) and cleanup_timer is None:
+                        def finish_cleanup():
+                            cleanup.append(f"completed session did not exit within {KILL_GRACE_SECONDS}s; terminated process group")
+                            kill_group(process, KILL_GRACE_SECONDS)
+                        cleanup_timer = threading.Timer(KILL_GRACE_SECONDS, finish_cleanup)
+                        cleanup_timer.daemon = True
+                        cleanup_timer.start()
                     if count >= TURN_CAP and not stop:
                         stop.append(f"turn cap {TURN_CAP}")
                         kill_group(process, KILL_GRACE_SECONDS)
@@ -630,13 +747,16 @@ def launch(argv, env, cwd, logs, turns):
         except subprocess.TimeoutExpired:
             stop.append(f"wall cap {WALL_SECONDS}s")
             kill_group(process, KILL_GRACE_SECONDS)
+        if cleanup_timer:
+            cleanup_timer.cancel()
         # Delegates still running when the session ends die with it.
         kill_group(process, 0)
         reader.join(timeout=KILL_GRACE_SECONDS)
-    return process.returncode, stop
+        process.stdout.close()
+    return process.returncode, stop, cleanup
 
 
-def leaks(case, harness, events, logs, fixture_text):
+def leaks(case, harness, events, logs):
     found = []
     roots = [str(REAL_HOME / root) for root in PERSONAL_ROOTS]
     for path in sorted(logs.rglob("*")):
@@ -647,18 +767,30 @@ def leaks(case, harness, events, logs, fixture_text):
     if startup:
         if case["runtime"] == "claude":
             init = claude_init(events) or {}
-            loaded = set(init.get("skills", [])) | set(init.get("agents", []))
-            loaded |= {item["name"] for key in ("mcp_servers", "plugins") for item in init.get(key, [])}
-            delivered = {part for file in case["files"] for part in Path(file["path"]).parts}
-            delivered |= {Path(part).stem for part in delivered if Path(part).suffix in {".md", ".json"}}
-            mcp = next((file for file in case["files"] if file["path"] == ".mcp.json"), None)
-            if mcp:
-                delivered |= set((read_json(logs.parent / "repo/.mcp.json", {}) or {}).get("mcpServers", {}))
-            found += [f"personal name {name!r} in the startup record" for name in sorted(personal_names() & loaded - delivered)]
-        else:
-            for name in sorted(personal_names()):
-                if name not in fixture_text and re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])", startup):
-                    found.append(f"personal name {name!r} in the startup record")
+            delivered = {Path(file["path"]).parent.name for file in case["files"]
+                         if file["path"].startswith(".claude/skills/") and Path(file["path"]).name == "SKILL.md"}
+            # Vendor init in the first smoke lists these built-in agent types.
+            agents = {"claude", "Explore", "general-purpose", "Plan", "statusline-setup"}
+            agents |= {Path(file["path"]).stem for file in case["files"] if file["path"].startswith(".claude/agents/")}
+            debug_path = logs / "claude-debug.log"
+            debug = debug_path.read_text(errors="ignore") if debug_path.is_file() else ""
+            try:
+                bundled = claude_bundled(init, delivered, debug)
+            except ValueError as error:
+                found.append(str(error))
+                bundled = set()
+            found += claude_leaks(init, delivered, bundled, personal_skill_names(), agents)
+        elif case["runtime"] == "codex":
+            for name, source in codex_sources(startup):
+                if not source.startswith(("/", "~/")):
+                    found.append(f"unattributed skill/MCP entry {name!r}: {source}")
+                elif personal_source(source):
+                    found.append(f"personal skill/MCP entry {name!r} from {source}")
+        elif case["runtime"] == "kiro":
+            for skill in kiro_skills(events):
+                source = skill["_meta"]["kiro"]["resource"]["source"]
+                if source.get("root") and personal_source(source["root"]):
+                    found.append(f"personal skill {skill['name']!r} from {source['root']}")
     return found, startup
 
 
@@ -667,6 +799,10 @@ def skill_delivery(case, ctx, events, startup):
         return "unverified: no startup record"
     if case["runtime"] == "claude":
         delivered = "delegate-routing" in (claude_init(events) or {}).get("skills", [])
+    elif case["runtime"] == "kiro":
+        delivered = any(skill.get("name") == "delegate-routing" and
+                        skill["_meta"]["kiro"]["resource"]["source"] == {"origin": "workspace", "root": str(ctx["repo"])}
+                        for skill in kiro_skills(events))
     else:
         skill = ctx["repo"] / HARNESSES[case["runtime"]]["skill"]
         if skill.is_dir():
@@ -720,20 +856,18 @@ def run_case(case, prepared, args):
         (logs / "prompt-input.json").write_bytes(result.stdout)
         if result.returncode:
             return {**record, "status": "ERROR", "detail": f"preflight exited {result.returncode}: {result.stderr.decode(errors='ignore')[-500:]}"}
-    code, stop = launch(prepared["argv"], env, ctx["repo"], logs, harness["turns"])
+    code, stop, cleanup = launch(prepared["argv"], env, ctx["repo"], logs, harness["turns"], harness.get("finished"))
     for relative in harness["archive"]:
         if (ctx["home"] / relative).is_dir():
             shutil.copytree(ctx["home"] / relative, logs / Path(relative).name, symlinks=True)
     events = parse_lines((logs / "events.jsonl").read_text(errors="ignore"))
     hook_calls = parse_lines((logs / "hook-calls.jsonl").read_text(errors="ignore")) if (logs / "hook-calls.jsonl").exists() else []
-    raw_calls = [call for event in events for call in harness["calls"](event)]
+    raw_calls = session_calls(case, events, logs)
     calls = classify(case, raw_calls)
-    fixture_text = "\n".join(file["path"] + "\n" + file.get("text", "") for file in case["files"]) + "".join(
-        path.read_text(errors="ignore") for path in ctx["repo"].rglob("*") if path.is_file() and ".git" not in path.parts)
-    leaked, startup = leaks(case, harness, events, logs, fixture_text)
+    leaked, startup = leaks(case, harness, events, logs)
     delivery = skill_delivery(case, ctx, events, startup)
     record.update({
-        "delegates": calls, "delivery": delivery, "exitCode": code, "leaks": leaked, "stop": stop,
+        "cleanup": cleanup, "delegates": calls, "delivery": delivery, "exitCode": code, "leaks": leaked, "stop": stop,
         "observed": observed_controls(case["runtime"], events, logs),
         # Second, independent record; not counted, so a call is never counted twice.
         "hookDelegates": classify(case, [{"id": None, "name": call.get("tool_name") or call.get("toolName"), "input": call.get("tool_input") or call} for call in hook_calls]),
