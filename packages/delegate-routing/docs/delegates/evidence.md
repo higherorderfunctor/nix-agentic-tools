@@ -25,14 +25,39 @@ parts of the cell. `V help` proves syntax exposure only.
 | ----------- | ------------------ | ---------------------- | ------------------------------------------------- |
 | Claude Code | CLI                | 2.1.289                | `packages/claude-code/sources.json`               |
 | Codex       | CLI (source build) | 0.160.0                | `packages/chatgpt-codex/sources.json`             |
-| Kiro        | CLI                | 2.27.1                 | `packages/kiro-cli/sources.json`                  |
-| Kiro        | KAS (v3 engine)    | 0.66.22                | bundled in the kiro-cli 2.27.1 release            |
+| Kiro        | CLI                | 2.28.0                 | `packages/kiro-cli/sources.json`                  |
+| Kiro        | KAS (v3 engine)    | 0.66.26                | bundled in the kiro-cli 2.28.0 release            |
 | Kimchi      | CLI                | 1.5.1                  | `packages/kimchi/sources.json`                    |
 | Kimchi      | Pi (patched)       | 0.85.1                 | `packages/kimchi/sources.json` (`extraction.pi*`) |
 | Kimchi      | kimchi-workflows   | 0.0.9 (rev `7a6765cc`) | `packages/kimchi/workflows-sources.json`          |
 
 Kiro engine context: v2 is the default for `chat` and `acp`; v3/KAS rows need
 `--v3`, `--agent-engine v3` or `chat.agentEngine` (V).
+
+The h3 and k-cancel rows were compared offline on 2.27.1 and 2.28.0 using the
+same generated fake HOME, common/case agent overlays, rules and launch flags.
+All five original excerpts reproduce on 2.27.1. On 2.28.0 the four h3 calls
+return `Tool "orchestrate_subagent" is not available.` before child
+permissions/hooks; the parent offers `invoke_sub_agent`. The k-cancel next turn
+carries `Sub-agent execution was cancelled`; parent cancellation and child abort
+still occur. Each affected row retains its 2.27.1 observation inline. Other
+AST/bundle-function rows remain observations of KAS 0.66.22 (2.27.1).
+
+Controlled h3-all variations also excluded setup: an unpatched 2.27.1 build
+reproduces the successful child shell; 2.28.0 still refuses orchestration with
+`chat.enableWorkflows`, either rollout environment flag, both flags, all three
+gates, `chat.enableMainAgentSubagentTool`, an explicit `custom` agent, and
+`--agent-engine v3` or `chat.agentEngine="kas"` instead of `--v3`. Workflow
+gates are case-specific, not implicit requirements of the old h3 captures.
+Tracing the native launcher's ACP `session/new` proves the exposure change:
+2.27.1 sends `settings.subagentOrchestration={enabled:true}` alongside
+`workflows`/`goal` disabled; 2.28.0 omits `subagentOrchestration` with those
+same gates disabled. The KAS setting defaults off. KAS 0.66.26 also forces
+`subagentOrchestrationActive` false for `default-v2` mode, whereas 0.66.22
+selected the tool from client settings. For k-cancel, 0.66.26's
+`handleDanglingToolCall` preserves `reportedToolResultText` (the child's
+cancellation result); 0.66.22 synthesized the generic abort sentence. No probe
+rule or launch was removed to accommodate the change.
 
 ## Methods per harness
 

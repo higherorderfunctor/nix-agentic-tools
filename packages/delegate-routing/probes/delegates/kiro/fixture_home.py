@@ -5,6 +5,17 @@ The auth_kv/state table layout is from SQLite .schema only. The token key and
 access_token/expires_at fields are also named by fixtures/kiro-primitives/
 harness/acp-host.py; BuilderIdToken fields are in the pinned native binary's
 strings (crates/chat-cli-v2/src/auth/builder_id.rs). No real row is needed.
+
+Baseline preconditions: workflows are not enabled or unlocked here, and no
+agent engine or default agent is selected. Each case's launch flags select its
+engine; SETTINGS and CASE_ENV explicitly supply workflow gates when required.
+wire2.sh installs home-overlay's custom agent (tools: ["*"]) and the case's
+agent overlay (gate's preToolUse hook for h3-hookblock). codex-side/offline.py
+installs only the agents declared in its case JSON. No host settings or agents
+are inherited. The h3 permission probes reproduced on unpatched 2.27.1 with
+this baseline: workflows and extra agents are not prerequisites. On 2.28.0 the
+same headless launches offer invoke_sub_agent instead of orchestrate_subagent;
+that is a versioned observation, not a missing workflow fixture.
 """
 
 import argparse

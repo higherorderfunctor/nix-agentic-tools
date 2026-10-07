@@ -148,7 +148,7 @@ MCP/ACP/workflow claude:R0, codex:R0.
 | `delegate` (v1) (V spec; G behavior)              | model                                   | `launch/status`, `agent`, `task`                   | async; one task per agent                                            | status output                                               | v1 + `chat.enableDelegate`                       |
 | `invoke_sub_agent` (v3)                           | model: ACP main, KAS children, steps    | ³                                                  | rejects depth ≥5; 5 slots per parent execution; 300 turns            | `subagent_response` + files; `subExecutionId`               | ⁴                                                |
 | `subagent_<id>` wrappers (v3) (V list; A factory) | model: KAS children, steps              | `prompt` (or verbatim/context pair)                | as invoke                                                            | as invoke                                                   | registry contents                                |
-| `orchestrate_subagent` (v3)                       | model: headless/TUI main                | `task`, stages + `inlineAgent`, `repeat` 1–20      | ready stages parallel; invoke limits apply                           | "Pipeline completed" text; first failure stops              | ⁵                                                |
+| `orchestrate_subagent` (v3)                       | model: headless/TUI main                | `task`, stages + `inlineAgent`, `repeat` 1–20      | ready stages parallel; invoke limits apply                           | "Pipeline completed" text; first failure stops              | 2.28.0: headless absent; 2.27.1: present⁵        |
 | `run_workflow` + siblings⁶ (v3)                   | model; not from step or delegated child | ⁷                                                  | ≤50 nodes, nest ≤8, repeat ≤1000; parallel uncapped; runs concurrent | immediate `{workflowId, running}`                           | ⁸                                                |
 | Host `_kiro/workflow/*` RPCs                      | host (ACP)                              | ⁹                                                  | step sessions; global cap U (U)                                      | ID, state, node events                                      | work even with `workflowsEnabled:false`          |
 | `chat --no-interactive`                           | user/host                               | ¹⁰                                                 | one process                                                          | text or ACP JSONL; exit code                                | invocation                                       |
@@ -167,8 +167,11 @@ MCP/ACP/workflow claude:R0, codex:R0.
 3. `name`, `prompt`, `explanation`, `preset`, `contextFiles`, `specTask`, gated
    `inlineAgent{systemPrompt,model,effort}`.
 4. ACP `subagentOrchestration` swaps it to orchestrate; agent tools; hooks.
-5. TUI on unless workflows are on and the setting is false;
-   `KIRO_TEST_DISABLE_SUBAGENT_ORCHESTRATION=1`.
+5. 2.28.0 headless h3 calls: `Tool "orchestrate_subagent" is not available.`;
+   2.27.1: child shell runs with `-a`, hook blocks, untrusted stage fails,
+   trusted delegation reaches the child (V; claude:h3-all, claude:h3-hookblock,
+   claude:h3-perm, claude:h3-trustdel2). TUI 2.27.1: on unless workflows are on
+   and the setting is false; `KIRO_TEST_DISABLE_SUBAGENT_ORCHESTRATION=1`.
 6. `inspect/update/validate_workflow`, `send_message`,
    `save_workflow_definition`.
 7. `workflowPath` XOR `workflowPrompt`, `inputs`, `runLabel`; step
