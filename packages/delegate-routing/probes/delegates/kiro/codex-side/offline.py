@@ -1,20 +1,24 @@
 import json, os, pathlib, shutil, subprocess, sys, time
 # codex:R2-R4 — one case from cases/<name>.json against the pinned kiro-cli-chat in an empty netns.
-# usage: KIRO_BASE_HOME=<fixture home> python3 offline.py <name>   → <work>/runs/<name>/
+# usage: [KIRO_BASE_HOME=<fixture home>] python3 offline.py <name>   → <work>/runs/<name>/
 # work = $KIRO_CODEX_WORK, else $PROBE_OUT/kiro-codex, else a fresh temp dir (exported to the --inner child).
 S=pathlib.Path(__file__).resolve().parent
 sys.path.insert(0,str(S.parents[1]/'common'))
 import pin  # noqa: E402
+sys.path.insert(0, str(S.parent))
+from fixture_home import create_home, service_settings  # noqa: E402
 if '--inner' not in sys.argv:
     os.environ.setdefault('KIRO_CODEX_WORK',str(pin.workdir('kiro-codex')))
     os.environ.setdefault('KIRO_PKG',str(pin.package('kiro-cli.unwrapped')))
-PRIOR=pathlib.Path(os.environ['KIRO_BASE_HOME'])
+PRIOR=os.environ.get('KIRO_BASE_HOME')
 U=pathlib.Path(os.environ['KIRO_PKG'])/'bin'
 name=sys.argv[1]; cfg=json.loads((S/'cases'/(name+'.json')).read_text()); R=pathlib.Path(os.environ['KIRO_CODEX_WORK'])/'runs'/name
 if '--inner' not in sys.argv:
     if R.exists(): shutil.rmtree(R)
-    (R/'ws').mkdir(parents=True); shutil.copytree(PRIOR,R/'home',symlinks=True)
-    settings={k:{'endpoint':'http://127.0.0.1:18765','region':'us-east-1'} for k in ['api.codewhisperer.service','api.q.service','api.krs.service','api.cps.service']}
+    (R/'ws').mkdir(parents=True)
+    if PRIOR: shutil.copytree(PRIOR,R/'home',symlinks=True)
+    else: create_home(R/'home')
+    settings=service_settings()
     settings.update(cfg.get('settings',{})); (R/'home/.kiro/settings/cli.json').write_text(json.dumps(settings))
     for agent in cfg.get('agents',[]):
         d=R/'home/.kiro/agents'; d.mkdir(parents=True,exist_ok=True); (d/(agent['name']+'.json')).write_text(json.dumps(agent))

@@ -12,23 +12,31 @@ All cases are **OFFLINE**: the binary runs in an empty network namespace
 (`unshare -rn`, loopback only) and every service endpoint points at a local
 capture server that serves two fixture models and scripted event streams.
 
-**Need from the operator: `KIRO_BASE_HOME`.** The runs need a HOME skeleton
-whose `.local/share/kiro-cli/data.sqlite3` holds a _fixture_ builder-id login (a
-fake token with a future expiry), so the CLI starts without asking for auth. It
-is not committed. No real login is needed: nothing leaves the namespace.
+When `KIRO_BASE_HOME` is unset, both runners create a fresh HOME beneath their
+run directory with `fixture_home.py`. The stdlib-only generator builds the
+SQLite schema from scratch and seeds a **fake** builder-id token expiring in
+2099; all four service endpoints point at `http://127.0.0.1:18765`. It never
+opens or copies a real credential store. The runner's empty network namespace
+confines every request to the fake server.
+
+To create an explicit fixture home, run `python3 fixture_home.py <new-home>` and
+set `KIRO_BASE_HOME=<new-home>`. The generator refuses to overwrite an existing
+database. Only supply a fake fixture home to these offline probes.
 
 ## Harness
 
-| File                                | Role                                                                                                                                                                                                                                                                                                       |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wire2.sh <case> -- <args>`         | Runner. Env: `KIRO_BASE_HOME` (required), `T` (timeout, default 60), `SETTINGS` (cli.json keys), `CASE_ENV` (`K=V …`). Uses `cases/<case>/rules.json` (else `cases/x.rules.json`), drives ACP with `acpctl.py` when `cases/<case>/script.json` exists, overlays `home-overlay/`, `ws/` and the case's own. |
-| `capserver2.py`                     | Capture and scripted model server; writes `run/wire.jsonl` with timestamps.                                                                                                                                                                                                                                |
-| `acpctl.py`                         | ACP stdio driver with timed steps (async prompt, cancel, steer, child id, extension calls); writes `run/acp.log`.                                                                                                                                                                                          |
-| `wiresum.py <wire.jsonl> [marker…]` | One line per model request: conversation, model, effort, tool count, markers.                                                                                                                                                                                                                              |
-| `toolres.py <wire.jsonl> [rule]`    | Tool uses and tool results seen in recorded requests.                                                                                                                                                                                                                                                      |
-| `bundles.py <dir>`                  | Extracts `kas.js` and `tui.js` from the pinned binary and checks their sha256.                                                                                                                                                                                                                             |
-| `lit.cjs`                           | acorn AST helper: string literal → enclosing node.                                                                                                                                                                                                                                                         |
-| `codex-side/`                       | `offline.py <case>` (cases in `codex-side/cases/`), `driver.py`, `capserver.py`, AST scripts over `$KIRO_BUNDLES/kas.js`, `help.sh`, `native_strings.py`.                                                                                                                                                  |
+| File                                | Role                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wire2.sh <case> -- <args>`         | Runner. Env: `KIRO_BASE_HOME` (optional fake fixture home), `T` (timeout, default 60), `SETTINGS` (cli.json keys), `CASE_ENV` (`K=V …`). Uses `cases/<case>/rules.json` (else `cases/x.rules.json`), drives ACP with `acpctl.py` when `cases/<case>/script.json` exists, overlays `home-overlay/`, `ws/` and the case's own. |
+| `fixture_home.py <new-home>`        | Create a throwaway fake login and local service settings without reading any credentials.                                                                                                                                                                                                                                    |
+| `rules.py [--check]`                | Regenerate the h2 variants from shared bases and case deltas, or compare all 14 family paths byte-for-byte with `diff`.                                                                                                                                                                                                      |
+| `capserver2.py`                     | Capture and scripted model server; writes `run/wire.jsonl` with timestamps.                                                                                                                                                                                                                                                  |
+| `acpctl.py`                         | ACP stdio driver with timed steps (async prompt, cancel, steer, child id, extension calls); writes `run/acp.log`.                                                                                                                                                                                                            |
+| `wiresum.py <wire.jsonl> [marker…]` | One line per model request: conversation, model, effort, tool count, markers.                                                                                                                                                                                                                                                |
+| `toolres.py <wire.jsonl> [rule]`    | Tool uses and tool results seen in recorded requests.                                                                                                                                                                                                                                                                        |
+| `bundles.py <dir>`                  | Extracts `kas.js` and `tui.js` from the pinned binary and checks their sha256.                                                                                                                                                                                                                                               |
+| `lit.cjs`                           | acorn AST helper: string literal → enclosing node.                                                                                                                                                                                                                                                                           |
+| `codex-side/`                       | `offline.py <case>` (cases in `codex-side/cases/`), `driver.py`, `capserver.py`, AST scripts over `$KIRO_BUNDLES/kas.js`, `help.sh`, `native_strings.py`.                                                                                                                                                                    |
 
 The AST scripts need acorn and acorn-walk on `NODE_PATH` (not in nixpkgs):
 
@@ -122,7 +130,13 @@ These commands use the same common fixtures as the delegate cases. `k3-dup` and
 | k3-hooked | `T=90 ./wire2.sh k3-hooked -- chat --v3 --no-interactive -a --agent hooked "hello USER_SENTINEL_1"` | `[Session Start Hook Output]`, `HOOK_AGENTSPAWN_SENTINEL`                    |
 | a3-invoke | `T=240 ./wire2.sh a3-invoke -- acp --agent-engine v3 --auth-method cli`                             | Hooked child: `HOOKED_PROMPT_SENTINEL`; no hook-output sentinel              |
 
-A fixture-login generator is not supplied: the probe code names the SQLite file
-but does not define its auth schema or serialized login value. The
-`KIRO_BASE_HOME` requirement remains; without it these captures cannot be
-replayed locally.
+### Shared rules
+
+The a2, h2, h3 and codex-side inline families use `rules/<family>.json` as their
+base. Identical `cases/<case>/rules.json` paths are symlinks to that base, as is
+`codex-side/cases/v3-inline.json`; `h2-agentpin`, `h2-effort` and
+`v3-inline-ignored` are committed outputs of the small deltas in `rules.py`.
+Every original cited case path still resolves. After editing a base or delta,
+run `python3 rules.py`, then `python3 rules.py --check`. The check renders every
+family member into a temporary directory and requires `diff` exit 0 against its
+case path. All 14 paths were checked before replacing any duplicate with a link.
