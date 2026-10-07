@@ -21,8 +21,9 @@ How to read the tables:
   `packages/delegate-routing/probes/delegates/<harness>/`; `side` is the probe
   run that produced it (`claude`, `codex`, `judge`).
 
-No harness changes a **running child's** model. Only Claude changes a running
-child's effort: SDK `apply_flag_settings`, at the child's next request (V).
+No harness shows a path to change a **running child's** model. Only Claude
+changes a running child's effort: SDK `apply_flag_settings`, at the child's next
+request (V).
 
 ## Claude
 
@@ -56,15 +57,15 @@ Other surfaces:
 
 |         | `claude mcp serve` (V)                                                                                  | `--bg` daemon (V)                                        |
 | ------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Steer   | none: `SendMessage` to an MCP agent finds no transcript                                                 | interactive session (attach G)                           |
+| Steer   | none: `SendMessage` to an MCP agent finds no transcript                                                 | interactive session; `claude attach` shows it            |
 | Cancel  | `notifications/cancelled` aborts an Agent call, no reply; Workflow: no path (`TaskStop`: no task found) | `claude stop`; the transient daemon outlives `stop`/`rm` |
 | Update  | —                                                                                                       | —                                                        |
 | Status  | `ListAgents`: no reachable agents                                                                       | `claude agents --json` (`kind: background`), `logs`      |
-| Resume  | no                                                                                                      | respawn not measured (U)                                 |
-| Timeout | —                                                                                                       | depth and concurrency not measured (U)                   |
-| Prompts | as server flags                                                                                         | interactive session (`cc_entrypoint=cli`)                |
+| Resume  | no                                                                                                      | `claude respawn`: new process, idle, no new request      |
+| Timeout | —                                                                                                       | —                                                        |
+| Prompts | —                                                                                                       | interactive session (`cc_entrypoint=cli`)                |
 | Output  | synchronous Agent result; Workflow `async_launched`                                                     | `logs`                                                   |
-| Replay  | claude:dmu_mcp_lifecycle, claude:dmu_mcp_wf_alone                                                       | claude:dmu_bg_daemon                                     |
+| Replay  | claude:dmu_mcp_lifecycle, claude:dmu_mcp_wf_alone                                                       | claude:dmu_bg_daemon, claude:dmu_bg_limits               |
 
 ## Codex
 
@@ -146,19 +147,22 @@ Other surfaces:
 
 <a id="resume-and-fork"></a>Other surfaces:
 
-|         | Ferment-linked `Agent` (A)    | Workflow in-session step (V)     | `-p` / json (V)                        | Pi SDK (A)               |
-| ------- | ----------------------------- | -------------------------------- | -------------------------------------- | ------------------------ |
-| Steer   | `steer_subagent`              | parent-turn                      | none                                   | steer / follow-up        |
-| Cancel  | as `Agent`                    | `/workflow cancel`, Esc          | signal; daemons survive                | abort                    |
-| Update  | —                             | step model leaks to main session | none                                   | model/thinking           |
-| Status  | outcome + report              | `/workflow status`               | JSONL                                  | subscriptions            |
-| Resume  | 2 continuations, 1 finalizer¹ | `/workflow resume`               | `--continue`, `--resume`               | session managers         |
-| Timeout | tier budgets                  | `maxDurationMs`, `maxTokens`     | none                                   | host                     |
-| Prompts | as `Agent`                    | parent posture                   | classifier fails closed; `--yolo` runs | no gate unless installed |
-| Output  | `submit_agent_report`         | run store                        | stdout                                 | export                   |
-| Replay  | codex:N                       | claude:w2-workflow-model-leak    | claude:s9-perm-default, codex:B        | codex:P                  |
+|         | Ferment-linked `Agent` (A)    | Workflow in-session step (V)     | `-p` / json (V)                                                    | Pi SDK (A)               |
+| ------- | ----------------------------- | -------------------------------- | ------------------------------------------------------------------ | ------------------------ |
+| Steer   | `steer_subagent`              | parent-turn                      | none                                                               | steer / follow-up        |
+| Cancel  | as `Agent`                    | `/workflow cancel`, Esc          | signal; daemons survive                                            | abort                    |
+| Update  | —                             | step model leaks to main session | none                                                               | model/thinking           |
+| Status  | outcome + report              | `/workflow status`               | JSONL                                                              | subscriptions            |
+| Resume  | 2 continuations, 1 finalizer¹ | `/workflow resume`               | `--continue`, `--resume`                                           | session managers         |
+| Timeout | tier budgets                  | `maxDurationMs`, `maxTokens`     | none; a stdio MCP server blocks exit²                              | host                     |
+| Prompts | as `Agent`                    | parent posture                   | classifier fails closed; `--yolo` runs                             | no gate unless installed |
+| Output  | `submit_agent_report`         | run store                        | stdout                                                             | export                   |
+| Replay  | codex:N                       | claude:w2-workflow-model-leak    | claude:s9-perm-default, codex:B, claude:x1-print-exit-after-settle | codex:P                  |
 
 - ¹ continuation guard only for `ferment_step` (A) · judge:J3
+- ² a stdio MCP server Kimchi starts (user `mcp.json`, or project `.mcp.json`
+  trusted by `--approve`) is never closed, so the process idles after
+  `agent_settled` until killed; without one it exits in under 1 s (V)
 
 |         | Cloud dispatch (A)                                                         | External launchers (A) | `bash` (A)                     | `daemon` (A)                          |
 | ------- | -------------------------------------------------------------------------- | ---------------------- | ------------------------------ | ------------------------------------- |

@@ -359,6 +359,7 @@ segs
 semble
 sequentialthinking
 sess
+sesscap
 setext
 shellharden
 shortrev
@@ -446,6 +447,7 @@ userns
 vllm
 WEZTERM
 wfagents
+wfcap
 wfctl
 wfpins
 wikilink

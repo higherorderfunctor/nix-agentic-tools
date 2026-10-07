@@ -60,8 +60,8 @@ table the skill renders. Claude excludes calls made inside a delegate using
 `parent_tool_use_id`. Codex reads only the root rollout (its `session_meta.id`
 equals `thread.started`); a child's rollout is a separate file whose source is
 `subagent.thread_spawn`, so it is never scanned, and `exec --json` emits no
-spawn item (V; probe `codex:L1.exec-root-ends`, live `codex:L3.live-parity`).
-Child-event exclusion for Kimchi and Kiro is unverified.
+spawn item (V; probe `codex:L1.exec-root-ends`). Child-event exclusion for
+Kimchi and Kiro is unverified.
 
 | Assertion      | Passes when the log shows                                   |
 | -------------- | ----------------------------------------------------------- |
@@ -220,7 +220,12 @@ Open decisions:
 - Binaries resolve from `PATH`, not the repository pins (the first smoke ran
   claude 2.1.289, codex 0.160.0, kiro 2.27.1). Decide whether each harness
   defaults to its `ciPackages` pin or warns on a version mismatch.
-- Live Kimchi does not exit within 30 s after `agent_settled` (the same build
-  exits in about 2 s against the fake gateway). The suite records it as cleanup,
-  not ERROR; the cause needs one live run with its open sockets and child
-  processes listed after settling.
+- Live Kimchi does not exit within 30 s after `agent_settled`; the suite records
+  it as cleanup, not ERROR. Offline, a stdio MCP server that `--approve` trusts
+  keeps Kimchi alive and the gateway does not
+  (`kimchi/claude:x1-print-exit-after-settle`, with a stub server); that the
+  fixture's agnix server is the live cause is inferred (rerun live without
+  `.mcp.json` to settle). Decide whether `kimchi_setup` sets `plugins.mcp-apps`
+  false when MCP is not under test, or the Kimchi fixture drops its stdio
+  entries. Whether a connected HTTP MCP server also blocks exit is untested
+  (needs network).

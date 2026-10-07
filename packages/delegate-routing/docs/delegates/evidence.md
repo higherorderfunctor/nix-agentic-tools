@@ -39,82 +39,84 @@ Kiro evidence uses the pinned x86_64-linux unwrapped build. The native binary
 sha256 is `94c656bf317607ba1cca17e010e98fc5829d8e7c864f44bdedd8c4f4ad446c4d`;
 the KAS and TUI bundle hashes are checked by `bundles.py` (codex:R1). All
 indexed offline captures, bundle-function replays and AST/string probes were
-re-run at this pin. The `pr-*` and `mx-*` families (`pr-replay.sh`,
-`mx-replay.sh`) capture prompt reach and delegate control offline in both
-launchers, headless `chat --v3` and `acp --agent-engine v3`; `mx-sysfield`
-simulates the account flag. Headless v3 offers `invoke_sub_agent`, including
-child and grandchild execution (codex:R3 `v3-headless`); the h3 orchestration
-calls return `Tool "orchestrate_subagent" is not available.`. Parent
-cancellation aborts the child and the next turn carries
-`Sub-agent execution was cancelled` (claude:k-cancel). AST selectors and replay
-dependencies target KAS 0.66.26. Only results at the flake's current pin belong
-in this map and its probe index.
+re-run at this pin; most older wire2 rows (`claude:*`, `judge:*`) MISMATCH there
+because their captures hold the expected text but the excerpts don't print (Open
+UNKNOWNs). The `pr-*` and `mx-*` families (`pr-replay.sh`, `mx-replay.sh`)
+capture prompt reach and delegate control offline in both launchers, headless
+`chat --v3` and `acp --agent-engine v3`; `mx-sysfield` simulates the account
+flag. Headless v3 offers `invoke_sub_agent`, including child and grandchild
+execution (codex:R3 `v3-headless`); the h3 orchestration calls return
+`Tool "orchestrate_subagent" is not available.`. Parent cancellation aborts the
+child and the next turn carries `Sub-agent execution was cancelled`
+(claude:k-cancel). AST selectors and replay dependencies target KAS 0.66.26.
 
 Claude evidence uses the pinned x86_64-linux `claude-code` build. The pin moved
-from 2.1.291 to 2.1.292 with #2288; the cases added for the open unknowns
-(`dmu_*`, cache, carrier, census, gated, host and TUI captures) ran at 2.1.292,
-and the older indexed cases were last run at 2.1.291. Host replays use
-python3Packages.claude-agent-sdk 0.2.163 and claude-agent-acp 0.84.0 (TS SDK
-0.3.284) from this flake's nixpkgs. The login-backed `claude:live_resume`
-capture also resumes the completed child with its earlier Bash tool result.
-Depth defaults to 3, excess spawns at the 20-agent cap are refused, and workflow
-nodes withhold Agent/Workflow. The depth resolver reads a valid cached
-`tengu_hazel_trellis` value before the feature client fallback; explicit
-environment depth still wins (`codex:A`). Only current-pin results belong in the
-map and the probe index.
+from 2.1.291 to 2.1.292 with #2288. The cases added for the open unknowns
+(`claude:dmu_*`, cache, carrier, census, gated, host and TUI captures) match
+their excerpts at 2.1.292. The older indexed cases were last confirmed at
+2.1.291; at 2.1.292 they all exit 0, but most excerpt literals are not on stdout
+(mostly in unprinted files; some excerpts don't match the printed form), so
+re-confirming them is open. Host replays use python3Packages.claude-agent-sdk
+0.2.163 and claude-agent-acp 0.84.0 (TS SDK 0.3.284) from this flake's nixpkgs.
+The login-backed `claude:live_resume` capture also resumes the completed child
+with its earlier Bash tool result. Depth defaults to 3, excess spawns at the
+20-agent cap are refused, and workflow nodes withhold Agent/Workflow. The depth
+resolver reads a valid cached `tengu_hazel_trellis` value before the feature
+client fallback; explicit environment depth still wins (`codex:A`).
 
 Kimchi evidence uses the pinned x86_64-linux source build (1.5.1), patched Pi
 0.85.1 and kimchi-workflows 0.0.9 (`7a6765cc`). All indexed runnable offline
 scenarios, four tool inventories, extracted-source AST probes and VM replays
 were re-run with fake keys and local providers. Background steering reaches the
 next child request (`claude:s2-rpc-bg`). The system-prompt map (`claude:sp-*`,
-20 offline cases) replaces `codex:S`. Two LIVE cases (`claude:sp-p20-live-wire`,
-`claude:l1-live-agent-model-effort`) reach the real gateway through
-`live/recproxy.py` with the apiKey leaf of the operator's existing config; no
-login flow and no remote worker were used. Only results at the current flake pin
-belong in this map and probe index.
+20 offline cases) replaces `codex:S`. Three LIVE cases
+(`claude:sp-p20-live-wire`, `claude:l1-live-agent-model-effort`,
+`claude:l2-live-effort-ab`) reach the real gateway through `live/recproxy.py`
+with the apiKey leaf of the operator's existing config; no login flow and no
+remote worker were used. Five older rows MISMATCH at this pin (Open UNKNOWNs).
 
 ## Methods per harness
 
 Codex evidence uses the pinned x86_64-linux source build (0.160.1). All indexed
 offline cases were re-run with fresh homes, a fake provider, and the bundled
-model catalog. `codex:R0` extracted 104 Rust files (2,665 declarations, zero
-parse errors) and 28 SDK files (402 declarations); `claude:R1` emitted 104
-regular and 167 experimental RPC methods, with 63 experimental-only methods.
-`claude:R11` enables the message board and V2 explicitly for the
-`disable_direct_message` variant, which withholds send/follow-up while retaining
-spawn. Requirements cases mount a probe's `etc-codex/` at `/etc/codex` in an
-unprivileged `bwrap` overlay, without root. One LIVE case
-(`codex:L3.live-parity`) used the operator's ChatGPT login for one short turn:
-the live catalog's `multi_agent_version` matches the bundled one per model.
-Cloud execution is U.
+model catalog. 17 older rows MISMATCH at this pin (Open UNKNOWNs). `codex:R0`
+extracted 104 Rust files (2,665 declarations, zero parse errors) and 28 SDK
+files (402 declarations); `claude:R1` emitted 104 regular and 167 experimental
+RPC methods, with 63 experimental-only methods. `claude:R11` enables the message
+board and V2 explicitly for the `disable_direct_message` variant, which
+withholds send/follow-up while retaining spawn. Requirements cases mount a
+probe's `etc-codex/` at `/etc/codex` in an unprivileged `bwrap` overlay, without
+root. Two LIVE cases used the operator's ChatGPT login for one short turn each:
+`codex:L3.live-parity` found the live catalog's `multi_agent_version` equal to
+the bundled one for every model both list; `codex:L3.live-guardian` found its
+auto-review template equal too. Cloud execution is U.
 
 Case ids carry the side that produced them: `claude:`, `codex:` (the two
 independent investigators) and `judge:` (re-runs that settled disagreements).
 
-| Harness | Method                                                          | Yields | Example cases                                           |
-| ------- | --------------------------------------------------------------- | ------ | ------------------------------------------------------- |
-| Claude  | `-p` / stream-json / `mcp serve` against a local capture mock   | V      | `claude:depth`, `claude:ctl`, `claude:mcp_serve_agent`  |
-| Claude  | TUI under tmux against the capture mock                         | V      | prompt map K1                                           |
-| Claude  | Extracted bundle-function replay                                | Vr     | `codex:prompt-functions` (carrier and isolated child)   |
-| Claude  | Transcript replay (`jq` over session JSONL)                     | V      | prompt map snapshot records                             |
-| Claude  | AST / source read; help and binary grep                         | A, G   | `codex:A`, `codex:H`, `codex:P`                         |
-| Claude  | Real hosts against the capture mock (Python SDK, ACP adapter)   | V      | `claude:sdk-py`, `claude:acp-adapter`                   |
-| Codex   | Wire capture against a fake provider (`CODEX_HOME` scratch)     | V      | `claude:R2`, `codex:R1.v2-lifecycle`                    |
-| Codex   | `codex app-server` JSON-RPC driver                              | V      | `claude:R6`, `claude:R7`, `codex:R2`                    |
-| Codex   | Rollout files; binary `--help` / schema output                  | V      | `codex:R1.exec-resume-fork`, `claude:R0`                |
-| Codex   | Pinned source AST, vendor unit tests                            | A, I   | `codex:R0`, `judge:J2`                                  |
-| Codex   | TUI under tmux; shared daemon over a Unix WebSocket             | V      | `codex:T1`, `codex:L2.daemon-detach`                    |
-| Kiro    | Wire / recorder capture of the pinned binary                    | V      | `claude:k-pins`, `claude:h2-effort`                     |
-| Kiro    | ACP driver (v3; v2 engine (not used by this config))            | V      | `judge:k-steer`, `judge:j-a2-cancel-cfg`                |
-| Kiro    | KAS 0.66.26 bundle-function replay                              | Vr     | `codex:R5`                                              |
-| Kiro    | AST / strings of the bundle; help                               | A, G   | `codex:R6`, `codex:R1`                                  |
-| Kiro    | `reach.py` offsets per request (`pr-replay.sh`, `mx-replay.sh`) | V      | `pr-acp-orch`, `mx-resume`                              |
-| Kimchi  | `-p`, RPC and ACP runs against a fake model provider (`fake-a`) | V      | `claude:s1-fg-pins`, `claude:s2-rpc-bg`, `judge:J1`     |
-| Kimchi  | Workflow runs (in-session and background steps)                 | V      | `claude:w1-workflow`, `claude:w3b-workflow-cancel-late` |
-| Kimchi  | Pinned v1.5.1 source read (file:line)                           | A      | `codex:N`, `codex:P`, `judge:J4`                        |
-| Kimchi  | Resource / tool inventory                                       | V      | `claude:inv`                                            |
-| Kimchi  | Full-wire prompt map (`live/prompt_map.py`, `sysprompt.py`)     | V      | `claude:sp-p01`, `claude:sp-p15`                        |
+| Harness | Method                                                          | Yields | Example cases                                                       |
+| ------- | --------------------------------------------------------------- | ------ | ------------------------------------------------------------------- |
+| Claude  | `-p` / stream-json / `mcp serve` against a local capture mock   | V      | `claude:ctl`, `claude:dmu_mcp_lifecycle`, `claude:dmu_mcp_wf_alone` |
+| Claude  | TUI under tmux against the capture mock                         | V      | prompt map K1, `claude:dmu_team_tui`                                |
+| Claude  | Extracted bundle-function replay                                | Vr     | `codex:prompt-functions` (carrier and isolated child)               |
+| Claude  | Transcript replay (`jq` over session JSONL)                     | V      | prompt map snapshot records                                         |
+| Claude  | AST / source read; help and binary grep                         | A, G   | `codex:A`, `codex:H`, `codex:P`                                     |
+| Claude  | Real hosts against the capture mock (Python, TS SDK; ACP)       | V      | `claude:sdk-py`, `claude:sdk-ts`, `claude:acp-adapter`              |
+| Codex   | Wire capture against a fake provider (`CODEX_HOME` scratch)     | V      | `codex:R4`, `claude:R14`                                            |
+| Codex   | `codex app-server` JSON-RPC driver                              | V      | `codex:L5.v2-restart`, `codex:R1.v2-interrupt-tree`                 |
+| Codex   | Rollout files; binary `--help` / schema output                  | V      | `codex:M1`                                                          |
+| Codex   | Pinned source AST, vendor unit tests                            | A, I   | `codex:R0`, `judge:J2`                                              |
+| Codex   | TUI under tmux; shared daemon over a Unix WebSocket             | V      | `codex:T1`, `codex:L2.daemon-detach`                                |
+| Kiro    | Wire / recorder capture of the pinned binary                    | V      | `mx-hl-steer`, `mx-ups`                                             |
+| Kiro    | ACP driver (v3; v2 engine (not used by this config))            | V      | `claude:k-cancel`, `judge:k-wfctl`                                  |
+| Kiro    | KAS 0.66.26 bundle-function replay                              | Vr     | `codex:R5`                                                          |
+| Kiro    | AST / strings of the bundle; help                               | A, G   | `codex:R6`, `codex:R1`                                              |
+| Kiro    | `reach.py` offsets per request (`pr-replay.sh`, `mx-replay.sh`) | V      | `pr-acp-orch`, `mx-resume`                                          |
+| Kimchi  | `-p`, RPC and ACP runs against a fake model provider (`fake-a`) | V      | `claude:s1-fg-pins`, `claude:s2-rpc-bg`, `claude:a1-acp-cancel-fg`  |
+| Kimchi  | Workflow runs (in-session and background steps)                 | V      | `claude:w1-workflow`, `claude:w3b-workflow-cancel-late`             |
+| Kimchi  | Pinned v1.5.1 source read (file:line)                           | A      | `codex:N`, `codex:P`, `judge:J4`                                    |
+| Kimchi  | Resource / tool inventory                                       | V      | `claude:inv`                                                        |
+| Kimchi  | Full-wire prompt map (`live/prompt_map.py`, `sysprompt.py`)     | V      | `claude:sp-p01-print-all`, `claude:sp-p15-workflow-steps`           |
 
 ## Rerun
 
@@ -122,18 +124,19 @@ Each harness directory holds the ported probe scripts. Its `README.md` maps
 every case id used in the reference tables to the exact command, what the case
 shows, and the expected output excerpt. `probes/delegates/run.py` runs cases
 straight from those tables: `--list` shows every case and whether it runs,
-`--only=<harness>/<id>` (or a bare id, or a `prefix*`) selects, and each case
-prints MATCH, MISMATCH or SKIP; the exit code is the MISMATCH count. LIVE cases
-run only with `--live`. The case-table format is in the `run.py` docstring;
-older rows with no backtick excerpt or a `<placeholder>` command show as SKIP.
-Settling a U marked "Operator? yes" needs an account or privileged setup.
+`--only=<harness>/<id>` (or a bare id, or a `prefix*`) selects (an entry that
+matches nothing exits 2); each case prints MATCH, MISMATCH or SKIP; the exit
+code is the MISMATCH count. LIVE cases run only with `--live`. The case-table
+format is in the `run.py` docstring; older rows with no backtick excerpt or a
+`<placeholder>` command show as SKIP. Settling a U marked "Operator? yes" needs
+an account or privileged setup.
 
-| Harness | Case index                                                                     | Model backend               | Extra setup                                        |
-| ------- | ------------------------------------------------------------------------------ | --------------------------- | -------------------------------------------------- |
-| Claude  | [`probes/delegates/claude/README.md`](../../probes/delegates/claude/README.md) | capture mock                | none (one LIVE case costs quota)                   |
-| Codex   | [`probes/delegates/codex/README.md`](../../probes/delegates/codex/README.md)   | fake provider               | none                                               |
-| Kiro    | [`probes/delegates/kiro/README.md`](../../probes/delegates/kiro/README.md)     | recorder; KAS bundle replay | `KIRO_BASE_HOME`: a home with a fake fixture login |
-| Kimchi  | [`probes/delegates/kimchi/README.md`](../../probes/delegates/kimchi/README.md) | fake provider (`fake-a`)    | none                                               |
+| Harness | Case index                                                                     | Model backend               | Extra setup                                                                      |
+| ------- | ------------------------------------------------------------------------------ | --------------------------- | -------------------------------------------------------------------------------- |
+| Claude  | [`probes/delegates/claude/README.md`](../../probes/delegates/claude/README.md) | capture mock                | none (one LIVE case costs quota)                                                 |
+| Codex   | [`probes/delegates/codex/README.md`](../../probes/delegates/codex/README.md)   | fake provider               | none                                                                             |
+| Kiro    | [`probes/delegates/kiro/README.md`](../../probes/delegates/kiro/README.md)     | recorder; KAS bundle replay | `KIRO_BASE_HOME`: a home with a fake fixture login; `KIRO_BUNDLES` for AST cases |
+| Kimchi  | [`probes/delegates/kimchi/README.md`](../../probes/delegates/kimchi/README.md) | fake provider (`fake-a`)    | none                                                                             |
 
 ## When to reverify
 
@@ -150,27 +153,21 @@ Settling a U marked "Operator? yes" needs an account or privileged setup.
 Area: `delegate` = delegate tables (T1–T3), `prompt` = system-prompt map. Rank =
 impact rank in the cross-harness prompt map (1 = could change the option most).
 
-| Harness | Area     | Rank | Unknown                                                                                                                        | Settles it                                                                              | Operator?                       |
-| ------- | -------- | ---- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | ------------------------------- |
-| Claude  | prompt   | 1    | Other hosts' `initialize`: IDE ACP clients' `_meta` defaults (Zed, JetBrains), desktop app. Python SDK, ACP adapter, TS SDK: V | Point each host's CLI path at `host/sdk-recorder.sh` against the capture mock           | yes: pick hosts                 |
-| Claude  | prompt   | —    | Real CCR / teleport / remote-session launch env and argv (the append-head designator is V)                                     | Account with Claude Code on the web; capture through the live proxy                     | yes: scope + account            |
-| Claude  | prompt   | —    | Replay scripts for verify-run facts: TS SDK direct host, `policyHelper` under bwrap, append-head designator                    | Add `host/sdk-ts.sh`, `sysprompt/policy-helper.sh` and a `capture.sh` case              | no                              |
-| Claude  | delegate | —    | Remote / cloud: `isolation:"remote"`, `--cloud`, `--remote-control`, `--teleport`, `RemoteTrigger`                             | One cloud session and one remote Agent call on an account                               | yes: scope + account            |
-| Claude  | delegate | —    | Agent teams behavior: idle/wake, messaging, `TaskStop`, concurrency (not attempted)                                            | Extend `sysprompt/tui-subagent.py team` under tmux + mock                               | no                              |
-| Claude  | delegate | —    | Delegate lifecycle through `claude-agent-acp`: `session/cancel` during a child, child permission callbacks                     | Extend `host/acp-adapter.sh` offline                                                    | yes: confirm the adapter to map |
-| Claude  | delegate | —    | `Monitor` reach in `-p` with the account flag on (the gate is A; the first live run's listing was not saved)                   | Rerun `claude:live_monitor`                                                             | no (LIVE quota)                 |
-| Claude  | delegate | —    | `--bg` session depth and concurrency; `respawn`, `attach`                                                                      | Extend `claude:dmu_bg_daemon`                                                           | no                              |
-| Codex   | prompt   | —    | Realtime startup context: config `developer_instructions` or AGENTS.md on the wire? (instructions omit them, A)                | Local WebSocket mock via `experimental_realtime_ws_base_url`; trace the default context | no                              |
-| Codex   | prompt   | —    | MCP-type hook `additionalContext` reach (command hooks are V)                                                                  | `codex:P1` with an MCP hook                                                             | no                              |
-| Codex   | prompt   | —    | Live catalog auto-review template: an `extra_policy` slot? (bundled has none, so `guardian_extra_policy` is dropped)           | Keep the catalog `codex:L3.live-parity` fetches; grep its templates                     | no (LIVE quota)                 |
-| Codex   | delegate | —    | Cloud task: server-side model, limits, web cancel (client sends no model/effort and has no cancel, A)                          | Live account run on a throwaway environment                                             | yes: account + environment      |
-| Codex   | delegate | —    | Internal worker limits: review, compaction, memory (guardian is V)                                                             | Fake provider: held stream and malformed output per worker                              | no                              |
-| Kiro    | prompt   | 2    | Account `system_field_injection` value; server-side prompt (client half V, `mx-sysfield`)                                      | One live turn through a recorder; read the flag at key `2baac882…c7a03a`                | yes: work account               |
-| Kiro    | delegate | —    | Backend honors delegate model/effort (client wire V)                                                                           | Live `claude:k-pins` fixtures with a debug log                                          | yes: work account               |
-| Kiro    | delegate | —    | `--cloud --repo` behavior                                                                                                      | One account cloud session with logs                                                     | yes: account + scope            |
-| Kiro    | delegate | —    | Downloaded `kiro-cli crew` behavior                                                                                            | Install in a scratch HOME (network) and capture its delegate surface                    | yes: scope (network download)   |
-| Kiro    | delegate | —    | Global cap of host `_kiro/workflow/*` runs; `kiro-cli acp` session cap (not attempted)                                         | N parallel runs or sessions against `capserver2.py` with delayed rules                  | no                              |
-| Kimchi  | prompt   | —    | Remote worker's server-side system (the client sends none, A)                                                                  | One authorized remote run; capture the worker's wire                                    | yes: account                    |
-| Kimchi  | delegate | —    | Real gateway applies `reasoning_effort` (model as sent: V LIVE)                                                                | LIVE A/B of `claude:l1-live-agent-model-effort`, child thinking low vs high             | no (LIVE quota)                 |
-| Kimchi  | delegate | —    | Remote worker: actual model, effort, descendant cancel (client forces `yolo`, sends no model/effort, A)                        | Remote run with worker logs; Ctrl+X during a child                                      | yes: account + workspace        |
-| Kimchi  | delegate | —    | Multi-model child routing with a non-`kimchi-dev` orchestrator                                                                 | `claude:s10e-multimodel-acp` with `modelRoles.orchestrator` on another provider         | no                              |
+| Harness | Area     | Rank | Unknown                                                                                                                                                                                                                                                                                                         | Settles it                                                                                             | Operator?                       |
+| ------- | -------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| Claude  | prompt   | 1    | Other hosts' `initialize`: IDE ACP clients' `_meta` defaults (Zed, JetBrains), desktop app. Python SDK, ACP adapter, TS SDK: V                                                                                                                                                                                  | Point each host's CLI path at `host/sdk-recorder.sh` against the capture mock                          | yes: pick hosts                 |
+| Claude  | prompt   | —    | Real CCR / teleport / remote-session launch env and argv (prompt-head designator: V, `claude:append-head`)                                                                                                                                                                                                      | Account with Claude Code on the web; capture through the live proxy                                    | yes: scope + account            |
+| Claude  | delegate | —    | Older indexed cases (before `claude:dmu_*`) at 2.1.292: 28 of 35 runnable rows MISMATCH, rc 0, excerpt literals not on stdout (mostly in unprinted files; some excerpts don't match the printed form)                                                                                                           | Print the excerpt's source (or rewrite the excerpt), then `run.py --only='claude/*'`                   | no                              |
+| Claude  | delegate | —    | Remote / cloud: `isolation:"remote"`, `--cloud`, `--remote-control`, `--teleport`, `RemoteTrigger`                                                                                                                                                                                                              | One cloud session and one remote Agent call on an account                                              | yes: scope + account            |
+| Claude  | delegate | —    | Delegate lifecycle through `claude-agent-acp`: `session/cancel` during a child, child permission callbacks                                                                                                                                                                                                      | Extend `host/acp-adapter.sh` offline                                                                   | yes: confirm the adapter to map |
+| Codex   | delegate | —    | Cloud task: server-side model, limits, web cancel (client sends no model/effort and has no cancel, A)                                                                                                                                                                                                           | Live account run on a throwaway environment                                                            | yes: account + environment      |
+| Codex   | delegate | —    | Older indexed rows at 0.160.1: 17 of 26 runnable MISMATCH (`claude:R0`, `claude:R2`–`R10`, `claude:R12`, `claude:R13`, `codex:R1.exec-resume-fork`, `codex:R1.v2-concurrency`, `codex:R1.v2-resident-eviction`, `codex:R2`, `judge:J1`), rc 0; expected text sits in `results/*/wire`, rollouts or `help/*.txt` | Print the excerpt's source (or rewrite the excerpt), then `run.py --only='codex/*'`                    | no                              |
+| Kiro    | delegate | —    | Older wire2 rows (`claude:*`, `judge:*`) at 2.28.0: 15 of 19 runnable MISMATCH; expected text sits in `wire.jsonl`/`acp.log`; `judge:send-dir` needs `KIRO_BUNDLES`                                                                                                                                             | Print the excerpt's source (or rewrite the excerpt), then `run.py --only='kiro/claude:*,kiro/judge:*'` | no                              |
+| Kiro    | prompt   | 2    | Account `system_field_injection` value; server-side prompt (client half V, `mx-sysfield`)                                                                                                                                                                                                                       | One live turn through a recorder; read the flag at key `2baac882…c7a03a`                               | yes: work account               |
+| Kiro    | delegate | —    | Backend honors delegate model/effort (client wire V)                                                                                                                                                                                                                                                            | Live `claude:k-pins` fixtures with a debug log                                                         | yes: work account               |
+| Kiro    | delegate | —    | `--cloud --repo` behavior                                                                                                                                                                                                                                                                                       | One account cloud session with logs                                                                    | yes: account + scope            |
+| Kiro    | delegate | —    | Downloaded `kiro-cli crew` behavior                                                                                                                                                                                                                                                                             | Install in a scratch HOME (network) and capture its delegate surface                                   | yes: scope (network download)   |
+| Kimchi  | prompt   | —    | Remote worker's server-side system (the client sends none, A)                                                                                                                                                                                                                                                   | One authorized remote run; capture the worker's wire                                                   | yes: account                    |
+| Kimchi  | delegate | —    | Older indexed rows at 1.5.1: 5 of 21 runnable MISMATCH (`claude:inv`, `claude:s10-multimodel`, `claude:w4-workflow-rpc-abort`, `codex:B`, `judge:J1`); expected text sits in `*.tools.json`, `provider.jsonl` or the run's `stdout`; `codex:B` prints JSON (`"completedSessionResumed": true`)                  | Print the excerpt's source (or rewrite the excerpt), then `run.py --only='kimchi/*'`                   | no                              |
+| Kimchi  | delegate | —    | Real gateway applies `reasoning_effort` (accepted, model as sent: V LIVE; one A/B pair showed no effect)                                                                                                                                                                                                        | Repeat `claude:l2-live-effort-ab` 5+ times per arm, on two models; compare reasoning tokens            | no (LIVE quota)                 |
+| Kimchi  | delegate | —    | Remote worker: actual model, effort, descendant cancel (client forces `yolo`, sends no model/effort, A)                                                                                                                                                                                                         | Remote run with worker logs; Ctrl+X during a child                                                     | yes: account + workspace        |

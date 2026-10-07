@@ -7,7 +7,8 @@
 > is two parts: the map (`docs/delegates/` plus `probes/delegates/`) and the
 > acceptance suite (`eval/`, one real-session runner for all four harnesses with
 > one root baseline table and requested/observed controls and source-attributed
-> startup checks); techniques hand-declare `runsOwnSubagents` from map rows.
+> startup checks); `probes/delegates/run.py` re-runs the map's case rows;
+> techniques hand-declare `runsOwnSubagents` from map rows.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -216,12 +217,14 @@ isolation recipe, the caps and the operator steps.
 `docs/delegates/evidence.md` owns pins, evidence marks and capture methods. The
 other reference files own tools, controls, lifecycle and prompt reach.
 `probes/delegates/<harness>/README.md` indexes exact case commands and expected
-excerpts. Captured execution and source-only evidence stay separate. Probes
-write beneath a temporary case tree. Kiro creates a fake fixture login from
-schema and native type strings when no fixture home is supplied; both replay
-runners stay in an empty network namespace with local service endpoints. Its
-a2/h2/h3 and codex-side inline fixtures share bases and a generator with byte
-comparisons for every case path.
+excerpts; `probes/delegates/run.py --only=<id|glob>` re-runs those rows, exits
+with the MISMATCH count, and exits 2 when `--only` matches nothing. Captured
+execution and source-only evidence stay separate. Probes write beneath a
+temporary case tree. Kiro creates a fake fixture login from schema and native
+type strings when no fixture home is supplied; both replay runners stay in an
+empty network namespace with local service endpoints. Its a2/h2/h3 and
+codex-side inline fixtures share bases and a generator with byte comparisons for
+every case path.
 
 The repo-only `delegate-evidence` dev skill (`dev/skills/delegate-evidence/`)
 sends agents to the map and the suite before they state harness behavior or
@@ -235,5 +238,5 @@ the flake pin only; native VM tool exclusions come from that source, and
 inventory stdin resolves before entering the scratch project. RPC/ACP scenario
 deadlines are cleanup; the wire and tool results establish the behavior.
 Workflow cancel/abort fixtures wait for an active provider request, and the
-abort fixture waits 10 s before its status check. The prompt-map `codex:S`
-pointer has no replay and stays U.
+abort fixture waits 10 s before its status check. The Kimchi prompt map is
+replayed by the `claude:sp-*` cases.
