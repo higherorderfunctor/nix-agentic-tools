@@ -25,6 +25,7 @@
     claude-code-extracted = mkDriftCheck {
       inherit committed extracted;
       name = "claude-code";
+      sidecar = "packages/claude-code/extracted.json";
     };
   };
 }

@@ -3,9 +3,11 @@
     committed,
     extracted,
     name,
-  }: let
-    sidecar = pkgs.lib.removePrefix "${toString ../..}/" (toString committed);
-  in
+    # The sidecar's repository path, as a string, for messages only. A path
+    # derived from `committed` would move with its owner, and
+    # checks.facet-owner-relocation requires the check not to.
+    sidecar,
+  }:
     pkgs.runCommand "${name}-extracted-drift" {
       passthru = {inherit extracted;};
     } ''

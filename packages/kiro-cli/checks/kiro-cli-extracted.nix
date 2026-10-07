@@ -18,6 +18,7 @@
     kiro-cli-extracted = mkDriftCheck {
       inherit committed extracted;
       name = "kiro-cli";
+      sidecar = "packages/kiro-cli/extracted.json";
     };
     kiro-models-fixtures = pkgs.runCommand "kiro-models-fixtures" {} ''
       ${pkgs.python3}/bin/python3 ${./kiro-models.py} \

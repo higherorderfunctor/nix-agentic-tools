@@ -30,6 +30,7 @@
     semble-languages-extracted = mkDriftCheck {
       inherit committed extracted;
       name = "semble-languages";
+      sidecar = "packages/semble/extracted.json";
     };
   };
 }

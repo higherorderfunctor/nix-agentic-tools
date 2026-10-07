@@ -14,6 +14,7 @@
     chatgpt-codex-extracted = mkDriftCheck {
       inherit committed extracted;
       name = "chatgpt-codex";
+      sidecar = "packages/chatgpt-codex/extracted.json";
     };
   };
 }

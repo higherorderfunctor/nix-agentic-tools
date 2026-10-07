@@ -83,7 +83,7 @@ in {
     # only; the update pipeline commits whatever the extractor says, so
     # correctness rests on the guards and the mutants.
     "${name}-extracted" = mkDriftCheck {
-      inherit committed extracted name;
+      inherit committed extracted name sidecar;
     };
 
     # The extractor fails closed: every mutant trips the guards it names or

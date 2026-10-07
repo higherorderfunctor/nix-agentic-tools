@@ -29,6 +29,7 @@
     glab-extracted = mkDriftCheck {
       inherit committed extracted;
       name = "glab";
+      sidecar = "packages/glab/extracted.json";
     };
   };
 }

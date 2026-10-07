@@ -52,6 +52,7 @@
     kimchi-extracted = mkDriftCheck {
       inherit committed extracted;
       name = "kimchi";
+      sidecar = "packages/kimchi/extracted.json";
     };
 
     kimchi-extracted-harness-guard =

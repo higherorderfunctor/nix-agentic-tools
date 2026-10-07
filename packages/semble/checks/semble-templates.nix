@@ -134,6 +134,7 @@
     semble-templates-extracted = mkDriftCheck {
       inherit committed extracted;
       name = "semble-templates";
+      sidecar = "packages/semble/upstream-templates.json";
     };
   };
 }
