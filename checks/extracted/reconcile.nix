@@ -7,7 +7,7 @@
   inherit (import ../../lib/extracted {inherit pkgs;}) reconcile withAdded;
   base = {
     facts.value.type = "string";
-    fields = ["description" "excluded"];
+    fields = ["aliasFor" "description" "excluded"];
     needs = ["type"];
     rows.value = {};
     secretNeeds = ["excluded"];
@@ -35,20 +35,28 @@
       input.rows.value = null;
       kinds = ["bad-row"];
     };
+    blank-alias = {
+      input.rows.value.aliasFor = "";
+      kinds = ["bad-row"];
+    };
     blank-controls = {
       input = {
         fields = ["controls"];
         needs = ["controls"];
         rows.value.controls = "";
       };
-      kinds = ["needs-human"];
+      kinds = ["bad-row" "needs-human"];
     };
     blank-excluded = {
       input = {
         facts = {token.type = "string";};
         rows.token.excluded = "";
       };
-      kinds = ["secret"];
+      kinds = ["bad-row" "secret"];
+    };
+    blank-non-secret-excluded = {
+      input.rows.value.excluded = "";
+      kinds = ["bad-row"];
     };
     boolean-secret-name = {
       input = {
@@ -100,9 +108,10 @@
     };
     replace-not-allowed = {
       input.rows.value = {
-        bogus = 1;
-        replace = ["bogus"];
+        ignored = "kept";
+        replace = ["ignored"];
       };
+      entries = [];
       kinds = ["bad-row"];
     };
     replace-not-supplied = {
@@ -139,6 +148,14 @@
           };
         };
         rows = {gitTokens = {};};
+      };
+      kinds = ["secret"];
+    };
+    secret-no-needs = {
+      input = {
+        facts = {token.type = "string";};
+        rows = {};
+        secretNeeds = [];
       };
       kinds = ["secret"];
     };

@@ -7,9 +7,9 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-06 — non-blank rows gate delivery; grouped ignore
-> collisions fail as data, and drift checks expose automatic acceptance rows for
-> regeneration.
+> **Last verified:** 2026-10-06 — all hand fields reject blank values;
+> environment string facts classify unrecorded secrets; collision rows name
+> their cause.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -148,16 +148,20 @@ factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`,
 which fails evaluation if the pinned Kimchi no longer reads it or starts
 overwriting it.
 
-The extractor emits every resolved environment name with `type = "string"`.
+The extractor emits every resolved environment name with `type = "string"`,
+which feeds the secret classifier for names without a recorded row. A recorded
+`controls` row reviews an environment name without additional secret fields.
 Environment rows alone supply non-blank `controls` prose; grouped
 `environmentIgnored` names expand into `ignored = "<reason>"` rows inside
 `rules.nix`, so they stay in the facts but disappear from the consumer view.
 Reconcile reports removed rows or users, unresolved required fields, missing
 secret delivery rows, invalid or fact-shadowing rows, duplicate ignore names or
-controls/ignore collisions, and unrecorded derivable names. Rows fill only null
-or absent facts unless their `replace` list explicitly names a field. Ignored
-rows skip required-field checks. Only string values and string-to-string maps
-enter the shared runtime-values classifier.
+controls/ignore collisions, and unrecorded derivable names. Collision rows keep
+their controls or ignore reason and carry a field naming the collision, so
+`bad-row` reports its cause. Rows fill only null or absent facts unless their
+`replace` list explicitly names a field. Ignored rows skip required-field
+checks. Only string values and string-to-string maps enter the shared
+runtime-values classifier.
 
 Regeneration first writes the sidecar, then evaluates
 `checks.<system>.kimchi-extracted.passthru.rows` against it and adds `{}` rows

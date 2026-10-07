@@ -468,13 +468,8 @@ rec {
     ${pkgs.nix}/bin/nix fmt -- "${dest}"
     echo "${attr}: wrote ${dest}"
     ${pkgs.lib.optionalString (rows != null) ''
-      # The eval reads the old rows. Redirecting to their destination would
-      # truncate that input before Nix snapshots the dirty working tree.
-      extracted_rows_tmp=$(${pkgs.coreutils}/bin/mktemp)
-      ${pkgs.nix}/bin/nix eval --json ".#checks.${pkgs.stdenv.hostPlatform.system}.${attr}-extracted.passthru.rows" > "$extracted_rows_tmp"
-      ${pkgs.coreutils}/bin/mv "$extracted_rows_tmp" "${rows}"
-      ${pkgs.nix}/bin/nix fmt -- "${rows}"
-      echo "${attr}: wrote ${rows}"
+      ${(import ./extracted {inherit pkgs;}).mkRowsRegen rows}
+      echo "${attr}: wrote ${rows.path}"
     ''}
   '';
 
@@ -490,10 +485,10 @@ rec {
   # Without it the bump PR ships the old sidecar and fails the package's
   # drift check, and a failure holds the bump back on either path.
   #
-  # `targets` are `mkExtractRegen` arguments: `attr` is any flake attribute
-  # path whose `passthru.extracted` produces the sidecar (a check's, when the
-  # package itself must stay byte-identical to upstream), `dest` the
-  # repository path it replaces.
+  # `targets` are `mkExtractRegen` arguments: `attr` is the package name in
+  # `ciPackages` whose `passthru.extracted` produces the sidecar; `dest` is the
+  # repository path it replaces. Optional
+  # `rows = {name; path;}` names the drift check and its rows destination.
   mkRegenerateExtracted = {
     name,
     pkgs,

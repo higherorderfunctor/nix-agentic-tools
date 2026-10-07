@@ -24,15 +24,17 @@
         lib.zipAttrsWith (_: matches:
           if builtins.length matches == 1
           then builtins.head matches
-          else null)
+          else builtins.head matches // {"listed by more than one environment row or ignore group" = true;})
         ([rows.environment]
           ++ map (group:
             lib.genAttrs group.names (_:
-              if builtins.attrNames group == ["names" "reason"]
-              then {ignored = group.reason;}
-              else null))
+              {ignored = group.reason;}
+              // lib.optionalAttrs (builtins.attrNames group != ["names" "reason"]) {
+                "unknown environment ignore group fields" = true;
+              }))
           (builtins.attrValues rows.environmentIgnored));
-      # needs = ["controls"] already gates secret environment names.
+      # String facts classify unrecorded secret names; a recorded controls row
+      # is their review, so no additional secret fields are required.
       secretNeeds = [];
     };
   };

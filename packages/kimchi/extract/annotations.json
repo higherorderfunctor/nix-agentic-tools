@@ -8,9 +8,7 @@
       "excluded": "an alias for the API secret; set `ai.kimchi.apiKey`"
     },
     "deviceId": {},
-    "device_id": {
-      "aliasFor": "deviceId"
-    },
+    "device_id": { "aliasFor": "deviceId" },
     "gitTokens": {
       "excluded": "secrets; set `ai.kimchi.gitTokens`, which Home Manager reads from files at activation instead of writing them into the Nix store"
     },
@@ -56,9 +54,7 @@
     "KIMCHI_BASE_URL": {
       "controls": "LLM gateway base URL; overrides configured and region-derived endpoints"
     },
-    "KIMCHI_CLIPBOARD_FORCE": {
-      "controls": "clipboard backend override"
-    },
+    "KIMCHI_CLIPBOARD_FORCE": { "controls": "clipboard backend override" },
     "KIMCHI_CODING_AGENT_DIR": {
       "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)"
     },
@@ -68,42 +64,26 @@
     "KIMCHI_CONTEXT_DATE": {
       "controls": "prompt context date shown in place of the wall-clock date"
     },
-    "KIMCHI_DAP_BINARIES": {
-      "controls": "DAP adapter binary overrides"
-    },
-    "KIMCHI_DEBUG_PROMPTS": {
-      "controls": "prompt debugging output"
-    },
-    "KIMCHI_DEBUG_SESSION": {
-      "controls": "session debugging output"
-    },
+    "KIMCHI_DAP_BINARIES": { "controls": "DAP adapter binary overrides" },
+    "KIMCHI_DEBUG_PROMPTS": { "controls": "prompt debugging output" },
+    "KIMCHI_DEBUG_SESSION": { "controls": "session debugging output" },
     "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
       "controls": "suppression of pi built-in providers"
     },
     "KIMCHI_ENABLE_RESOURCES": {
       "controls": "transient comma-separated resource enablement"
     },
-    "KIMCHI_FERMENTS_DIR": {
-      "controls": "ferment state directory"
-    },
+    "KIMCHI_FERMENTS_DIR": { "controls": "ferment state directory" },
     "KIMCHI_FERMENT_DISABLE_PARALLEL": {
       "controls": "parallel ferment execution"
     },
-    "KIMCHI_FERMENT_LOCK_DIR": {
-      "controls": "ferment lock directory"
-    },
-    "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": {
-      "controls": "ferment stale-lock age"
-    },
-    "KIMCHI_IDE_LOCKFILE_DIR": {
-      "controls": "IDE lock-file directory"
-    },
+    "KIMCHI_FERMENT_LOCK_DIR": { "controls": "ferment lock directory" },
+    "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": { "controls": "ferment stale-lock age" },
+    "KIMCHI_IDE_LOCKFILE_DIR": { "controls": "IDE lock-file directory" },
     "KIMCHI_INFRA_BREAKER_THRESHOLD": {
       "controls": "infrastructure circuit-breaker failure threshold"
     },
-    "KIMCHI_LSP_BINARIES": {
-      "controls": "LSP server binary overrides"
-    },
+    "KIMCHI_LSP_BINARIES": { "controls": "LSP server binary overrides" },
     "KIMCHI_MCP_E2E_KEYRING_DIR": {
       "controls": "MCP end-to-end test keyring directory"
     },
@@ -113,75 +93,39 @@
     "KIMCHI_MEMORY_DRAIN_CONCURRENCY": {
       "controls": "memory capture drain concurrency"
     },
-    "KIMCHI_NO_PROXY": {
-      "controls": "explicit proxy bypass list"
-    },
-    "KIMCHI_NO_UPDATE_CHECK": {
-      "controls": "background Kimchi update check"
-    },
+    "KIMCHI_NO_PROXY": { "controls": "explicit proxy bypass list" },
+    "KIMCHI_NO_UPDATE_CHECK": { "controls": "background Kimchi update check" },
     "KIMCHI_OAUTH_TEMPLATE_DIR": {
       "controls": "OAuth result-page template directory"
     },
-    "KIMCHI_OLLAMA_HOST": {
-      "controls": "Ollama host URL"
-    },
+    "KIMCHI_OLLAMA_HOST": { "controls": "Ollama host URL" },
     "KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR": {
       "controls": "preserved inherited pi agent directory"
     },
     "KIMCHI_PARENT_SESSION_ID": {
       "controls": "parent session identity for subagents"
     },
-    "KIMCHI_PERMISSIONS": {
-      "controls": "initial permission mode"
-    },
-    "KIMCHI_PROXY": {
-      "controls": "HTTP and HTTPS proxy override"
-    },
-    "KIMCHI_PROXY_HELPER": {
-      "controls": "SSH proxy helper executable"
-    },
-    "KIMCHI_REDACTION_ENABLED": {
-      "controls": "PII redaction override"
-    },
+    "KIMCHI_PERMISSIONS": { "controls": "initial permission mode" },
+    "KIMCHI_PROXY": { "controls": "HTTP and HTTPS proxy override" },
+    "KIMCHI_PROXY_HELPER": { "controls": "SSH proxy helper executable" },
+    "KIMCHI_REDACTION_ENABLED": { "controls": "PII redaction override" },
     "KIMCHI_REGION": {
       "controls": "account region whose endpoints Kimchi uses (us or eu); overrides config.json region, and an unknown value counts as unset"
     },
-    "KIMCHI_REMOTE_ENDPOINT": {
-      "controls": "remote execution endpoint"
-    },
-    "KIMCHI_REMOTE_RUN": {
-      "controls": "remote execution mode"
-    },
-    "KIMCHI_REVIEW_LOG": {
-      "controls": "session-review log path"
-    },
-    "KIMCHI_REVIEW_THRESHOLD": {
-      "controls": "session-review threshold"
-    },
-    "KIMCHI_SANDBOX": {
-      "controls": "sandbox detection override"
-    },
-    "KIMCHI_SESSION_REVIEW": {
-      "controls": "session-review enablement"
-    },
+    "KIMCHI_REMOTE_ENDPOINT": { "controls": "remote execution endpoint" },
+    "KIMCHI_REMOTE_RUN": { "controls": "remote execution mode" },
+    "KIMCHI_REVIEW_LOG": { "controls": "session-review log path" },
+    "KIMCHI_REVIEW_THRESHOLD": { "controls": "session-review threshold" },
+    "KIMCHI_SANDBOX": { "controls": "sandbox detection override" },
+    "KIMCHI_SESSION_REVIEW": { "controls": "session-review enablement" },
     "KIMCHI_STREAM_IDLE_TIMEOUT_MS": {
       "controls": "outbound HTTP stream idle timeout"
     },
-    "KIMCHI_SUBAGENT": {
-      "controls": "subagent process marker"
-    },
-    "KIMCHI_TAGS": {
-      "controls": "tags attached to LLM requests"
-    },
-    "KIMCHI_TELEMETRY_DEBUG": {
-      "controls": "telemetry debugging output"
-    },
-    "KIMCHI_TELEMETRY_ENABLED": {
-      "controls": "telemetry enablement override"
-    },
-    "KIMCHI_WEB_APP_URL": {
-      "controls": "Kimchi web application base URL"
-    },
+    "KIMCHI_SUBAGENT": { "controls": "subagent process marker" },
+    "KIMCHI_TAGS": { "controls": "tags attached to LLM requests" },
+    "KIMCHI_TELEMETRY_DEBUG": { "controls": "telemetry debugging output" },
+    "KIMCHI_TELEMETRY_ENABLED": { "controls": "telemetry enablement override" },
+    "KIMCHI_WEB_APP_URL": { "controls": "Kimchi web application base URL" },
     "KIMCHI_WHEEL_SCROLL_LINES": {
       "controls": "mouse-wheel scroll lines in the TUI; overrides config.json tui.wheelScrollLines"
     },
@@ -194,81 +138,41 @@
     "OLLAMA_HOST": {
       "controls": "Ollama endpoint; takes precedence over KIMCHI_OLLAMA_HOST"
     },
-    "PI_CACHE_RETENTION": {
-      "controls": "provider prompt-cache retention"
-    },
+    "PI_CACHE_RETENTION": { "controls": "provider prompt-cache retention" },
     "PI_CLEAR_ON_SHRINK": {
       "controls": "terminal clearing when content shrinks"
     },
     "PI_CODING_AGENT_DIR": {
       "controls": "pi agent directory the caller inherited; entry.ts copies it to KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR (unless that is set) before pointing pi at the Kimchi harness, and pi package lookup reads that copy"
     },
-    "PI_EXPERIMENTAL": {
-      "controls": "pi experimental features"
-    },
-    "PI_HARDWARE_CURSOR": {
-      "controls": "terminal hardware cursor"
-    },
-    "PI_HYPERLINKS": {
-      "controls": "terminal hyperlink capability"
-    },
-    "PI_IMAGE_PROTOCOL": {
-      "controls": "terminal image protocol"
-    },
-    "PI_INSTALLER_API_BASE": {
-      "controls": "managed installer API base URL"
-    },
-    "PI_MANAGED_INSTALL_ROOT": {
-      "controls": "managed pi installation root"
-    },
+    "PI_EXPERIMENTAL": { "controls": "pi experimental features" },
+    "PI_HARDWARE_CURSOR": { "controls": "terminal hardware cursor" },
+    "PI_HYPERLINKS": { "controls": "terminal hyperlink capability" },
+    "PI_IMAGE_PROTOCOL": { "controls": "terminal image protocol" },
+    "PI_INSTALLER_API_BASE": { "controls": "managed installer API base URL" },
+    "PI_MANAGED_INSTALL_ROOT": { "controls": "managed pi installation root" },
     "PI_MCP_ADAPTER_KEYRING_RECOVERY_HELPER": {
       "controls": "MCP keyring recovery helper executable"
     },
     "PI_MCP_ADAPTER_KEYRING_RECOVERY_NODE": {
       "controls": "MCP keyring recovery Node.js executable"
     },
-    "PI_OAUTH_CALLBACK_HOST": {
-      "controls": "OAuth callback bind host"
-    },
-    "PI_OFFLINE": {
-      "controls": "pi startup network operations"
-    },
-    "PI_PACKAGE_DIR": {
-      "controls": "pi package and runtime asset directory"
-    },
-    "PI_SHARE_VIEWER_URL": {
-      "controls": "shared-session viewer base URL"
-    },
-    "PI_SKIP_VERSION_CHECK": {
-      "controls": "pi version check"
-    },
-    "PI_STARTUP_BENCHMARK": {
-      "controls": "interactive startup benchmark"
-    },
-    "PI_TELEMETRY": {
-      "controls": "pi install telemetry"
-    },
-    "PI_TIMING": {
-      "controls": "startup timing instrumentation"
-    },
-    "PI_TRUE_COLOR": {
-      "controls": "terminal true-color capability"
-    },
-    "PI_TUI_DEBUG": {
-      "controls": "TUI debug logging"
-    },
-    "PI_TUI_DEBUG_REDRAW": {
-      "controls": "TUI redraw logging"
-    },
-    "PI_TUI_ESC_TIMEOUT": {
-      "controls": "TUI escape-sequence timeout"
-    },
+    "PI_OAUTH_CALLBACK_HOST": { "controls": "OAuth callback bind host" },
+    "PI_OFFLINE": { "controls": "pi startup network operations" },
+    "PI_PACKAGE_DIR": { "controls": "pi package and runtime asset directory" },
+    "PI_SHARE_VIEWER_URL": { "controls": "shared-session viewer base URL" },
+    "PI_SKIP_VERSION_CHECK": { "controls": "pi version check" },
+    "PI_STARTUP_BENCHMARK": { "controls": "interactive startup benchmark" },
+    "PI_TELEMETRY": { "controls": "pi install telemetry" },
+    "PI_TIMING": { "controls": "startup timing instrumentation" },
+    "PI_TRUE_COLOR": { "controls": "terminal true-color capability" },
+    "PI_TUI_DEBUG": { "controls": "TUI debug logging" },
+    "PI_TUI_DEBUG_REDRAW": { "controls": "TUI redraw logging" },
+    "PI_TUI_ESC_TIMEOUT": { "controls": "TUI escape-sequence timeout" },
     "PI_TUI_NO_CLEAR_SCROLLBACK": {
       "controls": "scrollback clearing in Kimchi's pi-tui patch"
     },
-    "PI_TUI_WRITE_LOG": {
-      "controls": "raw TUI ANSI output log path"
-    },
+    "PI_TUI_WRITE_LOG": { "controls": "raw TUI ANSI output log path" },
     "SKILLS_DIR": {
       "controls": "skills-manager skills directory (default <cwd>/skills)"
     }

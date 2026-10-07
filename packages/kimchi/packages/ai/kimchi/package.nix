@@ -143,7 +143,10 @@
       attr = "kimchi";
       dest = repoPath ../../../extracted.json;
       inherit pkgs;
-      rows = repoPath ../../../extract/annotations.json;
+      rows = {
+        name = "kimchi";
+        path = repoPath ../../../extract/annotations.json;
+      };
     }}
   '';
 

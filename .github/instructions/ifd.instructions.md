@@ -7,9 +7,9 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-06 — drift precedes reconcile failures; the shared
-> check exposes regeneration rows, and environment extraction emits all resolved
-> names.
+> **Last verified:** 2026-10-06 — hand fields reject blank values; unrecorded
+> secrets fail even without required secret fields; one rows recipe serves drift
+> diagnostics and regeneration.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -178,7 +178,7 @@ minutes later inside `nix-update`.
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
 Importing `lib/extracted/default.nix` with `{ inherit pkgs; }` provides
-`mkDriftCheck { name; extracted; committed; sidecar; results ? {}; rows ? {}; rowsPath ? null; }`.
+`mkDriftCheck { name; extracted; committed; sidecar; results ? {}; rows ? null; }`.
 The builder returns `{ "${name}-extracted" = drv; }`, so callers merge its
 result into their checks and cannot choose a conflicting attribute. This
 includes `semble-languages-extracted` and `semble-templates-extracted`. A
@@ -188,29 +188,33 @@ then a command to copy its output over the committed sidecar and `nix fmt`. The
 check exposes `passthru.extracted` so regeneration remains buildable while drift
 is red. Optional `results` are reconcile results read from committed files;
 non-empty failures make the build fail after drift passes, without throwing
-during evaluation. A `rowsPath` also exposes `passthru.rows` and prints its
-eval, atomic replacement and format command beside the sidecar recipe and on
-unrecorded failures.
+during evaluation. Optional `rows = {path; value;}` exposes `value` as
+`passthru.rows` and prints its eval, replacement and format command for `path`
+beside the sidecar recipe and on unrecorded failures.
 
 `reconcile` takes one table per surface with `facts`, `rows`, required `needs`,
-allowed hand `fields`, explicit `secretNeeds`, and named `uses`. Required fields
-and secret delivery reasons must be non-blank strings. It reports `removed`,
-`needs-human`, `secret`, `bad-row`, and `unrecorded` failures. Rows fill null or
-absent facts; replacing a non-null fact requires its field in the row's
-`replace` list. `ignored = "<reason>"` omits a name from consumer entries and
-skips required fields. Classification uses the single runtime-values classifier
-only for string-valued names or string-to-string maps. `withAdded` preserves the
-already-parsed rows and adds `{}` rows for derivable non-secret new names.
+allowed hand `fields`, explicit `secretNeeds`, and named `uses`. Every supplied
+hand field must be a non-blank string. Required fields must be present in the
+merged entry; a secret must have a recorded row and its required secret fields.
+It reports `removed`, `needs-human`, `secret`, `bad-row`, and `unrecorded`
+failures. Rows fill null or absent facts; replacing a non-null fact requires its
+field in the row's `replace` list. `ignored = "<reason>"` omits a name from
+consumer entries and skips required fields. Classification uses the single
+runtime-values classifier only for string-valued names or string-to-string maps.
+`withAdded` preserves the already-parsed rows and adds `{}` rows for derivable
+non-secret new names.
 
-`mkExtractRegen` optionally takes a `rows` destination: after writing and
-formatting the sidecar it evaluates the same check's `passthru.rows`, then
-atomically replaces and formats the rows file. The temporary output matters:
-direct redirection would truncate the rows that this evaluation reads.
-`mkRegenerateExtracted` lists sidecar destinations in `passthru.sidecars`; its
-current callers do not regenerate rows. Kimchi's `extract/rules.nix` is shared
-by its consumer, drift check and regeneration; extractors continue to enforce
-source structure, while reconciliation failures turn the resulting update PR
-red.
+`mkExtractRegen` takes a package name as `attr` and optionally
+`rows = {name; path;}`, where `name` identifies the drift check independently of
+the package. After writing and formatting the sidecar it runs
+`lib/extracted/default.nix`'s `mkRowsRegen`, the same command the drift check
+prints, to evaluate `passthru.rows`, replace `path` and format it. The temporary
+output matters: direct redirection would truncate the rows that this evaluation
+reads. `mkRegenerateExtracted` lists sidecar destinations in
+`passthru.sidecars`; its current callers do not regenerate rows. Kimchi's
+`extract/rules.nix` is shared by its consumer, drift check and regeneration;
+extractors continue to enforce source structure, while reconciliation failures
+turn the resulting update PR red.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
@@ -258,9 +262,10 @@ counts toward `config.json` only when its `readFileSync` path resolves there;
 1.1.30 also parses `harness/settings.json` in that file, and a read that
 resolves to neither fails the extraction. The extractor emits every resolved
 environment name; reconcile in `packages/kimchi/extract/rules.nix` decides its
-acceptance, required controls prose, or grouped ignore reason. Removed rows fail
-reconcile in both directions. pi's own variable names come from Kimchi's
-`piConfig.name` the way pi derives them, not from pi's `PI_` default.
+acceptance, required controls prose, or grouped ignore reason. Reconcile fails a
+row whose name vanished (removed) and a new name it cannot accept (needs-human
+or unrecorded). pi's own variable names come from Kimchi's `piConfig.name` the
+way pi derives them, not from pi's `PI_` default.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin

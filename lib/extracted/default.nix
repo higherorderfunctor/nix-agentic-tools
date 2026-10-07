@@ -1,8 +1,18 @@
 {pkgs}: let
   inherit (pkgs) lib;
   inherit (import ../runtime-values {inherit lib;}) classify;
+  # The eval consumes the current rows: a temporary file prevents truncating
+  # that input before Nix snapshots the working tree.
+  mkRowsRegen = {
+    name,
+    path,
+  }: ''
+    extracted_rows_tmp="$(${pkgs.coreutils}/bin/mktemp)" && ${pkgs.nix}/bin/nix eval --json ".#checks.${pkgs.stdenv.hostPlatform.system}.${name}-extracted.passthru.rows" > "$extracted_rows_tmp" && ${pkgs.coreutils}/bin/mv "$extracted_rows_tmp" ${lib.escapeShellArg path} && ${pkgs.nix}/bin/nix fmt -- ${lib.escapeShellArg path}
+  '';
   nonBlank = value: builtins.isString value && builtins.match "[[:space:]]*" value == null;
 in {
+  inherit mkRowsRegen;
+
   # Facts carry upstream types. Only string leaves and string-to-string maps
   # enter the classifier; objects and booleans are outside its contract.
   reconcile = surfaces:
@@ -30,11 +40,12 @@ in {
         hand = builtins.removeAttrs row ["ignored" "replace"];
         badFields = lib.filter (field:
           !(builtins.elem field allowed)
+          || !nonBlank hand.${field}
           || (fact.${field} or null != null && !(replaceValid && builtins.elem field replace)))
         (builtins.attrNames hand);
         ignored = row ? ignored && nonBlank row.ignored;
         entry = fact // lib.filterAttrs (field: _: !(builtins.elem field badFields)) hand;
-        missing = lib.filter (field: !nonBlank (entry.${field} or null)) needs;
+        missing = lib.filter (field: entry.${field} or null == null) needs;
         # An explicit type replacement must not hide a known string secret.
         # Use a filled type only when extraction could not derive one.
         typed =
@@ -48,7 +59,7 @@ in {
             path = [name];
             hints = fact;
           };
-        missingSecret = lib.filter (field: !nonBlank (row.${field} or null)) secretNeeds;
+        missingSecret = lib.filter (field: entry.${field} or null == null) secretNeeds;
         badReasons =
           badFields
           ++ lib.optional (!builtins.isAttrs raw) "row must be an object"
@@ -67,7 +78,7 @@ in {
           ++ lib.optional bad (failure "bad-row" badReasons)
           ++ lib.optionals (present && !ignored) (
             lib.optional (missing != []) (failure "needs-human" missing)
-            ++ lib.optional (secret && missingSecret != []) (failure "secret" missingSecret)
+            ++ lib.optional (secret && (!recorded || missingSecret != [])) (failure "secret" missingSecret)
           )
           ++ lib.optional added (failure "unrecorded" "regenerate the rows");
       };
@@ -88,20 +99,22 @@ in {
     extracted,
     name,
     results ? {},
-    rows ? {},
-    rowsPath ? null,
+    rows ? null,
     # The sidecar's repository path, as a string, for messages only. A path
     # derived from `committed` would move with its owner, and
     # checks.facet-owner-relocation requires the check not to.
     sidecar,
   }: let
     failures = lib.concatMap (surface: surface.failures) (builtins.attrValues results);
-    rowsCommand = "nix eval --json .#checks.${pkgs.stdenv.hostPlatform.system}.${name}-extracted.passthru.rows > extracted-rows.tmp && mv extracted-rows.tmp ${rowsPath} && nix fmt -- ${rowsPath}"; # bare-commands: ok — printed repository-root recipe
-    printRowsCommand = lib.optionalString (rowsPath != null) "echo ${lib.escapeShellArg ("  " + rowsCommand)} >&2";
+    printRowsCommand = lib.optionalString (rows != null) "echo ${lib.escapeShellArg ("  "
+      + mkRowsRegen {
+        inherit name;
+        inherit (rows) path;
+      })} >&2";
   in {
     "${name}-extracted" =
       pkgs.runCommand "${name}-extracted-drift" {
-        passthru = {inherit extracted;} // lib.optionalAttrs (rowsPath != null) {inherit rows;};
+        passthru = {inherit extracted;} // lib.optionalAttrs (rows != null) {rows = rows.value;};
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
