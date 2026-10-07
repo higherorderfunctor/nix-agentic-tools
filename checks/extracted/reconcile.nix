@@ -35,6 +35,21 @@
       input.rows.value = null;
       kinds = ["bad-row"];
     };
+    blank-controls = {
+      input = {
+        fields = ["controls"];
+        needs = ["controls"];
+        rows.value.controls = "";
+      };
+      kinds = ["needs-human"];
+    };
+    blank-excluded = {
+      input = {
+        facts = {token.type = "string";};
+        rows.token.excluded = "";
+      };
+      kinds = ["secret"];
+    };
     boolean-secret-name = {
       input = {
         facts = {token.type = "boolean";};
@@ -82,6 +97,17 @@
       };
       kinds = [];
       type = "number";
+    };
+    replace-not-allowed = {
+      input.rows.value = {
+        bogus = 1;
+        replace = ["bogus"];
+      };
+      kinds = ["bad-row"];
+    };
+    replace-not-supplied = {
+      input.rows.value.replace = ["description"];
+      kinds = ["bad-row"];
     };
     secret = {
       input = {
@@ -164,7 +190,7 @@
     && (!(case ? type) || result.entries.value.type == case.type);
   failures = builtins.attrNames (lib.filterAttrs (_: case: !(run case)) cases);
   new = reconcile {config = base // {rows = {};};};
-  file = withAdded ./rows.json new;
+  file = withAdded (builtins.fromJSON (builtins.readFile ./rows.json)) new;
   recorded = reconcile {
     config =
       base

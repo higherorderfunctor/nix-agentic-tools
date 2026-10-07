@@ -233,7 +233,7 @@ in {
   # `config.projectTier.honoredKeys` from `.kimchi/config.json`. Harness
   # settings.json: pi merges the project file only for keys it reads through
   # its merged settings, and Kimchi reads its own additions from the user file.
-  userScopeConfigKeys = userScopeKeys extracted.config.keys;
+  userScopeConfigKeys = userScopeKeys rules.results.config.entries;
   userScopeHarnessKeys = userScopeKeys extracted.harness.keys;
 
   # Variables Kimchi's entry point overwrites before anything reads them,

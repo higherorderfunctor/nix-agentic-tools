@@ -1985,13 +1985,13 @@ async function extractEnvironment(
         .filter(([, names]) => names.has(name))
         .map(([runtime]) => runtime)
         .sort(),
-      controls: null,
       ...(fixed
         ? {
             reason:
               "src/entry.ts assigns it on every launch before anything reads it",
           }
         : {}),
+      type: "string",
     };
   }
   return { variables: sortObject(variables) };

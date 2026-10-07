@@ -16,22 +16,27 @@
       secretNeeds = ["excluded"];
     };
     environment = {
-      # Environment variables always hold strings, including names with no
-      # prose yet. This supplies the classifier's string-only contract.
-      facts = lib.mapAttrs (_: fact: fact // {type = "string";}) extracted.environment.variables;
+      facts = extracted.environment.variables;
       fields = ["controls"];
       needs = ["controls"];
+      # Duplicate names or groups with unknown fields become bad-row data.
       rows =
-        rows.environment
-        // builtins.listToAttrs (lib.concatMap (group:
-          map (name: lib.nameValuePair name {ignored = group.reason;}) group.names)
-        (builtins.attrValues rows.environmentIgnored));
-      # The factory's environment delivery accepts these string variables;
-      # a secret name must have a hand row documenting what it delivers.
-      secretNeeds = ["controls"];
+        lib.zipAttrsWith (_: matches:
+          if builtins.length matches == 1
+          then builtins.head matches
+          else null)
+        ([rows.environment]
+          ++ map (group:
+            lib.genAttrs group.names (_:
+              if builtins.attrNames group == ["names" "reason"]
+              then {ignored = group.reason;}
+              else null))
+          (builtins.attrValues rows.environmentIgnored));
+      # needs = ["controls"] already gates secret environment names.
+      secretNeeds = [];
     };
   };
 in {
   inherit results;
-  file = withAdded annotations results;
+  file = withAdded rows results;
 }

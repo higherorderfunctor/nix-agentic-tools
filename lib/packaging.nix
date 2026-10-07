@@ -471,7 +471,7 @@ rec {
       # The eval reads the old rows. Redirecting to their destination would
       # truncate that input before Nix snapshots the dirty working tree.
       extracted_rows_tmp=$(${pkgs.coreutils}/bin/mktemp)
-      ${pkgs.nix}/bin/nix eval --json ".#${ciAttr {inherit attr pkgs;}}.passthru.extractedRules.file" > "$extracted_rows_tmp"
+      ${pkgs.nix}/bin/nix eval --json ".#checks.${pkgs.stdenv.hostPlatform.system}.${attr}-extracted.passthru.rows" > "$extracted_rows_tmp"
       ${pkgs.coreutils}/bin/mv "$extracted_rows_tmp" "${rows}"
       ${pkgs.nix}/bin/nix fmt -- "${rows}"
       echo "${attr}: wrote ${rows}"
@@ -505,7 +505,7 @@ rec {
       ${builtins.concatStringsSep "\n" (map (target: mkExtractRegen (target // {inherit pkgs;})) targets)}
     '')
     .overrideAttrs (prev: {
-      passthru = (prev.passthru or {}) // {sidecars = pkgs.lib.concatMap (target: [target.dest] ++ pkgs.lib.optional (target.rows or null != null) target.rows) targets;};
+      passthru = (prev.passthru or {}) // {sidecars = map (target: target.dest) targets;};
     });
 
   # Source repair precedes floor extraction, which precedes vendor hashing.

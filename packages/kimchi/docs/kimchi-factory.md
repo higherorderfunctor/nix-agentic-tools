@@ -1,8 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-06 — extraction emits facts; one reconcile table
-> merges rows for consumers, drift checks and regeneration, with automatic
-> acceptance of derivable non-secret names.
+> **Last verified:** 2026-10-06 — non-blank rows gate delivery; grouped ignore
+> collisions fail as data, and drift checks expose automatic acceptance rows for
+> regeneration.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -141,38 +141,40 @@ factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`,
 which fails evaluation if the pinned Kimchi no longer reads it or starts
 overwriting it.
 
-The extractor emits every resolved environment name, with `controls = null` when
-its prose requires a human. Environment rows supply that prose; grouped
+The extractor emits every resolved environment name with `type = "string"`.
+Environment rows alone supply non-blank `controls` prose; grouped
 `environmentIgnored` names expand into `ignored = "<reason>"` rows inside
 `rules.nix`, so they stay in the facts but disappear from the consumer view.
 Reconcile reports removed rows or users, unresolved required fields, missing
-secret delivery rows, invalid or fact-shadowing rows, and unrecorded derivable
-names. Rows fill only null or absent facts unless their `replace` list
-explicitly names a field. Ignored rows skip required-field checks. Only string
-values and string-to-string maps enter the shared runtime-values classifier.
+secret delivery rows, invalid or fact-shadowing rows, duplicate ignore names or
+controls/ignore collisions, and unrecorded derivable names. Rows fill only null
+or absent facts unless their `replace` list explicitly names a field. Ignored
+rows skip required-field checks. Only string values and string-to-string maps
+enter the shared runtime-values classifier.
 
 Regeneration first writes the sidecar, then evaluates
-`passthru.extractedRules.file` against it and adds `{}` rows for new derivable,
-non-secret names. Failures remain data: regeneration completes and the update PR
-carries the facts and rows, while `kimchi-extracted` fails on anything that
-still needs a human. A new typed config key becomes an option automatically; a
-new environment name needs a `controls` row. Pi's own names follow Kimchi's
-`piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). The
-extractor uses the TypeScript compiler's checker for declared keys and types and
-syntax tree queries for environment access sites, while config queries
-cross-check compiler types against top-level, nested, and array-element runtime
-validation guards. Added lines from pi patch files are synthesized as source
-files and bound in isolated TypeScript programs before alias resolution; using
-the main program's checker on those foreign nodes can crash inside the compiler.
-A declaration is never taken by bare name when a reference can pick it:
-config.ts's functions and interfaces resolve in config.ts's own scope (Kimchi
-1.1.37 has a second `loadConfig`), pi's `Settings` comes from
-`settings-manager.d.ts`'s exports, and the harness `definitions` are the
-interfaces `Settings` references, collected through the checker (pi also
-declares an all-required `CompactionSettings` in `compaction.d.ts`). The Kimchi
-harness schemas still looked up by name must match exactly one declaration among
-the modules reachable from `src/entry.ts`, so the dead
-`model-catalog/model-metadata.ts` is ignored, and a second live
+`checks.<system>.kimchi-extracted.passthru.rows` against it and adds `{}` rows
+for new derivable, non-secret names. The drift and unrecorded diagnostics print
+the same rows command; row failures appear only after the sidecar matches.
+Failures remain data: regeneration completes and the update PR carries the facts
+and rows, while `kimchi-extracted` fails on anything that still needs a human. A
+new typed config key becomes an option automatically; a new environment name
+needs a `controls` row. Pi's own names follow Kimchi's `piConfig.name`
+(`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). The extractor uses
+the TypeScript compiler's checker for declared keys and types and syntax tree
+queries for environment access sites, while config queries cross-check compiler
+types against top-level, nested, and array-element runtime validation guards.
+Added lines from pi patch files are synthesized as source files and bound in
+isolated TypeScript programs before alias resolution; using the main program's
+checker on those foreign nodes can crash inside the compiler. A declaration is
+never taken by bare name when a reference can pick it: config.ts's functions and
+interfaces resolve in config.ts's own scope (Kimchi 1.1.37 has a second
+`loadConfig`), pi's `Settings` comes from `settings-manager.d.ts`'s exports, and
+the harness `definitions` are the interfaces `Settings` references, collected
+through the checker (pi also declares an all-required `CompactionSettings` in
+`compaction.d.ts`). The Kimchi harness schemas still looked up by name must
+match exactly one declaration among the modules reachable from `src/entry.ts`,
+so the dead `model-catalog/model-metadata.ts` is ignored, and a second live
 `ModelCustomMetadataSchema` stops the extraction instead of narrowing the
 option. Same-named constants back a constant only where the checker finds no
 initializer, and only when they all agree. Three additional hash-pinned pi

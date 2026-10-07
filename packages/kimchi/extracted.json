@@ -320,1071 +320,1071 @@
       "__MINIMATCH_TESTING_PLATFORM__": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "APPDATA": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_ACCESS_KEY_ID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_ACCOUNT_ID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_BEARER_TOKEN_BEDROCK": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_BEDROCK_FORCE_CACHE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_BEDROCK_FORCE_HTTP1": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_BEDROCK_SKIP_AUTH": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_CONTAINER_AUTHORIZATION_TOKEN": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_CONTAINER_CREDENTIALS_FULL_URI": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_CREDENTIAL_EXPIRATION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_CREDENTIAL_SCOPE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_DEFAULT_REGION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_EC2_METADATA_DISABLED": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_EC2_METADATA_SERVICE_ENDPOINT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_LAMBDA_BENCHMARK_MODE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_LAMBDA_NODEJS_NO_GLOBAL_AWSLAMBDA": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_LOGIN_CACHE_DIRECTORY": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_NEW_RETRIES_2026": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_PROFILE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_REGION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_ROLE_ARN": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_ROLE_SESSION_NAME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_SDK_JS_NODE_VERSION_SUPPORT_WARNING_DISABLED": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_SECRET_ACCESS_KEY": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_SESSION_TOKEN": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AWS_WEB_IDENTITY_TOKEN_FILE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AZURE_OPENAI_API_VERSION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AZURE_OPENAI_BASE_URL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AZURE_OPENAI_DEPLOYMENT_NAME_MAP": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AZURE_OPENAI_ENDPOINT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "AZURE_OPENAI_RESOURCE_NAME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "CASTAI_API_KEY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "CI": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "CLOUD_RUN_JOB": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "CLOUDSDK_CONFIG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "COLORFGBG": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "COLORTERM": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "COLUMNS": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "comspec": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "ComSpec": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "DEBUG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "DEBUG_AUTH": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "DETECT_GCP_RETRIES": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "DIFF_THEME": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "DISPLAY": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "EDITOR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "FUNCTION_NAME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "FUNCTION_TARGET": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GAE_MODULE_NAME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GAE_SERVICE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GCE_METADATA_HOST": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GCE_METADATA_IP": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "gcloud_project": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GCLOUD_PROJECT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GHOSTTY_RESOURCES_DIR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "google_application_credentials": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GOOGLE_APPLICATION_CREDENTIALS": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GOOGLE_CLOUD_LOCATION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "google_cloud_project": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GOOGLE_CLOUD_PROJECT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GOOGLE_CLOUD_QUOTA_PROJECT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "GRACEFUL_FS_PLATFORM": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "HF_HOME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "HF_TOKEN": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "HF_TOKEN_PATH": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "HOME": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "HOMEBREW_PREFIX": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "http_proxy": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "HTTP_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "https_proxy": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "HTTPS_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "ITERM_SESSION_ID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "JEST_WORKER_ID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "JS_DEBUG_PATH": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "K_CONFIGURATION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "K_SERVICE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_ACTIVE_FERMENT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_AGENT_PERSONA": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_API_KEY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_AUTO_GIT_INIT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_BASE_URL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_CLIPBOARD_FORCE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_CODING_AGENT_DIR": {
         "consumerOverridable": false,
         "readBy": ["kimchi", "pi"],
-        "controls": null,
-        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
       },
       "KIMCHI_CODING_AGENT_SESSION_DIR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_CONTEXT_DATE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_DAP_BINARIES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_DEBUG_PROMPTS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_DEBUG_SESSION": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
         "consumerOverridable": false,
         "readBy": ["pi"],
-        "controls": null,
-        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
       },
       "KIMCHI_ENABLE_RESOURCES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_FERMENT_DISABLE_PARALLEL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_FERMENT_LOCK_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_FERMENTS_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_IDE_LOCKFILE_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_INFRA_BREAKER_THRESHOLD": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_LSP_BINARIES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_MCP_E2E_KEYRING_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_MEMORY_CAPTURE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_MEMORY_DRAIN_CONCURRENCY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_NO_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_NO_UPDATE_CHECK": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_OAUTH_TEMPLATE_DIR": {
         "consumerOverridable": false,
         "readBy": ["kimchi"],
-        "controls": null,
-        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
       },
       "KIMCHI_OLLAMA_HOST": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_PARENT_SESSION_ID": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_PERMISSIONS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_PROXY_HELPER": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_REDACTION_ENABLED": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_REGION": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_REMOTE_ENDPOINT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_REMOTE_RUN": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_REVIEW_LOG": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_REVIEW_THRESHOLD": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_SANDBOX": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_SESSION_REVIEW": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_STREAM_IDLE_TIMEOUT_MS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_SUBAGENT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_TAGS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_TELEMETRY_DEBUG": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_TELEMETRY_ENABLED": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_TEST_HARNESS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_TUI_E2E_CLIPBOARD_IMAGE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_WEB_APP_URL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "KIMCHI_WHEEL_SCROLL_LINES": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "KIMI_CODE_OAUTH_HOST": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "KIMI_OAUTH_HOST": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "KITTY_WINDOW_ID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "LINES": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "LLAMA_BASE_URL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "MCP_OAUTH_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "MEM0_TELEMETRY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "METADATA_SERVER_DETECTION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "MOSH_CONNECTION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "no_proxy": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "NO_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "NODE_DEBUG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "NODE_ENV": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "OLLAMA_HOST": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "OPENCODE_CONFIG": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "OSTYPE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PATH": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "PATHEXT": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_CACHE_RETENTION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_CLEAR_ON_SHRINK": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_CODING_AGENT_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "PI_EXPERIMENTAL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_HARDWARE_CURSOR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_HYPERLINKS": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_IMAGE_PROTOCOL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_INSTALLER_API_BASE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_MANAGED_INSTALL_ROOT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_MCP_ADAPTER_KEYRING_RECOVERY_HELPER": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "PI_MCP_ADAPTER_KEYRING_RECOVERY_NODE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "PI_OAUTH_CALLBACK_HOST": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_OFFLINE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_PACKAGE_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_SHARE_VIEWER_URL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_SKIP_VERSION_CHECK": {
         "consumerOverridable": false,
         "readBy": ["pi"],
-        "controls": null,
-        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
       },
       "PI_STARTUP_BENCHMARK": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_TELEMETRY": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_TIMING": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_TRUE_COLOR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_TUI_DEBUG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_TUI_DEBUG_REDRAW": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_TUI_ESC_TIMEOUT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_TUI_NO_CLEAR_SCROLLBACK": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PI_TUI_WRITE_LOG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "PNPM_HOME": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "ProgramFiles": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "ProgramFiles(x86)": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "SHELL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "SKILLS_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "SMITHY_NEW_RETRIES_2026": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "SSH_CLIENT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "SSH_CONNECTION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "SSH_TTY": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "STY": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "SystemRoot": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "TERM": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "TERM_PROGRAM": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "TERMINAL_EMULATOR": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "TERMUX_VERSION": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "TEST_GRACEFUL_FS_GLOBAL_PATCH": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "TMUX": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "UNDICI_NO_WASM_SIMD": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "USER": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "USERNAME": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "USERPROFILE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "VISUAL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "VITEST": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "WARP_SESSION_ID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "WARP_TERMINAL_SESSION_UUID": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "WAYLAND_DISPLAY": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "WEZTERM_PANE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "WINDIR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "WS_NO_BUFFER_UTIL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "WS_NO_UTF_8_VALIDATE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       },
       "WSL_DISTRO_NAME": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "WSL_INTEROP": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "WSLENV": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "WT_SESSION": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "XDG_CACHE_HOME": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "XDG_CONFIG_HOME": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "XDG_DATA_HOME": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": null
+        "type": "string"
       },
       "XDG_SESSION_TYPE": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": null
+        "type": "string"
       },
       "ZELLIJ": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": null
+        "type": "string"
       }
     }
   },

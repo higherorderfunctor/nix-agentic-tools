@@ -31,7 +31,9 @@
     mkDriftCheck {
       inherit committed extracted;
       name = "kimchi";
-      rules = (import ../extract/rules.nix {inherit pkgs;}).results;
+      results = package.passthru.extractedRules.results;
+      rows = package.passthru.extractedRules.file;
+      rowsPath = "packages/kimchi/extract/annotations.json";
       sidecar = "packages/kimchi/extracted.json";
     }
     // {
@@ -81,6 +83,15 @@
             'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"' $'process.env.KIMCHI_DISABLE_BUILTIN_PROVIDERS = "1"\nprocess.env.KIMCHI_NO_UPDATE_CHECK = "0"'
           mutant "$kimchi" entry-unread src/entry.ts \
             'const inheritedPiAgentDir = process.env.PI_CODING_AGENT_DIR' 'const inheritedPiAgentDir = undefined'
+          mutant "$kimchi" environment-app-name package.json \
+            '"name": "kimchi"' '"name": "tau"'
+          cp -r "$kimchi" "$TMPDIR/environment-patch-alias-source"
+          chmod -R u+w "$TMPDIR/environment-patch-alias-source"
+          printf '%s\n' \
+            '+++ b/dist/environment-probe.js' \
+            '+const environment = process.env' \
+            '+void environment.UNLISTED_PATCH_PROBE' \
+            > "$TMPDIR/environment-patch-alias-source/patches/environment-probe.patch"
           mutant "$kimchi" hand-shape-new-member src/config.ts \
             '		const enabled = parsed?.teleport?.compactHint?.enabled' $'\t\tif (typeof parsed?.teleport?.delayMs === "number") return false\n\t\tconst enabled = parsed?.teleport?.compactHint?.enabled'
           mutant "$kimchi" hand-shape-retyped src/config.ts \
@@ -206,6 +217,12 @@
             echo "FAIL: project-tier mutation did not change compiler-derived project keys" >&2
             exit 1
           fi
+          for fixture in environment-app-name:TAU_CODING_AGENT_SESSION_DIR environment-patch-alias:UNLISTED_PATCH_PROBE; do
+            IFS=: read -r label name <<< "$fixture"
+            ${runExtractor ''"$TMPDIR/$label-source"'' ''"$TMPDIR/$label.json"'' ''"$pi"''}
+            ${pkgs.jq}/bin/jq -e --arg name "$name" '.environment.variables | has($name)' "$TMPDIR/$label.json" > /dev/null
+            echo "$label (exit 0): discovered $name" >> "$TMPDIR/proof"
+          done
           # The overwrite flag is derived from entry.ts, so an assignment before
           # any read flips a variable to fixed and a read before it flips back.
           ${runExtractor ''"$TMPDIR/entry-overwrite-source"'' ''"$TMPDIR/entry-overwrite.json"'' ''"$pi"''}

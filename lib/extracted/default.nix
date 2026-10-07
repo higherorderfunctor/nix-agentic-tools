@@ -10,9 +10,8 @@ in {
       facts,
       fields ? [],
       needs ? [],
-      path ? (name: [name]),
       rows,
-      secretNeeds ? [],
+      secretNeeds,
       uses ? {},
     }: let
       names = lib.sort builtins.lessThan (lib.unique (builtins.attrNames facts ++ builtins.attrNames rows ++ builtins.attrNames uses));
@@ -35,7 +34,7 @@ in {
         (builtins.attrNames hand);
         ignored = row ? ignored && nonBlank row.ignored;
         entry = fact // lib.filterAttrs (field: _: !(builtins.elem field badFields)) hand;
-        missing = lib.filter (field: entry.${field} or null == null) needs;
+        missing = lib.filter (field: !nonBlank (entry.${field} or null)) needs;
         # An explicit type replacement must not hide a known string secret.
         # Use a filled type only when extraction could not derive one.
         typed =
@@ -46,30 +45,31 @@ in {
         secret =
           stringValued
           && classify {
-            path = path name;
+            path = [name];
             hints = fact;
           };
-        missingSecret = lib.filter (field: row.${field} or null == null) secretNeeds;
-        bad = !builtins.isAttrs raw || badFields != [] || !replaceValid || (row ? ignored && !ignored);
+        missingSecret = lib.filter (field: !nonBlank (row.${field} or null)) secretNeeds;
+        badReasons =
+          badFields
+          ++ lib.optional (!builtins.isAttrs raw) "row must be an object"
+          ++ lib.optional (!replaceValid) "replace must list supplied allowed fields"
+          ++ lib.optional (row ? ignored && !ignored) "ignored must give a non-blank reason";
+        bad = badReasons != [];
         failure = kind: details: {
           inherit kind name surface;
           inherit details;
         };
-        derivable = present && !ignored && !bad && missing == [] && !secret;
+        added = present && !ignored && !bad && missing == [] && !secret && !recorded;
       in {
-        inherit entry ignored;
-        added = derivable && !recorded;
+        inherit added entry ignored;
         failures =
           lib.optional (!present) (failure "removed" (uses.${name} or "delete the stale row"))
-          ++ lib.optional bad (failure "bad-row" (badFields
-            ++ lib.optional (!builtins.isAttrs raw) "row must be an object"
-            ++ lib.optional (!replaceValid) "replace must list supplied allowed fields"
-            ++ lib.optional (row ? ignored && !ignored) "ignored must give a non-blank reason"))
+          ++ lib.optional bad (failure "bad-row" badReasons)
           ++ lib.optionals (present && !ignored) (
             lib.optional (missing != []) (failure "needs-human" missing)
-            ++ lib.optional (secret && (!recorded || missingSecret != [])) (failure "secret" missingSecret)
-            ++ lib.optional (derivable && !recorded) (failure "unrecorded" "run regeneration")
-          );
+            ++ lib.optional (secret && missingSecret != []) (failure "secret" missingSecret)
+          )
+          ++ lib.optional added (failure "unrecorded" "regenerate the rows");
       };
       results = lib.genAttrs names perName;
     in {
@@ -80,43 +80,33 @@ in {
     surfaces;
 
   # Preserve hand rows and grouped ignores, adding only accepted new names.
-  withAdded = file: results:
-    lib.foldl' (rows: surface:
-      rows
-      // {
-        ${surface} = (rows.${surface} or {}) // lib.genAttrs results.${surface}.added (_: {});
-      }) (builtins.fromJSON (builtins.readFile file)) (builtins.attrNames results);
+  withAdded = rows: results:
+    rows // lib.mapAttrs (surface: result: (rows.${surface} or {}) // lib.genAttrs result.added (_: {})) results;
 
   mkDriftCheck = {
     committed,
     extracted,
     name,
-    rules ? null,
+    results ? {},
+    rows ? {},
+    rowsPath ? null,
     # The sidecar's repository path, as a string, for messages only. A path
     # derived from `committed` would move with its owner, and
     # checks.facet-owner-relocation requires the check not to.
     sidecar,
   }: let
-    failures =
-      if rules == null
-      then []
-      else lib.concatMap (surface: surface.failures) (builtins.attrValues rules);
+    failures = lib.concatMap (surface: surface.failures) (builtins.attrValues results);
+    rowsCommand = "nix eval --json .#checks.${pkgs.stdenv.hostPlatform.system}.${name}-extracted.passthru.rows > extracted-rows.tmp && mv extracted-rows.tmp ${rowsPath} && nix fmt -- ${rowsPath}"; # bare-commands: ok — printed repository-root recipe
+    printRowsCommand = lib.optionalString (rowsPath != null) "echo ${lib.escapeShellArg ("  " + rowsCommand)} >&2";
   in {
     "${name}-extracted" =
       pkgs.runCommand "${name}-extracted-drift" {
-        passthru = {inherit extracted;};
+        passthru = {inherit extracted;} // lib.optionalAttrs (rowsPath != null) {inherit rows;};
       } ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         jq="${pkgs.jq}/bin/jq"
-        ${lib.optionalString (failures != []) ''
-          echo 'FAIL: ${name} extraction rows need attention:' >&2
-          "$jq" . ${pkgs.writeText "${name}-extracted-failures.json" (builtins.toJSON failures)} >&2
-          exit 1
-        ''}
-        if "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} '$a == $b' > /dev/null; then
-          echo "ok — ${name} sidecar matches the fresh extraction" > "$out"
-        else
+        if ! "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} '$a == $b' > /dev/null; then
           echo "FAIL: ${name} sidecar (${sidecar}) is out of sync with its extraction sources." >&2
           "$jq" -S . ${committed} > committed.json
           "$jq" -S . ${extracted} > extracted.json
@@ -125,8 +115,16 @@ in {
           echo '  extracted="$(nix build --no-link --print-out-paths .#checks.${pkgs.stdenv.hostPlatform.system}.${name}-extracted.passthru.extracted)"' >&2
           echo '  cp "$extracted" ${sidecar}' >&2
           echo '  nix fmt -- ${sidecar}' >&2
+          ${printRowsCommand}
           exit 1
         fi
+        ${lib.optionalString (failures != []) ''
+          echo 'FAIL: ${name} extraction rows need attention:' >&2
+          "$jq" . ${pkgs.writeText "${name}-extracted-failures.json" (builtins.toJSON failures)} >&2
+          ${lib.optionalString (lib.any (failure: failure.kind == "unrecorded") failures) printRowsCommand}
+          exit 1
+        ''}
+        echo "ok — ${name} sidecar matches the fresh extraction" > "$out"
       '';
   };
 }

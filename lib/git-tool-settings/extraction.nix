@@ -80,10 +80,6 @@ in {
     inherit (extracted) nativeBuildInputs;
   in
     {
-      # Drift: the committed sidecar equals a fresh extraction. Staleness
-      # only; the update pipeline commits whatever the extractor says, so
-      # correctness rests on the guards and the mutants.
-
       # The extractor fails closed: every mutant trips the guards it names or
       # moves the output exactly as it says.
       "${name}-extractor-guards" =
@@ -117,6 +113,9 @@ in {
         ${jq} -r '.settings | keys | "ok — all \(length) extracted keys are strings in ${installed}"' ${committed} >"$out"
       '';
     }
+    # Drift: the committed sidecar equals a fresh extraction. Staleness
+    # only; the update pipeline commits whatever the extractor says, so
+    # correctness rests on the guards and the mutants.
     // mkDriftCheck {
       inherit committed extracted name sidecar;
     };
