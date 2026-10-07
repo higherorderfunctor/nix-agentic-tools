@@ -191,6 +191,7 @@ killpg
 kimi
 kiro
 kirocli
+kirocrew
 kirodotdev
 ldflags
 libc

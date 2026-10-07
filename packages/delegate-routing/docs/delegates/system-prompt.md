@@ -56,7 +56,7 @@ channel table.
   not reach main (V).
 - **Kiro text is never system-role** unless the account's
   `system_field_injection` flag is on. The client half is V (`mx-sysfield`); the
-  account's value is U.
+  flag was off for the one probed account (V LIVE); other accounts are U.
 - **"Keep the vendor base" cannot be promised.** Claude and Kiro agent prompts
   replace it. Kimchi always rebuilds its own base over Pi's, and silently drops
   `--system-prompt` and `SYSTEM.md` (V; `claude:sp-p10-system-flag`,
@@ -233,8 +233,9 @@ and `shell` gets the default `ask` (V; `mx-trust`). Both KAS server constructors
 
 The account flag `system_field_injection` moves steering and base into a
 top-level `systemPrompt` on main requests; invoke children stay user-role (V
-client; `mx-sysfield`). The account's value and the server-side prompt are U;
-see [Open UNKNOWNs](evidence.md#open-unknowns).
+client; `mx-sysfield`). The flag was off for the one probed account (V LIVE); a
+server-side prompt exists (model-reported, not wire). Other accounts' values and
+that prompt's text are U; see [Open UNKNOWNs](evidence.md#open-unknowns).
 
 ### Kimchi
 
