@@ -6,8 +6,11 @@
     python3 run.py --only='kimchi/claude:sp-*,codex/codex:R1.*'
     python3 run.py --only=claude:dmu_wf_effort # a bare case id matches every harness
 
-Prints one MATCH, MISMATCH or SKIP line per case. The exit code is the
-MISMATCH count (capped at 125). LIVE cases are skipped unless `--live`.
+Prints one MATCH, MISMATCH or SKIP line per case. A case is MATCH only when its
+excerpts match and every command exited 0 without timing out; a command that is
+meant to fail must capture its status itself (`cmd || echo rc=$?`). The exit
+code is the MISMATCH count (capped at 125). LIVE cases are skipped unless
+`--live`.
 
 Case-table format (what this runner reads; register a new case by adding a row):
 
@@ -284,9 +287,12 @@ def main(argv=None):
         started = time.monotonic()
         text, codes, log = run(case, args.root, out, args.timeout)
         missing, unexpected = check(case, text)
-        verdict = "MISMATCH" if missing or unexpected else "MATCH"
+        failed = [f"{command!r} {code if isinstance(code, str) else f'exit {code}'}"
+                  for command, code in zip(case.commands, codes) if code != 0]
+        verdict = "MISMATCH" if missing or unexpected or failed else "MATCH"
         tally[verdict] += 1
-        detail = "".join([f"  missing {missing}" if missing else "", f"  unexpected {unexpected}" if unexpected else ""])
+        detail = "".join([f"  missing {missing}" if missing else "", f"  unexpected {unexpected}" if unexpected else "",
+                          f"  failed {failed}" if failed else ""])
         print(f"{verdict:<9} {case.qid}  rc={codes} {time.monotonic() - started:.1f}s{detail}  log={log}", flush=True)
     print(f"\n{tally['MATCH']} match, {tally['MISMATCH']} mismatch, {tally['SKIP']} skip; out: {out}")
     return min(tally["MISMATCH"], MAX_EXIT)

@@ -24,6 +24,9 @@ README = """# Fake harness
 | fake:prose    | see below                                      | `x`                                       | OFFLINE |
 | fake:input    | `cat <work>/x`                                 | `x`                                       | OFFLINE |
 | fake:noexcerpt| `echo hi`                                      | prints hi                                 | OFFLINE |
+| fake:rc1      | `echo RC_OUT; false`                           | `RC_OUT`                                  | OFFLINE |
+| fake:rccap    | `false \\|\\| echo rc=$?`                      | `rc=1`                                    | OFFLINE |
+| fake:slow     | `echo SLOW_OUT; sleep 5`                       | `SLOW_OUT`                                | OFFLINE |
 | fake:a / fake:b | `echo SHARED`                                | `SHARED`                                  | OFFLINE |
 
 ### Section defaults
@@ -79,6 +82,16 @@ class Runner(unittest.TestCase):
         self.assertIn("--only matched nothing: nope", err.getvalue())
         self.assertNotIn("Traceback", err.getvalue())
 
+    def test_nonzero_exit_and_timeout_are_not_match(self):
+        code, out = self.main("--only=fake:rc1")
+        self.assertEqual((code, out.split()[0]), (1, "MISMATCH"))
+        self.assertIn("exit 1", out)
+        code, out = self.main("--only=fake:slow", "--timeout=1")
+        self.assertEqual((code, out.split()[0]), (1, "MISMATCH"))
+        self.assertIn("timeout 1s", out)
+        code, out = self.main("--only=fake:rccap")
+        self.assertEqual((code, out.split()[0]), (0, "MATCH"))
+
     def test_run_counts_mismatches(self):
         code, out = self.main()
         verdicts = {line.split()[1]: line.split()[0] for line in out.splitlines() if line.startswith(("MATCH", "MISMATCH", "SKIP"))}
@@ -89,7 +102,9 @@ class Runner(unittest.TestCase):
         self.assertEqual(verdicts["fake/fake:pipe"], "MATCH")
         self.assertEqual(verdicts["fake/fake:live"], "SKIP")
         self.assertEqual(verdicts["fake/dflt-1"], "MATCH")
-        self.assertEqual(code, 2)
+        self.assertEqual(verdicts["fake/fake:rc1"], "MISMATCH")
+        self.assertEqual(verdicts["fake/fake:rccap"], "MATCH")
+        self.assertEqual(code, 3)
         self.assertIn("missing ['two']", out)
         code, out = self.main("--only=fake:live", "--live")
         self.assertEqual((code, out.split()[0]), (0, "MATCH"))

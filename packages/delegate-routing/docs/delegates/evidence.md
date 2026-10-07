@@ -132,11 +132,12 @@ every case id used in the reference tables to the exact command, what the case
 shows, and the expected output excerpt. `probes/delegates/run.py` runs cases
 straight from those tables: `--list` shows every case and whether it runs,
 `--only=<harness>/<id>` (or a bare id, or a `prefix*`) selects (an entry that
-matches nothing exits 2); each case prints MATCH, MISMATCH or SKIP; the exit
-code is the MISMATCH count. LIVE cases run only with `--live`. The case-table
-format is in the `run.py` docstring; older rows with no backtick excerpt or a
-`<placeholder>` command show as SKIP. Settling a U marked "Operator? yes" needs
-an account or privileged setup.
+matches nothing exits 2); each case prints MATCH, MISMATCH or SKIP, and a
+nonzero command exit or a timeout is a MISMATCH; the exit code is the MISMATCH
+count. LIVE cases run only with `--live`. The case-table format is in the
+`run.py` docstring; older rows with no backtick excerpt or a `<placeholder>`
+command show as SKIP. Settling a U marked "Operator? yes" needs an account or
+privileged setup.
 
 | Harness | Case index                                                                     | Model backend               | Extra setup                                                                      |
 | ------- | ------------------------------------------------------------------------------ | --------------------------- | -------------------------------------------------------------------------------- |
