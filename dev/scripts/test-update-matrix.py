@@ -95,12 +95,25 @@ class MatrixTest(unittest.TestCase):
             self.assertEqual(matrix.verify_failures(logs, "nixpkgs", "UPDATED"), ["<failed attributes not reported>"])
 
     def test_verdict_names_target_attributes_and_pr_only_on_failure(self):
-        self.assertIsNone(matrix.verification_verdict({"name": "nixpkgs", "status": "UPDATED"}, "https://example.test/pull/7"))
-        lines = matrix.verification_verdict({"name": "nixpkgs", "status": "UPDATED", "verifyFailed": ["a", "b"]}, "https://example.test/pull/7")
+        self.assertIsNone(matrix.verification_verdict({"name": "nixpkgs", "status": "UPDATED"}, "https://example.test/pull/7", ""))
+        level, lines = matrix.verification_verdict({"name": "nixpkgs", "status": "UPDATED", "verifyFailed": ["a", "b"]}, "https://example.test/pull/7", "")
+        self.assertEqual(level, "error")
         self.assertIn("nixpkgs", lines[0])
         self.assertIn("a, b", lines[1])
         self.assertIn("https://example.test/pull/7", lines[2])
-        self.assertIn("none", matrix.verification_verdict({"name": "nixpkgs", "verifyFailed": ["a"]}, "")[2])
+        self.assertIn("none", matrix.verification_verdict({"name": "nixpkgs", "verifyFailed": ["a"]}, "", "")[1][2])
+
+    def test_verdict_skips_a_preserved_lane_even_after_publication(self):
+        # A human took the branch over, possibly after this run published it.
+        # Preservation wins: the lane is skipped with a notice, never red.
+        prepared = {"name": "nixpkgs", "status": "UPDATED", "verifyFailed": ["a"]}
+        for published in ("", "https://example.test/pull/7"):
+            level, lines = matrix.verification_verdict(prepared, published, "2 non-bot commit(s) are on the remote branch (PR #7).")
+            self.assertEqual(level, "notice")
+            self.assertIn("update/nixpkgs", lines[0])
+            self.assertIn("non-bot commit(s)", lines[1])
+            self.assertIn("a", lines[2])
+        self.assertIsNone(matrix.verification_verdict({"name": "nixpkgs", "status": "UPDATED"}, "", "reason"))
 
     def test_verdict_runs_after_publication_and_receipt_without_cancelling_siblings(self):
         workflow = WORKFLOW.read_text()
@@ -192,13 +205,7 @@ if sys.argv[1:3] == ['pr', 'list']:
 if sys.argv[1:3] == ['pr', 'view']:
     number = sys.argv[3]
     closed = closed_path(number)
-    first_view = Path(os.environ['RUNNER_TEMP'], 'first-pr-view')
-    if os.environ.get('PR_VIEW_FAIL_ALWAYS') or (os.environ.get('PR_VIEW_FAIL_ONCE') and not first_view.exists()):
-        first_view.touch()
-        sys.exit(1)
-    previously_viewed = first_view.exists()
-    first_view.touch()
-    Path(os.environ['RUNNER_TEMP'], 'viewed').touch()
+    if os.environ.get('PR_VIEW_FAIL'): sys.exit(1)
     views_key = 'POST_CLOSE_VIEWS' if closed.exists() and 'POST_CLOSE_VIEWS' in os.environ else 'PR_VIEWS'
     if views_key in os.environ:
         view = json.loads(os.environ[views_key])[number]
@@ -210,28 +217,24 @@ if sys.argv[1:3] == ['pr', 'view']:
         subprocess.check_call(['git', '--git-dir', os.environ['REMOTE'], 'update-ref', 'refs/heads/update/demo', view['headRefOid']])
     if os.environ.get('PR_VIEW_REMOTE_HEAD'):
         view['headRefOid'] = subprocess.check_output(['git', '--git-dir', os.environ['REMOTE'], 'rev-parse', 'refs/heads/update/demo'], text=True).strip()
-    if os.environ.get('PR_VIEW_CHANGED_AFTER_FIRST') and previously_viewed:
-        view['headRefOid'] = os.environ['PR_VIEW_CHANGED_AFTER_FIRST']
     disabled = Path(os.environ['RUNNER_TEMP'], 'auto-merge-disabled').exists()
+    enabled = os.environ.get('AUTO_MERGE_ENABLED') or (os.environ.get('AUTO_MERGE_ENABLED_AFTER_ARM') and Path(os.environ['RUNNER_TEMP'], 'arm-attempted').exists())
     enabled_by = os.environ.get('AUTO_MERGE_ENABLED_BY', 'app/nix-agentic-tools-bot')
     if os.environ.get('PR_AUTO_MERGE_RAW'):
         view['autoMergeRequest'] = json.loads(os.environ['PR_AUTO_MERGE_RAW'])
     else:
-        view['autoMergeRequest'] = {'enabledAt': 'fixture', 'enabledBy': {'login': enabled_by}} if os.environ.get('AUTO_MERGE_ENABLED') and not disabled else None
+        view['autoMergeRequest'] = {'enabledAt': 'fixture', 'enabledBy': {'login': enabled_by}} if enabled and not disabled else None
     print(json.dumps(view))
 if sys.argv[1:3] == ['pr', 'close']: closed_path(sys.argv[3]).touch()
 if sys.argv[1] == 'api':
     if any(arg.endswith('/activity') for arg in sys.argv):
         ref = next(arg.removeprefix('ref=') for arg in sys.argv if arg.startswith('ref='))
-        first_read = Path(os.environ['RUNNER_TEMP'], 'activity-first-read')
-        if os.environ.get('ACTIVITY_EMPTY_ALWAYS') or (os.environ.get('ACTIVITY_EMPTY_ONCE') and not first_read.exists()):
-            first_read.touch()
+        if os.environ.get('ACTIVITY_ERROR'): sys.exit(1)
+        if os.environ.get('ACTIVITY_EMPTY'):
             print('[]')
             sys.exit(0)
         head = subprocess.check_output(['git', 'rev-parse', 'refs/remotes/origin/' + ref.removeprefix('refs/heads/')], text=True).strip()
         actor = os.environ.get('PUSH_ACTOR', 'nix-agentic-tools-bot[bot]')
-        if Path(os.environ['RUNNER_TEMP'], 'viewed').exists():
-            actor = os.environ.get('ARM_PUSH_ACTOR', actor)
         print(json.dumps([{'activity_type': 'push', 'actor': {'login': actor}, 'ref': ref, 'after': head}]))
     elif 'graphql' in sys.argv:
         number = next(arg.removeprefix('number=') for arg in sys.argv if arg.startswith('number='))
@@ -246,12 +249,15 @@ if sys.argv[1] == 'api':
             if closed.exists() and 'POST_CLOSE_THREADS' in os.environ:
                 threads = json.loads(os.environ['POST_CLOSE_THREADS'])
             print(json.dumps({'data': {'repository': {'pullRequest': {'reviewThreads': threads}}}}))
+    elif any(arg.endswith('/comments') and '/issues/' in arg for arg in sys.argv): print(os.environ.get('PR_COMMENTS', '[]'))
     else: print(os.environ['COMMIT_PAGES'])
 if sys.argv[1:3] == ['pr', 'merge']:
     if '--disable-auto' in sys.argv:
         if os.environ.get('FAIL_DISABLE'): sys.exit(1)
         Path(os.environ['RUNNER_TEMP'], 'auto-merge-disabled').touch()
-    elif os.environ.get('FAIL_ARM'): sys.exit(1)
+    else:
+        Path(os.environ['RUNNER_TEMP'], 'arm-attempted').touch()
+        if os.environ.get('FAIL_ARM'): sys.exit(1)
 if sys.argv[1:3] == ['pr', 'close'] and os.environ.get('RACE_TIP'):
     subprocess.check_call(['git', '--git-dir', os.environ['REMOTE'], 'update-ref', 'refs/heads/update/demo', os.environ['RACE_TIP']])
 if sys.argv[1:3] == ['pr', 'create']:
@@ -283,7 +289,52 @@ if sys.argv[1:3] == ['pr', 'reopen']:
 
     def publish(self, **env):
         (self.root / "auto-merge-disabled").unlink(missing_ok=True)
+        (self.root / "arm-attempted").unlink(missing_ok=True)
         return subprocess.run(["bash", str(SCRIPTS / "update-publish.sh")], cwd=self.repo, env=dict(self.env, **env), text=True, capture_output=True)
+
+    def assert_skipped(self, result, reason):
+        """The lane is a Renovate-style skip: green, a notice, touched once, reason recorded."""
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("::notice title=Update lane skipped::Leaving update/demo untouched:", result.stdout)
+        self.assertNotIn("::error", result.stdout)
+        self.assertIn(reason, (self.root / "skip").read_text())
+        self.assertEqual((self.root / "touched-branches").read_text(), "update/demo\n")
+
+    def comments(self):
+        """Bodies of every comment this publish posted."""
+        calls = [json.loads(line) for line in (self.root / "calls").read_text().splitlines()]
+        return [call[call.index("--body") + 1] for call in calls if call[:2] == ["pr", "comment"]]
+
+    def assert_left(self, result, reason, comment=True):
+        """Not the bot's own last push: skipped, nothing mutated, and one marked
+        comment only for a human edit (<comment>)."""
+        self.assert_skipped(result, reason)
+        calls = (self.root / "calls").read_text()
+        for mutation in ('["pr", "edit"', '["pr", "merge"', '["pr", "create"'):
+            self.assertNotIn(mutation, calls)
+        self.assertNotIn("Pushing update/demo", result.stdout)
+        bodies = self.comments()
+        self.assertEqual(len(bodies), 1 if comment else 0, bodies)
+        if comment:
+            self.assertIn("<!-- update-bot-left: update/demo ", bodies[0])
+            self.assertIn("changed since this bot last updated it", bodies[0])
+            self.assertIn("until the branch is deleted", bodies[0])
+
+    def matrix_command(self, command):
+        return subprocess.run(["python3", str(SCRIPTS / "update-matrix.py"), command], cwd=self.repo, env=self.env, text=True, capture_output=True)
+
+    def push_human_commit(self):
+        """Put a human fix on the remote branch on top of the bot's commit."""
+        self.git("checkout", "update/demo")
+        bot_tip = self.git("rev-parse", "HEAD")
+        self.git("config", "user.email", "human@example.test")
+        self.commit("human fix")
+        human_tip = self.git("rev-parse", "HEAD")
+        self.git("push", "origin", "update/demo")
+        self.git("reset", "--hard", bot_tip)
+        self.git("checkout", "main")
+        self.git("config", "user.email", "bot@example.test")
+        return human_tip
 
     def test_completed_branch_is_published_and_pr_created(self):
         result = self.publish()
@@ -310,49 +361,44 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertIn("attr.one, attr.two", verdict.stdout)
         self.assertIn("https://github.com/example/example/pull/1", verdict.stdout)
 
-    def test_new_pr_waits_for_matching_app_push_activity_before_arming(self):
-        result = self.publish(ACTIVITY_EMPTY_ONCE="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
+    def test_new_pr_arms_on_its_own_push_without_reading_push_activity(self):
+        # The bot's own push this run is its last push: origin at that SHA is
+        # enough, so there is no activity read and no re-read loop.
+        result = self.publish()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         calls = (self.root / "calls").read_text()
-        self.assertEqual(calls.count('"ref=refs/heads/update/demo"'), 2)
-        self.assertIn('["pr", "merge"', calls)
+        self.assertNotIn("/activity", calls)
+        self.assertEqual(calls.count('["pr", "view"'), 1)
+        self.assertIn('"--auto"', calls)
 
-    def test_new_pr_does_not_arm_when_app_push_activity_stays_unavailable(self):
-        result = self.publish(ACTIVITY_EMPTY_ALWAYS="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("App push activity unavailable after 5 reads", result.stdout)
-        calls = (self.root / "calls").read_text()
-        self.assertEqual(calls.count('"ref=refs/heads/update/demo"'), 5)
-        self.assertNotIn('["pr", "merge"', calls)
+    def test_pr_view_lag_is_skipped_and_failure_is_red_without_retry(self):
+        # GitHub's PR view disagreeing with origin is lag the next sweep
+        # self-heals: a quiet skip, no comment. A failed PR view is an API
+        # error: red. Neither is retried.
+        (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
+        for env, lag in (({"PR_VIEW": json.dumps(dict(self.own_pr(), headRefOid=self.base))}, True), ({"PR_VIEW_FAIL": "1"}, False)):
+            with self.subTest(lag=lag):
+                (self.root / "calls").unlink(missing_ok=True)
+                self.git("--git-dir", str(self.remote), "update-ref", "-d", "refs/heads/update/demo")
+                self.git("update-ref", "-d", "refs/remotes/origin/update/demo")
+                result = self.publish(**env)
+                calls = (self.root / "calls").read_text()
+                self.assertEqual(calls.count('["pr", "view"'), 1)
+                self.assertNotIn('["pr", "merge"', calls)
+                self.assertEqual(len(self.comments()), 0)
+                if lag:
+                    self.assert_skipped(result, "another repository, base, head branch, author or head")
+                    verdict = self.matrix_command("verdict")
+                    self.assertEqual(verdict.returncode, 0, verdict.stdout + verdict.stderr)
+                    self.assertIn("::notice title=Update lane skipped::", verdict.stdout)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("::error::Could not read GitHub's view of", result.stdout)
+                    self.assertEqual((self.root / "skip").read_text(), "")
 
-    def test_new_pr_waits_for_first_pr_view(self):
-        result = self.publish(PR_VIEW_FAIL_ONCE="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        calls = (self.root / "calls").read_text()
-        self.assertEqual(calls.count('["pr", "view"'), 2)
-        self.assertIn('["pr", "merge"', calls)
-
-    def test_new_pr_does_not_arm_when_pr_view_stays_unavailable(self):
-        result = self.publish(PR_VIEW_FAIL_ALWAYS="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("PR view unavailable after 5 reads", result.stdout)
-        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
-
-    def test_new_pr_rejects_changed_head_after_wait(self):
-        result = self.publish(ACTIVITY_EMPTY_ONCE="1", PR_VIEW_CHANGED_AFTER_FIRST=self.base)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("PR head changed", result.stdout)
-        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
-
-    def test_new_pr_rejects_human_push_after_wait(self):
-        result = self.publish(ACTIVITY_EMPTY_ONCE="1", ARM_PUSH_ACTOR="human")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("App push activity does not verify", result.stdout)
-        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
-
-    def test_human_auto_merge_disable_during_activity_wait_is_retained(self):
+    def test_human_auto_merge_disable_before_arming_is_retained(self):
         disabled = [{"__typename": "AutoMergeDisabledEvent", "actor": {"login": "human"}, "disabler": {"login": "human"}, "reason": None, "reasonCode": None}]
-        result = self.publish(ACTIVITY_EMPTY_ONCE="1", AUTO_MERGE_EVENTS=json.dumps(disabled))
+        result = self.publish(AUTO_MERGE_EVENTS=json.dumps(disabled))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Retaining explicit human auto-merge disable", result.stdout)
         self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
@@ -368,11 +414,8 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.git("checkout", "main")
         self.git("config", "user.email", "bot@example.test")
         result = self.publish(PR_LIST=json.dumps([self.own_pr()]), PUSH_ACTOR="human", AUTO_MERGE_ENABLED="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), human_tip)
-        self.assertIn("not a verified App push", result.stdout)
-        self.assertEqual((self.root / "touched-branches").read_text(), "update/demo\n")
-        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
+        self.assert_left(result, f"non-bot commits are on {human_tip}")
         self.assertFalse((self.root / "auto-merge-disabled").exists())
 
     def test_pr_creation_failure_is_not_a_successful_publication(self):
@@ -387,16 +430,77 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertNotIn('["pr",', (self.root / "calls").read_text())
         self.assertEqual(self.git("ls-remote", "origin", "refs/heads/update/demo"), "")
 
-    def test_publication_rejects_a_remote_change_after_checkout(self):
-        self.git("checkout", "-b", "human", "update/demo")
+    def land_push_after_checkout(self, parent, email="human@example.test"):
+        """Move origin's update/demo onto a commit by <email> the checkout never fetched."""
+        self.git("checkout", "-b", "other", parent)
+        self.git("config", "user.email", email)
         self.commit("concurrent work")
-        human_tip = self.git("rev-parse", "HEAD")
-        self.git("push", "origin", "human")
+        tip = self.git("rev-parse", "HEAD")
         self.git("checkout", "main")
-        self.git("--git-dir", str(self.remote), "update-ref", "refs/heads/update/demo", human_tip)
+        self.git("config", "user.email", "bot@example.test")
+        self.git("push", "origin", f"{tip}:refs/heads/update/demo")
+        self.git("branch", "-D", "other")
+        return tip
+
+    def test_origin_moved_after_checkout_is_left_whoever_moved_it(self):
+        # Origin's live head is read with git before anything is touched. It
+        # moved off the checkout's head -- created where none was, or advanced
+        # by a human or by other bot commits -- so the bot leaves it. Only a
+        # human's commits on an open PR earn a comment.
+        for existing, email in ((False, "human@example.test"), (True, "human@example.test"), (True, "bot@example.test")):
+            with self.subTest(existing=existing, email=email):
+                for ref in ("refs/heads/update/demo", "refs/pull/1/head"):
+                    subprocess.run(["git", "--git-dir", str(self.remote), "update-ref", "-d", ref], capture_output=True)
+                (self.root / "calls").unlink(missing_ok=True)
+                bot_tip = self.git("rev-parse", "update/demo")
+                if existing:
+                    self.git("push", "origin", "update/demo")
+                tip = self.land_push_after_checkout(bot_tip, email)
+                self.git("update-ref", *(["refs/remotes/origin/update/demo", bot_tip] if existing else ["-d", "refs/remotes/origin/update/demo"]))
+                result = self.publish(PR_LIST=json.dumps([self.own_pr()] if existing else []))
+                expected = bot_tip if existing else "(none)"
+                self.assert_left(result, f"origin's head is {tip}, not the bot's last push {expected}.", comment=existing and email.startswith("human"))
+                self.assertTrue(self.git("ls-remote", "origin", "refs/heads/update/demo").startswith(tip))
+
+    def test_rejected_push_after_origin_moved_is_left(self):
+        # The lease is the head the gate accepted. A push landing between the
+        # gate and the bot's push rejects it, and origin having moved decides.
+        self.git("push", "origin", "update/demo")
+        bot_tip = self.git("rev-parse", "update/demo")
+        new_base, _ = self.prepare_behind_base_refresh()
+        tip = self.land_push_after_checkout(bot_tip)
+        self.git("--git-dir", str(self.remote), "update-ref", "refs/heads/update/demo", bot_tip)
+        self.git("update-ref", "refs/remotes/origin/update/demo", bot_tip)
+        hook = self.remote / "hooks" / "pre-receive"
+        hook.write_text(f"#!/usr/bin/env bash\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nenv -u GIT_QUARANTINE_PATH git update-ref refs/heads/update/demo {tip}\nexit 1\n")
+        hook.chmod(0o755)
+        result = self.publish(PR_LIST=json.dumps([self.own_pr()]), UPDATE_BASE_SHA=new_base)
+        self.assertIn("Pushing update/demo", result.stdout)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"origin's head is {tip}", (self.root / "skip").read_text())
+        calls = (self.root / "calls").read_text()
+        self.assertNotIn('["pr", "edit"', calls)
+        self.assertNotIn('["pr", "merge"', calls)
+        self.assertEqual(len(self.comments()), 1)
+        self.assertTrue(self.git("ls-remote", "origin", "refs/heads/update/demo").startswith(tip))
+
+    def test_unreadable_origin_is_red_and_never_left(self):
+        self.git("remote", "set-url", "origin", str(self.root / "missing.git"))
         result = self.publish()
         self.assertNotEqual(result.returncode, 0)
-        self.assertTrue(self.git("ls-remote", "origin", "refs/heads/update/demo").startswith(human_tip))
+        self.assertIn("::error::Could not read origin's update/demo.", result.stdout)
+        self.assertEqual((self.root / "skip").read_text(), "")
+        self.assertNotIn('["pr", "comment"', (self.root / "calls").read_text())
+
+    def test_rejected_push_with_unmoved_origin_is_red(self):
+        hook = self.remote / "hooks" / "pre-receive"
+        hook.write_text("#!/usr/bin/env bash\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\nexit 1\n")
+        hook.chmod(0o755)
+        result = self.publish()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("::error::Could not push update/demo.", result.stdout)
+        self.assertEqual((self.root / "skip").read_text(), "")
+        self.assertEqual(self.git("ls-remote", "origin", "refs/heads/update/demo"), "")
         self.assertNotIn('["pr", "create"', (self.root / "calls").read_text())
 
     def test_held_back_target_preserves_pr_without_pushing(self):
@@ -406,6 +510,84 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertEqual((self.root / "touched-branches").read_text(), "update/demo\n")
         self.assertNotIn('["pr",', (self.root / "calls").read_text())
         self.assertEqual((self.root / "published-pr").read_text(), "")
+        # A hold-back on a bot-only branch still counts toward escalation.
+        self.assertEqual((self.root / "skip").read_text(), "")
+        self.assertNotIn("Preserving", result.stdout)
+
+    def test_held_back_target_on_a_human_branch_is_left(self):
+        human_tip = self.push_human_commit()
+        (self.root / "prepared.json").write_text(json.dumps({"base": self.base, "name": "demo", "status": "HELD BACK"}))
+        result = self.publish()
+        self.assert_skipped(result, f"non-bot commits are on {human_tip}")
+        self.assertEqual(self.git("ls-remote", "origin", "refs/heads/update/demo").split()[0], human_tip)
+        self.assertEqual(self.matrix_command("receipt").returncode, 0)
+        receipt = json.loads((self.root / "update-receipt.json").read_text())
+        self.assertIn("non-bot commits", receipt["skip"])
+        self.assertEqual(matrix.collect({"include": [{"name": "demo"}]}, [receipt], self.base), ["update/demo"])
+
+    def test_held_back_target_reads_origins_live_head(self):
+        # The job-start ref still shows the bot's push, but origin moved since:
+        # the hold-back is a skip, never counted toward escalation.
+        self.git("push", "origin", "update/demo")
+        tip = self.land_push_after_checkout(self.git("rev-parse", "update/demo"))
+        self.git("update-ref", "refs/remotes/origin/update/demo", self.git("rev-parse", "update/demo"))
+        (self.root / "prepared.json").write_text(json.dumps({"status": "HELD BACK"}))
+        result = self.publish(PR_LIST=json.dumps([self.own_pr()]))
+        self.assert_left(result, f"origin's head is {tip}")
+        self.assertNotIn("preparation held back", result.stdout)
+
+    def test_preserved_branch_with_failed_verification_skips_the_lane(self):
+        # The operator's case: the branch failed, a human is pushing an outside
+        # fix that takes more than a day. Every sweep must leave it alone and
+        # stay green.
+        human_tip = self.push_human_commit()
+        (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
+        posted = []
+        for sweep in range(2):
+            with self.subTest(sweep=sweep):
+                # One comment per head: the second sweep finds the first's marker.
+                (self.root / "calls").unlink(missing_ok=True)
+                result = self.publish(PR_LIST=json.dumps([self.own_pr()]), PR_COMMENTS=json.dumps(posted))
+                self.assert_left(result, f"non-bot commits are on {human_tip}", comment=sweep == 0)
+                posted += [{"user": {"login": "nix-agentic-tools-bot[bot]"}, "body": body} for body in self.comments()]
+                self.assertEqual(self.git("ls-remote", "origin", "refs/heads/update/demo").split()[0], human_tip)
+                verdict = self.matrix_command("verdict")
+                self.assertEqual(verdict.returncode, 0, verdict.stdout + verdict.stderr)
+                self.assertIn("::notice title=Update lane skipped::demo", verdict.stdout)
+                self.assertIn("update/demo", verdict.stdout)
+                self.assertIn("non-bot commits", verdict.stdout)
+                self.assertNotIn("::error", verdict.stdout)
+
+    def test_rebase_only_refresh_with_failed_verification_is_a_skip(self):
+        # Same patch, newer base: the PR is refreshed, but it proposes nothing
+        # new, so a failed build is a notice naming the PR, not a red lane.
+        new_base, _ = self.prepare_behind_base_refresh()
+        (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
+        result = self.publish(PR_LIST=json.dumps([self.own_pr()]), PR_VIEW_REMOTE_HEAD="1", UPDATE_BASE_SHA=new_base)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Pushing update/demo", result.stdout)
+        self.assertIn("PR #1 already proposes this patch", (self.root / "skip").read_text())
+        verdict = self.matrix_command("verdict")
+        self.assertEqual(verdict.returncode, 0, verdict.stdout + verdict.stderr)
+        self.assertIn("::notice title=Update lane skipped::demo", verdict.stdout)
+        self.assertIn("pull/1", verdict.stdout)
+        self.assertNotIn("::error", verdict.stdout)
+
+    def test_new_version_on_existing_pr_with_failed_verification_is_red(self):
+        new_base, _ = self.prepare_behind_base_refresh()
+        self.git("checkout", "update/demo")
+        self.commit("newer upstream version")
+        new_tip = self.git("rev-parse", "HEAD")
+        self.git("checkout", "main")
+        (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
+        result = self.publish(PR_LIST=json.dumps([self.own_pr()]), PR_VIEW_REMOTE_HEAD="1", UPDATE_BASE_SHA=new_base)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), new_tip)
+        self.assertEqual((self.root / "skip").read_text(), "")
+        verdict = self.matrix_command("verdict")
+        self.assertNotEqual(verdict.returncode, 0)
+        self.assertIn("::error title=Update build verification failed::demo", verdict.stdout)
+        self.assertIn("pull/1", verdict.stdout)
 
     def own_pr(self):
         return {"author": {"login": "app/nix-agentic-tools-bot"}, "baseRefName": "main", "headRefName": "update/demo", "headRepository": {"nameWithOwner": "example/example"}, "isCrossRepository": False, "mergeable": "MERGEABLE", "number": 1}
@@ -446,10 +628,15 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertEqual(result.returncode, 0, result.stderr)
         expected = ["pr", "merge", "1", "--squash", "--auto", "--match-head-commit", self.git("rev-parse", "update/demo")]
         self.assertIn(json.dumps(expected), (self.root / "calls").read_text())
-        (self.root / "calls").unlink()
-        self.assertNotEqual(self.publish(**env, FAIL_ARM="1").returncode, 0)
-        merge_calls = [json.loads(line) for line in (self.root / "calls").read_text().splitlines() if json.loads(line)[:2] == ["pr", "merge"]]
-        self.assertEqual(merge_calls, [expected, ["pr", "merge", "1", "--disable-auto"]])
+        # A failed enable is red. The rollback undoes only an enable the App owns
+        # afterwards (this run's own); one a human made meanwhile stays.
+        for enabled_by, rollback in ((None, False), ("app/nix-agentic-tools-bot", True), ("human", False)):
+            with self.subTest(enabled_by=enabled_by):
+                (self.root / "calls").unlink()
+                after = {"AUTO_MERGE_ENABLED_AFTER_ARM": "1", "AUTO_MERGE_ENABLED_BY": enabled_by} if enabled_by else {}
+                self.assertNotEqual(self.publish(**env, **after, FAIL_ARM="1").returncode, 0)
+                merge_calls = [json.loads(line) for line in (self.root / "calls").read_text().splitlines() if json.loads(line)[:2] == ["pr", "merge"]]
+                self.assertEqual(merge_calls, [expected] + ([["pr", "merge", "1", "--disable-auto"]] if rollback else []))
 
     def test_preexisting_auto_merge_is_not_removed_when_an_enable_would_fail(self):
         self.git("push", "origin", "update/demo")
@@ -523,7 +710,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertIn('"--auto"', calls)
         self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), new_tip)
 
-    def test_late_head_race_fails_without_changing_auto_merge(self):
+    def test_late_head_race_is_left_without_changing_auto_merge(self):
         self.git("push", "origin", "update/demo")
         self.git("checkout", "-b", "human", "update/demo")
         self.git("config", "user.email", "human@example.test")
@@ -535,16 +722,19 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         bot_tip = self.git("rev-parse", "update/demo")
         for fresh_update in (False, True):
             with self.subTest(fresh_update=fresh_update):
+                # Each sweep starts from a fresh checkout of origin.
                 self.git("--git-dir", str(self.remote), "update-ref", "refs/heads/update/demo", bot_tip)
+                self.git("update-ref", "refs/remotes/origin/update/demo", bot_tip)
                 (self.root / "calls").unlink(missing_ok=True)
                 if fresh_update:
                     self.git("checkout", "update/demo")
                     self.commit("newer upstream version")
                     self.git("checkout", "main")
                 result = self.publish(PR_LIST=json.dumps([self.own_pr()]), ARM_RACE_TIP=tip, AUTO_MERGE_ENABLED="1")
-                self.assertNotEqual(result.returncode, 0)
+                self.assert_skipped(result, "GitHub shows 1 with another repository, base, head branch, author or head")
                 calls = (self.root / "calls").read_text()
                 self.assertNotIn('["pr", "merge"', calls)
+                self.assertEqual(len(self.comments()), 0)
                 if fresh_update:
                     self.assertIn('["pr", "edit", "1"', calls)
                 self.assertTrue(self.git("ls-remote", "origin", "refs/heads/update/demo").startswith(tip))
@@ -554,9 +744,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         tip = self.git("rev-parse", "update/demo")
         view = dict(self.own_pr(), baseRefName="another-base", headRefOid=tip)
         result = self.publish(PR_LIST=json.dumps([self.own_pr()]), PR_VIEW=json.dumps(view), AUTO_MERGE_ENABLED="1")
-        self.assertNotEqual(result.returncode, 0)
-        calls = (self.root / "calls").read_text()
-        self.assertNotIn('["pr", "merge"', calls)
+        self.assert_left(result, "another repository, base", comment=False)
         self.assertTrue(self.git("ls-remote", "origin", "refs/heads/update/demo").startswith(tip))
 
     def test_app_pr_on_another_base_preserves_the_stable_branch(self):
@@ -578,16 +766,19 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.git("push", "origin", "update/demo")
         closed = self.closed_pr(self.install_pull_ref())
         human_close = [{"__typename": "ClosedEvent", "actor": {"login": "human"}}]
+        (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
         result = self.publish(
             CLOSED_PR_LIST=json.dumps([closed]),
             CLOSE_EVENTS=json.dumps(human_close),
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_left(result, "human-closed PR #1 already proposed this update", comment=False)
         calls = (self.root / "calls").read_text()
         self.assertNotIn('["pr", "create"', calls)
         self.assertNotIn('["pr", "merge"', calls)
         self.assertNotIn("Pushing update/demo", result.stdout)
-        self.assertEqual((self.root / "touched-branches").read_text(), "update/demo\n")
+        verdict = self.matrix_command("verdict")
+        self.assertEqual(verdict.returncode, 0, verdict.stdout + verdict.stderr)
+        self.assertIn("::notice title=Update lane skipped::", verdict.stdout)
 
     def test_unclassified_closed_proposal_fails_before_publication(self):
         self.git("push", "origin", "update/demo")
@@ -614,6 +805,7 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.commit("newer dependency patch")
         self.git("checkout", "main")
         human_close = [{"__typename": "ClosedEvent", "actor": {"login": "human"}}]
+        (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
         result = self.publish(
             CLOSED_PR_LIST=json.dumps([closed]),
             CLOSE_EVENTS=json.dumps(human_close),
@@ -623,6 +815,11 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         calls = (self.root / "calls").read_text()
         self.assertIn('["pr", "create"', calls)
         self.assertIn('["pr", "merge"', calls)
+        # A newer diff is a new proposal: published, so its red build is red.
+        self.assertEqual((self.root / "skip").read_text(), "")
+        verdict = self.matrix_command("verdict")
+        self.assertNotEqual(verdict.returncode, 0)
+        self.assertIn("::error title=Update build verification failed::demo", verdict.stdout)
 
     def test_remote_only_closed_head_allows_a_newer_proposal(self):
         closed_head = self.create_remote_only_pull_head()
@@ -672,13 +869,6 @@ if sys.argv[1:3] == ['pr', 'reopen']:
                 self.assertNotIn('["pr", "merge"', calls)
                 self.assertNotIn("Pushing update/demo", result.stdout)
 
-    def test_arming_rechecks_push_actor_even_when_head_is_unchanged(self):
-        self.git("push", "origin", "update/demo")
-        result = self.publish(PR_LIST=json.dumps([self.own_pr()]), ARM_PUSH_ACTOR="human", AUTO_MERGE_ENABLED="1")
-        self.assertNotEqual(result.returncode, 0)
-        calls = (self.root / "calls").read_text()
-        self.assertNotIn('["pr", "merge"', calls)
-
     def test_human_owned_pr_is_never_edited_or_armed(self):
         self.git("push", "origin", "update/demo")
         result = self.publish(PR_LIST=json.dumps([dict(self.own_pr(), author={"login": "human"})]))
@@ -696,15 +886,34 @@ if sys.argv[1:3] == ['pr', 'reopen']:
         self.assertIn('["pr", "create"', calls)
         self.assertNotIn('["pr", "edit"', calls)
 
-    def test_human_republishes_exact_prepared_sha_without_changing_auto_merge(self):
+    def test_head_github_does_not_credit_to_the_app_is_left(self):
+        # Every commit is the bot's, but GitHub credits the push to someone
+        # else, or has no activity row for it yet. Either way it is not the
+        # bot's own last push as far as it can tell: skipped with a notice and
+        # no comment (no human commit), never re-read, never red, even when
+        # this target's build verification failed.
         self.git("push", "origin", "update/demo")
         tip = self.git("rev-parse", "update/demo")
-        result = self.publish(PR_LIST=json.dumps([self.own_pr()]), PUSH_ACTOR="human", AUTO_MERGE_ENABLED="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("not a verified App push", result.stdout)
-        self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), tip)
-        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
-        self.assertFalse((self.root / "auto-merge-disabled").exists())
+        (self.root / "prepared.json").write_text(json.dumps({"name": "demo", "status": "UPDATED", "verifyFailed": ["attr.one"]}))
+        for env in ({"PUSH_ACTOR": "human"}, {"ACTIVITY_EMPTY": "1"}):
+            with self.subTest(env=env):
+                (self.root / "calls").unlink(missing_ok=True)
+                result = self.publish(PR_LIST=json.dumps([self.own_pr()]), AUTO_MERGE_ENABLED="1", **env)
+                self.assert_left(result, f"GitHub does not credit {tip} to the App's push.", comment=False)
+                self.assertEqual((self.root / "calls").read_text().count("/activity"), 1)
+                self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), tip)
+                self.assertFalse((self.root / "auto-merge-disabled").exists())
+                verdict = self.matrix_command("verdict")
+                self.assertEqual(verdict.returncode, 0, verdict.stdout + verdict.stderr)
+
+    def test_push_activity_api_error_is_red_never_a_human_edit(self):
+        self.git("push", "origin", "update/demo")
+        result = self.publish(PR_LIST=json.dumps([self.own_pr()]), ACTIVITY_ERROR="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("::error::Could not read GitHub's push activity for update/demo.", result.stdout)
+        self.assertNotIn("Leaving", result.stdout)
+        self.assertEqual((self.root / "skip").read_text(), "")
+        self.assertNotIn('["pr", "comment"', (self.root / "calls").read_text())
 
     def test_human_reenabled_auto_merge_survives_two_sweeps(self):
         self.git("checkout", "update/demo")
@@ -777,10 +986,8 @@ nfb_eval_flags
         self.git("checkout", "main")
         self.git("config", "user.email", "bot@example.test")
         result = self.publish(PR_LIST=json.dumps([self.own_pr()]), AUTO_MERGE_ENABLED="1")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Refusing to force-push", result.stdout)
+        self.assert_left(result, f"non-bot commits are on {human_tip}")
         self.assertEqual(self.git("rev-parse", "refs/remotes/origin/update/demo"), human_tip)
-        self.assertNotIn('["pr", "merge"', (self.root / "calls").read_text())
 
     def cleanup(self, prs=None, touched="", **overrides):
         (self.root / "update-completed.flag").touch()
@@ -1404,6 +1611,9 @@ class HoldBackEscalationTest(unittest.TestCase):
         for previous in ({}, {"oxlint": None}, {"oxlint": "NO UPDATES"}):
             self.assertEqual(matrix.escalation({"oxlint": "HELD BACK: oxlint"}, previous), ([], [], ["oxlint"]), previous)
 
+    def test_preserved_predecessor_is_never_the_first_of_two(self):
+        self.assertEqual(matrix.escalation({"oxlint": "HELD BACK: oxlint"}, {"oxlint": matrix.SKIPPED}), ([], [], ["oxlint"]))
+
     def test_unreadable_predecessor_receipt_is_never_a_first_offense(self):
         # Counting a receipt that exists but could not be read as "not held
         # back" reset the counter and turned a repeat into a green sweep.
@@ -1471,20 +1681,95 @@ class HoldBackEscalationTest(unittest.TestCase):
         # every other sweep and never escalate twice in a row. Scheduled-only
         # matters separately: a dispatched sweep may carry a target SUBSET, and
         # its missing receipt would read as "not held back".
-        runs = {"workflow_runs": [
-            {"id": 3, "conclusion": "failure", "html_url": "u3"},
-            {"id": 2, "conclusion": "success", "html_url": "u2"},
-        ]}
+        listing = [
+            self.run_entry(9, "2026-10-06T12:00:00Z", conclusion=None),
+            self.run_entry(3, "2026-10-06T06:00:00Z", conclusion="failure"),
+            self.run_entry(2, "2026-10-06T00:00:00Z", conclusion="success"),
+        ]
         captured = []
+        with mock.patch.object(matrix, "gh", side_effect=self.fake_sweep_gh(listing, captured)):
+            self.assertEqual(matrix.previous_sweep("o/r", "9")[0]["id"], 3)
+            self.assertEqual(matrix.previous_sweep("o/r", "3")[0]["id"], 2)
+            self.assertEqual(matrix.previous_sweep("o/r", "2"), (None, "there is no earlier scheduled sweep"))
+        query = next(args[1] for args in captured if "workflows/update.yml/runs" in args[1])
+        self.assertIn("event=schedule", query)
+        # The running sweep must be listable, so completed-only is never asked.
+        self.assertNotIn("status=completed", query)
 
-        def fake_gh(*args):
-            captured.append(args)
-            return json.dumps(runs)
+    @staticmethod
+    def run_entry(run_id, created, conclusion=None, event="schedule"):
+        return {"id": run_id, "created_at": created, "conclusion": conclusion, "event": event, "html_url": f"u{run_id}"}
 
-        with mock.patch.object(matrix, "gh", side_effect=fake_gh):
-            self.assertEqual(matrix.previous_sweep("o/r", "9")["id"], 3)
-            self.assertEqual(matrix.previous_sweep("o/r", "3")["id"], 2)
-        self.assertIn("event=schedule", captured[0][1])
+    def fake_sweep_gh(self, listing, captured=None, current=None):
+        """A `gh` double for previous_sweep: the current run, then the listing."""
+        def fake_gh(*args, **_):
+            if captured is not None:
+                captured.append(args)
+            path = args[1]
+            if "/actions/runs/" in path:
+                run_id = int(path.rsplit("/", 1)[1])
+                entry = current or next(run for run in listing if run["id"] == run_id)
+                return json.dumps(entry)
+            return json.dumps({"workflow_runs": listing})
+        return fake_gh
+
+    def test_stale_listing_is_unreadable_never_a_first_sweep(self):
+        # Regression: GitHub served a weeks-old snapshot whose head was run
+        # 33844722138 (2026-09-04). Taking its first entry made every hold-back
+        # a "first sweep". The current run is missing from it, so it is stale.
+        stale = [self.run_entry(33844722138, "2026-09-04T18:00:00Z", conclusion="success")]
+        current = self.run_entry(9, "2026-10-06T12:00:00Z")
+        with mock.patch.object(matrix.time, "sleep") as sleep, mock.patch.object(matrix, "gh", side_effect=self.fake_sweep_gh(stale, current=current)):
+            run, note = matrix.previous_sweep("o/r", "9")
+        self.assertEqual(run, matrix.UNREADABLE)
+        self.assertIn("does not include this run", note)
+        self.assertEqual(sleep.call_count, matrix.GH_ATTEMPTS - 1)
+        # End to end: the real previous_sweep, behind the same stale listing.
+        code, output = self.escalate([self.receipt("oxlint", "HELD BACK")], (
+            "import json\n"
+            f"m.gh = lambda *a, **k: json.dumps({current!r}) if '/actions/runs/' in a[1] else json.dumps({{'workflow_runs': {stale!r}}})\n"
+            "m.time.sleep = lambda *_: None\n"
+            "m.previous_sweep = original_previous_sweep\n"
+        ))
+        self.assertEqual(code, 1, output)
+        self.assertIn("::error title=Update hold-back count unknown::", output)
+        self.assertIn("does not include this run", output)
+        self.assertNotIn("first sweep", output)
+
+    def test_predecessor_older_than_one_interval_plus_slack_is_unreadable(self):
+        # The current run is listed, but nothing newer than three weeks is: the
+        # listing is still stale, or sweeps were missed. Either way the count
+        # is unknown, not reset.
+        listing = [self.run_entry(9, "2026-10-06T12:00:00Z"), self.run_entry(33844722138, "2026-09-04T18:00:00Z")]
+        with mock.patch.object(matrix.time, "sleep"), mock.patch.object(matrix, "gh", side_effect=self.fake_sweep_gh(listing)):
+            run, note = matrix.previous_sweep("o/r", "9")
+        self.assertEqual(run, matrix.UNREADABLE)
+        self.assertIn("past the 9.0h bound", note)
+
+    def test_dispatched_sweep_is_bounded_by_age_alone(self):
+        # A workflow_dispatch run is never in the scheduled listing, so that
+        # staleness check cannot apply; the age bound still does.
+        current = self.run_entry(9, "2026-10-06T12:00:00Z", event="workflow_dispatch")
+        for created, fresh in (("2026-10-06T06:00:00Z", True), ("2026-09-04T18:00:00Z", False)):
+            with self.subTest(created=created), mock.patch.object(matrix.time, "sleep"), mock.patch.object(matrix, "gh", side_effect=self.fake_sweep_gh([self.run_entry(3, created)], current=current)):
+                run, note = matrix.previous_sweep("o/r", "9")
+                if fresh:
+                    self.assertEqual((run["id"], note), (3, None))
+                else:
+                    self.assertEqual(run, matrix.UNREADABLE)
+                    self.assertIn("past the 9.0h bound", note)
+
+    def test_schedule_interval_comes_from_the_workflow_cron(self):
+        self.assertEqual(matrix.schedule_interval_hours(), 6)
+        with tempfile.TemporaryDirectory() as root:
+            workflow = Path(root) / "update.yml"
+            for cron, hours in (("0 0,6,12,18 * * *", 6), ("0 3 * * *", 24), ("0 1,2,10 * * *", 15)):
+                workflow.write_text(f'on:\n  schedule:\n    - cron: "{cron}"\n')
+                self.assertEqual(matrix.schedule_interval_hours(workflow), hours, cron)
+            for cron in ("0 0 * * 1", "0 * * * *", "15 */4 * * *"):
+                workflow.write_text(f'on:\n  schedule:\n    - cron: "{cron}"\n')
+                with self.subTest(cron=cron), self.assertRaises(ValueError):
+                    matrix.schedule_interval_hours(workflow)
 
     @staticmethod
     def fake_predecessor_gh(artifacts=None, payload=None, listing_fails=False, download_fails=False):
@@ -1516,6 +1801,8 @@ class HoldBackEscalationTest(unittest.TestCase):
                     return matrix.previous_status("o/r", run, "oxlint", Path(workspace))
 
             self.assertEqual(status(payload=held), ("HELD BACK", "u4", None))
+            preserved = json.dumps(dict(self.receipt("oxlint", "HELD BACK"), skip="1 non-bot commit(s)"))
+            self.assertEqual(status(payload=preserved), (matrix.SKIPPED, "u4", None))
             for artifacts in ([], [{"name": "update-receipt-oxlint", "expired": True}], [{"name": "update-receipt-oxlint-extra", "expired": False}]):
                 result = status(artifacts=artifacts)
                 self.assertEqual(result[:2], (None, "u4"), artifacts)
@@ -1580,7 +1867,8 @@ class HoldBackEscalationTest(unittest.TestCase):
                 f"sys.path.insert(0, {str(SCRIPTS)!r})\n"
                 f"spec = importlib.util.spec_from_file_location('m', {str(SCRIPTS / 'update-matrix.py')!r})\n"
                 "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
-                "m.previous_sweep = lambda *a, **k: {'id': 8, 'html_url': 'prev-url'}\n"
+                "original_previous_sweep = m.previous_sweep\n"
+                "m.previous_sweep = lambda *a, **k: ({'id': 8, 'html_url': 'prev-url'}, None)\n"
                 "m.preparation_reason = lambda *a, **k: ('the guard said bump napi.version', None)\n"
                 f"{overrides}\n"
                 "sys.argv = ['update-matrix.py', 'escalate']\n"
@@ -1635,7 +1923,7 @@ class HoldBackEscalationTest(unittest.TestCase):
         self.assertNotIn("::warning", output)
         self.assertIn("could not be read", output)
         self.assertIn("HTTP 502", output)
-        self.assertIn("unreadable predecessor receipt: kimchi-docs", output)
+        self.assertIn("unknown predecessor: kimchi-docs", output)
         # gh's multi-line stderr stays inside the one annotation.
         self.assertIn("HTTP 502%0A(stderr line 2)", output)
         self.assertIn("bump napi.version", output)
@@ -1654,6 +1942,14 @@ class HoldBackEscalationTest(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("::error title=Update target held back twice::", output)
 
+    def test_escalate_never_counts_a_hold_back_on_a_preserved_branch(self):
+        held = dict(self.receipt("oxlint", "HELD BACK"), skip="preparation held back and 1 non-bot commit(s) are on the remote branch.")
+        code, output = self.escalate([held], self.predecessor("HELD BACK"))
+        self.assertEqual(code, 0, output)
+        self.assertIn("::notice title=Update target held back on a preserved branch::update/oxlint", output)
+        self.assertNotIn("::error", output)
+        self.assertNotIn("::warning", output)
+
     def test_escalate_is_silent_and_cheap_when_nothing_is_held_back(self):
         code, output = self.escalate([self.receipt("beads", "UPDATED")], self.predecessor("HELD BACK"))
         self.assertEqual(code, 0, output)
@@ -1670,6 +1966,9 @@ class HoldBackEscalationTest(unittest.TestCase):
         # Ordering is load-bearing: failing BEFORE the cleanup script would skip
         # stale-PR cleanup repo-wide.
         self.assertLess(cleanup.index("update-cleanup.sh"), cleanup.index('update-matrix.py" escalate'))
+        # A failed cleanup step must not hide a repeated hold-back.
+        escalate = cleanup[cleanup.index("- name: Escalate repeated hold-backs"):cleanup.index('update-matrix.py" escalate')]
+        self.assertIn("if: ${{ !cancelled() }}", escalate)
 
 
 if __name__ == "__main__":

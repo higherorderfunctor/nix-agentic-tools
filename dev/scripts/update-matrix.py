@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import time
+from datetime import datetime
 from pathlib import Path
 
 from artifacts import downloaded
@@ -142,14 +143,21 @@ def held_back_reason(log):
 # previous_status() result for a receipt that EXISTS but could not be read.
 UNREADABLE = "UNREADABLE"
 
+# previous_status() result for a receipt whose lane was skipped (`skip` in the
+# receipt). On a HELD BACK receipt only a branch that is not the bot's own last
+# push sets it, so it never counts as the first of two hold-backs.
+SKIPPED = "SKIPPED"
+
 
 def escalation(held_back, previous):
     """Split this sweep's held-back targets: (repeated, unreadable, fresh).
 
     `held_back` maps target name -> its one-line completion report. `previous`
     maps those names -> the same target's status in the immediately preceding
-    scheduled sweep: that receipt's status, None when that sweep has no receipt
-    for the target, or UNREADABLE when it has one that could not be read.
+    scheduled sweep: that receipt's status, SKIPPED when that lane was skipped,
+    None when that sweep has no receipt for the target, or UNREADABLE when it
+    has one that could not be read. A SKIPPED predecessor counts as fresh: a
+    skipped hold-back is never the first of two.
 
     Only an ABSENT receipt makes a first offense -- a first-ever hold-back, a
     target new to the registry. An unreadable one is not evidence of a clean
@@ -203,8 +211,41 @@ def download(repo, run_id, artifact, destination):
     gh("run", "download", str(run_id), "--repo", repo, "--name", artifact, "--dir", str(destination), fresh_dir=destination)
 
 
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "update.yml"
+
+# How far past one schedule interval the predecessor may lie before it is
+# treated as unreadable: GitHub starts scheduled runs late under load.
+SCHEDULE_SLACK_FRACTION = 0.5
+
+
+def schedule_interval_hours(workflow=WORKFLOW):
+    """The longest gap between scheduled sweeps, read from update.yml's cron.
+
+    The cron is the one source of truth for the cadence; a second constant here
+    would drift from it. Only the shapes this workflow uses are understood: a
+    fixed minute and a comma list of hours,
+    every day. Anything else raises rather than guessing.
+    """
+    crons = re.findall(r'^\s*-\s*cron:\s*"([^"]+)"', workflow.read_text(), re.MULTILINE)
+    if len(crons) != 1:
+        raise ValueError(f"expected exactly one cron in {workflow.name}, found {len(crons)}")
+    minute, hour, *days = crons[0].split()
+    if not minute.isdigit() or not all(h.isdigit() for h in hour.split(",")) or days != ["*", "*", "*"]:
+        raise ValueError(f"unsupported update cron {crons[0]!r}")
+    hours = sorted(int(h) for h in hour.split(","))
+    return max((b - a) % 24 or 24 for a, b in zip(hours, hours[1:] + hours[:1]))
+
+
+def run_created(run):
+    return datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+
+
 def previous_sweep(repo, current_run_id):
-    """The scheduled Update run immediately before this one, or None.
+    """(run, note): the scheduled Update run immediately before this one.
+
+    run is that run's listing entry, None when there is no earlier scheduled
+    sweep, or UNREADABLE when the listing cannot be trusted; note says why
+    whenever run is not a listing entry.
 
     Only SCHEDULED runs count. A workflow_dispatch sweep may carry an explicit
     target subset, so its receipts cover only those targets; treating one as the
@@ -214,17 +255,49 @@ def previous_sweep(repo, current_run_id):
     Conclusion is deliberately NOT filtered. Once this gate fires the failing
     sweep is the predecessor the next one must compare against, and skipping it
     would reset the count every other sweep and never escalate twice running.
+
+    Freshness is checked, never assumed. GitHub has served a weeks-old snapshot
+    of this listing (its head was run 33844722138, from 2026-09-04), and taking
+    its first entry made every hold-back look like a first offense. So the
+    listing includes running sweeps, a scheduled current run must appear in it,
+    and the predecessor must be the newest run created before this one and no
+    older than one schedule interval plus slack. A listing that fails any of
+    these is re-read with backoff, then reported UNREADABLE.
     """
-    listing = gh("api", f"repos/{repo}/actions/workflows/update.yml/runs?status=completed&event=schedule&per_page=5")
-    earlier = [run for run in json.loads(listing)["workflow_runs"] if str(run["id"]) != str(current_run_id)]
-    return earlier[0] if earlier else None
+    try:
+        current = json.loads(gh("api", f"repos/{repo}/actions/runs/{current_run_id}"))
+        started = run_created(current)
+        limit = schedule_interval_hours() * (1 + SCHEDULE_SLACK_FRACTION) * 3600
+    except (GhError, KeyError, TypeError, ValueError) as error:
+        return UNREADABLE, f"could not read this run or the schedule: {error}"
+    note = None
+    for attempt in range(1, GH_ATTEMPTS + 1):
+        try:
+            listing = json.loads(gh("api", f"repos/{repo}/actions/workflows/update.yml/runs?event=schedule&branch=main&per_page=20"))
+            runs = listing["workflow_runs"]
+            if current.get("event") == "schedule" and not any(str(run["id"]) == str(current_run_id) for run in runs):
+                note = f"the scheduled-run listing does not include this run ({current_run_id}), so it is stale"
+            else:
+                earlier = sorted((run for run in runs if str(run["id"]) != str(current_run_id) and run_created(run) < started), key=run_created)
+                if not earlier:
+                    return None, "there is no earlier scheduled sweep"
+                previous = earlier[-1]
+                age = (started - run_created(previous)).total_seconds()
+                if age <= limit:
+                    return previous, None
+                note = f"the newest earlier scheduled sweep ({previous['id']}) is {age / 3600:.1f}h older than this run, past the {limit / 3600:.1f}h bound"
+        except (GhError, KeyError, TypeError, ValueError) as error:
+            note = f"could not list scheduled sweeps: {error}"
+        if attempt < GH_ATTEMPTS:
+            time.sleep(GH_RETRY_DELAY_SECONDS * attempt)
+    return UNREADABLE, note
 
 
 def previous_status(repo, run, name, workspace):
     """`name`'s status in that one sweep: (status, run_url, note).
 
-    status is the receipt's own status, None when that sweep has no unexpired
-    receipt artifact for `name`, or UNREADABLE when it has one that could not be
+    status is the receipt's own status, SKIPPED when its lane was skipped, None
+    when that sweep has no unexpired receipt artifact for `name`, or UNREADABLE when it has one that could not be
     listed, downloaded or parsed. note says why whenever status is not a
     receipt's own, so neither outcome passes silently.
 
@@ -258,7 +331,9 @@ def previous_status(repo, run, name, workspace):
     # match, so a mis-attached artifact cannot answer for a different target.
     if not isinstance(receipt, dict) or receipt.get("name") != name or not isinstance(receipt.get("status"), str):
         return UNREADABLE, url, f"its {artifact} artifact is not a receipt for {name}"
-    return receipt["status"], url, None
+    # A skipped hold-back left a branch that was not the bot's own last push. It
+    # is not the pipeline's failure, so it never counts as the first of two consecutive hold-backs.
+    return (SKIPPED if receipt.get("skip") else receipt["status"]), url, None
 
 
 def preparation_reason(repo, run_id, name, workspace):
@@ -297,23 +372,32 @@ def verify_failures(logs, name, status):
     return [line for line in record.read_text().splitlines() if line.strip()] or ["<failed attributes not reported>"]
 
 
-def verification_verdict(prepared, published_pr):
-    """Annotation lines failing a lane whose PR shipped despite a red build, or None.
+def verification_verdict(prepared, published_pr, skip):
+    """(level, annotation lines) for a failed build verification, or None.
 
     The PR is published first on purpose: a well-formed update that does not
     build is a red PR for branch CI to judge, never a withheld one. This verdict
     runs only after publication, so failing here cannot cost the target its PR,
     and other matrix lanes are unaffected (`fail-fast: false`).
+
+    The lane is red only when it proposed something new: a new PR, or a changed
+    patch on an existing one. `skip` is the publisher's reason it did not, and
+    then the lane gets a notice and stays green, Renovate-style. Either origin's
+    branch is not the bot's own last push (someone else changed it, often with
+    an outside fix that can take days, or GitHub could not yet confirm the push),
+    so the bot left it untouched; or the PR already proposes this exact patch
+    and at most its base moved. The next sweep re-reads the branch, so a red
+    lane here would only repeat what is already known.
     """
     failed = prepared.get("verifyFailed")
     if not failed:
         return None
-    pr = published_pr or "none -- publication preserved an existing branch or PR; see the publish step's log"
-    return [
-        f"{prepared['name']}: build verification failed before publication.",
-        f"Failed attributes: {', '.join(failed)}",
-        f"PR: {pr}",
-    ]
+    name = prepared["name"]
+    attributes = f"Failed attributes: {', '.join(failed)}"
+    pr = f"PR: {published_pr or 'none recorded; see the publish step log'}"
+    if skip:
+        return "notice", [f"{name}: build verification failed, but the update/{name} lane is skipped.", f"Reason: {skip}", attributes, pr]
+    return "error", [f"{name}: build verification failed before publication.", attributes, pr]
 
 
 def collect(matrix, receipts, base):
@@ -368,25 +452,45 @@ def main():
     elif args.command == "receipt":
         receipt = json.loads((temp / "prepared.json").read_text())
         receipt["touched"] = (temp / "touched-branches").read_text().splitlines()
+        skip = (temp / "skip").read_text().strip()
+        if skip:
+            receipt["skip"] = skip
         (temp / "update-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     elif args.command == "verdict":
-        published = temp / "published-pr"
-        lines = verification_verdict(json.loads((temp / "prepared.json").read_text()), published.read_text().strip() if published.exists() else "")
-        if lines is None:
+        def record(name):
+            path = temp / name
+            return path.read_text().strip() if path.exists() else ""
+
+        verdict = verification_verdict(json.loads((temp / "prepared.json").read_text()), record("published-pr"), record("skip"))
+        if verdict is None:
             print("Build verification did not fail for this target.")
+            return
+        level, lines = verdict
+        if level == "notice":
+            annotate("notice", "Update lane skipped", lines)
             return
         annotate("error", "Update build verification failed", lines)
         raise SystemExit(lines[0])
     elif args.command == "escalate":
         repo, run_id = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_RUN_ID"]
         receipts = [json.loads(p.read_text()) for p in downloaded("receipts", "update-receipt.json")]
-        held = {r["name"]: r.get("detail") or f"HELD BACK: {r['name']}" for r in receipts if r["status"] == "HELD BACK"}
+        held_back = [r for r in receipts if r["status"] == "HELD BACK"]
+        # On a HELD BACK receipt only a left branch sets `skip`: origin's head is
+        # not the bot's own last push, so the bot leaves it alone until it is
+        # deleted (merging deletes it). Those hold-backs never count.
+        for r in held_back:
+            if r.get("skip"):
+                annotate("notice", "Update target held back on a preserved branch", [f"update/{r['name']}: {r['skip']}", "Not counted toward hold-back escalation."])
+        held = {r["name"]: r.get("detail") or f"HELD BACK: {r['name']}" for r in held_back if not r.get("skip")}
         if not held:
             print("No target was held back this sweep.")
             return
         # Only pay for the API when something is actually held back.
-        previous = previous_sweep(repo, run_id)
-        seen = {name: previous_status(repo, previous, name, temp) for name in held}
+        previous, sweep_note = previous_sweep(repo, run_id)
+        if previous == UNREADABLE:
+            seen = {name: (UNREADABLE, None, sweep_note) for name in held}
+        else:
+            seen = {name: previous_status(repo, previous, name, temp) for name in held}
         repeated, unreadable, fresh = escalation(held, {name: status for name, (status, _, _) in seen.items()})
 
         def predecessor(name):
@@ -407,8 +511,8 @@ def main():
                 "judge for it -- any update PR still open is an EARLIER proposal, not this one.",
                 "It cannot clear itself; a person has to unblock preparation.",
             ]),
-            ("Update hold-back count unknown", "Held back with an unreadable predecessor receipt", unreadable, [
-                "Held back, and the previous sweep's receipt for this target could not be read, so",
+            ("Update hold-back count unknown", "Held back with an unknown predecessor", unreadable, [
+                "Held back, and the previous scheduled sweep, or its receipt for this target, could not be read, so",
                 "whether this is a first or a repeated hold-back is unknown. Counting it as a first",
                 "would silently reset the consecutive-hold counter, so this job fails instead.",
             ]),

@@ -217,12 +217,14 @@ def main():
             verified = status == "automatic"
         elif args.command == "push":
             activities = github("--method", "GET", f"repos/{repo}/activity", "-f", "ref=refs/heads/" + args.branch, "-f", "direction=desc", "-F", "per_page=1")
-            # A newly created ref can briefly have no activity row. The
-            # publisher may re-read this case, but a row for another actor,
-            # ref, or SHA is a definite refusal, never a retryable match.
-            if activities == []:
-                return 3
-            verified = bot_push(activities, args.branch, args.head)
+            # Exit 2 means "not credited to the App", whether the newest row
+            # names someone else or no row exists yet. The publisher skips the
+            # lane on it, and the next sweep re-reads. An exception is exit 1,
+            # an error, never reported as somebody else's push.
+            if not bot_push(activities, args.branch, args.head):
+                print(f"{args.head} on {args.branch} is not credited to the App's push")
+                return 2
+            verified = True
         else:
             verified = bot_review_threads(repo, args.number, args.allowed)
     except (KeyError, TypeError, ValueError, subprocess.CalledProcessError) as error:

@@ -30,17 +30,38 @@ than one 100-item API page, because reports and receipts are separate artifacts.
   hold-back still only warns, because one is routinely transient; inspect the
   corresponding `update-report-*` artifact before declaring the update healthy.
   The preserved PR, if any, is an earlier proposal -- no new PR or branch update
-  was written for the held-back attempt.
+  was written for the held-back attempt. A held-back receipt that also carries
+  `skip` sits on a branch whose live origin head is not the bot's own last push;
+  it is reported as a notice and never escalates. A predecessor listing that is
+  stale (missing the current run, or newest entry older than one schedule
+  interval plus slack) also gives `Update hold-back count unknown`; its
+  annotation says which.
 - `NO UPDATES` means the target produced no diff from the pinned base.
 - `UPDATED` means preparation completed and publication returned successfully;
-  inspect the PR and publisher log for whether it was created, refreshed,
-  unchanged, or preserved by an ownership/human-hold guard. It does not prove
-  the PR passed its native checks or merged. A receipt that also carries
-  `verifyFailed` is an input whose build verification failed: its PR was still
-  published, and its worker then failed `Fail on failed build verification` with
-  an `::error::` naming the failed attributes and the PR. Before 2026-10-06 that
-  case only warned, so a sweep such as 37463596606 read green while pnpm_12
-  failed on the nixpkgs lane.
+  inspect the PR and publisher log for whether it was created, refreshed or
+  unchanged. It does not prove the PR passed its native checks or merged. A
+  receipt that also carries `verifyFailed` is an input whose build verification
+  failed: its PR was still published, and its worker then failed
+  `Fail on failed build verification` with an `::error::` naming the failed
+  attributes and the PR -- when that PR is new or its patch changed. Before
+  2026-10-06 that case only warned, so a sweep such as 37463596606 read green
+  while pnpm_12 failed on the nixpkgs lane.
+- A receipt with `skip` is a Renovate-style skip, and `skip` says why. Either
+  the existing PR already proposed this exact patch (a rebase-only refresh, or
+  no push), or the bot left the branch because origin's live head was not its
+  own last push: non-bot commits, a head GitHub does not credit to the App,
+  origin moved (to anyone's commits), a lease rejected because origin moved,
+  PR-view or push-activity lag, a human-closed identical proposal, or a non-App
+  PR or one on another base. Such a lane stays green even with `verifyFailed`;
+  look for the `Update lane skipped` notice. Only a human edit (commits the bot
+  did not both author and commit) also gets one bot PR comment per head SHA.
+  There are no re-reads: lag clears on the next sweep, and a branch a human
+  changed stays left until it is deleted (merging deletes it). A skip during
+  arming follows the run's own push and title edit and undoes neither.
+- A red publish step is a genuine error, never someone else's edit: origin
+  unreadable, malformed PR metadata, an unclassifiable auto-merge event, a
+  failed `gh pr create`, a push that failed while origin did not move, or a
+  GitHub API exception. Re-run the lane or wait for the next sweep.
 
 The collector requires exactly one receipt per discovered target on the same
 base. Missing or duplicate receipts are incomplete evidence, even if some PRs

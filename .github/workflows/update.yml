@@ -4,6 +4,9 @@ name: Update
 
 on:
   schedule:
+    # The ONLY statement of the sweep cadence: hold-back escalation derives
+    # its predecessor-freshness bound from this line (update-matrix.py
+    # schedule_interval_hours), so keep it the workflow's single cron.
     - cron: "0 0,6,12,18 * * *"
   workflow_dispatch:
     inputs:
@@ -180,7 +183,11 @@ jobs:
           path: ${{ runner.temp }}/update-receipt.json
           if-no-files-found: error
       # A writable update whose build verification failed still publishes its
-      # PR above; only then does this lane go red. Placement after the receipt
+      # PR above; then this lane goes red only if that PR is new or its patch
+      # changed. It is skipped with a notice (receipt `skip`) when the PR
+      # already proposed this patch, or when publication left a branch whose
+      # live origin head was not the bot's own last push (Renovate's
+      # modified-branch rule). Placement after the receipt
       # upload is load-bearing: cleanup needs every lane's receipt, and
       # `fail-fast: false` keeps the other lanes running. `!cancelled()` keeps
       # the verdict (and its ::error) when publish or auto-merge arming fails;
@@ -263,13 +270,20 @@ jobs:
       # so branch CI has nothing to judge. That is correct and it is also how a
       # blocked target stayed invisible for three sweeps on 2026-09-16. This
       # step fails the sweep once a target has been held back TWICE running.
+      # A hold-back on a branch that is not the bot's own last push (receipt
+      # `skip`) is expected until that branch is deleted, and is never
+      # counted. A predecessor that cannot be identified freshly is reported
+      # as an unknown count, never as a first sweep.
       #
       # Placement after `Close stale dependency PRs` is load-bearing: the
       # completion sentinel and the cleanup script have both already run, so a
       # failure here cannot disable stale-PR cleanup repo-wide the way one
       # raised earlier in this job would. It uses the default workflow token,
       # not the App token above -- it only reads its own runs' artifacts.
+      # `!cancelled()` keeps it running after an earlier step in this job
+      # fails, so a cleanup failure cannot hide a repeated hold-back.
       - name: Escalate repeated hold-backs
+        if: ${{ !cancelled() }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
