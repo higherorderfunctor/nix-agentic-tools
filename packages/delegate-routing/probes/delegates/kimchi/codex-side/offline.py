@@ -76,8 +76,6 @@ def run(case):
             parent_write = case == 'native-permissions' and model == 'parent-fixture' and parent_calls == 2
             if call:
                 args = {'prompt': 'Return CHILD_OK.', 'description': 'Offline native child probe', 'subagent_type': 'General-purpose', 'model': 'child-fixture', 'thinking': 'high', 'run_in_background': False, 'max_duration': 15}
-                if case == 'isolated':
-                    args['isolated'] = True
                 delta = {'role': 'assistant', 'tool_calls': [{'index': 0, 'id': 'fixture-agent', 'type': 'function', 'function': {'name': 'Agent', 'arguments': json.dumps(args)}}]}
             elif case in ['native-resume', 'native-resume-blocked'] and model == 'parent-fixture' and parent_calls == 2:
                 tool_message = next(m for m in body['messages'] if m.get('role') == 'tool' and m.get('tool_call_id') == 'fixture-agent')

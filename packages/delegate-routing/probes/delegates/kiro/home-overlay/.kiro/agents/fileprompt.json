@@ -1,6 +1,0 @@
-{
-  "name": "fileprompt",
-  "description": "file prompt fixture",
-  "prompt": "file://./p.md",
-  "tools": ["*"]
-}

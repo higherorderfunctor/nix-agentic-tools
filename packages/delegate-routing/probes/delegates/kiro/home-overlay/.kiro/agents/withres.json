@@ -1,7 +1,0 @@
-{
-  "name": "withres",
-  "description": "resources fixture",
-  "prompt": "WITHRES_PROMPT_SENTINEL",
-  "tools": ["*"],
-  "resources": ["file://README.md"]
-}

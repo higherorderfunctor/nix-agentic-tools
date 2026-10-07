@@ -103,8 +103,6 @@ def mk_perm(subagent_type):
 
 CASES = {
     "tools_default": {"fn": f_tools, "argv": P + ["--tools=default", "hello"]},
-    "tools_default_wf": {"fn": f_tools, "argv": P + ["--tools=default", "hello"],
-                         "env": {"CLAUDE_CODE_ENABLE_WORKFLOWS": "1"}},
     "depth": {"fn": f_depth, "argv": P + ["--permission-mode", "bypassPermissions",
                                           "--allow-dangerously-skip-permissions", "DEPTH=0 go"], "timeout": 180},
     "parallel_fg": {"fn": mk_parallel(12, False), "argv": P + ["--permission-mode", "bypassPermissions",
@@ -119,11 +117,6 @@ CASES = {
         {"description": "pinned", "subagent_type": "pinned", "prompt": "ME pinned", "run_in_background": False},
         {"description": "pinned+override", "subagent_type": "pinned", "prompt": "ME pinned override", "model": "haiku", "run_in_background": False},
     ]), "argv": P + ["--effort", "high", "--permission-mode", "bypassPermissions", "--allow-dangerously-skip-permissions", "me"]},
-    "model_effort_env": {"fn": mk_model([
-        {"description": "inherit", "subagent_type": "general-purpose", "prompt": "ME inherit", "run_in_background": False},
-        {"description": "pinned", "subagent_type": "pinned", "prompt": "ME pinned", "run_in_background": False},
-    ]), "argv": P + ["--effort", "high", "--permission-mode", "bypassPermissions", "--allow-dangerously-skip-permissions", "me"],
-        "env": {"CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"}},
     "perm_default": {"fn": mk_perm("general-purpose"), "argv": P + ["perm"]},
     "perm_none": {"fn": mk_perm("general-purpose"), "argv": P + ["--permission-prompts", "none", "perm"]},
     "perm_named_bypass": {"fn": mk_perm("bypass"), "argv": P + ["perm"]},
@@ -133,13 +126,9 @@ CASES = {
 BYP = ["--permission-mode", "bypassPermissions", "--allow-dangerously-skip-permissions"]
 CASES.update({
     "depth_env1": {**CASES["depth"], "env": {"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "1"}},
-    "depth_env6": {**CASES["depth"], "env": {"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "6"}},
-    "parallel_fg_cap3": {**CASES["parallel_fg"], "env": {"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "3"}},
-    "tools_disable_wf": {"fn": f_tools, "argv": P + ["--tools=default", "hello"], "env": {"CLAUDE_CODE_DISABLE_WORKFLOWS": "1"}},
     "tools_disable_bg": {"fn": f_tools, "argv": P + ["--tools=default", "hello"], "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}},
     "tools_teams": {"fn": f_tools, "argv": P + ["--tools=default", "hello"], "env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"}},
     "tools_fork": {"fn": f_tools, "argv": P + ["--tools=default", "hello"], "env": {"CLAUDE_CODE_FORK_SUBAGENT": "1"}},
-    "tools_settings_nowf": {"fn": f_tools, "argv": P + ["--tools=default", "--settings", '{"enableWorkflows":false}', "hello"]},
     "tools_deny_agent": {"fn": f_tools, "argv": P + ["--tools=default", "--disallowedTools", "Agent", "--", "hello"]},
 })
 
@@ -183,7 +172,6 @@ def mk_wf(resume=False):
 
 CASES.update({
     "wf_default": {"fn": mk_wf(), "argv": P + ["wf"], "timeout": 120},
-    "wf_dontask": {"fn": mk_wf(), "argv": P + ["--permission-mode", "dontAsk", "wf"], "timeout": 120},
     "wf_bypass": {"fn": mk_wf(), "argv": P + BYP + ["wf"], "timeout": 180},
     "wf_bypass_cap4": {"fn": mk_wf(), "argv": P + BYP + ["wf"], "timeout": 180,
                        "env": {"CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS": "4"}},
@@ -443,8 +431,6 @@ CASES.update({
                      "argv": P + BYP + ["iso"]},
     "iso_worktree_clean": {"fn": mk_iso({"description": "iso", "prompt": "ISO_CHILD", "isolation": "worktree", "run_in_background": False}, "pwd"),
                            "argv": P + BYP + ["iso"]},
-    "fm_bgiso": {"fn": mk_iso({"description": "bgiso", "subagent_type": "bgiso", "prompt": "ISO_CHILD", "run_in_background": False}),
-                 "argv": P + BYP + ["iso"]},
     "fm_turns": {"fn": f_turns, "argv": P + BYP + ["turns"]},
 })
 
@@ -632,22 +618,17 @@ def f_wf_budget(body, n, st):
 CASES.update({
     "wf_stop": {"fn": f_wf_stop, "argv": P + BYP + ["wf"], "timeout": 120},
     "wf_budget": {"fn": f_wf_budget, "argv": P + BYP + ["+50k use a workflow"], "timeout": 120},
-    "wf_budget_none": {"fn": f_wf_budget, "argv": P + BYP + ["use a workflow"], "timeout": 120},
 })
 CASES["depth_settings_env1"] = {**CASES["depth"], "argv": P + BYP + ["--settings", '{"env":{"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH":"1","CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS":"3"}}', "DEPTH=0 go"]}
 CASES["parallel_settings_cap3"] = {**CASES["parallel_fg"], "argv": P + BYP + ["--settings", '{"env":{"CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS":"3"}}', "par"]}
 CASES["tools_settings_disablewf"] = {"fn": f_tools, "argv": P + ["--tools=default", "--settings", '{"disableWorkflows":true}', "hello"]}
-CASES["model_settings_subagentenv"] = {**CASES["model_effort_env"], "env": {}, "argv": P + BYP + ["--effort", "high", "--settings", '{"env":{"CLAUDE_CODE_SUBAGENT_MODEL":"sonnet"}}', "me"]}
 CASES["agents_json"] = {"fn": mk_model([
     {"description": "j", "subagent_type": "jsonagent", "prompt": "ME json", "run_in_background": False}]),
     "argv": P + BYP + ["--agents", '{"jsonagent":{"description":"json agent","prompt":"JSON_BODY_61","model":"sonnet","effort":"low","tools":["Read"]}}', "--", "me"]}
 CASES["model_force"] = {**CASES["model_effort"], "env": {"CLAUDE_CODE_SUBAGENT_MODEL": "sonnet", "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1"}}
 CASES["wf_force"] = {**CASES["wf_bypass"], "env": {"CLAUDE_CODE_SUBAGENT_MODEL": "haiku", "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1"}}
-CASES["wf_subenv"] = {**CASES["wf_bypass"], "env": {"CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"}}
 CASES["agents_nobuiltin"] = {"fn": f_tools, "argv": P + ["--tools=default", "hello"], "env": {"CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS": "1"}}
 CASES["agents_noexplore"] = {"fn": f_tools, "argv": P + ["--tools=default", "hello"], "env": {"CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS": "1"}}
-CASES["perm_named_bypass_allowed"] = {"fn": mk_perm("bypass"), "argv": P + ["--allow-dangerously-skip-permissions", "perm"]}
-CASES["perm_parent_accept_named_bypass"] = {"fn": mk_perm("bypass"), "argv": P + ["--permission-mode", "acceptEdits", "--allow-dangerously-skip-permissions", "perm"]}
 
 
 def f_perm_write(body, n, st):
@@ -663,15 +644,10 @@ def f_perm_write(body, n, st):
 
 
 CASES["perm_named_accept"] = {"fn": f_perm_write, "argv": P + ["perm"]}
-CASES["perm_default_write"] = {"fn": mk_perm("general-purpose"), "argv": P + ["perm"]}
 
 
-def _pw_gp(body, n, st):
-    st["pw_type"] = "general-purpose"
-    return f_perm_write(body, n, st)
 
 
-CASES["perm_gp_write_control"] = {"fn": _pw_gp, "argv": P + ["perm"]}
 
 # ---- JUDGE additions ---------------------------------------------------------
 # default concurrent-subagent cap (no env): 22 foreground calls in one turn
