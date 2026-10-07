@@ -50,6 +50,7 @@ calen
 cancelchild
 cands
 caoff
+capserver
 castai
 catchable
 catppuccin
@@ -185,6 +186,7 @@ kagimcp
 kagisearch
 kasdirs
 kasid
+kdefault
 killpg
 kimi
 kiro
@@ -264,6 +266,7 @@ nomodel
 nosub
 nosuid
 NOSYSTEM
+noyolo
 NPROCESSORS
 nrfutil
 nullary
@@ -314,6 +317,7 @@ rawfile
 rcodesign
 reauthor
 recognised
+recproxy
 reflog
 refsect
 reftable
@@ -391,6 +395,8 @@ supersection
 swapfile
 sweepability
 sweepable
+sysfield
+sysprompt
 taplo
 tengu
 TERMUX
@@ -411,6 +417,7 @@ turbofish
 typebox
 ufcs
 ugrep
+uinput
 ultracode
 ultrareview
 unapprove
@@ -438,6 +445,7 @@ usebruno
 userns
 vllm
 WEZTERM
+wfagents
 wfctl
 wfpins
 wikilink
