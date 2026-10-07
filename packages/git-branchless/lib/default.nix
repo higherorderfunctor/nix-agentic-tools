@@ -8,6 +8,7 @@
   }:
     import ../../../lib/git-tool-settings {
       inherit extracted lib;
+      rows = builtins.fromJSON (builtins.readFile ../extract/annotations.json);
       tool = "git-branchless";
       exclusions = {
         "branchless.mainBranch" = "the legacy name of `branchless.core.mainBranch`, which git-branchless reads first. `git branchless init` writes that key into every repository it initializes, so this one never takes effect there; set `branchless.core.mainBranch` instead";

@@ -139,7 +139,6 @@
       "documented": true,
       "fallback": ["commit.gpgSign"],
       "invalid": "fallback",
-      "note": "It decides signing in both directions: git-revise re-creates every commit it rewrites, target and descendants alike, whose signed state differs from this setting, so with it false (the default when `commit.gpgSign` is unset too) a run strips existing signatures even from commits it does not otherwise change. With `gpg.format = ssh` it signs with `gpg.ssh.program`; any other format goes through `gpg.program`.",
       "overriddenBy": ["--gpg-sign", "--no-gpg-sign", "-S"],
       "reads": {
         "gitrevise/odb.py#Repository.__init__": ["repository"]
@@ -149,9 +148,7 @@
       "writes": {}
     },
     "revise.rerere": {
-      "defaultDescription": "the value of `rerere.enabled`; when that is unset too, true exactly when the repository's `rr-cache` directory exists (`git rev-parse --git-path rr-cache`, which linked worktrees share with the main one).",
       "defaultExpr": "rr_cache.is_dir()",
-      "description": "Whether git-revise replays and records conflict resolutions through git's rerere cache. Read once per conflicted file; when false no resolution is replayed or recorded. When a recorded resolution exists, `rerere.autoUpdate` decides whether it is applied without asking (false prompts `Apply recorded resolution? (y/N)`), which differs from what that key means to git itself.",
       "documented": false,
       "fallback": ["rerere.enabled"],
       "invalid": "fallback",

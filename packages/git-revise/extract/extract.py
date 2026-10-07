@@ -2,9 +2,13 @@
 # cspell:ignore astext autoclass automodule dests doctree elts finalbody kwonlyargs orelse toctree vararg  (Python ast / docutils / upstream names)
 """Census of the git config keys git-revise reads.
 
-Input : the source tree the package builds (--src), the hand annotations
-        (--annotations), and docutils on PYTHONPATH.
-Output: extracted.json in the shared sidecar schema (lib/git-tool-settings).
+Input : the source tree the package builds (--src), and docutils on
+        PYTHONPATH.
+Output: extracted.json in the shared sidecar schema (lib/git-tool-settings):
+        facts only. An owned key the man page does not describe has no
+        `description`, and a key-shaped string no read covers is a dead key
+        with no reason; the rows in annotations.json supply them, and the
+        prose for a computed default, in Nix (lib/git-tool-settings/rules.nix).
 Exit  : non-zero when any guard trips:
   R1  `git config` or `git -c` reached outside the helpers, or a git argv
       the extractor cannot read (a non-literal before the subcommand, a
@@ -13,15 +17,13 @@ Exit  : non-zero when any guard trips:
   R2  a helper call whose key is not a literal, that splats its arguments,
       or that passes no default
   R3  a helper whose `git config` type flag is unknown
-  R4  an annotation that is stale or shadows an extracted value
   R5  the helper API drifted (signature, try/except shape, argv, wrapping)
   R6  a helper used as a value, or named through getattr/hasattr
   R7  one key under two spellings, or with conflicting types or defaults
   R8  the man page documents a key the code never reads
-  R9  an owned key with no description
-  R10 a key-shaped string no extracted read covers
+  R10 a key-shaped string in the man page no extracted read or dead key
+      covers
   R11 an override through an `args.X` the CLI parser does not define
-  R12 an owned key with a computed default and no defaultDescription
   R13 GIT_CONFIG* in code: config through the environment is not modelled
   R14 `git var` of a variable outside VAR_ALLOWED (it reads config git-revise
       does not model)
@@ -48,7 +50,6 @@ from pathlib import Path
 from census import Census, sites
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-parser.add_argument("--annotations", type=Path, required=True)
 parser.add_argument("--out", type=Path, required=True)
 parser.add_argument("--src", type=Path, required=True)
 args = parser.parse_args()
@@ -532,7 +533,6 @@ for spellings in fold.values():
     if len(spellings) > 1:
         fail("R7", f"one key read under several spellings: {sorted(spellings)}")
 
-annotations = json.loads(args.annotations.read_text())
 settings, foreign = {}, {}
 for key, rs in sorted(by_key.items()):
     entry = {"reads": sites(rs, "read"), "writes": {}}
@@ -574,17 +574,10 @@ for key in sorted(man_docs):
     if key not in by_key:
         fail("R8", f"{MAN} documents `{key}` but no read of it was extracted")
 
-census.apply_annotations(settings, annotations, code="R4")
-
-# ── R9/R12: owned keys the options layer could not describe ───────────
-for key, entry in settings.items():
-    if "description" not in entry:
-        fail("R9", f"{key} is read but has no description in {MAN} or annotations.json")
-    if "defaultExpr" in entry and "defaultDescription" not in entry:
-        fail("R12", f"{key} defaults to computed `{entry['defaultExpr']}`; add a defaultDescription")
-
-# ── R10: every key-shaped token in production strings is accounted for
-dead_annotated = annotations.get("deadKeys", {})
+# ── Dead keys and R10: every key-shaped token is accounted for ────────
+# A production string naming a key no read covers is a dead key: a
+# mention, or a read this extractor cannot see. Only a person can tell
+# which, so its row must give a reason.
 known = {k.lower() for k in by_key}
 dead = {}
 for rel, tree in modules.items():
@@ -593,18 +586,12 @@ for rel, tree in modules.items():
         if not (ok and isinstance(v, str)):
             continue
         for token in census.key_tokens(v):
-            if token.lower() in known:
-                continue
-            if token in dead_annotated:
-                dead[token] = {"file": rel, "reason": dead_annotated[token]}
-                continue
-            fail("R10", f"string at {rel}:{n.lineno} names {token}, which no extracted read covers")
+            if token.lower() not in known:
+                dead[token] = {"file": rel}
 for lit in sorted(man_literals):
     for token in census.key_tokens(lit):
-        if token.lower() not in known and token not in dead_annotated:
+        if token.lower() not in known and token not in dead:
             fail("R10", f"{MAN} names `{token}`, which no extracted read covers")
-for k in sorted(set(dead_annotated) - set(dead)):
-    fail("R4", f"deadKeys entry {k} is stale: no production string names it any more")
 
 # ── Floors ─────────────────────────────────────────────────────────────
 if len(settings) < MIN_SETTINGS:

@@ -1,7 +1,8 @@
 # Typed options for the git config keys a git tool reads, generated from its
-# drift-checked sidecar (`packages/<owner>/extracted.json`). One generator
-# serves git-branchless, git-absorb and git-revise; each owner's
-# lib/default.nix calls it with its sidecar and hand tables.
+# drift-checked sidecar (`packages/<owner>/extracted.json`) as its rows file
+# (`packages/<owner>/extract/annotations.json`) fills it, through ./rules.nix.
+# One generator serves git-branchless, git-absorb and git-revise; each
+# owner's lib/default.nix calls it with its sidecar, rows and hand tables.
 #
 # The sidecar is read as an ordinary committed file. Never pass a package's
 # `passthru.extracted` derivation here: that is import-from-derivation and
@@ -17,7 +18,8 @@
 # stay raw git configuration.
 #
 # A key upstream adds becomes an option on the next evaluation after the
-# sidecar is regenerated, with no hand step. A key upstream removes makes a
+# sidecar is regenerated; the rows regeneration accepts it with a `{}` row,
+# and the drift check fails until a person writes any prose it needs. A key upstream removes makes a
 # consumer that still sets it fail with an unknown-option error, because
 # every level of the tree is closed. A sidecar FIELD this file does not know
 # fails evaluation (`schema` below): an extractor that learns something new
@@ -25,6 +27,8 @@
 #
 # Arguments:
 #   lib, extracted     the nixpkgs lib and the parsed sidecar
+#   rows               the parsed rows file. Its failures are the drift
+#                      check's to report; options come from the entries.
 #   tool               the program's name, used in descriptions
 #   exclusions         key → reason it has no option
 #   refinements        key → { type; refine; } narrowing what the sidecar's
@@ -46,10 +50,14 @@
   tool,
   exclusions ? {},
   refinements ? {},
+  rows,
 }: let
   inherit (lib) types;
 
-  # ── The sidecar schema: every field the extractors may write ─────────
+  # The sidecar with each surface's facts replaced by its reconciled entries.
+  merged = extracted // lib.mapAttrs (_: result: result.entries) (import ./rules.nix {inherit extracted lib rows;}).results;
+
+  # ── The merged schema: every field an extractor or a row may write ────
   schema = let
     common = ["default" "defaultExpr" "fallback" "overriddenBy" "reads" "specialValues" "type" "values" "writes"];
   in {
@@ -74,17 +82,22 @@
     ++ lib.optional (node ? minimum && !(builtins.isInt node.minimum)) "${kind}.${key}.minimum is not an integer"
     ++ lib.optional (node ? invalid && !(lib.elem node.invalid schema.invalid)) "${kind}.${key}.invalid is not one of ${toString schema.invalid}";
 
-  schemaErrors =
+  # The top level first: the surfaces are reconciled only once they exist.
+  topErrors =
     unknown "sidecar" schema.top extracted
-    ++ map (field: "sidecar: missing `${field}`") (lib.subtractLists (builtins.attrNames extracted) schema.required)
-    ++ unknown "source" schema.source (extracted.source or {})
-    ++ lib.concatLists (lib.mapAttrsToList (entryErrors "setting") (extracted.settings or {}))
-    ++ lib.concatLists (lib.mapAttrsToList (entryErrors "foreign") (extracted.foreign or {}))
-    ++ lib.concatLists (lib.mapAttrsToList (key: unknown "deadKeys.${key}" schema.deadKey) (extracted.deadKeys or {}));
+    ++ map (field: "sidecar: missing `${field}`") (lib.subtractLists (builtins.attrNames extracted) schema.required);
+  schemaErrors =
+    if topErrors != []
+    then topErrors
+    else
+      unknown "source" schema.source extracted.source
+      ++ lib.concatLists (lib.mapAttrsToList (entryErrors "setting") merged.settings)
+      ++ lib.concatLists (lib.mapAttrsToList (entryErrors "foreign") extracted.foreign)
+      ++ lib.concatLists (lib.mapAttrsToList (key: unknown "deadKeys.${key}" schema.deadKey) merged.deadKeys);
 
   sidecar =
     if schemaErrors == []
-    then extracted
+    then merged
     else throw "lib/git-tool-settings: the ${tool} sidecar does not match the schema:\n  ${lib.concatStringsSep "\n  " schemaErrors}";
 
   # The tool reads `<name>` from the last segment of the key, and git folds a

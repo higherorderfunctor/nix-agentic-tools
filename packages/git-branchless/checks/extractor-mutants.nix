@@ -1,8 +1,11 @@
 # Mutants for lib/git-tool-settings/mutate.py. Each makes one upstream-shaped change to
-# the patched source (or to the annotations) and names the outcome the
-# extractor must produce: `fails` lists guard codes that must all fire;
-# `adds` / `changes` describe an output that must move with the source; a
-# mutant with neither must leave the output identical to the real one.
+# the patched source and names the outcome the extractor must produce:
+# `fails` lists guard codes that must all fire; `adds` / `changes` /
+# `deadKeysAdd` / `revsetFunctionsAdd` describe an output that must move with
+# the source; a mutant with none must leave the output identical to the real
+# one. What a person must write for a new name (a type, a dead key's reason)
+# is lib/git-tool-settings/rules.nix's to demand; checks/git-tool-settings/
+# rules.nix holds those cases.
 #
 # M* came with the prototype. C* are the shapes an independent review found
 # the prototype silently mishandled; each one now fails closed or is
@@ -48,7 +51,9 @@ in [
         }
       '')
     ];
-    fails = ["F3"];
+    # No type to derive: the fact stays null for a row to fill.
+    adds = ["branchless.new.untyped"];
+    changes."branchless.new.untyped".type = null;
   }
   {
     name = "M3-key-from-helper";
@@ -139,11 +144,6 @@ in [
     adds = ["branchless.hint.newThing"];
     changes."branchless.hint.newThing".description = "A brand new hint.";
   }
-  {
-    name = "M10-stale-annotation";
-    annotations.settings."branchless.gone.key".type = "bool";
-    fails = ["F4"];
-  }
 
   # ── Review mutants: shapes the prototype lost without failing ─────────
   {
@@ -197,7 +197,7 @@ in [
         pub const TEST_SHOW_VERBOSE_KEY: &str = "branchless.hint.testShowVerbose";
       '')
     ];
-    fails = ["F2" "F8"];
+    fails = ["F2"];
   }
   {
     name = "C3b-hint-arm-format";
@@ -356,17 +356,7 @@ in [
         pub const OTHER_KEY: &str = "branchless.dead.other";
       '')
     ];
-    fails = ["F8"];
-  }
-  {
-    name = "G2-stale-dead-key";
-    annotations.deadKeys."branchless.gone.dead" = "no longer declared";
-    fails = ["F4"];
-  }
-  {
-    name = "G3-shadowing-annotation";
-    annotations.settings."branchless.smartlog.reverse".default = true;
-    fails = ["F4"];
+    deadKeysAdd = ["branchless.dead.other"];
   }
   {
     name = "G4-unclassified-test-cfg";
