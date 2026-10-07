@@ -18,8 +18,9 @@
     };
     environment = {
       facts = extracted.environment.variables;
+      # Optional prose: nothing reads it, and an extractor cannot derive it.
       fields = ["controls"];
-      needs = ["controls"];
+      needs = [];
       # Duplicate names or groups with unknown fields become bad-row data.
       rows =
         lib.zipAttrsWith (_: matches:
@@ -34,8 +35,8 @@
                 "unknown environment ignore group fields" = true;
               }))
           (builtins.attrValues rows.environmentIgnored));
-      # String facts classify unrecorded secret names; a recorded controls row
-      # is their review, so no additional secret fields are required.
+      # String facts classify unrecorded secret names, so a secret is never
+      # auto-added; a recorded row is its review, with no extra secret fields.
       secretNeeds = [];
     };
   };
