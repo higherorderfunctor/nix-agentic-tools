@@ -1,197 +1,143 @@
-# Routing behavior evaluations
+# Acceptance suite
 
-This manual suite tests planning decisions against the real delivered
-delegate-routing skill and applicable always-on rules. It does not execute the
-fictional tasks or prove runtime capabilities. `cases.nix` uses the existing
-module harness and `runtimes.<runtime>` configuration; expected decisions remain
-separate from the prompt. The isolated set uses the cases, answer schema and
-prose rubric. The separate vendor set retains the host system prompt and
-repository configuration.
+One manual suite of real sessions on Claude, Codex, Kiro and Kimchi. Each case
+checks what the delivered delegate-routing configuration makes an agent do with
+a real task. A human starts it; it spends real model turns on the operator's
+logins. No Nix check or CI job runs a session.
 
-Run from the repository root, with Nix and Python's `jsonschema` installed:
+## Cases
 
-```bash
-python3 packages/delegate-routing/eval/run.py --render-only --case all --repeat 3 --seed 42 --out /tmp/delegate-routing-eval/rendered
-python3 packages/delegate-routing/eval/run.py --grade-existing /tmp/delegate-routing-eval/answers.json --case all --repeat 3 --seed 42 --out /tmp/delegate-routing-eval/graded
-```
+`cases.nix` evaluates this repository's own delivery (`dev/ai.nix`) through the
+devenv module harness, with only the case's switches changed, and exports every
+delivered file. The prompt is the task plus synthetic usage numbers; the
+expected behavior never enters it.
 
-`--case` selects case IDs; `all` selects the complete suite. `--repeat` defaults
-to three independent trials. The recorded seed shuffles scheduled trials.
-`--out` defaults to a fresh directory outside the repository. Use separate
-directories for comparisons; preserve failed trials instead of retrying until
-they pass. `--fixtures` accepts previously exported fixture JSON for offline
-replay. Without it, the runner evaluates the package check's `cases` passthru
-through Nix. Rendering may realize generated Markdown, but it starts no model.
+| Cases                                                   | Switch or shape                              | Assertion      |
+| ------------------------------------------------------- | -------------------------------------------- | -------------- |
+| `claude-clamp-off`, `claude-clamp-on`                   | `ai.claude.delegationClampMitigation.enable` | `delegate`     |
+| `claude-ultracode-drain-off`                            | ultracode on, `Pool drain` routing entry off | `observe`      |
+| `claude-ultracode-drain-on`                             | ultracode on, `Pool drain` routing entry on  | `codex-lane`   |
+| `codex-single`, `kimchi-single`, `kiro-single`          | one task                                     | `one-delegate` |
+| `codex-dependent`, `kimchi-dependent`, `kiro-dependent` | dependent chain                              | `workflow`     |
 
-## Adapter status and cost
+The two Claude pairs are on/off pairs: the switch is the only difference. The
+drain cases supply more Codex headroom than Claude headroom.
 
-All four isolated adapters (Claude, Codex, Kimchi, Kiro) are disabled with
-`UNSUPPORTED_SAFE_PLAN_MODE`. No authenticated suppression preflight or terminal
-transcript has established safe tool-free operation. This includes Claude:
-documented suppression flags alone do not establish completion capture or
-effective isolation. The isolated runner rejects a live request before starting
-a model process. `--runtime`, `--model`, and `--effort` identify the evaluator,
-separately from the fictional plan's selected model.
+Assertions read the session's own event log. A delegate call is a tool call
+named after a `subagent` or `workflow` technique of the case's runtime, or a
+shell command that starts an `external` technique of any runtime (`claude -p`,
+`codex exec`, `kimchi -p`, `kiro-cli chat`). The technique names come from the
+evaluated `ai.programs.delegate-routing.runtimes.<runtime>.techniques`, the same
+table the skill renders. Calls made inside a delegate are not counted.
 
-Before enabling an adapter, verify empty tool access, blocked tool and child
-requests, context isolation, auth preservation, terminal completion capture,
-timeout, and output caps for the exact runtime/version/config. Save that
-preflight identity and transcript. Read-only permissions and a planning prompt
-do not suppress paid tool or child calls. Use a fresh directory outside every
-checkout and the raw executable when wrappers force integrations on. Do not copy
-credentials into results. Live runs require explicit authorization; one 25-case
-run with three repeats schedules 75 candidate turns, plus calibrated prose judge
-turns. Never start them from a Nix check.
+| Assertion      | Passes when the log shows                                   |
+| -------------- | ----------------------------------------------------------- |
+| `codex-lane`   | an external `codex exec` launch                             |
+| `delegate`     | at least one delegate call                                  |
+| `observe`      | nothing more: it records the delegates once the run answers |
+| `one-delegate` | exactly one subagent or external delegate, and no workflow  |
+| `workflow`     | a workflow technique, or at least two delegates             |
 
-## Saved answers
+Add a case when a real routing problem shows up, not to fill a matrix.
 
-`--grade-existing` takes a JSON manifest. Answer paths are relative to the
-manifest. Each answer file contains exactly one JSON object; fences, surrounding
-text, duplicate keys, and repaired JSON do not count as a valid answer.
+## Running
 
-```json
-{
-  "evaluator": {
-    "effort": "medium",
-    "model": "synthetic-evaluator",
-    "runtime": "claude",
-    "version": "offline-fixture"
-  },
-  "trials": [
-    {
-      "answer": "answer.json",
-      "caseId": "user-model-effort",
-      "trial": 1
-    }
-  ]
-}
-```
-
-Use `infrastructureError` in a trial when no completed candidate answer exists.
-Missing scheduled answers remain infrastructure errors, not behavioral passes.
-The manifest describes saved evidence; grading does not invoke its evaluator.
-The runner saves inputs, observations, exact verdicts, provenance, and summary
-JSON/Markdown. Mock usage executables print fixed fixture data and exit; only
-the runner executes them. Fictional launcher availability is scenario data.
-
-## Reading results
-
-Exact checks compare complete selection tuples, then validate supplied
-inventory, pinning, technique availability, dependency graphs, completion
-ownership, review identities, and usage placement. Alternate tuples describe
-actual policy choices, not independent field allowances. Native Claude model
-aliases map to the supplied concrete synthetic inventory.
-
-Behavioral rates exclude infrastructure errors; end-to-end rates include all
-scheduled trials. Invalid candidate JSON is a behavioral failure. Selection
-distributions retain allowed alternatives. Prose scoring stays pending until a
-calibrated, pinned judge is available; apply `rubric.md` manually to saved text
-in the meantime. Combined exact-plus-prose success must not silently count
-pending prose as passing.
-
-Missing-usage fallback is unresolved. That case checks honest uncertainty and no
-fabricated allowance, while final-pool expectations stay pending. Its repeat
-variants cover nonzero helper exit and incomplete successful JSON. Synthetic
-child-support observations cover external ownership without depending on the
-skill's "Runs own subagents" column. Comparable percentage fixtures use equal
-window durations and reset times; they make no claim about live pool
-comparability.
-
-Compare prose revisions with the same fixtures, evaluator, adapter
-configuration, judge, seed, and repeat count. Three trials provide an early
-signal. Increase to ten for unstable or disputed cases; a model/backend change
-is a separate comparison. Render-only success proves fixture assembly, not
-routing behavior.
-
-## Auth-free structural gate
-
-`checks.x86_64-linux.delegate-routing-eval-structure` evaluates the cases,
-renders every skill and rule, validates the JSON Schema, and checks that
-expected fields exist in that schema. It does not run a candidate or judge, and
-does not enforce expected model decisions. Home Manager/devenv delivery parity
-remains covered by the package's existing module checks.
+Run from the repository root. Without `--fixtures` the runner evaluates the
+cases with Nix and realizes the generated files they point at.
 
 ```bash
-python3 packages/delegate-routing/eval/run.py --validate-fixtures --fixtures /tmp/delegate-routing-eval/cases.json
-NIX_CONFIG=$'max-jobs = 1\ncores = 2' nix build .#checks.x86_64-linux.delegate-routing-eval-structure --no-link
+eval=packages/delegate-routing/eval/suite.py
+python3 "$eval" --dry-run                                  # validate, print every launch, start nothing
+python3 "$eval" --case codex-single                        # one case
+python3 "$eval" --harness kiro                             # one harness
+python3 "$eval" --claude-token-file ~/.config/delegate-suite/claude-token  # the whole suite
 ```
 
-## Vendor steering set: real harness
+The run prints one row per case: `PASS`, `FAIL` or `ERROR`. It exits non-zero
+only when a case is `ERROR`, meaning it could not reach an answer: a missing
+binary or login, a cap hit, a crash, no completion event, a leak, or the
+fixture's routing skill missing from the startup record. A `FAIL` is a real
+answer that broke the assertion. Each case keeps `logs/` (events, stderr, hook
+log, harness logs, `verdict.json`); `summary.json` holds every row.
 
-`--set vendor` evaluates `vendor-cases.nix` through `dev/ai.nix` and the real
-devenv delivery pipeline. Six cases cover Claude Opus with the delegation-clamp
-hook on/off, Claude ultracode with Pool drain on/off, and Kiro single/dependent
-tasks. The Pool drain off variant is observational; no pool preference is
-imposed. Clamp cases supply greater Claude headroom so the house pool rule does
-not route around native Claude delegation. Ultracode cases supply greater Codex
-headroom. Clamp variants require a delegate plan or observed denied delegate
-attempt; single Kiro tasks require exactly one delegate; dependent tasks require
-a workflow. Pool drain on requires an external Codex delegate or Codex lane.
-Each variant gets its own pass/fail and the summary retains the paired
-observations. Expected answers never enter the prompt.
+`--dry-run` renders each fixture and scratch configuration and prints the exact
+argv, environment and files per case. Secrets show where they come from, never
+their value. `checks.x86_64-linux.delegate-routing-eval-structure` runs the same
+dry run in the sandbox, with no harness on `PATH` and no login.
 
-Render every variant without an authenticated model turn:
+## Isolation
 
-```bash
-python3 packages/delegate-routing/eval/run.py --set vendor --render-only --repeat 1 --out /tmp/vendor-render
-```
+Every case gets `<out>/<case>/repo`, a fresh git repository holding the
+delivered files (store symlinks, as devenv delivers them), and
+`<out>/<case>/home`, a scratch `HOME`. The process starts with only an
+allowlisted environment: `HOME`, `PATH`, `LANG`, `TERM`, `USER`, `TMPDIR`, the
+`XDG_*` directories inside the scratch home, `DEVENV_ROOT`, and the harness's
+own variables. Memory, user MCP servers, user skills, plugins and user
+instructions all live under the real home, so the scratch home drops them.
+`--keep` keeps the fixture and scratch home; by default only the logs stay.
 
-Each trial's `launch.json` records the exact argv, cwd and environment override.
-Stdout prints that argv and the complete `config.json` content, including every
-generated file and the safety overlay. The workspace contains real generated
-instructions, skill and hooks, rather than replacing the vendor system prompt.
-Usage is explicitly mocked in the prompt; real usage helpers are never run. The
-routing skill is supplied verbatim in the prompt because reads are denied. This
-extra exposure is an observed context source and differs from ordinary lazy
-skill loading.
+The default run directory is `/var/tmp/delegate-routing-suite/<UTC time>`. A
+live run refuses a directory under `~` or `/tmp`, or one with an `AGENTS.md` or
+`CLAUDE.md` above it: Kimchi and Claude load ancestor context files, and Codex
+refuses helper binaries under a temporary directory.
 
-Render-only records runtime version as UNKNOWN because it does not invoke a
-runtime. Live capture queries `--version` before any turn and records its
-executable, version, date, argv, generated-config and effective-config hashes.
-Generated sources carry hashes; raw symlinks are preserved, including dangling
-references whose targets are recorded as unavailable. The supplied prompt and
-safety hook are separately identified. Configured hook payloads are recorded as
-configured, not proof of injection. Model-reported context sources are retained
-in the answer. User-global/managed configuration, plugins, resolved Kiro
-model/effort and hidden vendor steering remain UNKNOWN unless exposed by the
-transcript. In particular, a delegation result cannot prove that heron_brook was
-present.
+| Harness | Launch                                                                                                                                                                                          | Login                                                                                                                                                 | Normal-session settings carried over                                                                                                            |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude  | `claude -p --setting-sources project`, overlay `--settings`, `--model opus --permission-mode auto`, scratch `CLAUDE_CONFIG_DIR`, memory, org memory, policy skills and claude.ai connectors off | `CLAUDE_CODE_OAUTH_TOKEN` from a `claude setup-token` token (`--claude-token-file` or the variable). `~/.claude` credentials are never read or copied | `enableWorkflows`, `ultracode`; the fixture's `.mcp.json` servers are enabled; the clamp hook comes from the fixture                            |
+| Codex   | `codex exec --json` with apps, plugins, remote plugins and memories disabled; scratch `CODEX_HOME`                                                                                              | `auth.json` symlinked, never copied: Codex rewrites it in place, so a refresh reaches the real file                                                   | `model`, `model_reasoning_effort`, `default_permissions`, `permissions`, `features`, `agents`; the fixture trusted in the scratch `config.toml` |
+| Kimchi  | `kimchi -p --mode json --approve --auto`                                                                                                                                                        | `KIMCHI_API_KEY` from `~/.config/kimchi/config.json`, session-only                                                                                    | `harness/settings.json` with the memory extension forced off                                                                                    |
+| Kiro    | `kiro-cli chat --v3 --no-interactive --trust-all-tools --output-format stream-json` through the operator's wrapper                                                                              | the real data dir (`KIRO_DATA_DIR`), shared, so a refresh lands in the database the operator already uses                                             | `chat.defaultModel`, `chat.enableCheckpoint`, `chat.enableTangentMode`, `chat.enableWorkflows`                                                  |
 
-The safety overlay exposes native tools but denies all execution through a
-logging PreToolUse hook, plus noninteractive permission denial. Claude loads
-project settings plus mandatory managed settings, so user-settings hooks cannot
-reverse its clamp toggle. Claude MCP enablement is disabled for the evaluation;
-Kiro trusts no tools. The real Claude mitigation hook remains installed. Native
-tool requests and external launcher calls in shell requests are recorded in
-`attempts.json`. A plan is graded separately from attempted calls; a refused
-attempt remains evidence, not successful delegation.
+Vendor-bundled skills and system prompts are kept: they are vendor surface.
+Claude and Kiro also get a log-only `PreToolUse` hook that appends each request
+to `logs/hook-calls.jsonl` and always exits 0; it is a second record, not
+counted. A `claude` binary must resolve inside `/nix/store` (`~/.local/bin`
+holds a stale native install); `--bin NAME=PATH` overrides any harness binary.
 
-Live adapters require suppression and terminal-capture evidence for the
-installed runtime and exact generated configuration. Before enabling a manual
-run, verify denial of native delegates, workflows, external launchers and
-read/write tools, hook execution and terminal completion with the same flags.
-Save the transcript outside the repository. Supply a JSON array of preflight
-records with `runtime`, `version`, `executable`, `generatedConfigHash`,
-`safetyProfileHash`, `allToolsDenied: true`, `hookExecutionVerified: true`,
-`terminalCaptureVerified: true`, and `evidenceTranscript` pointing at that file.
-The safety-profile hash normalizes the trial directory so evidence can be reused
-across repeat directories. Do not assert these fields without observing them. No
-paid preflight or model turn is part of the structural checks.
+**Caps.** 600 s wall clock per case, then the whole process group gets SIGTERM
+and, 30 s later, SIGKILL; delegates still running when the session ends are
+killed with it. Claude adds `--max-turns 40 --max-budget-usd 5` (the budget is a
+list-price tripwire under OAuth). Kiro has no turn flag, so the runner stops it
+after 40 tool calls. Codex and Kimchi have no turn or spend cap.
 
-After those checks and explicit authorization, run manually:
+**Nested CLI delegates** are attempt-only: a `codex exec` or `kiro-cli chat`
+child inherits the scratch home and fails without a login, and the attempt is
+still logged. A `claude -p` child in a Claude case and a `kimchi -p` child in a
+Kimchi case inherit the session's token and can run, inside the same caps.
 
-```bash
-python3 packages/delegate-routing/eval/run.py --set vendor --allow-paid --safety-preflight /tmp/vendor-preflight.json --repeat 1 --out /tmp/vendor-live
-```
+## Leak and delivery checks
 
-This schedules six paid candidate turns (18 at the default three repeats), with
-no judge or delegate turns. Real vendor prompts, repository instructions and
-Opus ultracode can make these considerably more expensive than isolated cases;
-no fixed monetary cost is claimed. Failed turns retain transcripts and
-infrastructure errors. Unsupported Kiro stream formats or missing completion
-markers are infrastructure errors rather than inferred passes. Render-only
-proves assembly, not safety or vendor behavior.
+A case is `ERROR` when either check fails, because its answer would not measure
+the delivered configuration.
 
-`checks.x86_64-linux.delegate-routing-vendor-structure` validates the vendor
-fixtures and renders every variant with no runtime process, authentication or
-behavioral assertions.
+- **Leak:** any personal configuration path under the real home (`~/.claude`,
+  `~/.claude.json`, `~/.agents`, `~/.codex`, `~/.kiro`, `~/.config/kiro`,
+  `~/.config/kimchi`, `~/.pi`) in any log; or a personal skill, MCP server,
+  plugin or agent name that the fixture does not ship in the harness's startup
+  record.
+- **Delivery:** the startup record must name `delegate-routing`.
+
+| Harness | Startup record                                                                |
+| ------- | ----------------------------------------------------------------------------- |
+| Claude  | the `system`/`init` stream event                                              |
+| Codex   | `codex debug prompt-input` with the same flags, run first (no model call)     |
+| Kiro    | `KIRO_CHAT_LOG_FILE` at debug level                                           |
+| Kimchi  | none: its JSON stream starts with a session header, so delivery is unverified |
+
+These cannot be isolated, and are recorded rather than removed: work-account
+managed settings (Claude, Codex), organization hooks, steering and MCP servers
+(Kiro), and server-side prompt injection (Kiro).
+
+## Operator steps before the first live run
+
+1. Create a Claude token once on the account the suite should use, and store it
+   outside the repository: `claude setup-token`, then save the printed token to
+   a file such as `~/.config/delegate-suite/claude-token` with mode 600.
+2. Check the Kimchi key in `~/.config/kimchi/config.json` belongs to that
+   account, and that `codex login status` and `kiro-cli whoami` show it too.
+3. `python3 packages/delegate-routing/eval/suite.py --dry-run` and read the
+   launches.
+4. One trivial run per harness to prove the login and the checks:
+   `--case claude-clamp-off --claude-token-file <file>`, then
+   `--case codex-single`, `--case kimchi-single`, `--case kiro-single`.
+5. The whole suite once. Every case must end `PASS` or `FAIL`.

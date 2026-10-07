@@ -4,31 +4,20 @@
   pkgs,
   ...
 }: let
-  cases = import ./eval/cases.nix {inherit harness lib;};
-  fixtures = pkgs.writeText "delegate-routing-eval-cases.json" (builtins.toJSON cases);
-  python = pkgs.python3.withPackages (packages: [packages.jsonschema]);
-  vendorCases = import ./eval/vendor-cases.nix {inherit harness lib pkgs;};
-  vendorFixtures = pkgs.writeText "delegate-routing-vendor-cases.json" (builtins.toJSON vendorCases);
+  cases = import ./eval/cases.nix {inherit harness lib pkgs;};
+  fixtures = pkgs.writeText "delegate-routing-cases.json" (builtins.toJSON cases);
 in {
+  # Validates every case and renders its fixture and launch plan with no
+  # harness on PATH and no login: the suite's --dry-run, nothing launched.
   checks.delegate-routing-eval-structure =
     pkgs.runCommand "delegate-routing-eval-structure" {
-      nativeBuildInputs = [python];
+      nativeBuildInputs = [pkgs.git pkgs.python3];
       passthru = {inherit cases;};
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      python ${./eval}/run.py --validate-fixtures --fixtures ${fixtures}
-      touch "$out"
-    '';
-  checks.delegate-routing-vendor-structure =
-    pkgs.runCommand "delegate-routing-vendor-structure" {
-      nativeBuildInputs = [python];
-      passthru.cases = vendorCases;
-    } ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      python ${./eval}/run.py --set vendor --validate-fixtures --fixtures ${vendorFixtures}
-      python ${./eval}/run.py --set vendor --render-only --fixtures ${vendorFixtures} --repeat 1 --out "$TMPDIR/vendor-render" > "$TMPDIR/vendor-render.log"
+      export HOME="$TMPDIR/home"
+      python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
       touch "$out"
     '';
   imports = [./checks/module-eval.nix];

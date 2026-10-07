@@ -3,8 +3,9 @@
 > **Last verified:** 2026-10-06 — one enabled "Work and review" workflow ships
 > the Subtractive standard; a runtime workflow record without text keeps the
 > portable header. Delegate evidence is two parts: the map (`docs/delegates/`
-> plus `probes/delegates/`) and the acceptance suite (`eval/`); techniques
-> hand-declare `runsOwnSubagents` from map rows.
+> plus `probes/delegates/`) and the acceptance suite (`eval/`, one real-session
+> runner for all four harnesses); techniques hand-declare `runsOwnSubagents`
+> from map rows.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -161,39 +162,26 @@ nix eval --raw .#delegate-routing-content.render --apply 'render: render { runti
 
 ## Acceptance suite
 
-`eval/` is the acceptance suite: it checks what the delivered skill makes an
-agent decide. Named Nix cases render the actual delivered skill and router rule
-through the existing module harness. Fictional inventories, capabilities and
-executed usage mocks provide the observations; independent expected tuples stay
-out of prompts. Pool cases consume this worktree's house rule sources. Only the
-review cases enable "Work and review"; the rest disable it so they test routing
-alone. Child-support observations are synthetic test configuration, not
-measurements of real runtimes. Missing-usage fallback remains a partial
-expectation until its policy is decided.
+`eval/` is the acceptance suite: one manual suite of real sessions on Claude,
+Codex, Kiro and Kimchi that checks what the delivered configuration makes an
+agent do with a real task. `eval/cases.nix` evaluates `dev/ai.nix` through the
+devenv module harness with only each case's switches changed, and exports every
+delivered file plus the evaluated delegate technique names. `eval/suite.py` is
+the single runner: it renders each case into a fresh fixture repository, runs
+one session under a scratch `HOME` that keeps only the login, caps it, and
+asserts on the session's own event log. Harness differences live in its
+`HARNESSES` table; assertions in its `ASSERTIONS` table.
 
-`eval/run.py` renders without authentication and grades strict saved JSON plans
-against `eval/plan.schema.json`; `eval/rubric.md` owns prose criteria and
-separate calibration samples. Runtime adapters stay disabled until verified
-tool/context suppression and terminal capture establish safe planning mode.
-Outputs default outside checkouts. Pending prose and policy decisions remain
-separate from exact scores, with infrastructure failures retained in end-to-end
-rates.
+A delegate call is classified by technique name, so the suite and the rendered
+skill read one table. The Claude clamp and ultracode drain cases are on/off
+pairs. Results are `PASS`, `FAIL` or `ERROR`; only `ERROR` (no answer, a leak,
+or the routing skill missing from the startup record) fails the run.
 
-The owner check `delegate-routing-eval-structure` evaluates and renders all
-cases, validates the schema, and checks expected field references. Its `cases`
-passthru is the runner's fixture export boundary. It never starts a model
-process. Existing module checks own Home Manager/devenv delivery parity; the
-manual suite owns behavioral evidence. See `eval/README.md` for replay commands.
-
-The separate `eval/vendor-cases.nix` set evaluates `dev/ai.nix` through the
-devenv module harness and exports the actual delivered files for each Claude
-experimental switch and Kiro task shape. `run.py --set vendor --render-only`
-materializes those files and a tool-denial overlay, retaining vendor system
-steering for manually authorized live capture. Configured hook content and
-observed sources are distinguished from hidden vendor text, which stays UNKNOWN.
-The vendor structural check renders every variant without starting a runtime.
-See the evaluation guide for safety preflight requirements, provenance, paired
-comparisons and paid-turn counts.
+The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
+in the sandbox: it validates every case and renders every fixture and launch
+plan with no harness and no login. Its `cases` passthru is the runner's fixture
+export. No check starts a session. See `eval/README.md` for the isolation
+recipe, the caps and the operator steps.
 
 ## Delegate map
 

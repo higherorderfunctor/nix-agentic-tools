@@ -23,15 +23,17 @@ gives the exact command and the expected output. There is no single runner.
 
 ## The acceptance suite: does the skill route correctly
 
-`packages/delegate-routing/eval/` holds real-session cases that check what the
-skill makes an agent decide. Render every case without a login:
+`packages/delegate-routing/eval/` runs real sessions on Claude, Codex, Kiro and
+Kimchi and checks what the delivered configuration makes an agent do. Validate
+every case and print each launch without starting anything:
 
 ```bash
-python3 packages/delegate-routing/eval/run.py --set vendor --render-only --repeat 1 --out "$(mktemp -d)"
+python3 packages/delegate-routing/eval/suite.py --dry-run
 ```
 
-A live run costs model turns and needs the safety preflight described in
-`eval/README.md`. Its command adds `--allow-paid --safety-preflight <file>`.
+A live run spends model turns on the operator's logins, so the operator runs it.
+`--case <id>` or `--harness <name>` narrows it; `eval/README.md` lists the
+operator steps.
 
 ## Rules
 
