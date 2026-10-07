@@ -2110,6 +2110,14 @@
             "valueName": "SOURCE"
           },
           {
+            "acceptedValues": ["daybreak_blue", "daybreak_red", "standard"],
+            "conflicts": [],
+            "default": null,
+            "help": "Request an experimental Cyber access program for this turn (OpenAI provider only). Omit to use server defaults. Not supported with review; fork requires a prompt",
+            "names": ["--cyber-access-program"],
+            "valueName": "PROGRAM"
+          },
+          {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
@@ -2277,6 +2285,14 @@
             "valueName": "SOURCE"
           },
           {
+            "acceptedValues": ["daybreak_blue", "daybreak_red", "standard"],
+            "conflicts": [],
+            "default": null,
+            "help": "Request an experimental Cyber access program for this turn (OpenAI provider only). Omit to use server defaults. Not supported with review; fork requires a prompt",
+            "names": ["--cyber-access-program"],
+            "valueName": "PROGRAM"
+          },
+          {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
@@ -2442,6 +2458,14 @@
             "help": "Source classification for newly created or forked threads",
             "names": ["--thread-source"],
             "valueName": "SOURCE"
+          },
+          {
+            "acceptedValues": ["daybreak_blue", "daybreak_red", "standard"],
+            "conflicts": [],
+            "default": null,
+            "help": "Request an experimental Cyber access program for this turn (OpenAI provider only). Omit to use server defaults. Not supported with review; fork requires a prompt",
+            "names": ["--cyber-access-program"],
+            "valueName": "PROGRAM"
           },
           {
             "acceptedValues": [],
@@ -2617,6 +2641,14 @@
             "help": "Source classification for newly created or forked threads",
             "names": ["--thread-source"],
             "valueName": "SOURCE"
+          },
+          {
+            "acceptedValues": ["daybreak_blue", "daybreak_red", "standard"],
+            "conflicts": [],
+            "default": null,
+            "help": "Request an experimental Cyber access program for this turn (OpenAI provider only). Omit to use server defaults. Not supported with review; fork requires a prompt",
+            "names": ["--cyber-access-program"],
+            "valueName": "PROGRAM"
           },
           {
             "acceptedValues": [],
@@ -5654,7 +5686,12 @@
     },
     {
       "default": false,
-      "maturity": "under development",
+      "maturity": "stable",
+      "name": "api_key_cyber_access_programs"
+    },
+    {
+      "default": true,
+      "maturity": "stable",
       "name": "api_key_model_discovery"
     },
     {
@@ -5705,6 +5742,11 @@
     {
       "default": true,
       "maturity": "stable",
+      "name": "browser_annotation_api"
+    },
+    {
+      "default": true,
+      "maturity": "stable",
       "name": "browser_use"
     },
     {
@@ -5721,6 +5763,11 @@
       "default": false,
       "maturity": "under development",
       "name": "chronicle"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "cli_daybreak"
     },
     {
       "default": false,
@@ -5978,6 +6025,11 @@
       "name": "in_app_updates"
     },
     {
+      "default": true,
+      "maturity": "stable",
+      "name": "in_app_voice"
+    },
+    {
       "default": false,
       "maturity": "under development",
       "name": "instant_interrupt"
@@ -6009,6 +6061,11 @@
     },
     {
       "default": false,
+      "maturity": "experimental",
+      "name": "login_shell_package_path"
+    },
+    {
+      "default": false,
       "maturity": "under development",
       "name": "mcp_2026_07_28"
     },
@@ -6026,6 +6083,11 @@
       "default": true,
       "maturity": "stable",
       "name": "mentions_v2"
+    },
+    {
+      "default": false,
+      "maturity": "under development",
+      "name": "model_catalog_in_context"
     },
     {
       "default": true,
@@ -6482,7 +6544,7 @@
     }
   ],
   "provenance": {
-    "codexVersion": "0.160.1",
+    "codexVersion": "0.161.0",
     "extractorSchema": 1
   }
 }
