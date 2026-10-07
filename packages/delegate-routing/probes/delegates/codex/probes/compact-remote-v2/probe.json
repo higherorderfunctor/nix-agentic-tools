@@ -1,0 +1,22 @@
+{
+  "thread": { "config": { "bypass_hook_trust": true } },
+  "turn": "TURN-ONE-7200",
+  "timeout": 20,
+  "after": [
+    {
+      "method": "thread/compact/start",
+      "params": { "threadId": "$THREAD" },
+      "wait": 5
+    },
+    {
+      "method": "turn/start",
+      "params": {
+        "threadId": "$THREAD",
+        "input": [
+          { "type": "text", "text": "TURN-TWO-7202", "text_elements": [] }
+        ]
+      },
+      "wait": 5
+    }
+  ]
+}

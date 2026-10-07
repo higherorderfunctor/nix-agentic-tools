@@ -1,0 +1,40 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["A_PY_SENTINEL"],
+    "events": [
+      {
+        "toolUseId": "rf_a",
+        "name": "read_file",
+        "input": { "path": "@RUN@/ws/src/a.py" }
+      }
+    ]
+  },
+  {
+    "match": "A_PY_SENTINEL",
+    "not": ["N_TXT_SENTINEL"],
+    "events": [
+      {
+        "toolUseId": "rf_n",
+        "name": "read_file",
+        "input": { "path": "@RUN@/ws/nested/n.txt" }
+      }
+    ]
+  },
+  {
+    "match": "N_TXT_SENTINEL",
+    "not": ["WS_AUTO_SENTINEL"],
+    "events": [
+      {
+        "toolUseId": "dc_a",
+        "name": "disclose_context",
+        "input": { "name": "ws-auto" }
+      }
+    ]
+  },
+  { "match": null, "events": ["MAIN_DONE"] },
+  { "match": null, "events": ["MAIN_DONE"] },
+  { "match": null, "events": ["MAIN_DONE"] },
+  { "match": null, "events": ["MAIN_DONE"] },
+  { "match": null, "events": ["MAIN_DONE"] }
+]

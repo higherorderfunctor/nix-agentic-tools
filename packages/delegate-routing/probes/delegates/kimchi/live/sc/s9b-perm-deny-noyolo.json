@@ -1,0 +1,14 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--no-session",
+    "--deny-tool",
+    "write",
+    "-p",
+    "go PLAN=[[{\"name\": \"write\", \"args\": {\"path\": \"parent_write.txt\", \"content\": \"x\"}}], [{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_DENY_NOYOLO CHILDPLAN=[[{\\\"name\\\": \\\"write\\\", \\\"args\\\": {\\\"path\\\": \\\"child_write.txt\\\", \\\"content\\\": \\\"x\\\"}}]]\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}]]"
+  ],
+  "timeout": 40
+}

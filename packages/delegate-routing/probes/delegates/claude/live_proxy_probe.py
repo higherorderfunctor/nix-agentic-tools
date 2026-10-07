@@ -3,6 +3,8 @@ front of api.anthropic.com. Logs request BODIES only (never headers) to <work>/o
 then runs one `claude -p --model haiku` against it. Usage: python3 live_proxy_probe.py <case>
 <work> = $PROBE_OUT/claude-live or a fresh temp dir.
 Case live_resume: does SendMessage to a COMPLETED background agent resume it with its prior history?
+Case live_monitor: with GrowthBook reachable (non-essential traffic allowed) and the first-party layout, does the
+account's Monitor gate reach a `-p` request (Monitor in `tools` or the deferred-tool listing)? One short turn.
 """
 import argparse, json, os, pathlib, ssl, subprocess, sys, threading, time, http.client
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -14,7 +16,7 @@ W = pin.workdir("claude-live")
 CLAUDE = os.environ.get("CLAUDE_BIN") or str(pin.package("claude-code") / "bin" / "claude")
 PORT = int(os.environ.get("MOCK_PORT", "18790"))
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("case", choices=["live_resume"])
+parser.add_argument("case", choices=["live_monitor", "live_resume"])
 parser.add_argument("--claude-token-file", required=True, help="Read the OAuth token from this file descriptor; never log or persist it")
 args = parser.parse_args()
 CASE = args.case
@@ -72,7 +74,12 @@ PROMPTS = {
         "Step 2: when the completion notification for that agent arrives, call SendMessage with to set to that agent's agentId "
         "and message: 'What exact text did your Bash command print? Reply with only that text.'\n"
         "Step 3: when that agent's second completion notification arrives, reply with exactly FINISHED."),
+    "live_monitor": "Reply with exactly OK and nothing else. Do not call any tool.",
 }
+# Per-case environment changes on top of the base below. live_monitor needs the feature client (so non-essential
+# traffic stays on) and the first-party request layout (so deferred tools and ToolSearch are offered).
+CASE_ENV = {"live_monitor": {"drop": ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"],
+                             "set": {"_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL": "1"}}}
 
 if __name__ == "__main__":
     if not (W / "fixture").exists():
@@ -87,6 +94,9 @@ if __name__ == "__main__":
     env["CLAUDE_CODE_OAUTH_TOKEN"] = pathlib.Path(args.claude_token_file).read_text().strip()
     env.update({"ANTHROPIC_BASE_URL": f"http://127.0.0.1:{PORT}", "DISABLE_AUTOUPDATER": "1",
                 "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"})
+    for key in CASE_ENV.get(CASE, {}).get("drop", []):
+        env.pop(key, None)
+    env.update(CASE_ENV.get(CASE, {}).get("set", {}))
     argv = [CLAUDE, "-p", "--model", "haiku", "--setting-sources", "project", "--strict-mcp-config", "--mcp-config",
             '{"mcpServers":{}}', "--permission-mode", "bypassPermissions", "--allow-dangerously-skip-permissions",
             "--output-format", "stream-json", "--verbose", PROMPTS[CASE]]

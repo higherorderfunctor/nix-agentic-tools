@@ -1,0 +1,16 @@
+model = "gpt-6-luna"
+model_provider = "fake"
+sandbox_mode = "read-only"
+approval_policy = "never"
+developer_instructions = "CFG-DEV-4000"
+[features]
+memories = true
+[memories]
+min_rollout_idle_hours = 1
+[model_providers.fake]
+name = "fake"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"
+stream_idle_timeout_ms = 1500
+stream_max_retries = 2

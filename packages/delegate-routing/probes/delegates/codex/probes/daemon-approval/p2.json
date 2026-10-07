@@ -1,0 +1,9 @@
+{
+  "transport": "daemon",
+  "resume": "p1/thread_id",
+  "turn": null,
+  "timeout": 12,
+  "settle": 0,
+  "approval": "accept",
+  "after": [{ "method": "thread/loaded/list", "params": {} }]
+}

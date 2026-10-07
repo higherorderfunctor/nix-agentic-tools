@@ -1,0 +1,23 @@
+{
+  "/root": [
+    {
+      "calls": [["spawn_agent", { "message": "V1-TASK-A" }, "multi_agent_v1"]]
+    },
+    {
+      "calls": [
+        [
+          "wait_agent",
+          { "targets": ["$AGENT_ID"], "timeout_ms": 5000 },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    { "calls": [["close_agent", { "target": "$AGENT_ID" }, "multi_agent_v1"]] },
+    { "msg": "ROOT DONE" }
+  ],
+  "v1c1": [
+    { "calls": [["spawn_agent", { "message": "V1-GRAND" }, "multi_agent_v1"]] },
+    { "sleep": 60, "msg": "CHILD DONE" }
+  ],
+  "v1c2": [{ "sleep": 60, "msg": "GRAND DONE" }]
+}

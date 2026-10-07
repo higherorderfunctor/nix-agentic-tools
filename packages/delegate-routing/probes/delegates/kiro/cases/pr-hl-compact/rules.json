@@ -1,0 +1,23 @@
+[
+  {
+    "events": [
+      { "contextUsagePercentage": 90 },
+      {
+        "input": { "explanation": "probe", "path": "." },
+        "name": "list_directory",
+        "toolUseId": "ld_0"
+      }
+    ],
+    "match": "MAIN_KICKOFF",
+    "not": ["<first_message>", "automated summarization request"]
+  },
+  {
+    "events": ["SUMMARY_SENTINEL"],
+    "match": "automated summarization request"
+  },
+  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null },
+  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null },
+  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null },
+  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null },
+  { "events": ["GENERIC_REPLY_SENTINEL"], "match": null }
+]

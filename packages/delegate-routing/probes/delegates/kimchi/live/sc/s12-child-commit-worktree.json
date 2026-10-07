@@ -1,0 +1,13 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--no-session",
+    "-p",
+    "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_WT CHILDPLAN=[[{\\\"name\\\": \\\"bash\\\", \\\"args\\\": {\\\"command\\\": \\\"echo x > child.txt && git add child.txt && git commit -q -m CHILD_WT_COMMIT && case \\\\\\\"$(git rev-parse --absolute-git-dir)\\\\\\\" in */.git/worktrees/*) echo LINKED_WT;; *) echo NOT_LINKED;; esac && git log -1 --format=LANDED:%s wt-branch\\\"}}]]\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}]]"
+  ],
+  "timeout": 40,
+  "setup_sh": "repo=\"$BASE/repo\"\ngit init -q -b main \"$repo\"\ngit -C \"$repo\" config user.name probe\ngit -C \"$repo\" config user.email probe@example.invalid\ngit -C \"$repo\" commit -q --allow-empty -m init\ngit -C \"$repo\" worktree add -q -b wt-branch \"$PROJ\"\ngit -C \"$PROJ\" rev-parse --absolute-git-dir"
+}

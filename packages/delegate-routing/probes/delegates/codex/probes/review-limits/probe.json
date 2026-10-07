@@ -1,0 +1,25 @@
+{
+  "thread": {},
+  "turn": "GO",
+  "timeout": 15,
+  "after": [
+    {
+      "method": "review/start",
+      "params": {
+        "threadId": "$THREAD",
+        "target": { "type": "custom", "instructions": "REVIEW-MALFORMED-7401" },
+        "delivery": "inline"
+      },
+      "wait": 6
+    },
+    {
+      "method": "review/start",
+      "params": {
+        "threadId": "$THREAD",
+        "target": { "type": "custom", "instructions": "REVIEW-STALL-7402" },
+        "delivery": "inline"
+      },
+      "wait": 20
+    }
+  ]
+}

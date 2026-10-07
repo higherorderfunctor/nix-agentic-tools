@@ -1,0 +1,1 @@
+../../guardian-extra/extra/AGENTS.md

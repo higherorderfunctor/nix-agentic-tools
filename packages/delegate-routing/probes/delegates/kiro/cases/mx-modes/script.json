@@ -1,0 +1,164 @@
+{
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "MODE_VIBE_SENTINEL hi",
+      "timeout": 60
+    },
+    {
+      "op": "call",
+      "method": "session/new",
+      "params": {
+        "cwd": "$CWD",
+        "mcpServers": [],
+        "_meta": {
+          "kiro": {
+            "modeId": "spec"
+          }
+        }
+      },
+      "save": {
+        "S_SPEC": "result.sessionId"
+      },
+      "timeout": 60
+    },
+    {
+      "op": "call",
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$S_SPEC",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "MODE_SPEC_SENTINEL hi"
+          }
+        ]
+      },
+      "timeout": 90
+    },
+    {
+      "op": "call",
+      "method": "session/new",
+      "params": {
+        "cwd": "$CWD",
+        "mcpServers": [],
+        "_meta": {
+          "kiro": {
+            "modeId": "quick-spec"
+          }
+        }
+      },
+      "save": {
+        "S_QUICK_SPEC": "result.sessionId"
+      },
+      "timeout": 60
+    },
+    {
+      "op": "call",
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$S_QUICK_SPEC",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "MODE_QUICK_SPEC_SENTINEL hi"
+          }
+        ]
+      },
+      "timeout": 90
+    },
+    {
+      "op": "call",
+      "method": "session/new",
+      "params": {
+        "cwd": "$CWD",
+        "mcpServers": [],
+        "_meta": {
+          "kiro": {
+            "modeId": "bug-fix"
+          }
+        }
+      },
+      "save": {
+        "S_BUG_FIX": "result.sessionId"
+      },
+      "timeout": 60
+    },
+    {
+      "op": "call",
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$S_BUG_FIX",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "MODE_BUG_FIX_SENTINEL hi"
+          }
+        ]
+      },
+      "timeout": 90
+    },
+    {
+      "op": "call",
+      "method": "session/new",
+      "params": {
+        "cwd": "$CWD",
+        "mcpServers": [],
+        "_meta": {
+          "kiro": {
+            "modeId": "plan"
+          }
+        }
+      },
+      "save": {
+        "S_PLAN": "result.sessionId"
+      },
+      "timeout": 60
+    },
+    {
+      "op": "call",
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$S_PLAN",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "MODE_PLAN_SENTINEL hi"
+          }
+        ]
+      },
+      "timeout": 90
+    },
+    {
+      "op": "call",
+      "method": "session/new",
+      "params": {
+        "cwd": "$CWD",
+        "mcpServers": [],
+        "_meta": {
+          "kiro": {
+            "modeId": "autonomous"
+          }
+        }
+      },
+      "save": {
+        "S_AUTONOMOUS": "result.sessionId"
+      },
+      "timeout": 60
+    },
+    {
+      "op": "call",
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$S_AUTONOMOUS",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "MODE_AUTONOMOUS_SENTINEL hi"
+          }
+        ]
+      },
+      "timeout": 90
+    }
+  ]
+}

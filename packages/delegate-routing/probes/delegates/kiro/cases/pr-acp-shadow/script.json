@@ -1,0 +1,3 @@
+{
+  "steps": [{ "op": "prompt", "text": "hello USER_SENTINEL_1" }]
+}

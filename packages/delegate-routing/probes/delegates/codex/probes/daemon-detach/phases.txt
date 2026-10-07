@@ -1,0 +1,9 @@
+# client disconnects 4 s into a turn whose root waits on a 25 s child
+client p1.json
+queue QUEUED-MSG-7301
+sleep 30
+# root idle since ~26 s: still loaded inside thread_unload_delay_secs = 20 (p2 attach=false: observes, does not subscribe)
+client p2.json
+sleep 30
+# no subscriber and idle past the delay: unloaded
+client p3.json

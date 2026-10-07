@@ -1,0 +1,14 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--mode",
+    "json",
+    "--no-session",
+    "--tools",
+    "read,bash,write",
+    "-p",
+    "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_DENIED_AGENT\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}]]"
+  ],
+  "timeout": 40
+}

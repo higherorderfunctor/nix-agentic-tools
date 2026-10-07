@@ -1,0 +1,48 @@
+{
+  "capsMeta": {
+    "kiro": {
+      "systemPrompt": "HOST_CAPS_SYS_SENTINEL",
+      "appendSystemPrompt": "HOST_CAPS_APPEND_SENTINEL"
+    }
+  },
+  "initMeta": {
+    "systemPrompt": "HOST_INIT_SYS_SENTINEL",
+    "appendSystemPrompt": "HOST_INIT_APPEND_SENTINEL"
+  },
+  "new": {
+    "systemPrompt": "HOST_NEWTOP_SYS_SENTINEL",
+    "appendSystemPrompt": "HOST_NEWTOP_APPEND_SENTINEL",
+    "_meta": {
+      "systemPrompt": "HOST_NEWMETA_SYS_SENTINEL",
+      "kiro": {
+        "systemPrompt": "HOST_NEW_SYS_SENTINEL",
+        "appendSystemPrompt": "HOST_NEW_APPEND_SENTINEL"
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "MAIN_KICKOFF USER_SENTINEL_1",
+      "meta": {
+        "kiro": {
+          "outputStyle": "concise",
+          "systemPrompt": "HOST_PROMPT_SYS_SENTINEL",
+          "appendSystemPrompt": "HOST_PROMPT_APPEND_SENTINEL"
+        }
+      },
+      "timeout": 120
+    },
+    { "op": "prompt", "text": "SECOND USER_SENTINEL_2", "timeout": 60 },
+    {
+      "op": "call",
+      "method": "session/set_config_option",
+      "params": {
+        "sessionId": "$SID",
+        "configId": "outputStyle",
+        "value": "concise"
+      }
+    },
+    { "op": "prompt", "text": "THIRD USER_SENTINEL_3", "timeout": 60 }
+  ]
+}

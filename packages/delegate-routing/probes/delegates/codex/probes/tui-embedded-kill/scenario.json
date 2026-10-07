@@ -1,0 +1,42 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          {
+            "task_name": "b",
+            "message": "TASK-B",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ]
+      ]
+    },
+    {
+      "calls": [
+        [
+          "wait_agent",
+          {
+            "timeout_ms": 60000
+          },
+          "collaboration"
+        ]
+      ]
+    },
+    {
+      "msg": "ROOT ONE"
+    }
+  ],
+  "/root/b": [
+    {
+      "sleep": 25,
+      "msg": "B DONE"
+    }
+  ],
+  "title": [
+    {
+      "msg": "{\"title\": \"Probe title\"}"
+    }
+  ]
+}

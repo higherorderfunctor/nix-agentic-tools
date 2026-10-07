@@ -1,0 +1,3 @@
+# the TUI submits a turn whose root waits on a 25 s child; its terminal is killed at ~6 s
+tui 6 TUI-GO-7401
+sleep 30

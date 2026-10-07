@@ -1,0 +1,8 @@
+{
+  "/root": [{ "msg": "ROOT TURN DONE" }, { "msg": "ROOT TURN DONE" }],
+  "*": [
+    { "stall": 10, "msg": "LATE-7602" },
+    { "stall": 10, "msg": "LATE-7602" },
+    { "stall": 10, "msg": "LATE-7602" }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "description": "file prompt fixture",
+  "name": "filep",
+  "prompt": "file://../prompts/filep-prompt.md",
+  "tools": ["*"]
+}

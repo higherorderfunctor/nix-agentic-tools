@@ -29,6 +29,9 @@ separately. Observations use Claude's root init, Codex turn/session events
 (including the matching root rollout), Kiro's request records in `chat.log` when
 exposed by the engine, and Kimchi's `agent_start`/`agent_end`. Missing fields
 read `not exposed`; requested settings are never substituted for observations.
+Kimchi's `agent_start` carries no model and no event carries the thinking level,
+so both read `not exposed` although assistant messages name the model; using
+those needs proof that child messages never reach the parent stream.
 
 ## Cases
 
@@ -54,8 +57,11 @@ shell command that starts an `external` technique of any runtime (`claude -p`,
 `codex exec`, `kimchi -p`, `kiro-cli chat`). The technique names come from the
 evaluated `ai.programs.delegate-routing.runtimes.<runtime>.techniques`, the same
 table the skill renders. Claude excludes calls made inside a delegate using
-`parent_tool_use_id`; child-event exclusion for Codex, Kimchi and Kiro is
-unverified until the first live run.
+`parent_tool_use_id`. Codex reads only the root rollout (its `session_meta.id`
+equals `thread.started`); a child's rollout is a separate file whose source is
+`subagent.thread_spawn`, so it is never scanned, and `exec --json` emits no
+spawn item (V; probe `codex:L1.exec-root-ends`). Child-event exclusion for
+Kimchi and Kiro is unverified.
 
 | Assertion      | Passes when the log shows                                   |
 | -------------- | ----------------------------------------------------------- |
@@ -75,7 +81,9 @@ cases with Nix and realizes the generated files they point at.
 ```bash
 eval=packages/delegate-routing/eval/suite.py
 python3 "$eval" --dry-run                                  # validate, print every launch, start nothing
+python3 "$eval" --list                                     # case ids, harness and assertion
 python3 "$eval" --case codex-single                        # one case
+python3 "$eval" --only='kimchi-*,codex-single'             # ids, or a prefix ending in *
 python3 "$eval" --harness kiro                             # one harness
 python3 "$eval" --claude-token-file ~/.config/delegate-suite/claude-token  # the whole suite
 ```
@@ -124,6 +132,11 @@ Claude and Kiro also get a log-only `PreToolUse` hook that appends each request
 to `logs/hook-calls.jsonl` and always exits 0; it is a second record, not
 counted. A `claude` binary must resolve inside `/nix/store` (`~/.local/bin`
 holds a stale native install); `--bin NAME=PATH` overrides any harness binary.
+Each case first runs the binary's `--version` in the fixture; a non-zero exit is
+an `ERROR` naming its output. A devenv shell puts this repository's project
+Kimchi wrapper first on `PATH`, and it refuses any other directory, so run from
+that shell with `--bin kimchi=<path>` (for example the profile's pinned
+`kimchi`).
 
 **Caps.** 600 s wall clock per case, then the whole process group gets SIGTERM
 and, 30 s later, SIGKILL; delegates still running when the session ends are
@@ -201,3 +214,18 @@ managed settings (Claude, Codex), organization hooks, steering and MCP servers
    `--case claude-clamp-off --claude-token-file <file>`, then
    `--case codex-single`, `--case kimchi-single`, `--case kiro-single`.
 5. The whole suite once. Every case must end `PASS` or `FAIL`.
+
+Open decisions:
+
+- Binaries resolve from `PATH`, not the repository pins (the first smoke ran
+  claude 2.1.289, codex 0.160.0, kiro 2.27.1). Decide whether each harness
+  defaults to its `ciPackages` pin or warns on a version mismatch.
+- Live Kimchi does not exit within 30 s after `agent_settled`; the suite records
+  it as cleanup, not ERROR. Offline, a stdio MCP server that `--approve` trusts
+  keeps Kimchi alive and the gateway does not
+  (`kimchi/claude:x1-print-exit-after-settle`, with a stub server); that the
+  fixture's agnix server is the live cause is inferred (rerun live without
+  `.mcp.json` to settle). Decide whether `kimchi_setup` sets `plugins.mcp-apps`
+  false when MCP is not under test, or the Kimchi fixture drops its stdio
+  entries. Whether a connected HTTP MCP server also blocks exit is untested
+  (needs network).

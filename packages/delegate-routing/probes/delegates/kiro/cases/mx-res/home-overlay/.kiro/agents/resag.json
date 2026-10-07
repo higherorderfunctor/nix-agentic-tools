@@ -1,0 +1,7 @@
+{
+  "name": "resag",
+  "description": "resources fixture",
+  "prompt": "RESAG_PROMPT_SENTINEL",
+  "tools": ["*"],
+  "resources": ["file://RES.md", "file://docs/*.md"]
+}

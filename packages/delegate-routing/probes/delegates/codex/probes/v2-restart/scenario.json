@@ -1,0 +1,40 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "a", "message": "TASK-A", "fork_turns": "none" },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          { "task_name": "b", "message": "TASK-B", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 15000 }, "collaboration"]] },
+    { "msg": "ROOT ONE" },
+    { "calls": [["list_agents", {}, "collaboration"]] },
+    {
+      "calls": [
+        [
+          "followup_task",
+          { "target": "a", "message": "FOLLOW-A" },
+          "collaboration"
+        ],
+        [
+          "followup_task",
+          { "target": "b", "message": "FOLLOW-B" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 15000 }, "collaboration"]] },
+    { "calls": [["list_agents", {}, "collaboration"]] },
+    { "msg": "ROOT TWO" }
+  ],
+  "/root/a": [{ "msg": "A DONE" }, { "msg": "A FOLLOW DONE" }],
+  "/root/b": [{ "sleep": 60, "msg": "B DONE" }, { "msg": "B FOLLOW DONE" }]
+}

@@ -1,0 +1,35 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          {
+            "task_name": "c_none",
+            "agent_type": "rnone",
+            "message": "T-NONE",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          {
+            "task_name": "c_prag",
+            "agent_type": "rprag",
+            "message": "T-PRAG",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ],
+        [
+          "spawn_agent",
+          { "task_name": "c_dflt", "message": "T-DFLT", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 20000 }, "collaboration"]] },
+    { "msg": "ROOT DONE" }
+  ]
+}

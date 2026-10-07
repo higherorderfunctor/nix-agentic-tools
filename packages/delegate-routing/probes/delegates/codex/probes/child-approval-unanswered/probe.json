@@ -1,0 +1,15 @@
+{
+  "thread": {},
+  "turn": "GO",
+  "timeout": 40,
+  "settle": 150,
+  "approval": "none",
+  "after": [
+    { "method": "thread/loaded/list", "params": {} },
+    {
+      "method": "turn/interrupt",
+      "params": { "threadId": "$CHILD", "turnId": "$CHILDTURN" },
+      "wait": 10
+    }
+  ]
+}

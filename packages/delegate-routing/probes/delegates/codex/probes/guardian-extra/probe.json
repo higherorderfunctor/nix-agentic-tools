@@ -1,0 +1,6 @@
+{
+  "thread": { "config": { "bypass_hook_trust": true } },
+  "turn": "GO",
+  "timeout": 40,
+  "approval": "decline"
+}

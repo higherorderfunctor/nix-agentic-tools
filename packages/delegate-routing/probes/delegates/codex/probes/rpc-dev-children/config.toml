@@ -1,0 +1,16 @@
+model = "gpt-6-luna"
+model_provider = "fake"
+sandbox_mode = "read-only"
+approval_policy = "never"
+developer_instructions = "CFG-DEV-4000"
+[model_providers.fake]
+name = "fake"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"
+[agents.rbare]
+description = "Declared role with no developer_instructions."
+config_file = "@H@/agents/rbare.toml"
+[agents.rtext]
+description = "Declared role with developer_instructions."
+config_file = "@H@/agents/rtext.toml"

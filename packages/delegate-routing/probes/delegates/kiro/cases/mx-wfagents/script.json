@@ -1,0 +1,113 @@
+{
+  "capsMeta": {
+    "kiro": {
+      "settings": {
+        "workflows": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "new": {
+    "_meta": {
+      "kiro": {
+        "settings": {
+          "workflows": {
+            "enabled": true
+          }
+        }
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "call",
+      "method": "_kiro/workflow/new",
+      "params": {
+        "parentSessionId": "$SID",
+        "workflow": {
+          "name": "wfagents",
+          "steps": [
+            {
+              "type": "step",
+              "id": "wf_coder",
+              "agent": "wf-coder",
+              "prompt": "WFA_WF_CODER_SENTINEL do it"
+            },
+            {
+              "type": "step",
+              "id": "wf_planner",
+              "agent": "wf-planner",
+              "prompt": "WFA_WF_PLANNER_SENTINEL do it"
+            },
+            {
+              "type": "step",
+              "id": "wf_review_aggregator",
+              "agent": "wf-review-aggregator",
+              "prompt": "WFA_WF_REVIEW_AGGREGATOR_SENTINEL do it"
+            },
+            {
+              "type": "step",
+              "id": "wf_pr_submitter",
+              "agent": "wf-pr-submitter",
+              "prompt": "WFA_WF_PR_SUBMITTER_SENTINEL do it"
+            },
+            {
+              "type": "step",
+              "id": "wf_pr_responder",
+              "agent": "wf-pr-responder",
+              "prompt": "WFA_WF_PR_RESPONDER_SENTINEL do it"
+            },
+            {
+              "type": "step",
+              "id": "wf_workflow_creator",
+              "agent": "wf-workflow-creator",
+              "prompt": "WFA_WF_WORKFLOW_CREATOR_SENTINEL do it"
+            },
+            {
+              "type": "step",
+              "id": "wf_auto_researcher",
+              "agent": "wf-auto-researcher",
+              "prompt": "WFA_WF_AUTO_RESEARCHER_SENTINEL do it"
+            },
+            {
+              "type": "step",
+              "id": "wf_design",
+              "agent": "wf-design",
+              "prompt": "WFA_WF_DESIGN_SENTINEL do it"
+            },
+            {
+              "type": "step",
+              "id": "wf_design_reviewer",
+              "agent": "wf-design-reviewer",
+              "prompt": "WFA_WF_DESIGN_REVIEWER_SENTINEL do it"
+            }
+          ]
+        },
+        "inputs": {}
+      },
+      "save": {
+        "WF": "result.workflowId"
+      }
+    },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/invoke",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "op": "sleep",
+      "s": 40
+    },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/inspect",
+      "params": {
+        "workflowId": "$WF"
+      },
+      "timeout": 30
+    }
+  ]
+}

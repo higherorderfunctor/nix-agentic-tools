@@ -9,6 +9,9 @@ Every request is appended to $LOG (JSONL). Decisions:
   streams keep-alive comments for n seconds before answering (a closed socket is logged as
   client_disconnected = cancel reached the HTTP layer). Child answers CHILD_DONE plus every
   STEER_xxx token seen anywhere in its messages.
+$NONREASONING (comma list of slugs) advertises those models with reasoning=false.
+POST .../embeddings answers a constant unit vector per input (memory store probes).
+With $WIRE set, every request body (messages verbatim, tool names) is also appended to $WIRE.
 """
 import json, os, re, sys, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -35,7 +38,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         log({"kind": "GET", "path": self.path})
         if self.path.startswith("/v1/models/metadata"):
-            models = [{"slug": s, "display_name": s, "provider": "ai-enabler", "reasoning": True, "input_modalities": ["text"],
+            models = [{"slug": s, "display_name": s, "provider": "ai-enabler", "reasoning": s not in os.environ.get("NONREASONING", "").split(","), "input_modalities": ["text"],
                        "is_serverless": True, "limits": {"context_window": 200000, "max_output_tokens": 8000}} for s in ("fake-a", "fake-b")]
             data = json.dumps({"models": models}).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data); return
@@ -48,6 +51,15 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(f"{len(data):x}\r\n".encode() + data + b"\r\n"); self.wfile.flush()
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if self.path.endswith("/embeddings"):
+            # Memory embedder: one constant unit vector per input, so every stored fact matches every query.
+            inputs = body.get("input")
+            inputs = inputs if isinstance(inputs, list) else [inputs]
+            dims = int(body.get("dimensions") or 1024)
+            vec = [1.0 / dims ** 0.5] * dims
+            data = json.dumps({"object": "list", "model": body.get("model"), "data": [{"object": "embedding", "index": i, "embedding": vec} for i in range(len(inputs))], "usage": {"prompt_tokens": 1, "total_tokens": 1}}).encode()
+            log({"kind": "EMBED", "path": self.path, "model": body.get("model"), "n": len(inputs)})
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data); return
         msgs = body.get("messages", [])
         tools = [t.get("function", {}).get("name") for t in body.get("tools", []) or []]
         system = next((text_of(m.get("content")) for m in msgs if m.get("role") in ("system", "developer")), "")
@@ -64,6 +76,10 @@ class H(BaseHTTPRequestHandler):
                "first_user_head": first_user[:240], "last_text": text_of(last.get("content"))[:600],
                "steers_seen": sorted(set(re.findall(r"STEER_[A-Z0-9_]+", alltext)))}
         log(rec)
+        if os.environ.get("WIRE"):
+            # Opt-in full request capture (scenario "full_wire"): every message and tool name, verbatim.
+            with lock, open(os.environ["WIRE"], "a") as f:
+                f.write(json.dumps({"t": rec["t"], "role": role, "model": body.get("model"), "tools": tools, "messages": msgs}) + "\n")
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Transfer-Encoding", "chunked")
@@ -78,7 +94,9 @@ class H(BaseHTTPRequestHandler):
                 while time.time() < end:
                     self.raw(": keepalive\n\n"); time.sleep(0.5)
             if role == "parent":
-                m = re.search(r"PLAN=(\[.*\])\s*$", first_user, re.S)
+                # A hook or harness steer can precede the prompt, so read the first user message carrying a PLAN.
+                plan_src = next((u for u in users if "PLAN=" in u), first_user)
+                m = re.search(r"PLAN=(\[.*\])\s*$", plan_src, re.S)
                 plan = json.loads(m.group(1)) if m else []
                 if n_asst < len(plan):
                     ids = []

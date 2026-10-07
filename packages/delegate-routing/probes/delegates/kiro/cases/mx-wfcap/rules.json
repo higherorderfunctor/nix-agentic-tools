@@ -1,0 +1,9 @@
+[
+  {
+    "match": "WFCAP_STEP",
+    "delay": 20,
+    "reuse": true,
+    "events": ["WFCAP_DONE"]
+  },
+  { "match": null, "reuse": true, "events": ["FALLBACK_TEXT"] }
+]

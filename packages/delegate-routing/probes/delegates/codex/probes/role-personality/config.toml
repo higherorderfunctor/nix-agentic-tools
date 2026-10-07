@@ -1,0 +1,16 @@
+model = "gpt-6-luna"
+model_provider = "fake"
+sandbox_mode = "read-only"
+approval_policy = "never"
+personality = "friendly"
+[model_providers.fake]
+name = "fake"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"
+[agents.rnone]
+description = "Role that sets personality none."
+config_file = "@H@/agents/rnone.toml"
+[agents.rprag]
+description = "Role that sets personality pragmatic."
+config_file = "@H@/agents/rprag.toml"

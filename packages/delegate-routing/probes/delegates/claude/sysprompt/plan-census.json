@@ -1,0 +1,43 @@
+[
+  {
+    "match": "CENSUS",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "statusline",
+          "prompt": "Subtask SL: reply done.",
+          "subagent_type": "statusline-setup",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "guide",
+          "prompt": "Subtask CG: reply done.",
+          "subagent_type": "claude-code-guide",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "webfetch",
+          "prompt": "Subtask WF: reply done.",
+          "subagent_type": "web-fetch",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "catchall",
+          "prompt": "Subtask CA: reply done.",
+          "subagent_type": "claude",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]

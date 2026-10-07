@@ -1,0 +1,14 @@
+{
+  "live_upstream": "https://llm.kimchi.dev",
+  "timeout": 180,
+  "args": [
+    "--model",
+    "kimchi-dev/glm-5.3",
+    "--thinking",
+    "minimal",
+    "--mode",
+    "json",
+    "-p",
+    "How many positive integers below 1000 are divisible by 3 or by 5 but not by 15? Do not use any tools. Reply with only the number."
+  ]
+}

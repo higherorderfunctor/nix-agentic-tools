@@ -1,0 +1,6 @@
+{
+  "description": "generated fixture",
+  "name": "gen",
+  "prompt": "GEN_BODY_SENTINEL\n\nGEN_APPEND_SENTINEL",
+  "tools": ["*"]
+}

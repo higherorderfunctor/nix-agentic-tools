@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Offline regressions for source attribution and the captured CLI schemas."""
 
+from contextlib import redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 import suite
+
+# The Nix build sandbox has no /usr/bin/env: name the bash on PATH.
+STRICT_BASH = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
 
 
 class SourceAttribution(unittest.TestCase):
@@ -107,6 +113,75 @@ class CliRecords(unittest.TestCase):
         self.assertTrue(harness["turns"](events[1]))
         self.assertEqual(len(harness["calls"](events[1])), 1)
         self.assertIn("use_subagent", harness["calls"](events[1])[0]["name"])
+
+
+class Selection(unittest.TestCase):
+    CASES = [{"id": name, "runtime": runtime, "expect": "one-delegate", "task": "t", "usage": {},
+              "techniques": {runtime: {"Agent": "subagent"}},
+              "files": [{"path": suite.HARNESSES[runtime]["skill"], "text": "x"}]}
+             for name, runtime in (("codex-single", "codex"), ("kimchi-dependent", "kimchi"), ("kimchi-single", "kimchi"))]
+
+    def test_exact_prefix_and_union(self):
+        ids = [case["id"] for case in self.CASES]
+        self.assertEqual(suite.select(ids, []), ids)
+        self.assertEqual(suite.select(ids, ["kimchi-single"]), ["kimchi-single"])
+        self.assertEqual(suite.select(ids, ["kimchi*"]), ["kimchi-dependent", "kimchi-single"])
+        self.assertEqual(suite.select(ids, ["codex-single,kimchi-s*"]), ["codex-single", "kimchi-single"])
+        self.assertEqual(suite.select(ids, ["codex-single", "kimchi-single"]), ["codex-single", "kimchi-single"])
+        # A prefix needs the star; a bare prefix is an unknown id.
+        with self.assertRaisesRegex(ValueError, "matched nothing: kimchi"):
+            suite.select(ids, ["kimchi"])
+
+    def run_main(self, *argv):
+        with tempfile.TemporaryDirectory() as directory:
+            fixtures = Path(directory) / "cases.json"
+            fixtures.write_text(json.dumps(self.CASES))
+            out = io.StringIO()
+            with patch.object(sys, "argv", ["suite.py", "--fixtures", str(fixtures), *argv]), redirect_stdout(out):
+                code = suite.main()
+            # --list starts nothing and writes no run directory.
+            self.assertEqual(list(Path(directory).iterdir()), [fixtures])
+        return code, out.getvalue()
+
+    def test_list_and_only(self):
+        code, out = self.run_main("--list")
+        self.assertEqual(code, 0)
+        self.assertEqual([line.split("\t")[0] for line in out.splitlines()], [case["id"] for case in self.CASES])
+        code, out = self.run_main("--list", "--only=kimchi*")
+        self.assertEqual(out.splitlines(), ["kimchi-dependent\tkimchi\tone-delegate", "kimchi-single\tkimchi\tone-delegate"])
+        with self.assertRaisesRegex(ValueError, "matched nothing"):
+            self.run_main("--list", "--only=nope*")
+
+
+class KimchiLaunch(unittest.TestCase):
+    def test_task_follows_double_dash(self):
+        # pi reads `--auto <text>` as a flag value: without `--` the task is
+        # swallowed, Kimchi prints only its session header and exits 0.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ctx = {"case": {"id": "kimchi-single"}, "exe": "kimchi", "home": root / "home", "prompt": "the task",
+                   "baseline_argv": ["--model", "kimi-k3", "--thinking", "medium"]}
+            with patch.object(suite, "REAL_HOME", root / "real"):
+                argv = suite.kimchi_setup(ctx)["argv"]
+            self.assertEqual(argv[-2:], ["--", "the task"])
+            self.assertLess(argv.index("--auto"), argv.index("--"))
+            self.assertEqual(oct((root / "home/.config/kimchi/config.json").stat().st_mode & 0o777), "0o600")
+
+    def test_binary_refusing_the_fixture_is_named(self):
+        with tempfile.TemporaryDirectory() as directory:
+            exe = Path(directory) / "kimchi"
+            exe.write_text(STRICT_BASH + "printf 'run kimchi from that devenv root.\\n' >&2\nexit 1\n")
+            exe.chmod(0o755)
+            record, refused = suite.probe_version(str(exe), "kimchi", os.environ, directory)
+            self.assertIn("exited 1 in the fixture: run kimchi from that devenv root.; pass --bin kimchi=<path>", refused)
+            exe.write_text(STRICT_BASH + "echo 1.5.1\n")
+            self.assertEqual(suite.probe_version(str(exe), "kimchi", os.environ, directory), ({"executable": str(exe), "version": "1.5.1"}, None))
+
+    def test_header_only_stream_is_named(self):
+        events = [{"type": "session", "version": 3}]
+        self.assertFalse(suite.HARNESSES["kimchi"]["answered"](events))
+        self.assertEqual(suite.stream_shape(events), "session x1")
+        self.assertEqual(suite.stream_shape([]), "empty")
 
 
 if __name__ == "__main__":

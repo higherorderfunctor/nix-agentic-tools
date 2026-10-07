@@ -1,0 +1,28 @@
+{
+  "capsMeta": { "kiro": { "hooks": { "enabled": true, "v2": true } } },
+  "new": {
+    "_meta": {
+      "kiro": {
+        "steering": [
+          {
+            "content": "ACP_INLINE_STEERING_SENTINEL",
+            "inclusion": "always",
+            "name": "inl"
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    { "op": "prompt", "text": "MAIN_KICKOFF USER_SENTINEL_1" },
+    { "op": "sleep", "s": 3 },
+    {
+      "op": "call",
+      "method": "_kiro/session/compact",
+      "params": { "sessionId": "$SID" },
+      "timeout": 60
+    },
+    { "op": "sleep", "s": 2 },
+    { "op": "prompt", "text": "SECOND_TURN USER_SENTINEL_2" }
+  ]
+}
