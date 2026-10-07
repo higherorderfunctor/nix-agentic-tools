@@ -341,6 +341,18 @@
       result.config.ai.kiro.v3
       && !(builtins.any (lib.hasInfix "ai.kiro.v3") result.config.warnings)
       && !(change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.v3
+      && (change {ai.programs.delegate-routing.runtimes.kiro.enable = false;}).config.ai.kiro.v3
+      && !(change {
+        ai.programs.delegate-routing.runtimes = {
+          kiro.enable = false;
+          claude.manualExternalDelegates = ["kimchi"];
+        };
+      }).config.ai.kiro.v3
+      && (let
+        unmanaged = change {ai.kiro.package = null;};
+      in
+        !unmanaged.config.ai.kiro.v3
+        && !(builtins.any (lib.hasInfix "ai.kiro.package is null") unmanaged.config.warnings))
       && (let
         optedOut = change {ai.kiro.v3 = false;};
       in

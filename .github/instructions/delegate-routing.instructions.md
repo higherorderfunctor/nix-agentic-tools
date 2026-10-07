@@ -10,7 +10,7 @@ applyTo: "packages/delegate-routing/**"
 > **Last verified:** 2026-10-07 — one enabled "Work and review" workflow ships
 > the Subtractive standard; a runtime workflow record without text keeps the
 > portable header; all delegate runtimes must be managed, and reaching Kiro
-> defaults `ai.kiro.v3` on through its wrapper.
+> defaults `ai.kiro.v3` on only when its package is managed.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -128,10 +128,16 @@ a model turn. Shared table rendering escapes cells once.
 
 When an enabled runtime reaches Kiro, as the session runtime or through
 `extraRuntimes` or `manualExternalDelegates`, the program sets `ai.kiro.v3` with
-`mkDefault`. The skill's Kiro evidence covers the v3 engine only. A consumer's
-own `ai.kiro.v3 = false` still wins and emits a mismatch warning. Every reached
-runtime must be enabled: managed Kiro's wrapper carries `--v3` to interactive
-and delegate launches alike. A consumer without the Kiro module is untouched.
+`mkDefault` only when `ai.kiro.package != null`. The skill's Kiro evidence
+covers the v3 engine only. A consumer's own `ai.kiro.v3 = false` still wins and
+emits a mismatch warning. Every reached runtime must be enabled. With a managed
+package, Kiro's wrapper carries `--v3` to interactive and delegate launches
+alike; with `package = null`, there is no wrapper, v3 is left unset and the
+mismatch warning fires. A consumer without the Kiro module is untouched.
+
+Reaching Kiro on devenv withholds `trustedMcpTools` from `kiro acp` (warned),
+while Home Manager drops bare tokens such as `use_aws` from the
+`permissions.yaml` translation.
 
 The common module imports `mkSkillPackageModule` once for the supported
 runtimes. Per-runtime program enable inherits portable enable through the

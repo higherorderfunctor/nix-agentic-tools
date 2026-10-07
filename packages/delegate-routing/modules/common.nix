@@ -35,8 +35,8 @@
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
-  # The skill's Kiro evidence covers the v3 engine only. All reached runtimes
-  # are managed; Kiro's wrapper carries --v3 to interactive and delegate launches.
+  # The skill's Kiro evidence covers the v3 engine only. Default v3 on only
+  # when ai.kiro.package != null: the managed wrapper carries --v3 to launches.
   reachesKiro = lib.any (runtime:
     sourceEnabled runtime
     && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
@@ -169,7 +169,7 @@ in {
       # Guarded on the declaration: a consumer without the Kiro module has no
       # ai.kiro.v3 to set.
       (lib.optionalAttrs kiroV3Declared {
-        kiro.v3 = lib.mkIf reachesKiro (lib.mkDefault true);
+        kiro.v3 = lib.mkIf (reachesKiro && config.ai.kiro.package != null) (lib.mkDefault true);
       })
     ];
     warnings = lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.v3) ''

@@ -1194,7 +1194,8 @@
 
     Enable every runtime named in `extraRuntimes` or `manualExternalDelegates`
     with `ai.<runtime>.enable`; disabled targets fail evaluation. Manual-only
-    entries require an explicit user request and are never auto-selected. If Kiro is enabled only for manual delegation, disable its own
+    entries require an explicit user request and are never auto-selected. If Kiro
+    is enabled only for manual delegation, disable its own
     delegate-routing program with `ai.programs.delegate-routing.runtimes.kiro.enable = false`.
     Copilot is excluded because its delegation controls are unestablished.
 
