@@ -2,7 +2,8 @@
 """Delegate-routing acceptance suite: one real session per case.
 
 Each case runs in a fresh fixture repository rendered from the repository's
-delivered configuration, under a scratch HOME that keeps only the login. See
+delivered configuration, under a scratch HOME that keeps only the login and carried-over settings. It
+hides config from the loader, not files from the model. See
 README.md for the isolation recipe, the caps and the operator steps.
 """
 
@@ -195,14 +196,9 @@ def kiro_setup(ctx):
         "KIRO_NO_REMOTE_CHANGELOG": "1",
         "XDG_DATA_HOME": str(data),
     }
-    # The launcher resolves the identity-patched KAS server from the real
-    # HOME; under the scratch HOME that fails and an exported value is kept.
-    materialize = re.search(r"/nix/store/[^\s\"']+/bin/kiro-identity-materialize", Path(ctx["exe"]).read_text(errors="ignore")) if Path(ctx["exe"]).is_file() else None
     return {
         "argv": [ctx["exe"], "chat", "--v3", "--no-interactive", "--trust-all-tools", "--output-format", "stream-json", ctx["prompt"]],
         "env": env,
-        "secrets": {"KIRO_KAS_SERVER_PATH": ("materialize", materialize.group(0))} if materialize else {},
-        "optional": {"KIRO_KAS_SERVER_PATH"},
         "written": [settings, hook],
     }
 
@@ -363,9 +359,6 @@ def render_fixture(case, root, state):
             path.symlink_to(file["sourcePath"])
         else:
             path.write_text(file["text"])
-    git = ["git", "-c", "user.name=suite", "-c", "user.email=suite@invalid", "-C", str(root)]
-    for argv in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "fixture", "--no-verify"]):
-        subprocess.run(git + argv, check=True, capture_output=True, timeout=60)
 
 
 def validate(cases):
@@ -443,8 +436,7 @@ def secret_value(spec):
         return Path(source).read_text().strip()
     if kind == "json":
         return (read_json(source, {}) or {}).get(rest[0])
-    result = subprocess.run([source], capture_output=True, text=True, timeout=120, check=False)
-    return result.stdout.strip() if result.returncode == 0 else None
+    raise ValueError(f"unknown secret source {kind!r}")
 
 
 def describe_secret(spec):
@@ -452,8 +444,7 @@ def describe_secret(spec):
         return "<MISSING: pass --claude-token-file or export CLAUDE_CODE_OAUTH_TOKEN>"
     kind, source, *rest = spec
     return {"env": f"<redacted: ${source}>", "file": f"<redacted: contents of {source}>",
-            "json": f"<redacted: {rest[0] if rest else ''} from {source}>",
-            "materialize": f"<output of {source} under the real HOME>"}[kind] + ", read at launch"
+            "json": f"<redacted: {rest[0] if rest else ''} from {source}>"}[kind] + ", read at launch"
 
 
 def prepare(case, out, args, live):
@@ -475,6 +466,9 @@ def prepare(case, out, args, live):
     ctx["claude_token"] = ("file", args.claude_token_file) if args.claude_token_file else (
         ("env", "CLAUDE_CODE_OAUTH_TOKEN") if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") else None)
     plan = harness["setup"](ctx)
+    git = ["git", "-c", "user.name=suite", "-c", "user.email=suite@invalid", "-C", str(ctx["repo"])]
+    for argv in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "fixture", "--no-verify"]):
+        subprocess.run(git + argv, check=True, capture_output=True, timeout=60)
     env = {
         "DEVENV_ROOT": str(ctx["repo"]),
         "HOME": str(ctx["home"]),
@@ -547,10 +541,62 @@ def leaks(case, harness, events, logs, fixture_text):
             found += [f"{root} in {path.relative_to(logs)}" for root in roots if root in text]
     startup = harness["startup"](events, logs)
     if startup:
-        for name in sorted(personal_names()):
-            if name not in fixture_text and re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])", startup):
-                found.append(f"personal name {name!r} in the startup record")
+        if case["runtime"] == "claude":
+            init = claude_init(events) or {}
+            loaded = set(init.get("skills", [])) | set(init.get("agents", []))
+            loaded |= {item["name"] for key in ("mcp_servers", "plugins") for item in init.get(key, [])}
+            delivered = {part for file in case["files"] for part in Path(file["path"]).parts}
+            delivered |= {Path(part).stem for part in delivered if Path(part).suffix in {".md", ".json"}}
+            mcp = next((file for file in case["files"] if file["path"] == ".mcp.json"), None)
+            if mcp:
+                delivered |= set((read_json(logs.parent / "repo/.mcp.json", {}) or {}).get("mcpServers", {}))
+            found += [f"personal name {name!r} in the startup record" for name in sorted(personal_names() & loaded - delivered)]
+        else:
+            for name in sorted(personal_names()):
+                if name not in fixture_text and re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])", startup):
+                    found.append(f"personal name {name!r} in the startup record")
     return found, startup
+
+
+def skill_delivery(case, ctx, events, startup):
+    if case["runtime"] == "kimchi":
+        return "unverified: no startup record"
+    if case["runtime"] == "claude":
+        delivered = "delegate-routing" in (claude_init(events) or {}).get("skills", [])
+    else:
+        skill = ctx["repo"] / HARNESSES[case["runtime"]]["skill"]
+        if skill.is_dir():
+            skill /= "SKILL.md"
+        frontmatter = skill.read_text().split("---", 2)[1]
+        match = re.search(r"^description:\s*(.*(?:\n[ \t]+[^\n]*)*)", frontmatter, re.MULTILINE)
+        description = " ".join(match.group(1).split()) if match else ""
+        if description.startswith('"'):
+            description = json.loads(description)
+        elif description.startswith("'"):
+            description = description[1:-1].replace("''", "'")
+        elif description.startswith((">", "|")):
+            description = description.split(" ", 1)[1] if " " in description else ""
+        delivered = bool(description) and " ".join(description.split()) in " ".join((startup or "").split())
+    return "loaded" if delivered else "missing"
+
+
+def raw_tool_names(value):
+    """Read diagnostic tool names without relying on the delegate extractor."""
+    if isinstance(value, dict):
+        for key in ("tool", "tool_name", "toolName"):
+            if isinstance(value.get(key), str):
+                yield value[key]
+        if value.get("type") in {"tool_use", "collab_tool_call", "command_execution"}:
+            yield value.get("name") or value["type"]
+        if value.get("sessionUpdate") == "tool_call":
+            for key in ("name", "title"):
+                if isinstance(value.get(key), str):
+                    yield value[key]
+        for item in value.values():
+            yield from raw_tool_names(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from raw_tool_names(item)
 
 
 def run_case(case, prepared, args):
@@ -561,7 +607,7 @@ def run_case(case, prepared, args):
         value = spec and secret_value(spec)
         if value:
             env[name] = value
-        elif name not in prepared.get("optional", ()):
+        else:
             return {"status": "ERROR", "detail": f"{name} unavailable: {describe_secret(spec)}"}
     version = subprocess.run([ctx["exe"], "--version"], capture_output=True, text=True, timeout=60, check=False, env=env, cwd=ctx["repo"])
     record = {"executable": ctx["exe"], "version": version.stdout.strip() or version.stderr.strip()}
@@ -576,11 +622,12 @@ def run_case(case, prepared, args):
             shutil.copytree(ctx["home"] / relative, logs / Path(relative).name, symlinks=True)
     events = parse_lines((logs / "events.jsonl").read_text(errors="ignore"))
     hook_calls = parse_lines((logs / "hook-calls.jsonl").read_text(errors="ignore")) if (logs / "hook-calls.jsonl").exists() else []
-    calls = classify(case, [call for event in events for call in harness["calls"](event)])
+    raw_calls = [call for event in events for call in harness["calls"](event)]
+    calls = classify(case, raw_calls)
     fixture_text = "\n".join(file["path"] + "\n" + file.get("text", "") for file in case["files"]) + "".join(
         path.read_text(errors="ignore") for path in ctx["repo"].rglob("*") if path.is_file() and ".git" not in path.parts)
     leaked, startup = leaks(case, harness, events, logs, fixture_text)
-    delivery = "unverified: no startup record" if startup is None else ("loaded" if "delegate-routing" in startup else "missing")
+    delivery = skill_delivery(case, ctx, events, startup)
     record.update({
         "delegates": calls, "delivery": delivery, "exitCode": code, "leaks": leaked, "stop": stop,
         # Second, independent record; not counted, so a call is never counted twice.
@@ -590,10 +637,13 @@ def run_case(case, prepared, args):
         return {**record, "status": "ERROR", "detail": "personal state leaked: " + "; ".join(leaked[:3])}
     if delivery == "missing":
         return {**record, "status": "ERROR", "detail": "the fixture's delegate-routing skill is absent from the startup record"}
+    if record["hookDelegates"] and not calls:
+        return {**record, "status": "ERROR", "detail": "event extractor missed delegates the hook saw"}
     if stop or not harness["answered"](events):
         return {**record, "status": "ERROR", "detail": "no answer: " + (", ".join(stop) or f"exit {code}, no completion event")}
     passed = ASSERTIONS[case["expect"]][1](calls)
-    summary = ", ".join(f"{call['runtime']}:{call['technique']}" for call in calls) or "no delegates"
+    names = sorted(set(raw_tool_names(events)))
+    summary = ", ".join(f"{call['runtime']}:{call['technique']}" for call in calls) or "no delegates; tools: " + (", ".join(names) or "none")
     return {**record, "status": "PASS" if passed else "FAIL", "detail": summary}
 
 

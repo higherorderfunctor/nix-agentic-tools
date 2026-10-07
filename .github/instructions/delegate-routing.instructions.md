@@ -175,14 +175,17 @@ agent do with a real task. `eval/cases.nix` evaluates `dev/ai.nix` through the
 devenv module harness with only each case's switches changed, and exports every
 delivered file plus the evaluated delegate technique names. `eval/suite.py` is
 the single runner: it renders each case into a fresh fixture repository, runs
-one session under a scratch `HOME` that keeps only the login, caps it, and
-asserts on the session's own event log. Harness differences live in its
-`HARNESSES` table; assertions in its `ASSERTIONS` table.
+one session under a scratch `HOME` that keeps only the login and carried-over
+settings; it hides config from the loader, not files from the model. It caps the
+session and asserts on the session's own event log. Harness differences live in
+its `HARNESSES` table; assertions in its `ASSERTIONS` table.
 
 A delegate call is classified by technique name, so the suite and the rendered
-skill read one table. The Claude clamp and ultracode drain cases are on/off
-pairs. Results are `PASS`, `FAIL` or `ERROR`; only `ERROR` (no answer, a leak,
-or the routing skill missing from the startup record) fails the run.
+skill read one table. Same-runtime nested children ARE logged in and can run and
+spend inside the 600 s process-group cap; no PATH shim blocks them. The Claude
+clamp and ultracode drain cases are on/off pairs. Results are `PASS`, `FAIL` or
+`ERROR`; only `ERROR` (no answer, a leak, or the routing skill missing from the
+startup record) fails the run.
 
 The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch

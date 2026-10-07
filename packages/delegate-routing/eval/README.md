@@ -12,13 +12,13 @@ devenv module harness, with only the case's switches changed, and exports every
 delivered file. The prompt is the task plus synthetic usage numbers; the
 expected behavior never enters it.
 
-| Cases                                                   | Switch or shape                              | Assertion      |
-| ------------------------------------------------------- | -------------------------------------------- | -------------- |
-| `claude-clamp-off`, `claude-clamp-on`                   | `ai.claude.delegationClampMitigation.enable` | `delegate`     |
-| `claude-ultracode-drain-off`                            | ultracode on, `Pool drain` routing entry off | `observe`      |
-| `claude-ultracode-drain-on`                             | ultracode on, `Pool drain` routing entry on  | `codex-lane`   |
-| `codex-single`, `kimchi-single`, `kiro-single`          | one task                                     | `one-delegate` |
-| `codex-dependent`, `kimchi-dependent`, `kiro-dependent` | dependent chain                              | `workflow`     |
+| Cases                                                   | Switch or shape                                        | Assertion      |
+| ------------------------------------------------------- | ------------------------------------------------------ | -------------- |
+| `claude-clamp-off`, `claude-clamp-on`                   | `ai.claude.delegationClampMitigation.enable`           | `delegate`     |
+| `claude-ultracode-drain-off`                            | ultracode on, clamp on, `Pool drain` routing entry off | `observe`      |
+| `claude-ultracode-drain-on`                             | ultracode on, clamp on, `Pool drain` routing entry on  | `codex-lane`   |
+| `codex-single`, `kimchi-single`, `kiro-single`          | one task                                               | `one-delegate` |
+| `codex-dependent`, `kimchi-dependent`, `kiro-dependent` | dependent chain                                        | `workflow`     |
 
 The two Claude pairs are on/off pairs: the switch is the only difference. The
 drain cases supply more Codex headroom than Claude headroom.
@@ -28,7 +28,9 @@ named after a `subagent` or `workflow` technique of the case's runtime, or a
 shell command that starts an `external` technique of any runtime (`claude -p`,
 `codex exec`, `kimchi -p`, `kiro-cli chat`). The technique names come from the
 evaluated `ai.programs.delegate-routing.runtimes.<runtime>.techniques`, the same
-table the skill renders. Calls made inside a delegate are not counted.
+table the skill renders. Claude excludes calls made inside a delegate using
+`parent_tool_use_id`; child-event exclusion for Codex, Kimchi and Kiro is
+unverified until the first live run.
 
 | Assertion      | Passes when the log shows                                   |
 | -------------- | ----------------------------------------------------------- |
@@ -56,9 +58,10 @@ python3 "$eval" --claude-token-file ~/.config/delegate-suite/claude-token  # the
 The run prints one row per case: `PASS`, `FAIL` or `ERROR`. It exits non-zero
 only when a case is `ERROR`, meaning it could not reach an answer: a missing
 binary or login, a cap hit, a crash, no completion event, a leak, or the
-fixture's routing skill missing from the startup record. A `FAIL` is a real
-answer that broke the assertion. Each case keeps `logs/` (events, stderr, hook
-log, harness logs, `verdict.json`); `summary.json` holds every row.
+fixture's routing skill missing from the startup record, or delegates seen by
+the hook but missed by the event extractor. A `FAIL` is a real answer that broke
+the assertion. Each case keeps `logs/` (events, stderr, hook log, harness logs,
+`verdict.json`); `summary.json` holds every row.
 
 `--dry-run` renders each fixture and scratch configuration and prints the exact
 argv, environment and files per case. Secrets show where they come from, never
@@ -72,9 +75,12 @@ delivered files (store symlinks, as devenv delivers them), and
 `<out>/<case>/home`, a scratch `HOME`. The process starts with only an
 allowlisted environment: `HOME`, `PATH`, `LANG`, `TERM`, `USER`, `TMPDIR`, the
 `XDG_*` directories inside the scratch home, `DEVENV_ROOT`, and the harness's
-own variables. Memory, user MCP servers, user skills, plugins and user
-instructions all live under the real home, so the scratch home drops them.
-`--keep` keeps the fixture and scratch home; by default only the logs stay.
+own variables. For Kiro, `XDG_DATA_HOME` and `KIRO_DATA_DIR` stay real to share
+the login database (decision 3); other per-user state in that database is
+unverified until a live chat log is captured. Memory, user MCP servers, user
+skills, plugins and user instructions all live under the real home, so the
+scratch home drops them. `--keep` keeps the fixture and scratch home; by default
+only the logs stay.
 
 The default run directory is `/var/tmp/delegate-routing-suite/<UTC time>`. A
 live run refuses a directory under `~` or `/tmp`, or one with an `AGENTS.md` or
@@ -100,10 +106,11 @@ killed with it. Claude adds `--max-turns 40 --max-budget-usd 5` (the budget is a
 list-price tripwire under OAuth). Kiro has no turn flag, so the runner stops it
 after 40 tool calls. Codex and Kimchi have no turn or spend cap.
 
-**Nested CLI delegates** are attempt-only: a `codex exec` or `kiro-cli chat`
-child inherits the scratch home and fails without a login, and the attempt is
-still logged. A `claude -p` child in a Claude case and a `kimchi -p` child in a
-Kimchi case inherit the session's token and can run, inside the same caps.
+**Nested CLI delegates** inherit the session's environment. Same-runtime
+children ARE logged in and can run and spend inside the 600 s process-group cap:
+Claude and Kimchi inherit tokens, Codex shares the auth symlink, and Kiro shares
+the real data directory. Cross-runtime children without a supplied login fail,
+and the attempt is still logged. No PATH shim blocks nested children.
 
 ## Leak and delivery checks
 
@@ -114,8 +121,16 @@ the delivered configuration.
   `~/.claude.json`, `~/.agents`, `~/.codex`, `~/.kiro`, `~/.config/kiro`,
   `~/.config/kimchi`, `~/.pi`) in any log; or a personal skill, MCP server,
   plugin or agent name that the fixture does not ship in the harness's startup
-  record.
-- **Delivery:** the startup record must name `delegate-routing`.
+  record. Claude compares init lists by equality and exempts only delivered path
+  components, Markdown/JSON stems and fixture `.mcp.json` server keys. Codex and
+  Kiro use prose records: names mentioned anywhere in fixture text are exempt,
+  so leaks of those names cannot be detected by the name scan. The personal-path
+  scan still runs.
+- **Delivery:** Claude's init `skills` list must contain `delegate-routing`.
+  Codex and Kiro must include the fixture skill's whitespace-normalized
+  frontmatter description in their whitespace-normalized startup record. Missing
+  descriptions fail closed as `ERROR`; whether these records carry descriptions
+  is unverified until the first live run. Kimchi stays unverified.
 
 | Harness | Startup record                                                                |
 | ------- | ----------------------------------------------------------------------------- |

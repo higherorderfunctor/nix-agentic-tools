@@ -96,6 +96,7 @@
       id = "claude-ultracode-drain-${label on}";
       runtime = "claude";
       switches.ai = {
+        claude.delegationClampMitigation.enable = lib.mkForce true;
         claude.ultracodeOnLaunch = lib.mkForce true;
         programs.delegate-routing.runtimes.claude.routing."Pool drain".enable = lib.mkForce on;
       };
