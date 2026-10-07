@@ -1,6 +1,7 @@
 # cspell:ignore apikey clientsecret privatekey
-# Callers classify only names whose value is a string: Codex flags with
-# valueName != null and string leaves of JSON/settings, never object or boolean nodes.
+# Callers classify a name whose value is a string (Codex flags with a value,
+# string leaves of JSON/settings) or a string-to-string map container such as
+# Kimchi's gitTokens; never a struct object or a boolean node.
 {lib}: let
   secretSuffixes = [
     "access_key"
@@ -17,6 +18,7 @@
     "private_key"
     "privatekey"
     "secret"
+    "secret_key"
     "token"
   ];
   snake = name:

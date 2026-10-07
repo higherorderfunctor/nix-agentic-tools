@@ -42,6 +42,8 @@
     provider_private_key = true;
     refresh_token = true;
     secret = true;
+    SECRET_KEY = true;
+    secretKey = true;
     selfHostedUrl = false;
     token = true;
     tokenEndpoint = false;
