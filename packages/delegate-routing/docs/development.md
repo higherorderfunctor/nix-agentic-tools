@@ -231,17 +231,20 @@ that evidence and the wording rules. It fires every turn, so there is no
 Codex, Kiro and Kimchi that checks what the delivered configuration makes an
 agent do with a real task. `eval/cases.nix` evaluates `dev/ai.nix` through the
 devenv module harness with only each case's switches changed, and exports every
-delivered file plus the evaluated delegate technique names. `eval/suite.py` is
-the single runner: it renders each case into a fresh fixture repository, runs
-one session under a scratch `HOME` that keeps only the login and carried-over
-settings; it hides config from the loader, not files from the model. It caps the
-session and asserts on the session's own event log. Root model and effort come
-from the single `ROOT_BASELINES` table at the operator’s strong-tier medium;
-Codex model/effort and Kiro default model are not copied. Claude debug scope
-counts attribute bundled skills without a name allowlist; Codex resolves catalog
-paths, and Kiro reads workspace skill source metadata from CLI stream updates.
-Kimchi separates extension flags from the task with `--`. Kiro resolves the
-newest matching Opus model only for live runs. Results record requested controls
+delivered file plus the evaluated delegate technique names. A Claude case also
+exports its joined `ai.claude.extraSystemPrompt` text, which the runner passes
+with `--append-system-prompt-file` as the managed launcher does: Claude's
+always-on entries reach no delivered file. `eval/suite.py` is the single runner:
+it renders each case into a fresh fixture repository, runs one session under a
+scratch `HOME` that keeps only the login and carried-over settings; it hides
+config from the loader, not files from the model. It caps the session and
+asserts on the session's own event log. Root model and effort come from the
+single `ROOT_BASELINES` table at the operator’s strong-tier medium; Codex
+model/effort and Kiro default model are not copied. Claude debug scope counts
+attribute bundled skills without a name allowlist; Codex resolves catalog paths,
+and Kiro reads workspace skill source metadata from CLI stream updates. Kimchi
+separates extension flags from the task with `--`. Kiro resolves the newest
+matching Opus model only for live runs. Results record requested controls
 separately from root event/log observations, with `not exposed` for missing
 fields. Harness differences live in its `HARNESSES` table; assertions in its
 `ASSERTIONS` table.

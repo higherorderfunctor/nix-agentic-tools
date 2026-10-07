@@ -66,6 +66,19 @@ class SourceAttribution(unittest.TestCase):
                 self.assertTrue(suite.personal_source(str(link)))
 
 
+class Launches(unittest.TestCase):
+    def test_claude_appends_the_delivered_system_prompt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ctx = {"case": {"systemPrompt": "# Delegate routing\n"}, "dir": root, "exe": "claude", "baseline_argv": [],
+                   "hook": root / "hook", "home": root / "home", "logs": root / "logs", "prompt": "task", "claude_token": None}
+            with patch.object(suite, "REAL_HOME", root):
+                plan = suite.claude_setup(ctx)
+            path = plan["argv"][plan["argv"].index("--append-system-prompt-file") + 1]
+            self.assertEqual(Path(path).read_text(), "# Delegate routing\n")
+            self.assertIn(Path(path), plan["written"])
+
+
 class CliRecords(unittest.TestCase):
     def test_codex_native_calls_from_root_only(self):
         case = {"runtime": "codex", "techniques": {"codex": {"spawn_agent": "subagent"}}}

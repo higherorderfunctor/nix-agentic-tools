@@ -1,12 +1,14 @@
 # Acceptance cases: the repository's real delivery (dev/ai.nix), with only the
 # named switches changed. suite.py renders each case into a fixture repository
-# and runs one real session in it. `expect` names an assertion in suite.py's
+# and runs one real session in it, appending Claude's system prompt the way
+# its managed launcher does. `expect` names an assertion in suite.py's
 # ASSERTIONS table; the prompt never carries it.
 {
   harness,
   lib,
   pkgs,
 }: let
+  inherit (import ../../../lib/ai/ai-common.nix {inherit lib;}) composeContent;
   inherit (import ../lib/vocabulary.nix) delegateKinds;
   mkCase = {
     codexHeadroom ? false,
@@ -53,25 +55,31 @@
       (lib.filterAttrs (_: technique: builtins.elem technique.kind delegateKinds) runtime.techniques))
     config.ai.programs.delegate-routing.runtimes;
   in
-    assert lib.assertMsg (failures == []) (lib.concatStringsSep "\n" failures); {
-      inherit expect files id runtime switches task techniques;
-      usage = {
-        claude = {
-          remainingPercent =
-            if codexHeadroom
-            then 10
-            else 90;
-          windowSeconds = 18000;
+    assert lib.assertMsg (failures == []) (lib.concatStringsSep "\n" failures);
+      {
+        inherit expect files id runtime switches task techniques;
+        usage = {
+          claude = {
+            remainingPercent =
+              if codexHeadroom
+              then 10
+              else 90;
+            windowSeconds = 18000;
+          };
+          codex = {
+            remainingPercent =
+              if codexHeadroom
+              then 90
+              else 10;
+            windowSeconds = 18000;
+          };
         };
-        codex = {
-          remainingPercent =
-            if codexHeadroom
-            then 90
-            else 10;
-          windowSeconds = 18000;
-        };
+      }
+      # Claude's always-on entries are no delivered file: its managed launcher
+      # appends the pool, joined by the same composeContent, as a system prompt.
+      // lib.optionalAttrs (runtime == "claude") {
+        systemPrompt = (composeContent (builtins.attrValues config.ai.claude.normalized.extraSystemPrompt)).text;
       };
-    };
   label = on:
     if on
     then "on"
