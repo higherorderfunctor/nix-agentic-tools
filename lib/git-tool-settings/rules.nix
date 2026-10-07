@@ -48,9 +48,12 @@
       secretNeeds = [];
     };
   };
+  # A write-only key becomes no option, so it needs none of these.
   needs = entry:
-    lib.optionals (entry.reads != {}) (lib.filter (field: entry.${field} or null == null) ["description" "type"])
-    ++ lib.optional (entry ? defaultExpr && entry.defaultDescription or null == null) "defaultDescription";
+    lib.optionals (entry.reads != {}) (
+      lib.filter (field: entry.${field} or null == null) ["description" "type"]
+      ++ lib.optional (entry ? defaultExpr && entry.defaultDescription or null == null) "defaultDescription"
+    );
   # Like reconcile's own `needs`: needs-human, never auto-added.
   needing = lib.filterAttrs (_: fields: fields != []) (lib.mapAttrs (_: needs) reconciled.settings.entries);
   results =

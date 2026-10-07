@@ -53,6 +53,11 @@
       settings.row = null;
       kinds = ["needs-human"];
     };
+    read-setting-needs-type = {
+      settings.fact = builtins.removeAttrs setting ["type"];
+      settings.row = null;
+      kinds = ["needs-human"];
+    };
     # A write-only key becomes no option, so nothing needs its prose.
     write-only-setting-accepted = {
       settings.fact = {
