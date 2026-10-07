@@ -165,7 +165,7 @@ in {
       # follow already supplies their store paths. If a future grammar needs a
       # custom derivation, also expose that grammar alone in flake packages so
       # the authenticated package sweep publishes it. Do not expose the
-      # grammar-patched Semble derivation. The extra parsers cover files Semble
+      # consumer-specific patched Semble derivation. The extra parsers cover files Semble
       # recognizes but its bundled grammar archive does not currently ship.
       grammars = with pkgs.tree-sitter-grammars; [
         tree-sitter-awk

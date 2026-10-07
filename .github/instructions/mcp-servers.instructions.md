@@ -116,10 +116,8 @@ If a JS MCP server fails with `Cannot find module 'X'`:
 
 ## MCP Server Packages
 
-> **Last verified:** 2026-10-06 — recipes build on this flake's nixpkgs
-> (`natSets`) and the overlay re-exports them; main-tracking rev bumps are done
-> by `update-pkg.sh`; vendored npm lock locations follow their manual or
-> automatic updater.
+> **Last verified:** 2026-10-07 — Semble is a first-party Python build with a
+> secondary MCP role and a grouped update target.
 >
 > Full lineage: `git show ed5898b1:dev/fragments/mcp-servers/overlay-guide.md`.
 
@@ -145,11 +143,10 @@ Servers use one of three Nix builders depending on upstream language:
 - **Go** (`buildGoModule`) — github-mcp. Requires `vendorHash` inline in the
   owner recipe
 
-Semble is the explicit non-builder exception. `semble-mcp` is a plain attr/meta
-view of `inputs.llm-agents.packages.${system}.semble`: it changes
-`meta.mainProgram` and shares the upstream CLI's exact derivation. It has no
-local source pin or update-target row; normal flake-input automation updates
-`llm-agents`.
+Semble uses `buildPythonApplication` with vendored Python dependencies and
+source sidecars maintained by a grouped updater. `semble-mcp` is a plain
+attr/meta view of the CLI build: it changes `meta.mainProgram` and shares the
+CLI's exact derivation.
 
 ### Inline Hash Pattern
 

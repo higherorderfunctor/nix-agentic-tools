@@ -132,12 +132,10 @@ composed registry and ninja DAG:
   fixed-output check.
 - **Flake inputs**: consumed from `inputs.<name>.packages`, updated via
   `nix flake update`.
-- **Pinned external derivation** (`semble`, `semble-mcp`): Semble is selected
-  directly from the unfollowed `llm-agents` input so the standalone and consumer
-  overlay paths remain byte-identical to Numtide's cached output. The MCP role
-  is a plain attr/meta overlay selecting `semble-mcp`; it shares the same
-  `drvPath` and `outPath` as the CLI. Do not apply `overlays.shared-nixpkgs`,
-  rebuild with local packages, or use `overrideAttrs`.
+- **Python source with vendored dependencies** (`semble`, `semble-mcp`): build
+  with this flake's nixpkgs and track the CLI plus its three dependencies
+  through one grouped `--use-update-script` target. The MCP role selects
+  `semble-mcp` through evaluation-time metadata and shares the CLI derivation.
 - **In-repo source**: packaged from a path in this repo (no upstream rev/hash,
   not version-tracked). **No package uses this shape today** —
   `kiro-memory-distiller` was the only one, and it was removed on 2026-09-01

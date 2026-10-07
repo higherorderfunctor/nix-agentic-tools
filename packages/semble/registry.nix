@@ -1,4 +1,8 @@
-{facetOwner, ...}: {
+{
+  facetOwner,
+  repoPath,
+  ...
+}: {
   documentation = {
     aiCliDescriptions.semble = "Local semantic and lexical code-search CLI";
     mcpServerMeta.semble-mcp = {
@@ -21,4 +25,5 @@
       }
     ];
   };
+  update.targets.semble = {flags = ["--use-update-script" "--override-filename" (repoPath ./packages/ai/semble/package.nix)];};
 }

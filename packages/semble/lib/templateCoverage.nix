@@ -1,6 +1,6 @@
 # Human-reviewed disposition for every upstream Semble integration artifact.
-# Hashes deliberately do not regenerate with the snapshot: an llm-agents input
-# bump must stop in CI until a reviewer decides whether each local derivative
+# Hashes deliberately do not regenerate with the snapshot: a grouped package
+# update must stop in CI until a reviewer decides whether each local derivative
 # remains correct.
 # All derivatives adopt 0.6.0's multi-repository guidance, resolve result labels,
 # and allow verification and search refinement instead of upstream's search bans.

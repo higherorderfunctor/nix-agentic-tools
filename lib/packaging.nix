@@ -457,12 +457,13 @@ rec {
   mkExtractRegen = {
     attr,
     dest,
+    extract ? "extracted",
     pkgs,
     rows ? null,
   }: ''
     echo "${attr}: regenerating ${dest}"
     extracted=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
-      ".#${ciAttr {inherit attr pkgs;}}.passthru.extracted")
+      ".#${ciAttr {inherit attr pkgs;}}.passthru.${extract}")
     ${pkgs.coreutils}/bin/cp "$extracted" "${dest}"
     ${pkgs.coreutils}/bin/chmod 644 "${dest}"
     ${pkgs.nix}/bin/nix fmt -- "${dest}"
@@ -486,8 +487,8 @@ rec {
   # drift check, and a failure holds the bump back on either path.
   #
   # `targets` are `mkExtractRegen` arguments: `attr` is the package name in
-  # `ciPackages` whose `passthru.extracted` produces the sidecar; `dest` is the
-  # repository path it replaces. Optional
+  # `ciPackages`, not a check path. `extract` selects its passthru key and
+  # defaults to `extracted`; `dest` is the repository path it replaces. Optional
   # `rows = {name; path;}` names the drift check and its rows destination.
   mkRegenerateExtracted = {
     name,

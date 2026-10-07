@@ -36,8 +36,6 @@ jobs:
       NIX_CONFIG: |
         max-jobs = 1
         cores = 0
-        extra-substituters = https://cache.numtide.com
-        extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
       SHARD_COUNT: 5
       SHARD_INDEX: ${{ matrix.shard }}
       SYSTEM: ${{ matrix.system }}
@@ -122,33 +120,6 @@ jobs:
           ls -d /nix/store/*-nix-eval-jobs-* 2>/dev/null || echo '(nix-eval-jobs not realized)'
           sudo -n lsof /nix/var/nix/db/big-lock || echo '(no lock holders reported or lsof unavailable)'
           nix config show || echo '(nix config show failed)'
-      - name: Mirror Semble into project cache
-        if:
-          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-          contains(fromJSON(steps.plan.outputs.packages), 'semble')
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          semble_path="$(nix build ".#ciPackages.${{ matrix.system }}.semble" \
-            --no-link --print-out-paths)"
-          printf '%s\n' "$semble_path" | cachix push nix-agentic-tools
-
-          store_name="${semble_path##*/}"
-          store_hash="${store_name%%-*}"
-          for attempt in 1 2 3 4 5; do
-            if curl --fail --silent --show-error --head \
-              "https://nix-agentic-tools.cachix.org/${store_hash}.narinfo" \
-              >/dev/null; then
-              echo "Semble is queryable from nix-agentic-tools.cachix.org"
-              break
-            fi
-            if [ "$attempt" = 5 ]; then
-              echo "Semble was pushed but its narinfo is not queryable" >&2
-              exit 1
-            fi
-            sleep "$attempt"
-          done
-
   # Preserve the required contexts. A cancelled, skipped, or missing worker
   # must fail these checks, including failures after a receipt was uploaded.
   build:
@@ -551,10 +522,9 @@ jobs:
 
       # The Semble customization smoke check builds a patched Semble here,
       # parses real AWK and jq samples, and exercises path-mapped discovery.
-      # This job's Cachix client is read-only (no authToken), and that patched
-      # derivation is deliberately absent from flake packages, so it is tested
-      # without being published. Its nixpkgs grammar inputs are already
-      # available through the Cachix nixpkgs follow.
+      # Customization still produces a separate patched build; this job's
+      # Cachix client is read-only. The base package is built and published
+      # by the authenticated package matrix above.
       - name: Run flake checks
         run: nix flake check
 
