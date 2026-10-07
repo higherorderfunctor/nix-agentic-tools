@@ -434,13 +434,14 @@ semble-grammars ships one wheel per platform, each with its own manifest, and
 `available_languages()` reads that manifest. The extractor
 (`extract/extract-languages.py`) imports the real modules under Semble's own
 interpreter and fails unless the platform manifest equals the
-platform-independent `sources.json`. So the committed file is the same on every
-system, and the drift check (`semble-languages-extracted`) catches a platform
-that drops a grammar. It runs on Linux inside `nix flake check`, which skips
-Darwin, so CI's aarch64-darwin package job builds it separately (shard 0, before
-the receipt upload, so it gates the required `build` context). The update
-pipeline extracts on x86_64-linux only. On 0.1.2 the linux-x86_64 and
-macos-arm64 manifests both list the same 77 grammars as `sources.json`.
+platform-independent manifest semble-grammars bundles as
+`grammars/sources.json`. So the committed file is the same on every system, and
+the drift check (`semble-languages-extracted`) catches a platform that drops a
+grammar. It runs on Linux inside `nix flake check`, which skips Darwin, so CI's
+aarch64-darwin package job builds it separately (shard 0, before the receipt
+upload, so it gates the required `build` context). The update pipeline extracts
+on x86_64-linux only. On 0.1.2 the linux-x86_64 and macos-arm64 manifests both
+list the same 77 grammars as that bundled manifest.
 
 Both snapshot drift checks call the shared `lib/extracted/default.nix` builder.
 A mismatch prints a sorted JSON diff and a recipe to build that check’s

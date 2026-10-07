@@ -131,7 +131,9 @@ composed registry and ninja DAG:
   a `nix-prefetch-url --unpack` hash, which fails a flat `fetchurl`'s
   fixed-output check.
 - **Flake inputs**: consumed from `inputs.<name>.packages`, updated via
-  `nix flake update`. **No package uses this shape today.**
+  `nix flake update`. **No package consumes `inputs.<name>.packages` today**;
+  git-branchless and nixos-mcp take source or lib from an input, which is why
+  the table lists them as `flake input`.
 - **Python source with vendored dependencies** (`semble`, `semble-mcp`): build
   with this flake's nixpkgs and track the CLI plus its three dependencies
   through one grouped `--use-update-script` target. The MCP role selects
