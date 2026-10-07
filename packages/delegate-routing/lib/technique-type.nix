@@ -35,5 +35,13 @@ lib.types.submodule {
       default = null;
       description = "Whether a delegate technique pins the model; null for inspection and usage.";
     };
+    runsOwnSubagents = lib.mkOption {
+      type = lib.types.str;
+      default = "unknown";
+      description = ''
+        Whether a delegate launched this way can run its own subagents, with
+        the mode it was observed in, such as "supported (headless)".
+      '';
+    };
   };
 }

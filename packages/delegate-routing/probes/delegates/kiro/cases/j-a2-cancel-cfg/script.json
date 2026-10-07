@@ -1,0 +1,28 @@
+{
+  "steps": [
+    {
+      "op": "call",
+      "method": "session/set_config_option",
+      "params": {
+        "sessionId": "$SID",
+        "configId": "effortLevel",
+        "value": "low"
+      }
+    },
+    {
+      "op": "prompt",
+      "text": "MAIN_KICKOFF USER_SENTINEL_1",
+      "async": true,
+      "tag": "p1"
+    },
+    { "op": "sleep", "s": 5 },
+    {
+      "op": "notify",
+      "method": "session/cancel",
+      "params": { "sessionId": "$SID" }
+    },
+    { "op": "wait", "tag": "p1", "timeout": 60 },
+    { "op": "sleep", "s": 12 },
+    { "op": "prompt", "text": "SECOND_PROMPT", "timeout": 60 }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "custom",
+  "description": "custom fixture",
+  "prompt": "CUSTOM_PROMPT_SENTINEL",
+  "tools": ["*"]
+}

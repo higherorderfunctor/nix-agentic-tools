@@ -1,0 +1,55 @@
+const { fs, nodes, code, named } = require("./ast.cjs");
+const args = process.argv.slice(2),
+  label = args.shift();
+const out = [];
+for (const spec of args) {
+  let nn;
+  if (spec.startsWith("contains:")) {
+    const term = spec.slice(9);
+    nn = nodes.filter(
+      (n) =>
+        [
+          "MethodDefinition",
+          "FunctionDeclaration",
+          "VariableDeclarator",
+        ].includes(n.type) && code(n).includes(term),
+    );
+  } else if (spec.startsWith("method:")) {
+    nn = nodes.filter(
+      (n) => n.type === "MethodDefinition" && n.key.name === spec.slice(7),
+    );
+  } else if (spec.startsWith("line:")) {
+    const line = +spec.slice(5);
+    nn = nodes.filter(
+      (n) =>
+        ["MethodDefinition", "FunctionDeclaration"].includes(n.type) &&
+        n.loc.start.line === line,
+    );
+  } else
+    nn = nodes.filter(
+      (n) =>
+        (n.type === "FunctionDeclaration" && n.id?.name === spec) ||
+        (n.type === "VariableDeclarator" && n.id?.name === spec) ||
+        (n.type === "AssignmentExpression" && n.left?.name === spec),
+    );
+  if (!nn.length) throw new Error(`No pinned AST node matches ${spec}`);
+  for (const n of nn)
+    out.push({
+      name: n.key?.name || n.id?.name || n.left?.name,
+      type: n.type,
+      line: n.loc.start.line,
+      source: code(n),
+    });
+}
+fs.writeFileSync(
+  process.cwd() + "/" + label + ".json",
+  JSON.stringify(out, null, 2),
+);
+console.log(
+  out.map((x) => ({
+    name: x.name,
+    type: x.type,
+    line: x.line,
+    chars: x.source.length,
+  })),
+);

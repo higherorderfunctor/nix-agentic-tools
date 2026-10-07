@@ -3,6 +3,7 @@ adoc
 affordances
 agenix
 agentic
+agentpin
 agentsdir
 agentskills
 agentsmd
@@ -46,12 +47,14 @@ bypassable
 cachix
 caddyfile
 calen
+cancelchild
 cands
 caoff
 castai
 catchable
 catppuccin
 cctools
+checkin
 clearenv
 clicolor
 clis
@@ -60,6 +63,7 @@ CLOUDSDK
 cmdbuilder
 codesign
 codewhisperer
+collab
 COLORFGBG
 COLORTERM
 commentchar
@@ -76,6 +80,7 @@ deadnix
 dedented
 dedents
 deepseek
+deleg
 derefs
 devenv
 devshell
@@ -85,6 +90,7 @@ direntry
 direnv
 direnvrc
 disableable
+disablewf
 disjointness
 docbook
 docsite
@@ -157,6 +163,7 @@ heredocs
 herestring
 higherorderfunctor
 hitl
+hookblock
 hookio
 hookscripts
 hookscriptsdir
@@ -234,6 +241,7 @@ moff
 mojibake
 mountpoint
 mtimes
+multimodel
 multivar
 mystor
 napi
@@ -248,8 +256,12 @@ nixbld
 nixd
 nixos
 nixpkgs
+nobuiltin
 nodev
+noexplore
 nohup
+nomodel
+nosub
 nosuid
 NOSYSTEM
 NPROCESSORS
@@ -327,6 +339,7 @@ revset
 revsets
 revwalk
 rodata
+rollouts
 rootfs
 rsbuild
 rspack
@@ -361,7 +374,9 @@ starlark
 startswith
 startupcompletedz
 statix
+statusline
 stdenv
+steerchild
 stopword
 streamable
 strflocaltime
@@ -388,6 +403,7 @@ tostring
 traceparent
 trailcomma
 treefmt
+trustdel
 tsgo
 tsgolint
 tummychow
@@ -396,6 +412,7 @@ typebox
 ufcs
 ugrep
 ultracode
+ultrareview
 unapprove
 unbuildable
 uncacheable
@@ -421,6 +438,8 @@ usebruno
 userns
 vllm
 WEZTERM
+wfctl
+wfpins
 wikilink
 WINDIR
 worktree

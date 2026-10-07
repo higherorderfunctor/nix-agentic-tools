@@ -1,0 +1,63 @@
+{
+  "rules": [
+    {
+      "match": "ROOT_TASK",
+      "events": [
+        {
+          "toolUseId": "spawn",
+          "name": "invoke_sub_agent",
+          "input": {
+            "name": "worker",
+            "prompt": "HOLD_CHILD",
+            "explanation": "offline lifecycle"
+          }
+        }
+      ]
+    },
+    {
+      "match": "HOLD_CHILD",
+      "delay": 8,
+      "events": ["CHILD_REPLY"]
+    }
+  ],
+  "agents": [
+    {
+      "name": "worker",
+      "description": "offline worker",
+      "prompt": "WORKER_PROMPT",
+      "tools": ["*"],
+      "model": "claude-sonnet-4"
+    }
+  ],
+  "args": ["acp", "--agent-engine", "v3", "--auth-method", "cli"],
+  "acp": true,
+  "initSettings": {
+    "inlineAgents": true
+  },
+  "new": {
+    "_meta": {
+      "kiro": {
+        "modelId": "claude-sonnet-4"
+      }
+    }
+  },
+  "steps": [
+    {
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "$SID",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "ROOT_TASK"
+          }
+        ]
+      },
+      "async": "prompt_run"
+    },
+    {
+      "wait": "prompt_run"
+    }
+  ],
+  "permission": "reject"
+}

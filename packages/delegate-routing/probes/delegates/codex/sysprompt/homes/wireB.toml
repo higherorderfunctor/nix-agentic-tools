@@ -1,0 +1,16 @@
+model = "gpt-6-luna"
+model_provider = "fake"
+developer_instructions = "MAIN-B-3001"
+[model_providers.fake]
+name = "fake"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"
+[agents.r1]
+description = "Declared role with no developer_instructions."
+config_file = "@D@/roles/r1.toml"
+[agents.r2]
+description = "Declared role with developer_instructions."
+config_file = "@D@/roles/r2.toml"
+[features.multi_agent_v2]
+subagent_developer_instructions = "SUBDEV-B-3003"

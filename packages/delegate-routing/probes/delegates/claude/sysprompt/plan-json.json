@@ -1,0 +1,25 @@
+[
+  {
+    "match": "SPAWN",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "json",
+          "prompt": "Subtask JS: reply done.",
+          "subagent_type": "jsonagent",
+          "run_in_background": false
+        }
+      },
+      {
+        "name": "Agent",
+        "input": {
+          "description": "gp",
+          "prompt": "Subtask GP: reply done.",
+          "subagent_type": "general-purpose",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]

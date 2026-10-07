@@ -1,0 +1,15 @@
+{
+  "name": "wf2",
+  "description": "wf-level",
+  "inputs": {},
+  "modelId": "claude-haiku-4.5",
+  "effortLevel": "max",
+  "steps": [
+    {
+      "type": "step",
+      "id": "t1",
+      "agent": "custom",
+      "prompt": "WFSTEP_T1 do it"
+    }
+  ]
+}

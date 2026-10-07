@@ -1,0 +1,16 @@
+[
+  {
+    "match": "SPAWN",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "fork",
+          "prompt": "Subtask FK: reply done.",
+          "subagent_type": "fork",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]

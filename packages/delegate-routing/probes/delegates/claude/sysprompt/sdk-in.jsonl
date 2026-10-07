@@ -1,0 +1,2 @@
+{"type":"control_request","request_id":"init1","request":{"subtype":"initialize","appendSystemPrompt":"SDK append: SDKAPP-9090.","appendSubagentSystemPrompt":"SDK subagent append: SDKSUB-9191.","agents":{"sdkagent":{"description":"sdk agent","prompt":"SDK agent body: SDKAGENT-9292."}}}}
+{"type":"user","message":{"role":"user","content":"SPAWN"},"parent_tool_use_id":null,"session_id":""}

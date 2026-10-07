@@ -1,0 +1,44 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "a", "message": "TASK-A", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    {
+      "sleep_before": 3,
+      "calls": [["interrupt_agent", { "target": "a" }, "collaboration"]]
+    },
+    { "sleep_before": 1, "calls": [["list_agents", {}, "collaboration"]] },
+    {
+      "calls": [
+        [
+          "followup_task",
+          { "target": "a", "message": "FOLLOWUP-AFTER-INTERRUPT" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 10000 }, "collaboration"]] },
+    { "calls": [["list_agents", {}, "collaboration"]] },
+    { "msg": "ROOT DONE" }
+  ],
+  "/root/a": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "g", "message": "TASK-G", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "sleep": 20, "msg": "A SLOW DONE" },
+    { "msg": "A AFTER FOLLOWUP" }
+  ],
+  "/root/a/g": [{ "sleep": 20, "msg": "G SLOW DONE" }]
+}

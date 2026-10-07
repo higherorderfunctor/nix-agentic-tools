@@ -1,0 +1,13 @@
+[
+  {
+    "match": "WFSPAWN",
+    "tools": [
+      {
+        "name": "Workflow",
+        "input": {
+          "script": "export const meta = { name: 'probe-wf', description: 'prompt capture probe', phases: [{ title: 'A' }] }\nconst a = await agent('Subtask WFDEF: reply done.', { label: 'def', phase: 'A' })\nconst b = await agent('Subtask WFNAMED: reply done.', { label: 'named', phase: 'A', agentType: 'named-agent' })\nreturn { a, b }\n"
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,14 @@
+default|gpt-6-luna|
+agents_enabled_false|gpt-6-luna|[agents]\nenabled = false
+mav2_false|gpt-6-luna|[features]\nmulti_agent_v2 = false
+multi_agent_false|gpt-6-luna|[features]\nmulti_agent = false
+disable_direct_message|gpt-6-luna|[features]\nagent_message_board = true\n[features.multi_agent_v2]\ndisable_direct_message = true\nenabled = true\nmessage_board_in_memory = true
+wait_agent_disabled|gpt-6-luna|[features.multi_agent_v2]\nwait_agent_enabled = false
+namespace_agents|gpt-6-luna|[features.multi_agent_v2]\ntool_namespace = "agents"
+no_model_overrides|gpt-6-luna|[features.multi_agent_v2]\nexpose_spawn_agent_model_overrides = false
+show_metadata|gpt-6-luna|[features.multi_agent_v2]\nhide_spawn_agent_metadata = false
+code_mode_too|gpt-6-luna|[features.multi_agent_v2]\nnon_code_mode_only = false
+gpt55_default|gpt-5.5|
+gpt56luna_v1|gpt-5.6-luna|
+gpt56luna_force_v2|gpt-5.6-luna|[features.multi_agent_v2]\nenabled = true
+gpt56luna_multi_agent_false|gpt-5.6-luna|[features]\nmulti_agent = false

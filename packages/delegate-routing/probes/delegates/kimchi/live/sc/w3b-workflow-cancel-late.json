@@ -1,0 +1,33 @@
+{
+  "args": ["--model", "kimchi-dev/fake-a", "--mode", "rpc", "--approve"],
+  "workflows": true,
+  "close_stdin": false,
+  "timeout": 25,
+  "files": {
+    ".kimchi/workflows/probe2.workflow.ts": "import { createAgentStep, createWorkflow } from \"@kimchi-dev/kimchi-workflows\"\nconst bg = createAgentStep({ name: \"bg-step\", background: true, model: \"kimchi-dev/fake-b\", prompt: () => \"WF_BG_LONG WFSLEEP=12\" })\nexport default createWorkflow({ name: \"probe2\", description: \"cancel probe\" }).then(bg).commit()\n"
+  },
+  "stdin_lines": [
+    {
+      "at": 1.5,
+      "line": {
+        "type": "prompt",
+        "message": "/workflow run probe2"
+      }
+    },
+    {
+      "at": 9,
+      "after_request": "WF_BG_LONG",
+      "line": {
+        "type": "prompt",
+        "message": "/workflow cancel"
+      }
+    },
+    {
+      "at": 15,
+      "line": {
+        "type": "prompt",
+        "message": "/workflow run list"
+      }
+    }
+  ]
+}

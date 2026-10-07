@@ -1,0 +1,42 @@
+{
+  "thread": {},
+  "turn": "GO",
+  "timeout": 30,
+  "actions": [
+    {
+      "at": 2.0,
+      "method": "turn/steer",
+      "params": {
+        "threadId": "$CHILD",
+        "expectedTurnId": "$CHILDTURN",
+        "input": [
+          { "type": "text", "text": "STEER-CHILD-1", "text_elements": [] }
+        ]
+      }
+    },
+    {
+      "at": 2.5,
+      "method": "turn/settings/update",
+      "params": {
+        "threadId": "$CHILD",
+        "turnId": "$CHILDTURN",
+        "model": "gpt-6-sol",
+        "effort": "high"
+      }
+    },
+    {
+      "at": 3.0,
+      "method": "thread/inject_items",
+      "params": {
+        "threadId": "$CHILD",
+        "items": [
+          {
+            "type": "message",
+            "role": "developer",
+            "content": [{ "type": "input_text", "text": "INJECT-CHILD-1" }]
+          }
+        ]
+      }
+    }
+  ]
+}

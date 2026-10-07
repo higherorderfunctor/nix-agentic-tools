@@ -410,6 +410,7 @@ in {
         # outright. Measured 2026-09-22 — bare and wrapped arms reloaded
         # identically, 3/3 each, with an attribution control confirming
         # nothing else walks `dev/skills/`.
+        delegate-evidence = ./skills/delegate-evidence;
         index-repo-docs = ./skills/index-repo-docs;
         kimchi-egress-report = ./skills/kimchi-egress-report;
         kimchi-surface-scan = ./skills/kimchi-surface-scan;

@@ -1,0 +1,7 @@
+name = "r1"
+description = "Probe role r1."
+developer_instructions = "ROLE-R1-DEV"
+model = "gpt-6-sol"
+model_reasoning_effort = "low"
+sandbox_mode = "danger-full-access"
+approval_policy = "on-request"

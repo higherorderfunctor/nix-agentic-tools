@@ -1,0 +1,83 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["orchestrated session"],
+    "events": [
+      {
+        "toolUseId": "tu_c",
+        "name": "subagent",
+        "input": {
+          "task": "T",
+          "stages": [
+            {
+              "name": "st0",
+              "role": "custom",
+              "prompt_template": "CHILD_PERM {task}",
+              "model": "claude-haiku-4.5"
+            },
+            {
+              "name": "st1",
+              "role": "custom",
+              "prompt_template": "CHILD_PERM2 {task}"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "match": ["orchestrated session", "CHILD_PERM"],
+    "events": [
+      {
+        "toolUseId": "cb1",
+        "name": "shell",
+        "input": { "command": "echo CHILD_BASH_RAN" }
+      }
+    ]
+  },
+  {
+    "match": ["orchestrated session", "CHILD_PERM"],
+    "events": [
+      {
+        "toolUseId": "sm1",
+        "name": "summary",
+        "input": {
+          "taskDescription": "CHILD_PERM",
+          "taskResult": "CHILD_SUMMARY"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["orchestrated session", "CHILD_PERM"],
+    "events": ["CHILD_AFTER"]
+  },
+  {
+    "match": ["orchestrated session", "CHILD_PERM2"],
+    "events": [
+      {
+        "toolUseId": "sm2",
+        "name": "summary",
+        "input": {
+          "taskDescription": "CHILD_PERM2",
+          "taskResult": "CHILD2_DONE"
+        }
+      }
+    ]
+  },
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["orchestrated session"],
+    "events": ["MAIN_DONE"]
+  },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] },
+  { "match": null, "events": ["FALLBACK_TEXT"] }
+]

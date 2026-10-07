@@ -1,0 +1,104 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          {
+            "message": "V1-TASK-A",
+            "reasoning_effort": "high"
+          },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    {
+      "calls": [
+        [
+          "send_input",
+          {
+            "target": "$AGENT_ID",
+            "message": "V1-INPUT-QUEUED"
+          },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    {
+      "calls": [
+        [
+          "wait_agent",
+          {
+            "targets": ["$AGENT_ID"],
+            "timeout_ms": 15000
+          },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    {
+      "calls": [
+        [
+          "close_agent",
+          {
+            "target": "$AGENT_ID"
+          },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    {
+      "calls": [
+        [
+          "resume_agent",
+          {
+            "id": "$AGENT_ID"
+          },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    {
+      "calls": [
+        [
+          "send_input",
+          {
+            "target": "$AGENT_ID",
+            "message": "V1-AFTER-RESUME",
+            "interrupt": true
+          },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    {
+      "calls": [
+        [
+          "wait_agent",
+          {
+            "targets": ["$AGENT_ID"],
+            "timeout_ms": 15000
+          },
+          "multi_agent_v1"
+        ]
+      ]
+    },
+    {
+      "msg": "ROOT DONE"
+    }
+  ],
+  "v1c1": [
+    {
+      "sleep": 4,
+      "msg": "CHILD V1 FIRST"
+    },
+    {
+      "sleep": 4,
+      "msg": "CHILD V1 SECOND"
+    },
+    {
+      "sleep": 4,
+      "msg": "CHILD V1 THIRD"
+    }
+  ]
+}

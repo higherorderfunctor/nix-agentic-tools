@@ -1,0 +1,29 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "a", "message": "TASK-A", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 60000 }, "collaboration"]] },
+    { "calls": [["list_agents", {}, "collaboration"]] },
+    { "msg": "ROOT TURN2 DONE" }
+  ],
+  "/root/a": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "g", "message": "TASK-G", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "sleep": 25, "msg": "A SLOW DONE" }
+  ],
+  "/root/a/g": [{ "sleep": 25, "msg": "G SLOW DONE" }]
+}

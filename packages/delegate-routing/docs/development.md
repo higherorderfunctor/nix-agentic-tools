@@ -3,7 +3,11 @@
 > **Last verified:** 2026-10-07 — one enabled "Work and review" workflow ships
 > the Subtractive standard; a runtime workflow record without text keeps the
 > portable header; all delegate runtimes must be managed, and reaching Kiro
-> defaults `ai.kiro.v3` on only when its package is managed.
+> defaults `ai.kiro.v3` on only when its package is managed. Delegate evidence
+> is two parts: the map (`docs/delegates/` plus `probes/delegates/`) and the
+> acceptance suite (`eval/`, one real-session runner for all four harnesses with
+> one root baseline table and requested/observed controls and source-attributed
+> startup checks); techniques hand-declare `runsOwnSubagents` from map rows.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -110,6 +114,13 @@ on PATH. Introspection and usage nodes describe how to obtain live evidence.
 Usage commands remain part of the existing technique catalog. Each package field
 uses `mkDefault`; consumers can override fields, add nodes or disable a node.
 
+`runsOwnSubagents` fills the technique table's "Runs own subagents" column,
+which "Choose execution" points readers at. It is a hand-declared string,
+`"unknown"` by default; a shipped value names the mode it was seen in, such as
+`"supported (headless)"`, and a one-line comment in `lib/techniques.nix` cites
+the map row and case id that executed it. Change a value only with a map row
+behind it.
+
 Kimchi's Agent tool pins model and thinking. An omitted `thinking` falls back to
 the persona default, so pass it explicitly. Kimchi's `/workflow` is a slash
 command without a model tool; `dev/ai.nix` enables its interactive resource
@@ -164,3 +175,65 @@ nix eval --raw .#delegate-routing-content.skills.codex.text
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "kiro"; models.kiro = [{vendors = ["anthropic"];}]; }'
 nix eval --raw .#delegate-routing-content.render --apply 'render: render { runtime = "claude"; extraRuntimes = ["codex"]; manualExternalDelegates = ["kiro"]; models.claude = [{vendors = ["anthropic"];}]; models.codex = [{vendors = ["openai"];}]; models.kiro = [{vendors = ["anthropic"];}]; }'
 ```
+
+## Acceptance suite
+
+`eval/` is the acceptance suite: one manual suite of real sessions on Claude,
+Codex, Kiro and Kimchi that checks what the delivered configuration makes an
+agent do with a real task. `eval/cases.nix` evaluates `dev/ai.nix` through the
+devenv module harness with only each case's switches changed, and exports every
+delivered file plus the evaluated delegate technique names. `eval/suite.py` is
+the single runner: it renders each case into a fresh fixture repository, runs
+one session under a scratch `HOME` that keeps only the login and carried-over
+settings; it hides config from the loader, not files from the model. It caps the
+session and asserts on the session's own event log. Root model and effort come
+from the single `ROOT_BASELINES` table at the operator’s strong-tier medium;
+Codex model/effort and Kiro default model are not copied. Claude debug scope
+counts attribute bundled skills without a name allowlist; Codex resolves catalog
+paths, and Kiro reads workspace skill source metadata from CLI stream updates.
+Kimchi separates extension flags from the task with `--`. Kiro resolves the
+newest matching Opus model only for live runs. Results record requested controls
+separately from root event/log observations, with `not exposed` for missing
+fields. Harness differences live in its `HARNESSES` table; assertions in its
+`ASSERTIONS` table.
+
+A delegate call is classified by technique name, so the suite and the rendered
+skill read one table. Same-runtime nested children ARE logged in and can run and
+spend inside the 600 s process-group cap; no PATH shim blocks them. The Claude
+clamp and ultracode drain cases are on/off pairs. Results are `PASS`, `FAIL` or
+`ERROR`; only `ERROR` (no answer, a leak, or the routing skill missing from the
+startup record) fails the run.
+
+The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
+in the sandbox: it validates every case and renders every fixture and launch
+plan with no harness and no login. Its `cases` passthru is the runner's fixture
+export. It also runs the offline source-attribution and event-schema regressions
+in `eval/test_suite.py`. No check starts a session. See `eval/README.md` for the
+isolation recipe, the caps and the operator steps.
+
+## Delegate map
+
+`docs/delegates/evidence.md` owns pins, evidence marks and capture methods. The
+other reference files own tools, controls, lifecycle and prompt reach.
+`probes/delegates/<harness>/README.md` indexes exact case commands and expected
+excerpts. Captured execution and source-only evidence stay separate. Probes
+write beneath a temporary case tree. Kiro creates a fake fixture login from
+schema and native type strings when no fixture home is supplied; both replay
+runners stay in an empty network namespace with local service endpoints. Its
+a2/h2/h3 and codex-side inline fixtures share bases and a generator with byte
+comparisons for every case path.
+
+The repo-only `delegate-evidence` dev skill (`dev/skills/delegate-evidence/`)
+sends agents to the map and the suite before they state harness behavior or
+debug the skill.
+
+Kiro map results describe only the current flake pin. Its v2 replay cases remain
+marked "v2 engine (not used by this config)"; skill capability citations use v3
+cases. The headless nested capture shares its rules with the ACP nested case
+through `rulesFrom`; AST selectors fail on a missing match. Kimchi replays use
+the flake pin only; native VM tool exclusions come from that source, and
+inventory stdin resolves before entering the scratch project. RPC/ACP scenario
+deadlines are cleanup; the wire and tool results establish the behavior.
+Workflow cancel/abort fixtures wait for an active provider request, and the
+abort fixture waits 10 s before its status check. The prompt-map `codex:S`
+pointer has no replay and stays U.

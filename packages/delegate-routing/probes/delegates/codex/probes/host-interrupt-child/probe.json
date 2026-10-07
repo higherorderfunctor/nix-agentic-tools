@@ -1,0 +1,12 @@
+{
+  "thread": {},
+  "turn": "GO",
+  "timeout": 30,
+  "actions": [
+    {
+      "at": 2.0,
+      "method": "turn/interrupt",
+      "params": { "threadId": "$CHILD", "turnId": "$CHILDTURN" }
+    }
+  ]
+}
