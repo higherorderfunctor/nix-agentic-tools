@@ -9,7 +9,7 @@ applyTo: "packages/kimchi/**"
 
 > **Last verified:** 2026-10-07 — `mkKimchi` binds `lib.ai.extracted`
 > independently of runtime package replacements; environment `controls` prose is
-> optional, so only secret environment names need a hand row.
+> optional except on secret names, which still need a hand row.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -152,9 +152,10 @@ which fails evaluation if the pinned Kimchi no longer reads it or starts
 overwriting it.
 
 The extractor emits every resolved environment name with `type = "string"`,
-which feeds the secret classifier for names without a recorded row. A recorded
-row reviews an environment name without additional secret fields, so a secret is
-never auto-added. `controls` prose is optional and must be non-blank when given;
+which feeds the secret classifier for names without a recorded row. Secret names
+are never auto-added, and their rows must carry `controls` prose, so an
+auto-added `{}` row cannot stand in for the review of a name the classifier
+later calls secret. Otherwise `controls` is optional and non-blank when given;
 grouped `environmentIgnored` names expand into `ignored = "<reason>"` rows
 inside `rules.nix`, so they stay in the facts but disappear from the consumer
 view. Reconcile reports removed rows or users, unresolved required fields,

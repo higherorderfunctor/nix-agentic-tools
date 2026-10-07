@@ -1,7 +1,8 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-06 — owners apply the injected `extractedLib`
-> function instead of importing the shared extraction library by relative path.
+> **Last verified:** 2026-10-07 — owners apply the injected `extractedLib`
+> function instead of importing the shared extraction library by relative path;
+> Kimchi environment names need controls prose only when secret.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -255,10 +256,10 @@ counts toward `config.json` only when its `readFileSync` path resolves there;
 1.1.30 also parses `harness/settings.json` in that file, and a read that
 resolves to neither fails the extraction. The extractor emits every resolved
 environment name; reconcile in `packages/kimchi/extract/rules.nix` decides its
-acceptance, required controls prose, or grouped ignore reason. Reconcile fails a
-row whose name vanished (removed) and a new name it cannot accept (needs-human
-or unrecorded). pi's own variable names come from Kimchi's `piConfig.name` the
-way pi derives them, not from pi's `PI_` default.
+acceptance, optional controls prose (required on secret names), or grouped
+ignore reason. Reconcile fails a row whose name vanished (removed) and a new
+name it cannot accept (secret or unrecorded). pi's own variable names come from
+Kimchi's `piConfig.name` the way pi derives them, not from pi's `PI_` default.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin

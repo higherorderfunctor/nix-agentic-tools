@@ -35,9 +35,10 @@
                 "unknown environment ignore group fields" = true;
               }))
           (builtins.attrValues rows.environmentIgnored));
-      # String facts classify unrecorded secret names, so a secret is never
-      # auto-added; a recorded row is its review, with no extra secret fields.
-      secretNeeds = [];
+      # A secret name is never auto-added, and its row must carry controls
+      # prose, so an auto-added {} row cannot pass as the review of a name
+      # the classifier later calls secret.
+      secretNeeds = ["controls"];
     };
   };
 in {
