@@ -232,9 +232,9 @@ in
           root = packageRoot;
           inherit target;
         };
+        extractedRules = import ../../../extract/rules.nix {inherit extractedLib pkgs;};
         # Also discovered by fix_sidecar_hashes after nixpkgs input changes.
         inherit fixVendorHash;
-        extractedRules = import ../../../extract/rules.nix {inherit extractedLib pkgs;};
         updateScript = vu.mkUpdateScript {
           inherit pkgs sourcesFile;
           pname = "chatgpt-codex";

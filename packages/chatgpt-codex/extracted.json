@@ -5641,10 +5641,6 @@
       }
     ]
   },
-  "config": {
-    "documentedKeys": [],
-    "probeValidatedKeys": []
-  },
   "features": [
     {
       "default": false,

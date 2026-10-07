@@ -1,8 +1,9 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-07 — launcher dependencies come from `mkCodex.nix`
-> and fail reconciliation on upstream removal; Home Manager owns daemon
-> selection and settings, while devenv excludes daemon state.
+> **Last verified:** 2026-10-07 — launcher flags come from
+> `lib/launcher-flags.nix` and fail reconciliation when the root command drops
+> one; Home Manager owns daemon selection and settings, while devenv excludes
+> daemon state.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -89,10 +90,11 @@ sandbox will own that home.
   update PR. It then drives the warn paths with stub roots and a selector whose
   waits are shortened through `.override`: a stop that fails, one that hangs,
   and a lock held past the wait each exit 0 with a `warning:`.
-- `--no-daemon` lives in `mkCodex.nix`'s `launcherFlags.devenv` constant.
-  `extract/rules.nix` reads it as a `uses` dependency, and
-  `chatgpt-codex-extracted` fails with `removed` if upstream drops it, even if
-  its annotation row is deleted.
+- `--no-daemon` lives in `lib/launcher-flags.nix`'s `devenv` list, which
+  `mkCodex.nix` builds the launcher from. `extract/rules.nix` checks it as a
+  `uses` dependency of the root command's flags, so `chatgpt-codex-extracted`
+  fails with `removed` if upstream drops it from the root command, even if its
+  `launcherFlags` annotation row is deleted.
 
 ## Settled — do not relitigate
 

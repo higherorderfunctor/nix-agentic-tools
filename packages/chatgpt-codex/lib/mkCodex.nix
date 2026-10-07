@@ -32,10 +32,10 @@
   # `codex queue` and `--remote` then refuse to run, and `codex remote-control`
   # and `codex app-server daemon …` ignore it and still reach the user daemon.
   # The flags live in launcher-flags.nix, which extraction reconciliation also
-  # reads, so it fails if upstream drops one. devenv's launcher also
-  # carries the trust of the project hooks it generates (`hookTrustFor`), as a
-  # session flag: Codex reads hook trust only from user config and session
-  # flags, and devenv never writes the user's config.
+  # reads, so it fails if upstream drops one from the root command. devenv's
+  # launcher also carries the trust of the project hooks it generates
+  # (`hookTrustFor`), as a session flag: Codex reads hook trust only from user
+  # config and session flags, and devenv never writes the user's config.
   launcherFlags = import ./launcher-flags.nix;
   codexInstallPackage = {
     backend,

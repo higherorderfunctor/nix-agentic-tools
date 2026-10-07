@@ -73,14 +73,6 @@
     "codex unarchive": {},
     "codex update": {}
   },
-  "config": {
-    "documentedKeys": {
-      "disposition": "empty unsupported extraction seam; manual-documented keys use typed/freeform TOML and the CX-012 ledger"
-    },
-    "probeValidatedKeys": {
-      "disposition": "empty unsupported extraction seam; behavioral probes live in codex-configuration-probes.md"
-    }
-  },
   "flags": {
     "--add-dir": {},
     "--all": {},
@@ -189,5 +181,6 @@
     "--ws-token-file": {},
     "--ws-token-sha256": {},
     "--yes": {}
-  }
+  },
+  "launcherFlags": { "--config": {}, "--no-daemon": {} }
 }

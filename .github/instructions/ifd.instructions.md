@@ -8,7 +8,7 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 ## IFD Patterns and Gotchas
 
 > **Last verified:** 2026-10-07 — Codex uses the injected `extractedLib` for
-> name reconciliation and row regeneration alongside sidecar drift.
+> command, flag and root launcher-flag reconciliation alongside sidecar drift.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -500,13 +500,12 @@ wrong one sends the next session hunting upstream for a change that never
 happened.
 
 Codex's `extract/rules.nix` applies the injected `extractedLib` to reconcile
-committed command, canonical flag and config seam names with
-`extract/annotations.json`. The package exposes `passthru.extractedRules`, and
-`chatgpt-codex-extracted` consumes its results alongside sidecar drift.
-`mkExtractRegen` regenerates the facts and then adds derivable `{}` rows;
-missing config dispositions remain failures for the update PR to resolve.
-Launcher flags come from one constant in `mkCodex.nix` and are recorded as
-`uses`, so upstream removal requires updating the launcher. Feature maturity
+committed command and canonical flag names with `extract/annotations.json`. The
+package exposes `passthru.extractedRules`, and `chatgpt-codex-extracted`
+consumes its results alongside sidecar drift. `mkExtractRegen` regenerates the
+facts and then adds derivable `{}` rows. Launcher flags come from
+`lib/launcher-flags.nix` and are recorded as `uses` of the root command's flags,
+so an upstream removal there requires updating the launcher. Feature maturity
 policy stays at the factory's `== "stable"` branch; record fields are extractor
 output rather than a second human ledger.
 

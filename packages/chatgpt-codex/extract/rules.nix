@@ -15,19 +15,21 @@
       rows = rows.commands;
       secretNeeds = [];
     };
-    config = {
-      facts = lib.mapAttrs (_: _: {}) extracted.config;
-      fields = ["disposition"];
-      needs = ["disposition"];
-      rows = rows.config;
-      secretNeeds = [];
-    };
     flags = {
       facts = lib.genAttrs (lib.unique (lib.concatMap (command: map (flag: builtins.head flag.names) command.flags) (builtins.attrValues extracted.cli.commands))) (_: {});
       rows = rows.flags;
+      # Flags carry no values into Nix: the facts are untyped, so secret
+      # classification does not apply.
+      secretNeeds = [];
+    };
+    # The launcher passes its flags before any subcommand, so they are checked
+    # against the root command's flags alone.
+    launcherFlags = {
+      facts = lib.genAttrs (lib.intersectLists (lib.concatLists (builtins.attrValues launcherFlags)) (map (flag: builtins.head flag.names) extracted.cli.globalFlags)) (_: {});
+      rows = rows.launcherFlags;
       secretNeeds = [];
       uses = lib.foldlAttrs (uses: policy: flags:
-        uses // lib.genAttrs flags (_: "mkCodex.nix launcherFlags.${policy}")) {}
+        uses // lib.genAttrs flags (_: "lib/launcher-flags.nix ${policy}")) {}
       launcherFlags;
     };
   };
