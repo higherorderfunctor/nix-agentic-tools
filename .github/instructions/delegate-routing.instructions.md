@@ -7,9 +7,9 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-06 — one enabled "Work and review" workflow ships
+> **Last verified:** 2026-10-07 — one enabled "Work and review" workflow ships
 > the Subtractive standard; a runtime workflow record without text keeps the
-> portable header.
+> portable header; reaching Kiro defaults `ai.kiro.v3` on.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -123,6 +123,12 @@ and usage nodes. Kimchi has no usage node because no command reads usage without
 a model turn. Shared table rendering escapes cells once.
 
 ## Delivery and previews
+
+When an enabled runtime reaches Kiro, as the session runtime or through
+`extraRuntimes` or `manualExternalDelegates`, the program sets `ai.kiro.v3` with
+`mkDefault`. The skill's Kiro evidence covers the v3 engine only. A consumer's
+own `ai.kiro.v3 = false` still wins, and a consumer without the Kiro module is
+untouched.
 
 The common module imports `mkSkillPackageModule` once for the supported
 runtimes. Per-runtime program enable inherits portable enable through the

@@ -329,6 +329,14 @@
       && lib.hasInfix "claude-opus-*" claude
       && lib.hasInfix "gpt-*-sol" claude
     );
+    # The skill's Kiro evidence covers the v3 engine only: reaching Kiro turns it
+    # on by default, the program being off leaves Kiro alone, and an explicit
+    # consumer value wins.
+    "module-delegate-routing-${name}-kiro-v3" = mkTest "delegate-routing-${name}-kiro-v3" (
+      result.config.ai.kiro.v3
+      && !(change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.v3
+      && !(change {ai.kiro.v3 = false;}).config.ai.kiro.v3
+    );
     "module-delegate-routing-${name}-kiro-models" = mkTest "delegate-routing-${name}-kiro-models" (
       requiresSelection "kiro"
       && lib.hasInfix "opus (anthropic)" kiro
