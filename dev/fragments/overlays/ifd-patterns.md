@@ -1,8 +1,10 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-07 — owners apply the injected `extractedLib`
-> function instead of importing the shared extraction library by relative path;
-> Kimchi environment names need controls prose only when secret.
+> **Last verified:** 2026-10-07 — Codex uses the injected `extractedLib` for
+> command, flag and root launcher-flag reconciliation alongside sidecar drift;
+> Semble exposes both extractors on package passthru, and
+> `mkExtractRegen.extract` selects its templates snapshot; Kimchi environment
+> names need controls prose only when secret.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -198,17 +200,17 @@ runtime-values classifier only for string-valued names or string-to-string maps.
 `withAdded` preserves the already-parsed rows and adds `{}` rows for derivable
 non-secret new names.
 
-`mkExtractRegen` takes a package name as `attr` and optionally
-`rows = {name; path;}`, where `name` identifies the drift check independently of
-the package. After writing and formatting the sidecar it runs
-`lib/extracted/default.nix`'s `mkRowsRegen`, the same command the drift check
-prints, to evaluate `passthru.rows`, replace `path` and format it. The temporary
-output matters: direct redirection would truncate the rows that this evaluation
-reads. `mkRegenerateExtracted` lists sidecar destinations in
-`passthru.sidecars`; its current callers do not regenerate rows. Kimchi's
-`extract/rules.nix` is shared by its consumer, drift check and regeneration;
-extractors continue to enforce source structure, while reconciliation failures
-turn the resulting update PR red.
+`mkExtractRegen` takes a package name as `attr`, an optional `extract` passthru
+key (default `extracted`), and optionally `rows = {name; path;}`, where `name`
+identifies the drift check independently of the package. After writing and
+formatting the sidecar it runs `lib/extracted/default.nix`'s `mkRowsRegen`, the
+same command the drift check prints, to evaluate `passthru.rows`, replace `path`
+and format it. The temporary output matters: direct redirection would truncate
+the rows that this evaluation reads. `mkRegenerateExtracted` lists sidecar
+destinations in `passthru.sidecars`; its current callers do not regenerate rows.
+Kimchi's `extract/rules.nix` is shared by its consumer, drift check and
+regeneration; extractors continue to enforce source structure, while
+reconciliation failures turn the resulting update PR red.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
@@ -493,16 +495,15 @@ binary", the other is "the package layout moved" — and a build that names the
 wrong one sends the next session hunting upstream for a change that never
 happened.
 
-Codex additionally carries a different kind of gate:
-`packages/chatgpt-codex/checks/chatgpt-codex-coverage.nix` compares the
-generated vocabulary with the human-authored categorical partition in
-`packages/chatgpt-codex/lib/extractedCoverage.nix`. Shape checks prove the
-extractor still recognizes upstream; this reverse check proves every recognized
-surface has an explicit Nix disposition. Keep those sources separate. If the
-update hook generated the classification too, the exact change needing review
-would bless itself. Model IDs and feature names may be policy-covered rather
-than copied item-for-item, but new command/flag identities, record fields,
-feature maturities, and config-key extraction fail closed.
+Codex's `extract/rules.nix` applies the injected `extractedLib` to reconcile
+committed command and canonical flag names with `extract/annotations.json`. The
+package exposes `passthru.extractedRules`, and `chatgpt-codex-extracted`
+consumes its results alongside sidecar drift. `mkExtractRegen` regenerates the
+facts and then adds derivable `{}` rows. Launcher flags come from
+`lib/launcher-flags.nix` and are recorded as `uses` of the root command's flags,
+so an upstream removal there requires updating the launcher. Feature maturity
+policy stays at the factory's `== "stable"` branch; record fields are extractor
+output rather than a second human ledger.
 
 ### Gotchas when adding new packages
 

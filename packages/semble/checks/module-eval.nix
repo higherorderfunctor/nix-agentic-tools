@@ -382,7 +382,6 @@ in {
             pattern = "flake.lock";
           }
         ]
-        && hmPackage.passthru.updateFlakeInput == "llm-agents"
         && hm.home.activation ? sembleCacheGuard
         && lib.hasInfix "semble-cache-guard" hm.home.activation.sembleCacheGuard.text
         && lib.hasInfix "semble-cache-guard" devenv.enterShell
@@ -541,121 +540,120 @@ in {
         inherit pathMappings;
       };
     in
-      assert sembleWithGrammars.passthru.updateFlakeInput == "llm-agents";
-        pkgs.runCommand "module-test-semble-extra-grammars-load" {} ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
+      pkgs.runCommand "module-test-semble-extra-grammars-load" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
 
-          # Reuse the wrapped entry point's interpreter and complete Python path,
-          # replacing only its CLI dispatch tail with this parser smoke test.
-          ${pkgs.coreutils}/bin/mkdir -p repo/checks/hooks repo/docs repo/pkg
-          ${pkgs.coreutils}/bin/touch \
-            repo/.envrc \
-            repo/.gitignore \
-            repo/.sembleignore \
-            repo/ab.cfg \
-            repo/checks/hooks/pre-edit \
-            repo/docs/example.fixture.py \
-            repo/docs/example.md.fixture \
-            repo/docs/schema.json \
-            repo/flake.lock \
-            repo/pkg/deps.lock \
-            repo/settings.json \
-            repo/special.lock
-          ${pkgs.coreutils}/bin/head -n 3 ${sembleWithGrammars}/bin/.semble-wrapped > test-grammars.py
-          ${pkgs.coreutils}/bin/cat >> test-grammars.py <<'PY'
-          import json
-          from pathlib import Path
-          from types import SimpleNamespace
+        # Reuse the wrapped entry point's interpreter and complete Python path,
+        # replacing only its CLI dispatch tail with this parser smoke test.
+        ${pkgs.coreutils}/bin/mkdir -p repo/checks/hooks repo/docs repo/pkg
+        ${pkgs.coreutils}/bin/touch \
+          repo/.envrc \
+          repo/.gitignore \
+          repo/.sembleignore \
+          repo/ab.cfg \
+          repo/checks/hooks/pre-edit \
+          repo/docs/example.fixture.py \
+          repo/docs/example.md.fixture \
+          repo/docs/schema.json \
+          repo/flake.lock \
+          repo/pkg/deps.lock \
+          repo/settings.json \
+          repo/special.lock
+        ${pkgs.coreutils}/bin/head -n 3 ${sembleWithGrammars}/bin/.semble-wrapped > test-grammars.py
+        ${pkgs.coreutils}/bin/cat >> test-grammars.py <<'PY'
+        import json
+        from pathlib import Path
+        from types import SimpleNamespace
 
-          from semble.cache import _metadata_matches
-          from semble.chunking.core import _cached_get_parser
-          from semble.index.file_walker import walk_files
-          from semble.index.files import detect_language, get_extensions
-          from semble.index.index import SembleIndex
-          from semble.path_mappings import CUSTOMIZATION_FINGERPRINT
-          from semble.types import ContentType
+        from semble.cache import _metadata_matches
+        from semble.chunking.core import _cached_get_parser
+        from semble.index.file_walker import walk_files
+        from semble.index.files import detect_language, get_extensions
+        from semble.index.index import SembleIndex
+        from semble.path_mappings import CUSTOMIZATION_FINGERPRINT
+        from semble.types import ContentType
 
-          samples = {
-              "awk": b"BEGIN { print 1 }",
-              "jq": b".foo | length",
-          }
-          for language, source in samples.items():
-              parser = _cached_get_parser(language)
-              assert parser is not None, language
-              assert parser.parse(source).root_node.type == "program", language
+        samples = {
+            "awk": b"BEGIN { print 1 }",
+            "jq": b".foo | length",
+        }
+        for language, source in samples.items():
+            parser = _cached_get_parser(language)
+            assert parser is not None, language
+            assert parser.parse(source).root_node.type == "program", language
 
-          root = Path("repo").resolve()
-          expected = {
-              ".envrc": "bash",
-              ".gitignore": "gitignore",
-              ".sembleignore": "gitignore",
-              "checks/hooks/pre-edit": "bash",
-              "docs/example.fixture.py": "markdown",
-              "docs/example.md.fixture": "markdown",
-              "docs/schema.json": "json",
-              "flake.lock": "json",
-              "ab.cfg": "properties",
-              "settings.json": "json",
-              "pkg/deps.lock": "toml",
-              "special.lock": "yaml",
-          }
-          for relative, language in expected.items():
-              assert detect_language(root / relative, root) == language, relative
-          assert detect_language(root / "ordinary.py", root) == "python"
+        root = Path("repo").resolve()
+        expected = {
+            ".envrc": "bash",
+            ".gitignore": "gitignore",
+            ".sembleignore": "gitignore",
+            "checks/hooks/pre-edit": "bash",
+            "docs/example.fixture.py": "markdown",
+            "docs/example.md.fixture": "markdown",
+            "docs/schema.json": "json",
+            "flake.lock": "json",
+            "ab.cfg": "properties",
+            "settings.json": "json",
+            "pkg/deps.lock": "toml",
+            "special.lock": "yaml",
+        }
+        for relative, language in expected.items():
+            assert detect_language(root / relative, root) == language, relative
+        assert detect_language(root / "ordinary.py", root) == "python"
 
-          def walked(content: str) -> set[str]:
-              content_type = ContentType(content)
-              return {
-                  path.relative_to(root).as_posix()
-                  for path in walk_files(
-                      root,
-                      get_extensions((content_type,)),
-                      content=(content,),
-                  )
-              }
+        def walked(content: str) -> set[str]:
+            content_type = ContentType(content)
+            return {
+                path.relative_to(root).as_posix()
+                for path in walk_files(
+                    root,
+                    get_extensions((content_type,)),
+                    content=(content,),
+                )
+            }
 
-          assert walked("code") == {".envrc", "checks/hooks/pre-edit"}
-          assert walked("docs") == {"docs/example.fixture.py", "docs/example.md.fixture", "docs/schema.json"}
-          assert walked("config") == {
-              ".gitignore",
-              ".sembleignore",
-              "ab.cfg",
-              "flake.lock",
-              "pkg/deps.lock",
-              "settings.json",
-              "special.lock",
-          }
-          assert {
-              path.relative_to(root).as_posix()
-              for path in walk_files(root, [".py"])
-          } == {"docs/example.fixture.py"}
+        assert walked("code") == {".envrc", "checks/hooks/pre-edit"}
+        assert walked("docs") == {"docs/example.fixture.py", "docs/example.md.fixture", "docs/schema.json"}
+        assert walked("config") == {
+            ".gitignore",
+            ".sembleignore",
+            "ab.cfg",
+            "flake.lock",
+            "pkg/deps.lock",
+            "settings.json",
+            "special.lock",
+        }
+        assert {
+            path.relative_to(root).as_posix()
+            for path in walk_files(root, [".py"])
+        } == {"docs/example.fixture.py"}
 
-          class EmptyIndex:
-              def save(self, path: Path) -> None:
-                  path.write_bytes(b"")
+        class EmptyIndex:
+            def save(self, path: Path) -> None:
+                path.write_bytes(b"")
 
-          persisted = Path("persisted")
-          fake_index = SimpleNamespace(
-              _bm25_index=EmptyIndex(),
-              _semantic_index=EmptyIndex(),
-              _root=root,
-              _model_path="test-model",
-              _content=(ContentType.CODE,),
-              _manifest={},
-              chunks=[],
-          )
-          SembleIndex.save(fake_index, persisted)
-          metadata = json.loads((persisted / "metadata.json").read_text())
-          assert metadata["nix_customization"] == CUSTOMIZATION_FINGERPRINT
-          assert _metadata_matches(metadata, "test-model", (ContentType.CODE,))
-          metadata["nix_customization"] = "different-package"
-          assert not _metadata_matches(metadata, "test-model", (ContentType.CODE,))
-          PY
-          ${pkgs.coreutils}/bin/chmod +x test-grammars.py
-          ./test-grammars.py
-          ${pkgs.coreutils}/bin/touch "$out"
-        '';
+        persisted = Path("persisted")
+        fake_index = SimpleNamespace(
+            _bm25_index=EmptyIndex(),
+            _semantic_index=EmptyIndex(),
+            _root=root,
+            _model_path="test-model",
+            _content=(ContentType.CODE,),
+            _manifest={},
+            chunks=[],
+        )
+        SembleIndex.save(fake_index, persisted)
+        metadata = json.loads((persisted / "metadata.json").read_text())
+        assert metadata["nix_customization"] == CUSTOMIZATION_FINGERPRINT
+        assert _metadata_matches(metadata, "test-model", (ContentType.CODE,))
+        metadata["nix_customization"] = "different-package"
+        assert not _metadata_matches(metadata, "test-model", (ContentType.CODE,))
+        PY
+        ${pkgs.coreutils}/bin/chmod +x test-grammars.py
+        ./test-grammars.py
+        ${pkgs.coreutils}/bin/touch "$out"
+      '';
 
     # A null-language mapping indexes its files with line chunks and no
     # language, bypasses the parser its suffix would pick, and logs nothing.

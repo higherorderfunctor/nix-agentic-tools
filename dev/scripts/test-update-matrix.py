@@ -1167,13 +1167,10 @@ class PreparationTest(unittest.TestCase):
         self.repo = self.root / "source"
         self.bin = self.root / "bin"
         (self.repo / "packages" / "demo").mkdir(parents=True)
-        (self.repo / "packages" / "semble").mkdir(parents=True)
         self.bin.mkdir()
         (self.repo / "flake.lock").write_text("{}\n")
         (self.repo / "devenv.lock").write_text("{}\n")
         (self.repo / "devenv.yaml").write_text("inputs: {}\n")
-        (self.repo / "packages" / "semble" / "extracted.json").write_text("{}\n")
-        (self.repo / "packages" / "semble" / "upstream-templates.json").write_text("{}\n")
         self.upstream = self.root / "upstream"
         self.upstream.mkdir()
         (self.upstream / "go.mod").write_text("module example.test/demo\n\ngo 1.26.8\n")

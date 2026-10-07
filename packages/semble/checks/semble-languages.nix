@@ -2,11 +2,7 @@
 # the grammars semble-grammars bundles, the extension map, and the
 # language sets behind each content type.
 #
-# Extraction reads the pinned package output in a separate derivation; the
-# Semble derivation itself stays byte-for-byte identical to llm-agents.nix.
-# The update pipeline regenerates the file on every llm-agents bump
-# (dev/scripts/update-input.sh), so a bot PR carries it instead of failing
-# this check.
+# The grouped package updater regenerates the snapshot from passthru.extracted.
 {
   extractedLib,
   lib,
@@ -23,10 +19,7 @@
       ../extracted.json;
     languages = import ../lib/extracted.nix;
 
-    sembleScript = import ./semble-script.nix pkgs;
-    extracted = pkgs.runCommand "semble-extracted.json" {} ''
-      ${sembleScript "extract-languages" semble ./extract-languages.py} > "$out"
-    '';
+    extracted = semble.passthru.extracted;
   in
     mkDriftCheck {
       inherit committed extracted;

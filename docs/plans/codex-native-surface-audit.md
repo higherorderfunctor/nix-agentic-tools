@@ -7,8 +7,9 @@
 
 This is the CX-012 expose/defer ledger for Codex surfaces that do not have an
 obvious cross-runtime mapping. It complements the artifact and mutation probes
-in `codex-configuration-probes.md`; the completed reverse CLI-command coverage
-audit is recorded separately in `codex-reverse-coverage-audit.md`.
+in `codex-configuration-probes.md`. Extracted command, flag and config names now
+reconcile against `packages/chatgpt-codex/extract/annotations.json` through
+`packages/chatgpt-codex/extract/rules.nix`.
 
 A surface gets a dedicated Nix option or materializer when its structure is
 stable, mistakes need early diagnostics, or it lives outside the existing

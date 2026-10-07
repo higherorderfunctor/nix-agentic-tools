@@ -9,12 +9,18 @@
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
     inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
-    extracted = self.ciPackages.${system}.chatgpt-codex.passthru.extracted;
+    package = self.ciPackages.${system}.chatgpt-codex;
+    inherit (package.passthru) extracted;
     committed = ../extracted.json;
   in
     mkDriftCheck {
       inherit committed extracted;
       name = "chatgpt-codex";
+      results = package.passthru.extractedRules.results;
+      rows = {
+        path = "packages/chatgpt-codex/extract/annotations.json";
+        value = package.passthru.extractedRules.file;
+      };
       sidecar = "packages/chatgpt-codex/extracted.json";
     };
 }

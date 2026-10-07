@@ -217,7 +217,7 @@
       fi
 
       if [ ! -s ${sidecarsFile} ]; then
-        echo "ERROR: no package exposes passthru.regenerateExtracted, though Semble's snapshots alone need one" >&2
+        echo "ERROR: no package exposes passthru.regenerateExtracted, though rev- and input-tracked census packages need one" >&2
         exit 1
       fi
       while IFS= read -r sidecar || [ -n "$sidecar" ]; do

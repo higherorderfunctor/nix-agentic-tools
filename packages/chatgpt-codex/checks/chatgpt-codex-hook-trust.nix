@@ -11,12 +11,12 @@
 # of a Codex release that changes either.
 #
 # Home Manager's state is in user config.toml; devenv's is in the launcher's
-# `-c` flag, so that half runs the built launcher. The handlers cover every
-# normalization Codex applies: a matcher on an event that ignores it, default
-# and clamped timeouts, `async`, a status message, a Windows command, and a
-# context limit that is kept, dropped at its default, and ignored on an event
-# that cannot emit context. The module is evaluated at placeholder roots, which
-# are rewritten to the build directory. Offline and with no model call.
+# `--config` flag, so that half runs the built launcher. The handlers cover
+# every normalization Codex applies: a matcher on an event that ignores it,
+# default and clamped timeouts, `async`, a status message, a Windows command,
+# and a context limit that is kept, dropped at its default, and ignored on an
+# event that cannot emit context. The module is evaluated at placeholder roots,
+# which are rewritten to the build directory. Offline and with no model call.
 {
   harness,
   lib,

@@ -1,0 +1,19 @@
+{
+  "version": "0.1.2",
+  "aarch64-darwin": {
+    "hash": "sha256-dy5wEc5eL/XZNHovAnpEfHE9Pw1imD3ThFfwSqIhXGw=",
+    "url": "https://files.pythonhosted.org/packages/da/42/85eca6563cf3794a68e6b0fd6c03d3ed39b1466e68fd14e0b25b70084c19/semble_grammars-0.1.2-py3-none-macosx_11_0_arm64.whl"
+  },
+  "aarch64-linux": {
+    "hash": "sha256-8k9joE5Wny3iiq85FmyN3djilqoDkKyBbfatG9gU478=",
+    "url": "https://files.pythonhosted.org/packages/32/e2/bec01f956cd7aa52505a57954f3259febd00092715eac6f0ea1fff6058e0/semble_grammars-0.1.2-py3-none-manylinux2014_aarch64.whl"
+  },
+  "x86_64-darwin": {
+    "hash": "sha256-Uv5pjx0kieatPmRiyTIud3lnabID90opT4AeWovRDxk=",
+    "url": "https://files.pythonhosted.org/packages/b6/bd/2c0491654f9ce320faa72e6e047e07b11e696d8d737dad2a68629a294831/semble_grammars-0.1.2-py3-none-macosx_10_13_x86_64.whl"
+  },
+  "x86_64-linux": {
+    "hash": "sha256-wEBZXKThF5aaNJgH3OBcGlHbs2joDegLAFU5/YbvnAc=",
+    "url": "https://files.pythonhosted.org/packages/9d/d9/e93eb269ccd2494cf4b5ac2f201b5badb959800bf21a2ae700d6d7f6418a/semble_grammars-0.1.2-py3-none-manylinux2014_x86_64.whl"
+  }
+}
