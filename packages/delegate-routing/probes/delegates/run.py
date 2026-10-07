@@ -30,8 +30,8 @@ Case-table format (what this runner reads; register a new case by adding a row):
 - Tables without a Command column take their section's default from
   SECTION_DEFAULTS ({id} = case id, {name} = the id after its last `:`).
 
-Every run gets a scratch `PROBE_OUT` (default under /var/tmp); each case's
-output is kept in `<out>/<case>.log`.
+Every run gets a scratch `PROBE_OUT` (`--out`, else `$PROBE_OUT`, else a fresh
+dir under /var/tmp); each case's output is kept in `<out>/<case>.log`.
 """
 
 import argparse
@@ -258,11 +258,15 @@ def main(argv=None):
     parser.add_argument("--only", action="append", default=[], metavar="ID[,ID|PREFIX*]",
                         help="run only these cases (qualified harness/id or bare id); a trailing * matches a prefix")
     parser.add_argument("--live", action="store_true", help="also run LIVE cases (operator login, real quota)")
-    parser.add_argument("--out", type=Path, help="scratch PROBE_OUT and per-case logs; default a fresh /var/tmp dir")
+    parser.add_argument("--out", type=Path, default=os.environ.get("PROBE_OUT"),
+                        help="scratch PROBE_OUT and per-case logs; default $PROBE_OUT, else a fresh /var/tmp dir")
     parser.add_argument("--root", type=Path, default=HERE, help=argparse.SUPPRESS)
     parser.add_argument("--timeout", type=int, default=1200, help="seconds per command (default 1200)")
     args = parser.parse_args(argv)
-    cases = select(discover(args.root), args.only, lambda case: [case.qid, case.id])
+    try:
+        cases = select(discover(args.root), args.only, lambda case: [case.qid, case.id])
+    except ValueError as error:
+        parser.error(str(error))
     if args.list:
         for case in cases:
             status = case.skip or ("LIVE" if case.live else "runnable")

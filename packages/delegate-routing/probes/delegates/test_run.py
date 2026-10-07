@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline tests for run.py: a synthetic harness README, no probe is started."""
 
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import io
 from pathlib import Path
 import tempfile
@@ -72,8 +72,12 @@ class Runner(unittest.TestCase):
         code, out = self.main("--list", "--only=fake/fake:m*,dflt-1")
         self.assertEqual(code, 0)
         self.assertEqual([line.split("\t")[0] for line in out.splitlines()], ["fake/fake:match", "fake/fake:miss", "fake/dflt-1"])
-        with self.assertRaisesRegex(ValueError, "matched nothing"):
+        err = io.StringIO()
+        with redirect_stderr(err), self.assertRaises(SystemExit) as raised:
             self.main("--list", "--only=nope")
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("--only matched nothing: nope", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
 
     def test_run_counts_mismatches(self):
         code, out = self.main()
