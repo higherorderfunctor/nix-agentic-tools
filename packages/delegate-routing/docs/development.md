@@ -5,8 +5,9 @@
 > portable header; all delegate runtimes must be managed, and reaching Kiro
 > defaults `ai.kiro.v3` on only when its package is managed. Delegate evidence
 > is two parts: the map (`docs/delegates/` plus `probes/delegates/`) and the
-> acceptance suite (`eval/`, one real-session runner for all four harnesses);
-> techniques hand-declare `runsOwnSubagents` from map rows.
+> acceptance suite (`eval/`, one real-session runner for all four harnesses with
+> one root baseline table and requested/observed controls); techniques
+> hand-declare `runsOwnSubagents` from map rows.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -185,8 +186,13 @@ delivered file plus the evaluated delegate technique names. `eval/suite.py` is
 the single runner: it renders each case into a fresh fixture repository, runs
 one session under a scratch `HOME` that keeps only the login and carried-over
 settings; it hides config from the loader, not files from the model. It caps the
-session and asserts on the session's own event log. Harness differences live in
-its `HARNESSES` table; assertions in its `ASSERTIONS` table.
+session and asserts on the session's own event log. Root model and effort come
+from the single `ROOT_BASELINES` table at the operator’s strong-tier medium;
+Codex model/effort and Kiro default model are not copied. Kiro resolves the
+newest matching Opus model only for live runs. Results record requested controls
+separately from root event/log observations, with `not exposed` for missing
+fields. Harness differences live in its `HARNESSES` table; assertions in its
+`ASSERTIONS` table.
 
 A delegate call is classified by technique name, so the suite and the rendered
 skill read one table. Same-runtime nested children ARE logged in and can run and
