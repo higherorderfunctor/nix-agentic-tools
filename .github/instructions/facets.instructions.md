@@ -8,7 +8,7 @@ applyTo: "checks/*/default.nix,checks/facets/**,flake.nix,lib/facets.nix,lib/fac
 ## Package ownership and native composition
 
 > **Last verified:** 2026-10-06 — shared library exports compose with owner
-> helpers; `lib.runtimeValues` exposes the standalone secret classifier.
+> helpers; `lib.runtimeValues` composes from its shared library directory.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -101,8 +101,8 @@ supplied to the recipe. The overlay-pattern fragment has the full
 build-versus-export shape.
 
 The flake composes shared `baseLib` exports with owner helpers through
-`repository.libraryFor`. `lib.runtimeValues` exports only `classify`, the shared
-name-based secret classifier in `lib/runtime-values/`.
+`repository.libraryFor`. `lib.runtimeValues` is composed into `baseLib` from
+`lib/runtime-values/`.
 
 An owner's `lib/default.nix` contributes public helpers, using native module
 options with raw leaf values. Functions retain their `functionArgs`; option

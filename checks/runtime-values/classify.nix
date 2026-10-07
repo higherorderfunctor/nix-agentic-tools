@@ -29,7 +29,9 @@
     GLAB_CONFIG_DIR = false;
     host = false;
     job_token = true;
+    keepRecentTokens = false;
     KIMCHI_API_KEY = true;
+    maxTokens = false;
     oauth2_refresh_token = true;
     passwd = true;
     password = true;
@@ -43,6 +45,7 @@
     selfHostedUrl = false;
     token = true;
     tokenEndpoint = false;
+    "toolSearch.minTokens" = false;
   };
   contextCases = [
     {
@@ -82,9 +85,16 @@
       input.path = ["token" "host"];
     }
   ];
+  expectations =
+    lib.mapAttrsToList (name: expected: {
+      inherit expected;
+      input.path = [name];
+    })
+    cases
+    ++ contextCases;
+  mismatches = builtins.filter (entry: classify entry.input != entry.expected) expectations;
 in {
   checks.runtime-values-classifier = harness.mkTest "runtime-values-classifier" (
-    lib.all (name: classify {path = [name];} == cases.${name}) (builtins.attrNames cases)
-    && lib.all (entry: classify entry.input == entry.expected) contextCases
+    assert lib.assertMsg (mismatches == []) (builtins.toJSON mismatches); true
   );
 }
