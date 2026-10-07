@@ -23,7 +23,7 @@ parts of the cell. `V help` proves syntax exposure only.
 
 | Harness     | Component          | Version                | Pin                                               |
 | ----------- | ------------------ | ---------------------- | ------------------------------------------------- |
-| Claude Code | CLI                | 2.1.289                | `packages/claude-code/sources.json`               |
+| Claude Code | CLI                | 2.1.291                | `packages/claude-code/sources.json`               |
 | Codex       | CLI (source build) | 0.160.0                | `packages/chatgpt-codex/sources.json`             |
 | Kiro        | CLI                | 2.28.0                 | `packages/kiro-cli/sources.json`                  |
 | Kiro        | KAS (v3 engine)    | 0.66.26                | bundled in the kiro-cli 2.28.0 release            |
@@ -46,6 +46,16 @@ child and the next turn carries `Sub-agent execution was cancelled`
 (claude:k-cancel). AST selectors and replay dependencies target KAS 0.66.26.
 Only results at the flake's current pin belong in this map and its probe index.
 
+Claude evidence uses the pinned x86_64-linux `claude-code` build (2.1.291). All
+indexed offline harness cases, prompt captures, host replays, workflow replays,
+and extracted-bundle probes were re-run at this pin. The login-backed
+`claude:live_resume` capture also resumes the completed child with its earlier
+Bash tool result. Depth defaults to 3, excess spawns at the 20-agent cap are
+refused, and workflow nodes withhold Agent/Workflow. The depth resolver reads a
+valid cached `tengu_hazel_trellis` value before the feature client fallback;
+explicit environment depth still wins (`codex:A`). Only current-pin results
+belong in the map and the probe index.
+
 ## Methods per harness
 
 Case ids carry the side that produced them: `claude:`, `codex:` (the two
@@ -55,7 +65,7 @@ independent investigators) and `judge:` (re-runs that settled disagreements).
 | ------- | --------------------------------------------------------------- | ------ | ------------------------------------------------------- |
 | Claude  | `-p` / stream-json / `mcp serve` against a local capture mock   | V      | `claude:depth`, `claude:ctl`, `claude:mcp_serve_agent`  |
 | Claude  | TUI under tmux against the capture mock                         | V      | prompt map K1                                           |
-| Claude  | Extracted bundle-function replay                                | Vr     | prompt map (main-thread agent body)                     |
+| Claude  | Extracted bundle-function replay                                | Vr     | `codex:prompt-functions` (carrier and isolated child)   |
 | Claude  | Transcript replay (`jq` over session JSONL)                     | V      | prompt map snapshot records                             |
 | Claude  | AST / source read; help and binary grep                         | A, G   | `codex:A`, `codex:H`, `codex:P`                         |
 | Codex   | Wire capture against a fake provider (`CODEX_HOME` scratch)     | V      | `claude:R2`, `codex:R1.v2-lifecycle`                    |
@@ -111,7 +121,7 @@ impact rank in the cross-harness prompt map (1 = could change the option most).
 | Claude  | prompt   | —    | Census gaps: other built-in agents, prompt-section resolver / plugin middleware                                                                                                                                 | AST inventory + one mock capture each                                              | no                             |
 | Claude  | delegate | —    | Running child after `set_model` / `apply_flag_settings`; env vs `agent()` effort                                                                                                                                | Mock 2-turn child, switch between turns; node `effort` + env                       | no                             |
 | Claude  | delegate | —    | Frontmatter `bypassPermissions` ignored under default parent: cause                                                                                                                                             | Trace `ensureAgentsBypassConsent`; mock with consent-seeded config                 | no                             |
-| Claude  | delegate | —    | Workflow `budget.total` setter from `-p` / SDK                                                                                                                                                                  | Locate directive parser; interactive tmux run                                      | no                             |
+| Claude  | delegate | —    | Workflow node total wall-clock deadline; `budget.total` setter from `-p` / SDK                                                                                                                                  | Audit node options; locate directive parser; interactive tmux run                  | no                             |
 | Claude  | delegate | —    | `mcp serve` lifecycle (TaskStop, SendMessage, `tools/call` cancel)                                                                                                                                              | Extend `claude:mcp_serve_agent` / `claude:mcp_serve_wf`                            | no                             |
 | Claude  | delegate | —    | Remote / cloud / `--bg` daemon / teams / ACP behavior                                                                                                                                                           | Gated account or daemon run; pick an external ACP adapter                          | yes: scope + account           |
 | Claude  | delegate | —    | Skill `context: fork`, plugin `model.fork`, hook-agent depth, `Monitor` gate                                                                                                                                    | One mock case each against the fake provider                                       | no                             |

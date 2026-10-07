@@ -4,8 +4,7 @@ shopt -s inherit_errexit 2>/dev/null || :
 # usage: capture.sh <case>...   (or: capture.sh all)
 # Re-runs the system-prompt capture cases (codex:P; inputs to codex:A and codex:C) into
 # <work> = $PROBE_OUT/claude-sysprompt or a fresh temp dir, printed at the end.
-# The original runs recorded argv only: the plan, stdin and env per case below are
-# reconstructed from the case's argv and its plan file's match token.
+# Each case specifies its argv, stdin, environment and mock reply plan.
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ $# -eq 0 ]]; then
   sed -n '2,/^here=/p' "${BASH_SOURCE[0]}" | sed -n 's/^# \{0,1\}//p'
@@ -46,7 +45,7 @@ one() {
   p7-style) run "$1" "$here/plan-gp.json" -- "${P[@]}" --allowedTools Agent --settings '{"outputStyle":"sentinel-style"}' "${APP[@]}" SPAWN ;;
   p7b-stylekeep) run "$1" - -- "${P[@]}" --allowedTools Agent --settings '{"outputStyle":"keep-style"}' hi ;;
   p8-bare) run "$1" - -- "${P[@]}" --allowedTools Agent --bare "${APP[@]}" hi ;;
-  p9-noappend) run "$1" - -- "${P[@]}" --allowedTools Agent hi ;;
+  p9-noappend) run "$1" - -- "${P[@]}" --allowedTools Agent -- hi ;;
   p9b-exdyn) run "$1" - -- "${P[@]}" --allowedTools Agent --exclude-dynamic-system-prompt-sections hi ;;
   p10-agentonly) run "$1" - -- "${P[@]}" --allowedTools Agent --agent named-agent "${APP[@]}" hi ;;
   p10b-agentsetting) run "$1" - -- "${P[@]}" --allowedTools Agent --settings '{"agent":"named-agent"}' hi ;;

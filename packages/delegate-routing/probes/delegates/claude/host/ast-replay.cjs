@@ -1,42 +1,39 @@
-const fs = require("fs");
 // codex:H — prints the host-control routing functions (initialize, interrupt, set_model, …).
 // usage: NODE_PATH=<dir with acorn@8> node ast-replay.cjs <unpacked-dir>   (<unpacked-dir> from ../unpack.sh)
-const acorn = require("acorn");
+const { readChunks, selectFunction } = require("../bundle.cjs");
 const root = process.argv[2];
 if (!root) {
   console.error("usage: node ast-replay.cjs <unpacked-dir>");
   process.exit(2);
 }
+// Require the control dispatcher, launch validation and CLI option declaration.
+// Chunk hashes and minified names are not part of the behavior under test.
 const targets = [
-  ["chunk-8h3wkqrn.js", ["yd", "llo", "od"]],
-  ["chunk-40wfk18e.js", ["yrt"]],
-  ["chunk-ya33qr7x.js", ["gr"]],
+  [
+    "control dispatcher",
+    [
+      'request.subtype==="set_model"',
+      "apply_flag_settings",
+      "appendSubagentSystemPrompt",
+    ],
+  ],
+  [
+    "launch validation",
+    ["--sdk-url requires both", "permissionPrompts", "await-initialize"],
+  ],
+  [
+    "CLI options",
+    ["--permission-prompts <target>", "--system-prompt-snapshot <on|off>"],
+  ],
 ];
-for (const [file, names] of targets) {
-  const source = fs.readFileSync(`${root}/${file}`, "utf8");
-  const ast = acorn.parse(source, {
-    ecmaVersion: "latest",
-    sourceType: "module",
-  });
-  for (const node of ast.body) {
-    if (node.type !== "FunctionDeclaration" || !names.includes(node.id.name))
-      continue;
-    const body = source.slice(node.start, node.end);
-    const matches = [
-      "initialize",
-      "interrupt",
-      "set_model",
-      "set_permission_mode",
-      "permissionPrompts",
-      "sdk-url",
-      "await-initialize",
-    ].filter((s) => body.includes(s));
-    if (matches.length) {
-      console.log(
-        `${file}:${node.id.name} bytes=${node.start}-${node.end} matches=${matches.join(",")}`,
-      );
-      console.log(body.slice(0, 1700));
-      console.log();
-    }
+const chunks = readChunks(root);
+for (const [label, terms] of targets) {
+  const { file, node, text: body } = selectFunction(chunks, terms);
+  console.log(
+    `${label}: ${file}:${node.id.name} bytes=${node.start}-${node.end}`,
+  );
+  for (const term of terms) {
+    const at = body.indexOf(term);
+    console.log(body.slice(Math.max(0, at - 180), at + 600));
   }
 }
