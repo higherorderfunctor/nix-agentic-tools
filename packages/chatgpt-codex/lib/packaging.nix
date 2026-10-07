@@ -173,7 +173,6 @@ rec {
 
       result = {
           "cli": {"commands": records, "globalFlags": root_flags},
-          "config": {"documentedKeys": [], "probeValidatedKeys": []},
           "features": sorted(feature_rows, key=lambda row: row["name"]),
           "models": sorted(models, key=lambda model: model["slug"]),
           "provenance": {"codexVersion": version, "extractorSchema": 1},

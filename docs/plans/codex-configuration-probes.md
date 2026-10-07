@@ -177,10 +177,6 @@ reinterpret scrape output:
     "commands": {},
     "globalFlags": []
   },
-  "config": {
-    "documentedKeys": [],
-    "probeValidatedKeys": []
-  },
   "features": [],
   "models": [],
   "provenance": {
