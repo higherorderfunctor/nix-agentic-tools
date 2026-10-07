@@ -171,9 +171,8 @@
       && !(accepts real.harnessSettingsOptions {statusLine.pinned = ["probe"];});
 
     hand-tables-are-current =
-      real.report.staleExclusions
+      real.report.staleNotes
       == []
-      && real.report.staleNotes == []
       && real.report.staleRefinements == []
       && withoutModelRoles.report.staleRefinements == ["harnessSettings.modelRoles"];
 

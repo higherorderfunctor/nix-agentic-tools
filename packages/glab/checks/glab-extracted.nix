@@ -25,11 +25,10 @@
     inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.glab.passthru.extracted;
     committed = ../extracted.json;
-  in {
-    glab-extracted = mkDriftCheck {
+  in
+    mkDriftCheck {
       inherit committed extracted;
       name = "glab";
       sidecar = "packages/glab/extracted.json";
     };
-  };
 }

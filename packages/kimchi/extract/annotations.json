@@ -1,14 +1,19 @@
 {
   "config": {
-    "apiKey": {},
+    "apiKey": {
+      "excluded": "a secret; set `ai.kimchi.apiKey`, which reads it from a file at launch instead of writing it into the Nix store"
+    },
     "api_key": {
-      "aliasFor": "apiKey"
+      "aliasFor": "apiKey",
+      "excluded": "an alias for the API secret; set `ai.kimchi.apiKey`"
     },
     "deviceId": {},
     "device_id": {
       "aliasFor": "deviceId"
     },
-    "gitTokens": {},
+    "gitTokens": {
+      "excluded": "secrets; set `ai.kimchi.gitTokens`, which Home Manager reads from files at activation instead of writing them into the Nix store"
+    },
     "llmEndpoint": {},
     "maxToolResultChars": {},
     "mcpSearch": {},
@@ -24,9 +29,7 @@
     "surveys": {},
     "telemetry": {},
     "teleport": {},
-    "tui": {
-      "introduced": "1.5.0"
-    }
+    "tui": {}
   },
   "environment": {
     "CASTAI_API_KEY": {
@@ -51,8 +54,7 @@
       "controls": "automatic git initialization for ferment work"
     },
     "KIMCHI_BASE_URL": {
-      "controls": "LLM gateway base URL; overrides configured and region-derived endpoints",
-      "introduced": "1.3.0"
+      "controls": "LLM gateway base URL; overrides configured and region-derived endpoints"
     },
     "KIMCHI_CLIPBOARD_FORCE": {
       "controls": "clipboard backend override"
@@ -181,8 +183,7 @@
       "controls": "Kimchi web application base URL"
     },
     "KIMCHI_WHEEL_SCROLL_LINES": {
-      "controls": "mouse-wheel scroll lines in the TUI; overrides config.json tui.wheelScrollLines",
-      "introduced": "1.5.0"
+      "controls": "mouse-wheel scroll lines in the TUI; overrides config.json tui.wheelScrollLines"
     },
     "LLAMA_BASE_URL": {
       "controls": "default llama.cpp server URL offered by pi's llama provider login"
@@ -327,8 +328,7 @@
     },
     "kimchiTestSeams": {
       "names": ["KIMCHI_TEST_HARNESS", "KIMCHI_TUI_E2E_CLIPBOARD_IMAGE"],
-      "reason": "Kimchi test/E2E guards; no user-facing behavior",
-      "introduced": "1.3.0"
+      "reason": "Kimchi test/E2E guards; no user-facing behavior"
     },
     "libraryInternals": {
       "names": [

@@ -20,13 +20,12 @@
 # consumer that still sets it fail with an unknown-option error instead of
 # writing a key nothing reads. Every submodule is closed for the same reason.
 #
-# Three small hand tables are this generator's only exceptions (the extractor
+# Two small hand tables are this generator's only exceptions (the extractor
 # keeps hand-written parts of its own; docs/kimchi-factory.md lists them and
 # their guards), and each row must name a path the sidecar still has —
 # `report.stale*` lists any that do not, and `checks/native-options.nix` fails
 # on it:
 #
-#   exclusions   key → reason it has no native option
 #   refinements  path → (node → type), runtime validation the type tree lacks
 #   notes        path → prose appended to the generated description
 {
@@ -46,20 +45,17 @@
   roleModelType = types.addCheck types.str (value: builtins.match "[[:space:]]*" value == null);
   roleModelsType = types.addCheck (types.listOf roleModelType) (values: values != []);
 
+  rules = import ../extract/rules.nix {inherit extracted pkgs;};
+
   surfaces = {
     settings = {
-      schema = extracted.config;
+      schema = extracted.config // {keys = rules.results.config.entries;};
       definitions = {};
     };
     harnessSettings = {
       schema = extracted.harness;
       definitions = extracted.harness.definitions or {};
     };
-  };
-
-  exclusions = {
-    "settings.apiKey" = "a secret; set `ai.kimchi.apiKey`, which reads it from a file at launch instead of writing it into the Nix store";
-    "settings.gitTokens" = "secrets; set `ai.kimchi.gitTokens`, which Home Manager reads from files at activation instead of writing them into the Nix store";
   };
 
   refinements = {
@@ -98,8 +94,8 @@
     '';
   };
 
-  # Keys with no native option at all: an alias spelling of another key (the
-  # one hand annotation left on config keys), and an inert key. The extractor
+  # Keys with no native option at all: an alias spelling of another key (a
+  # row carrying aliasFor), and an inert key. The extractor
   # marks a key inert only when upstream tags its KimchiConfig member
   # @deprecated and no Kimchi code consumes it; config.ts still parses it and
   # warns that it is obsolete. A release that consumes it again clears the
@@ -198,7 +194,7 @@
   surfaceOf = name: surface: let
     keys = surface.schema.keys;
     excludedReason = key:
-      exclusions."${name}.${key}" or (derivedExclusion keys.${key});
+      keys.${key}.excluded or (derivedExclusion keys.${key});
     kept = lib.filterAttrs (key: _: excludedReason key == null) keys;
     walked = lib.mapAttrs (key: walkOption surface.definitions "${name}.${key}") kept;
   in {
@@ -224,7 +220,7 @@
 
   stale = table: lib.sort (a: b: a < b) (lib.filter (path: !(knownPath path)) (builtins.attrNames table));
 
-  variables = extracted.environment.variables;
+  variables = rules.results.environment.entries;
   userScopeKeys = keys: builtins.attrNames (lib.filterAttrs (_: node: !(node.project or false)) keys);
 in {
   inherit (extracted) virtualPackages;
@@ -249,7 +245,7 @@ in {
     (lib.filterAttrs (_: variable: !(variable.consumerOverridable or false)) variables);
 
   # Every variable the factory sets itself goes through this, so a Kimchi
-  # release that stops reading one (the environment census drops it), or
+  # release that stops reading one (reconciliation reports it removed), or
   # starts overwriting it (the entry.ts analysis flips `consumerOverridable`),
   # fails evaluation by name instead of leaving a dead `--set` in the wrapper.
   environmentName = name:
@@ -270,7 +266,6 @@ in {
 
   report = {
     excluded = lib.mapAttrs (_: s: s.excluded) generated;
-    staleExclusions = stale exclusions;
     staleNotes = stale notes;
     staleRefinements = stale refinements;
     untyped = lib.concatMap (s: s.untyped) (builtins.attrValues generated);

@@ -458,6 +458,7 @@ rec {
     attr,
     dest,
     pkgs,
+    rows ? null,
   }: ''
     echo "${attr}: regenerating ${dest}"
     extracted=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
@@ -466,6 +467,15 @@ rec {
     ${pkgs.coreutils}/bin/chmod 644 "${dest}"
     ${pkgs.nix}/bin/nix fmt -- "${dest}"
     echo "${attr}: wrote ${dest}"
+    ${pkgs.lib.optionalString (rows != null) ''
+      # The eval reads the old rows. Redirecting to their destination would
+      # truncate that input before Nix snapshots the dirty working tree.
+      extracted_rows_tmp=$(${pkgs.coreutils}/bin/mktemp)
+      ${pkgs.nix}/bin/nix eval --json ".#${ciAttr {inherit attr pkgs;}}.passthru.extractedRules.file" > "$extracted_rows_tmp"
+      ${pkgs.coreutils}/bin/mv "$extracted_rows_tmp" "${rows}"
+      ${pkgs.nix}/bin/nix fmt -- "${rows}"
+      echo "${attr}: wrote ${rows}"
+    ''}
   '';
 
   # `passthru.regenerateExtracted`: the sidecar regeneration for a package
@@ -495,7 +505,7 @@ rec {
       ${builtins.concatStringsSep "\n" (map (target: mkExtractRegen (target // {inherit pkgs;})) targets)}
     '')
     .overrideAttrs (prev: {
-      passthru = (prev.passthru or {}) // {sidecars = map (target: target.dest) targets;};
+      passthru = (prev.passthru or {}) // {sidecars = pkgs.lib.concatMap (target: [target.dest] ++ pkgs.lib.optional (target.rows or null != null) target.rows) targets;};
     });
 
   # Source repair precedes floor extraction, which precedes vendor hashing.

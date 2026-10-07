@@ -143,6 +143,7 @@
       attr = "kimchi";
       dest = repoPath ../../../extracted.json;
       inherit pkgs;
+      rows = repoPath ../../../extract/annotations.json;
     }}
   '';
 
@@ -290,6 +291,7 @@ in
     passthru = {
       inherit externalizedExtensions externalizeExtensions extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
       inherit (goUpdate) fixGoFloor fixVendorHash;
+      extractedRules = import ../../../extract/rules.nix {inherit pkgs;};
       extractionSources = {
         kimchi = kimchiSource;
         pi = piPackage;

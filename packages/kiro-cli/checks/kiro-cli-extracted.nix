@@ -14,16 +14,17 @@
     inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.kiro-cli.passthru.extracted;
     committed = ../extracted.json;
-  in {
-    kiro-cli-extracted = mkDriftCheck {
+  in
+    {
+      kiro-models-fixtures = pkgs.runCommand "kiro-models-fixtures" {} ''
+        ${pkgs.python3}/bin/python3 ${./kiro-models.py} \
+          ${../extract/models.py} ${../model-catalog.json}
+        touch "$out"
+      '';
+    }
+    // mkDriftCheck {
       inherit committed extracted;
       name = "kiro-cli";
       sidecar = "packages/kiro-cli/extracted.json";
     };
-    kiro-models-fixtures = pkgs.runCommand "kiro-models-fixtures" {} ''
-      ${pkgs.python3}/bin/python3 ${./kiro-models.py} \
-        ${../extract/models.py} ${../model-catalog.json}
-      touch "$out"
-    '';
-  };
 }

@@ -1,8 +1,8 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-06 — all extracted-sidecar drift checks share
-> `lib/extracted/default.nix`; comparisons report a sorted JSON diff and the
-> check’s `passthru.extracted` build, sidecar copy, and `nix fmt` recipe.
+> **Last verified:** 2026-10-06 — the shared drift builder derives its check
+> attribute from `name`; optional reconcile rules fail at build time, and
+> regeneration writes automatic acceptance rows after the sidecar.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -171,13 +171,34 @@ minutes later inside `nix-update`.
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
 Importing `lib/extracted/default.nix` with `{ inherit pkgs; }` provides
-`mkDriftCheck { name; extracted; committed; }`. All extractor drift checks use
-this builder; each check attribute is `${name}-extracted`, including
+`mkDriftCheck { name; extracted; committed; sidecar; rules ? null; }`. The
+builder returns `{ "${name}-extracted" = drv; }`, so callers merge its result
+into their checks and cannot choose a conflicting attribute. This includes
 `semble-languages-extracted` and `semble-templates-extracted`. A mismatch prints
 `nix build --no-link --print-out-paths .#checks.<system>.<name>-extracted.passthru.extracted`,
 then a command to copy its output over the committed sidecar and `nix fmt`. The
 check exposes `passthru.extracted` so regeneration remains buildable while drift
-is red.
+is red. Optional `rules` are reconcile results read from committed files;
+non-empty failures make the build fail without throwing during evaluation.
+
+`reconcile` takes one table per surface with `facts`, `rows`, required `needs`,
+allowed hand `fields`, `secretNeeds`, and named `uses`. It reports `removed`,
+`needs-human`, `secret`, `bad-row`, and `unrecorded` failures. Rows fill null or
+absent facts; replacing a non-null fact requires its field in the row's
+`replace` list. `ignored = "<reason>"` omits a name from consumer entries and
+skips required fields. Classification uses the single runtime-values classifier
+only for string-valued names or string-to-string maps. `withAdded` preserves the
+rows file and adds `{}` rows for derivable non-secret new names.
+
+`mkExtractRegen` optionally takes a `rows` destination: after writing and
+formatting the sidecar it evaluates the package's
+`passthru.extractedRules.file`, then atomically replaces and formats the rows
+file. The temporary output matters: direct redirection would truncate the rows
+that this evaluation reads. `mkRegenerateExtracted` includes rows destinations
+in `passthru.sidecars`, so input-update PRs stage both files. Kimchi's
+`extract/rules.nix` is shared by its consumer, drift check and regeneration;
+extractors continue to enforce source structure, while reconciliation failures
+turn the resulting update PR red.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use

@@ -21,11 +21,10 @@
     inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.claude-code.passthru.extracted;
     committed = ../extracted.json;
-  in {
-    claude-code-extracted = mkDriftCheck {
+  in
+    mkDriftCheck {
       inherit committed extracted;
       name = "claude-code";
       sidecar = "packages/claude-code/extracted.json";
     };
-  };
 }

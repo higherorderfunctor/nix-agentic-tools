@@ -1,8 +1,9 @@
 # Git tool settings: census, sidecar, generator
 
 > **Last verified:** 2026-10-06 — git-tool drift checks use the shared
-> `lib/extracted/default.nix` builder and print a check extraction build,
-> sidecar copy, and `nix fmt` recipe.
+> `lib/extracted/default.nix` builder, which derives the check attribute from
+> its `name`, and print a check extraction build, sidecar copy, and `nix fmt`
+> recipe.
 >
 > **Settled — do not relitigate.**
 >
@@ -75,7 +76,8 @@ description field.
 ## Checks per tool (`extraction.nix`)
 
 - `<tool>-extracted` — drift between the committed sidecar and a fresh
-  extraction, built by `lib/extracted/default.nix`’s `mkDriftCheck`. It prints a
+  extraction, built by `lib/extracted/default.nix`’s `mkDriftCheck`, which
+  returns the `${name}-extracted` attribute for the caller to merge. It prints a
   sorted JSON diff and a recipe to build the check’s `passthru.extracted`, copy
   it over the committed sidecar, and run `nix fmt`. Staleness only; the update
   pipeline commits whatever the extractor says.
