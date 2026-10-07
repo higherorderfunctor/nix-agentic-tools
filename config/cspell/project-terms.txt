@@ -63,6 +63,7 @@ CLOUDSDK
 cmdbuilder
 codesign
 codewhisperer
+collab
 COLORFGBG
 COLORTERM
 commentchar
@@ -338,6 +339,7 @@ revset
 revsets
 revwalk
 rodata
+rollouts
 rootfs
 rsbuild
 rspack
@@ -372,6 +374,7 @@ starlark
 startswith
 startupcompletedz
 statix
+statusline
 stdenv
 steerchild
 stopword

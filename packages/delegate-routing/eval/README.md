@@ -26,9 +26,9 @@ carried-over settings remain intact.
 
 Each result and the PASS/FAIL table show requested and observed model/effort
 separately. Observations use Claude's root init, Codex turn/session events
-(including the matching root rollout), Kiro's request records in `chat.log`, and
-Kimchi's `agent_start`/`agent_end`. Missing fields read `not exposed`; requested
-settings are never substituted for observations.
+(including the matching root rollout), Kiro's request records in `chat.log` when
+exposed by the engine, and Kimchi's `agent_start`/`agent_end`. Missing fields
+read `not exposed`; requested settings are never substituted for observations.
 
 ## Cases
 
@@ -116,7 +116,7 @@ refuses helper binaries under a temporary directory.
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Claude  | `claude -p --setting-sources project`, overlay `--settings`, `--model opus --effort medium --permission-mode auto`, scratch `CLAUDE_CONFIG_DIR`, memory, org memory, policy skills and claude.ai connectors off | `CLAUDE_CODE_OAUTH_TOKEN` from a `claude setup-token` token (`--claude-token-file` or the variable). `~/.claude` credentials are never read or copied | `enableWorkflows`, `ultracode`; the fixture's `.mcp.json` servers are enabled; the clamp hook comes from the fixture |
 | Codex   | `codex exec --json` with apps, plugins, remote plugins and memories disabled; scratch `CODEX_HOME`                                                                                                              | `auth.json` symlinked, never copied: Codex rewrites it in place, so a refresh reaches the real file                                                   | `default_permissions`, `permissions`, `features`, `agents`; the fixture trusted in the scratch `config.toml`         |
-| Kimchi  | `kimchi -p --mode json --approve --auto`                                                                                                                                                                        | `KIMCHI_API_KEY` from `~/.config/kimchi/config.json`, session-only                                                                                    | `harness/settings.json` with the memory extension forced off                                                         |
+| Kimchi  | `kimchi -p --mode json --approve --auto -- <task>`                                                                                                                                                              | `KIMCHI_API_KEY` from `~/.config/kimchi/config.json`, session-only                                                                                    | `harness/settings.json` with the memory extension forced off                                                         |
 | Kiro    | `kiro-cli chat --v3 --no-interactive --trust-all-tools --output-format stream-json` through the operator's wrapper                                                                                              | the real data dir (`KIRO_DATA_DIR`), shared, so a refresh lands in the database the operator already uses                                             | `chat.enableCheckpoint`, `chat.enableTangentMode`, `chat.enableWorkflows`                                            |
 
 Vendor-bundled skills and system prompts are kept: they are vendor surface.
@@ -142,27 +142,47 @@ and the attempt is still logged. No PATH shim blocks nested children.
 A case is `ERROR` when either check fails, because its answer would not measure
 the delivered configuration.
 
-- **Leak:** any personal configuration path under the real home (`~/.claude`,
-  `~/.claude.json`, `~/.agents`, `~/.codex`, `~/.kiro`, `~/.config/kiro`,
-  `~/.config/kimchi`, `~/.pi`) in any log; or a personal skill, MCP server,
-  plugin or agent name that the fixture does not ship in the harness's startup
-  record. Claude compares init lists by equality and exempts only delivered path
-  components, Markdown/JSON stems and fixture `.mcp.json` server keys. Codex and
-  Kiro use prose records: names mentioned anywhere in fixture text are exempt,
-  so leaks of those names cannot be detected by the name scan. The personal-path
-  scan still runs.
+- **Leak:** personal configuration paths under the real home still fail in any
+  log. Startup checks attribute skills and MCP entries by source, never by a
+  bare name in arbitrary prose. Codex expands skill-root aliases in
+  `prompt-input.json` and checks both recorded paths and resolved targets
+  against personal skill roots; the log path scan covers user MCP configuration
+  paths. Claude requires plugins to be builtin, MCP servers to have
+  `source: project`, and agents to be builtin or fixture-delivered. Its debug
+  log reports skill scope counts rather than individual paths: every disk skill
+  must be project-delivered, with exactly the fixture count and zero managed,
+  user, additional, legacy or plugin skills. Only after those checks is the init
+  remainder attributed to vendor bundles. A missing or changed source record
+  fails closed. Kiro's skill metadata carries origin and root.
 - **Delivery:** Claude's init `skills` list must contain `delegate-routing`.
-  Codex and Kiro must include the fixture skill's whitespace-normalized
-  frontmatter description in their whitespace-normalized startup record. Missing
-  descriptions fail closed as `ERROR`; whether these records carry descriptions
-  is unverified until the first live run. Kimchi stays unverified.
+  Codex must include the fixture skill's whitespace-normalized frontmatter
+  description in the startup record. Kiro's `available_commands_update` must
+  list the skill with workspace origin and the fixture root. Kimchi stays
+  unverified because its JSON stream exposes no loaded-skill catalog.
 
-| Harness | Startup record                                                                |
-| ------- | ----------------------------------------------------------------------------- |
-| Claude  | the `system`/`init` stream event                                              |
-| Codex   | `codex debug prompt-input` with the same flags, run first (no model call)     |
-| Kiro    | `KIRO_CHAT_LOG_FILE` at debug level                                           |
-| Kimchi  | none: its JSON stream starts with a session header, so delivery is unverified |
+| Harness | Startup record                                                                   |
+| ------- | -------------------------------------------------------------------------------- |
+| Claude  | `system`/`init` plus `--debug-file` loader scope evidence                        |
+| Codex   | `codex debug prompt-input` with the same flags, run first (no model call)        |
+| Kiro    | stream `sessionUpdate.data.update.availableCommands`, with skill source metadata |
+| Kimchi  | none: its JSON stream starts with a session header, so delivery is unverified    |
+
+The Kiro CLI wraps ACP updates in `data`, and completes with `runFinished`,
+rather than raw ACP `params`/`result`. Tool ids live in `_meta.kiro.toolId`.
+Codex's stream can omit native `spawn_agent` calls; the runner reads native
+delegates from the matching root rollout, retaining stream commands for external
+launches and excluding child rollouts. Kimchi forwards extension flags to pi:
+`--auto` followed by task text consumes that text as a flag value, so the launch
+separates the task with `--`. Its scratch `config.json` is mode 600. A Kimchi
+`agent_settled` record starts a 30 s exit grace period: a process still alive
+afterward is terminated, with that cleanup recorded separately from an
+unanswered wall timeout. An answer requires a final assistant message with
+`stopReason: stop`.
+
+`python3 packages/delegate-routing/eval/test_suite.py` runs offline regressions
+for name collisions, real personal skills, foreign sources, resolved paths, and
+CLI event schemas. The structure check runs these tests before rendering dry-run
+fixtures.
 
 These cannot be isolated, and are recorded rather than removed: work-account
 managed settings (Claude, Codex), organization hooks, steering and MCP servers
