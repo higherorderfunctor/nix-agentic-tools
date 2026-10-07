@@ -51,6 +51,19 @@
     },
     {
       "match": "CHILD_STAGE",
+      "events": [
+        {
+          "toolUseId": "summary",
+          "name": "summary",
+          "input": {
+            "taskDescription": "CHILD_STAGE",
+            "taskResult": "CHILD_FINISHED"
+          }
+        }
+      ]
+    },
+    {
+      "match": "\"toolUseId\":\"summary\"",
       "events": ["CHILD_FINISHED"]
     },
     {

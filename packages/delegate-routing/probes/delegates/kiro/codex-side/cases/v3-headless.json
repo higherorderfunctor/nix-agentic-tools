@@ -1,0 +1,21 @@
+{
+  "agents": [
+    {
+      "description": "offline registered worker",
+      "model": "claude-haiku-4.5",
+      "name": "anonymous",
+      "prompt": "INLINE_SYSTEM",
+      "tools": ["*"]
+    }
+  ],
+  "args": [
+    "chat",
+    "--v3",
+    "--no-interactive",
+    "-a",
+    "--model",
+    "claude-sonnet-4",
+    "NEST_ROOT"
+  ],
+  "rulesFrom": "v3-nested"
+}

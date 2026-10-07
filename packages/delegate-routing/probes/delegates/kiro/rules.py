@@ -30,7 +30,16 @@ SECOND_STAGE = ''',
             }'''
 SECOND_RULE = '''  {
     "match": ["orchestrated session", "CHILD_PERM2"],
-    "events": ["CHILD2_DONE"]
+    "events": [
+      {
+        "toolUseId": "sm2",
+        "name": "summary",
+        "input": {
+          "taskDescription": "CHILD_PERM2",
+          "taskResult": "CHILD2_DONE"
+        }
+      }
+    ]
   },
 '''
 

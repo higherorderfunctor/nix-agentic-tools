@@ -113,7 +113,7 @@
       notes = "models with no effort control ignore --effort";
       pinsEffort = true;
       pinsModel = true;
-      # docs/delegates/tools.md: headless chat runs a child via the v2 crew (claude:h2-all) and, from 2.28.0, v3 `invoke_sub_agent` (codex:R3 v3-nested); v3 `orchestrate_subagent` is no longer offered headless (claude:h3-all)
+      # docs/delegates/tools.md: v3 headless child and grandchild execute (codex:R3 v3-headless)
       runsOwnSubagents = "supported (headless)";
     };
     models = {

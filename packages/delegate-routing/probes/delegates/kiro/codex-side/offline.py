@@ -12,7 +12,9 @@ if '--inner' not in sys.argv:
     os.environ.setdefault('KIRO_PKG',str(pin.package('kiro-cli.unwrapped')))
 PRIOR=os.environ.get('KIRO_BASE_HOME')
 U=pathlib.Path(os.environ['KIRO_PKG'])/'bin'
-name=sys.argv[1]; cfg=json.loads((S/'cases'/(name+'.json')).read_text()); R=pathlib.Path(os.environ['KIRO_CODEX_WORK'])/'runs'/name
+name=sys.argv[1]; cfg=json.loads((S/'cases'/(name+'.json')).read_text())
+if 'rulesFrom' in cfg: cfg['rules']=json.loads((S/'cases'/(cfg['rulesFrom']+'.json')).read_text())['rules']
+R=pathlib.Path(os.environ['KIRO_CODEX_WORK'])/'runs'/name
 if '--inner' not in sys.argv:
     if R.exists(): shutil.rmtree(R)
     (R/'ws').mkdir(parents=True)

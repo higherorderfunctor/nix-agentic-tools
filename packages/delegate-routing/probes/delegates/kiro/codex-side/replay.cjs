@@ -5,7 +5,7 @@ const vm = require("vm"),
 const bundle = `${process.env.KIRO_BUNDLES}/kas.js`; // from ../bundles.py
 assert.equal(
   crypto.createHash("sha256").update(fs.readFileSync(bundle)).digest("hex"),
-  "79a1a743ee7236a71bba9c6c68342deccfcffea4d61361eae0254288339b19c8",
+  "3bc21b1f684cd3cc4aa0e10f198a5f97ea41398a63ed5db1858d4145fbe42828",
 );
 const report = [];
 const log = (test, values) => report.push({ test, ...values });
@@ -38,7 +38,7 @@ const method = (name, line) => {
   return vm.runInContext("({" + code(n) + "})", ctx)[name];
 };
 Object.assign(ctx, {
-  Df: () => ({
+  qp: () => ({
     models: [
       {
         id: "A",
@@ -54,49 +54,51 @@ Object.assign(ctx, {
       },
     ],
   }),
-  Ipe: new Set(["max"]),
-  hD: "off",
-  Ppe: "on",
+  Yfe: new Set(["max"]),
+  D1: "off",
+  Xfe: "on",
 });
-fn("zOn");
-fn("HOn");
+fn("AUn");
+fn("RUn");
 log("effort-resolver", {
-  registeredDefault: ctx.zOn("B", undefined, "default").effortLevel,
-  inlineDefault: ctx.zOn("B", undefined, "belowMax").effortLevel,
-  inlineUnsupported: ctx.zOn("B", "bogus", "belowMax").effortLevel,
-  inlineLow: ctx.zOn("B", "low", "belowMax").effortLevel,
-  autoIgnores: ctx.zOn("auto", "low").effortLevel === undefined,
+  registeredDefault: ctx.AUn("B", undefined, "default").effortLevel,
+  inlineDefault: ctx.AUn("B", undefined, "belowMax").effortLevel,
+  inlineUnsupported: ctx.AUn("B", "bogus", "belowMax").effortLevel,
+  inlineLow: ctx.AUn("B", "low", "belowMax").effortLevel,
+  autoIgnores: ctx.AUn("auto", "low").effortLevel === undefined,
 });
-assert.equal(ctx.zOn("B", "bogus", "belowMax").effortLevel, "high");
+assert.equal(ctx.AUn("B", "bogus", "belowMax").effortLevel, "high");
 Object.assign(ctx, {
-  sX: (x) => ({ modelId: x }),
-  Gl: () => "fixture-child",
-  J_t: (x) => x,
-  Brt: (x) => x,
-  mGi: async (x) => x,
-  Yee: () => "FALLBACK",
-  Y_t: () => undefined,
-  Iwe: { id: "other" },
-  vGi: () => ({
+  eZ: (x) => ({ modelId: x }),
+  Vl: () => "fixture-child",
+  git: (x) => x,
+  Qfe: (x) => x,
+  xbt: (x) => x,
+  XQi: async (x) => x,
+  Qte: () => "FALLBACK",
+  aTt: () => undefined,
+  cEe: { id: "other" },
+  eeo: () => ({
     needsFileTree: false,
     buildDefinition: async (x) => ({ input: x, type: "custom-agent" }),
     extractResult: () => ({ response: "RESULT", files: [] }),
   }),
-  $1: (t) => ({ agent: t.id }),
-  HOn: ctx.HOn,
-  zOn: ctx.zOn,
-  w: { info() {}, debug() {}, warn() {} },
-  Un: () => false,
-  JRr: () => 1000,
-  dCc: new Set(),
-  Rr: { isSuccess: (x) => x === "Success" },
+  Zk: (t) => ({ agent: t.id }),
+  RUn: ctx.RUn,
+  AUn: ctx.AUn,
+  v: { info() {}, debug() {}, warn() {} },
+  An: () => false,
+  CUe: { reportCountMetrics() {} },
+  aOr: () => 1000,
+  WLc: new Set(),
+  Pr: { isSuccess: (x) => x === "Success" },
 });
 const workspace = {
   withToolPolicy: (p) => ({ ...workspace, policy: p }),
   withContext: (c) => ({ ...workspace, context: c }),
 };
 const launched = [];
-ctx.e3e = (definition, opts) => {
+ctx.y4e = (definition, opts) => {
   launched.push({ definition, opts });
   return {
     executionId: "fixture-child",
@@ -105,8 +107,8 @@ ctx.e3e = (definition, opts) => {
     waitForCompletion: async () => ({ status: "success" }),
   };
 };
-fn("Iki");
-const dispatch = fn("sEt");
+fn("cOi");
+const dispatch = fn("mTt");
 const parent = {
   workspace,
   model: { modelId: "A", effortLevel: "high", thinkingType: "on" },
@@ -165,8 +167,8 @@ async function main() {
   assert.equal(launched[1].opts.model.effortLevel, "high");
   assert.strictEqual(launched[2].opts.model, parent.model);
   // Execute the real native-KAS constructor body against fixture services.
-  ctx.Ljn = () => ({ promise: Promise.resolve(), resolve() {}, reject() {} });
-  const construct = method("constructor", 12162);
+  ctx.dei = () => ({ promise: Promise.resolve(), resolve() {}, reject() {} });
+  const construct = method("constructor", 12178);
   function child(signal) {
     const c = {
       abortController: new AbortController(),
@@ -190,16 +192,16 @@ async function main() {
     childAborted: c.abortController.signal.aborted,
     grandchildAborted: g.abortController.signal.aborted,
   });
-  ctx.Nji = new WeakMap();
-  ctx.eIr = 5;
-  ctx.Mji = {
+  ctx.lto = new WeakMap();
+  ctx.uOr = 5;
+  ctx.dto = {
     Sema: class {
       constructor(n) {
         this.capacity = n;
       }
     },
   };
-  const sem = fn("Lwe");
+  const sem = fn("hEe");
   const p1 = {},
     p2 = {};
   assert.strictEqual(sem(p1), sem(p1));
@@ -208,13 +210,14 @@ async function main() {
     perExecutionCapacity: sem(p1).capacity,
     perExecutionNotGlobal: true,
   });
-  fn("Gji");
-  ctx.qji = 5;
+  fn("_k");
+  ctx.Ito = 5;
+  ctx.Dto = () => ({ kind: "missing" });
   ctx.e = { id: "invoke_sub_agent" };
-  ctx.I$e = () => ({});
-  ctx.Bi = (x) => x.decision === "reject";
-  ctx.Pc = () => "permission-denied";
-  ctx.Mt = {
+  ctx.D3e = () => ({});
+  ctx.qi = (x) => x.decision === "reject";
+  ctx.Mc = () => "permission-denied";
+  ctx.Ot = {
     of: (status, message) =>
       new Proxy(
         { status, message },
@@ -231,7 +234,7 @@ async function main() {
         },
       ),
   };
-  const invoke = method("handle", 15930);
+  const invoke = method("handle", 15961);
   for (const depth of [4, 5, 6]) {
     const receiver = {
       id: "invoke_sub_agent",
@@ -259,18 +262,18 @@ async function main() {
     log("depth-" + depth, { status: r.status, message: r.message });
     assert.equal(r.status, depth < 5 ? "Rejected" : "Error");
   }
-  ctx.ZRr = "KIRO_SUBAGENT_DEADLINE_MS";
-  ctx.XRr = 3600000;
-  ctx.Mja = 2147483647;
-  fn("yU");
-  fn("JRr");
+  ctx.sOr = "KIRO_SUBAGENT_DEADLINE_MS";
+  ctx.oOr = 3600000;
+  ctx.Lrc = 2147483647;
+  fn("UU");
+  fn("aOr");
   log("deadline-env", {
-    default: ctx.JRr({}),
-    zero: ctx.JRr({ KIRO_SUBAGENT_DEADLINE_MS: "0" }),
-    valid: ctx.JRr({ KIRO_SUBAGENT_DEADLINE_MS: "123" }),
-    invalid: ctx.JRr({ KIRO_SUBAGENT_DEADLINE_MS: "-1" }),
+    default: ctx.aOr({}),
+    zero: ctx.aOr({ KIRO_SUBAGENT_DEADLINE_MS: "0" }),
+    valid: ctx.aOr({ KIRO_SUBAGENT_DEADLINE_MS: "123" }),
+    invalid: ctx.aOr({ KIRO_SUBAGENT_DEADLINE_MS: "-1" }),
   });
-  const timeout = await ctx.Iki(
+  const timeout = await ctx.cOi(
     new Promise(() => {}),
     5,
     { idleMs: () => 10 },
@@ -278,12 +281,12 @@ async function main() {
   );
   assert(timeout.timedOut);
   log("idle-timeout", { timedOut: timeout.timedOut });
-  ctx.w = { debug() {}, info() {} };
-  ctx.Da = (x) => x;
-  ctx.Iq = (kind, id) => id;
-  ctx.oAe = /^NOTIFY/;
-  ctx.G6 = { randomUUID: () => "id" };
-  const steer = method("handleSessionSteer", 17817);
+  ctx.v = { debug() {}, info() {} };
+  ctx.va = (x) => x;
+  ctx.iz = (kind, id) => id;
+  ctx.tRe = /^NOTIFY/;
+  ctx.gB = { randomUUID: () => "id" };
+  const steer = method("handleSessionSteer", 17809);
   const buffer = [],
     updates = [];
   const result = await steer.call(

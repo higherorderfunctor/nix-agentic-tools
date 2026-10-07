@@ -4,7 +4,7 @@ const out = nodes
     (n) =>
       n.type === "MethodDefinition" &&
       n.loc.start.line >= 16280 &&
-      n.loc.start.line <= 16640,
+      n.loc.start.line <= 16720,
   )
   .map((n) => ({ name: n.key?.name, line: n.loc.start.line, source: code(n) }));
 fs.writeFileSync(

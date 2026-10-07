@@ -14,7 +14,7 @@ K7 workflows · K8 other model turns (compaction, title, hooks, helpers).
 | ------- | ------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------- |
 | Claude  | Tail of `system[2]` (main); separate hidden flag for children | system                                                  | Fork: main append. Others: child channel |
 | Codex   | `developer_instructions`: a developer message beside the base | developer (lite models have no system slot)             | Inherited unless replaced                |
-| Kiro    | Always-on steering file, placed **before** base/agent prompt  | user (`history[0]`); system only if account flag on (U) | Yes for most kinds                       |
+| Kiro    | Always-on steering file, placed **before** base/agent prompt  | user (`history[0]`); system only if account flag on (U) | Invoke children (V); workflow steps U    |
 | Kimchi  | `--append-system-prompt`: tail of Kimchi's rebuilt prompt     | system (provider-wire serialization U)                  | Default replace mode: no                 |
 
 ## Defaults per kind
@@ -22,39 +22,40 @@ K7 workflows · K8 other model turns (compaction, title, hooks, helpers).
 Cell = vendor base · extra text reaches? · mark. Channel: Claude K1–K3/K8 main
 append, K4–K7 sub-agent append; others as above.
 
-| Kind | Claude                                                    | Codex                                                 | Kiro                                                  | Kimchi                                              |
-| ---- | --------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------- |
-| K1   | Base (27.6k) · Yes · V                                    | Catalog base · Yes · V rollout, I wire                | None; 231-byte `kiro_default` (v2) · Yes · V; I (TUI) | Main base · Yes, tail · V                           |
-| K2   | Base, "Agent SDK" identity · Yes · V                      | Catalog base · Yes · V                                | As K1 v2 · Yes · V                                    | Main base, autonomous variant · Yes · V             |
-| K3   | Base · Yes if host sends no prompt field · V              | Catalog base · Yes if no RPC dev text · V             | As v2 · steering file only; `_meta` ignored · V       | Main base · Yes, inline text only · V               |
-| K4   | None; own body + tail · sub-agent append Yes, main No · V | Parent's base · Yes, inherited · V/I                  | None (v2 crew) · Yes · V                              | Child wrapper; persona replaces · **No** · V        |
-| K5   | None; body replaces · sub-agent append Yes · V            | Parent base + role text · **No** if role has text · V | KAS: body replaces · Yes · V                          | Child wrapper; body replaces · **No** · V           |
-| K6   | None; general-purpose body · sub-agent append Yes · V     | Parent's base · Yes, inherited once · V               | v2: N/A (`role` required) · V                         | Selected persona · follows persona · V              |
-| K7   | None; `workflow-subagent` body · sub-agent append Yes · V | No workflow kind; K4–K6 rules · I                     | KAS only, gated; per K4/K5 · Yes · V                  | In-session: main base · persistent channels Yes · V |
-| K8   | Compaction: parent system · Yes (copied) · V              | Local compaction: session base · Yes · V              | KAS compaction: kept · Yes · V                        | Fixed summarizer · **No** · V                       |
+| Kind | Claude                                                    | Codex                                                 | Kiro                                                            | Kimchi                                              |
+| ---- | --------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
+| K1   | Base (27.6k) · Yes · V                                    | Catalog base · Yes · V rollout, I wire                | KAS base · steering before base · A (TUI)                       | Main base · Yes, tail · V                           |
+| K2   | Base, "Agent SDK" identity · Yes · V                      | Catalog base · Yes · V                                | KAS base · steering before base · V (`w-v3`)                    | Main base, autonomous variant · Yes · V             |
+| K3   | Base · Yes if host sends no prompt field · V              | Catalog base · Yes if no RPC dev text · V             | KAS base · file + inline steering · V (`k3-dup`)                | Main base · Yes, inline text only · V               |
+| K4   | None; own body + tail · sub-agent append Yes, main No · V | Parent's base · Yes, inherited · V/I                  | Named built-in body · inherited steering · V; A (`codex:R3/R6`) | Child wrapper; persona replaces · **No** · V        |
+| K5   | None; body replaces · sub-agent append Yes · V            | Parent base + role text · **No** if role has text · V | Body replaces · inherited steering · V (`a3-invoke`)            | Child wrapper; body replaces · **No** · V           |
+| K6   | None; general-purpose body · sub-agent append Yes · V     | Parent's base · Yes, inherited once · V               | Inline body replaces · inherited steering · V (`claude:k-pins`) | Selected persona · follows persona · V              |
+| K7   | None; `workflow-subagent` body · sub-agent append Yes · V | No workflow kind; K4–K6 rules · I                     | Step body · steering reach not re-verified at 2.28.0 · U        | In-session: main base · persistent channels Yes · V |
+| K8   | Compaction: parent system · Yes (copied) · V              | Local compaction: session base · Yes · V              | not re-verified at 2.28.0 · U                                   | Fixed summarizer · **No** · V                       |
 
-Title reach: Claude No (V); Codex config Yes, RPC overrides No (I); Kiro No (V);
-Kimchi No (V). Exceptions are footnoted under each harness's channel table.
+Title reach: Claude No (V); Codex config Yes, RPC overrides No (I); Kiro not
+re-verified at 2.28.0 (U); Kimchi No (V). Exceptions are footnoted under each
+harness's channel table.
 
 ## What one normalized option can promise
 
-| Kind | Promise | Who fails                                                       | Consequence                                                                                         |
-| ---- | ------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| K1   | **Yes** | None by default                                                 | Claude `--resume` re-sends old text: change needs a fresh session. Kiro text sits before the prompt |
-| K2   | **Yes** | None                                                            | Codex keeps only the top layer: the option must own it                                              |
-| K3   | Partial | Claude, Codex (host field overrides); Kiro v2 (`_meta` ignored) | CLI/file channel works only while the host sends nothing. Kimchi ACP needs inline text              |
-| K4   | Partial | Kimchi                                                          | Claude needs the sub-agent channel; Codex reaches unless `subagent_developer_instructions` set      |
-| K5   | Partial | Codex (role with own text), Kimchi (replace mode)               | Agent definition wins; reach depends on how each agent is written                                   |
-| K6   | Partial | Kimchi (follows persona); Kiro v2 N/A                           | Claude non-fork via sub-agent channel, fork via main; Codex inherited                               |
-| K7   | Partial | Kimchi background steps (flag not forwarded)                    | Claude, Kiro (gated) reach; Codex uses K4–K6 rules                                                  |
-| K8   | **No**  | Most titles; Kimchi / Kiro v2 compaction                        | No universal guarantee; Codex config title/recap I; compaction reach above                          |
+| Kind | Promise | Who fails                                                                                       | Consequence                                                                                         |
+| ---- | ------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| K1   | **Yes** | None by default                                                                                 | Claude `--resume` re-sends old text: change needs a fresh session. Kiro text sits before the prompt |
+| K2   | **Yes** | None                                                                                            | Codex keeps only the top layer: the option must own it                                              |
+| K3   | Partial | Claude, Codex (host field overrides); Kiro v2 engine (not used by this config): `_meta` reach U | CLI/file channel works only while the host sends nothing. Kimchi ACP needs inline text              |
+| K4   | Partial | Kimchi                                                                                          | Claude needs the sub-agent channel; Codex reaches unless `subagent_developer_instructions` set      |
+| K5   | Partial | Codex (role with own text), Kimchi (replace mode)                                               | Agent definition wins; reach depends on how each agent is written                                   |
+| K6   | Partial | Kimchi (follows persona); Kiro v2 engine (not used by this config): N/A                         | Claude non-fork via sub-agent channel, fork via main; Codex inherited                               |
+| K7   | Partial | Kimchi background steps (flag not forwarded)                                                    | Claude reaches; Kiro workflow steering not re-verified at 2.28.0 (U); Codex uses K4–K6 rules        |
+| K8   | **No**  | Most titles; Kimchi / Kiro compaction (U)                                                       | No universal guarantee; Codex config title/recap I; compaction reach above                          |
 
 - **Claude needs two channels.** Main append reaches fork children (V). Non-fork
   children need the sub-agent channel (V); it does not reach main (V).
 - **Kiro text is never system-role** unless the account's
   `system_field_injection` flag is on (U).
-- **"Keep the vendor base" cannot be promised.** Kiro v2 has none; Claude and
-  Kiro agent prompts replace it; Kimchi children replace it.
+- **"Keep the vendor base" cannot be promised.** Claude and Kiro agent prompts
+  replace it; Kimchi children replace it.
 
 Open questions and settling steps: [evidence.md](evidence.md#open-unknowns).
 
@@ -123,30 +124,25 @@ Open questions and settling steps: [evidence.md](evidence.md#open-unknowns).
 
 ### Kiro
 
-| Channel                                                                              | Effect                                                | Twice                                                      | Reaches                                                                             | Mark |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---- |
-| Global steering `~/.kiro/steering/*.md` (always / no frontmatter)                    | Adds, user role, before base                          | Combine; same name across global/workspace/inline all kept | K1–K3 all engines, KAS K4–K7 children, v2 crew, v1 subagent, KAS normal compaction¹ | V    |
-| Workspace steering `.kiro/steering/*.md`; root `AGENTS.md` (nested = fileMatch only) | Adds                                                  | Steering: combine                                          | As global; dropped in untrusted workspace (KAS)²                                    | V    |
-| `README.md`                                                                          | Adds                                                  | —                                                          | v1/v2 every agent; KAS only via `resources`                                         | V    |
-| Agent `resources.files`                                                              | Adds                                                  | Same doc id: later wins                                    | KAS main (not KAS children); v1/v2 agents                                           | V    |
-| ACP `_meta.kiro.steering[]`                                                          | Adds after file steering, before base                 | Same name in one batch: first kept                         | K3 v3 main + `invoke_sub_agent` children; v2 ignores; TUI/chat never send           | V    |
-| Agent `prompt` (JSON / MD / `file://` / ACP `customAgents`)                          | **Replaces** base³                                    | Profile id collision: later wins; ACP batch: first wins    | Selected agent, K1–K5, K7 steps                                                     | V    |
-| `invoke_sub_agent` `preset` / `inlineAgent.systemPrompt`                             | Replaces                                              | —                                                          | KAS K4/K5 children / KAS K6 (gated)⁴                                                | V    |
-| `agentSpawn` / SessionStart hook stdout; `userPromptSubmit` stdout                   | Adds, `history[0]` after base; adds to each user turn | Combine (per hook)                                         | Main K1–K3, v2 crew, v1 subagent; not KAS children⁵                                 | V    |
-| Output style                                                                         | Adds user text                                        | —                                                          | KAS main                                                                            | V    |
-| Workflow lifecycle text                                                              | Adds (system + user)                                  | —                                                          | K7 dedicated steps                                                                  | V    |
-| `systemPrompt` / `appendSystemPrompt` (flag, setting, `_meta`)                       | Does not exist / ignored⁶                             | —                                                          | None                                                                                | V    |
+This map describes v3/KAS, selected by this configuration. The v2 engine (not
+used by this config) remains covered by the replay cases.
 
-1. Not v2 `/compact` checkpoint, KAS truncation / recap, or title (V). v3 K1
-   resumed session and resumed K7 step: old snapshot only (V). KAS K4
-   `dispatchKind:"spec"` drops steering (V); full prompt there U.
-2. v3 untrusted workspace: global steering only (V).
-3. Empty or missing prompt (all V): v2 no instruction; v3 main no base; KAS
-   child vendor fallback; workflow no base; v2 crew also loses the preamble; v1
-   rejects it and uses `kiro_default`.
-4. Feature off (default): N/A, agent not found (V).
-5. v2 `--agent X` headless: steering yes, X's agentSpawn hook skipped (V).
-6. Includes K3 v3 `_meta[.kiro].systemPrompt` / `appendSystemPrompt` (V).
+| Channel                                                                      | Effect                                   | Twice                                                 | Reaches                                                                          | Mark  |
+| ---------------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------- | ----- |
+| Global steering `~/.kiro/steering/*.md`                                      | Adds user text before base or agent body | Combined with workspace and inline rules              | Main and invoke children (`w-v3`, `a3-invoke`)                                   | V     |
+| Workspace steering `.kiro/steering/*.md`; root `AGENTS.md`                   | Adds before base                         | Combined with global and inline rules                 | Main and invoke children (`w-v3`, `a3-invoke`)                                   | V     |
+| ACP `_meta.kiro.steering[]`                                                  | Adds after file steering, before body    | Same name across global/workspace/inline retained     | ACP main (`k3-dup`); invoke child (`a3-invoke`)                                  | V     |
+| Agent `prompt`, ACP `customAgents`                                           | Replaces base                            | Profile collision rules not re-verified at 2.28.0 (U) | Main (`k3-hooked`) and named invoke children (`a3-invoke`)                       | V / U |
+| `invoke_sub_agent` `inlineAgent.systemPrompt`                                | Replaces body when inline agents enabled | —                                                     | Invoke child (`claude:k-pins`, `codex:R3`); disabled gate leaves agent not found | V     |
+| `agentSpawn` hook stdout                                                     | Adds after body in `history[0]`          | —                                                     | Main (`k3-hooked`); absent in hooked invoke child (`a3-invoke`)                  | V     |
+| Agent `preset`; prompt schema and dispatch                                   | Selected preset replaces body            | —                                                     | Invoke dispatch (`codex:R6`)                                                     | A     |
+| `README.md`, agent resources, output style, manual/file-match steering       | not re-verified at 2.28.0                | not re-verified at 2.28.0                             | not re-verified at 2.28.0                                                        | U     |
+| Workflow steering; compaction/title; resume prompt snapshot                  | not re-verified at 2.28.0                | —                                                     | not re-verified at 2.28.0                                                        | U     |
+| `systemPrompt` / `appendSystemPrompt` host fields; `userPromptSubmit` stdout | not re-verified at 2.28.0                | —                                                     | not re-verified at 2.28.0                                                        | U     |
+
+The capture backend proves client payloads. The account-controlled
+`system_field_injection` and server-side prompt are not re-verified at 2.28.0
+(U); see [Open UNKNOWNs](evidence.md#open-unknowns).
 
 ### Kimchi
 

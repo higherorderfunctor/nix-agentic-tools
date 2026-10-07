@@ -4,7 +4,21 @@ const args = process.argv.slice(2),
 const out = [];
 for (const spec of args) {
   let nn;
-  if (spec.startsWith("line:")) {
+  if (spec.startsWith("contains:")) {
+    const term = spec.slice(9);
+    nn = nodes.filter(
+      (n) =>
+        [
+          "MethodDefinition",
+          "FunctionDeclaration",
+          "VariableDeclarator",
+        ].includes(n.type) && code(n).includes(term),
+    );
+  } else if (spec.startsWith("method:")) {
+    nn = nodes.filter(
+      (n) => n.type === "MethodDefinition" && n.key.name === spec.slice(7),
+    );
+  } else if (spec.startsWith("line:")) {
     const line = +spec.slice(5);
     nn = nodes.filter(
       (n) =>
@@ -18,6 +32,7 @@ for (const spec of args) {
         (n.type === "VariableDeclarator" && n.id?.name === spec) ||
         (n.type === "AssignmentExpression" && n.left?.name === spec),
     );
+  if (!nn.length) throw new Error(`No pinned AST node matches ${spec}`);
   for (const n of nn)
     out.push({
       name: n.key?.name || n.id?.name || n.left?.name,

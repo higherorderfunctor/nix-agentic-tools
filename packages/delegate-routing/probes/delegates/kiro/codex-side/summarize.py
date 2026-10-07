@@ -4,13 +4,13 @@ import hashlib,json,pathlib
 import sys
 S=pathlib.Path(sys.argv[1])
 out={}
-for name in ['v2-controls','v2-flags','v2-headless','v3-controls','v3-deny','v3-inline','v3-nested','v3-workflow','v3-pause','v3-workflow-ungated']:
+for name in ['v2-controls','v2-flags','v2-headless','v3-controls','v3-deny','v3-headless','v3-inline','v3-inline-ignored','v3-nested','v3-pause','v3-workflow','v3-workflow-ungated']:
  R=S/'runs'/name; requests=[]; schemas={}
  for line in (R/'wire.jsonl').read_text().splitlines():
   x=json.loads(line)
   if 'GenerateAssistantResponse' not in x['target']:continue
   c=json.loads(x['body'])['conversationState'];m=c['currentMessage']['userInputMessage']
-  requests.append({'modelId':m.get('modelId'),'content':m.get('content','')[:160],'rule':x['rule'],'tools':[t['toolSpecification']['name'] for t in m.get('userInputMessageContext',{}).get('tools',[])]})
+  requests.append({'conversationId':c['conversationId'],'modelId':m.get('modelId'),'content':m.get('content','')[:160],'rule':x['rule'],'tools':[t['toolSpecification']['name'] for t in m.get('userInputMessageContext',{}).get('tools',[])]})
   for t in m.get('userInputMessageContext',{}).get('tools',[]):
    spec=t['toolSpecification'];schemas.setdefault(spec['name'],spec)
  events=[]
@@ -36,3 +36,18 @@ paused=next(x['result']['state'] for x in pause_results if x.get('result',{}).ge
 completed=next(x['result']['state'] for x in pause_results if x.get('result',{}).get('state',{}).get('status')=='completed')
 assert paused['root']['children'][0]['sessionId']==completed['root']['children'][0]['sessionId']
 print(json.dumps({n:{'requests':len(v['requests']),'tools':v['toolNames'],'errors':[x['error']['code'] for x in v['errors']],'processExit':v['exit']['exit']} for n,v in out.items()},indent=2))
+
+for name in ['v3-nested', 'v3-headless']:
+ assert len(out[name]['requests']) == 5, (name, out[name]['requests'])
+ assert any(r['modelId']=='claude-haiku-4.5' and 'GRAND_TASK' in r['content'] for r in out[name]['requests'])
+ wire=(S/'runs'/name/'wire.jsonl').read_text()
+ assert 'GRAND_RESULT' in wire and 'CHILD_RESULT' in wire, name
+assert 'not found in registry' in (S/'runs/v3-inline-ignored/wire.jsonl').read_text()
+for name in out:
+ assert out[name]['exit']['exit']==0, (name, out[name]['exit'])
+
+assert 'subagent' in out['v2-flags']['toolNames']
+assert len(out['v3-deny']['requests']) == 2
+assert len({r['conversationId'] for r in out['v3-deny']['requests']}) == 1
+first_deny = next(json.loads(x['body']) for x in (json.loads(line) for line in (S/'runs/v3-deny/wire.jsonl').read_text().splitlines()) if 'GenerateAssistantResponse' in x['target'])
+assert 'ROOT_TASK' in first_deny['conversationState']['currentMessage']['userInputMessage']['content']
