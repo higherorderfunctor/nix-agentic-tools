@@ -1,6 +1,4 @@
-{pkgs}: let
-  inherit (import ../packaging.nix) ciAttr;
-in {
+{pkgs}: {
   mkDriftCheck = {
     committed,
     extracted,
@@ -20,10 +18,9 @@ in {
         "$jq" -S . ${extracted} > extracted.json
         ${pkgs.diffutils}/bin/diff -u committed.json extracted.json >&2 || :
         echo "Regenerate from the repository root:" >&2
-        echo '  "$(nix build --no-link --print-out-paths .#${ciAttr {
-        attr = name;
-        inherit pkgs;
-      }}.passthru.regenerateExtracted)"' >&2
+        echo '  extracted="$(nix build --no-link --print-out-paths .#checks.${pkgs.stdenv.hostPlatform.system}.${name}-extracted.passthru.extracted)"' >&2
+        echo '  cp "$extracted" ${pkgs.lib.removePrefix "${toString ../..}/" (toString committed)}' >&2
+        echo '  nix fmt' >&2
         exit 1
       fi
     '';

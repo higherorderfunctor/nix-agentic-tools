@@ -177,7 +177,6 @@
             # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
             # packages/stacked-workflows/lib/git-config*.nix).
           };
-        extracted = import ./lib/extracted;
         # Consumer-facing packaging helpers. Only this one is public; the rest
         # of lib/packaging.nix is the repo's own update/build tooling. It takes
         # the caller's `pkgs` as an argument, so it builds on their nixpkgs.

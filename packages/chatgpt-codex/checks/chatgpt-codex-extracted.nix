@@ -7,7 +7,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.chatgpt-codex.passthru.extracted;
     committed = ../extracted.json;
   in {

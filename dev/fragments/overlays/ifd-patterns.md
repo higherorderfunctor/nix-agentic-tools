@@ -2,8 +2,7 @@
 
 > **Last verified:** 2026-10-06 — all extracted-sidecar drift checks share
 > `lib/extracted/default.nix`; comparisons report a sorted JSON diff and the
-> package’s `passthru.regenerateExtracted` command. Extraction and update
-> ordering are unchanged.
+> check’s `passthru.extracted` build, sidecar copy, and `nix fmt` recipe.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -171,13 +170,14 @@ minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
-`lib.extracted { inherit pkgs; }` exports
+Importing `lib/extracted/default.nix` with `{ inherit pkgs; }` provides
 `mkDriftCheck { name; extracted; committed; }`. All extractor drift checks use
-this builder; `name` is the package whose `passthru.regenerateExtracted`
-rewrites the committed sidecar. Both Semble checks use `name = "semble"`, whose
-regeneration script updates both snapshots. The check exposes
-`passthru.extracted` so those snapshots can still be regenerated while drift is
-red.
+this builder; each check attribute is `${name}-extracted`, including
+`semble-languages-extracted` and `semble-templates-extracted`. A mismatch prints
+`nix build --no-link --print-out-paths .#checks.<system>.<name>-extracted.passthru.extracted`,
+then a command to copy its output over the committed sidecar and `nix fmt`. The
+check exposes `passthru.extracted` so regeneration remains buildable while drift
+is red.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use

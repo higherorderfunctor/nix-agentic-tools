@@ -1,8 +1,9 @@
 # Semble integrations
 
 > **Last verified:** 2026-10-06 — both snapshot drift checks use the shared
-> `lib/extracted/default.nix` builder and retain `passthru.extracted` for
-> regeneration; the language check also forces the committed sidecar reader.
+> `lib/extracted/default.nix` builder and retain `passthru.extracted` for a
+> build, sidecar copy, and `nix fmt` recipe; the language check validates the
+> committed sidecar reader without blocking extraction.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -439,8 +440,10 @@ pipeline extracts on x86_64-linux only. On 0.1.2 the linux-x86_64 and
 macos-arm64 manifests both list the same 77 grammars as `sources.json`.
 
 Both snapshot drift checks call the shared `lib/extracted/default.nix` builder.
-A mismatch prints a sorted JSON diff and the Semble regeneration command; the
-language check also forces the committed sidecar reader to evaluate.
+A mismatch prints a sorted JSON diff and a recipe to build that check’s
+`passthru.extracted`, copy it over the committed snapshot, and run `nix fmt`.
+The language check validates the committed sidecar reader while leaving
+`passthru.extracted` buildable for regeneration.
 
 Semble has no update target of its own; it arrives with the `llm-agents` input.
 Its `passthru.regenerateExtracted` rebuilds both Semble snapshots

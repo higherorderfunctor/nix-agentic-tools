@@ -15,9 +15,11 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
     semble = self.ciPackages.${system}.semble;
-    committed = ../extracted.json;
+    # Validate the reader when checking drift, while leaving extraction buildable.
+    committed = assert lib.assertMsg (languages.parsedLanguages != []) "packages/semble/lib/extracted.nix derives no parsed languages";
+      ../extracted.json;
     languages = import ../lib/extracted.nix;
 
     sembleScript = import ./semble-script.nix pkgs;
@@ -25,14 +27,9 @@
       ${sembleScript "extract-languages" semble ./extract-languages.py} > "$out"
     '';
   in {
-    semble-languages-extracted =
-      (mkDriftCheck {
-        inherit committed extracted;
-        name = "semble";
-      }).overrideAttrs (_: {
-        # Force the committed sidecar reader without blocking regeneration.
-        parsedLanguageCount = assert lib.assertMsg (languages.parsedLanguages != []) "packages/semble/lib/extracted.nix derives no parsed languages";
-          builtins.length languages.parsedLanguages;
-      });
+    semble-languages-extracted = mkDriftCheck {
+      inherit committed extracted;
+      name = "semble-languages";
+    };
   };
 }

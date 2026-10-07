@@ -9,7 +9,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
     semble = self.ciPackages.${system}.semble;
     committed = ../upstream-templates.json;
     reviewed = import ../lib/templateCoverage.nix;
@@ -133,7 +133,7 @@
 
     semble-templates-extracted = mkDriftCheck {
       inherit committed extracted;
-      name = "semble";
+      name = "semble-templates";
     };
   };
 }

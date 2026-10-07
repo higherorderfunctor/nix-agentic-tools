@@ -7,7 +7,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
     package = self.ciPackages.${system}.kimchi;
     inherit (package.passthru) extracted extractionSources extractionSourceUrls;
     committed = ../extracted.json;
