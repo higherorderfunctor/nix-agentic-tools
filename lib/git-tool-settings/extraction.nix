@@ -17,7 +17,7 @@
 # derivation input, so neither moves the package's store path, and the drift
 # check and the update pipeline's regeneration read the same derivation.
 {pkgs}: let
-  inherit (import ../packaging.nix) ciAttr;
+  inherit (import ../extracted {inherit pkgs;}) mkDriftCheck;
   jq = "${pkgs.jq}/bin/jq";
 
   # One interpreter for every extractor: tree-sitter-rust for the Rust
@@ -82,22 +82,9 @@ in {
     # Drift: the committed sidecar equals a fresh extraction. Staleness
     # only; the update pipeline commits whatever the extractor says, so
     # correctness rests on the guards and the mutants.
-    "${name}-extracted" = pkgs.runCommand "${name}-extracted-drift" {} ''
-      ${strict}
-      if ${jq} -e -n --slurpfile a ${extracted} --slurpfile b ${committed} '$a == $b' >/dev/null; then
-        echo "ok — ${sidecar} matches the ${name} source" >"$out"
-      else
-        echo "FAIL: ${sidecar} is out of sync with the ${name} source." >&2
-        diff <(${jq} -S . ${committed}) <(${jq} -S . ${extracted}) >&2 || :
-        echo "" >&2
-        echo "Regenerate from the repository root:" >&2
-        echo '  "$(nix build --no-link --print-out-paths .#${ciAttr {
-        attr = name;
-        inherit pkgs;
-      }}.passthru.regenerateExtracted)"' >&2
-        exit 1
-      fi
-    '';
+    "${name}-extracted" = mkDriftCheck {
+      inherit committed extracted name sidecar;
+    };
 
     # The extractor fails closed: every mutant trips the guards it names or
     # moves the output exactly as it says.
