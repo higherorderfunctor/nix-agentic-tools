@@ -2,6 +2,7 @@
 # Extraction reads the pinned package output in a separate derivation; the
 # Semble derivation itself stays byte-for-byte identical to llm-agents.nix.
 {
+  extractedLib,
   lib,
   pkgs,
   self,
@@ -9,7 +10,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
     semble = self.ciPackages.${system}.semble;
     committed = ../upstream-templates.json;
     reviewed = import ../lib/templateCoverage.nix;

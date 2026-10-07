@@ -161,6 +161,7 @@
     (import ../packages/kimchi/lib/extracted.nix {
       inherit lib pkgs;
       extracted = builtins.fromJSON (builtins.readFile ../packages/kimchi/extracted.json);
+      extractedLib = import ../lib/extracted;
     }).userScopeHarnessKeys;
 
   # ── README.md generation ─────────────────────────────────────────────

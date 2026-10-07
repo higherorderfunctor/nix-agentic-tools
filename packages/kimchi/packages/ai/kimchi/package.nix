@@ -3,6 +3,7 @@
 # relative to the executable, including when the module wraps that executable.
 {
   externalizedExtensions ? import ../../../externalized-extensions.nix,
+  extractedLib,
   fd,
   packageLib,
   pkgs,
@@ -294,7 +295,7 @@ in
     passthru = {
       inherit externalizedExtensions externalizeExtensions extracted fixPnpmDepsHash goFloor goModPath proxyHelper;
       inherit (goUpdate) fixGoFloor fixVendorHash;
-      extractedRules = import ../../../extract/rules.nix {inherit pkgs;};
+      extractedRules = import ../../../extract/rules.nix {inherit extractedLib pkgs;};
       extractionSources = {
         kimchi = kimchiSource;
         pi = piPackage;

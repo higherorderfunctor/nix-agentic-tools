@@ -22,6 +22,7 @@
   sidecar = import ./extracted.nix {
     inherit lib pkgs;
     extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+    extractedLib = lib.ai.extracted;
   };
   # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
   # That fixed project namespace is independent of ai.kimchi.configDir, which

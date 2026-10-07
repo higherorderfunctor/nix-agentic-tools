@@ -8,12 +8,14 @@ in {
   # stated consumer facts. Exported because `ai.<runtime>.methodFor` documents
   # it as its default and a replacement delegates back to it.
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
-  hooks = import ./hooks.nix {inherit lib;};
+  # `extracted {pkgs}`: the shared extraction builders (lib/extracted).
+  extracted = import ../extracted;
   # One builder for generated Markdown and structured files.
   generated = import ../generated.nix {inherit lib;};
   # `guards pkgs`: the generated-file guards as programs and a check builder
   # for a consumer's own files (lib/markdown/guards.nix).
   guards = (import ../markdown/guards.nix {inherit lib;}).consumer;
+  hooks = import ./hooks.nix {inherit lib;};
   # `linkDirectory pkgs name source`: a directory of top-level links into
   # source (lib/link-directory.nix).
   linkDirectory = import ../link-directory.nix;

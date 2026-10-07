@@ -8,6 +8,7 @@
 # (dev/scripts/update-input.sh), so a bot PR carries it instead of failing
 # this check.
 {
+  extractedLib,
   lib,
   pkgs,
   self,
@@ -15,7 +16,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
     semble = self.ciPackages.${system}.semble;
     # Validate the reader when checking drift, while leaving extraction buildable.
     committed = assert lib.assertMsg (languages.parsedLanguages != []) "packages/semble/lib/extracted.nix derives no parsed languages";

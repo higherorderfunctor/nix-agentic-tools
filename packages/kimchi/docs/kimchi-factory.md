@@ -1,8 +1,7 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-06 — all hand fields reject blank values;
-> environment string facts classify unrecorded secrets; collision rows name
-> their cause.
+> **Last verified:** 2026-10-07 — `mkKimchi` binds `lib.ai.extracted`
+> independently of runtime package replacements.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -90,21 +89,24 @@ becomes an option at the next re-extraction, and a key it removes fails its
 consumer as an unknown option instead of writing bytes nothing reads. Every
 option is `nullOr` with a null default. Config rows record acceptance and may
 carry `aliasFor` or `excluded`. `extract/rules.nix` defines the config and
-environment surfaces once, using `lib/extracted/default.nix`'s `reconcile`.
-Consumers merge those rows with the committed facts; extraction itself emits
-facts and clones alias types from the rows' `aliasFor` references. Alias keys
-and inert keys have no option. A key is inert when upstream tags its
-`KimchiConfig` member `@deprecated` and no Kimchi code consumes it: nothing
-reads the loaded member, and nothing outside `config.ts` reads the raw
-`readConfigExtras` member, while `config.ts` still parses it to warn that it is
-obsolete. A release that consumes it again clears the flag, and the key becomes
-an option. Secret exclusions (`apiKey`, its alias, and `gitTokens`) live in the
-config rows, naming `ai.kimchi.apiKey` or `ai.kimchi.gitTokens` as their
-delivery path. The option generator keeps two hand tables: one refinement
-(`modelRoles`, whose role names and single-string roles come from the sidecar
-while the non-blank and non-empty checks do not), and one description note.
-`report.stale*` lists any refinement or note whose path the sidecar lost, and
-`checks/native-options.nix` fails on it. Reconcile detects stale exclusion rows.
+environment surfaces once, using the shared `extractedLib` function’s
+`reconcile`. Recipes receive the function through `scopeArgs`, checks through
+module arguments. `mkKimchi` binds `lib.ai.extracted` independently of runtime
+package replacements. Consumers merge those rows with the committed facts;
+extraction itself emits facts and clones alias types from the rows' `aliasFor`
+references. Alias keys and inert keys have no option. A key is inert when
+upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
+consumes it: nothing reads the loaded member, and nothing outside `config.ts`
+reads the raw `readConfigExtras` member, while `config.ts` still parses it to
+warn that it is obsolete. A release that consumes it again clears the flag, and
+the key becomes an option. Secret exclusions (`apiKey`, its alias, and
+`gitTokens`) live in the config rows, naming `ai.kimchi.apiKey` or
+`ai.kimchi.gitTokens` as their delivery path. The option generator keeps two
+hand tables: one refinement (`modelRoles`, whose role names and single-string
+roles come from the sidecar while the non-blank and non-empty checks do not),
+and one description note. `report.stale*` lists any refinement or note whose
+path the sidecar lost, and `checks/native-options.nix` fails on it. Reconcile
+detects stale exclusion rows.
 
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's harness additions (`fermentV2`, `modelRoles` and the rest, each

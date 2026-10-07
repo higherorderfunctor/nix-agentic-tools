@@ -29,9 +29,10 @@
 #   refinements  path → (node → type), runtime validation the type tree lacks
 #   notes        path → prose appended to the generated description
 {
+  extracted,
+  extractedLib,
   lib,
   pkgs,
-  extracted,
 }: let
   inherit (lib) types;
   json = (pkgs.formats.json {}).type;
@@ -45,7 +46,7 @@
   roleModelType = types.addCheck types.str (value: builtins.match "[[:space:]]*" value == null);
   roleModelsType = types.addCheck (types.listOf roleModelType) (values: values != []);
 
-  rules = import ../extract/rules.nix {inherit extracted pkgs;};
+  rules = import ../extract/rules.nix {inherit extracted extractedLib pkgs;};
 
   surfaces = {
     settings = {

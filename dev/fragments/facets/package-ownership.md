@@ -1,10 +1,7 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-04 — recipes run through `buildOverlay` on this
-> flake's own nixpkgs (`natSets`, no consumer config); the exported overlay
-> re-exports those builds and falls back to `buildOverlay` on `final` only off
-> the native triple. Toolchains use `mkGoBin` and `mkRustBin` over the supplied
-> set; Agnix and Semble identity checks are owner-local.
+> **Last verified:** 2026-10-07 — owners receive the shared extraction library
+> as an argument rather than importing it by a relative path.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -36,7 +33,9 @@ to collision checks, even when a competing definition uses `mkForce`.
 `checks/<concern>/default.nix`; the workspace discovers those entry points one
 directory deep. Supporting files and fixture trees are not recursively
 registered. Adding a package check needs only owner edits; adding a root concern
-needs no flake export-list edit.
+needs no flake export-list edit. The Agnix role identity check
+(`packages/agnix/checks/role-identity.nix`) and Semble package identity check
+(`packages/semble/checks/package-identity.nix`) are owner-local.
 
 Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and
@@ -85,16 +84,17 @@ hybrid package. Preserve namespace neighbors and replace package leaves whole.
 
 Package recipes receive `pkgs` through native `callPackage` scopes built by
 `buildOverlay`. Shared helpers arrive as `scopeArgs` from
-`lib/facets/repository.nix` (`fragmentsLib`, `generatedLib`, `packageLib`,
-`repoPath`, `traceSource`). Recipes should not encode a relative route back to
-the repository root. That `pkgs` is this flake's nixpkgs (`natSets`) for every
-output, the exported overlay and the module defaults; a consumer's `final`
-reaches a recipe only through the overlay's fallback (unsupported system, cross,
-non-default libc) or when the consumer sets `follows`. No consumer config
-reaches `natSets`; the receiver's own nixpkgs decides unfree (`checkedBy`).
-Toolchain input libraries construct their compilers over the package set
-supplied to the recipe. The overlay-pattern fragment has the full
-build-versus-export shape.
+`lib/facets/repository.nix` (`extractedLib`, `fragmentsLib`, `generatedLib`,
+`gitToolExtraction`, `packageLib`, `repoPath`, `traceSource`). The extraction
+builders take `{pkgs}`; owner checks receive them as module arguments as well.
+Recipes should not encode a relative route back to the repository root. That
+`pkgs` is this flake's nixpkgs (`natSets`) for every output, the exported
+overlay and the module defaults; a consumer's `final` reaches a recipe only
+through the overlay's fallback (unsupported system, cross, non-default libc) or
+when the consumer sets `follows`. No consumer config reaches `natSets`; the
+receiver's own nixpkgs decides unfree (`checkedBy`). Toolchain input libraries
+construct their compilers over the package set supplied to the recipe. The
+overlay-pattern fragment has the full build-versus-export shape.
 
 `lib/default.nix` contributes public helpers, using native module options with
 raw leaf values. Functions retain their `functionArgs`; option declarations,

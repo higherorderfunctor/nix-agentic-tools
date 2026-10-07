@@ -1,13 +1,14 @@
 # Drift and collision checks for Kimchi's two source-derived settings surfaces.
 # cspell:ignore odwyer
 {
+  extractedLib,
   pkgs,
   self,
   ...
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
-    inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
+    inherit (extractedLib {inherit pkgs;}) mkDriftCheck;
     package = self.ciPackages.${system}.kimchi;
     inherit (package.passthru) extracted extractionSources extractionSourceUrls;
     committed = ../extracted.json;

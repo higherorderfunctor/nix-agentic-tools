@@ -1,5 +1,6 @@
 # Independent release pin: Kimchi's pnpm lock does not select this build.
 {
+  extractedLib,
   packageLib,
   pkgs,
   repoPath,
@@ -8,7 +9,7 @@
   inherit (pkgs) lib;
   pnpm = pkgs.ai.generic.pnpm_10;
   extracted = import ../../../../lib/extracted.nix {
-    inherit lib pkgs;
+    inherit extractedLib lib pkgs;
     extracted = builtins.fromJSON (builtins.readFile ../../../../extracted.json);
   };
   virtualPackages = pkgs.writeText "pi-virtual-packages.json" (builtins.toJSON extracted.virtualPackages);

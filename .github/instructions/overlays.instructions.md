@@ -7,19 +7,8 @@ applyTo: "lib/facets/**,lib/testing/**,lib/packaging.nix,lib/toolchains.nix,pack
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-06 — this flake's own nixpkgs builds every package
-> it ships: one `natSets.<system>` builds `packages`, `legacyPackages`,
-> `ciPackages`, the exported overlay's re-export and the module defaults, and
-> `checks.nat-overlay-parity` gates that they are one derivation. Unfree is
-> decided by the receiver's own nixpkgs through `checkedBy`, which also
-> re-checks every override function and reports the receiver's `meta.available`;
-> a free leaf's dependencies are judged in CI by a no-config set. Recipes still
-> take bun and pnpm from `pkgs.ai.generic`. pnpm_12 and chatgpt-codex override
-> nixpkgs' source-built Rust packages with sidecar pins and the locked
-> toolchain; chatgpt-codex's update restores its hashes before regenerating.
-> `checks.update-target-meta-eval` runs nix-update's own eval.nix over every
-> update target, so a `src` override that breaks a field nix-update reads fails
-> CI.
+> **Last verified:** 2026-10-06 — owners receive the shared extraction functions
+> through repository arguments instead of relative imports.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -52,12 +41,15 @@ clearer role. A later namespace change should move the inner recipe path, while
 renaming the outer owner leaves the public namespace unchanged.
 
 Recipes receive a package set as `pkgs`, together with `inputs`, plus every
-entry of `scopeArgs` in `lib/facets/repository.nix`: `fragmentsLib`,
-`generatedLib`, `packageLib`, `repoPath` and `traceSource`. Keep source
-sidecars, patches, extraction helpers, and declarative registrations with the
-owner. `registry.nix` declares update/doc entries; `repoPath ./relative/path`
-derives mutable paths from their actual location. See the package-ownership
-fragment for the native composition boundaries.
+entry of `scopeArgs` in `lib/facets/repository.nix`: `extractedLib`,
+`fragmentsLib`, `generatedLib`, `gitToolExtraction`, `packageLib`, `repoPath`
+and `traceSource`. Apply the extraction functions with `{inherit pkgs;}`; owner
+checks receive them through module arguments. Owners must not import shared
+extraction helpers by a relative path: owner relocation would break it. Keep
+source sidecars, patches, extraction helpers, and declarative registrations with
+the owner. `registry.nix` declares update/doc entries;
+`repoPath ./relative/path` derives mutable paths from their actual location. See
+the package-ownership fragment for the native composition boundaries.
 
 ### Who builds a package: `buildOverlay` and the exported overlay
 
