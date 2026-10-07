@@ -225,6 +225,7 @@
   userScopeKeys = keys: builtins.attrNames (lib.filterAttrs (_: node: !(node.project or false)) keys);
 in {
   inherit (extracted) virtualPackages;
+  inherit rules;
 
   settingsOptions = generated.settings.options;
   harnessSettingsOptions = generated.harnessSettings.options;

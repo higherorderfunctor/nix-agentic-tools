@@ -119,19 +119,23 @@ it. Reconcile detects stale exclusion rows.
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's harness additions (`fermentV2`, `modelRoles` and the rest, each
 typed from a named declaration) are a hand list in `extract.mjs`. Two censuses
-check it: every harness key config.ts parses, and every constant key passed to
-config/settings.ts's `readConfigSetting`, `readConfigSettingAsync`,
-`writeConfigSetting` and `writeConfigSettingAsync` anywhere in `src/`, is
-matched against pi `Settings` and the additions. A key in neither is not an
-extraction failure: the extractor emits it untyped (`type = null`, user scope,
-optional), and the harness surface fails it as `needs-human` until its row
-supplies a `type`, or `ignored = "<reason>"` when Nix should not expose it. The
-option generator reads only reconciled entries, so an ignored or untyped read
-never becomes an option. As in config, a string key the classifier calls secret
-is never auto-added, and its row must carry `excluded`. Other direct readers of
-the harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts`
-reads `model` and `provider` for telemetry), so a key upstream adds there meets
-the closed submodule as an unknown option with no drift signal. The config.json
+discover keys beyond it: every harness key config.ts parses, and every constant
+key passed to config/settings.ts's `readConfigSetting`,
+`readConfigSettingAsync`, `writeConfigSetting` and `writeConfigSettingAsync`
+anywhere in `src/`, is matched against pi `Settings` and the additions. A key in
+neither is not an extraction failure: the extractor emits it untyped
+(`type = null`, user scope, optional), and the harness surface fails it as
+`needs-human` until its row supplies a `type`, or `ignored = "<reason>"` when
+Nix should not expose it. A row's `type` is a bare JSON type with no `enum`,
+`items` or `properties`, so a structured addition belongs in the `extract.mjs`
+hand list instead. The option generator reads only reconciled entries, so an
+ignored read never becomes an option. An untyped read becomes an untyped JSON
+option, which both `report.untyped` and the drift check fail until its row
+supplies a `type`. As in config, a string key the classifier calls secret is
+never auto-added, and its row must carry `excluded`. Other direct readers of the
+harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts` reads
+`model` and `provider` for telemetry), so a key upstream adds there meets the
+closed submodule as an unknown option with no drift signal. The config.json
 shapes of `teleport`, `gitTokens` and the `surveys` record have no declared
 type, so they are written by hand and pinned both ways to their readers' runtime
 guards (`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`):

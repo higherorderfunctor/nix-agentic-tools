@@ -104,7 +104,7 @@
     .defaultThinkingLevel
     or null;
 
-  keptKeys = surface: excluded: sorted (builtins.attrNames (builtins.removeAttrs surface.keys (builtins.attrNames excluded)));
+  keptKeys = keys: excluded: sorted (builtins.attrNames (builtins.removeAttrs keys (builtins.attrNames excluded)));
 
   # `telemetry.endpoint`, because devenv passes `telemetry.enabled` through
   # the launcher environment rather than the project file.
@@ -129,9 +129,9 @@
     # Every key the sidecar keeps is an option, and nothing else is.
     real-surface-is-the-sidecar =
       sorted (builtins.attrNames real.settingsOptions)
-      == keptKeys committed.config real.report.excluded.settings
+      == keptKeys real.rules.results.config.entries real.report.excluded.settings
       && sorted (builtins.attrNames real.harnessSettingsOptions)
-      == keptKeys committed.harness real.report.excluded.harnessSettings
+      == keptKeys real.rules.results.harness.entries real.report.excluded.harnessSettings
       && real.report.excluded.settings ? apiKey
       && real.report.excluded.settings ? api_key
       && real.report.excluded.settings ? gitTokens;
@@ -201,7 +201,7 @@
     # extraction; the devenv rejection uses the first.
     project-tier-rejects-user-scope-config =
       sorted real.userScopeConfigKeys
-      == sorted (lib.subtractLists committed.config.projectTier.honoredKeys (builtins.attrNames committed.config.keys))
+      == sorted (lib.subtractLists committed.config.projectTier.honoredKeys (builtins.attrNames real.rules.results.config.entries))
       && lib.any (lib.hasInfix "config.json keys Kimchi reads only from user scope: telemetry") (failedAssertions devenvTelemetry)
       && failedAssertions hmTelemetry == [];
 

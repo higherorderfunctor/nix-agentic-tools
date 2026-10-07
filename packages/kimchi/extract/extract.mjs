@@ -389,7 +389,7 @@ function unwrapExpression(expression, ts) {
 // config.ts resolves the harness directory (AGENT_CONFIG_DIR) as well as
 // config.json, and earlier releases parsed harness/settings.json here. So
 // "every JSON.parse here is config.json" is not assumed: a harness read is
-// counted with the harness keys, which must all be known, and an
+// counted with the harness keys and reconciled by extract/rules.nix, and an
 // unattributable parse fails rather than being guessed.
 function discoverConfigKeys(sourceFile, checker, ts) {
   const location = (node) => {
@@ -1446,10 +1446,11 @@ function extractHarness(
   // SettingsManager, which does not type them.
   for (const [name, descriptor] of Object.entries(additions))
     keys[name] = { source: "kimchi", ...descriptor, project: false };
-  // A key Kimchi reads (in config.ts or through config/settings.ts) that is
-  // neither a pi Setting nor a typed addition is a fact with no derivable
-  // type; extract/rules.nix decides whether it needs a human. Like the
-  // additions, Kimchi reads it from the user file only, and absent is allowed.
+  // A key Kimchi reads or writes (in config.ts or through config/settings.ts)
+  // that is neither a pi Setting nor a typed addition is a fact with no
+  // derivable type; extract/rules.nix decides whether it needs a human. Like
+  // the additions, Kimchi reads it from the user file only, and absent is
+  // allowed.
   const unknownHarnessReads = [
     ...configTsHarnessReads,
     ...settingsHelperKeys(settingsHelperSource, kimchiSources, analysisContext),
