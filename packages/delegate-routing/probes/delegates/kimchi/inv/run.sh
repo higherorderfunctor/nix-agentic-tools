@@ -28,12 +28,13 @@ if [[ -n ${WORKFLOWS:-} ]]; then
 fi
 read -r -a extra_env <<<"${EXTRA_ENV:-}"
 read -r -a prompt_args <<<"${PROMPT_ARGS--p hello}"
+stdin_file="$(realpath "${STDIN_FILE:-/dev/null}")"
 cd "$base/project"
 env -i HOME="$base/home" PATH="$PATH" TMPDIR="$base/tmp" XDG_CACHE_HOME="$base/cache" XDG_CONFIG_HOME="$base/config" \
   XDG_DATA_HOME="$base/data" XDG_RUNTIME_DIR="$base/runtime" XDG_STATE_HOME="$base/state" \
   KIMCHI_TELEMETRY_ENABLED=0 "${extra_env[@]}" \
   timeout 60 "$kimchi" --mode "${MODE:-json}" --no-session -e "$here/observer.ts" "$@" "${prompt_args[@]}" \
-  <"${STDIN_FILE:-/dev/null}" >"$base/stdout" 2>"$base/stderr" || echo "exit=$?" >>"$base/stderr"
+  <"$stdin_file" >"$base/stdout" 2>"$base/stderr" || echo "exit=$?" >>"$base/stderr"
 grep '^INV_TOOLS ' "$base/stderr" | sed 's/^INV_TOOLS //' | python3 -m json.tool >"$work/$label.tools.json"
 grep '^INV_COMMANDS ' "$base/stderr" | sed 's/^INV_COMMANDS //' | python3 -m json.tool >"$work/$label.commands.json"
 printf 'tools: %s\n' "$work/$label.tools.json"

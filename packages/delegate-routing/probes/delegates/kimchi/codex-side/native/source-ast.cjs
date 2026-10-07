@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const assert = require("node:assert/strict");
 const path = require("node:path");
 const ts = require(process.env.TYPESCRIPT_JS);
 const root = process.env.KIMCHI_SRC;
@@ -56,10 +57,7 @@ const picks = {
     "createOutputFilePath",
     "writeInitialEntry",
   ],
-  "src/extensions/agents/manager/session-file.ts": [
-    "createAgentSessionFile",
-    "prepareAgentSessionFile",
-  ],
+  "src/extensions/agents/manager/session-file.ts": ["prepareAgentSessionFile"],
 };
 const out = [];
 for (const [rel, names] of Object.entries(picks)) {
@@ -99,5 +97,6 @@ for (const [rel, names] of Object.entries(picks)) {
     ts.forEachChild(n, visit);
   };
   visit(sf);
+  assert.equal(wanted.size, 0, `${rel}: missing ${[...wanted].join(", ")}`);
 }
 console.log(JSON.stringify(out, null, 2));
