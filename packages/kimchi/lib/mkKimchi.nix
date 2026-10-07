@@ -8,7 +8,7 @@
 # ~/.config/kimchi/{config.json,harness/}; devenv writes only Kimchi's native
 # project paths under the repository root. Home Manager shares Kimchi's two
 # writable settings documents and keeps the remaining JSON files read-only.
-{extractedLib}: {
+{
   lib,
   pkgs,
   ...
@@ -20,8 +20,9 @@
   # Native option types, project-tier keys and environment names, all read
   # from the committed sidecar (never passthru.extracted: that is IFD).
   sidecar = import ./extracted.nix {
-    inherit extractedLib lib pkgs;
+    inherit lib pkgs;
     extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
+    extractedLib = lib.ai.extracted;
   };
   # pi 0.85.1 derives CONFIG_DIR_NAME from Kimchi's packaged piConfig.configDir.
   # That fixed project namespace is independent of ai.kimchi.configDir, which

@@ -507,13 +507,6 @@ in {
     };
 
     internal = {
-      extractedLib = lib.mkOption {
-        type = lib.types.raw;
-        default = throw "ai.internal.extractedLib: set by the flake-level module wrappers; compose homeManagerModules.default or devenvModules.nix-agentic-tools";
-        internal = true;
-        visible = false;
-        description = "Shared extraction function supplied by the flake-level module wrappers, independent of runtime package replacements.";
-      };
       formatter = lib.mkOption {
         type = lib.types.raw;
         default = formatter;

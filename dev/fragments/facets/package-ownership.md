@@ -1,8 +1,7 @@
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-06 — shared extraction builders reach owner recipes
-> through `scopeArgs` and owner checks through module arguments, so extraction
-> consumers relocate with their owner.
+> **Last verified:** 2026-10-07 — owners receive the shared extraction library
+> as an argument rather than importing it by a relative path.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -34,7 +33,9 @@ to collision checks, even when a competing definition uses `mkForce`.
 `checks/<concern>/default.nix`; the workspace discovers those entry points one
 directory deep. Supporting files and fixture trees are not recursively
 registered. Adding a package check needs only owner edits; adding a root concern
-needs no flake export-list edit.
+needs no flake export-list edit. The Agnix role identity check
+(`packages/agnix/checks/role-identity.nix`) and Semble package identity check
+(`packages/semble/checks/package-identity.nix`) are owner-local.
 
 Root and owner check names share an exclusive claim boundary. Each contributor
 supplies isolated definitions for claim discovery, while its conditions and
@@ -86,8 +87,6 @@ Package recipes receive `pkgs` through native `callPackage` scopes built by
 `lib/facets/repository.nix` (`extractedLib`, `fragmentsLib`, `generatedLib`,
 `gitToolExtraction`, `packageLib`, `repoPath`, `traceSource`). The extraction
 builders take `{pkgs}`; owner checks receive them as module arguments as well.
-`extractedLib` also reaches owner library entries through the library context
-and backend factories through `ai.internal`, independent of package overrides.
 Recipes should not encode a relative route back to the repository root. That
 `pkgs` is this flake's nixpkgs (`natSets`) for every output, the exported
 overlay and the module defaults; a consumer's `final` reaches a recipe only

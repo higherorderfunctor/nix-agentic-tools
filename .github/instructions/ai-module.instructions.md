@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-06 — the private `ai.internal.extractedLib`
-> function reaches backend factories independently of runtime package overrides.
+> **Last verified:** 2026-10-04 — per-runtime program overrides use
+> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -54,14 +54,6 @@ configuration to each capable enabled ecosystem (Claude, Codex, Copilot, Kimchi,
 Kiro). It is NOT a thin wrapper — the gating semantics, default-setting
 behavior, and fanout patterns are load-bearing and got bitten into production by
 a silent no-op bug. Read this fragment before changing the gating.
-
-The flake-level module wrappers supply shared extraction machinery through
-`ai.internal.extractedLib`. Kimchi’s backend shims bind that function before
-constructing its factory; its sidecar reader applies it to the factory’s `pkgs`.
-Keep this helper independent of `ai.internal.packages`: consumers and the module
-harness may replace the runtime package with one that has no extraction
-passthru. The public Kimchi library binds the same function from the
-repository’s library context without changing its `{lib, pkgs, ...}` interface.
 
 ### Codex extracted facts need reverse coverage
 

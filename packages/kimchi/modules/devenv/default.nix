@@ -10,7 +10,7 @@
 in {
   imports = [
     ../common.nix
-    (aiLib.app.devenvTransform (import ../../lib/mkKimchi.nix {inherit (config.ai.internal) extractedLib;} {
+    (aiLib.app.devenvTransform (import ../../lib/mkKimchi.nix {
       lib = lib // {ai = aiLib;};
       # This flake's build unless the overlay is applied (ai.internal.packages).
       pkgs = pkgs // {ai = config.ai.internal.packages;};

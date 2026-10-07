@@ -11,8 +11,8 @@
   inherit (registry) index repoPath;
   inherit (registry.config) update;
   # Shared extraction builders, handed to owner packages and checks as
-  # arguments so an owner never reaches into lib/ by a relative path (the
-  # facet-owner-relocation check moves an owner and re-evaluates it).
+  # arguments so their consumers do not import these builders by a relative
+  # path into the repository's lib/ directory.
   extractedLib = import ../extracted;
   gitToolExtraction = import ../git-tool-settings/extraction.nix;
   packageWorldFor = pkgs: let
@@ -173,7 +173,7 @@
     lib.genAttrs packageRoots (root: pkgs.${root} or (rootOf root));
   # Flake values the exported modules receive as `ai.internal`.
   moduleInternals = {
-    inherit extractedLib rootsFor;
+    inherit rootsFor;
     treefmtNix = inputs.treefmt-nix;
   };
 in {
@@ -182,7 +182,7 @@ in {
     facets.realizeLibrary {
       inherit index rootLibrary;
       rootSource = root + "/lib";
-      context = {inherit extractedLib inputs lib repoPath;};
+      context = {inherit inputs lib repoPath;};
     };
   packagesFor = {
     pkgs,
