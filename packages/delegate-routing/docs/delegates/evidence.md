@@ -24,7 +24,7 @@ parts of the cell. `V help` proves syntax exposure only.
 | Harness     | Component          | Version                | Pin                                               |
 | ----------- | ------------------ | ---------------------- | ------------------------------------------------- |
 | Claude Code | CLI                | 2.1.291                | `packages/claude-code/sources.json`               |
-| Codex       | CLI (source build) | 0.160.0                | `packages/chatgpt-codex/sources.json`             |
+| Codex       | CLI (source build) | 0.160.1                | `packages/chatgpt-codex/sources.json`             |
 | Kiro        | CLI                | 2.28.0                 | `packages/kiro-cli/sources.json`                  |
 | Kiro        | KAS (v3 engine)    | 0.66.26                | bundled in the kiro-cli 2.28.0 release            |
 | Kimchi      | CLI                | 1.5.1                  | `packages/kimchi/sources.json`                    |
@@ -57,6 +57,16 @@ explicit environment depth still wins (`codex:A`). Only current-pin results
 belong in the map and the probe index.
 
 ## Methods per harness
+
+Codex evidence uses the pinned x86_64-linux source build (0.160.1). All indexed
+offline cases were re-run with fresh homes, a fake provider, and the bundled
+model catalog. `codex:R0` extracted 104 Rust files (2,665 declarations, zero
+parse errors) and 28 SDK files (402 declarations); `claude:R1` emitted 104
+regular and 167 experimental RPC methods, with 63 experimental-only methods.
+`claude:R11` enables the message board and V2 explicitly for the
+`disable_direct_message` variant, which withholds send/follow-up while retaining
+spawn. No account cache or real Codex login was used. Live catalog parity and
+cloud execution are not re-verified at 0.160.1 (U).
 
 Case ids carry the side that produced them: `claude:`, `codex:` (the two
 independent investigators) and `judge:` (re-runs that settled disagreements).
@@ -130,9 +140,9 @@ impact rank in the cross-harness prompt map (1 = could change the option most).
 | Codex   | prompt   | —    | Guardian wire request: extra really absent?                                                                                                                                                                     | Fake provider + `approvals_reviewer` auto-review + approval-needing shell          | no                             |
 | Codex   | prompt   | —    | Remote V2 compaction, memory phases, title/recap payloads                                                                                                                                                       | Fake provider advertising remote compaction; memories + title on                   | no                             |
 | Codex   | prompt   | —    | Role `personality` change re-renders the base?                                                                                                                                                                  | Fake-provider spawn of a role with `personality="none"`                            | no                             |
-| Codex   | delegate | —    | Live catalog parity (V2 per model)                                                                                                                                                                              | One live `codex exec` spawn                                                        | no (exec slot)                 |
+| Codex   | delegate | —    | U: not re-verified at 0.160.1 — live catalog parity (V2 per model)                                                                                                                                              | One live `codex exec` spawn                                                        | yes: account                   |
 | Codex   | delegate | —    | `exec` root end with live children; signal cascade                                                                                                                                                              | Fake provider + `codex exec --json` slow child                                     | no                             |
-| Codex   | delegate | —    | Cloud task model, limits, cancel                                                                                                                                                                                | Live account run                                                                   | yes                            |
+| Codex   | delegate | —    | U: not re-verified at 0.160.1 — cloud task model, limits, cancel                                                                                                                                                | Live account run                                                                   | yes                            |
 | Codex   | delegate | —    | TUI / daemon / remote lifecycle                                                                                                                                                                                 | Scratch `CODEX_HOME` daemon, unwrapped binary                                      | no                             |
 | Codex   | delegate | —    | Unanswered approval deadline; auto-review in children                                                                                                                                                           | `R9` variant with `approvals_reviewer=auto_review`                                 | no                             |
 | Codex   | delegate | —    | V1 close cascade at runtime; V2 tree after restart                                                                                                                                                              | Depth-2 close; app-server restart replay                                           | no                             |

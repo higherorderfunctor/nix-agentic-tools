@@ -70,17 +70,17 @@ Other surfaces: none recorded.
 
 Other surfaces:
 
-|         | SDK session (A)                  | TUI / daemon / remote (U) | Cloud task (U)      |
-| ------- | -------------------------------- | ------------------------- | ------------------- |
-| Steer   | Python RPC; TS none              | interactive, `queue`      | none                |
-| Cancel  | Python interrupt; TS AbortSignal | interactive               | none exposed        |
-| Update  | as underlying                    | via app-server            | none                |
-| Status  | events                           | agent browser             | `status`, `list`    |
-| Resume  | Python resume/fork; TS resume    | interactive               | none                |
-| Timeout | host                             | U                         | U                   |
-| Prompts | as underlying                    | interactive               | U                   |
-| Output  | structured                       | UI                        | `diff`, `apply`     |
-| Replay  | codex:R0                         | codex:R0                  | codex:R0, claude:R0 |
+|         | SDK session (A)                  | TUI / daemon / remote (U) | Cloud task: not re-verified at 0.160.1 (U) |
+| ------- | -------------------------------- | ------------------------- | ------------------------------------------ |
+| Steer   | Python RPC; TS none              | interactive, `queue`      | none                                       |
+| Cancel  | Python interrupt; TS AbortSignal | interactive               | none exposed                               |
+| Update  | as underlying                    | via app-server            | none                                       |
+| Status  | events                           | agent browser             | `status`, `list`                           |
+| Resume  | Python resume/fork; TS resume    | interactive               | none                                       |
+| Timeout | host                             | U                         | U                                          |
+| Prompts | as underlying                    | interactive               | U                                          |
+| Output  | structured                       | UI                        | `diff`, `apply`                            |
+| Replay  | codex:R0                         | codex:R0                  | codex:R0, claude:R0                        |
 
 ## Kiro
 

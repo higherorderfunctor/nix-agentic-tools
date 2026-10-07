@@ -2,11 +2,9 @@
 """mkcache.py <codex-src> <out-models_cache.json> — writes a fresh models_cache.json from the
 model catalog bundled in the pinned Codex source (codex-rs/models-manager/models.json).
 
-The original probes used the operator's account-fetched cache. That file carries an account
-identity, so it is not committed; the bundled catalog gives the same multi_agent_version per model
+The cache has no account identity. The bundled catalog sets multi_agent_version per model
 (v2: gpt-6.1-sol, gpt-6-astra, gpt-6-sol, gpt-6-luna, gpt-5.6-sol, gpt-5.6-terra; v1: gpt-5.6-luna,
-codex-auto-review; none: gpt-5.5; gpt-reserve is absent). Checked 2026-10-05: judge:J1 and
-claude:R8 reproduce with this file.
+codex-auto-review; none: gpt-5.5; gpt-reserve is absent). judge:J1 and claude:R8 use this file.
 """
 import datetime
 import json

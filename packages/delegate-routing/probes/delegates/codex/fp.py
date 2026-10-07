@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scripted fake OpenAI Responses provider for Codex 0.160.0 delegate probes.
+"""Scripted fake OpenAI Responses provider for the pinned Codex delegate probes.
 
 usage: fp.py <port> <outdir> <scenario.json>
 
