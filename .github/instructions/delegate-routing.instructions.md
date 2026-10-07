@@ -7,14 +7,15 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-07 — one enabled "Work and review" workflow ships
-> the Subtractive standard; a runtime workflow record without text keeps the
-> portable header; all delegate runtimes must be managed, and reaching Kiro
-> defaults `ai.kiro.v3` on only when its package is managed. Delegate evidence
-> is two parts: the map (`docs/delegates/` plus `probes/delegates/`) and the
-> acceptance suite (`eval/`, one real-session runner for all four harnesses with
-> one root baseline table and requested/observed controls and source-attributed
-> startup checks); techniques hand-declare `runsOwnSubagents` from map rows.
+> **Last verified:** 2026-10-07 — "Work and review" keeps producers and
+> evaluators apart and splits diagnosis from fix; it ships the Subtractive
+> standard; a runtime workflow record without text keeps the portable header;
+> all delegate runtimes must be managed, and reaching Kiro defaults `ai.kiro.v3`
+> on only when its package is managed. Delegate evidence is two parts: the map
+> (`docs/delegates/` plus `probes/delegates/`) and the acceptance suite
+> (`eval/`, one real-session runner for all four harnesses with one root
+> baseline table and requested/observed controls and source-attributed startup
+> checks); techniques hand-declare `runsOwnSubagents` from map rows.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -36,9 +37,11 @@ The package ships one enabled workflow, "Work and review", with the steps
 Rubric, Subtractive, Work, Review, Prosecute, Defend, Judge and Loop chained by
 `after`. Review is one reviewer; Prosecute, Defend and Judge replace it for a
 change to a shared abstraction. The Subtractive step adds the subtraction
-standard to the rubric. Loop sends validated findings back to the worker for at
-most 3 rounds. Add, replace, disable or reorder a step by key. A workflow can
-have introductory text or only steps; an enabled step needs content.
+standard to the rubric. The workflow keeps producers and evaluators apart; Work
+splits diagnosis from fix when the task is to fix a failure. Loop sends
+validated findings back to the worker for at most 3 rounds. Add, replace,
+disable or reorder a step by key. A workflow can have introductory text or only
+steps; an enabled step needs content.
 
 Entries with `always = true` render through the existing per-runtime `ai.rules`
 fan-out. Other entries render in the generated skill. A workflow's `always`
