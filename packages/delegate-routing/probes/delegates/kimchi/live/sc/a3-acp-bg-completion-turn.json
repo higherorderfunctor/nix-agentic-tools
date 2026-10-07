@@ -1,0 +1,72 @@
+{
+  "acp": true,
+  "args": ["--model", "kimchi-dev/fake-a", "--mode", "acp"],
+  "close_stdin": false,
+  "timeout": 24,
+  "stdin_lines": [
+    {
+      "at": 0.5,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": 1,
+          "clientCapabilities": {
+            "fs": {
+              "readTextFile": false,
+              "writeTextFile": false
+            },
+            "terminal": false
+          }
+        }
+      }
+    },
+    {
+      "at": 1,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "session/new",
+        "params": {
+          "cwd": "@PROJ@",
+          "mcpServers": []
+        }
+      }
+    },
+    {
+      "at": 3,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "session/prompt",
+        "params": {
+          "sessionId": "@SID@",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_ACPBG SLEEP=4\", \"description\": \"d\", \"subagent_type\": \"General-Purpose\"}}]]"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "at": 16,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "session/prompt",
+        "params": {
+          "sessionId": "@SID@",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "SECOND_PROMPT PLAN=[]"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

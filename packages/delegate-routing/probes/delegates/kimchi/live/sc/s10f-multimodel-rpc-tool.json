@@ -1,0 +1,32 @@
+{
+  "args": [
+    "--model",
+    "kimchi-dev/fake-a",
+    "--yolo",
+    "--mode",
+    "rpc",
+    "--no-session"
+  ],
+  "stdin_lines": [
+    {
+      "at": 1.5,
+      "line": {
+        "type": "prompt",
+        "message": "go PLAN=[[{\"name\": \"set_model\", \"args\": {\"model\": \"multi-model\"}}], [{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_BUILDER\", \"description\": \"d\", \"subagent_type\": \"Builder\", \"run_in_background\": false}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_EXPLORE\", \"description\": \"d\", \"subagent_type\": \"Explore\", \"run_in_background\": false}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_OUTSIDE\", \"description\": \"d\", \"subagent_type\": \"Builder\", \"model\": \"kimchi-dev/fake-a\", \"run_in_background\": false}}]]"
+      }
+    }
+  ],
+  "close_stdin": false,
+  "timeout": 15,
+  "settings": {
+    "modelRoles": {
+      "orchestrator": "kimchi-dev/fake-a",
+      "planner": ["kimchi-dev/fake-b"],
+      "builder": ["kimchi-dev/fake-b"],
+      "reviewer": ["kimchi-dev/fake-b"],
+      "explorer": ["kimchi-dev/fake-b"],
+      "researcher": ["kimchi-dev/fake-b"],
+      "judge": ["kimchi-dev/fake-b"]
+    }
+  }
+}

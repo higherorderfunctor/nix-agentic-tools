@@ -1,0 +1,79 @@
+{
+  "acp": true,
+  "args": ["--mode", "acp"],
+  "close_stdin": false,
+  "timeout": 15,
+  "settings": {
+    "modelRoles": {
+      "orchestrator": "kimchi-dev/fake-a",
+      "planner": ["kimchi-dev/fake-b"],
+      "builder": ["kimchi-dev/fake-b"],
+      "reviewer": ["kimchi-dev/fake-b"],
+      "explorer": ["kimchi-dev/fake-b"],
+      "researcher": ["kimchi-dev/fake-b"],
+      "judge": ["kimchi-dev/fake-b"]
+    }
+  },
+  "stdin_lines": [
+    {
+      "at": 0.5,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": 1,
+          "clientCapabilities": {
+            "fs": {
+              "readTextFile": false,
+              "writeTextFile": false
+            },
+            "terminal": false
+          }
+        }
+      }
+    },
+    {
+      "at": 1,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "session/new",
+        "params": {
+          "cwd": "@PROJ@",
+          "mcpServers": []
+        }
+      }
+    },
+    {
+      "at": 2.5,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "session/set_config_option",
+        "params": {
+          "sessionId": "@SID@",
+          "configId": "model",
+          "value": "multi-model"
+        }
+      }
+    },
+    {
+      "at": 3.5,
+      "line": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "session/prompt",
+        "params": {
+          "sessionId": "@SID@",
+          "prompt": [
+            {
+              "type": "text",
+              "text": "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_BUILDER\", \"description\": \"d\", \"subagent_type\": \"Builder\", \"run_in_background\": false}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_EXPLORE\", \"description\": \"d\", \"subagent_type\": \"Explore\", \"run_in_background\": false}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_OUTSIDE\", \"description\": \"d\", \"subagent_type\": \"Builder\", \"model\": \"kimchi-dev/fake-a\", \"run_in_background\": false}}]]"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

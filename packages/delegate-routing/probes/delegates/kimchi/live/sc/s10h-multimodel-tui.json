@@ -1,0 +1,33 @@
+{
+  "tty": true,
+  "args": ["--multi-model", "--no-session"],
+  "timeout": 20,
+  "settings": {
+    "modelRoles": {
+      "orchestrator": "kimchi-dev/fake-a",
+      "planner": ["kimchi-dev/fake-b"],
+      "builder": ["kimchi-dev/fake-b"],
+      "reviewer": ["kimchi-dev/fake-b"],
+      "explorer": ["kimchi-dev/fake-b"],
+      "researcher": ["kimchi-dev/fake-b"],
+      "judge": ["kimchi-dev/fake-b"]
+    }
+  },
+  "stdin_lines": [
+    {
+      "at": 5,
+      "line": "go PLAN=[[{\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_BUILDER\", \"description\": \"d\", \"subagent_type\": \"Builder\", \"run_in_background\": false}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_EXPLORE\", \"description\": \"d\", \"subagent_type\": \"Explore\", \"run_in_background\": false}}, {\"name\": \"Agent\", \"args\": {\"prompt\": \"CHILD_MM_OUTSIDE\", \"description\": \"d\", \"subagent_type\": \"Builder\", \"model\": \"kimchi-dev/fake-a\", \"run_in_background\": false}}]]"
+    },
+    {
+      "at": 6,
+      "line": "\r"
+    }
+  ],
+  "config": {
+    "onboarding": {
+      "sessionModeWizardSeenAt": "2026-01-01T00:00:00.000Z"
+    },
+    "skillPaths": [],
+    "migrationState": "skip-forever"
+  }
+}
