@@ -7,7 +7,7 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-06 — one enabled "Work and review" workflow ships
+> **Last verified:** 2026-10-07 — one enabled "Work and review" workflow ships
 > the Subtractive standard; a runtime workflow record without text keeps the
 > portable header; all delegate runtimes must be managed, and reaching Kiro
 > defaults `ai.kiro.v3` on only when its package is managed. Delegate evidence
