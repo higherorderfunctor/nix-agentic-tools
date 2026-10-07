@@ -1,8 +1,9 @@
 ## heron_brook Delegation Clamp — answered by the delegate-routing reminder
 
-> **Last verified:** 2026-10-05 — the Claude-only `delegationClampMitigation`
+> **Last verified:** 2026-10-07 — the Claude-only `delegationClampMitigation`
 > option is gone; its permission grant now rides the per-turn delegate-routing
-> reminder (`ai.programs.delegate-routing.reminder`).
+> reminder (`ai.programs.delegate-routing.reminder`), whose default grants
+> subagents and workflows and names the delegate-routing skill.
 >
 > **Settled — do not relitigate.** The once-per-session hook pair, its marker
 > script and its checks, with the lineage before them:
@@ -37,10 +38,10 @@ delegation suppressed looks identical to a normal one. It also contradicts
 
 The delegate-routing reminder (`packages/delegate-routing/lib/reminder.nix`) is
 one first-person line injected by a `UserPromptSubmit` hook on every turn. Its
-default asks the model to load the delegate-routing skill and grants permission
-for subagents, workflows and deep research. That grant is the request the
-clamp's escape clause asks for. The reminder is on by default whenever the
-delegate-routing program is enabled, and
+default grants permission to delegate to subagents and workflows and names the
+delegate-routing skill to follow when it does; it does not name deep research.
+That grant is the request the clamp's escape clause asks for. The reminder is on
+by default whenever the delegate-routing program is enabled, and
 `ai.programs.delegate-routing.runtimes.claude.reminder.enable = false` turns it
 off for Claude alone.
 

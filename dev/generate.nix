@@ -1197,10 +1197,9 @@
 
     `reminder` (on by default) injects one first-person line on every turn through
     a `UserPromptSubmit` hook: Claude, Codex and Kiro on both backends, Kimchi on
-    devenv only. The default asks the model to load the skill and follow its
-    always-on guidance, and grants permission for subagents, workflows and deep
-    research, which answers Claude Code's undocumented `heron_brook` delegation
-    clamp ([anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988)).
+    devenv only. The default grants permission to delegate to subagents and
+    workflows and names the delegate-routing skill to follow when it does, which
+    answers Claude Code's undocumented `heron_brook` delegation clamp ([anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988)).
     Replace it with `reminder.text` or `reminder.source`, or turn it off per runtime
     with `runtimes.<runtime>.reminder.enable = false`. On Codex the hook cannot
     sit beside inline `ai.codex.native.settings.hooks`; move those to
