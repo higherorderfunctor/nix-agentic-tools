@@ -998,10 +998,10 @@ and Codex to OpenAI. Kimchi and Kiro require an explicit selection when their
 runtime and delegate-routing program are enabled. The package ships no families
 for Kimchi-served vendors; declare them under `families` before selecting them.
 
-Enable each auto-selectable external runtime with `ai.<runtime>.enable`.
-Manual-only entries require an explicit user request and do not require runtime
-enable. If Kiro is enabled only for manual delegation, disable its own
-delegate-routing program with
+Enable every runtime named in `extraRuntimes` or `manualExternalDelegates` with
+`ai.<runtime>.enable`; disabled targets fail evaluation. Manual-only entries
+require an explicit user request and are never auto-selected. If Kiro is enabled
+only for manual delegation, disable its own delegate-routing program with
 `ai.programs.delegate-routing.runtimes.kiro.enable = false`. Copilot is excluded
 because its delegation controls are unestablished.
 

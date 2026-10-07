@@ -67,22 +67,27 @@
     };
     manualScenario.ai = {
       claude.enable = true;
-      kiro.enable = lib.mkForce false;
+      kiro.enable = true;
       programs.delegate-routing.runtimes.claude = {
         enable = true;
         manualExternalDelegates = ["kiro"];
       };
     };
     manualMissingModels = evaluate manualScenario;
-    manualDisabled = evaluate (lib.recursiveUpdate manualScenario {
+    manualManaged = evaluate (lib.recursiveUpdate manualScenario {
       ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
     });
     manualOverlap = evaluate (lib.recursiveUpdate manualScenario {
       ai.programs.delegate-routing.runtimes.claude.extraRuntimes = ["kiro"];
       ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
     });
+    manualRuntimeDisabled = evaluate (lib.recursiveUpdate manualScenario {
+      ai.kiro.enable = lib.mkForce false;
+      ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
+    });
     invalid = evaluate (lib.recursiveUpdate manualScenario {
       ai = {
+        kiro.enable = lib.mkForce false;
         programs.delegate-routing.runtimes.claude = {
           extraRuntimes = ["kiro"];
           manualExternalDelegates = [];
@@ -329,6 +334,30 @@
       && lib.hasInfix "claude-opus-*" claude
       && lib.hasInfix "gpt-*-sol" claude
     );
+    # The skill's Kiro evidence covers the v3 engine only: reaching Kiro turns it
+    # on by default, the program being off leaves Kiro alone, and an explicit
+    # consumer value wins.
+    "module-delegate-routing-${name}-kiro-v3" = mkTest "delegate-routing-${name}-kiro-v3" (
+      result.config.ai.kiro.v3
+      && !(builtins.any (lib.hasInfix "ai.kiro.v3") result.config.warnings)
+      && !(change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.v3
+      && (change {ai.programs.delegate-routing.runtimes.kiro.enable = false;}).config.ai.kiro.v3
+      && !(change {
+        ai.programs.delegate-routing.runtimes = {
+          kiro.enable = false;
+          claude.manualExternalDelegates = ["kimchi"];
+        };
+      }).config.ai.kiro.v3
+      && (let
+        unmanaged = change {ai.kiro.package = null;};
+      in
+        !unmanaged.config.ai.kiro.v3
+        && !(builtins.any (lib.hasInfix "ai.kiro.package is null") unmanaged.config.warnings))
+      && (let
+        optedOut = change {ai.kiro.v3 = false;};
+      in
+        !optedOut.config.ai.kiro.v3 && builtins.any (lib.hasInfix "ai.kiro.v3 is false") optedOut.config.warnings)
+    );
     "module-delegate-routing-${name}-kiro-models" = mkTest "delegate-routing-${name}-kiro-models" (
       requiresSelection "kiro"
       && lib.hasInfix "opus (anthropic)" kiro
@@ -464,15 +493,19 @@
       && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
     );
     "module-delegate-routing-${name}-external-enable" = mkTest "delegate-routing-${name}-external-enable" (
-      failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false"
+      failsWith invalid "ai.programs.delegate-routing.runtimes.claude.extraRuntimes includes `kiro`, but ai.kiro.enable is false. Enable it with ai.kiro.enable = true."
       && failsWith manualMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
-      && passes manualDisabled
-      && lib.hasInfix "## manual-only external delegates\n\n### kiro\n\n-" (readSkill manualDisabled "claude")
-      && lib.hasInfix "### kiro techniques" (readSkill manualDisabled "claude")
+      && passes manualManaged
+      && lib.hasInfix "## manual-only external delegates\n\n### kiro\n\n-" (readSkill manualManaged "claude")
+      && lib.hasInfix "### kiro techniques" (readSkill manualManaged "claude")
       && passes manualOverlap
-      && readSkill manualOverlap "claude" == readSkill manualDisabled "claude"
+      && readSkill manualOverlap "claude" == readSkill manualManaged "claude"
       && failsWith extraProgramDisabledKiroMissingModels "ai.programs.delegate-routing.runtimes.kiro.models must select at least one"
       && passes extraProgramDisabledKiro
+    );
+    "module-delegate-routing-${name}-manual-external-enable" = mkTest "delegate-routing-${name}-manual-external-enable" (
+      failsWith manualRuntimeDisabled "ai.programs.delegate-routing.runtimes.claude.manualExternalDelegates includes `kiro`, but ai.kiro.enable is false. Enable it with ai.kiro.enable = true."
+      && passes manualManaged
     );
     "module-delegate-routing-${name}-options" = mkTest "delegate-routing-${name}-options" (
       let
