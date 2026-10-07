@@ -11,6 +11,7 @@ README.md for the isolation recipe, the caps and the operator steps.
 import argparse
 from datetime import datetime, timezone
 import fnmatch
+import functools
 import json
 import os
 from pathlib import Path
@@ -628,12 +629,19 @@ def resolve(name, overrides, live):
 
 # Secrets are read only at launch, from where the operator keeps them; a dry
 # run prints where each one comes from, never its value.
+@functools.cache
+def read_secret_file(source):
+    # Read once per run: a process-substitution pipe (<(sops -d ...)) is
+    # empty on the second read, which starved every case after the first.
+    return Path(source).read_text().strip()
+
+
 def secret_value(spec):
     kind, source, *rest = spec
     if kind == "env":
         return os.environ.get(source)
     if kind == "file":
-        return Path(source).read_text().strip()
+        return read_secret_file(source)
     if kind == "json":
         return (read_json(source, {}) or {}).get(rest[0])
     raise ValueError(f"unknown secret source {kind!r}")
