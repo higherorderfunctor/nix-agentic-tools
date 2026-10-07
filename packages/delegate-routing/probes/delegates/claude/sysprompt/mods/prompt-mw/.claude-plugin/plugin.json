@@ -1,0 +1,5 @@
+{
+  "name": "prompt-mw",
+  "version": "0.1.0",
+  "description": "Probe: marks prompt.compose and prompt.section output with sentinels"
+}

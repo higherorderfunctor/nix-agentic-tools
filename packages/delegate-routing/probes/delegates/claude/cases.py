@@ -693,3 +693,8 @@ CASES["judge_wf_msg"] = {"fn": f_judge_wf_msg, "argv": P + BYP + ["wf"], "timeou
 
 # CLAUDE_CODE_EFFORT_LEVEL vs --effort high and vs frontmatter effort:low (both sides had grep only)
 CASES["judge_effort_env"] = {**CASES["model_effort"], "env": {"CLAUDE_CODE_EFFORT_LEVEL": "medium"}}
+
+# ---- delegate-map unknowns (claude-delegate lane) -----------------------------
+import cases_dmu  # noqa: E402
+
+CASES.update(cases_dmu.CASES)
