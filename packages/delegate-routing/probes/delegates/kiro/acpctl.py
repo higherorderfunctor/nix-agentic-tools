@@ -1,4 +1,5 @@
 import json,subprocess,sys,threading,time,os,queue
+STRICT='set -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n'
 # ACP stdio driver with timed steps. Usage: acpctl.py <script.json> <binary> <args...>
 # script: {"capsMeta":{initialize clientCapabilities._meta, e.g. {"kiro":{"settings":{..}}}}, "initMeta":{...}, "new":{session/new params minus cwd}, "permission":"allow"|"reject"|"cancelled" or {"<substring of toolCall json>":action,"*":default},
 #          "steps":[{"op":"prompt","text":..,"async":bool,"tag":..} | {"op":"wait","tag":..,"timeout":s} |
@@ -10,6 +11,9 @@ import json,subprocess,sys,threading,time,os,queue
 # agent->client requests (default {}). A prompt step may carry "meta" (session/prompt _meta). {"op":"sh","cmd":..}
 # runs a shell command in the cwd (the run's ws) between steps. "permissionVia":"respond" answers a permission
 # request with a _kiro/permission/respond request instead of a JSON-RPC reply (the `serve` mux discards those).
+# {"op":"new","as":"NAME"} opens another session (same params as the first) and saves its id; a prompt step's
+# optional "session" names the session to prompt (default $SID). Any step with "repeat":N runs N copies with "$I"
+# replaced by 1..N everywhere in the step, save keys included.
 script=json.load(open(sys.argv[1])); cmd=sys.argv[2:]; T0=time.time()
 p=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=open(os.environ.get('ACP_STDERR','/dev/null'),'w'),text=True,bufsize=1)
 log=open(os.environ['ACP_LOG'],'w'); results={}; lastnote={}; waiters={}; lock=threading.Lock(); perm=script.get('permission','allow'); replies=script.get('replies',{})
@@ -63,22 +67,30 @@ sid=(r.get('result') or {}).get('sessionId') or ''
 saved={}
 def sub(o):
     t=json.dumps(o).replace('$SID',sid).replace('$CWD',os.getcwd())
-    for k,v in saved.items(): t=t.replace('$'+k,str(v))
+    for k in sorted(saved,key=len,reverse=True): t=t.replace('$'+k,str(saved[k]))
     return json.loads(t)
 def dig(o,path):
     for part in path.replace(']','').replace('[','.').split('.'):
         o=o[int(part)] if part.isdigit() else o[part]
     return o
 tags={}
-for st in script.get('steps',[]):
+def expand(steps):
+    for st in steps:
+        n=st.get('repeat')
+        if n is None: yield st; continue
+        for k in range(1,n+1): yield json.loads(json.dumps({x:y for x,y in st.items() if x!='repeat'}).replace('$I',str(k)))
+for st in expand(script.get('steps',[])):
     op=st['op']
-    if op=='prompt':
-        i=req('session/prompt',{"sessionId":sid,"prompt":[{"type":"text","text":st['text']}],**({"_meta":st['meta']} if 'meta' in st else {})})
+    if op=='new':
+        r=wait(req('session/new',newp),180); print(ts(),'new',st.get('as',''),json.dumps(r)[:200],flush=True)
+        if 'as' in st: saved[st['as']]=(r.get('result') or {}).get('sessionId') or ''
+    elif op=='prompt':
+        i=req('session/prompt',{"sessionId":sub(st.get('session','$SID')),"prompt":[{"type":"text","text":st['text']}],**({"_meta":st['meta']} if 'meta' in st else {})})
         if st.get('async'): tags[st.get('tag','p')]=i
         else: r=wait(i,st.get('timeout',180)); print(ts(),'prompt',json.dumps(r)[:400],flush=True)
     elif op=='wait': r=wait(tags[st['tag']],st.get('timeout',180)); print(ts(),'wait',st['tag'],json.dumps(r)[:400],flush=True)
     elif op=='sleep': time.sleep(st['s'])
-    elif op=='sh': r=subprocess.run(['bash','-c',sub(st)['cmd']],capture_output=True,text=True); print(ts(),'sh',r.returncode,(r.stdout+r.stderr)[:1500],flush=True)
+    elif op=='sh': r=subprocess.run(['bash','-c',STRICT+sub(st)['cmd']],capture_output=True,text=True); print(ts(),'sh',r.returncode,(r.stdout+r.stderr)[:1500],flush=True)
     elif op=='grab':
         try: saved[st['as']]=dig(lastnote[st['method']],st['path']); print(ts(),'grab',st['as'],saved[st['as']],flush=True)
         except Exception as e: print(ts(),'grab failed',st,e,flush=True)

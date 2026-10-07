@@ -7,7 +7,7 @@ shopt -s inherit_errexit 2>/dev/null || :
 # models and GenerateAssistantResponse from cases/<case>/rules.json (else cases/x.rules.json).
 # When cases/<case>/script.json exists, acpctl.py drives the process over ACP stdio with it.
 # KIRO_BASE_HOME optionally supplies a fixture HOME; otherwise fixture_home.py creates a fake login.
-# Writes <work>/<case>/run/{wire.jsonl,out.txt,acp.log,acp.err,chat.log,home,ws};
+# Writes <work>/<case>/run/{wire.jsonl,out.txt,acp.log,acp.err,chat.log,home,ws} and prints out.txt;
 # work = $PROBE_OUT/kiro or a fresh temp dir. Binary: pinned kiro-cli unwrapped (KIRO_PKG overrides).
 # KEEP=1 reuses an existing run (home, ws, appended wire.jsonl) for a second process; SCRIPT=<file> replaces
 # cases/<case>/script.json as the ACP driver script and SCRIPT=none runs without a driver. WRAP="<cmd …>" is
@@ -76,3 +76,4 @@ env -i PATH="$U:/usr/bin:/bin" HOME="$R/home" CFFIXED_USER_HOME="$R/home" XDG_CO
 kill "$sp"
 exit "$r"' _ "$@" || rc=$?
 printf 'rc=%s run=%s\n' "$rc" "$R"
+if [[ -f $R/out.txt ]]; then cat "$R/out.txt"; fi

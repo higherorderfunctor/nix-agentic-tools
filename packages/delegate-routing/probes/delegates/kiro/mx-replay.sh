@@ -328,8 +328,52 @@ case_mx-trust() {
   else printf '   ok    absent: untrusted-execution rule in _kiro/permissions/list\n'; fi
 }
 
+# capacity summary: peak in-flight model requests for <marker> and their distinct conversations, run statuses
+# from every _kiro/workflow/list result in acp.log, and the number of prompts that ended their turn
+capacity() {
+  local r=$1 marker=$2
+  {
+    python3 "$S/inflight.py" "$r/wire.jsonl" "$marker"
+    python3 - "$r/acp.log" <<'PY_STATUS'
+import collections, json, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    if " << " not in line:
+        continue
+    try:
+        runs = json.loads(line.split(" << ", 1)[1])["result"]["runs"]
+    except (ValueError, KeyError, TypeError):
+        continue
+    counts = collections.Counter(run["status"] for run in runs)
+    print(f"workflow/list runs={len(runs)} " + " ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+PY_STATUS
+    printf 'end_turn=%s\n' "$(grep -c 'wait p[0-9]* .*"stopReason": "end_turn"' "$r/out.txt" || :)"
+  } >>"$sum"
+}
+
+# host _kiro/workflow/new + invoke x20 in one session, each one step held 20 s by the server: all 20 runs are
+# running at once and all 20 step requests are in flight together (no run cap at 20); all complete
+case_mx-wfcap() {
+  run mx-wfcap mx-wfcap WFCAP_STEP "${WF[@]}" T=150 -- "${ACP3[@]}"
+  capacity "$run_dir" WFCAP_STEP
+  expect '^marker=WFCAP_STEP requests=20 peak_inflight=20 '
+  expect '^workflow/list runs=20 running=20$'
+  expect '^workflow/list runs=20 completed=20$'
+}
+
+# one `acp` process: 20 more session/new calls succeed, and 20 prompts (one per session) held 15 s by the server
+# are all in flight together across 20 conversations (no session or prompt cap at 20); all end their turn
+case_mx-sesscap() {
+  run mx-sesscap mx-sesscap SESSCAP_PROMPT T=120 -- "${ACP3[@]}"
+  capacity "$run_dir" SESSCAP_PROMPT
+  expect '^marker=SESSCAP_PROMPT requests=20 peak_inflight=20 '
+  expect '^conversations=20$'
+  expect '^end_turn=20$'
+  refute 'new S[0-9]+ .*"error"'
+}
+
 all=(mx-hl-steer mx-hl-manual mx-acp-steer mx-host mx-hl-style mx-res mx-ups mx-modes mx-wfagents mx-hl-inline
-  mx-perm-ignore mx-wf-perm mx-child-hist mx-child-uinput mx-resume mx-wf-snap mx-serve mx-sysfield mx-trust)
+  mx-perm-ignore mx-wf-perm mx-child-hist mx-child-uinput mx-resume mx-wf-snap mx-serve mx-sysfield mx-trust mx-wfcap
+  mx-sesscap)
 ids=("$@")
 if ((${#ids[@]} == 0)); then ids=("${all[@]}"); fi
 for id in "${ids[@]}"; do "case_$id"; done

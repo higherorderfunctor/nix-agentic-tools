@@ -1,0 +1,9 @@
+[
+  {
+    "match": "SESSCAP_PROMPT",
+    "delay": 15,
+    "reuse": true,
+    "events": ["SESSCAP_DONE"]
+  },
+  { "match": null, "reuse": true, "events": ["FALLBACK_TEXT"] }
+]

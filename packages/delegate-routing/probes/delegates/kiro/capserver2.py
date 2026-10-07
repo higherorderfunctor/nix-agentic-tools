@@ -2,7 +2,8 @@ import http.server,json,sys,struct,zlib,threading,os,time
 # Capture server (extends sysprompt-map capserver.py): logs every request with a timestamp to argv[2].
 # ListAvailableModels -> two fixture models, both advertising effort via additionalModelRequestFieldsSchema.output_config.effort.
 # GenerateAssistantResponse -> first unused rule in $RULES whose "match" substrings all occur in the body
-#   (and none of "not"); optional "delay" seconds before answering. Events: str = text, {toolUseId,name,input} = tool use,
+#   (and none of "not"); optional "delay" seconds before answering; "reuse":true keeps the rule matchable after use.
+#   Events: str = text, {toolUseId,name,input} = tool use,
 #   {contextUsagePercentage:N} = contextUsageEvent (drives KAS auto-summarization above 80%).
 # GetFeatureConfiguration -> $CAP_FEATURES ({"<feature key>": value}) keyed the way KAS 0.66.26 looks them up
 #   (sha256 of its salt + key); without CAP_FEATURES it answers 400 like every other unscripted call.
@@ -42,7 +43,9 @@ class H(http.server.BaseHTTPRequestHandler):
                 for i,r in enumerate(RULES):
                     if i in used: continue
                     mm=r.get('match'); mm=[] if mm is None else ([mm] if isinstance(mm,str) else mm)
-                    if all(x in text for x in mm) and not any(x in text for x in r.get('not',[])): used.add(i); rule=i; break
+                    if all(x in text for x in mm) and not any(x in text for x in r.get('not',[])):
+                        if not r.get('reuse'): used.add(i)
+                        rule=i; break
         log({'t':round(time.time()-T0,2),'method':self.command,'path':self.path,'target':t,'rule':rule,'headers':dict(self.headers),'body':text})
         try:
             if rule is not None and RULES[rule].get('delay'): time.sleep(RULES[rule]['delay'])
