@@ -45,7 +45,8 @@ How to read the tables:
 1. `description`, `prompt`, `subagent_type`, `model` (sonnet/opus/haiku/fable),
    `run_in_background` (default bg), `isolation` worktree/remote. No
    effort/tools/perm/system field.
-2. Agent is withheld at the cap.
+2. Agent is withheld at the cap. Explicit depth env wins; otherwise a valid
+   cached feature value precedes the feature-client fallback (Vr; `codex:A`).
 3. Excess is **refused** "Do not retry", not queued.
 4. fg: report + agentId + usage. bg: agentId + `output_file`, later
    `<task-notification>`.
@@ -62,7 +63,7 @@ How to read the tables:
 12. worktree path only when changed; removed if clean / remote gated.
 13. `script`/`name`/`scriptPath`, `args`, `resumeFromRunId`. Node `model`,
     `effort`, `agentType`, `schema`, `isolation`, `label`, `phase` (V)
-    (+`disallowedTools`, `bashCommandClamp` G).
+    (+`disallowedTools`, `bashCommandClamp`, `stallMs` G; `codex:A`).
 14. Nodes min(16,max(2,cpus−2)); 1,000 `agent()` per tree; nodes lack
     Agent/Workflow/SendUserMessage. `workflow()` 1 level (G).
 15. Async: Task ID, Run ID, script, transcript dir; then notification +

@@ -257,7 +257,7 @@ def f_ctl(body, n, st):
         spec = {"1": ("CTL_CHILD1_LONG", None), "2": ("CTL_CHILD2_SHORT", None), "3": ("CTL_CHILD3_LONG", None)}.get(t)
         if not spec:
             return TXT("CTL_NOOP")
-        return [tu("Agent", {"description": f"ctl {t}", "prompt": spec[0], "run_in_background": False}, int(t))], "tool_use", 0
+        return [tu("Agent", {"description": f"ctl {t}", "prompt": spec[0], "run_in_background": False}, n)], "tool_use", 0
     fu = first_user_text(body)
     st["data"].setdefault("child", []).append({"n": n, "model": body.get("model"), "oc": body.get("output_config"),
                                                "which": re.findall(r"CTL_CHILD\d_\w+", fu)[:1]})
@@ -323,6 +323,7 @@ def ctl_driver(argv, cwd, env, out):
         p.wait(20)
     except Exception:
         p.kill()
+        p.wait()
     (out / "driver-log.json").write_text(J.dumps(log, indent=1, default=str))
     with lock:
         so = "\n".join(J.dumps(e) for e in events)
@@ -569,6 +570,7 @@ def ctl2_driver(argv, cwd, env, out):
         p.wait(10)
     except Exception:
         p.kill()
+        p.wait()
     return p.returncode, "\n".join(J.dumps(e) for e in events), p.stderr.read()
 
 

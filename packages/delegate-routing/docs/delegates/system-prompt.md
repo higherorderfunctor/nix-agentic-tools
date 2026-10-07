@@ -24,7 +24,7 @@ append, K4–K7 sub-agent append; others as above.
 
 | Kind | Claude                                                    | Codex                                                 | Kiro                                                            | Kimchi                                              |
 | ---- | --------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
-| K1   | Base (27.6k) · Yes · V                                    | Catalog base · Yes · V rollout, I wire                | KAS base · steering before base · A (TUI)                       | Main base · Yes, tail · V                           |
+| K1   | Base (27.4k) · Yes · V                                    | Catalog base · Yes · V rollout, I wire                | KAS base · steering before base · A (TUI)                       | Main base · Yes, tail · V                           |
 | K2   | Base, "Agent SDK" identity · Yes · V                      | Catalog base · Yes · V                                | KAS base · steering before base · V (`w-v3`)                    | Main base, autonomous variant · Yes · V             |
 | K3   | Base · Yes if host sends no prompt field · V              | Catalog base · Yes if no RPC dev text · V             | KAS base · file + inline steering · V (`k3-dup`)                | Main base · Yes, inline text only · V               |
 | K4   | None; own body + tail · sub-agent append Yes, main No · V | Parent's base · Yes, inherited · V/I                  | Named built-in body · inherited steering · V; A (`codex:R3/R6`) | Child wrapper; persona replaces · **No** · V        |
@@ -33,9 +33,9 @@ append, K4–K7 sub-agent append; others as above.
 | K7   | None; `workflow-subagent` body · sub-agent append Yes · V | No workflow kind; K4–K6 rules · I                     | Step body · steering reach not re-verified at 2.28.0 · U        | In-session: main base · persistent channels Yes · V |
 | K8   | Compaction: parent system · Yes (copied) · V              | Local compaction: session base · Yes · V              | not re-verified at 2.28.0 · U                                   | Fixed summarizer · **No** · V                       |
 
-Title reach: Claude No (V); Codex config Yes, RPC overrides No (I); Kiro not
-re-verified at 2.28.0 (U); Kimchi No (V). Exceptions are footnoted under each
-harness's channel table.
+Title reach: Claude No (Vr; `codex:prompt-functions`); Codex config Yes, RPC
+overrides No (I); Kiro not re-verified at 2.28.0 (U); Kimchi No (V). Exceptions
+are footnoted under each harness's channel table.
 
 ## What one normalized option can promise
 
@@ -85,9 +85,9 @@ Open questions and settling steps: [evidence.md](evidence.md#open-unknowns).
    (I). `fork` (`CLAUDE_CODE_FORK_SUBAGENT=1`) copies the parent system: main
    append yes, sub-agent append no (V).
 2. K1 bridge carrier with `CLAUDE_CODE_BRIDGE_PROMPT_SHA256` missing or
-   mismatched drops the file (Vr).
+   mismatched drops the file (Vr; `codex:prompt-functions`).
 3. With `--agent`: custom prompt wins, agent body dropped (V).
-4. K4 isolated-context call: suppressed (Vr).
+4. K4 isolated-context call: suppressed (Vr; `codex:prompt-functions`).
 5. Silently dropped without `CLAUDE_CODE_ENABLE_APPEND_SUBAGENT_PROMPT=1` (V).
 6. Empty main `--agent` body falls back to base (V); empty sub-agent body gives
    tail only (V). Agent-file `appendSystemPrompt` is not parsed, so no base +

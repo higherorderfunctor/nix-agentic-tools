@@ -4,7 +4,7 @@ then runs one `claude -p --model haiku` against it. Usage: python3 live_proxy_pr
 <work> = $PROBE_OUT/claude-live or a fresh temp dir.
 Case live_resume: does SendMessage to a COMPLETED background agent resume it with its prior history?
 """
-import json, os, pathlib, ssl, subprocess, sys, threading, time, http.client
+import argparse, json, os, pathlib, ssl, subprocess, sys, threading, time, http.client
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 S = pathlib.Path(__file__).resolve().parent
@@ -13,7 +13,11 @@ import pin  # noqa: E402
 W = pin.workdir("claude-live")
 CLAUDE = os.environ.get("CLAUDE_BIN") or str(pin.package("claude-code") / "bin" / "claude")
 PORT = int(os.environ.get("MOCK_PORT", "18790"))
-CASE = sys.argv[1] if len(sys.argv) > 1 else "live_resume"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("case", choices=["live_resume"])
+parser.add_argument("--claude-token-file", required=True, help="Read the OAuth token from this file descriptor; never log or persist it")
+args = parser.parse_args()
+CASE = args.case
 OUT = W / "out" / CASE
 OUT.mkdir(parents=True, exist_ok=True)
 N = [0]
@@ -76,6 +80,11 @@ if __name__ == "__main__":
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), P)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     env = {k: v for k, v in os.environ.items() if k not in ("CLAUDECODE",) and not k.startswith("CLAUDE_CODE_")}
+    # Keep this case's login in process memory only; its scratch config is empty.
+    for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"):
+        env.pop(key, None)
+    env["CLAUDE_CONFIG_DIR"] = str(W / "config")
+    env["CLAUDE_CODE_OAUTH_TOKEN"] = pathlib.Path(args.claude_token_file).read_text().strip()
     env.update({"ANTHROPIC_BASE_URL": f"http://127.0.0.1:{PORT}", "DISABLE_AUTOUPDATER": "1",
                 "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"})
     argv = [CLAUDE, "-p", "--model", "haiku", "--setting-sources", "project", "--strict-mcp-config", "--mcp-config",
