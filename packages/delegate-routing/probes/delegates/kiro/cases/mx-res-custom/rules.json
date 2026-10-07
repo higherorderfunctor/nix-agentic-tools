@@ -1,0 +1,30 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>", "CHILD_DONE_SENTINEL"],
+    "events": [
+      {
+        "toolUseId": "tu_r",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "custom",
+          "prompt": "CHILD_TASK do it",
+          "explanation": "x"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_TASK"],
+    "events": [
+      {
+        "toolUseId": "sr_r",
+        "name": "subagent_response",
+        "input": { "response": "CHILD_DONE_SENTINEL", "files": [] }
+      }
+    ]
+  },
+  { "match": null, "events": ["MAIN_DONE"] },
+  { "match": null, "events": ["MAIN_DONE"] },
+  { "match": null, "events": ["MAIN_DONE"] }
+]

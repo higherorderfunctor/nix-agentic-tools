@@ -1,0 +1,44 @@
+{
+  "capsMeta": {
+    "kiro": {
+      "settings": {
+        "inlineAgents": {
+          "enabled": true
+        }
+      },
+      "hooks": {
+        "enabled": true,
+        "v2": true
+      }
+    }
+  },
+  "new": {
+    "_meta": {
+      "kiro": {
+        "customAgents": [
+          {
+            "description": "inline",
+            "id": "inlagent",
+            "prompt": "ACP_INLINE_AGENT_PROMPT_SENTINEL",
+            "tools": ["*"]
+          }
+        ],
+        "steering": [
+          {
+            "content": "ACP_INLINE_STEERING_SENTINEL",
+            "inclusion": "always",
+            "name": "inl"
+          }
+        ],
+        "modeId": "gen"
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "MAIN_KICKOFF USER_SENTINEL_1",
+      "timeout": 200
+    }
+  ]
+}

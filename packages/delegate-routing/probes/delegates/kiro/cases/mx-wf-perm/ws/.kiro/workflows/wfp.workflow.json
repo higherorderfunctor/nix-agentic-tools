@@ -1,0 +1,13 @@
+{
+  "name": "wfp",
+  "description": "step shell permission",
+  "inputs": {},
+  "steps": [
+    {
+      "type": "step",
+      "id": "s1",
+      "agent": "custom",
+      "prompt": "WFP_STEP do it"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "capsMeta": { "kiro": { "hooks": { "enabled": true, "v2": true } } },
+  "new": { "_meta": { "kiro": { "modeId": "ups1" } } },
+  "steps": [
+    { "op": "prompt", "text": "hello USER_SENTINEL_1", "timeout": 60 },
+    { "op": "prompt", "text": "again USER_SENTINEL_2", "timeout": 60 }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "steps": [
+    {
+      "op": "call",
+      "method": "_kiro/permissions/list",
+      "params": { "sessionId": "$SID" }
+    },
+    {
+      "op": "call",
+      "method": "_kiro/permissions/explain",
+      "params": {
+        "sessionId": "$SID",
+        "capability": "shell",
+        "resource": "echo hi"
+      }
+    }
+  ]
+}

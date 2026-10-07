@@ -1,0 +1,6 @@
+{
+  "description": "user agent named like the v3 default mode",
+  "name": "vibe",
+  "prompt": "VIBE_USER_SENTINEL",
+  "tools": ["*"]
+}

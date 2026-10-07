@@ -1,0 +1,191 @@
+[
+  {
+    "events": [
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "general-task-execution",
+          "prompt": "STAGE_SENT_GENERAL_TASK_EXECUTION do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_0"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "custom",
+          "prompt": "STAGE_SENT_CUSTOM do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_1"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "gen",
+          "prompt": "STAGE_SENT_GEN do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_2"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "filep",
+          "prompt": "STAGE_SENT_FILEP do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_3"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "mdagent",
+          "prompt": "STAGE_SENT_MDAGENT do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_4"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "hooked",
+          "prompt": "STAGE_SENT_HOOKED do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_5"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "hookedca",
+          "prompt": "STAGE_SENT_HOOKEDCA do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_6"
+      },
+      {
+        "input": {
+          "explanation": "probe",
+          "name": "inlagent",
+          "prompt": "STAGE_SENT_INLAGENT do it"
+        },
+        "name": "invoke_sub_agent",
+        "toolUseId": "tu_7"
+      }
+    ],
+    "match": "MAIN_KICKOFF"
+  },
+  {
+    "events": ["CHILD_DONE_general-task-execution"],
+    "match": "STAGE_SENT_GENERAL_TASK_EXECUTION do it"
+  },
+  {
+    "events": ["CHILD_DONE_custom"],
+    "match": "STAGE_SENT_CUSTOM do it"
+  },
+  {
+    "events": ["CHILD_DONE_gen"],
+    "match": "STAGE_SENT_GEN do it"
+  },
+  {
+    "events": ["CHILD_DONE_filep"],
+    "match": "STAGE_SENT_FILEP do it"
+  },
+  {
+    "events": ["CHILD_DONE_mdagent"],
+    "match": "STAGE_SENT_MDAGENT do it"
+  },
+  {
+    "events": ["CHILD_DONE_hooked"],
+    "match": "STAGE_SENT_HOOKED do it"
+  },
+  {
+    "events": ["CHILD_DONE_hookedca"],
+    "match": "STAGE_SENT_HOOKEDCA do it"
+  },
+  {
+    "events": ["CHILD_DONE_inlagent"],
+    "match": "STAGE_SENT_INLAGENT do it"
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  },
+  {
+    "events": ["FALLBACK_TEXT"],
+    "match": null
+  }
+]

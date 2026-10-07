@@ -1,0 +1,6 @@
+{
+  "name": "snapag",
+  "description": "resume snapshot fixture",
+  "prompt": "SNAP_AGENT_V1_SENTINEL",
+  "tools": ["*"]
+}

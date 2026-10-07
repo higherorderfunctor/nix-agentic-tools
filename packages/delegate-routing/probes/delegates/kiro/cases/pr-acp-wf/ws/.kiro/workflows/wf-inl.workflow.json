@@ -1,0 +1,13 @@
+{
+  "name": "wf-inl",
+  "description": "ACP customAgent as a step agent",
+  "inputs": {},
+  "steps": [
+    {
+      "type": "step",
+      "id": "s_0",
+      "agent": "inlagent",
+      "prompt": "WFSTEP_INLAGENT do it"
+    }
+  ]
+}

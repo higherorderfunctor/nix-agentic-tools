@@ -1,0 +1,35 @@
+[
+  {
+    "events": ["FIRST_ANSWER_SENTINEL"],
+    "match": "MAIN_KICKOFF",
+    "not": ["FIRST_ANSWER_SENTINEL", "<first_message>"]
+  },
+  {
+    "events": ["SECOND_ANSWER_SENTINEL"],
+    "match": "SECOND_TURN"
+  },
+  {
+    "events": ["GENERIC_REPLY_SENTINEL"],
+    "match": null
+  },
+  {
+    "events": ["GENERIC_REPLY_SENTINEL"],
+    "match": null
+  },
+  {
+    "events": ["GENERIC_REPLY_SENTINEL"],
+    "match": null
+  },
+  {
+    "events": ["GENERIC_REPLY_SENTINEL"],
+    "match": null
+  },
+  {
+    "events": ["GENERIC_REPLY_SENTINEL"],
+    "match": null
+  },
+  {
+    "events": ["GENERIC_REPLY_SENTINEL"],
+    "match": null
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "new": {
+    "_meta": {
+      "kiro": {
+        "modeId": "snapag",
+        "steering": [
+          {
+            "name": "snap-inline",
+            "inclusion": "always",
+            "content": "SNAP_INLINE_V1_SENTINEL"
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    { "op": "prompt", "text": "MAIN_KICKOFF USER_SENTINEL_1", "timeout": 90 }
+  ]
+}

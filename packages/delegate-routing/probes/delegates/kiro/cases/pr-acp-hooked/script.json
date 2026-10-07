@@ -1,0 +1,23 @@
+{
+  "new": {
+    "_meta": {
+      "kiro": {
+        "modeId": "hooked"
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "hello USER_SENTINEL_1"
+    }
+  ],
+  "capsMeta": {
+    "kiro": {
+      "hooks": {
+        "enabled": true,
+        "v2": true
+      }
+    }
+  }
+}

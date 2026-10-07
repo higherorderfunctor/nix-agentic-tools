@@ -1,0 +1,31 @@
+[
+  {
+    "match": "WFS_STEP1",
+    "delay": 8,
+    "events": ["STEP1_FIRST"]
+  },
+  {
+    "match": "WFS_STEP1",
+    "events": ["STEP1_DONE"]
+  },
+  {
+    "match": "WFS_STEP2",
+    "events": ["STEP2_DONE"]
+  },
+  {
+    "match": null,
+    "events": ["PARENT_DONE"]
+  },
+  {
+    "match": null,
+    "events": ["PARENT_DONE"]
+  },
+  {
+    "match": null,
+    "events": ["PARENT_DONE"]
+  },
+  {
+    "match": null,
+    "events": ["PARENT_DONE"]
+  }
+]

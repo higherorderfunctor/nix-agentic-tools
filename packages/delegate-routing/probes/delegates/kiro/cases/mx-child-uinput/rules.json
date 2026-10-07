@@ -1,0 +1,60 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["<response_requirement>", "CHILD_DONE_SENTINEL"],
+    "events": [
+      {
+        "toolUseId": "tu_u",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "custom",
+          "prompt": "CHILD_UINPUT do it",
+          "explanation": "x"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_UINPUT"],
+    "not": ["ui_1"],
+    "events": [
+      {
+        "toolUseId": "ui_1",
+        "name": "user_input",
+        "input": {
+          "question": "**UINPUT_Q_SENTINEL?**",
+          "options": ["UOPT_A", "UOPT_B"]
+        }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "CHILD_UINPUT"],
+    "events": [
+      {
+        "toolUseId": "sr_u",
+        "name": "subagent_response",
+        "input": {
+          "response": "CHILD_DONE_SENTINEL",
+          "files": []
+        }
+      }
+    ]
+  },
+  {
+    "match": null,
+    "events": ["MAIN_DONE"]
+  },
+  {
+    "match": null,
+    "events": ["MAIN_DONE"]
+  },
+  {
+    "match": null,
+    "events": ["MAIN_DONE"]
+  },
+  {
+    "match": null,
+    "events": ["MAIN_DONE"]
+  }
+]

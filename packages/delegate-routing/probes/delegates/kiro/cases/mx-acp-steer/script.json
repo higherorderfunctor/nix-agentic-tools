@@ -1,0 +1,34 @@
+{
+  "new": {
+    "_meta": {
+      "kiro": {
+        "steering": [
+          {
+            "name": "acp-man",
+            "inclusion": "manual",
+            "content": "ACP_MANUAL_SENTINEL"
+          },
+          {
+            "name": "acp-fm",
+            "inclusion": "fileMatch",
+            "fileMatchPattern": "src/**",
+            "content": "ACP_FM_SENTINEL"
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "/acp-man MAIN_KICKOFF USER_SENTINEL_1",
+      "timeout": 90
+    },
+    {
+      "op": "prompt",
+      "text": "/ws-manual SECOND USER_SENTINEL_2",
+      "timeout": 60
+    },
+    { "op": "prompt", "text": "THIRD USER_SENTINEL_3", "timeout": 60 }
+  ]
+}

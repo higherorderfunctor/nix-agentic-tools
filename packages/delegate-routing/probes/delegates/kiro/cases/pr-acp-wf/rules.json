@@ -1,0 +1,341 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "events": [
+      {
+        "toolUseId": "tw_wf-reach",
+        "name": "run_workflow",
+        "input": {
+          "workflowPath": "@RUN@/ws/.kiro/workflows/wf-reach.workflow.json",
+          "inputs": {}
+        }
+      },
+      {
+        "toolUseId": "tw_wf-inl",
+        "name": "run_workflow",
+        "input": {
+          "workflowPath": "@RUN@/ws/.kiro/workflows/wf-inl.workflow.json",
+          "inputs": {}
+        }
+      },
+      {
+        "toolUseId": "tw_wf-fc-in",
+        "name": "run_workflow",
+        "input": {
+          "workflowPath": "@RUN@/ws/.kiro/workflows/wf-fc-in.workflow.json",
+          "inputs": {}
+        }
+      },
+      {
+        "toolUseId": "tw_wf-fc-out",
+        "name": "run_workflow",
+        "input": {
+          "workflowPath": "@RUN@/ws/.kiro/workflows/wf-fc-out.workflow.json",
+          "inputs": {}
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_CUSTOM do it"],
+    "not": ["DONE_WFSTEP_CUSTOM"],
+    "events": [
+      {
+        "toolUseId": "sm_CUSTOM",
+        "name": "send_message",
+        "input": {
+          "severity": "success",
+          "message": "DONE_WFSTEP_CUSTOM"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_CUSTOM do it"],
+    "events": ["TXT_WFSTEP_CUSTOM"]
+  },
+  {
+    "match": ["WFSTEP_CUSTOM do it"],
+    "events": ["TXT_WFSTEP_CUSTOM"]
+  },
+  {
+    "match": ["WFSTEP_CUSTOM do it"],
+    "events": ["TXT_WFSTEP_CUSTOM"]
+  },
+  {
+    "match": ["WFSTEP_GEN do it"],
+    "not": ["DONE_WFSTEP_GEN"],
+    "events": [
+      {
+        "toolUseId": "sm_GEN",
+        "name": "send_message",
+        "input": {
+          "severity": "success",
+          "message": "DONE_WFSTEP_GEN"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_GEN do it"],
+    "events": ["TXT_WFSTEP_GEN"]
+  },
+  {
+    "match": ["WFSTEP_GEN do it"],
+    "events": ["TXT_WFSTEP_GEN"]
+  },
+  {
+    "match": ["WFSTEP_GEN do it"],
+    "events": ["TXT_WFSTEP_GEN"]
+  },
+  {
+    "match": ["WFSTEP_HOOKED do it"],
+    "not": ["DONE_WFSTEP_HOOKED"],
+    "events": [
+      {
+        "toolUseId": "sm_HOOKED",
+        "name": "send_message",
+        "input": {
+          "severity": "success",
+          "message": "DONE_WFSTEP_HOOKED"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_HOOKED do it"],
+    "events": ["TXT_WFSTEP_HOOKED"]
+  },
+  {
+    "match": ["WFSTEP_HOOKED do it"],
+    "events": ["TXT_WFSTEP_HOOKED"]
+  },
+  {
+    "match": ["WFSTEP_HOOKED do it"],
+    "events": ["TXT_WFSTEP_HOOKED"]
+  },
+  {
+    "match": ["WFSTEP_HOOKEDCA do it"],
+    "not": ["DONE_WFSTEP_HOOKEDCA"],
+    "events": [
+      {
+        "toolUseId": "sm_HOOKEDCA",
+        "name": "send_message",
+        "input": {
+          "severity": "success",
+          "message": "DONE_WFSTEP_HOOKEDCA"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_HOOKEDCA do it"],
+    "events": ["TXT_WFSTEP_HOOKEDCA"]
+  },
+  {
+    "match": ["WFSTEP_HOOKEDCA do it"],
+    "events": ["TXT_WFSTEP_HOOKEDCA"]
+  },
+  {
+    "match": ["WFSTEP_HOOKEDCA do it"],
+    "events": ["TXT_WFSTEP_HOOKEDCA"]
+  },
+  {
+    "match": ["WFSTEP_INLAGENT do it"],
+    "not": ["DONE_WFSTEP_INLAGENT"],
+    "events": [
+      {
+        "toolUseId": "sm_INLAGENT",
+        "name": "send_message",
+        "input": {
+          "severity": "success",
+          "message": "DONE_WFSTEP_INLAGENT"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_INLAGENT do it"],
+    "events": ["TXT_WFSTEP_INLAGENT"]
+  },
+  {
+    "match": ["WFSTEP_INLAGENT do it"],
+    "events": ["TXT_WFSTEP_INLAGENT"]
+  },
+  {
+    "match": ["WFSTEP_INLAGENT do it"],
+    "events": ["TXT_WFSTEP_INLAGENT"]
+  },
+  {
+    "match": ["WFSTEP_FCIN do it"],
+    "not": ["DONE_WFSTEP_FCIN"],
+    "events": [
+      {
+        "toolUseId": "sm_FCIN",
+        "name": "send_message",
+        "input": {
+          "severity": "success",
+          "message": "DONE_WFSTEP_FCIN"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_FCIN do it"],
+    "events": ["TXT_WFSTEP_FCIN"]
+  },
+  {
+    "match": ["WFSTEP_FCIN do it"],
+    "events": ["TXT_WFSTEP_FCIN"]
+  },
+  {
+    "match": ["WFSTEP_FCIN do it"],
+    "events": ["TXT_WFSTEP_FCIN"]
+  },
+  {
+    "match": ["WFSTEP_FCOUT do it"],
+    "not": ["DONE_WFSTEP_FCOUT"],
+    "events": [
+      {
+        "toolUseId": "sm_FCOUT",
+        "name": "send_message",
+        "input": {
+          "severity": "success",
+          "message": "DONE_WFSTEP_FCOUT"
+        }
+      }
+    ]
+  },
+  {
+    "match": ["WFSTEP_FCOUT do it"],
+    "events": ["TXT_WFSTEP_FCOUT"]
+  },
+  {
+    "match": ["WFSTEP_FCOUT do it"],
+    "events": ["TXT_WFSTEP_FCOUT"]
+  },
+  {
+    "match": ["WFSTEP_FCOUT do it"],
+    "events": ["TXT_WFSTEP_FCOUT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  },
+  {
+    "match": null,
+    "events": ["FALLBACK_TEXT"]
+  }
+]

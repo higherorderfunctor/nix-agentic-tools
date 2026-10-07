@@ -1,0 +1,28 @@
+{
+  "name": "wf-fc-out",
+  "description": "outside fileCheck",
+  "inputs": {},
+  "steps": [
+    {
+      "type": "repeat",
+      "id": "r_out",
+      "maxIterations": 2,
+      "onMaxIterations": "abort",
+      "stopCondition": {
+        "fileCheck": {
+          "path": "/nonexistent-outside/status.json",
+          "jsonPath": "verdict",
+          "value": "PASS"
+        }
+      },
+      "steps": [
+        {
+          "type": "step",
+          "id": "fc_out",
+          "agent": "custom",
+          "prompt": "WFSTEP_FCOUT do it"
+        }
+      ]
+    }
+  ]
+}
