@@ -50,6 +50,7 @@
 # Fully prebuilt history (musl tarball installed verbatim):
 # `git show f38b946f:packages/chatgpt-codex/packages/ai/chatgpt-codex/package.nix`.
 {
+  extractedLib,
   packageLib,
   pkgs,
   repoPath,
@@ -233,6 +234,7 @@ in
         };
         # Also discovered by fix_sidecar_hashes after nixpkgs input changes.
         inherit fixVendorHash;
+        extractedRules = import ../../../extract/rules.nix {inherit extractedLib pkgs;};
         updateScript = vu.mkUpdateScript {
           inherit pkgs sourcesFile;
           pname = "chatgpt-codex";
@@ -258,6 +260,10 @@ in
               attr = "chatgpt-codex";
               dest = repoPath ../../../extracted.json;
               inherit pkgs;
+              rows = {
+                name = "chatgpt-codex";
+                path = repoPath ../../../extract/annotations.json;
+              };
             }}
           '';
         };

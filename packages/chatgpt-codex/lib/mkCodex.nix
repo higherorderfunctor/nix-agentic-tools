@@ -31,11 +31,12 @@
   # version. Clap accepts the root flag before every subcommand; `codex agents`,
   # `codex queue` and `--remote` then refuse to run, and `codex remote-control`
   # and `codex app-server daemon …` ignore it and still reach the user daemon.
-  # The flag list is `cli.launcherFlags` in extractedCoverage.nix, where
-  # chatgpt-codex-coverage fails if upstream drops one. devenv's launcher also
+  # The flags live in launcher-flags.nix, which extraction reconciliation also
+  # reads, so it fails if upstream drops one. devenv's launcher also
   # carries the trust of the project hooks it generates (`hookTrustFor`), as a
   # session flag: Codex reads hook trust only from user config and session
   # flags, and devenv never writes the user's config.
+  launcherFlags = import ./launcher-flags.nix;
   codexInstallPackage = {
     backend,
     cfg,
@@ -48,8 +49,11 @@
       environmentVariables = launcherEnvironment;
       exe = "codex";
       flags = lib.optionals (backend == "devenv") (
-        lib.concatMap (flag: ["--add-flags" flag]) (import ./extractedCoverage.nix).cli.launcherFlags.devenv
-        ++ lib.optionals (hookTrust != {}) ["--add-flag" "-c" "--add-flag" (lib.escapeShellArg (hookTrustOverride hookTrust))]
+        lib.concatMap (flag: ["--add-flags" flag]) launcherFlags.devenv
+        ++ lib.optionals (hookTrust != {}) (
+          lib.concatMap (flag: ["--add-flag" flag]) launcherFlags.hookTrust
+          ++ ["--add-flag" (lib.escapeShellArg (hookTrustOverride hookTrust))]
+        )
       );
       name = "chatgpt-codex-wrapped";
       inherit (cfg) package;

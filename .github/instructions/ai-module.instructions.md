@@ -7,8 +7,8 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-07 — Codex reconciles committed names and config
+> dispositions; per-runtime program overrides accept portable `settings`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -55,21 +55,24 @@ Kiro). It is NOT a thin wrapper — the gating semantics, default-setting
 behavior, and fanout patterns are load-bearing and got bitten into production by
 a silent no-op bug. Read this fragment before changing the gating.
 
-### Codex extracted facts need reverse coverage
+### Codex extracted names reconcile against rows
 
 `packages/chatgpt-codex/extracted.json` is generated fact from the pinned
-binary. `packages/chatgpt-codex/lib/extractedCoverage.nix` is the separate,
-human-reviewed ownership decision. Never generate the second from the first:
-`packages/chatgpt-codex/checks/chatgpt-codex-coverage.nix` intentionally fails
-when a bump introduces a command, canonical flag, record field, feature
-maturity, or config-key seam without an explicit Nix disposition.
+binary. `packages/chatgpt-codex/extract/rules.nix` reconciles command names,
+canonical flag names and config seam names against `extract/annotations.json`.
+Regeneration adds `{}` rows for new commands and flags. Config rows require a
+hand-authored `disposition`; existing empty extraction seams retain their
+recorded dispositions. `chatgpt-codex-extracted` reports unrecorded names,
+removed rows or launcher dependencies, missing dispositions and invalid rows.
+The launcher flag constants live in `mkCodex.nix` and supply reconciliation's
+`uses`, so deleting a row cannot hide a missing launcher dependency.
 
-Dynamic policy is still coverage. Stable feature names become typed directly
-from the sidecar, non-stable names remain available through the boolean freeform
-table, model slugs stay strings because availability is account- and
-provider-dependent, and extracted reasoning levels feed typed enums. The closed
-`--sandbox` and `--ask-for-approval` value sets also feed their typed options
-directly; do not restore parallel handwritten lists.
+Stable feature names become typed directly from the sidecar; every other
+maturity remains available through the boolean freeform table. Model slugs stay
+strings because availability is account- and provider-dependent, and extracted
+reasoning levels feed typed enums. The closed `--sandbox` and
+`--ask-for-approval` value sets also feed their typed options directly; do not
+restore parallel handwritten lists.
 
 ### There is no `ai.enable`
 
