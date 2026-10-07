@@ -1,6 +1,6 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-06 — owners receive the shared extraction functions
+> **Last verified:** 2026-10-07 — owners receive the shared extraction functions
 > through repository arguments instead of relative imports.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
@@ -299,15 +299,15 @@ repository-local `kiro-memory-distiller`, was removed on 2026-09-01, so
 Most supporting entries (`btop`, `bun`, `fblog`, `gh`, `glab`, `oh-my-posh`,
 `otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations but
 `pkgs.<name>.overrideAttrs` over the nixpkgs one, moving only `version`, `src`,
-`passthru.updateScript` and — for the Go ones — `vendorHash`. `gluetun` and
-`pipelock` are the exceptions, and only because nixpkgs does not carry either;
-`bruno` is deliberately absent from that list because `overrideAttrs` cannot
-express its override at all (see the `.override` section below). `glab` IS on
-the list and belongs there — `buildGoModule` reads `vendorHash` and `src` off
-`finalAttrs`, so composing on the output works — even though it shares bruno's
-SIDECAR contract, because that contract is about where the hash comes from, not
-about which override seam is correct. Two rules that are not obvious from
-reading such a file:
+`passthru.updateScript` and — for the Go ones — `vendorHash`. `gluetun`,
+`iron-proxy` and `pipelock` are the exceptions, and only because nixpkgs does
+not carry any of them; `bruno` is deliberately absent from that list because
+`overrideAttrs` cannot express its override at all (see the `.override` section
+below). `glab` IS on the list and belongs there — `buildGoModule` reads
+`vendorHash` and `src` off `finalAttrs`, so composing on the output works — even
+though it shares bruno's SIDECAR contract, because that contract is about where
+the hash comes from, not about which override seam is correct. Two rules that
+are not obvious from reading such a file:
 
 - **Namespaced-only.** The overlay writes `pkgs.ai.<group>.<name>` and NEVER a
   top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would turn this from an
@@ -663,10 +663,11 @@ derivation.
 
 Go archive updates need an explicit vendor-hash repair; `go.sum` does not supply
 a Nix vendor-tree hash. It goes in the sidecar (`beads`, its nested paired Dolt,
-`gh`, `glab`, `gluetun`, `kimchi`, `oh-my-posh`, `otel-tui`, `pipelock`), never
-inline, and the mechanism is worth understanding before touching it. Kimchi is
-the odd row: the recorded hash covers its nested `proxy-helper` rather than a
-top-level Go build, and everything below still applies to it unchanged.
+`gh`, `glab`, `gluetun`, `iron-proxy`, `kimchi`, `oh-my-posh`, `otel-tui`,
+`pipelock`), never inline, and the mechanism is worth understanding before
+touching it. Kimchi is the odd row: the recorded hash covers its nested
+`proxy-helper` rather than a top-level Go build, and everything below still
+applies to it unchanged.
 
 - `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
   (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not itself
@@ -863,11 +864,11 @@ replace the helper with a pinned toolchain version either; a pin cannot tell
 "still filling a real gap" from "this is now a downgrade".
 
 **EVERY owned Go package carries the seam** — `beads`, `gh`, `github-mcp`,
-`glab`, `gluetun`, `mcp-language-server`, `oh-my-posh`, `otel-tui`, `pipelock`,
-`tsgolint` — and so do Beads' nested paired Dolt derivation and kimchi's
-`proxy-helper`. Scoping it to "whatever broke most recently" is how the same
-defect gets rediscovered per package: when `glab` broke, `gh` had ALREADY
-silently required Go >= 1.26.5.
+`glab`, `gluetun`, `iron-proxy`, `mcp-language-server`, `oh-my-posh`,
+`otel-tui`, `pipelock`, `tsgolint` — and so do Beads' nested paired Dolt
+derivation and kimchi's `proxy-helper`. Scoping it to "whatever broke most
+recently" is how the same defect gets rediscovered per package: when `glab`
+broke, `gh` had ALREADY silently required Go >= 1.26.5.
 
 Three ways to apply it:
 
@@ -878,7 +879,7 @@ Three ways to apply it:
   versioned constructor and its package-specific defaults survive while its
   compiler changes. Zero or several builder arguments throw.
 - `toolchain.buildGoModule` when the recipe calls the builder directly
-  (`gluetun`, `kimchi`, `pipelock`).
+  (`gluetun`, `iron-proxy`, `kimchi`, `pipelock`).
 - `toolchain.go` when a derivation needs the compiler itself (`glab`'s
   schema-dump extract, which compiles upstream's `internal/config`).
 
@@ -904,8 +905,8 @@ modes below are therefore written by automation from the pinned source.
 
 So the floor is extracted from the pinned source's go.mod, by mechanism:
 
-- **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `kimchi`,
-  `oh-my-posh`, `otel-tui`, `pipelock`)** — `vu.mkGoFloorFix` runs as
+- **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `iron-proxy`,
+  `kimchi`, `oh-my-posh`, `otel-tui`, `pipelock`)** — `vu.mkGoFloorFix` runs as
   `extraExtract` and writes a `goFloor` key into the sidecar. Correct home for
   it because the floor is a function of the pinned version, so it changes only
   when the version does — unlike `vendorHash`, which can be invalidated with no

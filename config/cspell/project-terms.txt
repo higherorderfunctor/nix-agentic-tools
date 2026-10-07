@@ -176,6 +176,7 @@ inferera
 inlines
 inspectable
 ints
+ironsh
 isaacphi
 iterm
 jandedobbeleer
@@ -284,6 +285,7 @@ osmani
 oxalica
 oxlint
 pandoc
+paradigmxyz
 parentheticals
 partialclone
 passteque
