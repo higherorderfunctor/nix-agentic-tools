@@ -5,6 +5,7 @@
 # argv[2] the repository to index.
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -23,15 +24,34 @@ async def fake_serve(content):
     captured.append([item.value for item in content])
 
 
+# 0.6.2's semble-mcp ends in os._exit(0) after serve(), which would end this
+# script before its assertions run.
+class _Exited(BaseException):
+    pass
+
+
+def _fake_exit(code):
+    assert code == 0, code
+    raise _Exited
+
+
+real_exit = os._exit
 real_serve = semble.mcp.serve
+os._exit = _fake_exit
 semble.mcp.serve = fake_serve
-for case in expected["argv"]:
-    captured.clear()
-    sys.argv = ["semble-mcp", *case["argv"]]
-    cli.main()
-    assert captured == [case["content"]], (case, captured)
-    print("ok argv", case["argv"])
-semble.mcp.serve = real_serve
+try:
+    for case in expected["argv"]:
+        captured.clear()
+        sys.argv = ["semble-mcp", *case["argv"]]
+        try:
+            cli.main()
+        except _Exited:
+            pass
+        assert captured == [case["content"]], (case, captured)
+        print("ok argv", case["argv"])
+finally:
+    semble.mcp.serve = real_serve
+    os._exit = real_exit
 
 
 def text_of(result) -> str:
