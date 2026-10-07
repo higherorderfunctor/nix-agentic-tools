@@ -1,0 +1,6 @@
+{
+  "description": "agent whose prompt repeats the steering text",
+  "name": "dupagent",
+  "prompt": "DUP_TEXT_SENTINEL\n\nDUPAGENT_BODY_SENTINEL",
+  "tools": ["*"]
+}

@@ -1,0 +1,14 @@
+{
+  "steps": [
+    { "op": "new", "as": "S$I", "repeat": 20 },
+    {
+      "op": "prompt",
+      "session": "$S$I",
+      "text": "SESSCAP_PROMPT $I",
+      "async": true,
+      "tag": "p$I",
+      "repeat": 20
+    },
+    { "op": "wait", "tag": "p$I", "timeout": 60, "repeat": 20 }
+  ]
+}

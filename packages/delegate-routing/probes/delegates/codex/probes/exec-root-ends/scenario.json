@@ -1,0 +1,27 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          { "task_name": "a", "message": "TASK-A", "fork_turns": "none" },
+          "collaboration"
+        ]
+      ]
+    },
+    { "calls": [["wait_agent", { "timeout_ms": 3000 }, "collaboration"]] },
+    { "msg": "ROOT DONE" }
+  ],
+  "/root/a": [
+    {
+      "calls": [
+        [
+          "exec",
+          "const r = await tools.exec_command({cmd: \"sleep 300; echo DMUMARK\", yield_time_ms: 1000}); text(JSON.stringify(r));",
+          "custom"
+        ]
+      ]
+    },
+    { "sleep": 60, "msg": "A DONE" }
+  ]
+}

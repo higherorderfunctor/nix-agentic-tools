@@ -23,6 +23,7 @@
     "preferences": {},
     "redaction": {},
     "region": {},
+    "selfHostedUrl": {},
     "skillPaths": {},
     "surveys": {},
     "telemetry": {},
@@ -117,6 +118,7 @@
     "KIMCHI_REVIEW_LOG": { "controls": "session-review log path" },
     "KIMCHI_REVIEW_THRESHOLD": { "controls": "session-review threshold" },
     "KIMCHI_SANDBOX": { "controls": "sandbox detection override" },
+    "KIMCHI_SELF_HOSTED_URL": {},
     "KIMCHI_SESSION_REVIEW": { "controls": "session-review enablement" },
     "KIMCHI_STREAM_IDLE_TIMEOUT_MS": {
       "controls": "outbound HTTP stream idle timeout"

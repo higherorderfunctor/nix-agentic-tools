@@ -195,9 +195,15 @@
         "project": true
       },
       "region": {
-        "typeExpression": "\"us\" | \"eu\"",
+        "typeExpression": "\"us\" | \"eu\" | \"self-hosted\"",
         "type": "enum",
-        "enum": ["us", "eu"],
+        "enum": ["us", "eu", "self-hosted"],
+        "optional": true,
+        "project": false
+      },
+      "selfHostedUrl": {
+        "typeExpression": "string",
+        "type": "string",
         "optional": true,
         "project": false
       },
@@ -921,6 +927,11 @@
         "type": "string"
       },
       "KIMCHI_SANDBOX": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_SELF_HOSTED_URL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
         "type": "string"
@@ -2137,7 +2148,7 @@
   },
   "provenance": {
     "extractorSchema": 4,
-    "kimchiVersion": "1.5.1",
+    "kimchiVersion": "1.7.1",
     "piVersion": "0.85.1"
   },
   "virtualPackages": [

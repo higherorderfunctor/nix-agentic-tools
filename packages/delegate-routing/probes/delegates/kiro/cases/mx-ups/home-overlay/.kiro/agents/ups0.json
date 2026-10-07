@@ -1,0 +1,13 @@
+{
+  "name": "ups0",
+  "description": "userPromptSubmit exit 0 fixture",
+  "prompt": "UPS0_PROMPT_SENTINEL",
+  "tools": ["*"],
+  "hooks": {
+    "userPromptSubmit": [
+      {
+        "command": "echo UPS0_STDOUT_SENTINEL; echo UPS0_STDERR_SENTINEL >&2; exit 0"
+      }
+    ]
+  }
+}

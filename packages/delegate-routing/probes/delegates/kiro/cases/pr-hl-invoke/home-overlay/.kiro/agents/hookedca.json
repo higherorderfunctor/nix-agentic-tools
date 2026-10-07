@@ -1,0 +1,11 @@
+{
+  "description": "custom-agent dispatch hook fixture",
+  "dispatchKind": "custom-agent",
+  "hooks": {
+    "agentSpawn": [{ "command": "echo HOOKCA_AGENTSPAWN_SENTINEL" }],
+    "userPromptSubmit": [{ "command": "echo HOOKCA_UPS_SENTINEL" }]
+  },
+  "name": "hookedca",
+  "prompt": "HOOKEDCA_PROMPT_SENTINEL",
+  "tools": ["*"]
+}

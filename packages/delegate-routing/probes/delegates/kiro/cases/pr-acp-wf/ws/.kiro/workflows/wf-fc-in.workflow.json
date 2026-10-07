@@ -1,0 +1,28 @@
+{
+  "name": "wf-fc-in",
+  "description": "relative fileCheck",
+  "inputs": {},
+  "steps": [
+    {
+      "type": "repeat",
+      "id": "r_in",
+      "maxIterations": 2,
+      "onMaxIterations": "abort",
+      "stopCondition": {
+        "fileCheck": {
+          "path": "fc/status.json",
+          "jsonPath": "verdict",
+          "value": "PASS"
+        }
+      },
+      "steps": [
+        {
+          "type": "step",
+          "id": "fc_in",
+          "agent": "custom",
+          "prompt": "WFSTEP_FCIN do it"
+        }
+      ]
+    }
+  ]
+}

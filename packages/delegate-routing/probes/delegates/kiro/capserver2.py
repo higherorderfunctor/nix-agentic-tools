@@ -2,9 +2,15 @@ import http.server,json,sys,struct,zlib,threading,os,time
 # Capture server (extends sysprompt-map capserver.py): logs every request with a timestamp to argv[2].
 # ListAvailableModels -> two fixture models, both advertising effort via additionalModelRequestFieldsSchema.output_config.effort.
 # GenerateAssistantResponse -> first unused rule in $RULES whose "match" substrings all occur in the body
-#   (and none of "not"); optional "delay" seconds before answering. Events: str = text, {toolUseId,name,input} = tool use.
+#   (and none of "not"); optional "delay" seconds before answering; "reuse":true keeps the rule matchable after use.
+#   Events: str = text, {toolUseId,name,input} = tool use,
+#   {contextUsagePercentage:N} = contextUsageEvent (drives KAS auto-summarization above 80%).
+# GetFeatureConfiguration -> $CAP_FEATURES ({"<feature key>": value}) keyed the way KAS 0.66.26 looks them up
+#   (sha256 of its salt + key); without CAP_FEATURES it answers 400 like every other unscripted call.
 OUT=sys.argv[2]; RULES=json.load(open(os.environ['RULES'])) if os.environ.get('RULES') else []
 used=set(); lock=threading.Lock(); T0=time.time()
+import hashlib
+FEATURES={hashlib.sha256(('kiro-feature-config-key-salt-3e9b1d7a'+k).encode()).hexdigest():v for k,v in json.loads(os.environ.get('CAP_FEATURES') or '{}').items()}
 EFF={"type":"object","properties":{"output_config":{"type":"object","properties":{"effort":{"type":"string","enum":["low","medium","high","xhigh","max"],"default":"high"}}}}}
 def model(i,n): return {"modelId":i,"modelName":n,"description":"fixture","tokenLimits":{"maxInputTokens":200000,"maxOutputTokens":64000},"supportedInputTypes":["TEXT"],"rateMultiplier":1.0,"rateUnit":"credit","additionalModelRequestFieldsSchema":EFF}
 MODELS=[model("claude-sonnet-4","Claude Sonnet 4"),model("claude-haiku-4.5","Claude Haiku 4.5")]
@@ -19,8 +25,9 @@ def stream(events):
     out=b''
     for e in events:
         if isinstance(e,str): out+=msg('assistantResponseEvent',{"content":e})
+        elif 'contextUsagePercentage' in e: out+=msg('contextUsageEvent',{"contextUsagePercentage":e['contextUsagePercentage']})
         else: out+=msg('toolUseEvent',{"toolUseId":e["toolUseId"],"name":e["name"],"input":json.dumps(e["input"])}); out+=msg('toolUseEvent',{"toolUseId":e["toolUseId"],"name":e["name"],"stop":True})
-    out+=msg('metadataEvent',{"stopReason":"TOOL_USE" if any(not isinstance(e,str) for e in events) else "END_TURN"})
+    out+=msg('metadataEvent',{"stopReason":"TOOL_USE" if any(not isinstance(e,str) and 'toolUseId' in e for e in events) else "END_TURN"})
     return out
 def log(d):
     with lock:
@@ -36,12 +43,16 @@ class H(http.server.BaseHTTPRequestHandler):
                 for i,r in enumerate(RULES):
                     if i in used: continue
                     mm=r.get('match'); mm=[] if mm is None else ([mm] if isinstance(mm,str) else mm)
-                    if all(x in text for x in mm) and not any(x in text for x in r.get('not',[])): used.add(i); rule=i; break
+                    if all(x in text for x in mm) and not any(x in text for x in r.get('not',[])):
+                        if not r.get('reuse'): used.add(i)
+                        rule=i; break
         log({'t':round(time.time()-T0,2),'method':self.command,'path':self.path,'target':t,'rule':rule,'headers':dict(self.headers),'body':text})
         try:
             if rule is not None and RULES[rule].get('delay'): time.sleep(RULES[rule]['delay'])
             if 'ListAvailableModels' in t:
                 out=json.dumps({"models":MODELS,"defaultModel":MODELS[0]}).encode(); code=200; ct='application/x-amz-json-1.0'
+            elif 'GetFeatureConfiguration' in t and FEATURES:
+                out=json.dumps({"configuration":FEATURES}).encode(); code=200; ct='application/x-amz-json-1.0'
             elif rule is not None:
                 out=stream(RULES[rule]['events']); code=200; ct='application/vnd.amazon.eventstream'
             else:

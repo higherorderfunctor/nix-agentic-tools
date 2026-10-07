@@ -2,27 +2,26 @@
 """Census of the git config keys git-absorb reads.
 
 Input : the source tree the package builds (src + patches), parsed with
-        tree-sitter-rust; its Documentation/git-absorb.adoc, converted to
-        DocBook by asciidoc (the format's own reference parser); and the hand
-        annotations in annotations.json.
-Output: extracted.json in the shared sidecar schema (lib/git-tool-settings).
+        tree-sitter-rust; and its Documentation/git-absorb.adoc, converted to
+        DocBook by asciidoc (the format's own reference parser).
+Output: extracted.json in the shared sidecar schema (lib/git-tool-settings):
+        facts only. A key the man page does not describe has no
+        `description`, and a const nothing reads is a dead key with no
+        reason; the rows in annotations.json supply both, in Nix
+        (lib/git-tool-settings/rules.nix).
 Exit  : non-zero when any guard trips:
   F1  a key that does not reduce to a string literal
   F2  a read method outside METHOD_TYPES
-  F3  a setting with no type
-  F4  an annotation that is stale or shadows an extracted value
   F6  a config handle or git2::Config method used outside the read shape
   F7  a production "config" string literal (git-absorb runs no `git config`)
   F8  the man page documents a key the source never reads
-  F9  a key-shaped string literal no read or dead key accounts for, or a
-      key-shaped const nothing reads
+  F9  a key-shaped string literal no read or dead key accounts for
   F10 a key or default passed through a parameter with no production caller
   F11 a test cfg the test filter cannot classify
   F12 a read whose match arms are not `Ok(v) [if v > N] => v [as T], _ => D`,
       or a read combined with a CLI field by anything but `config.f || read`
   F13 one key read with different types, defaults, minimums or CLI flags, or
       an identifier that names consts in several other files
-  F14 a setting the man page does not describe
   F15 fewer settings than the floor
 
 Every Rust fact is a typed tree node (lib/git-tool-settings/rust_tree.py).
@@ -45,7 +44,6 @@ import rust_tree as rt
 from census import Census, sites
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-parser.add_argument("--annotations", type=Path, required=True)
 parser.add_argument("--out", type=Path, required=True)
 parser.add_argument("--src", type=Path, required=True)
 args = parser.parse_args()
@@ -416,7 +414,9 @@ for key, rs in sorted(by_key.items()):
     clis = [r["cli"] for r in rs if r["cli"]]
     if clis:
         entry["cli"] = census.agree(key, "CLI flags", clis, "F13")
-    if key in docs:
+    # A blank paragraph is no description: the needs rule must see the key
+    # as having no description rather than accept "".
+    if docs.get(key, "").strip():
         entry["description"] = docs[key]
     settings[key] = entry
 
@@ -436,27 +436,12 @@ for key in sorted(set(docs) - set(settings)):
     fail("F8", f"Documentation/git-absorb.adoc documents {key}, which the source never reads")
 
 # ── Dead keys: key-shaped consts no read resolves to ──────────────────
-annotations = json.loads(args.annotations.read_text())
-dead_annotated = annotations.get("deadKeys", {})
 dead = {}
 for ident, entries in consts.items():
     for f, c in entries:
         ok, value = rt.literal_value(c.child_by_field_name("value"))
         if ok and isinstance(value, str) and census.key_tokens(value) == [value] and value not in settings:
-            if value in dead_annotated:
-                dead[value] = {"const": ident, "file": f, "reason": dead_annotated[value]}
-            else:
-                fail("F9", f"const {ident} = {value!r} at {where(f, c)} is never read; add it to deadKeys if intended")
-for key in sorted(set(dead_annotated) - set(dead)):
-    fail("F4", f"deadKeys entry {key} is stale")
-
-census.apply_annotations(settings, annotations)
-
-for key, entry in settings.items():
-    if entry.get("type") is None:
-        fail("F3", f"no type for {key}")
-    if not entry.get("description"):
-        fail("F14", f"{key} has no description: Documentation/git-absorb.adoc no longer documents it")
+            dead[value] = {"const": ident, "file": f}
 
 # ── F9: the literal net ───────────────────────────────────────────────
 known = set(settings) | set(dead)

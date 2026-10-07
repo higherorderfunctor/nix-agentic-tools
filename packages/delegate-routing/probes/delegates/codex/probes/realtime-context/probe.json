@@ -1,0 +1,21 @@
+{
+  "thread": {},
+  "turn": "RT-TURN-7701",
+  "timeout": 15,
+  "after": [
+    {
+      "method": "thread/realtime/start",
+      "params": {
+        "threadId": "$THREAD",
+        "outputModality": "text",
+        "transport": { "type": "websocket" }
+      },
+      "wait": 4
+    },
+    {
+      "method": "thread/realtime/stop",
+      "params": { "threadId": "$THREAD" },
+      "wait": 2
+    }
+  ]
+}

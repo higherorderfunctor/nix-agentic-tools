@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""an.py <case-dir> [--dump]: per request, where each sentinel token (e.g. APPINLINE-1313) appears."""
+"""an.py <case-dir>|<req-NNN.json> [--dump]: per request, where each sentinel token (e.g. APPINLINE-1313) appears."""
 import json, re, sys, glob, os
 d = sys.argv[1]; dump = "--dump" in sys.argv
 pat = re.compile(r"\b[A-Z]{4,}-\d{4}\b")
-for f in sorted(glob.glob(os.path.join(d, "req-*.json"))):
+for f in [d] if os.path.isfile(d) else sorted(glob.glob(os.path.join(d, "req-*.json"))):
     r = json.load(open(f)); b = r["body"]
     sysb = b.get("system", [])
     if isinstance(sysb, str): sysb = [{"text": sysb}]

@@ -1,0 +1,17 @@
+{
+  "thread": {},
+  "turn": "TURN-ONE-7500",
+  "timeout": 15,
+  "after": [
+    {
+      "method": "thread/compact/start",
+      "params": { "threadId": "$THREAD" },
+      "wait": 6
+    },
+    {
+      "method": "thread/compact/start",
+      "params": { "threadId": "$THREAD" },
+      "wait": 20
+    }
+  ]
+}

@@ -44,7 +44,7 @@ diff --git a/src/semble/cache.py b/src/semble/cache.py
  
  
  def _metadata_matches(metadata: dict, model_path: str, content: Sequence[ContentType]) -> bool:
-@@ -114,7 +124,7 @@
+@@ -121,7 +131,7 @@
      path: str, model_path: str | None, content: Sequence[ContentType]
  ) -> tuple[PersistencePath, dict] | None:
      """Return the cached index files and metadata for path, or None if absent or built with other settings."""
@@ -52,19 +52,11 @@ diff --git a/src/semble/cache.py b/src/semble/cache.py
 +    persistence_path = PersistencePath.from_path(find_index_from_cache_folder(path, content, model_path))
      if persistence_path.non_existing():
          return None
-     metadata = json.loads(persistence_path.metadata.read_text(encoding="utf-8"))
+     try:
 diff --git a/src/semble/cli.py b/src/semble/cli.py
 --- a/src/semble/cli.py
 +++ b/src/semble/cli.py
-@@ -3,6 +3,7 @@
- import io
- import json
- import logging
-+import os
- import re
- import sys
- import warnings
-@@ -17,10 +18,11 @@
+@@ -19,10 +19,11 @@
  from semble.cache import cache_key, resolve_cache_folder, save_index_to_cache
  from semble.index import SembleIndex
  from semble.index.types import PersistencePath
@@ -77,7 +69,7 @@ diff --git a/src/semble/cli.py b/src/semble/cli.py
  from semble.version import __version__
  
  _CLI_DISPATCH_ARGS = frozenset(
-@@ -75,10 +77,13 @@
+@@ -77,10 +78,13 @@
      p.add_argument(
          "--content",
          nargs="+",
@@ -93,16 +85,16 @@ diff --git a/src/semble/cli.py b/src/semble/cli.py
      )
      p.add_argument(
          "--include-text-files",
-@@ -111,7 +116,7 @@
+@@ -114,7 +118,7 @@
          raise SystemExit(1)
      from semble.mcp import serve
  
 -    content = _resolve_content(args.content, args.include_text_files)
 +    content = _resolve_content(DEFAULT_CONTENT if args.content is None else args.content, args.include_text_files)
-     asyncio.run(serve(content))
- 
- 
-@@ -128,6 +133,18 @@
+     asyncio.new_event_loop().run_until_complete(serve(content))
+     # Skip asyncio.run's shutdown, which waits for threads still loading the model or building an index.
+     os._exit(0)
+@@ -133,6 +137,18 @@
      return [ContentType(c) for c in content]
  
  
@@ -121,7 +113,7 @@ diff --git a/src/semble/cli.py b/src/semble/cli.py
  def _load_index(paths: list[str], content: list[ContentType]) -> tuple[SembleIndex, list[tuple[str, SembleIndex]]]:
      """Build an index per path or git URL, exiting on FileNotFoundError.
  
-@@ -330,7 +347,7 @@
+@@ -335,7 +351,7 @@
              args.path,
              args.query,
              args.top_k,
@@ -130,7 +122,7 @@ diff --git a/src/semble/cli.py b/src/semble/cli.py
              args.max_snippet_lines,
              args.format,
          )
-@@ -340,7 +357,7 @@
+@@ -345,7 +361,7 @@
              args.file_path,
              args.line,
              args.top_k,

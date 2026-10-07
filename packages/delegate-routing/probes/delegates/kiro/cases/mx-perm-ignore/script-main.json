@@ -1,0 +1,32 @@
+{
+  "permission": "ignore",
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "MAIN_KICKOFF USER_SENTINEL_1",
+      "async": true,
+      "tag": "p"
+    },
+    {
+      "op": "sleep",
+      "s": 45
+    },
+    {
+      "op": "notify",
+      "method": "session/cancel",
+      "params": {
+        "sessionId": "$SID"
+      }
+    },
+    {
+      "op": "wait",
+      "tag": "p",
+      "timeout": 30
+    },
+    {
+      "op": "prompt",
+      "text": "AFTER_CANCEL USER_SENTINEL_2",
+      "timeout": 60
+    }
+  ]
+}

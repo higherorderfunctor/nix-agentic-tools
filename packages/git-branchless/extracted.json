@@ -2,8 +2,7 @@
   "deadKeys": {
     "branchless.restack.warnAbandoned": {
       "const": "RESTACK_WARN_ABANDONED_CONFIG_KEY",
-      "file": "git-branchless-lib/src/core/config.rs",
-      "reason": "Upstream declares RESTACK_WARN_ABANDONED_CONFIG_KEY and never reads it. The live key is branchless.hint.restackWarnAbandoned."
+      "file": "git-branchless-lib/src/core/config.rs"
     }
   },
   "foreign": {
@@ -201,7 +200,6 @@
       "writes": {}
     },
     "branchless.core.mainBranch": {
-      "defaultDescription": "computed: `branchless.mainBranch`, then `init.defaultBranch`, then `master`. `git branchless init` writes a value into every repository it initializes.",
       "description": "Get the configured name of the main branch. The following config values are resolved, in order. The first valid value is returned. - branchless.core.mainBranch - (deprecated) branchless.mainBranch - init.defaultBranch - finally, default to \"master\"",
       "reads": {
         "git-branchless-lib/src/core/config.rs#get_main_branch_name": [
@@ -209,7 +207,6 @@
         ]
       },
       "status": "current",
-      "type": "string",
       "writes": {
         "git-branchless-init/src/lib.rs#set_configs": ["file"]
       }
@@ -217,7 +214,6 @@
     "branchless.core.protectCheckedOutBranches": {
       "default": true,
       "description": "If `true`, refuse to move branches checked out in another worktree.",
-      "note": "Only this repository's build reads this key: its protect-checked-out-branches patch adds it. Upstream git-branchless ignores it.",
       "reads": {
         "git-branchless-lib/src/core/config.rs#get_protect_checked_out_branches": [
           "repository"
@@ -295,7 +291,6 @@
         ]
       },
       "status": "legacy",
-      "type": "string",
       "writes": {}
     },
     "branchless.navigation.autoSwitchBranches": {
@@ -365,7 +360,6 @@
       "writes": {}
     },
     "branchless.revsets.alias.<name>": {
-      "description": "Revset aliases: `<name>` becomes callable as `<name>()` in any revset. `$1` is replaced with the first argument, `$2` with the second, and so on. A name that matches a builtin revset function is never used, because builtins are looked up first.",
       "reads": {
         "git-branchless-revset/src/eval.rs#eval_fn": ["repository"]
       },
@@ -410,7 +404,6 @@
       "writes": {}
     },
     "branchless.test.alias.<name>": {
-      "description": "Named test commands for `git test run -c <name>`. The alias named `default` runs when neither `--command` nor `--exec` is given.",
       "reads": {
         "git-branchless-test/src/lib.rs#resolve_test_command_alias": [
           "repository"
@@ -421,8 +414,6 @@
       "writes": {}
     },
     "branchless.test.jobs": {
-      "defaultDescription": "unset, which runs 1 job. A configured value never changes the execution strategy: only the command-line `--jobs` above 1 switches to the `worktree` strategy, so a value above 1 with `branchless.test.strategy` left at `working-copy` makes every `git test run` fail. The value is read and validated even when `--jobs` is given, and a negative value is an error.",
-      "description": "Default number of parallel jobs for `git test run`. `0` runs one job per physical CPU.",
       "reads": {
         "git-branchless-test/src/lib.rs#resolve": ["repository"]
       },

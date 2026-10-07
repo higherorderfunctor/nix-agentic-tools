@@ -1,5 +1,7 @@
 {
+  "deadKeys": {},
   "settings": {
+    "revise.autoSquash": {},
     "revise.gpgSign": {
       "note": "It decides signing in both directions: git-revise re-creates every commit it rewrites, target and descendants alike, whose signed state differs from this setting, so with it false (the default when `commit.gpgSign` is unset too) a run strips existing signatures even from commits it does not otherwise change. With `gpg.format = ssh` it signs with `gpg.ssh.program`; any other format goes through `gpg.program`."
     },

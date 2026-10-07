@@ -1,0 +1,43 @@
+[
+  {
+    "match": "MAIN_KICKOFF",
+    "not": ["not found in registry", "INLINE_DONE_SENTINEL"],
+    "events": [
+      {
+        "toolUseId": "tu_i",
+        "name": "invoke_sub_agent",
+        "input": {
+          "name": "anonymous",
+          "prompt": "INLINE_TASK do it",
+          "explanation": "x",
+          "inlineAgent": {
+            "systemPrompt": "INLINE_SYS_SENTINEL",
+            "model": "claude-haiku-4.5",
+            "effort": "low"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "match": ["<response_requirement>", "INLINE_TASK"],
+    "events": [
+      {
+        "toolUseId": "sr_i",
+        "name": "subagent_response",
+        "input": {
+          "response": "INLINE_DONE_SENTINEL",
+          "files": []
+        }
+      }
+    ]
+  },
+  {
+    "match": null,
+    "events": ["MAIN_DONE"]
+  },
+  {
+    "match": null,
+    "events": ["MAIN_DONE"]
+  }
+]

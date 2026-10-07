@@ -1,0 +1,8 @@
+{
+  "transport": "daemon",
+  "thread": {},
+  "turn": "GO",
+  "timeout": 3,
+  "settle": 0,
+  "approval": "none"
+}

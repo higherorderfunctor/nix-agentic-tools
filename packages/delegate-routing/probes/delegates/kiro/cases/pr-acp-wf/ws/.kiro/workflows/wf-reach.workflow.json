@@ -1,0 +1,31 @@
+{
+  "name": "wf-reach",
+  "description": "prompt reach",
+  "inputs": {},
+  "steps": [
+    {
+      "type": "step",
+      "id": "s_0",
+      "agent": "custom",
+      "prompt": "WFSTEP_CUSTOM do it"
+    },
+    {
+      "type": "step",
+      "id": "s_1",
+      "agent": "gen",
+      "prompt": "WFSTEP_GEN do it"
+    },
+    {
+      "type": "step",
+      "id": "s_2",
+      "agent": "hooked",
+      "prompt": "WFSTEP_HOOKED do it"
+    },
+    {
+      "type": "step",
+      "id": "s_3",
+      "agent": "hookedca",
+      "prompt": "WFSTEP_HOOKEDCA do it"
+    }
+  ]
+}

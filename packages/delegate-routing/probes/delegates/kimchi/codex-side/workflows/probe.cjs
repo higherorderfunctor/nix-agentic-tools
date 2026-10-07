@@ -246,8 +246,13 @@ vm.runInContext(
     inheritedExtensionArgs: context.inheritedExtensionArgs(),
     captured,
   };
+  // Untracked scratch (the same JSON is printed below): keep it out of the tree.
+  const outDir = process.env.PROBE_OUT
+    ? path.join(process.env.PROBE_OUT, "kimchi-codex")
+    : process.cwd();
+  fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(
-    path.join(process.cwd(), "output.json"),
+    path.join(outDir, "output.json"),
     JSON.stringify(result, null, 2) + "\n",
   );
   fs.writeFileSync(

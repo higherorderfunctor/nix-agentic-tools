@@ -1,0 +1,4 @@
+# a TUI attached with --remote to a standalone app-server; its terminal is killed at ~6 s
+server
+tui-remote 6 TUI-GO-7403
+sleep 30

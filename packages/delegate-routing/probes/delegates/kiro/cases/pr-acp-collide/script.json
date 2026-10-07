@@ -1,0 +1,18 @@
+{
+  "new": {
+    "_meta": {
+      "kiro": {
+        "customAgents": [
+          {
+            "description": "client agent that shares the file agents' name",
+            "id": "custom",
+            "prompt": "ACP_CUSTOM_PROMPT_SENTINEL",
+            "tools": ["*"]
+          }
+        ],
+        "modeId": "custom"
+      }
+    }
+  },
+  "steps": [{ "op": "prompt", "text": "hello USER_SENTINEL_1" }]
+}

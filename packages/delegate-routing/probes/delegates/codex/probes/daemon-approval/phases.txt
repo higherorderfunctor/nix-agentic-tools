@@ -1,0 +1,7 @@
+# the client leaves at 3 s; the child asks for approval at ~8 s with no client attached
+client p1.json
+sleep 10
+# a new client resumes the ROOT thread: is the child's pending approval re-sent to it?
+client p2.json
+# a client resumes the CHILD thread and accepts whatever approval it is sent
+client p3.json

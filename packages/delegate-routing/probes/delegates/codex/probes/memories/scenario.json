@@ -1,0 +1,42 @@
+{
+  "/root": [
+    {
+      "msg": "ROOT TURN DONE"
+    },
+    {
+      "msg": "ROOT TURN DONE"
+    },
+    {
+      "msg": "ROOT TURN DONE"
+    },
+    {
+      "msg": "ROOT TURN DONE"
+    },
+    {
+      "msg": "ROOT TURN DONE"
+    },
+    {
+      "msg": "ROOT TURN DONE"
+    }
+  ],
+  "*": [
+    {
+      "msg": "{\"raw_memory\": \"RAW-MEM-7101\", \"rollout_summary\": \"SUMMARY-7102\", \"rollout_slug\": \"probe-slug\"}"
+    },
+    {
+      "msg": "{\"raw_memory\": \"RAW-MEM-7101\", \"rollout_summary\": \"SUMMARY-7102\", \"rollout_slug\": \"probe-slug\"}"
+    },
+    {
+      "msg": "{\"raw_memory\": \"RAW-MEM-7101\", \"rollout_summary\": \"SUMMARY-7102\", \"rollout_slug\": \"probe-slug\"}"
+    },
+    {
+      "msg": "{\"raw_memory\": \"RAW-MEM-7101\", \"rollout_summary\": \"SUMMARY-7102\", \"rollout_slug\": \"probe-slug\"}"
+    },
+    {
+      "msg": "{\"raw_memory\": \"RAW-MEM-7101\", \"rollout_summary\": \"SUMMARY-7102\", \"rollout_slug\": \"probe-slug\"}"
+    },
+    {
+      "msg": "{\"raw_memory\": \"RAW-MEM-7101\", \"rollout_summary\": \"SUMMARY-7102\", \"rollout_slug\": \"probe-slug\"}"
+    }
+  ]
+}

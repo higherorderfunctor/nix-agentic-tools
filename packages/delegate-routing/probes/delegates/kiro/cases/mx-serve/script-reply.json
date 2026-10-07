@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "MAIN_KICKOFF USER_SENTINEL_1",
+      "timeout": 20
+    }
+  ]
+}

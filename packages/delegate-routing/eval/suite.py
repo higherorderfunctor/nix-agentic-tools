@@ -594,7 +594,7 @@ def validate(cases):
             raise ValueError(f"{where}: delivered routing skill {HARNESSES[case['runtime']]['skill']} missing")
 
 
-def load_cases(path):
+def load_cases(path, realise=True):
     if path:
         return json.loads(Path(path).read_text())
     result = subprocess.run(["nix", "eval", "--json", f".#checks.x86_64-linux.{CHECK}.passthru.cases"],
@@ -602,7 +602,7 @@ def load_cases(path):
     if result.returncode:
         raise ValueError(f"case evaluation failed: {result.stderr}")
     cases = json.loads(result.stdout)
-    if any("sourcePath" in file and not os.path.lexists(file["sourcePath"]) for case in cases for file in case["files"]):
+    if realise and any("sourcePath" in file and not os.path.lexists(file["sourcePath"]) for case in cases for file in case["files"]):
         # The check's inputs carry every generated-config dependency. Realize
         # them only; no package output or model is started.
         drv = subprocess.run(["nix", "eval", "--raw", f".#checks.x86_64-linux.{CHECK}.drvPath"], cwd=REPO,
@@ -613,6 +613,24 @@ def load_cases(path):
 
 
 # --- one case ----------------------------------------------------------------
+
+def select(items, specs, names=lambda item: [item]):
+    """`--only` filter, shared with probes/delegates/run.py.
+
+    Each spec is a comma-separated list; an entry ending in `*` is a prefix,
+    any other entry an exact id. `names` gives the ids an item answers to.
+    An entry that matches nothing is an error, never a silent no-op.
+    """
+    patterns = [entry.strip() for spec in specs for entry in spec.split(",") if entry.strip()]
+
+    def hit(pattern, item):
+        return any(name.startswith(pattern[:-1]) if pattern.endswith("*") else name == pattern for name in names(item))
+
+    unmatched = [pattern for pattern in patterns if not any(hit(pattern, item) for item in items)]
+    if unmatched:
+        raise ValueError(f"--only matched nothing: {', '.join(unmatched)}")
+    return [item for item in items if not patterns or any(hit(pattern, item) for pattern in patterns)]
+
 
 def resolve(name, overrides, live):
     path = overrides.get(name) or shutil.which(name)
@@ -847,6 +865,30 @@ def raw_tool_names(value):
             yield from raw_tool_names(item)
 
 
+def probe_version(exe, name, env, cwd):
+    """`--version` in the case's own cwd and env, before any model turn.
+
+    A binary that refuses to start here would otherwise surface as an empty
+    stream. Seen live: a devenv project wrapper first on PATH exits 1 outside
+    its own project root ("run kimchi from that devenv root").
+    """
+    result = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=60, check=False, env=env, cwd=cwd)
+    output = result.stdout.strip() or result.stderr.strip()
+    record = {"executable": exe, "version": output}
+    if result.returncode:
+        return record, f"{exe} --version exited {result.returncode} in the fixture: {output[-300:]}; pass --bin {name}=<path>"
+    return record, None
+
+
+def stream_shape(events):
+    """Event types in order of first appearance, with counts: `session x1`."""
+    counts = {}
+    for event in events:
+        kind = str(event.get("type"))
+        counts[kind] = counts.get(kind, 0) + 1
+    return ", ".join(f"{kind} x{count}" for kind, count in counts.items()) or "empty"
+
+
 def run_case(case, prepared, args):
     harness, ctx = HARNESSES[case["runtime"]], prepared["ctx"]
     logs = ctx["logs"]
@@ -857,8 +899,9 @@ def run_case(case, prepared, args):
             env[name] = value
         else:
             return {"status": "ERROR", "detail": f"{name} unavailable: {describe_secret(spec)}"}
-    version = subprocess.run([ctx["exe"], "--version"], capture_output=True, text=True, timeout=60, check=False, env=env, cwd=ctx["repo"])
-    record = {"executable": ctx["exe"], "version": version.stdout.strip() or version.stderr.strip()}
+    record, refused = probe_version(ctx["exe"], harness["exe"], env, ctx["repo"])
+    if refused:
+        return {**record, "status": "ERROR", "detail": refused}
     if prepared.get("preflight"):
         result = subprocess.run(prepared["preflight"], cwd=ctx["repo"], env=env, capture_output=True, timeout=120, check=False, stdin=subprocess.DEVNULL)
         (logs / "prompt-input.json").write_bytes(result.stdout)
@@ -887,7 +930,7 @@ def run_case(case, prepared, args):
     if record["hookDelegates"] and not calls:
         return {**record, "status": "ERROR", "detail": "event extractor missed delegates the hook saw"}
     if stop or not harness["answered"](events):
-        return {**record, "status": "ERROR", "detail": "no answer: " + (", ".join(stop) or f"exit {code}, no completion event")}
+        return {**record, "status": "ERROR", "detail": "no answer: " + (", ".join(stop) or f"exit {code}, no completion event; stream: {stream_shape(events)}")}
     passed = ASSERTIONS[case["expect"]][1](calls)
     names = sorted(set(raw_tool_names(events)))
     summary = ", ".join(f"{call['runtime']}:{call['technique']}" for call in calls) or "no delegates; tools: " + (", ".join(names) or "none")
@@ -930,15 +973,24 @@ def main():
     parser.add_argument("--fixtures", help="case JSON exported from the check; default: evaluate it with Nix")
     parser.add_argument("--harness", action="append", default=[], choices=sorted(HARNESSES), help="harness (repeatable); default all")
     parser.add_argument("--keep", action="store_true", help="keep each case's fixture and scratch HOME")
+    parser.add_argument("--list", action="store_true", help="print every case id, harness and assertion; start nothing")
+    parser.add_argument("--only", action="append", default=[], metavar="ID[,ID|PREFIX*]",
+                        help="run only these cases; a trailing * matches a prefix (repeatable)")
     parser.add_argument("--out", type=Path, help=f"run directory; default {DEFAULT_ROOT}/<UTC time>")
     args = parser.parse_args()
     args.bin = dict(item.split("=", 1) for item in args.bin)
-    cases = load_cases(args.fixtures)
+    # --list needs ids only; it never builds the generated files.
+    cases = load_cases(args.fixtures, realise=not args.list)
     validate(cases)
     unknown = set(args.case) - {case["id"] for case in cases}
     if unknown:
         raise ValueError(f"unknown cases: {sorted(unknown)}")
     cases = [case for case in cases if (not args.case or case["id"] in args.case) and (not args.harness or case["runtime"] in args.harness)]
+    cases = select(cases, args.only, lambda case: [case["id"]])
+    if args.list:
+        for case in cases:
+            print(f"{case['id']}\t{case['runtime']}\t{case['expect']}")
+        return 0
     out = args.out or DEFAULT_ROOT / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     if not args.dry_run:
         check_location(out)

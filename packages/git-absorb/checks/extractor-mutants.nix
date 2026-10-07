@@ -1,8 +1,10 @@
 # Mutants for lib/git-tool-settings/mutate.py over the git-absorb source.
 # Each makes one upstream-shaped change and names the outcome the extractor
 # must produce: `fails` lists guard codes that must all fire; `adds` /
-# `changes` describe an output that must move with the source; a mutant
-# with neither must leave the output identical to the real one.
+# `changes` / `deadKeysAdd` describe an output that must move with the
+# source; a mutant with none must leave the output identical to the real one.
+# What a person must write for a new name is lib/git-tool-settings/rules.nix's
+# to demand; checks/git-tool-settings/rules.nix holds those cases.
 #
 # P* came with the prototype. K* are the independent review's blind spots,
 # each of which the prototype passed silently; every one now fails closed
@@ -17,8 +19,8 @@ let
     append = text;
   };
   replace = file: from: to: {inherit file from to;};
-  # A man-page subsection documenting `absorb.<key>`, so a mutant that adds
-  # a key does not also trip F14 (undocumented setting).
+  # A man-page subsection documenting `absorb.<key>`: the description P2
+  # extracts, and the unread key K9 documents.
   documented = key:
     replace adoc "GENERATE SQUASH COMMITS INSTEAD OF FIXUPS\n" ''
       PROBE ${key}
@@ -112,7 +114,7 @@ in [
         pub const UNUSED_CONFIG_NAME: &str = "absorb.unused";
       '')
     ];
-    fails = ["F9"];
+    deadKeysAdd = ["absorb.unused"];
   }
   {
     name = "P12-subprocess-git-config";
@@ -123,16 +125,6 @@ in [
       '')
     ];
     fails = ["F7" "F9"];
-  }
-  {
-    name = "P13-stale-annotation";
-    annotations.settings."absorb.gone".note = "x";
-    fails = ["F4"];
-  }
-  {
-    name = "P14-annotation-shadows-the-source";
-    annotations.settings."absorb.forceDetach".default = true;
-    fails = ["F4"];
   }
   {
     name = "P15-unclassified-test-cfg";
@@ -164,7 +156,7 @@ in [
         let _ = repo;
             FIXUP_TARGET_ALWAYS_SHA_DEFAULT'')
     ];
-    fails = ["F8" "F9" "F15"];
+    fails = ["F8" "F15"];
   }
   {
     name = "P18-key-parameter-without-caller";
@@ -207,7 +199,6 @@ in [
         }
         pub fn use_k1(repo: &Repository) -> bool { k1(repo, true) }
       '')
-      (documented "kOne")
     ];
     adds = ["absorb.kOne"];
     changes."absorb.kOne".default = true;
@@ -226,7 +217,6 @@ in [
         }
         pub fn use_k2(repo: &Repository) -> bool { k2(repo, "absorb.kTwo") }
       '')
-      (documented "kTwo")
     ];
     adds = ["absorb.kTwo"];
     changes."absorb.kTwo".default = true;
@@ -239,7 +229,8 @@ in [
   {
     name = "K4-same-named-key-const-elsewhere";
     edits = [(replace lib' "mod commute;\n" "mod commute;\nconst FORCE_AUTHOR_CONFIG_NAME: &str = \"absorb.forceAuthorX\";\n")];
-    fails = ["F9"];
+    # The read still resolves to this file's const; the other is dead.
+    deadKeysAdd = ["absorb.forceAuthorX"];
   }
   {
     # A key outside `absorb.` read through the shape is git's own key.
@@ -292,7 +283,7 @@ in [
   {
     name = "K10-man-page-renames-a-key";
     edits = [(replace adoc "    forceDetach = true\n" "    forceDetached = true\n")];
-    fails = ["F8" "F14"];
+    fails = ["F8"];
   }
   {
     name = "K11-negated-ok-arm";
@@ -358,7 +349,6 @@ in [
             }
         }
       '')
-      (documented "odd")
     ];
     adds = ["absorb.odd"];
     changes."absorb.odd" = {

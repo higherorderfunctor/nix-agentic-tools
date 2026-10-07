@@ -1,0 +1,14 @@
+{
+  "live_upstream": "https://llm.kimchi.dev",
+  "timeout": 240,
+  "args": [
+    "--model",
+    "kimchi-dev/minimax-m3",
+    "--thinking",
+    "low",
+    "--mode",
+    "json",
+    "-p",
+    "Call the Agent tool exactly once, in the foreground, with exactly these arguments: subagent_type \"General-Purpose\", description \"probe\", model \"kimchi-dev/glm-5.3-flash\", thinking \"high\", run_in_background false, prompt \"Reply with the single word CHILD_OK. Do not use any tools.\". Do not call any other tool. After it returns, reply with the single word DONE."
+  ]
+}

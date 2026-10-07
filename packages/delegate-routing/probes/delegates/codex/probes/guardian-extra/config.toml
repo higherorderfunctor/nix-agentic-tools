@@ -1,0 +1,13 @@
+model = "gpt-6-luna"
+model_provider = "fake"
+sandbox_mode = "read-only"
+approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+developer_instructions = "CFG-DEV-4000"
+[model_providers.fake]
+name = "fake"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"
+[[hooks.SessionStart]]
+hooks = [{ type = "command", command = "python3 @H@/hook.py" }]

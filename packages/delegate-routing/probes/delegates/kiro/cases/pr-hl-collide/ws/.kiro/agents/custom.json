@@ -1,0 +1,6 @@
+{
+  "description": "workspace agent that shares the global agent's name",
+  "name": "custom",
+  "prompt": "WS_CUSTOM_PROMPT_SENTINEL",
+  "tools": ["*"]
+}

@@ -1,0 +1,73 @@
+{
+  "new": {
+    "_meta": {
+      "kiro": {
+        "steering": [
+          {
+            "name": "snap-inline",
+            "inclusion": "always",
+            "content": "SNAP_INLINE_V2_SENTINEL"
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "call",
+      "method": "session/load",
+      "params": {
+        "sessionId": "@OLD@",
+        "cwd": "$CWD",
+        "mcpServers": [],
+        "_meta": {
+          "kiro": {
+            "steering": [
+              {
+                "name": "snap-inline",
+                "inclusion": "always",
+                "content": "SNAP_INLINE_V2_SENTINEL"
+              }
+            ]
+          }
+        }
+      },
+      "timeout": 60
+    },
+    {
+      "op": "call",
+      "method": "session/prompt",
+      "params": {
+        "sessionId": "@OLD@",
+        "prompt": [
+          {
+            "type": "text",
+            "text": "RESUMED USER_SENTINEL_2"
+          }
+        ]
+      },
+      "timeout": 60
+    },
+    {
+      "op": "call",
+      "method": "_kiro/session/history",
+      "params": {
+        "sessionId": "@OLD@"
+      }
+    },
+    {
+      "op": "call",
+      "method": "_kiro/session/export",
+      "params": {
+        "sessionId": "@OLD@"
+      },
+      "save": {
+        "ZIP": "result.filePath"
+      }
+    },
+    {
+      "op": "sh",
+      "cmd": "unzip -l '$ZIP' | grep -o 'sub-executions/.*'; unzip -p '$ZIP' '*/sub-executions/*' | grep -c CHILD_DONE_SENTINEL; rm -rf \"$(dirname '$ZIP')\""
+    }
+  ]
+}

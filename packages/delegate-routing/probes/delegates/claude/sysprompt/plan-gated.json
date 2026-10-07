@@ -1,0 +1,29 @@
+[
+  {
+    "match": "COORD",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "worker",
+          "prompt": "Subtask WK: reply done.",
+          "subagent_type": "worker"
+        }
+      }
+    ]
+  },
+  {
+    "match": "TEAM",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "mate",
+          "prompt": "Subtask TM: reply done.",
+          "name": "mate",
+          "team_name": "probe-team"
+        }
+      }
+    ]
+  }
+]

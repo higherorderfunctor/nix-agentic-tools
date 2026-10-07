@@ -1,10 +1,16 @@
 {
   "deadKeys": {},
   "settings": {
+    "absorb.autoStageIfNothingStaged": {},
+    "absorb.createSquashCommits": {},
+    "absorb.fixupTargetAlwaysSHA": {},
+    "absorb.forceAuthor": {},
+    "absorb.forceDetach": {},
     "absorb.maxStack": {
       "defaultDescription": "10. A value of 0 or below, or one that does not parse as an integer, also gives 10, silently.",
       "description": "Number of commits, counted back from HEAD, that git-absorb searches for fixup targets. Ignored when `--base` is given; `--no-limit` removes the limit for one run.",
       "replace": ["description"]
-    }
+    },
+    "absorb.oneFixupPerCommit": {}
   }
 }

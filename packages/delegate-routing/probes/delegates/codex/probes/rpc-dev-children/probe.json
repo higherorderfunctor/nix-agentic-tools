@@ -1,0 +1,9 @@
+{
+  "thread": {
+    "developerInstructions": "RPC-DEV-5001",
+    "baseInstructions": "RPC-BASE-5002",
+    "config": { "agents.max_threads": 6 }
+  },
+  "turn": "GO",
+  "timeout": 40
+}

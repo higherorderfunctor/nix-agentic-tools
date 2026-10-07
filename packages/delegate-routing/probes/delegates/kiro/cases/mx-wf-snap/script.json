@@ -1,0 +1,96 @@
+{
+  "capsMeta": {
+    "kiro": {
+      "settings": {
+        "workflows": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "new": {
+    "_meta": {
+      "kiro": {
+        "settings": {
+          "workflows": {
+            "enabled": true
+          }
+        }
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "call",
+      "method": "_kiro/workflow/new",
+      "params": {
+        "parentSessionId": "$SID",
+        "workflow": {
+          "name": "wfsnap",
+          "steps": [
+            {
+              "type": "step",
+              "id": "one",
+              "agent": "custom",
+              "prompt": "WFS_STEP1 do it"
+            },
+            {
+              "type": "step",
+              "id": "two",
+              "agent": "custom",
+              "prompt": "WFS_STEP2 do it"
+            }
+          ]
+        },
+        "inputs": {}
+      },
+      "save": {
+        "WF": "result.workflowId"
+      }
+    },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/invoke",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "op": "sleep",
+      "s": 2
+    },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/pause",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "op": "sleep",
+      "s": 1
+    },
+    {
+      "op": "sh",
+      "cmd": "sed -i 's/_V1_/_V2_/' .kiro/steering/snap.md && cat .kiro/steering/snap.md"
+    },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/resume",
+      "params": {
+        "workflowId": "$WF"
+      }
+    },
+    {
+      "op": "sleep",
+      "s": 12
+    },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/inspect",
+      "params": {
+        "workflowId": "$WF"
+      }
+    }
+  ]
+}

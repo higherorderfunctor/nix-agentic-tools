@@ -1,0 +1,47 @@
+{
+  "capsMeta": { "kiro": { "settings": { "workflows": { "enabled": true } } } },
+  "new": {
+    "_meta": { "kiro": { "settings": { "workflows": { "enabled": true } } } }
+  },
+  "steps": [
+    {
+      "op": "call",
+      "method": "_kiro/workflow/new",
+      "params": {
+        "parentSessionId": "$SID",
+        "workflow": {
+          "name": "wfcap$I",
+          "steps": [
+            {
+              "type": "step",
+              "id": "s1",
+              "agent": "custom",
+              "prompt": "WFCAP_STEP run $I"
+            }
+          ]
+        },
+        "inputs": {}
+      },
+      "save": { "W$I": "result.workflowId" },
+      "repeat": 20
+    },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/invoke",
+      "params": { "workflowId": "$W$I" },
+      "repeat": 20
+    },
+    { "op": "sleep", "s": 12 },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/list",
+      "params": { "sessionId": "$SID" }
+    },
+    { "op": "sleep", "s": 25 },
+    {
+      "op": "call",
+      "method": "_kiro/workflow/list",
+      "params": { "sessionId": "$SID" }
+    }
+  ]
+}

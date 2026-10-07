@@ -1,0 +1,16 @@
+[
+  {
+    "match": "SPAWN",
+    "tools": [
+      {
+        "name": "Agent",
+        "input": {
+          "description": "guide",
+          "prompt": "Subtask CG: reply done.",
+          "subagent_type": "claude-code-guide",
+          "run_in_background": false
+        }
+      }
+    ]
+  }
+]

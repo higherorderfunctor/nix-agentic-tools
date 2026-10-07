@@ -1,0 +1,51 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "spawn_agent",
+          {
+            "task_name": "a",
+            "message": "TASK-A",
+            "fork_turns": "none"
+          },
+          "collaboration"
+        ]
+      ]
+    },
+    {
+      "calls": [
+        [
+          "wait_agent",
+          {
+            "timeout_ms": 140000
+          },
+          "collaboration"
+        ]
+      ]
+    },
+    {
+      "msg": "ROOT DONE"
+    }
+  ],
+  "/root/a": [
+    {
+      "calls": [
+        [
+          "exec",
+          "const r = await tools.exec_command({cmd: \"true\", sandbox_permissions: \"require_escalated\", justification: \"probe escalation\"}); text(JSON.stringify(r));",
+          "custom"
+        ]
+      ]
+    },
+    {
+      "msg": "A DONE"
+    }
+  ],
+  "guardian": [
+    {
+      "sleep": 100,
+      "msg": "{\"risk_level\": \"low\", \"user_authorization\": \"high\", \"outcome\": \"allow\", \"rationale\": \"PROBE-ALLOW\"}"
+    }
+  ]
+}

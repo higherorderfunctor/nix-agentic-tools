@@ -1,0 +1,14 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "exec",
+          "const r = await tools.exec_command({cmd: \"true\", sandbox_permissions: \"require_escalated\", justification: \"probe escalation\"}); text(JSON.stringify(r));",
+          "custom"
+        ]
+      ]
+    },
+    { "msg": "ROOT DONE" }
+  ]
+}

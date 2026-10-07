@@ -1,0 +1,6 @@
+{
+  "description": "user agent named like the v2 default",
+  "name": "kiro_default",
+  "prompt": "KDEFAULT_USER_SENTINEL",
+  "tools": ["*"]
+}
