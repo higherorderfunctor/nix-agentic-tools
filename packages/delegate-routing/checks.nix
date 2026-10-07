@@ -11,13 +11,15 @@ in {
   # harness on PATH and no login: the suite's --dry-run, nothing launched.
   checks.delegate-routing-eval-structure =
     pkgs.runCommand "delegate-routing-eval-structure" {
-      nativeBuildInputs = [pkgs.git pkgs.python3];
+      nativeBuildInputs = [pkgs.diffutils pkgs.git pkgs.python3];
       passthru = {inherit cases;};
     } ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       export HOME="$TMPDIR/home"
       python ${./eval}/test_suite.py
+      # Templated Kiro probe configs must stay byte-identical to their committed paths.
+      python ${./probes/delegates/kiro}/rules.py --check > "$TMPDIR/kiro-rules.log"
       python ${./eval}/suite.py --dry-run --fixtures ${fixtures} --out "$TMPDIR/suite" > "$TMPDIR/dry-run.log"
       touch "$out"
     '';

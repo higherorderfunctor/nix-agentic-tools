@@ -202,8 +202,11 @@ isolation recipe, the caps and the operator steps.
 other reference files own tools, controls, lifecycle and prompt reach.
 `probes/delegates/<harness>/README.md` indexes exact case commands and expected
 excerpts. Captured execution and source-only evidence stay separate. Probes
-write beneath a temporary case tree; Kiro needs an operator-supplied fixture
-home because this probe set does not define its serialized login schema.
+write beneath a temporary case tree. Kiro creates a fake fixture login from
+schema and native type strings when no fixture home is supplied; both replay
+runners stay in an empty network namespace with local service endpoints. Its
+a2/h2/h3 and codex-side inline fixtures share bases and a generator with byte
+comparisons for every case path.
 
 The repo-only `delegate-evidence` dev skill (`dev/skills/delegate-evidence/`)
 sends agents to the map and the suite before they state harness behavior or
