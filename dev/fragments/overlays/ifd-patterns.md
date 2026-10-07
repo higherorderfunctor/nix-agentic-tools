@@ -1,16 +1,9 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-04 — update discovery uses absolute root
-> `.#.updateTargets` selection and keeps IFD disabled; the warm step evaluates
-> `ciPackages`, the unfree-enabled, unchecked set CI builds; git-branchless
-> joins the source-measured sidecars. `fix_sidecar_hashes` also re-derives
-> `pnpmDepsHash`, but only when the stale output is not substitutable; kimchi
-> versions its pnpm-deps and src FOD names; Kiro settings extraction validates
-> its materialized TUI registry and workspace merge with AST checks; Kimchi
-> attributes every config.ts JSON read to the file it reads, censuses every
-> resolved environment read, and no longer extracts a CLI surface nothing read.
-> pnpm_12 inherits nixpkgs' source-built Rust package and nodejs-slim passthru,
-> with sidecar source/cargo repair exposed as fixVendorHash.
+> **Last verified:** 2026-10-06 — all extracted-sidecar drift checks share
+> `lib/extracted/default.nix`; comparisons report a sorted JSON diff and the
+> package’s `passthru.regenerateExtracted` command. Extraction and update
+> ordering are unchanged.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -177,6 +170,14 @@ means an unrelated eval error now surfaces at the warm step rather than a few
 minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
+
+`lib.extracted { inherit pkgs; }` exports
+`mkDriftCheck { name; extracted; committed; }`. All extractor drift checks use
+this builder; `name` is the package whose `passthru.regenerateExtracted`
+rewrites the committed sidecar. Both Semble checks use `name = "semble"`, whose
+regeneration script updates both snapshots. The check exposes
+`passthru.extracted` so those snapshots can still be regenerated while drift is
+red.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use

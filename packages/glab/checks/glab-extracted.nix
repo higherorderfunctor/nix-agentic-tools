@@ -22,25 +22,13 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
+    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.glab.passthru.extracted;
     committed = ../extracted.json;
   in {
-    glab-extracted = pkgs.runCommand "glab-extracted-drift" {} ''
-      jq="${pkgs.jq}/bin/jq"
-      if "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} \
-        '$a == $b' > /dev/null; then
-        echo "ok — packages/glab/extracted.json matches the packaged glab schema" > $out
-      else
-        echo "FAIL: packages/glab/extracted.json is out of sync with glab's internal/config.KeySchema." >&2
-        echo "--- committed ---" >&2
-        "$jq" -S . ${committed} >&2
-        echo "--- extracted from source ---" >&2
-        "$jq" -S . ${extracted} >&2
-        echo "" >&2
-        echo "Regenerate: nix build .#glab.passthru.extracted --no-link --print-out-paths" >&2
-        echo "then cp the result over packages/glab/extracted.json and 'git add' it." >&2
-        exit 1
-      fi
-    '';
+    glab-extracted = mkDriftCheck {
+      inherit committed extracted;
+      name = "glab";
+    };
   };
 }

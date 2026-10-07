@@ -1,9 +1,8 @@
 # Git tool settings: census, sidecar, generator
 
-> **Last verified:** 2026-09-29 — one generator
-> (`lib/git-tool-settings/default.nix`) serves git-branchless, git-absorb and
-> git-revise; `tool-module.nix` mounts each tree at `git.<section>.settings`
-> (packages/git/docs/git.md), and resilient init preserves dependent tasks.
+> **Last verified:** 2026-10-06 — git-tool drift checks use the shared
+> `lib/extracted/default.nix` builder; the generator and module mounts are
+> unchanged.
 >
 > **Settled — do not relitigate.**
 >
@@ -76,8 +75,9 @@ description field.
 ## Checks per tool (`extraction.nix`)
 
 - `<tool>-extracted` — drift between the committed sidecar and a fresh
-  extraction. Staleness only; the update pipeline commits whatever the extractor
-  says.
+  extraction, built by `lib/extracted/default.nix`’s `mkDriftCheck`. It prints a
+  sorted JSON diff and the package’s regeneration command. Staleness only; the
+  update pipeline commits whatever the extractor says.
 - `<tool>-extractor-guards` — the mutants: each trips the guards it names or
   moves the output exactly as declared.
 - `<tool>-extracted-binary` — every extracted key is a string in the installed

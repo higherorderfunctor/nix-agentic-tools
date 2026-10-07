@@ -7,6 +7,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
+    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
     package = self.ciPackages.${system}.kimchi;
     inherit (package.passthru) extracted extractionSources extractionSourceUrls;
     committed = ../extracted.json;
@@ -48,23 +49,10 @@
     runExtractorWithAnnotations = runExtractorForVersion package.version;
     runExtractor = runExtractorWithAnnotations ../extract/annotations.json;
   in {
-    kimchi-extracted = pkgs.runCommand "kimchi-extracted-drift" {} ''
-      jq="${pkgs.jq}/bin/jq"
-      if "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} \
-        '$a == $b' > /dev/null; then
-        echo "ok — packages/kimchi/extracted.json matches the pinned Kimchi and pi sources" > "$out"
-      else
-        echo "FAIL: packages/kimchi/extracted.json is out of sync with its extraction sources." >&2
-        echo "--- committed ---" >&2
-        "$jq" -S . ${committed} >&2
-        echo "--- extracted ---" >&2
-        "$jq" -S . ${extracted} >&2
-        echo "" >&2
-        echo "Regenerate: nix build .#kimchi.passthru.extracted --no-link --print-out-paths" >&2
-        echo "then copy the result over packages/kimchi/extracted.json, format it, and git add it." >&2
-        exit 1
-      fi
-    '';
+    kimchi-extracted = mkDriftCheck {
+      inherit committed extracted;
+      name = "kimchi";
+    };
 
     kimchi-extracted-harness-guard =
       pkgs.runCommand "kimchi-extracted-harness-guard" {

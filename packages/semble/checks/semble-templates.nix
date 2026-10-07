@@ -9,6 +9,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
+    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
     semble = self.ciPackages.${system}.semble;
     committed = ../upstream-templates.json;
     reviewed = import ../lib/templateCoverage.nix;
@@ -130,19 +131,9 @@
         echo "ok — every pinned Semble template has a reviewed content disposition" > "$out"
       '';
 
-    semble-templates-extracted =
-      pkgs.runCommand "semble-templates-extracted-drift" {
-        passthru = {inherit extracted;};
-      } ''
-        if ${pkgs.jq}/bin/jq -e -n --slurpfile actual ${extracted} \
-          --slurpfile committed ${committed} '$actual == $committed' > /dev/null; then
-          echo "ok — packages/semble/upstream-templates.json matches the pinned package" > "$out"
-        else
-          echo "FAIL: packages/semble/upstream-templates.json is out of sync with the pinned Semble package." >&2
-          echo "Regenerate: nix build .#checks.${system}.semble-templates-extracted.passthru.extracted --no-link --print-out-paths" >&2
-          echo "Then copy the result over packages/semble/upstream-templates.json and format it." >&2
-          exit 1
-        fi
-      '';
+    semble-templates-extracted = mkDriftCheck {
+      inherit committed extracted;
+      name = "semble";
+    };
   };
 }

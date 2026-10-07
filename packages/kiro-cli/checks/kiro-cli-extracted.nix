@@ -11,26 +11,14 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
+    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.kiro-cli.passthru.extracted;
     committed = ../extracted.json;
   in {
-    kiro-cli-extracted = pkgs.runCommand "kiro-cli-extracted-drift" {} ''
-      jq="${pkgs.jq}/bin/jq"
-      if "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} \
-        '$a == $b' > /dev/null; then
-        echo "ok — packages/kiro-cli/extracted.json matches the binary and public model snapshot" > $out
-      else
-        echo "FAIL: packages/kiro-cli/extracted.json is out of sync with its extraction sources." >&2
-        echo "--- committed ---" >&2
-        "$jq" -S . ${committed} >&2
-        echo "--- extracted ---" >&2
-        "$jq" -S . ${extracted} >&2
-        echo "" >&2
-        echo "Regenerate: nix build .#ciPackages.${system}.kiro-cli.passthru.extracted --no-link --print-out-paths" >&2
-        echo "then cp the result over packages/kiro-cli/extracted.json, 'nix fmt' it, and 'git add'." >&2
-        exit 1
-      fi
-    '';
+    kiro-cli-extracted = mkDriftCheck {
+      inherit committed extracted;
+      name = "kiro-cli";
+    };
     kiro-models-fixtures = pkgs.runCommand "kiro-models-fixtures" {} ''
       ${pkgs.python3}/bin/python3 ${./kiro-models.py} \
         ${../extract/models.py} ${../model-catalog.json}

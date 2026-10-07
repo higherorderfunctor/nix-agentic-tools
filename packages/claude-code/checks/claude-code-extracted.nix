@@ -18,29 +18,13 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
+    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.claude-code.passthru.extracted;
     committed = ../extracted.json;
   in {
-    claude-code-extracted = pkgs.runCommand "claude-code-extracted-drift" {} ''
-      jq="${pkgs.jq}/bin/jq"
-      if "$jq" -e -n --slurpfile a ${extracted} --slurpfile b ${committed} \
-        '$a == $b' > /dev/null; then
-        echo "ok — packages/claude-code/extracted.json matches the packaged binary" > $out
-      else
-        echo "FAIL: packages/claude-code/extracted.json is out of sync with the claude binary." >&2
-        echo "--- diff: committed (-) vs extracted from binary (+), first 80 lines ---" >&2
-        # `|| true`: diff exits 1 when the files differ, which is the case we are
-        # already in, and `head` closing the pipe early would make it exit 141.
-        # Either would abort this branch before the guidance below is printed.
-        "$jq" -S . ${committed} > committed.json
-        "$jq" -S . ${extracted} > extracted.json
-        ${pkgs.diffutils}/bin/diff -u committed.json extracted.json \
-          | ${pkgs.coreutils}/bin/head -80 >&2 || true
-        echo "" >&2
-        echo "Regenerate: nix build .#ciPackages.${system}.claude-code.passthru.extracted --no-link --print-out-paths" >&2
-        echo "then cp the result over packages/claude-code/extracted.json and 'git add' it." >&2
-        exit 1
-      fi
-    '';
+    claude-code-extracted = mkDriftCheck {
+      inherit committed extracted;
+      name = "claude-code";
+    };
   };
 }

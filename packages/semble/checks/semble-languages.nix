@@ -15,6 +15,7 @@
 }: {
   checks = let
     inherit (pkgs.stdenv.hostPlatform) system;
+    inherit (self.lib.extracted {inherit pkgs;}) mkDriftCheck;
     semble = self.ciPackages.${system}.semble;
     committed = ../extracted.json;
     languages = import ../lib/extracted.nix;
@@ -25,24 +26,13 @@
     '';
   in {
     semble-languages-extracted =
-      pkgs.runCommand "semble-languages-extracted-drift" {
-        passthru = {inherit extracted;};
-        # Forces the eval-side reader over the committed file, so a reshaped
-        # extractor cannot land with a reader that no longer evaluates. An
-        # attribute rather than an assert, so `passthru.extracted` stays
-        # buildable while extracted.json is being regenerated.
+      (mkDriftCheck {
+        inherit committed extracted;
+        name = "semble";
+      }).overrideAttrs (_: {
+        # Force the committed sidecar reader without blocking regeneration.
         parsedLanguageCount = assert lib.assertMsg (languages.parsedLanguages != []) "packages/semble/lib/extracted.nix derives no parsed languages";
           builtins.length languages.parsedLanguages;
-      } ''
-        if ${pkgs.jq}/bin/jq -e -n --slurpfile actual ${extracted} \
-          --slurpfile committed ${committed} '$actual == $committed' > /dev/null; then
-          echo "ok — packages/semble/extracted.json matches the pinned package" > "$out"
-        else
-          echo "FAIL: packages/semble/extracted.json is out of sync with the pinned Semble package." >&2
-          echo "Regenerate: nix build .#checks.${system}.semble-languages-extracted.passthru.extracted --no-link --print-out-paths" >&2
-          echo "Then copy the result over packages/semble/extracted.json and format it." >&2
-          exit 1
-        fi
-      '';
+      });
   };
 }
