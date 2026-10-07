@@ -26,11 +26,10 @@
     extracted = pkgs.runCommand "semble-extracted.json" {} ''
       ${sembleScript "extract-languages" semble ./extract-languages.py} > "$out"
     '';
-  in {
-    semble-languages-extracted = mkDriftCheck {
+  in
+    mkDriftCheck {
       inherit committed extracted;
       name = "semble-languages";
       sidecar = "packages/semble/extracted.json";
     };
-  };
 }

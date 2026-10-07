@@ -7,9 +7,9 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-04 — workflows is an independent external pi
-> extension, delivered as a named package link on both backends; Kimchi removes
-> its static registration and resource toggle before compilation.
+> **Last verified:** 2026-10-06 — all hand fields reject blank values;
+> environment string facts classify unrecorded secrets; collision rows name
+> their cause.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -95,20 +95,23 @@ unless they are scalars, because `filterNulls` does not recurse into lists. So a
 key upstream adds to pi's `Settings` or to config.ts's `readConfigExtras`
 becomes an option at the next re-extraction, and a key it removes fails its
 consumer as an unknown option instead of writing bytes nothing reads. Every
-option is `nullOr` with a null default. Config annotations may name an
-`aliasFor` or the exact `introduced` release. The extractor validates every
-annotation before release gating, then includes only active rows in its census
-and generated sidecar. Alias keys and inert keys have no option. A key is inert
-when upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
-consumes it: nothing reads the loaded member, and nothing outside `config.ts`
-reads the raw `readConfigExtras` member, while `config.ts` still parses it to
-warn that it is obsolete. A release that consumes it again clears the flag, and
-the key becomes an option. The option generator keeps three hand tables: two
-exclusions (`apiKey` and `gitTokens`, secrets delivered by `ai.kimchi.apiKey`
-and `ai.kimchi.gitTokens`), one refinement (`modelRoles`, whose role names and
-single-string roles come from the sidecar while the non-blank and non-empty
-checks do not), and one description note. `report.stale*` lists any row whose
-path the sidecar lost, and `checks/native-options.nix` fails on it.
+option is `nullOr` with a null default. Config rows record acceptance and may
+carry `aliasFor` or `excluded`. `extract/rules.nix` defines the config and
+environment surfaces once, using `lib/extracted/default.nix`'s `reconcile`.
+Consumers merge those rows with the committed facts; extraction itself emits
+facts and clones alias types from the rows' `aliasFor` references. Alias keys
+and inert keys have no option. A key is inert when upstream tags its
+`KimchiConfig` member `@deprecated` and no Kimchi code consumes it: nothing
+reads the loaded member, and nothing outside `config.ts` reads the raw
+`readConfigExtras` member, while `config.ts` still parses it to warn that it is
+obsolete. A release that consumes it again clears the flag, and the key becomes
+an option. Secret exclusions (`apiKey`, its alias, and `gitTokens`) live in the
+config rows, naming `ai.kimchi.apiKey` or `ai.kimchi.gitTokens` as their
+delivery path. The option generator keeps two hand tables: one refinement
+(`modelRoles`, whose role names and single-string roles come from the sidecar
+while the non-blank and non-empty checks do not), and one description note.
+`report.stale*` lists any refinement or note whose path the sidecar lost, and
+`checks/native-options.nix` fails on it. Reconcile detects stale exclusion rows.
 
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's harness additions (`fermentV2`, `modelRoles` and the rest, each
@@ -145,12 +148,29 @@ factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`,
 which fails evaluation if the pinned Kimchi no longer reads it or starts
 overwriting it.
 
-Every resolved environment name is either published from an annotation (a
-`controls` description and optional `introduced` release) or listed, with a
-reason, under `environmentIgnored` in `extract/annotations.json`. An
-`introduced` release lets preparation classify a newly discovered name before
-the package pin moves without making the pinned release's freshness check stale.
-Pi's own names follow Kimchi's `piConfig.name`
+The extractor emits every resolved environment name with `type = "string"`,
+which feeds the secret classifier for names without a recorded row. A recorded
+`controls` row reviews an environment name without additional secret fields.
+Environment rows alone supply non-blank `controls` prose; grouped
+`environmentIgnored` names expand into `ignored = "<reason>"` rows inside
+`rules.nix`, so they stay in the facts but disappear from the consumer view.
+Reconcile reports removed rows or users, unresolved required fields, missing
+secret delivery rows, invalid or fact-shadowing rows, duplicate ignore names or
+controls/ignore collisions, and unrecorded derivable names. Collision rows keep
+their controls or ignore reason and carry a field naming the collision, so
+`bad-row` reports its cause. Rows fill only null or absent facts unless their
+`replace` list explicitly names a field. Ignored rows skip required-field
+checks. Only string values and string-to-string maps enter the shared
+runtime-values classifier.
+
+Regeneration first writes the sidecar, then evaluates
+`checks.<system>.kimchi-extracted.passthru.rows` against it and adds `{}` rows
+for new derivable, non-secret names. The drift and unrecorded diagnostics print
+the same rows command; row failures appear only after the sidecar matches.
+Failures remain data: regeneration completes and the update PR carries the facts
+and rows, while `kimchi-extracted` fails on anything that still needs a human. A
+new typed config key becomes an option automatically; a new environment name
+needs a `controls` row. Pi's own names follow Kimchi's `piConfig.name`
 (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). The extractor uses
 the TypeScript compiler's checker for declared keys and types and syntax tree
 queries for environment access sites, while config queries cross-check compiler

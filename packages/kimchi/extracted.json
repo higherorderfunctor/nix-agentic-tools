@@ -5,7 +5,6 @@
         "typeExpression": "string",
         "type": "string",
         "optional": true,
-        "aliasFor": "apiKey",
         "project": true
       },
       "apiKey": {
@@ -18,7 +17,6 @@
         "typeExpression": "string",
         "type": "string",
         "optional": true,
-        "aliasFor": "deviceId",
         "project": true
       },
       "deviceId": {
@@ -319,409 +317,1074 @@
   },
   "environment": {
     "variables": {
+      "__MINIMATCH_TESTING_PLATFORM__": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "APPDATA": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_ACCESS_KEY_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_ACCOUNT_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_BEARER_TOKEN_BEDROCK": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_BEDROCK_FORCE_CACHE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_BEDROCK_FORCE_HTTP1": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_BEDROCK_SKIP_AUTH": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_CONTAINER_AUTHORIZATION_TOKEN": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_CONTAINER_CREDENTIALS_FULL_URI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_CREDENTIAL_EXPIRATION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_CREDENTIAL_SCOPE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_DEFAULT_REGION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_EC2_METADATA_DISABLED": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_EC2_METADATA_SERVICE_ENDPOINT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_LAMBDA_BENCHMARK_MODE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_LAMBDA_NODEJS_NO_GLOBAL_AWSLAMBDA": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_LOGIN_CACHE_DIRECTORY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_NEW_RETRIES_2026": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_PROFILE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_REGION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_ROLE_ARN": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_ROLE_SESSION_NAME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_SDK_JS_NODE_VERSION_SUPPORT_WARNING_DISABLED": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_SECRET_ACCESS_KEY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_SESSION_TOKEN": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AWS_WEB_IDENTITY_TOKEN_FILE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AZURE_OPENAI_API_VERSION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AZURE_OPENAI_BASE_URL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AZURE_OPENAI_DEPLOYMENT_NAME_MAP": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AZURE_OPENAI_ENDPOINT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "AZURE_OPENAI_RESOURCE_NAME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
       "CASTAI_API_KEY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "Cast AI API key fallback for the stats command when config.json and KIMCHI_API_KEY provide none"
+        "type": "string"
+      },
+      "CI": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CLOUD_RUN_JOB": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "CLOUDSDK_CONFIG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "COLORFGBG": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "COLORTERM": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "COLUMNS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "comspec": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ComSpec": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "DEBUG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "DEBUG_AUTH": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "DETECT_GCP_RETRIES": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
       },
       "DIFF_THEME": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "syntax-highlighting theme for rendered diffs (default github-dark)"
+        "type": "string"
+      },
+      "DISPLAY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "EDITOR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "FUNCTION_NAME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "FUNCTION_TARGET": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GAE_MODULE_NAME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GAE_SERVICE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GCE_METADATA_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GCE_METADATA_IP": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "gcloud_project": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GCLOUD_PROJECT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GHOSTTY_RESOURCES_DIR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "google_application_credentials": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GOOGLE_APPLICATION_CREDENTIALS": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GOOGLE_CLOUD_LOCATION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "google_cloud_project": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GOOGLE_CLOUD_PROJECT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GOOGLE_CLOUD_QUOTA_PROJECT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "GRACEFUL_FS_PLATFORM": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "HF_HOME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "HF_TOKEN": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "HF_TOKEN_PATH": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "HOME": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "HOMEBREW_PREFIX": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "http_proxy": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "HTTP_PROXY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "https_proxy": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "HTTPS_PROXY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "ITERM_SESSION_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "JEST_WORKER_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
       },
       "JS_DEBUG_PATH": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "js-debug DAP server script used by the debugger extension"
+        "type": "string"
+      },
+      "K_CONFIGURATION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "K_SERVICE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
       },
       "KIMCHI_ACTIVE_FERMENT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "active ferment identifier inherited by worker processes"
+        "type": "string"
       },
       "KIMCHI_AGENT_PERSONA": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "persona selected for an agent worker"
+        "type": "string"
       },
       "KIMCHI_API_KEY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "Kimchi API authentication; overrides config.json"
+        "type": "string"
       },
       "KIMCHI_AUTO_GIT_INIT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "automatic git initialization for ferment work"
+        "type": "string"
       },
       "KIMCHI_BASE_URL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "LLM gateway base URL; overrides configured and region-derived endpoints"
+        "type": "string"
       },
       "KIMCHI_CLIPBOARD_FORCE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "clipboard backend override"
+        "type": "string"
       },
       "KIMCHI_CODING_AGENT_DIR": {
         "consumerOverridable": false,
         "readBy": ["kimchi", "pi"],
-        "controls": "Kimchi harness configuration directory (pi's ENV_AGENT_DIR, named from Kimchi's piConfig.name)",
-        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
       },
       "KIMCHI_CODING_AGENT_SESSION_DIR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "pi session storage directory (pi's ENV_SESSION_DIR, named from Kimchi's piConfig.name)"
+        "type": "string"
       },
       "KIMCHI_CONTEXT_DATE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "prompt context date shown in place of the wall-clock date"
+        "type": "string"
       },
       "KIMCHI_DAP_BINARIES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "DAP adapter binary overrides"
+        "type": "string"
       },
       "KIMCHI_DEBUG_PROMPTS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "prompt debugging output"
+        "type": "string"
       },
       "KIMCHI_DEBUG_SESSION": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "session debugging output"
+        "type": "string"
       },
       "KIMCHI_DISABLE_BUILTIN_PROVIDERS": {
         "consumerOverridable": false,
         "readBy": ["pi"],
-        "controls": "suppression of pi built-in providers",
-        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
       },
       "KIMCHI_ENABLE_RESOURCES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "transient comma-separated resource enablement"
+        "type": "string"
       },
       "KIMCHI_FERMENT_DISABLE_PARALLEL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "parallel ferment execution"
+        "type": "string"
       },
       "KIMCHI_FERMENT_LOCK_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "ferment lock directory"
+        "type": "string"
       },
       "KIMCHI_FERMENT_LOCK_MAX_AGE_MS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "ferment stale-lock age"
+        "type": "string"
       },
       "KIMCHI_FERMENTS_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "ferment state directory"
+        "type": "string"
       },
       "KIMCHI_IDE_LOCKFILE_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "IDE lock-file directory"
+        "type": "string"
       },
       "KIMCHI_INFRA_BREAKER_THRESHOLD": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "infrastructure circuit-breaker failure threshold"
+        "type": "string"
       },
       "KIMCHI_LSP_BINARIES": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "LSP server binary overrides"
+        "type": "string"
       },
       "KIMCHI_MCP_E2E_KEYRING_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "MCP end-to-end test keyring directory"
+        "type": "string"
       },
       "KIMCHI_MEMORY_CAPTURE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "memory capture kill-switch ('off' disables capture)"
+        "type": "string"
       },
       "KIMCHI_MEMORY_DRAIN_CONCURRENCY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "memory capture drain concurrency"
+        "type": "string"
       },
       "KIMCHI_NO_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "explicit proxy bypass list"
+        "type": "string"
       },
       "KIMCHI_NO_UPDATE_CHECK": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "background Kimchi update check"
+        "type": "string"
       },
       "KIMCHI_OAUTH_TEMPLATE_DIR": {
         "consumerOverridable": false,
         "readBy": ["kimchi"],
-        "controls": "OAuth result-page template directory",
-        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
       },
       "KIMCHI_OLLAMA_HOST": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "Ollama host URL"
+        "type": "string"
       },
       "KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "preserved inherited pi agent directory"
+        "type": "string"
       },
       "KIMCHI_PARENT_SESSION_ID": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "parent session identity for subagents"
+        "type": "string"
       },
       "KIMCHI_PERMISSIONS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "initial permission mode"
+        "type": "string"
       },
       "KIMCHI_PROXY": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "HTTP and HTTPS proxy override"
+        "type": "string"
       },
       "KIMCHI_PROXY_HELPER": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "SSH proxy helper executable"
+        "type": "string"
       },
       "KIMCHI_REDACTION_ENABLED": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "PII redaction override"
+        "type": "string"
       },
       "KIMCHI_REGION": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "account region whose endpoints Kimchi uses (us or eu); overrides config.json region, and an unknown value counts as unset"
+        "type": "string"
       },
       "KIMCHI_REMOTE_ENDPOINT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "remote execution endpoint"
+        "type": "string"
       },
       "KIMCHI_REMOTE_RUN": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "remote execution mode"
+        "type": "string"
       },
       "KIMCHI_REVIEW_LOG": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "session-review log path"
+        "type": "string"
       },
       "KIMCHI_REVIEW_THRESHOLD": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "session-review threshold"
+        "type": "string"
       },
       "KIMCHI_SANDBOX": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "sandbox detection override"
+        "type": "string"
       },
       "KIMCHI_SESSION_REVIEW": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "session-review enablement"
+        "type": "string"
       },
       "KIMCHI_STREAM_IDLE_TIMEOUT_MS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "outbound HTTP stream idle timeout"
+        "type": "string"
       },
       "KIMCHI_SUBAGENT": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "subagent process marker"
+        "type": "string"
       },
       "KIMCHI_TAGS": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "tags attached to LLM requests"
+        "type": "string"
       },
       "KIMCHI_TELEMETRY_DEBUG": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "telemetry debugging output"
+        "type": "string"
       },
       "KIMCHI_TELEMETRY_ENABLED": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "telemetry enablement override"
+        "type": "string"
+      },
+      "KIMCHI_TEST_HARNESS": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "KIMCHI_TUI_E2E_CLIPBOARD_IMAGE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
       },
       "KIMCHI_WEB_APP_URL": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "Kimchi web application base URL"
+        "type": "string"
       },
       "KIMCHI_WHEEL_SCROLL_LINES": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": "mouse-wheel scroll lines in the TUI; overrides config.json tui.wheelScrollLines"
+        "type": "string"
+      },
+      "KIMI_CODE_OAUTH_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "KIMI_OAUTH_HOST": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "KITTY_WINDOW_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "LINES": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
       },
       "LLAMA_BASE_URL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "default llama.cpp server URL offered by pi's llama provider login"
+        "type": "string"
       },
       "MCP_OAUTH_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "legacy MCP OAuth token directory read during keyring migration (default <harness>/mcp-oauth)"
+        "type": "string"
+      },
+      "MEM0_TELEMETRY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "METADATA_SERVER_DETECTION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "MOSH_CONNECTION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "no_proxy": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "NO_PROXY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "NODE_DEBUG": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "NODE_ENV": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
       },
       "OLLAMA_HOST": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "Ollama endpoint; takes precedence over KIMCHI_OLLAMA_HOST"
+        "type": "string"
+      },
+      "OPENCODE_CONFIG": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "OSTYPE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "PATH": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "PATHEXT": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
       },
       "PI_CACHE_RETENTION": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "provider prompt-cache retention"
+        "type": "string"
       },
       "PI_CLEAR_ON_SHRINK": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "terminal clearing when content shrinks"
+        "type": "string"
       },
       "PI_CODING_AGENT_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "pi agent directory the caller inherited; entry.ts copies it to KIMCHI_ORIGINAL_PI_CODING_AGENT_DIR (unless that is set) before pointing pi at the Kimchi harness, and pi package lookup reads that copy"
+        "type": "string"
       },
       "PI_EXPERIMENTAL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "pi experimental features"
+        "type": "string"
       },
       "PI_HARDWARE_CURSOR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "terminal hardware cursor"
+        "type": "string"
       },
       "PI_HYPERLINKS": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "terminal hyperlink capability"
+        "type": "string"
       },
       "PI_IMAGE_PROTOCOL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "terminal image protocol"
+        "type": "string"
       },
       "PI_INSTALLER_API_BASE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "managed installer API base URL"
+        "type": "string"
       },
       "PI_MANAGED_INSTALL_ROOT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "managed pi installation root"
+        "type": "string"
       },
       "PI_MCP_ADAPTER_KEYRING_RECOVERY_HELPER": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "MCP keyring recovery helper executable"
+        "type": "string"
       },
       "PI_MCP_ADAPTER_KEYRING_RECOVERY_NODE": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "MCP keyring recovery Node.js executable"
+        "type": "string"
       },
       "PI_OAUTH_CALLBACK_HOST": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "OAuth callback bind host"
+        "type": "string"
       },
       "PI_OFFLINE": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "pi startup network operations"
+        "type": "string"
       },
       "PI_PACKAGE_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi", "pi"],
-        "controls": "pi package and runtime asset directory"
+        "type": "string"
       },
       "PI_SHARE_VIEWER_URL": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "shared-session viewer base URL"
+        "type": "string"
       },
       "PI_SKIP_VERSION_CHECK": {
         "consumerOverridable": false,
         "readBy": ["pi"],
-        "controls": "pi version check",
-        "reason": "src/entry.ts assigns it on every launch before anything reads it"
+        "reason": "src/entry.ts assigns it on every launch before anything reads it",
+        "type": "string"
       },
       "PI_STARTUP_BENCHMARK": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "interactive startup benchmark"
+        "type": "string"
       },
       "PI_TELEMETRY": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "pi install telemetry"
+        "type": "string"
       },
       "PI_TIMING": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "startup timing instrumentation"
+        "type": "string"
       },
       "PI_TRUE_COLOR": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "terminal true-color capability"
+        "type": "string"
       },
       "PI_TUI_DEBUG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "TUI debug logging"
+        "type": "string"
       },
       "PI_TUI_DEBUG_REDRAW": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "TUI redraw logging"
+        "type": "string"
       },
       "PI_TUI_ESC_TIMEOUT": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "TUI escape-sequence timeout"
+        "type": "string"
       },
       "PI_TUI_NO_CLEAR_SCROLLBACK": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "scrollback clearing in Kimchi's pi-tui patch"
+        "type": "string"
       },
       "PI_TUI_WRITE_LOG": {
         "consumerOverridable": true,
         "readBy": ["pi"],
-        "controls": "raw TUI ANSI output log path"
+        "type": "string"
+      },
+      "PNPM_HOME": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ProgramFiles": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "ProgramFiles(x86)": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "SHELL": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
       },
       "SKILLS_DIR": {
         "consumerOverridable": true,
         "readBy": ["kimchi"],
-        "controls": "skills-manager skills directory (default <cwd>/skills)"
+        "type": "string"
+      },
+      "SMITHY_NEW_RETRIES_2026": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "SSH_CLIENT": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "SSH_CONNECTION": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "SSH_TTY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "STY": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "SystemRoot": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "TERM": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "TERM_PROGRAM": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "TERMINAL_EMULATOR": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "TERMUX_VERSION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "TEST_GRACEFUL_FS_GLOBAL_PATCH": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "TMUX": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "UNDICI_NO_WASM_SIMD": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "USER": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "USERNAME": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "USERPROFILE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "VISUAL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "VITEST": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "WARP_SESSION_ID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "WARP_TERMINAL_SESSION_UUID": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "WAYLAND_DISPLAY": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "WEZTERM_PANE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "WINDIR": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "WS_NO_BUFFER_UTIL": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "WS_NO_UTF_8_VALIDATE": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
+      },
+      "WSL_DISTRO_NAME": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "WSL_INTEROP": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "WSLENV": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "WT_SESSION": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "XDG_CACHE_HOME": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "XDG_CONFIG_HOME": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "XDG_DATA_HOME": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi"],
+        "type": "string"
+      },
+      "XDG_SESSION_TYPE": {
+        "consumerOverridable": true,
+        "readBy": ["kimchi", "pi"],
+        "type": "string"
+      },
+      "ZELLIJ": {
+        "consumerOverridable": true,
+        "readBy": ["pi"],
+        "type": "string"
       }
     }
   },

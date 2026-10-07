@@ -10,11 +10,10 @@
     inherit (import ../../../lib/extracted {inherit pkgs;}) mkDriftCheck;
     extracted = self.ciPackages.${system}.chatgpt-codex.passthru.extracted;
     committed = ../extracted.json;
-  in {
-    chatgpt-codex-extracted = mkDriftCheck {
+  in
+    mkDriftCheck {
       inherit committed extracted;
       name = "chatgpt-codex";
       sidecar = "packages/chatgpt-codex/extracted.json";
     };
-  };
 }

@@ -458,6 +458,7 @@ rec {
     attr,
     dest,
     pkgs,
+    rows ? null,
   }: ''
     echo "${attr}: regenerating ${dest}"
     extracted=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
@@ -466,6 +467,10 @@ rec {
     ${pkgs.coreutils}/bin/chmod 644 "${dest}"
     ${pkgs.nix}/bin/nix fmt -- "${dest}"
     echo "${attr}: wrote ${dest}"
+    ${pkgs.lib.optionalString (rows != null) ''
+      ${(import ./extracted {inherit pkgs;}).mkRowsRegen rows}
+      echo "${attr}: wrote ${rows.path}"
+    ''}
   '';
 
   # `passthru.regenerateExtracted`: the sidecar regeneration for a package
@@ -480,10 +485,10 @@ rec {
   # Without it the bump PR ships the old sidecar and fails the package's
   # drift check, and a failure holds the bump back on either path.
   #
-  # `targets` are `mkExtractRegen` arguments: `attr` is any flake attribute
-  # path whose `passthru.extracted` produces the sidecar (a check's, when the
-  # package itself must stay byte-identical to upstream), `dest` the
-  # repository path it replaces.
+  # `targets` are `mkExtractRegen` arguments: `attr` is the package name in
+  # `ciPackages` whose `passthru.extracted` produces the sidecar; `dest` is the
+  # repository path it replaces. Optional
+  # `rows = {name; path;}` names the drift check and its rows destination.
   mkRegenerateExtracted = {
     name,
     pkgs,

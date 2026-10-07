@@ -638,7 +638,10 @@ function discoverProjectConfigKeys(configSource, annotations, checker, ts) {
 
   const result = new Set(canonical);
   for (const [name, annotation] of Object.entries(annotations)) {
-    if (annotation.aliasFor && canonical.has(annotation.aliasFor))
+    if (
+      typeof annotation?.aliasFor === "string" &&
+      canonical.has(annotation.aliasFor)
+    )
       result.add(name);
   }
   return result;
@@ -894,7 +897,6 @@ function extractConfig(
   kimchiSources,
   checker,
   analysisChecker,
-  kimchiVersion,
   ts,
 ) {
   // Every name below is resolved as config.ts itself sees it: Kimchi 1.1.37
@@ -913,8 +915,14 @@ function extractConfig(
     return membersOfDeclaration(declaration, checker, ts, true);
   };
   const keys = { ...extras };
-  keys.api_key = structuredClone(keys.apiKey);
-  keys.device_id = structuredClone(keys.deviceId);
+  const aliases = Object.entries(annotations).filter(
+    ([name, row]) =>
+      discovered.has(name) &&
+      typeof row?.aliasFor === "string" &&
+      keys[row.aliasFor],
+  );
+  for (const [name, row] of aliases)
+    keys[name] = structuredClone(keys[row.aliasFor]);
   // These objects are read behind presence/type guards rather than declared in
   // readConfigExtras, so absence is a valid state even though their nested
   // interfaces describe required fields once the object exists.
@@ -925,6 +933,9 @@ function extractConfig(
     typeExpression: "TelemetryConfig",
     properties: interfaceMembers("TelemetryConfig"),
   };
+  // readTelemetryConfig returns apiKey resolved from KIMCHI_API_KEY or the
+  // top-level config key; it never reads telemetry.apiKey. Refuse that inert
+  // input rather than generating an option that Kimchi silently ignores.
   delete keys.telemetry.properties.apiKey;
   for (const property of Object.values(keys.telemetry.properties)) {
     // readTelemetryConfig independently validates each input member and fills
@@ -996,11 +1007,8 @@ function extractConfig(
       continue;
     validateRuntimeDescriptor(name, descriptor, extrasValidation);
   }
-  for (const [alias, canonical] of [
-    ["api_key", "apiKey"],
-    ["device_id", "deviceId"],
-  ]) {
-    const kind = extras[canonical].type;
+  for (const [alias, row] of aliases) {
+    const kind = keys[row.aliasFor].type;
     if (!extrasValidation.get(alias)?.has(kind)) {
       fail(
         `config.json validation shape changed: ${alias} is no longer guarded as a ${kind}`,
@@ -1023,50 +1031,9 @@ function extractConfig(
       "config.json exposes a top-level 'harness' key; this collides with the reserved harness settings namespace",
     );
   }
-  const annotationEntries = Object.entries(annotations).map(
-    ([name, annotation]) => {
-      if (
-        !annotation ||
-        typeof annotation !== "object" ||
-        Array.isArray(annotation)
-      )
-        fail(`config.${name} must be an object`);
-      const handKeys = Object.keys(annotation).filter(
-        (key) => key !== "aliasFor" && key !== "introduced",
-      );
-      if (handKeys.length)
-        fail(`config.${name} has unknown keys: ${JSON.stringify(handKeys)}`);
-      if (
-        annotation.aliasFor !== undefined &&
-        (typeof annotation.aliasFor !== "string" || !annotation.aliasFor.trim())
-      )
-        fail(`config.${name}.aliasFor must be a non-empty string`);
-      return [
-        name,
-        annotation,
-        releaseAtLeast(
-          kimchiVersion,
-          annotation.introduced,
-          `config.${name}.introduced`,
-        ),
-      ];
-    },
-  );
-  const activeAnnotations = Object.fromEntries(
-    annotationEntries
-      .filter(([, , active]) => active)
-      .map(([name, annotation]) => [name, annotation]),
-  );
-  const expected = new Set(Object.keys(activeAnnotations));
-  const unknown = [...discovered].filter((key) => !expected.has(key)).sort();
-  const missing = [...expected].filter((key) => !discovered.has(key)).sort();
-  if (unknown.length || missing.length)
-    fail(
-      `config.json key census changed; new=${JSON.stringify(unknown)}, missing=${JSON.stringify(missing)}`,
-    );
   const projectKeys = discoverProjectConfigKeys(
     sourceFile,
-    activeAnnotations,
+    annotations,
     checker,
     ts,
   );
@@ -1078,12 +1045,9 @@ function extractConfig(
     analysisChecker,
     ts,
   );
-  for (const [name, annotation] of Object.entries(activeAnnotations)) {
-    if (!keys[name])
-      fail(`no compiler-derived type for config.json key ${name}`);
+  for (const name of discovered) {
     keys[name] = {
-      ...keys[name],
-      ...(annotation.aliasFor ? { aliasFor: annotation.aliasFor } : {}),
+      ...(keys[name] ?? { type: null }),
       ...(inert.has(name) ? { deprecated: inert.get(name), inert: true } : {}),
       project: projectKeys.has(name),
     };
@@ -1980,30 +1944,11 @@ function bindPatchSource(path, text, ts) {
   };
 }
 
-function releaseAtLeast(actual, introduced, label) {
-  if (introduced === undefined) return true;
-  const parse = (version) => {
-    if (!/^\d+\.\d+\.\d+$/.test(version))
-      fail(`${label} has invalid release ${JSON.stringify(version)}`);
-    return version.split(".").map(Number);
-  };
-  const actualParts = parse(actual);
-  const introducedParts = parse(introduced);
-  for (let index = 0; index < actualParts.length; index++) {
-    if (actualParts[index] !== introducedParts[index])
-      return actualParts[index] > introducedParts[index];
-  }
-  return true;
-}
-
 async function extractEnvironment(
   kimchiSourceFiles,
   piSourceFiles,
   patchPaths,
-  annotations,
-  ignored,
   overwritten,
-  kimchiVersion,
   context,
 ) {
   const { ts } = context;
@@ -2030,97 +1975,9 @@ async function extractEnvironment(
     }))
       reads.pi.add(name);
   }
-  // The census runs over every resolved read, not a KIMCHI_/PI_ subset: a
-  // name is either published (annotations) or ignored with a reason, and
-  // both lists must match what the sources actually read.
   const discovered = new Set([...reads.kimchi, ...reads.pi]);
-  const annotationEntries = Object.entries(annotations).map(
-    ([name, annotation]) => {
-      if (
-        !annotation ||
-        typeof annotation !== "object" ||
-        Array.isArray(annotation)
-      )
-        fail(`environment.${name} must be an object`);
-      const handKeys = Object.keys(annotation).filter(
-        (key) => key !== "controls" && key !== "introduced",
-      );
-      if (handKeys.length)
-        fail(
-          `environment.${name} has unknown keys: ${JSON.stringify(handKeys)}`,
-        );
-      if (typeof annotation.controls !== "string" || !annotation.controls)
-        fail(`environment.${name} needs a non-empty 'controls' description`);
-      return [
-        name,
-        annotation,
-        releaseAtLeast(
-          kimchiVersion,
-          annotation.introduced,
-          `environment.${name}.introduced`,
-        ),
-      ];
-    },
-  );
-  const activeAnnotations = Object.fromEntries(
-    annotationEntries
-      .filter(([, , active]) => active)
-      .map(([name, annotation]) => [name, annotation]),
-  );
-  const expected = new Set(Object.keys(activeAnnotations));
-  // Ignored names are grouped under one shared reason, but each is an exact
-  // name: a prefix or pattern would reopen the blind spot the census closes.
-  const ignoredEntries = Object.entries(ignored).map(([group, entry]) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry))
-      fail(`environmentIgnored.${group} must be an object`);
-    const handKeys = Object.keys(entry).filter(
-      (key) => key !== "introduced" && key !== "names" && key !== "reason",
-    );
-    if (handKeys.length)
-      fail(
-        `environmentIgnored.${group} has unknown keys: ${JSON.stringify(handKeys)}`,
-      );
-    if (typeof entry.reason !== "string" || !entry.reason.trim())
-      fail(`environmentIgnored.${group} needs a non-empty string reason`);
-    if (
-      !Array.isArray(entry.names) ||
-      !entry.names.length ||
-      entry.names.some((name) => typeof name !== "string" || !name.trim())
-    )
-      fail(
-        `environmentIgnored.${group} needs a non-empty names list of non-empty strings`,
-      );
-    return [
-      group,
-      entry,
-      releaseAtLeast(
-        kimchiVersion,
-        entry.introduced,
-        `environmentIgnored.${group}.introduced`,
-      ),
-    ];
-  });
-  const allIgnored = ignoredEntries.flatMap(([, entry]) => entry.names);
-  if (new Set(allIgnored).size !== allIgnored.length)
-    fail("environmentIgnored lists a name in more than one group");
-  const ignoredList = ignoredEntries
-    .filter(([, , active]) => active)
-    .flatMap(([, entry]) => entry.names);
-  const ignoredNames = new Set(ignoredList);
-  const unknown = [...discovered]
-    .filter((name) => !expected.has(name) && !ignoredNames.has(name))
-    .sort();
-  const missing = [...expected].filter((name) => !discovered.has(name)).sort();
-  const staleIgnored = [...ignoredNames]
-    .filter((name) => !discovered.has(name))
-    .sort();
-  const both = [...expected].filter((name) => ignoredNames.has(name)).sort();
-  if (unknown.length || missing.length || staleIgnored.length || both.length)
-    fail(
-      `environment census changed; new=${JSON.stringify(unknown)}, missing=${JSON.stringify(missing)}, staleIgnored=${JSON.stringify(staleIgnored)}, annotatedAndIgnored=${JSON.stringify(both)}`,
-    );
   const variables = {};
-  for (const [name, annotation] of Object.entries(activeAnnotations)) {
+  for (const name of discovered) {
     const fixed = overwritten.has(name);
     variables[name] = {
       consumerOverridable: !fixed,
@@ -2128,13 +1985,13 @@ async function extractEnvironment(
         .filter(([, names]) => names.has(name))
         .map(([runtime]) => runtime)
         .sort(),
-      controls: annotation.controls,
       ...(fixed
         ? {
             reason:
               "src/entry.ts assigns it on every launch before anything reads it",
           }
         : {}),
+      type: "string",
     };
   }
   return { variables: sortObject(variables) };
@@ -2338,7 +2195,6 @@ async function main() {
       ),
       checker,
       analysisChecker,
-      args["kimchi-version"],
       ts,
     ),
     environment: await extractEnvironment(
@@ -2351,15 +2207,11 @@ async function main() {
           sourceFile.fileName.endsWith(".js"),
       ),
       patchPaths,
-      annotations.environment,
-      annotations.environmentIgnored ??
-        fail("annotations lack environmentIgnored"),
       launchOverwrites(
         requireSource(join(kimchiRoot, "src/entry.ts")),
         program,
         environmentContext,
       ),
-      args["kimchi-version"],
       environmentContext,
     ),
     harness: extractHarness(

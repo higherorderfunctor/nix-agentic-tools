@@ -78,45 +78,45 @@ in {
     # The extraction's own tools (asciidoc for git-absorb's man page) are
     # what the mutants need too.
     inherit (extracted) nativeBuildInputs;
-  in {
+  in
+    {
+      # The extractor fails closed: every mutant trips the guards it names or
+      # moves the output exactly as it says.
+      "${name}-extractor-guards" =
+        pkgs.runCommand "${name}-extractor-guards" {
+          inherit nativeBuildInputs;
+          PYTHONPATH = shared;
+        } ''
+          ${strict}
+          python3 ${shared + "/mutate.py"} \
+            --annotations ${extractDir + "/annotations.json"} \
+            --baseline ${extracted} \
+            --extractor ${extractDir + "/extract.py"} \
+            --mutants ${pkgs.writeText "${name}-extractor-mutants.json" (builtins.toJSON mutants)} \
+            --src ${patchedSource} >"$out"
+        '';
+
+      # Every key the census reports (a `<name>` family by its literal prefix)
+      # is a string in the built package, so the census cannot describe a key
+      # the release does not contain.
+      "${name}-extracted-binary" = pkgs.runCommand "${name}-extracted-binary" {} ''
+        ${strict}
+        target=${package}/${installed}
+        missing=""
+        while IFS= read -r key; do
+          grep -raqF -- "$key" "$target" || missing="$missing $key"
+        done < <(${jq} -r '.settings | keys[] | sub("<name>$"; "")' ${committed})
+        if [ -n "$missing" ]; then
+          echo "FAIL: ${sidecar} names keys absent from $target:$missing" >&2
+          exit 1
+        fi
+        ${jq} -r '.settings | keys | "ok — all \(length) extracted keys are strings in ${installed}"' ${committed} >"$out"
+      '';
+    }
     # Drift: the committed sidecar equals a fresh extraction. Staleness
     # only; the update pipeline commits whatever the extractor says, so
     # correctness rests on the guards and the mutants.
-    "${name}-extracted" = mkDriftCheck {
+    // mkDriftCheck {
       inherit committed extracted name sidecar;
     };
-
-    # The extractor fails closed: every mutant trips the guards it names or
-    # moves the output exactly as it says.
-    "${name}-extractor-guards" =
-      pkgs.runCommand "${name}-extractor-guards" {
-        inherit nativeBuildInputs;
-        PYTHONPATH = shared;
-      } ''
-        ${strict}
-        python3 ${shared + "/mutate.py"} \
-          --annotations ${extractDir + "/annotations.json"} \
-          --baseline ${extracted} \
-          --extractor ${extractDir + "/extract.py"} \
-          --mutants ${pkgs.writeText "${name}-extractor-mutants.json" (builtins.toJSON mutants)} \
-          --src ${patchedSource} >"$out"
-      '';
-
-    # Every key the census reports (a `<name>` family by its literal prefix)
-    # is a string in the built package, so the census cannot describe a key
-    # the release does not contain.
-    "${name}-extracted-binary" = pkgs.runCommand "${name}-extracted-binary" {} ''
-      ${strict}
-      target=${package}/${installed}
-      missing=""
-      while IFS= read -r key; do
-        grep -raqF -- "$key" "$target" || missing="$missing $key"
-      done < <(${jq} -r '.settings | keys[] | sub("<name>$"; "")' ${committed})
-      if [ -n "$missing" ]; then
-        echo "FAIL: ${sidecar} names keys absent from $target:$missing" >&2
-        exit 1
-      fi
-      ${jq} -r '.settings | keys | "ok — all \(length) extracted keys are strings in ${installed}"' ${committed} >"$out"
-    '';
-  };
 }
