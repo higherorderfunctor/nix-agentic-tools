@@ -698,3 +698,8 @@ CASES["judge_effort_env"] = {**CASES["model_effort"], "env": {"CLAUDE_CODE_EFFOR
 import cases_dmu  # noqa: E402
 
 CASES.update(cases_dmu.CASES)
+
+# ---- delegate-map unknowns, round 2 (--bg limits, agent teams) -----------------
+import cases_dmu2  # noqa: E402
+
+CASES.update(cases_dmu2.CASES)

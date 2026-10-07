@@ -6,6 +6,7 @@ system/first-user heads) so a runner can grep one field.
 """
 import json
 import re
+import shutil
 import time
 
 from harness import WORK, S, role, text_of, tool_results
@@ -433,7 +434,15 @@ CASES.update({
 })
 
 # ---- 7. plugin $.model.fork / $.model.complete --------------------------------------------
-MODEL_MOD = S / "mods" / "model-fork"
+# Claude writes <plugin>/.claude-plugin/types/ at load time, so the case runs a scratch copy
+# of the mod; nothing is written into the source tree.
+MODEL_MOD_SRC = S / "mods" / "model-fork"
+MODEL_MOD = WORK / "mods" / "model-fork"
+
+
+def prep_model_mod():
+    shutil.rmtree(MODEL_MOD, ignore_errors=True)
+    shutil.copytree(MODEL_MOD_SRC, MODEL_MOD, ignore=shutil.ignore_patterns("types"))
 
 
 def f_plugin_model(body, n, st):
@@ -445,8 +454,8 @@ def f_plugin_model(body, n, st):
     return TXT(f"PLUGIN_{tag.upper()}_REPLY")
 
 
-CASES["dmu_plugin_model"] = {"fn": f_plugin_model, "argv": PS + ["--plugin-dir", str(MODEL_MOD), "hello"],
-                             "timeout": 90}
+CASES["dmu_plugin_model"] = {"fn": f_plugin_model, "prep": prep_model_mod,
+                             "argv": PS + ["--plugin-dir", str(MODEL_MOD), "hello"], "timeout": 90}
 
 
 # ---- 8. hook type:"agent" ------------------------------------------------------------------

@@ -15,6 +15,9 @@ fi
 source "$here/../../common/pin.sh"
 work="$(probe_workdir claude-sysprompt)"
 export CLAUDE_BIN="${CLAUDE_BIN:-$(probe_pkg claude-code)/bin/claude}"
+# Claude writes <plugin>/.claude-plugin/types/ at load time, so plugin cases load a scratch copy.
+mw="$work/mods/prompt-mw"
+rm -rf "$mw" && mkdir -p "$work/mods" && cp -r "$here/mods/prompt-mw" "$mw" && rm -rf "$mw/.claude-plugin/types"
 P=(-p --no-session-persistence --model haiku)
 APP=(--append-system-prompt "Inline append sentinel: APPINLINE-1313.")
 SUB=(--append-subagent-system-prompt "Subagent append: SUBAPP-1414.")
@@ -28,6 +31,12 @@ run() {
   else
     "$here/run.sh" "$work" "$@"
   fi
+}
+# v1:<len>:<sha256> of the file's first line (the head; the append continues after a blank line)
+designator() {
+  local head
+  head="$(head -n1 "$1")"
+  printf 'v1:%s:%s' "${#head}" "$(printf '%s' "$head" | sha256sum | cut -d' ' -f1)"
 }
 one() {
   case "$1" in
@@ -69,9 +78,13 @@ one() {
   carrier-mismatch) CLAUDE_CODE_BRIDGE_MCP_CARRIER=1 CLAUDE_CODE_BRIDGE_PROMPT_SHA256="$(printf '0%.0s' {1..64})" run "$1" - -- "${P[@]}" --debug-file "$work/$1.debug" --append-system-prompt-file "$here/append.md" hi ;;
   carrier-nodigest) CLAUDE_CODE_BRIDGE_MCP_CARRIER=1 run "$1" - -- "${P[@]}" --debug-file "$work/$1.debug" --append-system-prompt-file "$here/append.md" hi ;;
   carrier-inline) CLAUDE_CODE_BRIDGE_MCP_CARRIER=1 CLAUDE_CODE_BRIDGE_PROMPT_SHA256="$(sha256sum "$here/append.md" | cut -d' ' -f1)" run "$1" - -- "${P[@]}" --append-system-prompt-file "$here/append.md" "${APP[@]}" hi ;;
+  # append-head designator: CLAUDE_CODE_REMOTE + first-party layout; the head is the append's first line
+  append-head) FP1=1 CLAUDE_CODE_REMOTE=1 CLAUDE_CODE_APPEND_PROMPT_HEAD="$(designator "$here/append-head.md")" run "$1" - -- "${P[@]}" --append-system-prompt-file "$here/append-head.md" hi ;;
+  append-head-nodesig) FP1=1 CLAUDE_CODE_REMOTE=1 run "$1" - -- "${P[@]}" --append-system-prompt-file "$here/append-head.md" hi ;;
+  append-head-local) FP1=1 CLAUDE_CODE_APPEND_PROMPT_HEAD="$(designator "$here/append-head.md")" run "$1" - -- "${P[@]}" --append-system-prompt-file "$here/append-head.md" hi ;;
   census-builtin) CLAUDE_CODE_WEB_FETCH_AGENT=1 CLAUDE_CODE_ENTRYPOINT=cli run "$1" "$here/plan-census.json" -- "${P[@]}" --allowedTools Agent "${APP[@]}" "${SUB[@]}" CENSUS ;;
-  census-mw) run "$1" "$here/plan-gp.json" -- "${P[@]}" --allowedTools Agent --plugin-dir "$here/mods/prompt-mw" "${APP[@]}" "${SUB[@]}" SPAWN ;;
-  census-mw-1p) FP1=1 run "$1" - -- "${P[@]}" --plugin-dir "$here/mods/prompt-mw" "${APP[@]}" hi ;;
+  census-mw) run "$1" "$here/plan-gp.json" -- "${P[@]}" --allowedTools Agent --plugin-dir "$mw" "${APP[@]}" "${SUB[@]}" SPAWN ;;
+  census-mw-1p) FP1=1 run "$1" - -- "${P[@]}" --plugin-dir "$mw" "${APP[@]}" hi ;;
   gated-coordinator) CLAUDE_CODE_COORDINATOR_MODE=1 run "$1" "$here/plan-gated.json" -- "${P[@]}" --allowedTools Agent "${APP[@]}" "${SUB[@]}" COORD ;;
   gated-teammate) CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 run "$1" "$here/plan-gated.json" -- "${P[@]}" --allowedTools Agent "${APP[@]}" "${SUB[@]}" TEAM ;;
   snap1) run "$1" - -- -p --model haiku --session-id "$SID" --append-system-prompt "Version one: APPVONE-2121." first ;;
@@ -89,7 +102,7 @@ if [[ $1 == all ]]; then
     p8-bare p9-noappend p9b-exdyn p10-agentonly p10b-agentsetting snap1 snap2 snap3 \
     cache-none cache-file cache-fileinline order-wrapper-user order-user-wrapper \
     cache1p-none cache1p-file cache1p-fileinline cache1p-twofiles \
-    carrier-match carrier-mismatch carrier-nodigest carrier-inline census-builtin census-mw census-mw-1p gated-coordinator gated-teammate
+    carrier-match carrier-mismatch carrier-nodigest carrier-inline append-head append-head-nodesig append-head-local census-builtin census-mw census-mw-1p gated-coordinator gated-teammate
 fi
 for c in "$@"; do
   printf '== %s\n' "$c"
