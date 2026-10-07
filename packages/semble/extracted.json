@@ -726,6 +726,6 @@
   "provenance": {
     "extractorSchema": 1,
     "sembleGrammarsVersion": "0.1.2",
-    "sembleVersion": "0.6.1"
+    "sembleVersion": "0.6.2"
   }
 }
