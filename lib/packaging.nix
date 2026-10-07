@@ -437,10 +437,10 @@ rec {
   # hypothetical — it is how glab's first-ever bump failed (PR #621),
   # glab having been the one extracted package that never wired it.
   #
-  # Builds the pure `passthru.extracted` against the just-written
-  # sources.json (dirty-tracked, so flake eval sees the new version) and
-  # copies it over the committed path. ONE extraction source: the drift
-  # check consumes the same `passthru.extracted`, so the two cannot
+  # Builds the pure `passthru.<extract>` (default `extracted`) against the
+  # just-written sources.json (dirty-tracked, so flake eval sees the new
+  # version) and copies it over the committed path. ONE extraction source:
+  # the drift check consumes the same passthru attribute, so the two cannot
   # disagree about what "extracted" means.
   #
   # `nix fmt` is load-bearing, not tidiness. The extractors emit jq /

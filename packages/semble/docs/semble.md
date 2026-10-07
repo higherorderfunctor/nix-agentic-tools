@@ -8,8 +8,7 @@
 > **Settled — do not relitigate.** Semble left the external package input in
 > 2026-10. #2220's `ciAttr` prefix broke check-path regeneration, and the D12
 > rule requires first-party builds; upstream byte identity is no longer a useful
-> contract. Do not restore the external input. Conditional patches remain until
-> the separate runtime-configuration change.
+> contract. Do not restore the external input.
 
 Semble provides local semantic and lexical code search through a CLI and an MCP
 server. This repository builds it from source with its own nixpkgs and adds
@@ -433,7 +432,7 @@ packages decide how a file is treated:
 
 semble-grammars ships one wheel per platform, each with its own manifest, and
 `available_languages()` reads that manifest. The extractor
-(`checks/extract-languages.py`) imports the real modules under Semble's own
+(`extract/extract-languages.py`) imports the real modules under Semble's own
 interpreter and fails unless the platform manifest equals the
 platform-independent `sources.json`. So the committed file is the same on every
 system, and the drift check (`semble-languages-extracted`) catches a platform
@@ -449,10 +448,10 @@ A mismatch prints a sorted JSON diff and a recipe to build that check’s
 The language check validates the committed sidecar reader while leaving
 `passthru.extracted` buildable for regeneration.
 
-Semble's grouped `--use-update-script` target tracks the CLI, model2vec,
-vicinity and semble-grammars in `sources/*.json`. Its `extraExtract` regenerates
-both snapshots from the package's `passthru.extracted` and
-`passthru.extractedTemplates`. The drift checks consume the same extractors;
+Semble's grouped `--use-update-script` target tracks the CLI in `sources.json`
+and model2vec, vicinity and semble-grammars in `<dep>-sources.json`. The grouped
+script then regenerates both snapshots from the package's `passthru.extracted`
+and `passthru.extractedTemplates`. The drift checks consume the same extractors;
 `mkExtractRegen` names `extract = "extractedTemplates"` for the templates file.
 Human-reviewed template hashes remain a separate approval gate.
 

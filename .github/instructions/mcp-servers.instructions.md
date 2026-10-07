@@ -304,12 +304,6 @@ around; plan for the patch to be DELETED, not maintained forever.
 5. Add package checks beside the implementation, then regenerate with
    `devenv tasks run --mode before generate:all`.
 
-For an external package role such as `semble-mcp`, replace the local build and
-update target with a direct input-package selection and input update automation.
-Add a sibling-derivation assertion, as in
-`packages/semble/checks/package-identity.nix`, so a future `overrideAttrs`
-cannot create a redundant build.
-
 ### Updating
 
 ```bash

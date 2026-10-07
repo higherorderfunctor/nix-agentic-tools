@@ -7,15 +7,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-10-06 — a worker whose input build verification failed
-> publishes its PR, uploads its receipt, then fails in
-> `Fail on failed build verification` only when its PR is new or its patch
-> changed, otherwise a notice skips the lane; the bot touches a branch only
-> while origin's live head (read with git) is its own last push, and otherwise
-> skips the lane with a notice and no re-reads, commenting once per head only on
-> a human edit; a failed PR view is red; escalation re-checks its predecessor
-> listing for freshness; discovery selects the absolute root `.#.updateTargets`
-> with IFD disabled, before any package workers run.
+> **Last verified:** 2026-10-07 — package build runners use no CI-only
+> substituter and no shard mirrors a runtime closure into the project cache.
 >
 > **Settled — do not relitigate.** Run `34710827449` timed out before the
 > package-layout refactor. The same oxlint derivation appeared before and after
@@ -243,11 +236,7 @@ materialization on macOS where the Linux-only flake check cannot. These jobs
 explicitly enable and assert the Nix sandbox before the materializer executes;
 Darwin's Nix default does not provide that guarantee. Patched proprietary Kiro
 stays in those jobs without cache publication; the update workers retain
-Cachix's `pushFilter: kiro-cli`. Numtide substitution remains confined to
-package build runners through job-level `NIX_CONFIG`, which survives
-cachix-action's configuration override. On authenticated main builds, only the
-shard containing Semble mirrors its runtime closure into the project cache and
-checks its narinfo.
+Cachix's `pushFilter: kiro-cli`.
 
 The Cachix action owns shard uploads and its finalization remains part of the
 worker outcome. Do not also start nix-fast-build's optional uploader: its

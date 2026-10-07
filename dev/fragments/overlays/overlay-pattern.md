@@ -748,9 +748,7 @@ A package owned by a flake input, or bumped by rev without its own update script
 `passthru.regenerateExtracted = packageLib.mkRegenerateExtracted { … }` instead.
 `update-input.sh` discovers it through `passthru.updateFlakeInput`,
 `update-pkg.sh` by the target's own name, and both commit its `sidecars`.
-Semble's targets are its drift checks' `passthru.extracted`, which keeps the
-package byte-identical to upstream; git-branchless's is its own
-`passthru.extracted`.
+git-branchless's target is its own `passthru.extracted`.
 
 The hash fixers (the vendor and src fixers `mkGoUpdateExtract` builds
 internally, and `mkNpmDepsFix`) are one body — `vu.mkHashFix` — parameterized by

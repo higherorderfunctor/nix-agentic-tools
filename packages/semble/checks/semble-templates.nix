@@ -15,7 +15,7 @@
     reviewed = import ../lib/templateCoverage.nix;
     records = import ../lib/integrations.nix;
     snapshot = builtins.fromJSON (builtins.readFile committed);
-    templateNames = ["claude.md" "codex.toml" "copilot.md" "kiro.md"];
+    inherit (semble.passthru) templateNames;
 
     extracted = semble.passthru.extractedTemplates;
 

@@ -8,13 +8,20 @@
   python3,
   repoPath,
   versionCheckHook,
-  writableTmpDirAsHomeHook,
 }: let
   inherit (python3.pkgs) buildPythonPackage;
   buildSystem = with python3.pkgs; [setuptools setuptools-scm];
-  sources = name: builtins.fromJSON (builtins.readFile (../../../sources + "/${name}.json"));
-  sembleSources = sources "semble";
+  sourcesFiles = {
+    model2vec = ../../../model2vec-sources.json;
+    semble = ../../../sources.json;
+    semble-grammars = ../../../semble-grammars-sources.json;
+    vicinity = ../../../vicinity-sources.json;
+  };
+  sources = name: builtins.fromJSON (builtins.readFile sourcesFiles.${name});
   grammarSources = sources "semble-grammars";
+  model2vecSources = sources "model2vec";
+  sembleSources = sources "semble";
+  vicinitySources = sources "vicinity";
   sdistUrl = pname: version: "https://files.pythonhosted.org/packages/source/${builtins.substring 0 1 pname}/${pname}/${pname}-${version}.tar.gz";
   grammarPlatforms = {
     aarch64-darwin = "macosx_11_0_arm64";
@@ -37,7 +44,7 @@
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList (pname: row: "${packageLib.mkUpdateScript (row
       // {
         inherit pkgs pname;
-        sourcesFile = repoPath (../../../sources + "/${pname}.json");
+        sourcesFile = repoPath sourcesFiles.${pname};
         versionCheck.cmd = "${pkgs.curl}/bin/curl -fsSL https://pypi.org/pypi/${pname}/json | ${pkgs.jq}/bin/jq -r '.info.version'";
       })}")
     updateRows)}
@@ -59,12 +66,12 @@
   # Vendor them inline, since
   # they have no consumer in this flake other than semble itself.
 
-  model2vec = python3.pkgs.buildPythonPackage rec {
+  model2vec = buildPythonPackage rec {
     pname = "model2vec";
-    inherit (sources "model2vec") version;
+    inherit (model2vecSources) version;
     pyproject = true;
 
-    src = pkgs.fetchurl {inherit ((sources "model2vec").src) url hash;};
+    src = pkgs.fetchurl {inherit (model2vecSources.src) url hash;};
 
     build-system = buildSystem;
 
@@ -95,12 +102,12 @@
     };
   };
 
-  vicinity = python3.pkgs.buildPythonPackage rec {
+  vicinity = buildPythonPackage rec {
     pname = "vicinity";
-    inherit (sources "vicinity") version;
+    inherit (vicinitySources) version;
     pyproject = true;
 
-    src = pkgs.fetchurl {inherit ((sources "vicinity").src) url hash;};
+    src = pkgs.fetchurl {inherit (vicinitySources.src) url hash;};
 
     build-system = buildSystem;
 
@@ -181,16 +188,15 @@ in
       pathspec
       questionary
       semble-grammars
+      tqdm
       tree-sitter
       vicinity
     ];
 
     nativeBuildInputs = [makeWrapper];
 
-    # Upstream's `semble` entry point auto-dispatches to either the CLI or the
-    # MCP server based on argv[1]. Expose a second binary that always launches
-    # the MCP server so users can wire it into agent configs without relying on
-    # the implicit "no-subcommand-means-MCP" behavior.
+    # `semble-mcp` is a stable entry-point name for the MCP role; with no
+    # subcommand upstream dispatches to the MCP server.
     # Scope nounset: nixpkgs' later Python wrapping hook reads unset array keys.
     postInstall = ''
       (
@@ -207,18 +213,9 @@ in
     ];
 
     doInstallCheck = true;
-    nativeInstallCheckInputs = [versionCheckHook writableTmpDirAsHomeHook];
-    # Bind the check to this package's version even when an overlay's shell
-    # carries a different version variable into the hook.
-    preVersionCheck = ''
-      version="${finalAttrs.version}"
-    '';
+    nativeInstallCheckInputs = [versionCheckHook];
 
-    passthru =
-      {
-        inherit model2vec semble-grammars updateScript vicinity;
-      }
-      // (import ../../../extract {inherit lib pkgs;}) finalAttrs.finalPackage;
+    passthru = {inherit updateScript;} // (import ../../../extract {inherit lib pkgs;}) finalAttrs.finalPackage;
 
     meta = with lib; {
       changelog = "https://github.com/MinishLab/semble/releases/tag/v${finalAttrs.version}";

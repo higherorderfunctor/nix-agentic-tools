@@ -5,10 +5,11 @@
   sembleScript = import ../checks/semble-script.nix pkgs;
   templateNames = ["claude.md" "codex.toml" "copilot.md" "kiro.md"];
 in {
+  inherit templateNames;
   extracted = pkgs.runCommand "semble-extracted.json" {} ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
-    ${sembleScript "extract-languages" semble ../checks/extract-languages.py} > "$out"
+    ${sembleScript "extract-languages" semble ./extract-languages.py} > "$out"
   '';
   extractedTemplates = pkgs.runCommand "semble-upstream-templates.json" {nativeBuildInputs = [pkgs.python3];} ''
     set -euETo pipefail
@@ -50,7 +51,7 @@ in {
     probe_home="$TMPDIR/probe-home"
     mkdir -p "$probe_home"
     HOME="$probe_home" HF_HUB_OFFLINE=1 \
-      python3 ${../checks/semble-mcp-surface.py} ${semble}/bin/semble-mcp > mcp-surface.json
+      python3 ${./semble-mcp-surface.py} ${semble}/bin/semble-mcp > mcp-surface.json
 
     ${pkgs.jq}/bin/jq -n \
       --arg pname "${semble.pname}" \
