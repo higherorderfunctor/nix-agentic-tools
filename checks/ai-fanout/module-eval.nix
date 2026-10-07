@@ -389,6 +389,11 @@ in {
           routing = "attribute set of (submodule)";
           workflows = "attribute set of (submodule)";
         } ["claude" "codex" "kimchi" "kiro"]
+        && programParity "git-worktrees" {
+          enable = "boolean";
+          location = "non-empty string";
+          protocol = "attribute set of (submodule)";
+        } ["claude" "codex" "kimchi" "kiro"]
         && programParity "peer-communication" {enable = "boolean";} harnessNames
         && programParity "stacked-workflows" {enable = "boolean";} harnessNames
         && hm.options.stacked-workflows ? gitPreset
@@ -419,14 +424,16 @@ in {
               then "stack-plan"
               else package;
             contributes = runtime:
-              if package == "semble"
+              if package == "git-worktrees"
+              then evaluated.config.ai.${runtime}.extraSystemPrompt.git-worktrees.enable or false
+              else if package == "semble"
               then evaluated.config.ai.${runtime}.mcpServers ? semble
               else evaluated.config.ai.${runtime}.skills ? ${skillName};
           in
             assert lib.assertMsg (!(contributes "claude") && contributes "codex")
             "${package}: portable=${builtins.toJSON evaluated.config.ai.programs.${package}.enable}, claude=${builtins.toJSON (contributes "claude")}, codex=${builtins.toJSON (contributes "codex")}"; true)
           [lib.mkDefault lib.mkForce])
-        ["delegate-routing" "peer-communication" "semble" "stacked-workflows"])
+        ["delegate-routing" "git-worktrees" "peer-communication" "semble" "stacked-workflows"])
       [evalHm evalDevenv]
     );
 

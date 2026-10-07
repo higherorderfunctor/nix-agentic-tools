@@ -412,9 +412,10 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-10-06 — the worker and three review roles run inside a
-> loop of at most 3 rounds; unsettled findings go back to the orchestrator to
-> validate.
+> **Last verified:** 2026-10-06 — open human PRs as drafts; internal review runs
+> on drafts; the operator inspects structure and undrafts to trigger Copilot.
+> The worker and three review roles run inside a loop of at most 3 rounds;
+> unsettled findings go back to the orchestrator to validate.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -521,9 +522,9 @@ decision that is genuinely the operator's.
 ### Copilot reviews once, automatically. Do not trigger the first one
 
 The ruleset requests it when the PR **becomes ready for review** — which covers
-a PR opened non-draft as well as a draft flipped later. It is automatic. Do not
-request it by hand, and do not treat an absent run on a fresh push as a missed
-trigger: pushes never trigger a review, so absent is the resting state.
+a draft the operator undrafts after inspecting its structure. It is automatic.
+Do not request it by hand, and do not treat an absent run on a fresh push as a
+missed trigger: pushes never trigger a review, so absent is the resting state.
 
 **Re-request only after a significant change since the last run.** New scope, a
 mechanism the previous review never saw, an approach rewritten rather than
@@ -583,9 +584,9 @@ validate.
 
 **Scope, deliberately narrow:**
 
-- Only for changes going to `main`. A draft PR, or a long-lived experiment
-  branch where the design is not settled yet, forgoes it — if it is a draft, it
-  is not ready for this.
+- Only for changes going to `main`, including draft PRs. Internal review runs
+  while the PR is a draft. A long-lived experiment branch where the design is
+  not settled yet forgoes it.
 - **Local runtimes only, always.** Never hand this to github.com Copilot: it
   cannot be given a model or an effort level, and the cost belongs where those
   controls exist.
@@ -705,19 +706,13 @@ silently resolves one level too deep, into
    even though local commits do not run it yet.
 
 3. **Push at the first commit** — not at the end — so the branch is a continuous
-   off-machine backup. Open the PR **ready (non-draft) as soon as the work is
-   dev-complete**: becoming ready for review is the _only_ thing that
-   automatically requests a Copilot review, so a draft that is actually ready
-   silently skips review and a later flip is what fires it. Reserve **draft**
-   for genuine WIP, or when you explicitly want to preview the branch in GitHub
-   without review. Draft and ready PRs both get full CI here.
+   off-machine backup. Open human PRs as **drafts**. Run internal review on the
+   draft, including the three-role protocol when its triggers apply. Draft and
+   ready PRs both get full CI here.
 
-   Corollary worth internalizing: that one automatic review is the only free
-   one, so **flip to ready when the branch is worth reviewing** — not
-   mid-refactor, where it is spent on code you are about to replace.
-
-4. Keep pushing as work lands. Flip draft → ready the moment it is dev-complete
-   so review can start.
+4. Keep pushing as work lands. After internal review, the operator inspects the
+   PR's structure and undrafts it. That transition fires Copilot's one automatic
+   review. Do not undraft it yourself when development completes.
 
 5. **The moment the PR is open and non-draft, run the Copilot review loop on
    your own initiative.** Nobody has to ask. Poll for the review on the head

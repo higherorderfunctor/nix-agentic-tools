@@ -138,12 +138,13 @@ _: {
         "packages/copilot-cli/lib/mkCopilot.nix"
         "packages/copilot-cli/modules/**"
         "packages/delegate-routing/modules/**"
+        "packages/git-worktrees/modules/**"
         "packages/kimchi/lib/mkKimchi.nix"
         "packages/kiro-cli/lib/mkKiro.nix"
         "packages/kiro-cli/modules/**"
-        # `ai-module-fanout.md` discusses this file as the repo's only
-        # `mkProgram` consumer; the retired glob caught `lib/mkSemble.nix`
-        # instead, which is a 37-line MCP defaults record.
+        # Every `mkProgram` consumer's modules are scoped here, so the program
+        # contract in `ai-module-fanout.md` loads with them. For Semble that is
+        # this file, not `lib/mkSemble.nix`, a 37-line MCP defaults record.
         "packages/semble/modules/common.nix"
       ];
       sources = [
