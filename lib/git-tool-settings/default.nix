@@ -18,8 +18,9 @@
 # stay raw git configuration.
 #
 # A key upstream adds becomes an option on the next evaluation after the
-# sidecar is regenerated; the rows regeneration accepts it with a `{}` row,
-# and the drift check fails until a person writes any prose it needs. A key
+# sidecar is regenerated. The rows regeneration writes a `{}` row only when
+# the extracted facts already satisfy the rule; a key still missing prose gets
+# no row, and the drift check fails until a person writes it. A key
 # upstream removes makes a consumer that still sets it fail with an
 # unknown-option error, because every level of the tree is closed. A sidecar
 # FIELD this file does not know fails evaluation (`schema` below): an

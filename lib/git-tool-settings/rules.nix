@@ -17,8 +17,9 @@
 #   deadKeys   key-shaped names the source declares or mentions and never
 #              reads. Only a person can say why, so each needs a `reason`
 #              row. A dead key that is read again becomes a setting and
-#              leaves its row `removed`, which `ignored` on a settings row
-#              would hide.
+#              leaves its row `removed`. A settings row may not carry
+#              `ignored` (bad-row); `exclusions` is the one way to give a
+#              key no option.
 #
 # Returns `results` (per surface: entries, added, failures) and `file`, the
 # rows with a `{}` row for every new name the rule accepts.
@@ -56,6 +57,10 @@
     );
   # Like reconcile's own `needs`: needs-human, never auto-added.
   needing = lib.filterAttrs (_: fields: fields != []) (lib.mapAttrs (_: needs) reconciled.settings.entries);
+  # `exclusions` (./default.nix) is the one way to give a key no option: it
+  # reports the key in `report.excluded`. An ignored settings row would drop
+  # the option and skip its needs unreported.
+  ignoredSettings = lib.filter (name: rows.settings.${name} ? ignored) (builtins.attrNames rows.settings);
   results =
     reconciled
     // {
@@ -70,7 +75,14 @@
               kind = "needs-human";
               surface = "settings";
             })
-            needing;
+            needing
+            ++ map (name: {
+              inherit name;
+              details = ["a settings row cannot be ignored; give the key no option in the owner's `exclusions`"];
+              kind = "bad-row";
+              surface = "settings";
+            })
+            ignoredSettings;
         };
     };
 in {

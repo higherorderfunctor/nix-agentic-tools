@@ -58,6 +58,12 @@
       settings.row = null;
       kinds = ["needs-human"];
     };
+    # An ignored row would drop the option and skip its needs, unreported.
+    settings-row-cannot-ignore = {
+      settings.fact = setting;
+      settings.row = {ignored = "probe";};
+      kinds = ["bad-row"];
+    };
     # A write-only key becomes no option, so nothing needs its prose.
     write-only-setting-accepted = {
       settings.fact = {
