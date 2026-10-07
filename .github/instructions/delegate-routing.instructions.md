@@ -9,7 +9,8 @@ applyTo: "packages/delegate-routing/**"
 
 > **Last verified:** 2026-10-07 — one enabled "Work and review" workflow ships
 > the Subtractive standard; a runtime workflow record without text keeps the
-> portable header; reaching Kiro defaults `ai.kiro.v3` on.
+> portable header; all delegate runtimes must be managed, and reaching Kiro
+> defaults `ai.kiro.v3` on through its wrapper.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -98,9 +99,10 @@ An enabled program on an enabled runtime must select at least one family. Its
 `extraRuntimes` and `manualExternalDelegates` targets also need a selection.
 `extraRuntimes` adds automatic external candidates and requires the target
 runtime to be enabled. `manualExternalDelegates` requires an explicit user
-request and does not require runtime enable. Manual-only wins if a target occurs
-in both lists. Selected families appear once per tier with all applicable native
-and external reaches.
+request and also requires the target runtime to be enabled. Disabled targets in
+either list fail evaluation with a message naming the list and runtime.
+Manual-only wins if a target occurs in both lists. Selected families appear once
+per tier with all applicable native and external reaches.
 
 Resolve concrete models at launch time: inspect the runtime's live list, compare
 version segments to find the highest version matching the family pattern, and
@@ -127,8 +129,9 @@ a model turn. Shared table rendering escapes cells once.
 When an enabled runtime reaches Kiro, as the session runtime or through
 `extraRuntimes` or `manualExternalDelegates`, the program sets `ai.kiro.v3` with
 `mkDefault`. The skill's Kiro evidence covers the v3 engine only. A consumer's
-own `ai.kiro.v3 = false` still wins, and a consumer without the Kiro module is
-untouched.
+own `ai.kiro.v3 = false` still wins and emits a mismatch warning. Every reached
+runtime must be enabled: managed Kiro's wrapper carries `--v3` to interactive
+and delegate launches alike. A consumer without the Kiro module is untouched.
 
 The common module imports `mkSkillPackageModule` once for the supported
 runtimes. Per-runtime program enable inherits portable enable through the

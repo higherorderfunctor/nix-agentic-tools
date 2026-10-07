@@ -14,7 +14,7 @@
   tierNames = vocabulary.tiers;
   techniqueType = import ../lib/technique-type.nix {inherit lib;};
   familyFunctions = import ../lib/select-families.nix {inherit lib;};
-  inherit (familyFunctions) automatic select;
+  inherit (familyFunctions) select;
   entryDefaults = import ../lib/entries.nix {inherit lib;};
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
   entries = import ../lib/resolve-entries.nix {inherit lib;};
@@ -35,12 +35,13 @@
     else enabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
-  # The skill's Kiro evidence (the delegate map and the acceptance suite) covers
-  # the v3 engine only, so any enabled runtime that can reach Kiro runs it there.
+  # The skill's Kiro evidence covers the v3 engine only. All reached runtimes
+  # are managed; Kiro's wrapper carries --v3 to interactive and delegate launches.
   reachesKiro = lib.any (runtime:
     sourceEnabled runtime
     && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
   supportedRuntimes;
+  kiroV3Declared = lib.hasAttrByPath ["ai" "kiro" "v3"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
   techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.techniques);
   flattenedFamilies = familyFunctions.flatten portable.families;
@@ -59,7 +60,7 @@
       manualExternalDelegates = lib.mkOption {
         type = lib.types.listOf (lib.types.enum (lib.remove runtime supportedRuntimes));
         default = [];
-        description = "Describe external delegates for explicit user requests only; never auto-select them. No runtime enable is required. Manual-only takes precedence over extraRuntimes.";
+        description = "Describe external delegates for explicit user requests only; never auto-select them. Each named runtime must be enabled through ai.<runtime>.enable. Manual-only takes precedence over extraRuntimes.";
       };
       models = lib.mkOption {
         type = lib.types.listOf (lib.types.submodule {
@@ -167,10 +168,15 @@ in {
       }
       # Guarded on the declaration: a consumer without the Kiro module has no
       # ai.kiro.v3 to set.
-      (lib.optionalAttrs (lib.hasAttrByPath ["ai" "kiro" "v3"] options) {
+      (lib.optionalAttrs kiroV3Declared {
         kiro.v3 = lib.mkIf reachesKiro (lib.mkDefault true);
       })
     ];
+    warnings = lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.v3) ''
+      ai.programs.delegate-routing reaches Kiro, but ai.kiro.v3 is false. The
+      skill's Kiro behavior is verified on the v3 engine only; sessions on
+      another engine may not delegate as the skill describes.
+    '';
     assertions =
       [
         {
@@ -184,11 +190,12 @@ in {
         manualExternalDelegates = config.ai.programs.delegate-routing.runtimes.${runtime}.manualExternalDelegates;
         requiredTargets = lib.unique ([runtime] ++ extraRuntimes ++ manualExternalDelegates);
       in
-        map (target: {
-          assertion = !(sourceEnabled runtime) || runtimeEnabled target;
-          message = "${path}.extraRuntimes includes `${target}`, but ai.${target}.enable is false. Enable that runtime or use manualExternalDelegates.";
-        })
-        (automatic {inherit runtime extraRuntimes manualExternalDelegates;})
+        lib.concatMap (list:
+          map (target: {
+            assertion = !(sourceEnabled runtime) || runtimeEnabled target;
+            message = "${path}.${list} includes `${target}`, but ai.${target}.enable is false. Enable it with ai.${target}.enable = true.";
+          })
+          portable.runtimes.${runtime}.${list}) ["extraRuntimes" "manualExternalDelegates"]
         ++ map (target: {
           assertion = !(sourceEnabled runtime) || select portable.families models.${target} != [];
           message = "ai.programs.delegate-routing.runtimes.${target}.models must select at least one configured family when its program and runtime are enabled or an enabled runtime references it.";
