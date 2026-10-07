@@ -89,8 +89,7 @@
     },
     "absorb.maxStack": {
       "default": 10,
-      "defaultDescription": "10. A value of 0 or below, or one that does not parse as an integer, also gives 10, silently.",
-      "description": "Number of commits, counted back from HEAD, that git-absorb searches for fixup targets. Ignored when `--base` is given; `--no-limit` removes the limit for one run.",
+      "description": "When run without `--base`, git-absorb will only search for candidate commits to fixup within a certain range (by default 10). Set `absorb.maxStack = 50`. Stack size can also be disabled temporarily for one command (see `--no-limit`)",
       "invalid": "default",
       "minimum": 1,
       "reads": {

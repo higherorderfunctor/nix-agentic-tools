@@ -2,8 +2,11 @@
 # Mutants for lib/git-tool-settings/mutate.py over the git-revise source.
 # Each makes one upstream-shaped change and names the outcome the extractor
 # must produce: `fails` lists guard codes that must all fire; `adds` /
-# `changes` describe an output that must move with the source; a mutant
-# with neither must leave the output identical to the real one.
+# `changes` / `deadKeysAdd` describe an output that must move with the
+# source; a mutant with none must leave the output identical to the real one.
+# What a person must write for a new name (a description, a computed
+# default's prose, a dead key's reason) is lib/git-tool-settings/rules.nix's
+# to demand; checks/git-tool-settings/rules.nix holds those cases.
 #
 # P* came with the prototype. K* are the independent review's blind spots
 # (a global option before `config`, a helper named through getattr, an argv
@@ -12,7 +15,6 @@
 let
   tui = "gitrevise/tui.py";
   odb = "gitrevise/odb.py";
-  merge = "gitrevise/merge.py";
   utils = "gitrevise/utils.py";
   man = "docs/man.rst";
   append = file: text: {
@@ -31,7 +33,9 @@ in [
   {
     name = "P1-new-owned-key-undocumented";
     edits = [(append tui "\n\ndef probe(repo: Repository) -> object:\n    return repo.bool_config(\"revise.newThing\", default=False)\n")];
-    fails = ["R9"];
+    # No man page entry: the description stays null for a row to fill.
+    adds = ["revise.newThing"];
+    changes."revise.newThing".description = null;
   }
   {
     name = "P2-new-owned-key-documented";
@@ -73,7 +77,7 @@ in [
   {
     name = "P-raw-subprocess";
     edits = [(append tui "\n\ndef probe(repo: Repository) -> object:\n    from subprocess import run\n    return run([\"git\", \"config\", \"--get\", \"revise.foo\"])\n")];
-    fails = ["R1" "R10"];
+    fails = ["R1"];
   }
   {
     name = "P-git-dash-c";
@@ -158,12 +162,12 @@ in [
   {
     name = "P-computed-owned-default";
     edits = [(replace odb "\"revise.gpgSign\", default=self.bool_config(\"commit.gpgSign\", default=False)" "\"revise.gpgSign\", default=self.gitdir.exists()")];
-    fails = ["R12"];
+    changes."revise.gpgSign".defaultExpr = "self.gitdir.exists()";
   }
   {
     name = "P-key-literal-in-help";
     edits = [(replace tui "help=\"force disable revise.autoSquash behaviour\"" "help=\"force disable revise.autoSquash and revise.squashMode behaviour\"")];
-    fails = ["R10"];
+    deadKeysAdd = ["revise.squashMode"];
   }
   {
     name = "P-doc-only-key";
@@ -189,22 +193,6 @@ in [
     name = "P-conflicting-defaults";
     edits = [(append tui "\n\ndef probe(repo: Repository) -> object:\n    return repo.bool_config(\"commit.verbose\", default=True)\n")];
     fails = ["R7"];
-  }
-  {
-    name = "P-stale-annotation";
-    edits = [(replace merge "\"revise.rerere\",\n        default=repo.bool_config(\"rerere.enabled\", default=rr_cache.is_dir())," "\"rerere.enabled\", default=rr_cache.is_dir(),")];
-    fails = ["R4"];
-  }
-  {
-    name = "P-annotation-shadows-source";
-    annotations = {
-      settings = {
-        "revise.gpgSign" = {
-          default = true;
-        };
-      };
-    };
-    fails = ["R4"];
   }
   {
     name = "P-string-helper-type-flag-changed";

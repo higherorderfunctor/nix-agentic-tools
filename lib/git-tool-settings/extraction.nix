@@ -57,7 +57,6 @@ in {
     } ''
       ${strict}
       python3 ${extractDir + "/extract.py"} \
-        --annotations ${extractDir + "/annotations.json"} \
         --out "$out" \
         --src ${source}
     '';
@@ -75,6 +74,11 @@ in {
     installed,
   }: let
     inherit (package.passthru) extracted patchedSource;
+    rules = import ./rules.nix {
+      inherit (pkgs) lib;
+      extracted = builtins.fromJSON (builtins.readFile committed);
+      rows = builtins.fromJSON (builtins.readFile (extractDir + "/annotations.json"));
+    };
     # The extraction's own tools (asciidoc for git-absorb's man page) are
     # what the mutants need too.
     inherit (extracted) nativeBuildInputs;
@@ -89,7 +93,6 @@ in {
         } ''
           ${strict}
           python3 ${shared + "/mutate.py"} \
-            --annotations ${extractDir + "/annotations.json"} \
             --baseline ${extracted} \
             --extractor ${extractDir + "/extract.py"} \
             --mutants ${pkgs.writeText "${name}-extractor-mutants.json" (builtins.toJSON mutants)} \
@@ -113,10 +116,17 @@ in {
         ${jq} -r '.settings | keys | "ok — all \(length) extracted keys are strings in ${installed}"' ${committed} >"$out"
       '';
     }
-    # Drift: the committed sidecar equals a fresh extraction. Staleness
-    # only; the update pipeline commits whatever the extractor says, so
-    # correctness rests on the guards and the mutants.
+    # Drift: the committed sidecar equals a fresh extraction, and the rows
+    # file accepts every name in it (./rules.nix). The update pipeline
+    # commits whatever the extractor says, plus a `{}` row for each new name
+    # the rule accepts, so correctness rests on the guards, the mutants and
+    # the rule's failures.
     // mkDriftCheck {
       inherit committed extracted name sidecar;
+      inherit (rules) results;
+      rows = {
+        path = "${dirOf sidecar}/extract/annotations.json";
+        value = rules.file;
+      };
     };
 }

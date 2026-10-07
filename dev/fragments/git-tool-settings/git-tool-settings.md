@@ -1,9 +1,9 @@
 # Git tool settings: census, sidecar, generator
 
-> **Last verified:** 2026-10-06 — git-tool drift checks use the shared
-> `lib/extracted/default.nix` builder, which derives the check attribute from
-> its `name`, and print a check extraction build, sidecar copy, and `nix fmt`
-> recipe.
+> **Last verified:** 2026-10-07 — extractors emit facts only; rows in
+> `extract/annotations.json` fill them through `lib/git-tool-settings/rules.nix`
+> (the new-key rule), which the generator, drift check and rows regeneration
+> share; only read keys need `type` and `description`.
 >
 > **Settled — do not relitigate.**
 >
@@ -22,18 +22,19 @@
 
 ## Files
 
-| Path                                    | Role                                                                                                 |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `lib/git-tool-settings/default.nix`     | the generator: sidecar → closed option tree, `leaves`, `report`                                      |
-| `lib/git-tool-settings/extraction.nix`  | `patchedSource`, `extracted`, and the three checks per tool                                          |
-| `lib/git-tool-settings/rust_tree.py`    | tree-sitter-rust helpers: literals, calls, token trees, doc comments, test filtering                 |
-| `lib/git-tool-settings/census.py`       | failure list, key-token net, fill-only annotations, sidecar writer                                   |
-| `lib/git-tool-settings/mutate.py`       | the mutation tests every tool's `<tool>-extractor-guards` runs                                       |
-| `packages/<owner>/extract/`             | the tool's own `extract.py` and `annotations.json`                                                   |
-| `packages/<owner>/lib/default.nix`      | `lib.<owner>.settings {lib}` — the generator over that sidecar, plus the tool's hand tables (if any) |
-| `lib/git-tool-settings/tool-module.nix` | the consumer-module factory: `git.<section>.{enable,settings}`, lowered into `git.settings`          |
-| `lib/git-tool-settings/ini-type.nix`    | Home Manager's `gitIniType`, the type of `git.settings` on both backends                             |
-| `lib/git-tool-settings/repo-config.*`   | devenv `include` / `init`; init reports failures while its task keeps dependents runnable            |
+| Path                                    | Role                                                                                               |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `lib/git-tool-settings/default.nix`     | the generator: sidecar → closed option tree, `leaves`, `report`                                    |
+| `lib/git-tool-settings/extraction.nix`  | `patchedSource`, `extracted`, and the three checks per tool                                        |
+| `lib/git-tool-settings/rust_tree.py`    | tree-sitter-rust helpers: literals, calls, token trees, doc comments, test filtering               |
+| `lib/git-tool-settings/census.py`       | failure list, key-token net, sidecar writer                                                        |
+| `lib/git-tool-settings/rules.nix`       | the surface table (`settings`, `deadKeys`) every tool's facts and rows go through                  |
+| `lib/git-tool-settings/mutate.py`       | the mutation tests every tool's `<tool>-extractor-guards` runs                                     |
+| `packages/<owner>/extract/`             | the tool's own `extract.py` and its rows file, `annotations.json`                                  |
+| `packages/<owner>/lib/default.nix`      | `lib.<owner>.settings {lib}` — the generator over that sidecar and rows, plus hand tables (if any) |
+| `lib/git-tool-settings/tool-module.nix` | the consumer-module factory: `git.<section>.{enable,settings}`, lowered into `git.settings`        |
+| `lib/git-tool-settings/ini-type.nix`    | Home Manager's `gitIniType`, the type of `git.settings` on both backends                           |
+| `lib/git-tool-settings/repo-config.*`   | devenv `include` / `init`; init reports failures while its task keeps dependents runnable          |
 
 Owners live under `packages/` and share code only through `lib/`, which is why
 the generator and helpers sit here and not in one owner.
@@ -54,8 +55,29 @@ may carry:
 - prose: `description`, `defaultDescription`, `note`
 
 `foreign` entries (git's own keys the tool reads or writes) take the measured
-fields but no prose; they never become options. Annotations may only fill an
-empty field or replace one they name in `replace` (`census.apply_annotations`).
+fields but no prose; they never become options.
+
+## Facts and rows
+
+The sidecar holds facts only, a field absent where the source cannot state it.
+`rules.nix` runs `reconcile` (`lib/extracted/reconcile.nix`, lib-only so the
+option modules can call it) over two surfaces of the rows file:
+
+- `settings` — a key the tool reads needs `type` and `description`; a write-only
+  key (`reads == {}`, branchless only) becomes no option and needs neither. A
+  row may fill either, replace a fact only for a field it lists in `replace`,
+  and add `defaultDescription` or `note`. A key with a `defaultExpr` also needs
+  `defaultDescription`. `rules.nix` decides these needs per entry, so each name
+  gets one `needs-human` failure listing every missing field.
+- `deadKeys` — key-shaped names the source never reads (an unread const; in
+  git-revise, any string a read does not cover); each needs a `reason`. Not
+  `ignored` on a settings row: a dead key read again becomes a setting and its
+  reason row fails as `removed`.
+
+Failures (`removed`, `needs-human`, `bad-row`, `secret`, `unrecorded`) are data:
+the generator builds options from the entries regardless, and the drift check
+fails on them. Rows regeneration writes `{}` for each accepted new name. The
+cases specific to this table are `checks/git-tool-settings/rules.nix`.
 
 ## Generator
 
@@ -76,11 +98,10 @@ description field.
 ## Checks per tool (`extraction.nix`)
 
 - `<tool>-extracted` — drift between the committed sidecar and a fresh
-  extraction, built by `lib/extracted/default.nix`’s `mkDriftCheck`, which
-  returns the `${name}-extracted` attribute for the caller to merge. It prints a
-  sorted JSON diff and a recipe to build the check’s `passthru.extracted`, copy
-  it over the committed sidecar, and run `nix fmt`. Staleness only; the update
-  pipeline commits whatever the extractor says.
+  extraction, plus the rule's failures over the committed sidecar and rows,
+  built by `lib/extracted/default.nix`’s `mkDriftCheck`. It prints a sorted JSON
+  diff, the failures, and the recipes to rebuild the sidecar and to rewrite the
+  rows from the check’s `passthru.rows`.
 - `<tool>-extractor-guards` — the mutants: each trips the guards it names or
   moves the output exactly as declared.
 - `<tool>-extracted-binary` — every extracted key is a string in the installed
@@ -104,22 +125,24 @@ description field.
   chain) or computed (`defaultExpr`), and `overriddenBy` comes from
   `build_parser()` imported from the pinned source (eval). Descriptions are the
   man page's `.. gitconfig::` directives, parsed with docutils; `revise.rerere`
-  is undocumented upstream and its description is a hand annotation. The literal
-  `"config"` may appear only inside the helpers, and `git var` may only name the
-  three variables it reads today.
+  is undocumented upstream and its description is a row. The literal `"config"`
+  may appear only inside the helpers, and `git var` may only name the three
+  variables it reads today.
 
 ## Regeneration
 
 Each package's `passthru.regenerateExtracted`
 (`packageLib.mkRegenerateExtracted`) rewrites its sidecar from
-`passthru.extracted`. git-branchless runs it on its flake-input bump; git-absorb
-and git-revise, rev-bump targets, run it from `update-pkg.sh` after the bump. A
-failing extraction holds the bump back. Locally:
+`passthru.extracted`, then its rows from the drift check's `passthru.rows`; both
+paths are in its `sidecars`, which the update scripts stage. git-branchless runs
+it on its flake-input bump; git-absorb and git-revise, rev-bump targets, run it
+from `update-pkg.sh` after the bump. A failing extraction holds the bump back.
+Locally:
 `"$(nix build --no-link --print-out-paths .#<tool>.passthru.regenerateExtracted)"`.
 
 ## Adding a tool
 
-`extract/extract.py` + `annotations.json`,
+`extract/extract.py` + a rows file `annotations.json` (`{deadKeys, settings}`),
 `passthru.{patchedSource,extracted, regenerateExtracted}` on the package, a
 `checks.nix` calling `extraction.checks`, a mutant list covering every guard,
 and `lib/default.nix` exporting `<owner>.settings`. The generator check then

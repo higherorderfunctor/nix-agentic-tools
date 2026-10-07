@@ -2,8 +2,12 @@
 """Census of the git config keys git-branchless reads and writes.
 
 Input : the PATCHED source tree (the package's unpack + patch output), parsed
-        with tree-sitter-rust, plus the hand annotations in annotations.json.
-Output: extracted.json, one record per key (see the sidecar at the bottom).
+        with tree-sitter-rust.
+Output: extracted.json, one record per key (see the sidecar at the bottom):
+        facts only. A read with no type or doc comment has neither field, and
+        a key-shaped const nothing reads is a dead key with no reason; the
+        rows in annotations.json supply them, in Nix
+        (lib/git-tool-settings/rules.nix).
 Exit  : non-zero when any guard trips. Every guard names its code (F1..F15)
         so a failure says which call shape the resolver no longer
         understands. A new upstream key never disappears silently: either it
@@ -28,7 +32,6 @@ import rust_tree as rt
 from census import Census, sites
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-parser.add_argument("--annotations", type=Path, required=True)
 parser.add_argument("--out", type=Path, required=True)
 parser.add_argument("--src", type=Path, required=True)
 args = parser.parse_args()
@@ -589,21 +592,13 @@ for r in records:
         r["doc"] = enum_doc.get(r["type"][5:])
 all_docs = " ".join(r["doc"] or "" for r in records)
 
-# ── F8: key-shaped consts nothing reads ───────────────────────────────
-annotations = json.loads(args.annotations.read_text())
-dead_annotated = annotations.get("deadKeys", {})
+# ── Dead keys: key-shaped consts nothing reads ────────────────────────
 read_raw = {r["key_raw"] for r in records}
 dead = {}
 for ident, entries in consts.items():
     for value, f, c in entries:
         if isinstance(value, str) and census.key_tokens(value) == [value] and value not in read_raw:
-            if value in dead_annotated:
-                dead[value] = {"const": ident, "file": f, "reason": dead_annotated[value]}
-            else:
-                fail("F8", f"key-shaped const {ident} = {value!r} at {f}:{rt.line(c)} is never read; "
-                           "extend the resolver, or record it under deadKeys in annotations.json")
-for k in sorted(set(dead_annotated) - set(dead)):
-    fail("F4", f"deadKeys entry {k} is stale: no unread const holds it any more")
+            dead[value] = {"const": ident, "file": f}
 
 # ── Aggregate the sites into one record per key ───────────────────────
 by_key = defaultdict(list)
@@ -636,14 +631,6 @@ for key, rs in sorted(by_key.items()):
     legacy = re.search(r"\(deprecated\)\s*" + re.escape(key) + r"(?![\w.])", all_docs)
     entry["status"] = "legacy" if legacy else "current"
     settings[key] = entry
-
-# ── Annotations: fill what the source cannot state (F4) ───────────────
-census.apply_annotations(settings, annotations)
-
-# ── F3: a setting with no type is a hard failure ──────────────────────
-for key, entry in settings.items():
-    if entry["reads"] and "type" not in entry:
-        fail("F3", f"no type for read of {key} (add one to annotations.json)")
 
 
 # ── F9: every key named in a production string literal is accounted for

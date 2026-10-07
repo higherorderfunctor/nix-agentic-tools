@@ -7,10 +7,10 @@ applyTo: "packages/git-branchless/**"
 
 # git-branchless config extraction
 
-> **Last verified:** 2026-09-29 — tree-sitter walk of the patched 0.11.1 source:
-> 24 `branchless.*` keys (23 typed options, `branchless.mainBranch` excluded),
-> 17 foreign keys, 36 builtin revset functions, and sync's direct draft query;
-> 44 mutants fail closed or move the output as declared.
+> **Last verified:** 2026-10-07 — the extractor emits facts only and the rows
+> file fills them in Nix; 24 `branchless.*` keys (23 typed options), 17 foreign
+> keys, 36 builtin revset functions; 41 mutants fail closed or move the output
+> as declared.
 >
 > **Settled — do not relitigate.**
 >
@@ -47,10 +47,12 @@ It never builds Rust, and passthru leaves the package's store path alone.
 1. `extract/extract.py` — the resolver. It parses every production `.rs` file
    with tree-sitter-rust (`lib/git-tool-settings/rust_tree.py`), reads call
    shapes, keys, defaults and types from typed nodes, writes `extracted.json`
-   and exits non-zero on any guard.
-2. `extract/annotations.json` — the only hand input: prose the source cannot
-   state (computed defaults, alias-family descriptions, the patch note), types
-   for two untyped reads, and `deadKeys`.
+   (facts only) and exits non-zero on any guard.
+2. `extract/annotations.json` — the rows file, the only hand input, applied in
+   Nix by `lib/git-tool-settings/rules.nix`: a row per key (`{}` when the facts
+   suffice), prose the source cannot state (computed defaults, alias-family
+   descriptions, the patch note), types for two untyped reads, and a `reason`
+   per dead key.
 
 Every config access goes through `ConfigRead`/`ConfigWrite` in
 `git-branchless-lib/src/git/config.rs`, which is why a structured scan works.
@@ -64,7 +66,7 @@ Every config access goes through `ConfigRead`/`ConfigWrite` in
   one isolated file). Handle chains follow parameters back to every caller.
 - `foreign.<key>` — git's own keys the tool reads or writes (`reads`/`writes`
   only; they are not typed here).
-- `deadKeys` — key-shaped consts nothing reads, with the annotated reason.
+- `deadKeys` — key-shaped consts nothing reads; the reason is a row.
 - `revsetFunctions` — the builtin `FUNCTIONS` table. It is consulted before
   `branchless.revsets.alias.*`, so an alias with a builtin's name is dead.
 
@@ -76,12 +78,9 @@ Every config access goes through `ConfigRead`/`ConfigWrite` in
 | ---- | --------------------------------------------------------------------------------------------------------------- |
 | F1   | a call on a config handle matches no recognised shape, or a UFCS call                                           |
 | F2   | a key expression is unresolvable, or a key-returning fn has a non-literal match arm                             |
-| F3   | a `branchless.*` read has no type                                                                               |
-| F4   | an annotation is stale, shadows an extracted value without `replace`, or `deadKeys` names nothing               |
 | F5   | the `ConfigRead`/`ConfigWrite` methods or `GetConfigValue` types change                                         |
 | F6   | raw git2 config access outside the allowlist                                                                    |
 | F7   | a `["config", …]` git argv has a non-literal element                                                            |
-| F8   | a key-shaped const is never read and not in `deadKeys`                                                          |
 | F9   | a production string literal names a `branchless.*` key no recognised read or write extracts (the net)           |
 | F10  | a handle is obtained where no key is extracted and not handed to a Config-typed parameter, or stored in a field |
 | F11  | a test cfg other than exactly `#[cfg(test)]`                                                                    |
@@ -98,6 +97,10 @@ string nodes in the tree (a macro's token tree keeps them typed), so a read the
 resolver cannot follow still leaves its key in a literal. It does not catch a
 key built entirely at run time without a `branchless.` literal.
 
+A read with no type, a key with no description, a new dead key, and a row whose
+key is gone are not guards: they fail the drift check through the rows rule (see
+the git-tool-settings fragment).
+
 `checks/extractor-mutants.nix` holds one upstream-shaped change per guard and
 per known blind spot; `git-branchless-extractor-guards` runs them through
 `lib/git-tool-settings/mutate.py`. Add a mutant with every new guard, and one
@@ -106,9 +109,8 @@ series).
 
 ## Checks
 
-- `git-branchless-extracted` — the committed sidecar equals a fresh extraction.
-  Staleness only: the update pipeline commits whatever the extractor says, so
-  correctness rests on the guards.
+- `git-branchless-extracted` — the committed sidecar equals a fresh extraction,
+  and the rows rule passes over it.
 - `git-branchless-extractor-guards` — the mutants.
 - `git-branchless-extracted-binary` — every extracted key (a family by its
   literal prefix) is a string in the built binary.

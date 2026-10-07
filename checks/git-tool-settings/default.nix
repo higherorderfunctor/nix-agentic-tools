@@ -1,1 +1,1 @@
-{imports = [./generator.nix];}
+{imports = [./generator.nix ./rules.nix];}

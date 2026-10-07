@@ -85,6 +85,10 @@
             {
               attr = "git-branchless";
               dest = repoPath ../../../../extracted.json;
+              rows = {
+                name = "git-branchless";
+                path = repoPath ../../../../extract/annotations.json;
+              };
             }
           ];
         };

@@ -21,6 +21,11 @@
   generate = extracted:
     import ../../lib/git-tool-settings {
       inherit extracted lib;
+      # The fixtures state every fact directly, so no row fills one.
+      rows = {
+        deadKeys = {};
+        settings = {};
+      };
       tool = "probe-tool";
     };
   read = {reads."probe.rs#read" = ["repository"];};

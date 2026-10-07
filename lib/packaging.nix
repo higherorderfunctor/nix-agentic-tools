@@ -489,7 +489,8 @@ rec {
   # `targets` are `mkExtractRegen` arguments: `attr` is the package name in
   # `ciPackages`, not a check path. `extract` selects its passthru key and
   # defaults to `extracted`; `dest` is the repository path it replaces. Optional
-  # `rows = {name; path;}` names the drift check and its rows destination.
+  # `rows = {name; path;}` names the drift check and its rows destination, which
+  # `sidecars` lists too, so update-input.sh stages the rows the sweep wrote.
   mkRegenerateExtracted = {
     name,
     pkgs,
@@ -501,7 +502,7 @@ rec {
       ${builtins.concatStringsSep "\n" (map (target: mkExtractRegen (target // {inherit pkgs;})) targets)}
     '')
     .overrideAttrs (prev: {
-      passthru = (prev.passthru or {}) // {sidecars = map (target: target.dest) targets;};
+      passthru = (prev.passthru or {}) // {sidecars = builtins.concatMap (target: [target.dest] ++ pkgs.lib.optional (target.rows or null != null) target.rows.path) targets;};
     });
 
   # Source repair precedes floor extraction, which precedes vendor hashing.

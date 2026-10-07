@@ -76,6 +76,10 @@ in
             {
               attr = "git-absorb";
               dest = repoPath ../../../../extracted.json;
+              rows = {
+                name = "git-absorb";
+                path = repoPath ../../../../extract/annotations.json;
+              };
             }
           ];
         };
