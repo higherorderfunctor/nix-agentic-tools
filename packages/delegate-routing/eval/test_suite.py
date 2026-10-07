@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -13,7 +14,8 @@ from unittest.mock import patch
 
 import suite
 
-STRICT_BASH = "#!/usr/bin/env bash\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
+# The Nix build sandbox has no /usr/bin/env: name the bash on PATH.
+STRICT_BASH = f"#!{shutil.which('bash')}\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n"
 
 
 class SourceAttribution(unittest.TestCase):
