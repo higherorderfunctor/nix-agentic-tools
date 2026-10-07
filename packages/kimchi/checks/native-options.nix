@@ -16,24 +16,27 @@
   inherit (harness) evalDevenv;
   evalHm = config: harness.evalHm (lib.mkMerge [{ai.kimchi.native.settings.region = lib.mkOverride 1200 "us";} config]);
   committed = builtins.fromJSON (builtins.readFile ../extracted.json);
-  surfaceFor = extracted: import ../lib/extracted.nix {inherit extracted extractedLib lib pkgs;};
-  real = surfaceFor committed;
+  committedRows = builtins.fromJSON (builtins.readFile ../extract/annotations.json);
+  surfaceFor = extracted: rows: import ../lib/extracted.nix {inherit extracted extractedLib lib pkgs rows;};
+  real = surfaceFor committed null;
   sorted = lib.sort (a: b: a < b);
 
   # One harness key added, one config key removed, one enum value added.
-  fixture = surfaceFor (lib.recursiveUpdate (committed
-    // {
-      config = committed.config // {keys = builtins.removeAttrs committed.config.keys ["llmEndpoint"];};
-    }) {
-    harness.keys = {
-      doubleEscapeAction.enum = committed.harness.keys.doubleEscapeAction.enum ++ ["probe"];
-      probeAdded = {
-        optional = true;
-        type = "boolean";
-        typeExpression = "boolean";
+  fixture =
+    surfaceFor (lib.recursiveUpdate (committed
+      // {
+        config = committed.config // {keys = builtins.removeAttrs committed.config.keys ["llmEndpoint"];};
+      }) {
+      harness.keys = {
+        doubleEscapeAction.enum = committed.harness.keys.doubleEscapeAction.enum ++ ["probe"];
+        probeAdded = {
+          optional = true;
+          type = "boolean";
+          typeExpression = "boolean";
+        };
       };
-    };
-  });
+    })
+    null;
   # Guards the fixture itself: recursiveUpdate cannot delete a key.
   fixtureHasNoLlmEndpoint = !(fixture.settingsOptions ? llmEndpoint);
 
@@ -41,22 +44,37 @@
   withoutModelRoles = surfaceFor (committed
     // {
       harness = committed.harness // {keys = builtins.removeAttrs committed.harness.keys ["modelRoles"];};
-    });
-  withUnion = surfaceFor (lib.recursiveUpdate committed {
-    harness.keys.probeUnion = {
-      optional = true;
-      type = "union";
-      typeExpression = "string | number";
-    };
-  });
-  withUserScopeTheme = surfaceFor (lib.recursiveUpdate committed {
-    harness.keys.theme.project = false;
-  });
-  withConsumedInertKey = surfaceFor (lib.recursiveUpdate committed {
-    config.keys.mcpSearchLimit.inert = false;
-  });
-  withoutOwnVariable = surfaceFor (lib.recursiveUpdate committed {
-    environment.variables.KIMCHI_REGION.consumerOverridable = false;
+    })
+  null;
+  withUnion =
+    surfaceFor (lib.recursiveUpdate committed {
+      harness.keys.probeUnion = {
+        optional = true;
+        type = "union";
+        typeExpression = "string | number";
+      };
+    })
+    null;
+  withUserScopeTheme =
+    surfaceFor (lib.recursiveUpdate committed {
+      harness.keys.theme.project = false;
+    })
+    null;
+  withConsumedInertKey =
+    surfaceFor (lib.recursiveUpdate committed {
+      config.keys.mcpSearchLimit.inert = false;
+    })
+    null;
+  withoutOwnVariable =
+    surfaceFor (lib.recursiveUpdate committed {
+      environment.variables.KIMCHI_REGION.consumerOverridable = false;
+    })
+    null;
+  # Annotation rows with one harness key and one config key ignored. Both keys
+  # have an option on the real surface and nothing in the factory reads them.
+  withIgnoredRows = surfaceFor committed (lib.recursiveUpdate committedRows {
+    config.llmEndpoint.ignored = "probe";
+    harness.httpProxy.ignored = "probe";
   });
 
   # Does `value` type-check against a closed submodule of `options`?
@@ -104,7 +122,7 @@
     .defaultThinkingLevel
     or null;
 
-  keptKeys = surface: excluded: sorted (builtins.attrNames (builtins.removeAttrs surface.keys (builtins.attrNames excluded)));
+  keptKeys = keys: excluded: sorted (builtins.attrNames (builtins.removeAttrs keys (builtins.attrNames excluded)));
 
   # `telemetry.endpoint`, because devenv passes `telemetry.enabled` through
   # the launcher environment rather than the project file.
@@ -129,12 +147,27 @@
     # Every key the sidecar keeps is an option, and nothing else is.
     real-surface-is-the-sidecar =
       sorted (builtins.attrNames real.settingsOptions)
-      == keptKeys committed.config real.report.excluded.settings
+      == keptKeys real.rules.results.config.entries real.report.excluded.settings
       && sorted (builtins.attrNames real.harnessSettingsOptions)
-      == keptKeys committed.harness real.report.excluded.harnessSettings
+      == keptKeys real.rules.results.harness.entries real.report.excluded.harnessSettings
       && real.report.excluded.settings ? apiKey
       && real.report.excluded.settings ? api_key
       && real.report.excluded.settings ? gitTokens;
+
+    # A row marked `ignored` removes the key from every surface built from the
+    # reconciled entries, not just from the library's own result. The first
+    # two clauses are the precondition: an excluded key has no option anyway.
+    ignored-row-is-not-an-option =
+      real.harnessSettingsOptions
+      ? httpProxy
+      && real.settingsOptions ? llmEndpoint
+      && !(withIgnoredRows.harnessSettingsOptions ? httpProxy)
+      && !(withIgnoredRows.settingsOptions ? llmEndpoint)
+      && !(lib.elem "httpProxy" withIgnoredRows.userScopeHarnessKeys)
+      && sorted (builtins.attrNames withIgnoredRows.harnessSettingsOptions)
+      == keptKeys withIgnoredRows.rules.results.harness.entries withIgnoredRows.report.excluded.harnessSettings
+      && sorted (builtins.attrNames withIgnoredRows.settingsOptions)
+      == keptKeys withIgnoredRows.rules.results.config.entries withIgnoredRows.report.excluded.settings;
 
     added-key-appears =
       fixture.harnessSettingsOptions ? probeAdded
@@ -201,7 +234,7 @@
     # extraction; the devenv rejection uses the first.
     project-tier-rejects-user-scope-config =
       sorted real.userScopeConfigKeys
-      == sorted (lib.subtractLists committed.config.projectTier.honoredKeys (builtins.attrNames committed.config.keys))
+      == sorted (lib.subtractLists committed.config.projectTier.honoredKeys (builtins.attrNames real.rules.results.config.entries))
       && lib.any (lib.hasInfix "config.json keys Kimchi reads only from user scope: telemetry") (failedAssertions devenvTelemetry)
       && failedAssertions hmTelemetry == [];
 

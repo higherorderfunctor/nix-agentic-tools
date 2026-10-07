@@ -7,9 +7,9 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-07 — `mkKimchi` binds `lib.ai.extracted`
-> independently of runtime package replacements; environment `controls` prose is
-> optional except on secret names, which still need a hand row.
+> **Last verified:** 2026-10-07 — harness keys are reconciled like config keys:
+> an untyped harness read is an extracted fact that `rules.nix` fails as
+> `needs-human`, not an extraction failure.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -96,43 +96,53 @@ key upstream adds to pi's `Settings` or to config.ts's `readConfigExtras`
 becomes an option at the next re-extraction, and a key it removes fails its
 consumer as an unknown option instead of writing bytes nothing reads. Every
 option is `nullOr` with a null default. Config rows record acceptance and may
-carry `aliasFor` or `excluded`. `extract/rules.nix` defines the config and
-environment surfaces once, using the shared `extractedLib` function’s
-`reconcile`. Recipes receive the function through `scopeArgs`, checks through
-module arguments. `mkKimchi` binds `lib.ai.extracted` independently of runtime
-package replacements. Consumers merge those rows with the committed facts;
-extraction itself emits facts and clones alias types from the rows' `aliasFor`
-references. Alias keys and inert keys have no option. A key is inert when
-upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
-consumes it: nothing reads the loaded member, and nothing outside `config.ts`
-reads the raw `readConfigExtras` member, while `config.ts` still parses it to
-warn that it is obsolete. A release that consumes it again clears the flag, and
-the key becomes an option. Secret exclusions (`apiKey`, its alias, and
-`gitTokens`) live in the config rows, naming `ai.kimchi.apiKey` or
-`ai.kimchi.gitTokens` as their delivery path. The option generator keeps two
-hand tables: one refinement (`modelRoles`, whose role names and single-string
-roles come from the sidecar while the non-blank and non-empty checks do not),
-and one description note. `report.stale*` lists any refinement or note whose
-path the sidecar lost, and `checks/native-options.nix` fails on it. Reconcile
-detects stale exclusion rows.
+carry `aliasFor` or `excluded`; harness rows may carry `type` or `excluded`.
+`extract/rules.nix` defines the config, environment and harness surfaces once,
+using the shared `extractedLib` function’s `reconcile`. Recipes receive the
+function through `scopeArgs`, checks through module arguments. `mkKimchi` binds
+`lib.ai.extracted` independently of runtime package replacements. Consumers
+merge those rows with the committed facts; extraction itself emits facts and
+clones alias types from the rows' `aliasFor` references. Alias keys and inert
+keys have no option. A key is inert when upstream tags its `KimchiConfig` member
+`@deprecated` and no Kimchi code consumes it: nothing reads the loaded member,
+and nothing outside `config.ts` reads the raw `readConfigExtras` member, while
+`config.ts` still parses it to warn that it is obsolete. A release that consumes
+it again clears the flag, and the key becomes an option. Secret exclusions
+(`apiKey`, its alias, and `gitTokens`) live in the config rows, naming
+`ai.kimchi.apiKey` or `ai.kimchi.gitTokens` as their delivery path. The option
+generator keeps two hand tables: one refinement (`modelRoles`, whose role names
+and single-string roles come from the sidecar while the non-blank and non-empty
+checks do not), and one description note. `report.stale*` lists any refinement
+or note whose path the sidecar lost, and `checks/native-options.nix` fails on
+it. Reconcile detects stale exclusion rows.
 
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's harness additions (`fermentV2`, `modelRoles` and the rest, each
 typed from a named declaration) are a hand list in `extract.mjs`. Two censuses
-check it: every harness key config.ts parses, and every constant key passed to
-config/settings.ts's `readConfigSetting`, `readConfigSettingAsync`,
-`writeConfigSetting` and `writeConfigSettingAsync` anywhere in `src/`, must be a
-pi `Settings` key or an addition. Other direct readers of the harness file are
-not censused (in 1.1.37, `telemetry/config-snapshot.ts` reads `model` and
-`provider` for telemetry), so a key upstream adds there meets the closed
-submodule as an unknown option with no drift signal. The config.json shapes of
-`teleport`, `gitTokens` and the `surveys` record have no declared type, so they
-are written by hand and pinned both ways to their readers' runtime guards
-(`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`): every
-scalar leaf must be `typeof`-guarded as its type, and every guarded path must be
-in the shape. That check also runs the generator over a fixture sidecar with a
-key added, a key removed and an enum widened, and requires the option surface to
-move with it.
+discover keys beyond it: every harness key config.ts parses, and every constant
+key passed to config/settings.ts's `readConfigSetting`,
+`readConfigSettingAsync`, `writeConfigSetting` and `writeConfigSettingAsync`
+anywhere in `src/`, is matched against pi `Settings` and the additions. A key in
+neither is not an extraction failure: the extractor emits it untyped
+(`type = null`, user scope, optional), and the harness surface fails it as
+`needs-human` until its row supplies a `type`, or `ignored = "<reason>"` when
+Nix should not expose it. A row's `type` is a bare JSON type with no `enum`,
+`items` or `properties`, so a structured addition belongs in the `extract.mjs`
+hand list instead. The option generator reads only reconciled entries, so an
+ignored read never becomes an option. An untyped read becomes an untyped JSON
+option, which both `report.untyped` and the drift check fail until its row
+supplies a `type`. As in config, a string key the classifier calls secret is
+never auto-added, and its row must carry `excluded`. Other direct readers of the
+harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts` reads
+`model` and `provider` for telemetry), so a key upstream adds there meets the
+closed submodule as an unknown option with no drift signal. The config.json
+shapes of `teleport`, `gitTokens` and the `surveys` record have no declared
+type, so they are written by hand and pinned both ways to their readers' runtime
+guards (`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`):
+every scalar leaf must be `typeof`-guarded as its type, and every guarded path
+must be in the shape. That check also runs the generator over a fixture sidecar
+with a key added, a key removed and an enum widened, and requires the option
+surface to move with it.
 
 The sidecar also drives two rejections and one lookup. Devenv rejects
 `native.settings` keys whose `project` flag is false, because Kimchi merges only
