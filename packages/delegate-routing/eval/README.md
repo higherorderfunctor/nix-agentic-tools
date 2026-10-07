@@ -5,6 +5,31 @@ checks what the delivered delegate-routing configuration makes an agent do with
 a real task. A human starts it; it spends real model turns on the operator's
 logins. No Nix check or CI job runs a session.
 
+## Baseline
+
+The root runs at the operator's normal strong-tier medium so delegation choices
+come from a realistic orchestrator. `ROOT_BASELINES` in `suite.py` owns these
+pins; delegate models remain the agent's choice.
+
+| Harness | Root model             | Root effort       | Controls                                                 |
+| ------- | ---------------------- | ----------------- | -------------------------------------------------------- |
+| Claude  | `opus`                 | `medium`          | `--model opus --effort medium`                           |
+| Codex   | `gpt-6.1-sol`          | `medium`          | `--model gpt-6.1-sol -c model_reasoning_effort="medium"` |
+| Kimchi  | `kimi-k3`              | `medium` thinking | `--model kimi-k3 --thinking medium`                      |
+| Kiro    | newest `claude-opus-*` | `medium`          | `--model <id> --effort medium`                           |
+
+Kiro resolves `.models[].model_id` from `kiro-cli chat --list-models -f json` at
+run time, comparing version segments numerically; dry runs print the pattern
+without querying the CLI. Codex does not copy `model` or
+`model_reasoning_effort`; Kiro does not copy `chat.defaultModel`. Other
+carried-over settings remain intact.
+
+Each result and the PASS/FAIL table show requested and observed model/effort
+separately. Observations use Claude's root init, Codex turn/session events
+(including the matching root rollout), Kiro's request records in `chat.log`, and
+Kimchi's `agent_start`/`agent_end`. Missing fields read `not exposed`; requested
+settings are never substituted for observations.
+
 ## Cases
 
 `cases.nix` evaluates this repository's own delivery (`dev/ai.nix`) through the
@@ -87,12 +112,12 @@ live run refuses a directory under `~` or `/tmp`, or one with an `AGENTS.md` or
 `CLAUDE.md` above it: Kimchi and Claude load ancestor context files, and Codex
 refuses helper binaries under a temporary directory.
 
-| Harness | Launch                                                                                                                                                                                          | Login                                                                                                                                                 | Normal-session settings carried over                                                                                                            |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude  | `claude -p --setting-sources project`, overlay `--settings`, `--model opus --permission-mode auto`, scratch `CLAUDE_CONFIG_DIR`, memory, org memory, policy skills and claude.ai connectors off | `CLAUDE_CODE_OAUTH_TOKEN` from a `claude setup-token` token (`--claude-token-file` or the variable). `~/.claude` credentials are never read or copied | `enableWorkflows`, `ultracode`; the fixture's `.mcp.json` servers are enabled; the clamp hook comes from the fixture                            |
-| Codex   | `codex exec --json` with apps, plugins, remote plugins and memories disabled; scratch `CODEX_HOME`                                                                                              | `auth.json` symlinked, never copied: Codex rewrites it in place, so a refresh reaches the real file                                                   | `model`, `model_reasoning_effort`, `default_permissions`, `permissions`, `features`, `agents`; the fixture trusted in the scratch `config.toml` |
-| Kimchi  | `kimchi -p --mode json --approve --auto`                                                                                                                                                        | `KIMCHI_API_KEY` from `~/.config/kimchi/config.json`, session-only                                                                                    | `harness/settings.json` with the memory extension forced off                                                                                    |
-| Kiro    | `kiro-cli chat --v3 --no-interactive --trust-all-tools --output-format stream-json` through the operator's wrapper                                                                              | the real data dir (`KIRO_DATA_DIR`), shared, so a refresh lands in the database the operator already uses                                             | `chat.defaultModel`, `chat.enableCheckpoint`, `chat.enableTangentMode`, `chat.enableWorkflows`                                                  |
+| Harness | Launch                                                                                                                                                                                                          | Login                                                                                                                                                 | Normal-session settings carried over                                                                                 |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Claude  | `claude -p --setting-sources project`, overlay `--settings`, `--model opus --effort medium --permission-mode auto`, scratch `CLAUDE_CONFIG_DIR`, memory, org memory, policy skills and claude.ai connectors off | `CLAUDE_CODE_OAUTH_TOKEN` from a `claude setup-token` token (`--claude-token-file` or the variable). `~/.claude` credentials are never read or copied | `enableWorkflows`, `ultracode`; the fixture's `.mcp.json` servers are enabled; the clamp hook comes from the fixture |
+| Codex   | `codex exec --json` with apps, plugins, remote plugins and memories disabled; scratch `CODEX_HOME`                                                                                                              | `auth.json` symlinked, never copied: Codex rewrites it in place, so a refresh reaches the real file                                                   | `default_permissions`, `permissions`, `features`, `agents`; the fixture trusted in the scratch `config.toml`         |
+| Kimchi  | `kimchi -p --mode json --approve --auto`                                                                                                                                                                        | `KIMCHI_API_KEY` from `~/.config/kimchi/config.json`, session-only                                                                                    | `harness/settings.json` with the memory extension forced off                                                         |
+| Kiro    | `kiro-cli chat --v3 --no-interactive --trust-all-tools --output-format stream-json` through the operator's wrapper                                                                                              | the real data dir (`KIRO_DATA_DIR`), shared, so a refresh lands in the database the operator already uses                                             | `chat.enableCheckpoint`, `chat.enableTangentMode`, `chat.enableWorkflows`                                            |
 
 Vendor-bundled skills and system prompts are kept: they are vendor surface.
 Claude and Kiro also get a log-only `PreToolUse` hook that appends each request

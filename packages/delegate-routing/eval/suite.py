@@ -10,6 +10,7 @@ README.md for the isolation recipe, the caps and the operator steps.
 # cspell:ignore AUTOINSTALL CLAUDEAI collab killpg realise setsid
 import argparse
 from datetime import datetime, timezone
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -27,6 +28,31 @@ REPO = HERE.parents[2]
 REAL_HOME = Path.home()
 CHECK = "delegate-routing-eval-structure"
 NIX_ENV = {**os.environ, "NIX_CONFIG": os.environ.get("NIX_CONFIG", "") + "\nmax-jobs = 1\ncores = 2\n"}
+
+# Root controls only; delegate choices still come from the delivered skill.
+ROOT_BASELINES = {
+    "claude": {
+        "argv": ["--model", "{model}", "--effort", "{effort}"],
+        "effort": "medium",
+        "model": "opus",
+    },
+    "codex": {
+        "argv": ["--model", "{model}", "-c", 'model_reasoning_effort="{effort}"'],
+        "effort": "medium",
+        "model": "gpt-6.1-sol",
+    },
+    "kimchi": {
+        "argv": ["--model", "{model}", "--thinking", "{effort}"],
+        "effort": "medium",
+        "model": "kimi-k3",
+    },
+    "kiro": {
+        "argv": ["--model", "{model}", "--effort", "{effort}"],
+        "effort": "medium",
+        "listModels": ["chat", "--list-models", "-f", "json"],
+        "model": "claude-opus-*",
+    },
+}
 
 # Caps on every run, all four harnesses.
 WALL_SECONDS = 600
@@ -132,7 +158,7 @@ def claude_setup(ctx):
     write_json(ctx["dir"] / "claude-overlay.json", overlay)
     return {
         "argv": [ctx["exe"], "-p", "--setting-sources", "project", "--settings", str(ctx["dir"] / "claude-overlay.json"),
-                 "--model", "opus", "--permission-mode", "auto", "--max-turns", str(TURN_CAP),
+                 *ctx["baseline_argv"], "--permission-mode", "auto", "--max-turns", str(TURN_CAP),
                  "--max-budget-usd", str(BUDGET_USD), "--no-session-persistence", "--output-format", "stream-json",
                  "--verbose", "--include-hook-events", "--forward-subagent-text", ctx["prompt"]],
         "env": {
@@ -153,9 +179,9 @@ def codex_setup(ctx):
         real = tomllib.loads((REAL_HOME / ".codex/config.toml").read_text())
     except (OSError, ValueError):
         real = {}
-    # The operator's model, effort and permissions; no MCP servers, project
+    # The operator's permissions and behavior; no MCP servers, project
     # trust list or UI keys.
-    config = {key: real[key] for key in ("agents", "default_permissions", "features", "model", "model_reasoning_effort", "permissions") if key in real}
+    config = {key: real[key] for key in ("agents", "default_permissions", "features", "permissions") if key in real}
     config["approval_policy"] = "never"
     # Trust belongs in config.toml: trust passed with -c skips the project config.
     config["projects"] = {str(ctx["repo"]): {"trust_level": "trusted"}}
@@ -170,10 +196,10 @@ def codex_setup(ctx):
     flags = ["--disable", "apps", "--disable", "plugins", "--disable", "remote_plugin", "--disable", "memories",
              "-c", "memories.use_memories=false", "-c", "memories.generate_memories=false"]
     return {
-        "argv": [ctx["exe"], "exec", *flags, "--json", "-o", str(ctx["logs"] / "last-message.txt"), ctx["prompt"]],
+        "argv": [ctx["exe"], "exec", *ctx["baseline_argv"], *flags, "--json", "-o", str(ctx["logs"] / "last-message.txt"), ctx["prompt"]],
         "env": {"CODEX_HOME": str(codex_home)},
         # Renders the model-visible prompt with no model call: the startup record.
-        "preflight": [ctx["exe"], "debug", "prompt-input", *flags],
+        "preflight": [ctx["exe"], *ctx["baseline_argv"], "debug", "prompt-input", *flags],
         "written": [codex_home / "config.toml", auth],
     }
 
@@ -181,7 +207,7 @@ def codex_setup(ctx):
 def kiro_setup(ctx):
     real = read_json(REAL_HOME / ".kiro/settings/cli.json", {}) or {}
     settings = ctx["home"] / ".kiro/settings/cli.json"
-    write_json(settings, {key: real[key] for key in ("chat.defaultModel", "chat.enableCheckpoint", "chat.enableTangentMode", "chat.enableWorkflows") if key in real})
+    write_json(settings, {key: real[key] for key in ("chat.enableCheckpoint", "chat.enableTangentMode", "chat.enableWorkflows") if key in real})
     hook = ctx["repo"] / ".kiro/hooks/suite-log.json"
     write_json(hook, {"version": "v1", "hooks": [{"name": "suite-log", "trigger": "PreToolUse", "action": {"type": "command", "command": str(ctx["hook"])}}]})
     data = Path(os.environ.get("XDG_DATA_HOME") or REAL_HOME / ".local/share")
@@ -197,7 +223,7 @@ def kiro_setup(ctx):
         "XDG_DATA_HOME": str(data),
     }
     return {
-        "argv": [ctx["exe"], "chat", "--v3", "--no-interactive", "--trust-all-tools", "--output-format", "stream-json", ctx["prompt"]],
+        "argv": [ctx["exe"], "chat", *ctx["baseline_argv"], "--v3", "--no-interactive", "--trust-all-tools", "--output-format", "stream-json", ctx["prompt"]],
         "env": env,
         "written": [settings, hook],
     }
@@ -214,7 +240,7 @@ def kimchi_setup(ctx):
     write_json(harness / "settings.json", settings)
     return {
         # --auto: the closest posture to a normal interactive session.
-        "argv": [ctx["exe"], "-p", "--mode", "json", "--approve", "--auto", ctx["prompt"]],
+        "argv": [ctx["exe"], "-p", *ctx["baseline_argv"], "--mode", "json", "--approve", "--auto", ctx["prompt"]],
         "env": {"KIMCHI_NO_UPDATE_CHECK": "1", "KIMCHI_TAGS": f"suite:delegate-routing,case:{ctx['case']['id']}", "KIMCHI_TELEMETRY_ENABLED": "0"},
         # Session-only: an env key is never written back to the real config.
         "secrets": {"KIMCHI_API_KEY": ("json", REAL_HOME / ".config/kimchi/config.json", "apiKey")},
@@ -341,6 +367,73 @@ def parse_lines(text):
     return [value for value in values if isinstance(value, dict)]
 
 
+def observed_controls(runtime, events, logs):
+    """Reported root controls, never inferred from argv or copied settings.
+
+    Keep distinct values if the root changes models during a run. Missing
+    fields stay explicit, including effort on streams that only report model.
+    """
+    records = []
+    own = [event for event in events if not event.get("parent_tool_use_id")]
+    if runtime == "claude":
+        records = [claude_init(own) or {}]
+    elif runtime == "kimchi":
+        records = [event for event in own if event.get("type") in {"agent_start", "agent_end"}]
+    elif runtime == "codex":
+        types = {"session_meta", "session_configured", "turn_context", "turn.started", "turn.completed", "session.started"}
+        records = [event.get("payload") or event.get("turn") or event.get("session") or event for event in own if event.get("type") in types]
+        # exec's stream may omit controls; archived root turn_context exposes
+        # them. Match the root thread, never a delegate's rollout.
+        root_id = next((event.get("thread_id") for event in own if event.get("type") == "thread.started"), None)
+        for path in sorted((logs / "sessions").rglob("*.jsonl")):
+            session = parse_lines(path.read_text(errors="ignore"))
+            meta = next((event.get("payload") or {} for event in session if event.get("type") == "session_meta"), {})
+            if root_id and meta.get("id") == root_id:
+                records += [event.get("payload") or {} for event in session if event.get("type") in types]
+    elif runtime == "kiro":
+        path = logs / "chat.log"
+        text = path.read_text(errors="ignore") if path.is_file() else ""
+        # qChatLogger writes [DEBUG] [QChat] {request: {conversationState: ...}}.
+        # Read only the current user message, never history or tool arguments.
+        text = re.sub(r"^\[DEBUG\] \[QChat\] ", "", text, flags=re.MULTILINE)
+        root_id = None
+        for event in parse_lines(text):
+            request = event.get("request") or {}
+            state = request.get("conversationState") or {}
+            current = (state.get("currentMessage") or {}).get("userInputMessage") or {}
+            model = current.get("modelId")
+            if not model:
+                continue
+            identity = state.get("conversationId")
+            if not records:
+                root_id = identity
+            elif root_id is None or identity != root_id:
+                continue
+            extra = request.get("additionalModelRequestFields") or {}
+            effort = (extra.get("output_config") or {}).get("effort") or request.get("effortLevel")
+            records.append({"model": model, "effort": effort})
+    values = {"model": [], "effort": []}
+    for record in records:
+        # Restrict nesting to event control fields; never scan messages/tools.
+        settings = record.get("settings") or {}
+        model = record.get("model") or record.get("model_id") or record.get("modelId") or settings.get("model")
+        if isinstance(model, dict):
+            model = model.get("id") or model.get("model_id")
+        effort = next((record.get(key) or settings.get(key) for key in
+                       ("effort", "reasoning_effort", "model_reasoning_effort", "effortLevel", "thinkingLevel")
+                       if record.get(key) or settings.get(key)), None)
+        for key, value in (("model", model), ("effort", effort)):
+            if isinstance(value, str) and value not in values[key]:
+                values[key].append(value)
+    return {key: ", ".join(value) if value else "not exposed" for key, value in values.items()}
+
+
+def control_record(runtime, requested=None):
+    baseline = ROOT_BASELINES[runtime]
+    return {"requested": requested or {key: baseline[key] for key in ("model", "effort")},
+            "observed": {key: "not exposed" for key in ("model", "effort")}}
+
+
 # --- fixture -----------------------------------------------------------------
 
 def render_fixture(case, root, state):
@@ -461,6 +554,17 @@ def prepare(case, out, args, live):
     ctx["hook"].write_text(f"#!/usr/bin/env bash\nset -euETo pipefail\nshopt -s inherit_errexit 2>/dev/null || :\n{{ cat; printf '\\n'; }} >>{shlex.quote(str(ctx['logs'] / 'hook-calls.jsonl'))} || :\n")
     ctx["hook"].chmod(0o755)
     ctx["exe"] = resolve(harness["exe"], args.bin, live)
+    baseline = ROOT_BASELINES[case["runtime"]]
+    ctx["requested"] = {key: baseline[key] for key in ("model", "effort")}
+    if live and baseline.get("listModels"):
+        listed = subprocess.run([ctx["exe"], *baseline["listModels"]], capture_output=True, text=True, check=True, timeout=60)
+        # The CLI's .models[].model_id, with numeric version ordering (4.10 > 4.9).
+        models = [row["model_id"] for row in json.loads(listed.stdout)["models"]
+                  if fnmatch.fnmatchcase(row["model_id"], baseline["model"])]
+        if not models:
+            raise ValueError(f"no model matches {baseline['model']}")
+        ctx["requested"]["model"] = max(models, key=lambda model: (tuple(map(int, re.findall(r"\d+", model))), model))
+    ctx["baseline_argv"] = [arg.format(**ctx["requested"]) for arg in baseline["argv"]]
     ctx["prompt"] = case["task"] + "\n\nCurrent usage (use these numbers; do not run a usage helper):\n" + json.dumps(case["usage"], sort_keys=True)
     # A `claude setup-token` token; ~/.claude credentials are never read.
     ctx["claude_token"] = ("file", args.claude_token_file) if args.claude_token_file else (
@@ -630,6 +734,7 @@ def run_case(case, prepared, args):
     delivery = skill_delivery(case, ctx, events, startup)
     record.update({
         "delegates": calls, "delivery": delivery, "exitCode": code, "leaks": leaked, "stop": stop,
+        "observed": observed_controls(case["runtime"], events, logs),
         # Second, independent record; not counted, so a call is never counted twice.
         "hookDelegates": classify(case, [{"id": None, "name": call.get("tool_name") or call.get("toolName"), "input": call.get("tool_input") or call} for call in hook_calls]),
     })
@@ -703,17 +808,18 @@ def main():
         except (LookupError, OSError, ValueError, subprocess.SubprocessError) as error:
             if args.dry_run:
                 raise
-            results.append({"case": case["id"], "harness": case["runtime"], "status": "ERROR", "detail": str(error)})
+            results.append({"case": case["id"], "harness": case["runtime"], **control_record(case["runtime"]), "status": "ERROR", "detail": str(error)})
             continue
         if args.dry_run:
             show(case, prepared)
-            results.append({"case": case["id"], "harness": case["runtime"], "status": "DRY-RUN", "detail": case["expect"]})
+            results.append({"case": case["id"], "harness": case["runtime"], **control_record(case["runtime"], prepared["ctx"]["requested"]), "status": "DRY-RUN", "detail": case["expect"]})
         else:
             try:
                 verdict = run_case(case, prepared, args)
             except (OSError, ValueError, subprocess.SubprocessError) as error:
                 verdict = {"status": "ERROR", "detail": f"{type(error).__name__}: {error}"}
-            results.append({"case": case["id"], "harness": case["runtime"], "expect": case["expect"], **verdict})
+            results.append({"case": case["id"], "harness": case["runtime"], "expect": case["expect"],
+                            **control_record(case["runtime"], prepared["ctx"]["requested"]), **verdict})
             write_json(prepared["ctx"]["logs"] / "verdict.json", results[-1])
             print(f"{case['id']}: {verdict['status']} {verdict['detail']}", file=sys.stderr)
         if not args.keep:
@@ -721,9 +827,10 @@ def main():
                 shutil.rmtree(out / case["id"] / name, ignore_errors=True)
     write_json(out / "summary.json", results)
     width = max(len(item["case"]) for item in results)
-    print(f"{'CASE':<{width}}  HARNESS  RESULT   DETAIL")
+    print(f"{'CASE':<{width}}  HARNESS  RESULT   REQUESTED MODEL / EFFORT -> OBSERVED MODEL / EFFORT  DETAIL")
     for item in results:
-        print(f"{item['case']:<{width}}  {item['harness']:<7}  {item['status']:<7}  {item['detail']}")
+        controls = " -> ".join(f"{item[key]['model']} / {item[key]['effort']}" for key in ("requested", "observed"))
+        print(f"{item['case']:<{width}}  {item['harness']:<7}  {item['status']:<7}  {controls}  {item['detail']}")
     print(f"\nlogs: {out}")
     return int(any(item["status"] == "ERROR" for item in results))
 
