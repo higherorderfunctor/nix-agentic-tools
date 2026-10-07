@@ -8,6 +8,7 @@ in {
   # stated consumer facts. Exported because `ai.<runtime>.methodFor` documents
   # it as its default and a replacement delegates back to it.
   deliveryMethod = import ./deliveryMethod.nix {inherit lib;};
+  # `extracted {pkgs}`: the shared extraction builders (lib/extracted).
   extracted = import ../extracted;
   # One builder for generated Markdown and structured files.
   generated = import ../generated.nix {inherit lib;};
