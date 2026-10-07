@@ -275,6 +275,7 @@ nvfetcher
 objectish
 ollama
 oneshot
+onepassword
 ONLN
 openat
 openclaw

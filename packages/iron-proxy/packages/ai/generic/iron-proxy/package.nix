@@ -29,6 +29,11 @@ in
     inherit (sources) version;
     src = fetchzip {inherit (sources.src) url hash;};
     vendorHash = sources.vendorHash or lib.fakeHash;
+    # The vendor tree holds github.com/1Password/connect-sdk-go and
+    # github.com/1password/onepassword-sdk-go. On a case-insensitive macOS
+    # store, Nix's case hack renames one of them and -mod=vendor fails;
+    # the module cache escapes capitals (1!password), so no collision.
+    proxyVendor = true;
     # Upstream's release builds only this command.
     subPackages = ["cmd/iron-proxy"];
     # Upstream releases are static (CGO_ENABLED=0).
