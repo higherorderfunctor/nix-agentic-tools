@@ -33,6 +33,8 @@
   extractedLib,
   lib,
   pkgs,
+  # Optional annotation rows; null reads the committed annotations.json.
+  rows ? null,
 }: let
   inherit (lib) types;
   json = (pkgs.formats.json {}).type;
@@ -46,7 +48,7 @@
   roleModelType = types.addCheck types.str (value: builtins.match "[[:space:]]*" value == null);
   roleModelsType = types.addCheck (types.listOf roleModelType) (values: values != []);
 
-  rules = import ../extract/rules.nix {inherit extracted extractedLib pkgs;};
+  rules = import ../extract/rules.nix ({inherit extracted extractedLib pkgs;} // lib.optionalAttrs (rows != null) {inherit rows;});
 
   surfaces = {
     settings = {

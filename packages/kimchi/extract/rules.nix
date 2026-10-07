@@ -3,11 +3,11 @@
   extracted ? builtins.fromJSON (builtins.readFile ../extracted.json),
   extractedLib,
   pkgs,
+  # The annotation rows; a check overrides them to prove a row reaches the surface.
+  rows ? builtins.fromJSON (builtins.readFile ./annotations.json),
 }: let
   inherit (pkgs) lib;
   inherit (extractedLib {inherit pkgs;}) reconcile withAdded;
-  annotations = ./annotations.json;
-  rows = builtins.fromJSON (builtins.readFile annotations);
   results = reconcile {
     config = {
       facts = extracted.config.keys;
