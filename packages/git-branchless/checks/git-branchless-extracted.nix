@@ -3,9 +3,10 @@
 #
 #   git-branchless-extracted          drift: the committed sidecar equals a
 #                                     fresh extraction of the pinned, patched
-#                                     source. Blocking, because the typed
-#                                     options are generated from the
-#                                     committed file.
+#                                     source, and the rows file accepts every
+#                                     name in it (rule failures). Blocking,
+#                                     because the typed options are generated
+#                                     from the committed file.
 #   git-branchless-extractor-guards   the extractor fails closed: every
 #                                     mutant in extractor-mutants.nix either
 #                                     trips the guards it names or moves the

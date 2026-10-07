@@ -19,11 +19,12 @@
 #
 # A key upstream adds becomes an option on the next evaluation after the
 # sidecar is regenerated; the rows regeneration accepts it with a `{}` row,
-# and the drift check fails until a person writes any prose it needs. A key upstream removes makes a
-# consumer that still sets it fail with an unknown-option error, because
-# every level of the tree is closed. A sidecar FIELD this file does not know
-# fails evaluation (`schema` below): an extractor that learns something new
-# must teach the generator too, or the fact would be dropped silently.
+# and the drift check fails until a person writes any prose it needs. A key
+# upstream removes makes a consumer that still sets it fail with an
+# unknown-option error, because every level of the tree is closed. A sidecar
+# FIELD this file does not know fails evaluation (`schema` below): an
+# extractor that learns something new must teach the generator too, or the
+# fact would be dropped silently.
 #
 # Arguments:
 #   lib, extracted     the nixpkgs lib and the parsed sidecar

@@ -28,11 +28,6 @@
       deadKeys.row = null;
       kinds = ["needs-human"];
     };
-    dead-key-reasoned = {
-      deadKeys.fact = {const = "PROBE";};
-      deadKeys.row = {reason = "declared, never read";};
-      kinds = [];
-    };
     # A dead key read again is a setting, and its reason row goes stale.
     dead-key-read-again = {
       deadKeys.fact = null;
@@ -41,8 +36,30 @@
       settings.row = {};
       kinds = ["removed"];
     };
+    dead-key-reasoned = {
+      deadKeys.fact = {const = "PROBE";};
+      deadKeys.row = {reason = "declared, never read";};
+      kinds = [];
+    };
     new-setting-accepted = {
       settings.fact = setting;
+      settings.row = null;
+      added = ["probe.key"];
+      kinds = ["unrecorded"];
+    };
+    # A key the tool reads becomes an option, whose text needs prose.
+    read-setting-needs-description = {
+      settings.fact = builtins.removeAttrs setting ["description"];
+      settings.row = null;
+      kinds = ["needs-human"];
+    };
+    # A write-only key becomes no option, so nothing needs its prose.
+    write-only-setting-accepted = {
+      settings.fact = {
+        reads = {};
+        type = "string";
+        writes."probe.rs#write" = ["repository"];
+      };
       settings.row = null;
       added = ["probe.key"];
       kinds = ["unrecorded"];

@@ -414,7 +414,9 @@ for key, rs in sorted(by_key.items()):
     clis = [r["cli"] for r in rs if r["cli"]]
     if clis:
         entry["cli"] = census.agree(key, "CLI flags", clis, "F13")
-    if key in docs:
+    # A blank paragraph is no description: the needs rule must see the key
+    # as having no description rather than accept "".
+    if docs.get(key, "").strip():
         entry["description"] = docs[key]
     settings[key] = entry
 

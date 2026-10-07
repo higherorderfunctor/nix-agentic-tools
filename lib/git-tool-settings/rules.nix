@@ -7,7 +7,13 @@
 #   settings   the tool's own keys. A row fills `type` or `description`
 #              when the source cannot state it, replaces one it names in
 #              `replace`, and adds `defaultDescription` or `note`, prose no
-#              extractor derives.
+#              extractor derives. A key the tool reads needs `description`
+#              and `type`; a write-only key becomes no option (the
+#              generator excludes it for `reads == {}`), so it needs
+#              neither. A computed upstream default needs
+#              `defaultDescription`: the option text alone would say only
+#              "whatever `<expr>` computes" (git-revise's `revise.rerere`
+#              reads `rr_cache.is_dir()`).
 #   deadKeys   key-shaped names the source declares or mentions and never
 #              reads. Only a person can say why, so each needs a `reason`
 #              row. A dead key that is read again becomes a setting and
@@ -32,8 +38,9 @@
     };
     settings = {
       facts = extracted.settings;
-      fields = ["defaultDescription" "note"];
-      needs = ["description" "type"];
+      # Which of these a key needs depends on its entry, so `needs` below
+      # decides; listing them here lets a row fill or replace them.
+      fields = ["defaultDescription" "description" "note" "type"];
       rows = rows.settings;
       # No settings row field delivers a value outside the store; a name the
       # classifier calls secret is never auto-accepted, so it waits for a
@@ -41,31 +48,26 @@
       secretNeeds = [];
     };
   };
-  # The option text says only "whatever `<expr>` computes" for a computed
-  # upstream default (git-revise's `revise.rerere` reads `rr_cache.is_dir()`),
-  # so such a key needs `defaultDescription` prose before it is accepted,
-  # like any other `needs` field: needs-human, never auto-added.
-  computedWithoutProse = lib.filter (name: let
-    entry = reconciled.settings.entries.${name};
-  in
-    entry ? defaultExpr && entry.defaultDescription or null == null)
-  (builtins.attrNames reconciled.settings.entries);
+  needs = entry:
+    lib.optionals (entry.reads != {}) (lib.filter (field: entry.${field} or null == null) ["description" "type"])
+    ++ lib.optional (entry ? defaultExpr && entry.defaultDescription or null == null) "defaultDescription";
+  # Like reconcile's own `needs`: needs-human, never auto-added.
+  needing = lib.filterAttrs (_: fields: fields != []) (lib.mapAttrs (_: needs) reconciled.settings.entries);
   results =
     reconciled
     // {
       settings =
         reconciled.settings
         // {
-          added = lib.subtractLists computedWithoutProse reconciled.settings.added;
+          added = lib.subtractLists (builtins.attrNames needing) reconciled.settings.added;
           failures =
-            lib.filter (failure: !(failure.kind == "unrecorded" && builtins.elem failure.name computedWithoutProse)) reconciled.settings.failures
-            ++ map (name: {
-              inherit name;
-              details = ["defaultDescription"];
+            lib.filter (failure: !(failure.kind == "unrecorded" && needing ? ${failure.name})) reconciled.settings.failures
+            ++ lib.mapAttrsToList (name: details: {
+              inherit details name;
               kind = "needs-human";
               surface = "settings";
             })
-            computedWithoutProse;
+            needing;
         };
     };
 in {

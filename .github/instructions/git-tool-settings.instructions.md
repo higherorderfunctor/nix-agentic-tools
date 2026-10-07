@@ -10,7 +10,7 @@ applyTo: "checks/git-tool-settings/**,lib/git-tool-settings/**,packages/git-abso
 > **Last verified:** 2026-10-07 — extractors emit facts only; rows in
 > `extract/annotations.json` fill them through `lib/git-tool-settings/rules.nix`
 > (the new-key rule), which the generator, drift check and rows regeneration
-> share.
+> share; only read keys need `type` and `description`.
 >
 > **Settled — do not relitigate.**
 >
@@ -70,9 +70,12 @@ The sidecar holds facts only, a field absent where the source cannot state it.
 `rules.nix` runs `reconcile` (`lib/extracted/reconcile.nix`, lib-only so the
 option modules can call it) over two surfaces of the rows file:
 
-- `settings` — needs `type` and `description`; a row may fill either, replace a
-  fact only for a field it lists in `replace`, and add `defaultDescription` or
-  `note`. A key with a `defaultExpr` also needs `defaultDescription`.
+- `settings` — a key the tool reads needs `type` and `description`; a write-only
+  key (`reads == {}`, branchless only) becomes no option and needs neither. A
+  row may fill either, replace a fact only for a field it lists in `replace`,
+  and add `defaultDescription` or `note`. A key with a `defaultExpr` also needs
+  `defaultDescription`. `rules.nix` decides these needs per entry, so each name
+  gets one `needs-human` failure listing every missing field.
 - `deadKeys` — key-shaped names the source never reads (an unread const; in
   git-revise, any string a read does not cover); each needs a `reason`. Not
   `ignored` on a settings row: a dead key read again becomes a setting and its

@@ -7,11 +7,11 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-07 — Codex uses the injected `extractedLib` for
-> command, flag and root launcher-flag reconciliation alongside sidecar drift;
-> Semble exposes both extractors on package passthru, and
-> `mkExtractRegen.extract` selects its templates snapshot; Kimchi environment
-> names need controls prose only when secret.
+> **Last verified:** 2026-10-07 — the git tools' `mkRegenerateExtracted` calls
+> pass `rows` and list them in `passthru.sidecars`, reconciled by one shared
+> `lib/git-tool-settings/rules.nix`; Codex uses the injected `extractedLib`
+> alongside sidecar drift; Kimchi environment names need controls prose only
+> when secret.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -214,9 +214,11 @@ formatting the sidecar it runs `lib/extracted/default.nix`'s `mkRowsRegen`, the
 same command the drift check prints, to evaluate `passthru.rows`, replace `path`
 and format it. The temporary output matters: direct redirection would truncate
 the rows that this evaluation reads. `mkRegenerateExtracted` lists sidecar
-destinations in `passthru.sidecars`; its current callers do not regenerate rows.
-Kimchi's `extract/rules.nix` is shared by its consumer, drift check and
-regeneration; extractors continue to enforce source structure, while
+destinations in `passthru.sidecars`. Its callers are the three git tools, which
+pass `rows`, so `passthru.sidecars` lists each rows path too.
+`lib/git-tool-settings/rules.nix` is their one shared table, beside Kimchi's
+`extract/rules.nix`; each is shared by its consumer, drift check and
+regeneration. Extractors continue to enforce source structure, while
 reconciliation failures turn the resulting update PR red.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
