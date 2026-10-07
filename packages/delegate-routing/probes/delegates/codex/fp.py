@@ -4,9 +4,10 @@
 usage: fp.py <port> <outdir> <scenario.json>
 
 scenario.json maps an agent name (from x-codex-turn-metadata.agent_name,
-e.g. "/root", "/root/a", "/root/a/g"; "root" when absent; "guardian" for
-auto-review requests and "title" for the TUI's title side turn, each only when
-that key is present) or "*" (fallback for any
+e.g. "/root", "/root/a", "/root/a/g"; "root" when absent; an internal worker's
+x-openai-subagent label such as "guardian" (auto-review) or "review", and
+"title" for the TUI's title side turn, each only when that key is present) or
+"*" (fallback for any
 unscripted agent) to a list of steps. The Nth request from an agent gets
 step N; past the end it gets a final message "DONE <agent>".
 
@@ -14,6 +15,7 @@ step = {"calls": [[name, args_obj, namespace_or_null], ...],
         "msg": "text",            # final assistant message
         "raw": [item, ...],       # extra output items sent verbatim (e.g. {"type": "compaction", ...})
         "sleep": seconds,         # hold the stream open before completing
+        "stall": seconds,         # like sleep, but silent (no keepalive): trips the client's idle timeout
         "sleep_before": seconds}  # delay before sending anything
 
 Every request body is saved as reqNN-<agent>-s<step>.json and summarized in
@@ -73,9 +75,9 @@ class H(http.server.BaseHTTPRequestHandler):
         try: md = json.loads(cm.get("x-codex-turn-metadata", "{}"))
         except Exception: md = {}
         agent = md.get("agent_name") or "root"
-        # auto-review (guardian) requests carry the reviewed session's agent_name; a scenario with a
-        # "guardian" key scripts them separately instead of letting them consume that agent's steps
-        if "guardian" in scen and cm.get("x-openai-subagent") == "guardian": agent = "guardian"
+        # internal workers (auto-review "guardian", "review", ...) carry the parent's agent_name; a
+        # scenario keyed by their x-openai-subagent label scripts them apart from that agent's steps
+        if cm.get("x-openai-subagent") in scen: agent = cm["x-openai-subagent"]
         # the TUI's title side turn reports the root's agent_name too; a "title" key scripts it apart
         if "title" in scen and b"single-line task title" in raw: agent = "title"
         with lock:
@@ -128,6 +130,7 @@ class H(http.server.BaseHTTPRequestHandler):
                 while time.time() < end:
                     time.sleep(0.5)
                     self.wfile.write(b": keepalive\n\n"); self.wfile.flush()
+            time.sleep(step.get("stall", 0))
             for e in evs[1:] + [done(rid)]: self.wfile.write(ev(e))
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):

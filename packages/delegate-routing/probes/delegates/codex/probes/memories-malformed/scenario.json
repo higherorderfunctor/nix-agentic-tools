@@ -1,0 +1,4 @@
+{
+  "/root": [{ "msg": "ROOT TURN DONE" }, { "msg": "ROOT TURN DONE" }],
+  "*": [{ "msg": "NOT-JSON-7601" }, { "msg": "NOT-JSON-7601" }]
+}

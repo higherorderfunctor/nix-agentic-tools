@@ -1,0 +1,29 @@
+model = "gpt-6-luna"
+model_provider = "fake"
+sandbox_mode = "read-only"
+approval_policy = "never"
+[model_providers.fake]
+name = "fake"
+base_url = "http://127.0.0.1:@PORT@/v1"
+wire_api = "responses"
+env_key = "FAKE_KEY"
+[mcp_servers.hookmcp]
+command = "python3"
+args = ["@H@/mcphook.py"]
+[[hooks.SessionStart]]
+hooks = [
+  { type = "mcp_tool", server = "hookmcp", tool = "ctx", input = { event = "${hook_event_name}" } },
+]
+[[hooks.SubagentStart]]
+hooks = [
+  { type = "mcp_tool", server = "hookmcp", tool = "ctx", input = { event = "${hook_event_name}" } },
+]
+[[hooks.UserPromptSubmit]]
+hooks = [
+  { type = "mcp_tool", server = "hookmcp", tool = "ctx", input = { event = "${hook_event_name}" } },
+]
+[[hooks.PostToolUse]]
+matcher = ".*"
+hooks = [
+  { type = "mcp_tool", server = "hookmcp", tool = "ctx", input = { event = "${hook_event_name}" } },
+]

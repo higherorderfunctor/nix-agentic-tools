@@ -22,7 +22,7 @@ R="$work/results/$name"
 H="$R/home"
 rm -rf "$R"
 mkdir -p "$R/wire" "$H" "$work/plain"
-sed -e "s|@PORT@|$port|g" -e "s|@D@|$D|g" "$P/config.toml" >"$H/config.toml"
+sed -e "s|@PORT@|$port|g" -e "s|@RTPORT@|${RTPORT:-0}|g" -e "s|@D@|$D|g" "$P/config.toml" >"$H/config.toml"
 cp "$work/models_cache.json" "$H/models_cache.json"
 if [[ -d $P/extra ]]; then cp -rL "$P/extra/." "$H/"; fi # -L: probes may symlink shared fixtures
 shopt -s globstar nullglob

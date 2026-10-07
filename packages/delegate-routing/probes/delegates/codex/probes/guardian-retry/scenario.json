@@ -1,0 +1,20 @@
+{
+  "/root": [
+    {
+      "calls": [
+        [
+          "exec",
+          "const r = await tools.exec_command({cmd: \"true\", sandbox_permissions: \"require_escalated\", justification: \"probe escalation\"}); text(JSON.stringify(r));",
+          "custom"
+        ]
+      ]
+    },
+    { "msg": "ROOT DONE" }
+  ],
+  "guardian": [
+    { "msg": "NOT-JSON-RETRY-1" },
+    { "msg": "NOT-JSON-RETRY-2" },
+    { "msg": "NOT-JSON-RETRY-3" },
+    { "msg": "NOT-JSON-RETRY-4" }
+  ]
+}
