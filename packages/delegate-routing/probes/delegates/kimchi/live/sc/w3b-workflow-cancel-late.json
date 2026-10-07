@@ -16,6 +16,7 @@
     },
     {
       "at": 9,
+      "after_request": "WF_BG_LONG",
       "line": {
         "type": "prompt",
         "message": "/workflow cancel"

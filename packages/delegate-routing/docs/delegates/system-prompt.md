@@ -15,27 +15,27 @@ K7 workflows · K8 other model turns (compaction, title, hooks, helpers).
 | Claude  | Tail of `system[2]` (main); separate hidden flag for children | system                                                  | Fork: main append. Others: child channel |
 | Codex   | `developer_instructions`: a developer message beside the base | developer (lite models have no system slot)             | Inherited unless replaced                |
 | Kiro    | Always-on steering file, placed **before** base/agent prompt  | user (`history[0]`); system only if account flag on (U) | Invoke children (V); workflow steps U    |
-| Kimchi  | `--append-system-prompt`: tail of Kimchi's rebuilt prompt     | system (provider-wire serialization U)                  | Default replace mode: no                 |
+| Kimchi  | not re-verified at 1.5.1 (U)                                  | not re-verified at 1.5.1 (U)                            | not re-verified at 1.5.1 (U)             |
 
 ## Defaults per kind
 
 Cell = vendor base · extra text reaches? · mark. Channel: Claude K1–K3/K8 main
 append, K4–K7 sub-agent append; others as above.
 
-| Kind | Claude                                                    | Codex                                                 | Kiro                                                            | Kimchi                                              |
-| ---- | --------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
-| K1   | Base (27.4k) · Yes · V                                    | Catalog base · Yes · V rollout, I wire                | KAS base · steering before base · A (TUI)                       | Main base · Yes, tail · V                           |
-| K2   | Base, "Agent SDK" identity · Yes · V                      | Catalog base · Yes · V                                | KAS base · steering before base · V (`w-v3`)                    | Main base, autonomous variant · Yes · V             |
-| K3   | Base · Yes if host sends no prompt field · V              | Catalog base · Yes if no RPC dev text · V             | KAS base · file + inline steering · V (`k3-dup`)                | Main base · Yes, inline text only · V               |
-| K4   | None; own body + tail · sub-agent append Yes, main No · V | Parent's base · Yes, inherited · V/I                  | Named built-in body · inherited steering · V; A (`codex:R3/R6`) | Child wrapper; persona replaces · **No** · V        |
-| K5   | None; body replaces · sub-agent append Yes · V            | Parent base + role text · **No** if role has text · V | Body replaces · inherited steering · V (`a3-invoke`)            | Child wrapper; body replaces · **No** · V           |
-| K6   | None; general-purpose body · sub-agent append Yes · V     | Parent's base · Yes, inherited once · V               | Inline body replaces · inherited steering · V (`claude:k-pins`) | Selected persona · follows persona · V              |
-| K7   | None; `workflow-subagent` body · sub-agent append Yes · V | No workflow kind; K4–K6 rules · I                     | Step body · steering reach not re-verified at 2.28.0 · U        | In-session: main base · persistent channels Yes · V |
-| K8   | Compaction: parent system · Yes (copied) · V              | Local compaction: session base · Yes · V              | not re-verified at 2.28.0 · U                                   | Fixed summarizer · **No** · V                       |
+| Kind | Claude                                                    | Codex                                                 | Kiro                                                            | Kimchi                       |
+| ---- | --------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- | ---------------------------- |
+| K1   | Base (27.4k) · Yes · V                                    | Catalog base · Yes · V rollout, I wire                | KAS base · steering before base · A (TUI)                       | not re-verified at 1.5.1 · U |
+| K2   | Base, "Agent SDK" identity · Yes · V                      | Catalog base · Yes · V                                | KAS base · steering before base · V (`w-v3`)                    | not re-verified at 1.5.1 · U |
+| K3   | Base · Yes if host sends no prompt field · V              | Catalog base · Yes if no RPC dev text · V             | KAS base · file + inline steering · V (`k3-dup`)                | not re-verified at 1.5.1 · U |
+| K4   | None; own body + tail · sub-agent append Yes, main No · V | Parent's base · Yes, inherited · V/I                  | Named built-in body · inherited steering · V; A (`codex:R3/R6`) | not re-verified at 1.5.1 · U |
+| K5   | None; body replaces · sub-agent append Yes · V            | Parent base + role text · **No** if role has text · V | Body replaces · inherited steering · V (`a3-invoke`)            | not re-verified at 1.5.1 · U |
+| K6   | None; general-purpose body · sub-agent append Yes · V     | Parent's base · Yes, inherited once · V               | Inline body replaces · inherited steering · V (`claude:k-pins`) | not re-verified at 1.5.1 · U |
+| K7   | None; `workflow-subagent` body · sub-agent append Yes · V | No workflow kind; K4–K6 rules · I                     | Step body · steering reach not re-verified at 2.28.0 · U        | not re-verified at 1.5.1 · U |
+| K8   | Compaction: parent system · Yes (copied) · V              | Local compaction: session base · Yes · V              | not re-verified at 2.28.0 · U                                   | not re-verified at 1.5.1 · U |
 
 Title reach: Claude No (Vr; `codex:prompt-functions`); Codex config Yes, RPC
-overrides No (I); Kiro not re-verified at 2.28.0 (U); Kimchi No (V). Exceptions
-are footnoted under each harness's channel table.
+overrides No (I); Kiro not re-verified at 2.28.0 (U); Kimchi not re-verified at
+1.5.1 (U). Exceptions are footnoted under each harness's channel table.
 
 ## What one normalized option can promise
 
@@ -43,11 +43,11 @@ are footnoted under each harness's channel table.
 | ---- | ------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | K1   | **Yes** | None by default                                                                                 | Claude `--resume` re-sends old text: change needs a fresh session. Kiro text sits before the prompt |
 | K2   | **Yes** | None                                                                                            | Codex keeps only the top layer: the option must own it                                              |
-| K3   | Partial | Claude, Codex (host field overrides); Kiro v2 engine (not used by this config): `_meta` reach U | CLI/file channel works only while the host sends nothing. Kimchi ACP needs inline text              |
-| K4   | Partial | Kimchi                                                                                          | Claude needs the sub-agent channel; Codex reaches unless `subagent_developer_instructions` set      |
-| K5   | Partial | Codex (role with own text), Kimchi (replace mode)                                               | Agent definition wins; reach depends on how each agent is written                                   |
-| K6   | Partial | Kimchi (follows persona); Kiro v2 engine (not used by this config): N/A                         | Claude non-fork via sub-agent channel, fork via main; Codex inherited                               |
-| K7   | Partial | Kimchi background steps (flag not forwarded)                                                    | Claude reaches; Kiro workflow steering not re-verified at 2.28.0 (U); Codex uses K4–K6 rules        |
+| K3   | Partial | Claude, Codex (host field overrides); Kiro v2 engine (not used by this config): `_meta` reach U | CLI/file channel works only while the host sends nothing. Kimchi ACP prompt reach is U at 1.5.1     |
+| K4   | Partial | Kimchi (not re-verified at 1.5.1; U)                                                            | Claude needs the sub-agent channel; Codex reaches unless `subagent_developer_instructions` set      |
+| K5   | Partial | Codex (role with own text), Kimchi (not re-verified at 1.5.1; U)                                | Agent definition wins; reach depends on how each agent is written                                   |
+| K6   | Partial | Kimchi (not re-verified at 1.5.1; U); Kiro v2 engine (not used by this config): N/A             | Claude non-fork via sub-agent channel, fork via main; Codex inherited                               |
+| K7   | Partial | Kimchi background steps (V argv; `codex:W`)                                                     | Claude reaches; Kiro workflow steering not re-verified at 2.28.0 (U); Codex uses K4–K6 rules        |
 | K8   | **No**  | Most titles; Kimchi / Kiro compaction (U)                                                       | No universal guarantee; Codex config title/recap I; compaction reach above                          |
 
 - **Claude needs two channels.** Main append reaches fork children (V). Non-fork
@@ -55,7 +55,7 @@ are footnoted under each harness's channel table.
 - **Kiro text is never system-role** unless the account's
   `system_field_injection` flag is on (U).
 - **"Keep the vendor base" cannot be promised.** Claude and Kiro agent prompts
-  replace it; Kimchi children replace it.
+  replace it; Kimchi prompt composition is U at 1.5.1.
 
 Open questions and settling steps: [evidence.md](evidence.md#open-unknowns).
 
@@ -146,31 +146,25 @@ The capture backend proves client payloads. The account-controlled
 
 ### Kimchi
 
-| Channel                                                  | Effect                                          | Twice                                                   | Reaches                                                                                | Mark  |
-| -------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----- |
-| `--append-system-prompt TEXT\|PATH`                      | Adds at tail                                    | Combine in order; disables `APPEND_SYSTEM.md`           | K1, K2, K3 RPC, K3 ACP¹, K5 append², K7 in-session³                                    | V     |
-| `APPEND_SYSTEM.md` (global harness dir, trusted project) | Adds at tail                                    | One file; project shadows global                        | K1, K2, K3 RPC, K5 append, K7 (background I). Not ACP                                  | V     |
-| `SYSTEM.md` / `--system-prompt`                          | Replaces Pi base, then discarded: **no effect** | Last wins                                               | None                                                                                   | V     |
-| ACP `_meta["kimchi.dev"].appendSystemPrompt`             | Adds after CLI entries                          | One string per session; arrays ignored                  | K3 ACP (+ K5 append children I)                                                        | V     |
-| AGENTS.md / CLAUDE.md (+ `.local`)                       | Adds in Project Guidelines                      | Global + ancestors combine; per dir AGENTS beats CLAUDE | K1–K3, K5 append, K7; K4 GP/Plan project-only; K5 replace with `include_context_files` | V     |
-| SessionStart hook (systemPrompt delivery)                | Adds                                            | Combine, no dedup                                       | First prompt after start/compaction only⁴                                              | I     |
-| Claude-Code hooks, `systemMessage`, prompt-summary notes | User message                                    | —                                                       | Not system                                                                             | V     |
-| Extension `before_agent_start`                           | Replaces (chained)                              | Each sees previous                                      | Clobbered in K1–K3; K4/K5 child U                                                      | V / U |
-| Extension `before_provider_request`                      | Rewrites payload                                | Chained                                                 | Main-loop requests⁵                                                                    | V     |
-| System-prompt blocks                                     | Adds builder section, sorted                    | Same id replaces                                        | K1–K3; Kimchi-internal API                                                             | I     |
-| Memory digest                                            | Adds                                            | Stable until compaction                                 | K1–K3                                                                                  | V     |
-| Agent `.md` body + `prompt_mode`                         | Replace (default) / append⁶                     | Same name: later layer replaces whole                   | K5; K4 by name override; K6 by selection                                               | V     |
+`codex:S` has no replay script in this tree. Prompt composition, channel
+precedence and reach are not re-verified at 1.5.1 (U); see the Open UNKNOWNs.
+Workflow background argv is separately verified by `codex:W`: parent
+system-prompt flags are not forwarded.
 
-1. Inline text only; a PATH is inserted literally (V).
-2. `prompt_mode: append` strips 4 sections (V).
-3. Background / isolated step: parent flag and `_meta` not forwarded (V argv);
-   files still load (I).
-4. In-session K7 step: one-shot hook text is lost (V).
-5. Not K8 side turns (I). Children that load the extension: payload rewritten,
-   chained (I).
-6. Replace: body replaces, wrapper kept; empty body leaves the wrapper only.
-   Append: parent prompt + agent body; empty parent falls back to `genericBase`
-   (all V).
+| Channel                                                  | Result at pin            | Mark |
+| -------------------------------------------------------- | ------------------------ | ---- |
+| `--append-system-prompt TEXT\|PATH`                      | not re-verified at 1.5.1 | U    |
+| `APPEND_SYSTEM.md`                                       | not re-verified at 1.5.1 | U    |
+| `SYSTEM.md` / `--system-prompt`                          | not re-verified at 1.5.1 | U    |
+| ACP `_meta["kimchi.dev"].appendSystemPrompt`             | not re-verified at 1.5.1 | U    |
+| AGENTS.md / CLAUDE.md (+ `.local`)                       | not re-verified at 1.5.1 | U    |
+| SessionStart hook (systemPrompt delivery)                | not re-verified at 1.5.1 | U    |
+| Claude-Code hooks, `systemMessage`, prompt-summary notes | not re-verified at 1.5.1 | U    |
+| Extension `before_agent_start`                           | not re-verified at 1.5.1 | U    |
+| Extension `before_provider_request`                      | not re-verified at 1.5.1 | U    |
+| System-prompt blocks                                     | not re-verified at 1.5.1 | U    |
+| Memory digest                                            | not re-verified at 1.5.1 | U    |
+| Agent `.md` body + `prompt_mode`                         | not re-verified at 1.5.1 | U    |
 
 ## Replay
 

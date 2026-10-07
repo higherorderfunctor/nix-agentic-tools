@@ -222,4 +222,10 @@ debug the skill.
 Kiro map results describe only the current flake pin. Its v2 replay cases remain
 marked "v2 engine (not used by this config)"; skill capability citations use v3
 cases. The headless nested capture shares its rules with the ACP nested case
-through `rulesFrom`; AST selectors fail on a missing match.
+through `rulesFrom`; AST selectors fail on a missing match. Kimchi replays use
+the flake pin only; native VM tool exclusions come from that source, and
+inventory stdin resolves before entering the scratch project. RPC/ACP scenario
+deadlines are cleanup; the wire and tool results establish the behavior.
+Workflow cancel/abort fixtures wait for an active provider request, and the
+abort fixture waits 10 s before its status check. The prompt-map `codex:S`
+pointer has no replay and stays U.

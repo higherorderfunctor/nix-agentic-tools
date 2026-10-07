@@ -120,7 +120,7 @@ Other surfaces:
 | Update  | none; fixed at spawn · codex:R                                                             | none · codex:R                                                                                                                                                  | none · codex:W                                                                                                                                             | `set_model`, `set_thinking_level`: next turn, parent only · codex:R |
 | Status  | streamed tool updates · codex:C                                                            | `get_subagent_result` (`wait` ≤60 s); completion starts a parent turn · claude:s8-resume-ctx, claude:s2-rpc-bg                                                  | `/workflow status`, run list · codex:W                                                                                                                     | `get_state`, stats, events · codex:R                                |
 | Resume  | `resume_subagent`; `inherit_context` at spawn · codex:B                                    | `resume_subagent` · claude:s8b-resume-yolo                                                                                                                      | `/workflow resume`, `resumable`; no fork · codex:W                                                                                                         | `fork`, `clone`, switch/new session · codex:R                       |
-| Timeout | 900 s wall default, 120 s idle, 30+5 turns, output-token budget · codex:Q, judge:J4        | as fg · judge:J4                                                                                                                                                | `maxDurationMs` · codex:W                                                                                                                                  | none · codex:R                                                      |
+| Timeout | 900 s wall default (G), 120 s idle, 30+5 turns, output-token budget · codex:Q, judge:J4    | as fg · judge:J4                                                                                                                                                | `maxDurationMs` · codex:W                                                                                                                                  | none · codex:R                                                      |
 | Prompts | none: child tools ungated · claude:s9-perm-default, claude:a2-acp-default-perm             | as fg                                                                                                                                                           | none: forced `KIMCHI_PERMISSIONS=yolo` · codex:W                                                                                                           | `extension_ui_request` to client (parent only) · codex:R            |
 | Output  | tool result, `.output`, session file · codex:C                                             | verbose `get_subagent_result`, `.output` · claude:s8-resume-ctx                                                                                                 | final turn / `workflow_submit_result`; step session · codex:W                                                                                              | messages, last text, `export_html` · codex:R                        |
 
@@ -140,14 +140,14 @@ Other surfaces:
 
 - ¹ continuation guard only for `ferment_step` (A) · judge:J3
 
-|         | Cloud dispatch (A)                     | External launchers (A) | `bash` (A)                     | `daemon` (A)                          |
-| ------- | -------------------------------------- | ---------------------- | ------------------------------ | ------------------------------------- |
-| Steer   | `steer_subagent` via ACP               | target                 | none                           | none                                  |
-| Cancel  | explicit abort; shutdown spares remote | signals forwarded      | stop/abort/deadline kills tree | explicit stop; parent abort leaves it |
-| Update  | none                                   | target                 | deadline, checkin              | none                                  |
-| Status  | notification, polling                  | stdio                  | `/processes`                   | list/status                           |
-| Resume  | reattach on resume                     | target                 | not across resume              | ID kept                               |
-| Timeout | creation 10 min                        | none                   | 120 s                          | none                                  |
-| Prompts | worker policy U                        | target                 | parent gate only               | parent gate                           |
-| Output  | local mirror                           | target                 | tail + spill                   | log file                              |
-| Replay  | codex:P                                | codex:P                | codex:P                        | codex:P                               |
+|         | Cloud dispatch (A)                         | External launchers (A) | `bash` (A)                     | `daemon` (A)                          |
+| ------- | ------------------------------------------ | ---------------------- | ------------------------------ | ------------------------------------- |
+| Steer   | `steer_subagent` via ACP                   | target                 | none                           | none                                  |
+| Cancel  | explicit abort; shutdown spares remote     | signals forwarded      | stop/abort/deadline kills tree | explicit stop; parent abort leaves it |
+| Update  | none                                       | target                 | deadline, checkin              | none                                  |
+| Status  | notification, polling                      | stdio                  | `/processes`                   | list/status                           |
+| Resume  | reattach on resume                         | target                 | not across resume              | ID kept                               |
+| Timeout | creation 10 min                            | none                   | 120 s                          | none                                  |
+| Prompts | worker policy not re-verified at 1.5.1 (U) | target                 | parent gate only               | parent gate                           |
+| Output  | local mirror                               | target                 | tail + spill                   | log file                              |
+| Replay  | codex:P                                    | codex:P                | codex:P                        | codex:P                               |

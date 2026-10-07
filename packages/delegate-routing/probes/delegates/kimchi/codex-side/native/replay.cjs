@@ -26,6 +26,7 @@ function nodes(rel, wanted) {
     ts.forEachChild(n, v);
   }
   v(sf);
+  for (const name of wanted) assert(out[name], `${rel}: missing ${name}`);
   return out;
 }
 function load(code, names, additions = "") {
@@ -97,18 +98,16 @@ for (const c of modelCases)
   for (const [k, v] of Object.entries(c.want))
     assert.deepEqual(c.actual[k], v, `${c.name}.${k}`);
 const runner = nodes("src/extensions/agents/manager/agent-runner.ts", [
+  "EXCLUDED_TOOL_NAMES",
   "isExcludedSubagentToolName",
   "getPromptToolNames",
 ]);
-const excluded = [
-  '"Agent"',
-  '"resume_subagent"',
-  '"get_subagent_result"',
-  '"steer_subagent"',
-  "...FERMENT_TOOL_NAMES",
-].join(",");
+const ferment = nodes("src/extensions/ferment/tool-names.ts", [
+  "FERMENT_TOOLS",
+  "FERMENT_TOOL_NAMES",
+]);
 const tools = load(
-  `const FERMENT_TOOL_NAMES=['start_ferment_step','complete_ferment_step','list_ferments']; const EXCLUDED_TOOL_NAMES=[${excluded}]; ${runner.isExcludedSubagentToolName}\n${runner.getPromptToolNames}`,
+  `const ${ferment.FERMENT_TOOLS}; const ${ferment.FERMENT_TOOL_NAMES}; const ${runner.EXCLUDED_TOOL_NAMES}; ${runner.isExcludedSubagentToolName}\n${runner.getPromptToolNames}`,
   ["getPromptToolNames"],
 );
 const filtered = tools.getPromptToolNames([
