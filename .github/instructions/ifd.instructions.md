@@ -11,7 +11,8 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 > command, flag and root launcher-flag reconciliation alongside sidecar drift;
 > Semble exposes both extractors on package passthru, and
 > `mkExtractRegen.extract` selects its templates snapshot; Kimchi environment
-> names need controls prose only when secret.
+> names need controls prose only when secret, and an untyped Kimchi harness read
+> is a `needs-human` reconcile failure, not an extraction failure.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -267,7 +268,10 @@ resolves to neither fails the extraction. The extractor emits every resolved
 environment name; reconcile in `packages/kimchi/extract/rules.nix` decides its
 acceptance, optional controls prose (required on secret names), or grouped
 ignore reason. Reconcile fails a row whose name vanished (removed) and a new
-name it cannot accept (secret or unrecorded). pi's own variable names come from
+name it cannot accept (secret or unrecorded). Harness keys take the same path: a
+key Kimchi reads that is neither a pi `Settings` key nor a typed addition is
+emitted with `type = null`, and reconcile fails it as `needs-human` until a row
+supplies the type or an ignore reason. pi's own variable names come from
 Kimchi's `piConfig.name` the way pi derives them, not from pi's `PI_` default.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own

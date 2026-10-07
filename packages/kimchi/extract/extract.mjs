@@ -1446,17 +1446,21 @@ function extractHarness(
   // SettingsManager, which does not type them.
   for (const [name, descriptor] of Object.entries(additions))
     keys[name] = { source: "kimchi", ...descriptor, project: false };
+  // A key Kimchi reads (in config.ts or through config/settings.ts) that is
+  // neither a pi Setting nor a typed addition is a fact with no derivable
+  // type; extract/rules.nix decides whether it needs a human. Like the
+  // additions, Kimchi reads it from the user file only, and absent is allowed.
   const unknownHarnessReads = [
     ...configTsHarnessReads,
     ...settingsHelperKeys(settingsHelperSource, kimchiSources, analysisContext),
-  ]
-    .filter((name) => !keys[name])
-    .sort();
-  if (unknownHarnessReads.length) {
-    fail(
-      `Kimchi reads harness/settings.json keys (in config.ts or through config/settings.ts) that are neither pi Settings nor Kimchi additions: ${JSON.stringify([...new Set(unknownHarnessReads)])}`,
-    );
-  }
+  ].filter((name) => !keys[name]);
+  for (const name of unknownHarnessReads)
+    keys[name] = {
+      source: "kimchi",
+      optional: true,
+      project: false,
+      type: null,
+    };
   return {
     definitions: sortObject(definitions),
     keys: sortObject(keys),

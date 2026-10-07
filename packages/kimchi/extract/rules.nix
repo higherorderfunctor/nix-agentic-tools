@@ -40,6 +40,16 @@
       # the classifier later calls secret.
       secretNeeds = ["controls"];
     };
+    harness = {
+      facts = extracted.harness.keys;
+      # The extractor emits a key Kimchi reads with no declared type as
+      # `type = null`; a row supplies the JSON type its option needs.
+      fields = ["excluded"];
+      needs = ["type"];
+      rows = rows.harness;
+      # As in config: a secret key gets no option, and the row says why.
+      secretNeeds = ["excluded"];
+    };
   };
 in {
   inherit results;

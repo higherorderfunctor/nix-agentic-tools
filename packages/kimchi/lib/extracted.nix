@@ -54,7 +54,7 @@
       definitions = {};
     };
     harnessSettings = {
-      schema = extracted.harness;
+      schema = extracted.harness // {keys = rules.results.harness.entries;};
       definitions = extracted.harness.definitions or {};
     };
   };
@@ -235,7 +235,7 @@ in {
   # settings.json: pi merges the project file only for keys it reads through
   # its merged settings, and Kimchi reads its own additions from the user file.
   userScopeConfigKeys = userScopeKeys rules.results.config.entries;
-  userScopeHarnessKeys = userScopeKeys extracted.harness.keys;
+  userScopeHarnessKeys = userScopeKeys rules.results.harness.entries;
 
   # Variables Kimchi's entry point overwrites before anything reads them,
   # with the sidecar's reason. A value set for one of these is never read.
@@ -259,7 +259,7 @@ in {
   # RESOURCE_KINDS). An empty match means the sidecar's shape changed; fail
   # rather than reject every key.
   resourceKinds = let
-    kinds = lib.concatLists (builtins.filter builtins.isList (builtins.split "\\[x: `([a-z]+)\\.\\$\\{string}`]" extracted.harness.keys.resources.typeExpression));
+    kinds = lib.concatLists (builtins.filter builtins.isList (builtins.split "\\[x: `([a-z]+)\\.\\$\\{string}`]" rules.results.harness.entries.resources.typeExpression));
   in
     if kinds == []
     then throw "packages/kimchi/extracted.json harness.keys.resources.typeExpression lists no `<kind>.\${string}` index signatures; update packages/kimchi/lib/extracted.nix."

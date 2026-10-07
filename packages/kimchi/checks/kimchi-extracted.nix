@@ -174,8 +174,6 @@
             "config.json validation shape changed" >> "$TMPDIR/proof"
           expect_rejection config-nested-shape "$TMPDIR/config-nested-shape-source" \
             "config.json validation shape changed" >> "$TMPDIR/proof"
-          expect_rejection config-parse-attribution "$TMPDIR/config-parse-attribution-source" \
-            'that are neither pi Settings nor Kimchi additions: ["surveys"]' >> "$TMPDIR/proof"
           expect_rejection config-parse-unattributable "$TMPDIR/config-parse-unattributable-source" \
             'cannot attribute the JSON read' >> "$TMPDIR/proof"
           expect_rejection config-shape "$TMPDIR/config-shape-source" \
@@ -194,8 +192,6 @@
             'readSurveyConfig no longer guards surveys.*.seenAt as a string' >> "$TMPDIR/proof"
           expect_rejection helper-computed-key "$TMPDIR/helper-computed-key-source" \
             'passes a non-constant key to readConfigSetting' >> "$TMPDIR/proof"
-          expect_rejection helper-unknown-key "$TMPDIR/helper-unknown-key-source" \
-            'that are neither pi Settings nor Kimchi additions: ["hidePhaseChangesProbe"]' >> "$TMPDIR/proof"
           expect_rejection lockfile-drift "$TMPDIR/lockfile-drift-source" \
             "Kimchi's pnpm-lock.yaml resolves pi's @earendil-works/pi-tui to \"$drifted_version\"" >> "$TMPDIR/proof"
           expect_rejection pi-scope-unread "$kimchi" \
@@ -225,6 +221,21 @@
             ${runExtractor ''"$TMPDIR/$label-source"'' ''"$TMPDIR/$label.json"'' ''"$pi"''}
             ${pkgs.jq}/bin/jq -e --arg name "$name" '.environment.variables | has($name)' "$TMPDIR/$label.json" > /dev/null
             echo "$label (exit 0): discovered $name" >> "$TMPDIR/proof"
+          done
+          # A harness read that is neither a pi Setting nor a typed addition is
+          # emitted untyped; extract/rules.nix fails it as needs-human.
+          for fixture in config-parse-attribution:surveys helper-unknown-key:hidePhaseChangesProbe; do
+            IFS=: read -r label name <<< "$fixture"
+            ${runExtractor ''"$TMPDIR/$label-source"'' ''"$TMPDIR/$label.json"'' ''"$pi"''}
+            if ${pkgs.jq}/bin/jq -e --arg name "$name" \
+              '.harness.keys[$name] == {optional: true, project: false, source: "kimchi", type: null}' \
+              "$TMPDIR/$label.json" > /dev/null; then
+              echo "$label (exit 0): emitted untyped harness read $name" >> "$TMPDIR/proof"
+            else
+              echo "FAIL: $label did not emit $name as an untyped harness read" >&2
+              ${pkgs.jq}/bin/jq --arg name "$name" '.harness.keys[$name]' "$TMPDIR/$label.json" >&2
+              exit 1
+            fi
           done
           # The overwrite flag is derived from entry.ts, so an assignment before
           # any read flips a variable to fixed and a read before it flips back.
