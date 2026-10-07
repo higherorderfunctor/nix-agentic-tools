@@ -18,6 +18,8 @@
       notes = "`agent(prompt, {model, effort})` per node; a single node is the way to pin one delegate";
       pinsEffort = true;
       pinsModel = true;
+      # docs/delegates/tools.md Claude `Workflow` fn 14: nodes lack Agent/Workflow (claude:wf_allowed)
+      runsOwnSubagents = "unsupported (headless)";
     };
     "claude -p" = {
       command = ''claude -p --model <id> --effort <effort> "<prompt>"'';
@@ -47,7 +49,7 @@
       notes = "launch from cwd with a full brief and a fresh output path; use no -C, --worktree, bypass or trust flags. The terminal `-` already closes stdin, so do not add `</dev/null` (it wins the redirect and sends an empty prompt); check the exit code and `turn.failed`/`error` events, then verify the output";
       pinsEffort = true;
       pinsModel = true;
-      # docs/delegates/tools.md Codex V2 `spawn_agent`: `codex exec` child and grandchild run (codex:R1.v2-nested-depth-zero)
+      # docs/delegates/tools.md Codex V2 `spawn_agent`: `codex exec` child and grandchild run (codex:R1.v1-close-tree, codex:R1.v2-nested-depth-zero)
       runsOwnSubagents = "supported (headless)";
     };
     models = {

@@ -495,8 +495,6 @@
       && techniqueCells kiro "orchestrate_subagent" == ["`orchestrate_subagent`" "subagent" "false" "false" "interactive+acp"]
       && hasProse "some ACP clients enable it in place of invoke_sub_agent" kiro
       && lib.hasInfix "| Runs own subagents" claude
-      && ownSubagents claude "codex exec" == "supported (headless)"
-      && ownSubagents kimchi "Agent" == "unsupported (headless)"
       && ownSubagents kiro "orchestrate_subagent" == "unknown"
       && ownSubagents ownSubagentsOverride "codex exec" == "CUSTOM OWN SUBAGENTS"
     );

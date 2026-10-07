@@ -74,7 +74,5 @@ for p in paths:
     walk(tree.root_node, data, path)
 (OUT / 'rust-ast.json').write_text(json.dumps(items, indent=2))
 (OUT / 'source-manifest.json').write_text(json.dumps(manifest, indent=2))
-fixtures = {str(p.relative_to(R)): json.loads(p.read_text()) for p in (R / 'packages/delegate-routing/fixtures/capabilities').glob('codex*.json')}
-(OUT / 'committed-fixtures.json').write_text(json.dumps(fixtures, indent=2))
 (WORK / 'provenance.json').write_text(json.dumps(dict(binary=B, version=subprocess.check_output([B, '--version'], text=True).strip(), binary_sha256=hashlib.sha256(pathlib.Path(B).resolve().read_bytes()).hexdigest(), source=str(SRC), pin=json.loads((R / 'packages/chatgpt-codex/sources.json').read_text()), ast_parser=tree_sitter_rust.__file__), indent=2))
 print(json.dumps(dict(files=len(paths), declarations=len(items), parse_errors=sum(x['ast_has_error'] for x in manifest), cli_commands=len(commands))))
