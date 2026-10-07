@@ -54,13 +54,10 @@
   overlay = self.overlays.default;
 
   # ── Foreign nixpkgs ────────────────────────────────────────────────
-  # An input's own nixpkgs, never this flake's: no new flake input, and
-  # llm-agents' is fetched whenever semble evaluates anyway. devenv's is the
-  # fallback should llm-agents ever lock this flake's revision.
-  foreignSource =
-    lib.findFirst (source: source.narHash != inputs.nixpkgs.narHash)
-    (throw "nat-overlay-parity: every candidate foreign nixpkgs is this flake's own revision; add another")
-    [inputs.llm-agents.inputs.nixpkgs inputs.devenv.inputs.nixpkgs];
+  # devenv's rolling nixpkgs exercises consumers on a different revision.
+  foreignSource = assert lib.assertMsg (inputs.devenv.inputs.nixpkgs.narHash != inputs.nixpkgs.narHash)
+  "nat-overlay-parity: devenv's nixpkgs must differ from this flake's revision";
+    inputs.devenv.inputs.nixpkgs;
   foreignWith = config: import foreignSource {inherit config system;};
   foreign = foreignWith {allowUnfree = true;};
   foreignFree = foreignWith {};

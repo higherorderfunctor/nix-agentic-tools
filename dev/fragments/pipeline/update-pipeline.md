@@ -1,19 +1,7 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-10-06 — a writable update whose build verification
-> fails still publishes its PR, and its CI lane then fails with `::error::`
-> (`record_verify_failure` → receipt `verifyFailed` →
-> `update-matrix.py verdict`) only when the PR is new or its patch changed; a
-> same-patch PR or a branch whose live origin head is not the bot's own last
-> push is a skip (receipt `skip`, a `::notice::`, and one PR comment per head
-> only for a human edit), and such a hold-back never escalates; root metadata
-> reads use absolute `.#.updateTargets` paths; every pipeline read of a package
-> by name goes through `ciPackages` (`nat_attr`, `ciAttr`); rev bumps prefetch
-> with the package's own fetcher mode; both update paths regenerate committed
-> sidecars through `passthru.regenerateExtracted`; `--use-update-script` rows
-> must resolve `updateScript` to an executable file, gated by
-> `checks.update-script-executable`; every update target must survive
-> nix-update's own `eval.nix`, gated by `checks.update-target-meta-eval`.
+> **Last verified:** 2026-10-07 — Semble’s grouped package updater owns both
+> snapshots; input regeneration still serves git-branchless.
 >
 > **Settled — do not relitigate.** Gating the PR on a passing build was tried
 > and rejected. It parks every later bump of that input behind one broken
@@ -74,11 +62,8 @@ Targets fall into three categories:
   `regenerate_sidecars input <name>` (`update-common.sh`). It runs the
   `passthru.regenerateExtracted` script (`packageLib.mkRegenerateExtracted`) of
   every package whose `passthru.updateFlakeInput` names the input, and stages
-  the `sidecars` each one lists. Today that is Semble's two snapshots on
-  `llm-agents` and git-branchless's config census on `git-branchless`. A failed
-  regeneration holds the input back. Semble's human-reviewed template hashes are
-  not rewritten, so a changed template reaches the update PR but fails its
-  coverage check until the local derivative is reviewed.
+  the `sidecars` each one lists. Git-branchless's config census follows its
+  input through this path. A failed regeneration holds the input back.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages.
   Rev-tracked packages exposing `passthru.fixGoFloor` run that fixer before
@@ -88,7 +73,7 @@ Targets fall into three categories:
   `--version skip` bumps never run an `extraExtract`) gets its sidecar refreshed
   in the same commit, and a failure holds the bump back. `update-targets-parity`
   fails when a target with `passthru.extracted` has neither that nor
-  `--use-update-script`. The Beads binary target is the one grouped package: its
+  `--use-update-script`. The Beads binary target is a grouped package: its
   `passthru.updateScript` runs independent Beads and Dolt release updaters in
   sequence, so either upstream can move while the target still produces one
   branch, one build of `.#beads`, and one PR. The paired Dolt remains a nested
@@ -97,6 +82,10 @@ Targets fall into three categories:
   `update-report` target runs `update-report.sh` to print a summary grouped by
   status. There is no base-checkout format/build finalizer because it cannot
   observe changes committed only on target branches.
+
+  Semble's grouped script tracks the CLI, model2vec, vicinity and the grammar
+  wheels, then regenerates both snapshots. Human-reviewed template hashes stay
+  unchanged: a changed template fails coverage until its derivative is reviewed.
 
 ### Packages are read from `ciPackages`
 

@@ -1,7 +1,8 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-10-07 — owners receive the shared extraction functions
-> through repository arguments instead of relative imports.
+> **Last verified:** 2026-10-07 — Semble uses the source-build pattern; overlay
+> parity uses devenv’s foreign nixpkgs and the two Semble roles share one
+> derivation.
 >
 > **Settled — do not relitigate.** Full lineage, including why pnpm 12 once left
 > the shared builder:
@@ -152,16 +153,11 @@ fragment.
 `natSets` rebuilds everything on the consumer's nixpkgs and still agrees with
 the module defaults. The consumer then owns the recipe breakage above.
 
-**One exception to "one nixpkgs builds everything":** `semble` takes
-`inputs.llm-agents.packages`, built on that input's nixpkgs. The re-export still
-hands consumers this flake's drv, so the overlay and module defaults still
-agree.
-
 ### `checks.nat-overlay-parity`
 
 Eval-only; every assertion compares drvPath or out path strings, or whether one
-evaluates. The foreign nixpkgs is llm-agents' input (devenv's if llm-agents ever
-locks this flake's revision), so no new input is fetched.
+evaluates. The foreign nixpkgs is devenv's rolling input, asserted to differ
+from this flake's revision, so no new input is fetched.
 
 - **A** the overlay over the foreign nixpkgs gives `ciPackages`' drv for every
   claimed leaf, and the claim list equals the `ciPackages` leaves.
@@ -260,22 +256,17 @@ landing and was absorbed anyway, precisely so the pair is carried the same way
 when the channel next moves. The several-majors section below repeats the rule
 for majors of one package; this is the general form.
 
-### Direct external-flake derivations
+### Semble's source build and roles
 
-Semble is the external pinned-package exception to the local-build patterns
-below. `packages/semble/packages/ai/semble/package.nix` returns
-`inputs.llm-agents.packages.${system}.semble` directly. It does not apply the
-input's `overlays.shared-nixpkgs`, rebuild against this repository's injected
-`pkgs`, or call `overrideAttrs`; any of those would replace the upstream cache
-identity that this export promises to preserve. A plain attrset extension adds
-`passthru.updateFlakeInput = "llm-agents"`; the reverse update-target check
-validates that named input exists and treats its normal input bump as Semble's
-update path without changing the upstream `drvPath` or `outPath`.
+Semble uses `buildPythonApplication` with this flake's nixpkgs. Its three
+vendored dependencies stay let-bound and exposed through passthru. Four source
+sidecars feed one grouped `--use-update-script` target; its final extraction
+step regenerates both committed Semble snapshots from package passthru.
 
-When one upstream derivation ships multiple role binaries, expose secondary
-roles with a plain attrset/meta overlay. `semble-mcp` changes only
-`meta.mainProgram`, so `lib.getExe` selects the MCP binary while `drvPath` and
-`outPath` remain identical to the CLI and upstream output.
+When one derivation ships multiple role binaries, expose secondary roles with a
+plain attrset/meta overlay. `semble-mcp` changes only `meta.mainProgram`, so
+`lib.getExe` selects the MCP binary while `drvPath` and `outPath` remain
+identical to the CLI output.
 
 Shared update helpers require an explicit `sourcesFile`. Pass
 `sourcesFile = repoPath ./relative/sources.json`; there is no
@@ -758,9 +749,7 @@ A package owned by a flake input, or bumped by rev without its own update script
 `passthru.regenerateExtracted = packageLib.mkRegenerateExtracted { … }` instead.
 `update-input.sh` discovers it through `passthru.updateFlakeInput`,
 `update-pkg.sh` by the target's own name, and both commit its `sidecars`.
-Semble's targets are its drift checks' `passthru.extracted`, which keeps the
-package byte-identical to upstream; git-branchless's is its own
-`passthru.extracted`.
+git-branchless's target is its own `passthru.extracted`.
 
 The hash fixers (the vendor and src fixers `mkGoUpdateExtract` builds
 internally, and `mkNpmDepsFix`) are one body — `vu.mkHashFix` — parameterized by
@@ -821,20 +810,6 @@ bound to the base package; further overrides do not automatically retain the
 role's metadata. `packages/agnix/checks/role-identity.nix` asserts that all
 three roles share one `drvPath`, so a regression back to `overrideAttrs` fails
 the check.
-
-### Pinned external derivations preserve upstream identity
-
-Semble is selected directly from `inputs.llm-agents.packages.${system}.semble`.
-It is not rebuilt against the recipe's `pkgs` or changed with `overrideAttrs`.
-Its `drvPath` and `outPath` belong to the upstream flake, including when a
-consumer uses a different nixpkgs input.
-
-The `semble-mcp` role uses the same plain attrset extension as Agnix's roles,
-changing only evaluation-time `meta.mainProgram`. The CLI also adds
-`passthru.updateFlakeInput = "llm-agents"` through that extension; the MCP role
-inherits it. These metadata changes preserve both store paths.
-`packages/semble/checks/package-identity.nix` asserts the roles share one
-`drvPath` and the CLI retains the upstream `drvPath` and `outPath`.
 
 ### Go and Rust toolchains come only from the locked overlays
 

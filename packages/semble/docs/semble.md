@@ -1,15 +1,18 @@
 # Semble integrations
 
-> **Last verified:** 2026-10-06 — both snapshot drift checks use the shared
-> `lib/extracted/default.nix` builder and retain `passthru.extracted` for a
-> build, sidecar copy, and `nix fmt` recipe; the language check validates the
-> committed sidecar reader without blocking extraction.
+> **Last verified:** 2026-10-07 — Semble is built from source on this flake’s
+> nixpkgs; its grouped updater regenerates both snapshots from package passthru.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
+> **Settled — do not relitigate.** Semble left the external package input in
+> 2026-10. #2220's `ciAttr` prefix broke check-path regeneration, and the D12
+> rule requires first-party builds; upstream byte identity is no longer a useful
+> contract. Do not restore the external input.
+
 Semble provides local semantic and lexical code search through a CLI and an MCP
-server. This repository re-exports Numtide's pinned derivation unchanged and
-adds matching Home Manager and devenv convenience modules for Claude, Codex, and
+server. This repository builds it from source with its own nixpkgs and adds
+matching Home Manager and devenv convenience modules for Claude, Codex, and
 Kiro.
 
 ## Umbrella configuration
@@ -217,15 +220,15 @@ of `makeWrapper` launchers and nothing else, no `lib/` and no `nix-support/`.
 Two nixpkgs behaviors make that necessary. First, a Python application
 propagates its whole closure and the interpreter
 (`nix-support/propagated-build-inputs`), and Python's setup hook turns that into
-PYTHONPATH in any shell that contains Python. Installing the upstream derivation
-in a devenv shell put Semble's dependencies (numpy, tokenizers, huggingface-hub,
+PYTHONPATH in any shell that contains Python. Installing the base derivation in
+a devenv shell put Semble's dependencies (numpy, tokenizers, huggingface-hub,
 ...) on the project's PYTHONPATH, ahead of its own virtualenv, even in
 non-Python projects. Home Manager profiles run no setup hooks and never leaked.
 Second, the upstream entry point appends Semble's site-packages AFTER
 PYTHONPATH, so any `semble` or dependency the calling shell exports shadows
 Semble's own. Each launcher therefore unsets PYTHONPATH. Both are properties of
 every nixpkgs Python application, not of Semble; the module fixes them for the
-packages it installs without touching the upstream derivation.
+packages it installs without touching the base derivation.
 `module-semble-launcher-python-isolation` checks both backends, including a
 multi-variant install, and proves its fake module does shadow the unwrapped
 binary. `lib.ai.mcpServers.mkSemble` points at whatever package it is given and
@@ -351,10 +354,10 @@ Routing is a patch to Semble (`patches/models.patch`), not a wrapper:
 
 The models patch applies on its own or on top of the grammar patch. The vanilla
 settings (`models = []`, `defaultModel = null`, `defaultContent = ["code"]`,
-`pathMappings = []`, `grammars = []`) keep the installed package upstream's
-derivation byte for byte, which is what keeps it substitutable. Disabled entries
-count as absent. Any other value changes the package, so the cache guard clears
-the indexes on the next activation or shell entry. That includes changing only
+`pathMappings = []`, `grammars = []`) keep the published first-party base
+derivation unchanged, so it remains substitutable. Disabled entries count as
+absent. Any other value changes the package, so the cache guard clears the
+indexes on the next activation or shell entry. That includes changing only
 `defaultContent`: it costs a local, non-substitutable rebuild of Semble, where
 the removed `mcp.content` was a plain argument on upstream's cached package. The
 cost buys one default shared by the CLI and the MCP server.
@@ -404,13 +407,13 @@ snapshot remains verbatim for provenance.
 
 `packages/semble/upstream-templates.json` snapshots the four pinned agent
 templates, the installer block, and a live JSON-RPC `tools/list` response
-through a separate derivation; Semble itself remains unchanged. The four agent
-templates retain human-reviewed hash pins. The installer prose is no longer a
-reviewed hash dependency: a mechanical provenance assertion instead requires its
-embedded `semble[mcp]==<version>` fallback to match the packaged version. The
-exact MCP surface is reviewed separately, and every tool and argument named by
-the committed MCP prompt must remain present. Module evaluation reads only
-committed files and does not introduce IFD.
+through `passthru.extractedTemplates` on the package. The four agent templates
+retain human-reviewed hash pins. The installer prose is no longer a reviewed
+hash dependency: a mechanical provenance assertion instead requires its embedded
+`semble[mcp]==<version>` fallback to match the packaged version. The exact MCP
+surface is reviewed separately, and every tool and argument named by the
+committed MCP prompt must remain present. Module evaluation reads only committed
+files and does not introduce IFD.
 
 ## Language knowledge snapshot
 
@@ -429,15 +432,16 @@ packages decide how a file is treated:
 
 semble-grammars ships one wheel per platform, each with its own manifest, and
 `available_languages()` reads that manifest. The extractor
-(`checks/extract-languages.py`) imports the real modules under Semble's own
+(`extract/extract-languages.py`) imports the real modules under Semble's own
 interpreter and fails unless the platform manifest equals the
-platform-independent `sources.json`. So the committed file is the same on every
-system, and the drift check (`semble-languages-extracted`) catches a platform
-that drops a grammar. It runs on Linux inside `nix flake check`, which skips
-Darwin, so CI's aarch64-darwin package job builds it separately (shard 0, before
-the receipt upload, so it gates the required `build` context). The update
-pipeline extracts on x86_64-linux only. On 0.1.2 the linux-x86_64 and
-macos-arm64 manifests both list the same 77 grammars as `sources.json`.
+platform-independent manifest semble-grammars bundles as
+`grammars/sources.json`. So the committed file is the same on every system, and
+the drift check (`semble-languages-extracted`) catches a platform that drops a
+grammar. It runs on Linux inside `nix flake check`, which skips Darwin, so CI's
+aarch64-darwin package job builds it separately (shard 0, before the receipt
+upload, so it gates the required `build` context). The update pipeline extracts
+on x86_64-linux only. On 0.1.2 the linux-x86_64 and macos-arm64 manifests both
+list the same 77 grammars as that bundled manifest.
 
 Both snapshot drift checks call the shared `lib/extracted/default.nix` builder.
 A mismatch prints a sorted JSON diff and a recipe to build that check’s
@@ -445,11 +449,12 @@ A mismatch prints a sorted JSON diff and a recipe to build that check’s
 The language check validates the committed sidecar reader while leaving
 `passthru.extracted` buildable for regeneration.
 
-Semble has no update target of its own; it arrives with the `llm-agents` input.
-Its `passthru.regenerateExtracted` rebuilds both Semble snapshots
-(`extracted.json` and `upstream-templates.json`) from their checks'
-`passthru.extracted`, and `dev/scripts/update-input.sh` runs it on every
-`llm-agents` bump, so the bot PR carries them.
+Semble's grouped `--use-update-script` target tracks the CLI in `sources.json`
+and model2vec, vicinity and semble-grammars in `<dep>-sources.json`. The grouped
+script then regenerates both snapshots from the package's `passthru.extracted`
+and `passthru.extractedTemplates`. The drift checks consume the same extractors;
+`mkExtractRegen` names `extract = "extractedTemplates"` for the templates file.
+Human-reviewed template hashes remain a separate approval gate.
 
 ## Direct configuration
 
@@ -484,8 +489,8 @@ shape. `lib.ai.semble.withGrammars` remains the grammar-only shorthand.
 renders the CLI records with the routing block.
 
 The package roles are `pkgs.ai.semble` and `pkgs.ai.mcpServers.semble-mcp`. They
-share one derivation; the latter changes only the evaluation-time
-`meta.mainProgram` used by `lib.getExe`.
+share the first-party source-build derivation; the latter changes only the
+evaluation-time `meta.mainProgram` used by `lib.getExe`.
 
 Unless every search routes to a configured model, Semble downloads its built-in
 embedding model into the user cache on first use; the Nix package does not

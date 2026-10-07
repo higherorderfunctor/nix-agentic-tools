@@ -140,7 +140,7 @@ in
       // {
         # `overridePythonAttrs` sees the derivation before a caller or overlay
         # extends it as a plain attrset. Merge from the public package value so
-        # metadata such as updateFlakeInput survives the customization.
+        # metadata such as updateScript survives the customization.
         passthru =
           (package.passthru or {})
           // {

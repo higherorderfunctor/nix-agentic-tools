@@ -736,11 +736,8 @@ regenerate_sidecars() {
           r = builtins.tryEval (p.passthru ? regenerateExtracted
             && (if by == "input" then (p.passthru.updateFlakeInput or null) == name else n == name));
         in r.success && r.value;
-      # Aliases of one package (semble and semble-mcp) share one script.
-      scripts = map (n: (builtins.getAttr n ps).passthru.regenerateExtracted)
-        (builtins.filter selected (builtins.attrNames ps));
-    in builtins.attrValues (builtins.listToAttrs
-      (map (s: { name = builtins.unsafeDiscardStringContext s.drvPath; value = s; }) scripts))'
+    in map (n: (builtins.getAttr n ps).passthru.regenerateExtracted)
+      (builtins.filter selected (builtins.attrNames ps))'
 
   # stderr stays out of both captures; see fix_sidecar_hashes.
   if ! scripts=$(NAT_REGEN_BY="$by" NAT_REGEN_NAME="$name" nix build --impure --no-link --print-out-paths --expr "$roster"); then

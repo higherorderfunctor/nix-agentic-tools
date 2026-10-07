@@ -437,10 +437,10 @@ rec {
   # hypothetical — it is how glab's first-ever bump failed (PR #621),
   # glab having been the one extracted package that never wired it.
   #
-  # Builds the pure `passthru.extracted` against the just-written
-  # sources.json (dirty-tracked, so flake eval sees the new version) and
-  # copies it over the committed path. ONE extraction source: the drift
-  # check consumes the same `passthru.extracted`, so the two cannot
+  # Builds the pure `passthru.<extract>` (default `extracted`) against the
+  # just-written sources.json (dirty-tracked, so flake eval sees the new
+  # version) and copies it over the committed path. ONE extraction source:
+  # the drift check consumes the same passthru attribute, so the two cannot
   # disagree about what "extracted" means.
   #
   # `nix fmt` is load-bearing, not tidiness. The extractors emit jq /
@@ -457,12 +457,13 @@ rec {
   mkExtractRegen = {
     attr,
     dest,
+    extract ? "extracted",
     pkgs,
     rows ? null,
   }: ''
     echo "${attr}: regenerating ${dest}"
     extracted=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
-      ".#${ciAttr {inherit attr pkgs;}}.passthru.extracted")
+      ".#${ciAttr {inherit attr pkgs;}}.passthru.${extract}")
     ${pkgs.coreutils}/bin/cp "$extracted" "${dest}"
     ${pkgs.coreutils}/bin/chmod 644 "${dest}"
     ${pkgs.nix}/bin/nix fmt -- "${dest}"
@@ -486,8 +487,8 @@ rec {
   # drift check, and a failure holds the bump back on either path.
   #
   # `targets` are `mkExtractRegen` arguments: `attr` is the package name in
-  # `ciPackages` whose `passthru.extracted` produces the sidecar; `dest` is the
-  # repository path it replaces. Optional
+  # `ciPackages`, not a check path. `extract` selects its passthru key and
+  # defaults to `extracted`; `dest` is the repository path it replaces. Optional
   # `rows = {name; path;}` names the drift check and its rows destination.
   mkRegenerateExtracted = {
     name,

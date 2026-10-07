@@ -1,7 +1,9 @@
 ## IFD Patterns and Gotchas
 
 > **Last verified:** 2026-10-07 — Codex uses the injected `extractedLib` for
-> command, flag and root launcher-flag reconciliation alongside sidecar drift.
+> command, flag and root launcher-flag reconciliation alongside sidecar drift;
+> Semble exposes both extractors on package passthru, and
+> `mkExtractRegen.extract` selects its templates snapshot.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -197,17 +199,17 @@ runtime-values classifier only for string-valued names or string-to-string maps.
 `withAdded` preserves the already-parsed rows and adds `{}` rows for derivable
 non-secret new names.
 
-`mkExtractRegen` takes a package name as `attr` and optionally
-`rows = {name; path;}`, where `name` identifies the drift check independently of
-the package. After writing and formatting the sidecar it runs
-`lib/extracted/default.nix`'s `mkRowsRegen`, the same command the drift check
-prints, to evaluate `passthru.rows`, replace `path` and format it. The temporary
-output matters: direct redirection would truncate the rows that this evaluation
-reads. `mkRegenerateExtracted` lists sidecar destinations in
-`passthru.sidecars`; its current callers do not regenerate rows. Kimchi's
-`extract/rules.nix` is shared by its consumer, drift check and regeneration;
-extractors continue to enforce source structure, while reconciliation failures
-turn the resulting update PR red.
+`mkExtractRegen` takes a package name as `attr`, an optional `extract` passthru
+key (default `extracted`), and optionally `rows = {name; path;}`, where `name`
+identifies the drift check independently of the package. After writing and
+formatting the sidecar it runs `lib/extracted/default.nix`'s `mkRowsRegen`, the
+same command the drift check prints, to evaluate `passthru.rows`, replace `path`
+and format it. The temporary output matters: direct redirection would truncate
+the rows that this evaluation reads. `mkRegenerateExtracted` lists sidecar
+destinations in `passthru.sidecars`; its current callers do not regenerate rows.
+Kimchi's `extract/rules.nix` is shared by its consumer, drift check and
+regeneration; extractors continue to enforce source structure, while
+reconciliation failures turn the resulting update PR red.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
