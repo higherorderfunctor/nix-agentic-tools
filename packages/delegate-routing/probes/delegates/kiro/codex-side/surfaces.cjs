@@ -3,12 +3,12 @@ const out = nodes
   .filter(
     (n) =>
       (n.type === "MethodDefinition" &&
-        ((n.loc.start.line >= 15890 && n.loc.start.line <= 16600) ||
-          (n.loc.start.line >= 17290 && n.loc.start.line <= 17710))) ||
+        ((n.loc.start.line >= 15890 && n.loc.start.line <= 16700) ||
+          (n.loc.start.line >= 17290 && n.loc.start.line <= 17800))) ||
       (n.type === "FunctionDeclaration" &&
-        ["JRr", "Iki", "zOn", "HOn", "Bwe"].includes(n.id?.name)) ||
+        ["aOr", "cOi", "AUn", "RUn", "Bwe"].includes(n.id?.name)) ||
       (n.type === "VariableDeclarator" &&
-        ["eIr", "Hji", "ECc", "Nji", "qji", "oRc"].includes(n.id?.name)),
+        ["uOr", "Hji", "ECc", "lto", "Ito", "oRc"].includes(n.id?.name)),
   )
   .map((n) => ({
     name: n.key?.name || n.id?.name,

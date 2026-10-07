@@ -41,7 +41,10 @@
       {
         "toolUseId": "sm1",
         "name": "summary",
-        "input": { "taskResult": "CHILD_SUMMARY" }
+        "input": {
+          "taskDescription": "CHILD_PERM",
+          "taskResult": "CHILD_SUMMARY"
+        }
       }
     ]
   },
@@ -51,7 +54,16 @@
   },
   {
     "match": ["orchestrated session", "CHILD_PERM2"],
-    "events": ["CHILD2_DONE"]
+    "events": [
+      {
+        "toolUseId": "sm2",
+        "name": "summary",
+        "input": {
+          "taskDescription": "CHILD_PERM2",
+          "taskResult": "CHILD2_DONE"
+        }
+      }
+    ]
   },
   {
     "match": "MAIN_KICKOFF",

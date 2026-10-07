@@ -218,3 +218,8 @@ comparisons for every case path.
 The repo-only `delegate-evidence` dev skill (`dev/skills/delegate-evidence/`)
 sends agents to the map and the suite before they state harness behavior or
 debug the skill.
+
+Kiro map results describe only the current flake pin. Its v2 replay cases remain
+marked "v2 engine (not used by this config)"; skill capability citations use v3
+cases. The headless nested capture shares its rules with the ACP nested case
+through `rulesFrom`; AST selectors fail on a missing match.

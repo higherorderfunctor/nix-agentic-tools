@@ -36,7 +36,10 @@
       {
         "toolUseId": "sm1",
         "name": "summary",
-        "input": { "taskResult": "CHILD_SUMMARY" }
+        "input": {
+          "taskDescription": "CHILD_PERM",
+          "taskResult": "CHILD_SUMMARY"
+        }
       }
     ]
   },

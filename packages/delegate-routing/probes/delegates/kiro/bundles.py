@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Extracts the two JavaScript bundles embedded in the pinned kiro-cli-chat binary.
 
-usage: python3 bundles.py <out-dir>   → <out-dir>/kas.js (KAS @kiro/agent 0.66.22 acp-server.js)
-                                        <out-dir>/tui.js
-Each bundle is one zstd frame at a fixed offset of the 2.27.1 ELF; the KAS frame is a tar holding
-node_modules/@kiro/agent/dist/server/acp-server.js. Both are checked against the hashes the report
-used, so a different pin fails loudly instead of yielding other line numbers. Needs `zstd` on PATH.
-The same KAS file also appears under a v3 run's home at
-.local/share/kiro-cli/kas/2.27.1-*/node_modules/@kiro/agent/dist/server/acp-server.js.
+usage: python3 bundles.py <out-dir> → kas.js (KAS @kiro/agent 0.66.26), tui.js.
+The pinned ELF contains zstd frames at the offsets below. Binary and bundle hashes
+bind AST locations and replay functions to this flake's build. Needs zstd on PATH.
 """
 import hashlib
 import io
@@ -20,9 +16,9 @@ import tarfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "common"))
 import pin  # noqa: E402
 
-BINARY_SHA = "d2ada4bdda2e58bc3375e6822d7dd6ba19a53ff54c6d934d8f2186a0b9ad1372"
-KAS = (6893905, "79a1a743ee7236a71bba9c6c68342deccfcffea4d61361eae0254288339b19c8")
-TUI = (95928573, "3fe9ded80cc1edc1d2839c18603eb66850644df505f6618b134a7ecad193755e")
+BINARY_SHA = "94c656bf317607ba1cca17e010e98fc5829d8e7c864f44bdedd8c4f4ad446c4d"
+KAS = (6906041, "3bc21b1f684cd3cc4aa0e10f198a5f97ea41398a63ed5db1858d4145fbe42828")
+TUI = (95983877, "6733ecdbd8a72ecd1d6c7a2bbfc763b8b81a00e8cd097febcc01dc2152fede4f")
 MEMBER = "node_modules/@kiro/agent/dist/server/acp-server.js"
 
 
@@ -39,7 +35,7 @@ out.mkdir(parents=True, exist_ok=True)
 pkg = pathlib.Path(os.environ.get("KIRO_PKG") or pin.package("kiro-cli.unwrapped"))
 binary = (pkg / "bin" / ".kiro-cli-chat-wrapped").read_bytes()
 if hashlib.sha256(binary).hexdigest() != BINARY_SHA:
-    sys.exit("kiro-cli-chat is not the 2.27.1 binary the report used")
+    sys.exit("kiro-cli-chat is not the pinned 2.28.0 binary")
 with tarfile.open(fileobj=io.BytesIO(frame(binary, KAS[0]))) as tar:
     kas = tar.extractfile(MEMBER).read()
 tui = frame(binary, TUI[0])
