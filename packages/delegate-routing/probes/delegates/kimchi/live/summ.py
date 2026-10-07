@@ -1,7 +1,7 @@
 """Summarize out/<run>/provider.jsonl: relative time, role, model, effort, delegate tools, markers.
 LIVE runs (recproxy.py) print one RESP line per chat response: model/effort sent, model(s) returned,
-reasoning tokens. ACP runs also print the client-visible timeline from stdout: responses and
-agent_message_chunk text, one `acp` line each."""
+reasoning tokens. ACP runs also print the client-visible timeline from stdout: responses,
+agent_message_chunk text and `_kimchi.dev/*` extension notifications, one `acp` line each."""
 import json, os, sys
 rows = [json.loads(l) for l in open(sys.argv[1] + "/provider.jsonl")]
 t0 = next((r["t"] for r in rows if r["kind"] == "POST"), rows[0]["t"])
@@ -27,5 +27,7 @@ if os.path.exists(stdout):
         u = (m.get("params") or {}).get("update") or {}
         if "result" in m and "id" in m:
             print(f'{o["t"]:7.2f}', "acp", "response", m["id"], json.dumps(m["result"])[:60])
+        elif str(m.get("method", "")).startswith("_kimchi.dev/"):
+            print(f'{o["t"]:7.2f}', "acp", m["method"], json.dumps(m.get("params"))[:60])
         elif u.get("sessionUpdate") == "agent_message_chunk":
             print(f'{o["t"]:7.2f}', "acp", "agent_message_chunk", (u.get("content") or {}).get("text", "")[:60])
