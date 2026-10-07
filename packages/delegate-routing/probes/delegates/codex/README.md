@@ -11,10 +11,9 @@ set, otherwise to a fresh temp dir that the script prints. All cases are
 `CODEX_HOME`. No account, no quota.
 
 The model catalog comes from `mkcache.py`, which wraps the catalog bundled in
-the pinned source (`codex-rs/models-manager/models.json`). The original runs
-copied the operator's account-fetched `~/.codex/models_cache.json`; that file
-carries an account identity and is not committed. The per-model
-`multi_agent_version` is the same, except that `gpt-reserve` is absent.
+the pinned source (`codex-rs/models-manager/models.json`). Its identity is
+empty; no account cache or login is read. Catalog-dependent results describe
+this bundled catalog; live account-catalog parity is unknown.
 
 Set `PROBE_OUT` for the inventory + `inspect_ast.py` steps so both AST files
 land in the same directory.
@@ -30,7 +29,7 @@ land in the same directory.
 | `toggles.sh [variants]`, `toggles_report.py`   | One request per config variant; prints the multi-agent tool surface.                                                                                                |
 | `offline.py`, `protocol.py`                    | Codex-side `codex exec` and app-server protocol cases.                                                                                                              |
 | `inventory.py`, `sdk_ast.py`, `inspect_ast.py` | Codex-side CLI/schema inventory and tree-sitter AST of the pinned source.                                                                                           |
-| `sysprompt/wire.sh`                            | Re-captures the prior system-prompt study's wire runs.                                                                                                              |
+| `sysprompt/wire.sh`                            | Captures system-prompt wire runs at the pin.                                                                                                                        |
 
 `inventory.py` and `sdk_ast.py` need tree-sitter in a throwaway venv:
 
@@ -70,7 +69,7 @@ uv venv "$d/venv" && uv pip install --python "$d/venv/bin/python" tree-sitter==0
 | codex:R1.v2-resident-eviction | `python3 offline.py v2-resident-eviction`                                                                                | capacity 2: three sequential children work; only the resident one is listed; follow-up reloads the oldest             | `list_agents` shows one child                                                                                                                  |
 | codex:R1.v2-role-model        | `python3 offline.py v2-role-model`                                                                                       | role file effort (medium, `reader.toml`) overrides the requested low                                                  | child wire effort `medium`                                                                                                                     |
 | codex:R2                      | `python3 protocol.py --without-live-switch`; `python3 protocol.py`                                                       | app-server initialize, steer, settings update, resume, fork, review, interrupt                                        | enabled run: `wire [('gpt-6-luna', 'low'), ('gpt-6-luna', 'medium'), ('gpt-6-luna', 'low'), …]`; feature-off: `step_model_switching` rejection |
-| codex:R4                      | `sysprompt/wire.sh wireA`; `wireB`; `wireC`; `wireBase`; `wireL1`; `wireL2`                                              | the prior prompt study's wire captures (roles, `subagent_developer_instructions`, fork, base file)                    | `wireB`: root carries `MAIN-B-3001`, children `SUBDEV-B-3003` or `ROLE-R2-2002`                                                                |
+| codex:R4                      | `sysprompt/wire.sh wireA`; `wireB`; `wireC`; `wireBase`; `wireL1`; `wireL2`                                              | prompt wire captures (roles, `subagent_developer_instructions`, fork, base file)                                      | `wireB`: root carries `MAIN-B-3001`, children `SUBDEV-B-3003` or `ROLE-R2-2002`                                                                |
 | judge:J1                      | `./toggles.sh probes/toggles/judge-variants.txt`                                                                         | explicit V2 enable overrides `agents.enabled=false`, also on a v1-catalog model                                       | `agents_enabled_false … tools=-`; both `agents_off_v2_on*` rows list the six `collaboration.*` tools                                           |
 | judge:J2                      | `python3 agents_schema.py`                                                                                               | `AgentsToml` keys in `core/config.schema.json`                                                                        | six keys ending `max_depth`; no `max_threads`, no `job_max_runtime_seconds`                                                                    |
 
@@ -81,6 +80,6 @@ uv venv "$d/venv" && uv pip install --python "$d/venv/bin/python" tree-sitter==0
 | wireB   | `sysprompt/wire.sh wireB` | Root `MAIN-B-3001`; child `SUBDEV-B-3003` or `ROLE-R2-2002`       |
 | piD6    | `python3 offline.py piD6` | `piD6: UNTRUSTED-AGENTS-8006 present; UNTRUSTED-PROJ-8005 absent` |
 
-`piD6` reconstructs the original unknown-trust capture with the same project
-sentinels: a fresh home has no trust entry. Inspect `requests.json` to see the
-instruction-file sentinel and confirm the project-config sentinel is absent.
+`piD6` captures unknown trust with project sentinels: a fresh home has no trust
+entry. Inspect `requests.json` to see the instruction-file sentinel and confirm
+the project-config sentinel is absent.

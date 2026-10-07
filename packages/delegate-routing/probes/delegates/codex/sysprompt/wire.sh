@@ -2,7 +2,7 @@
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 # usage: wire.sh <wireA|wireB|wireC|wireBase|wireL1|wireL2> [port]
-# codex:R4 — re-captures one system-prompt wire run of the prior study: scripted.py records every
+# codex:R4 — captures one system-prompt wire run at the pin: scripted.py records every
 # POST /v1/responses body; `codex debug app-server send-message-v2 TRIGGER` drives one root turn.
 # Writes <work>/<case>/req*.json and prints analyze.py's sentinel summary.
 # work = $PROBE_OUT/codex-sysprompt or a fresh temp dir. Binary: pinned chatgpt-codex (CODEX_PKG overrides).

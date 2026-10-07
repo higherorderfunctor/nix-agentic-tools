@@ -18,7 +18,7 @@ sys.path.insert(0, str(S))
 import codexpin  # noqa: E402
 B = codexpin.binary()
 WORK = codexpin.workdir('codex-offline')
-PRIOR = codexpin.models_cache(WORK)
+CATALOG = codexpin.models_cache(WORK)
 OUT = WORK / 'offline'
 OUT.mkdir(exist_ok=True)
 state = {}
@@ -105,7 +105,7 @@ def run_case(name, actions, extra=(), v1=False, nested=False):
         (cwd / 'AGENTS.md').write_text('UNTRUSTED-AGENTS-8006\n')
         (cwd / '.codex').mkdir(exist_ok=True)
         (cwd / '.codex' / 'config.toml').write_text('developer_instructions = "UNTRUSTED-PROJ-8005"\n')
-    cache = json.loads(PRIOR.read_text())
+    cache = json.loads(CATALOG.read_text())
     for m in cache['models']:
         if v1:
             m['multi_agent_version'] = 'v1'
