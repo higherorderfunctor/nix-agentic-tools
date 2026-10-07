@@ -7,11 +7,8 @@ applyTo: "checks/*/default.nix,checks/facets/**,flake.nix,lib/facets.nix,lib/fac
 
 ## Package ownership and native composition
 
-> **Last verified:** 2026-10-04 — recipes run through `buildOverlay` on this
-> flake's own nixpkgs (`natSets`, no consumer config); the exported overlay
-> re-exports those builds and falls back to `buildOverlay` on `final` only off
-> the native triple. Toolchains use `mkGoBin` and `mkRustBin` over the supplied
-> set; Agnix and Semble identity checks are owner-local.
+> **Last verified:** 2026-10-06 — shared library exports compose with owner
+> helpers; `lib.runtimeValues` exposes the standalone secret classifier.
 
 An owner directory groups the implementation, checks, and declarative metadata
 for a package. Public package namespaces come from the directory components
@@ -103,12 +100,17 @@ Toolchain input libraries construct their compilers over the package set
 supplied to the recipe. The overlay-pattern fragment has the full
 build-versus-export shape.
 
-`lib/default.nix` contributes public helpers, using native module options with
-raw leaf values. Functions retain their `functionArgs`; option declarations,
-option types, and callable attrsets are atomic values whose internals must stay
-lazy. Private helpers beside that entry point are not exported automatically.
-Backend directories require `default.nix`; ordinary `.nix` sidecars in
-`modules/` remain private to the backend modules that import them.
+The flake composes shared `baseLib` exports with owner helpers through
+`repository.libraryFor`. `lib.runtimeValues` exports only `classify`, the shared
+name-based secret classifier in `lib/runtime-values/`.
+
+An owner's `lib/default.nix` contributes public helpers, using native module
+options with raw leaf values. Functions retain their `functionArgs`; option
+declarations, option types, and callable attrsets are atomic values whose
+internals must stay lazy. Private helpers beside that entry point are not
+exported automatically. Backend directories require `default.nix`; ordinary
+`.nix` sidecars in `modules/` remain private to the backend modules that import
+them.
 
 The flat flake package projections (`packages`, `ciPackages`, and the flat part
 of `legacyPackages`) come from indexed leaf basenames. It rejects collisions,
