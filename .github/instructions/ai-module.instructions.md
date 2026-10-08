@@ -7,10 +7,11 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-07 — the runtime record's `launcherOptionsPath`
+> **Last verified:** 2026-10-08 — the runtime record's `launcherOptionsPath`
 > moves Kiro launcher options to `ai.kiro.cli`; Codex guards launcher flags as
 > real uses without per-name annotation rows; per-runtime program overrides
-> accept portable `settings`.
+> accept portable `settings`; Kiro hook warnings inspect prompt content rather
+> than text-source internal fields.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -411,7 +412,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   Home Manager can own, so its Home Manager row is an explicit exclusion: silent
   for the shared pool, warned for `ai.kimchi.hooks`. Kiro's v3 trigger records
   remain native-only, but their `action.command` resolves a package through the
-  same shared `commandType`.
+  same shared `commandType`. Kiro command hooks warn about an ignored prompt
+  only when `aiCommon.hasContent` finds enabled text or a source; an empty
+  text-source record's internal fields are not prompt content.
 - `ai.context` — a typed `text`/`source` global baseline. Each runtime has the
   same content record plus `filename`; root content precedes runtime content
   when both are present. The strictly higher-priority definition supplies the

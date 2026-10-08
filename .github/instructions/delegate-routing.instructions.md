@@ -7,9 +7,10 @@ applyTo: "packages/delegate-routing/**"
 
 # Delegate routing package
 
-> **Last verified:** 2026-10-07 — managed Kiro uses `ai.kiro.cli`;
+> **Last verified:** 2026-10-08 — managed Kiro uses `ai.kiro.cli`;
 > workflow-enabled reach defaults both workflow tweaks, and skill rendering and
-> acceptance inventory share effective technique selection.
+> acceptance inventory share effective technique selection; per-turn reminders
+> grant delegation through UserPromptSubmit hooks.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -173,6 +174,26 @@ skills. Both project-scoped roots load only when Kimchi trusts the project. A
 trusted project's `.claude/skills/delegate-routing` can override the Home
 Manager harness copy through default config paths.
 
+`reminder` is an enabled-by-default optional text source (`enable`, `text`,
+`source`). Its default is a standing request in the user's voice granting
+subagents and workflows and pointing at the delegate-routing skill. Each
+`runtimes.<runtime>.reminder.enable` is nullable: null inherits the shared
+reminder enable, false withholds it, and true enables it even when the shared
+reminder is off. A reminder runs only when both that runtime and its program are
+enabled. An enabled reminder needs content.
+
+Claude and Codex on both backends, and Kimchi on devenv only, receive one
+`UserPromptSubmit` hook whose JSON stdout carries
+`hookSpecificOutput.additionalContext`. Home Manager has no Kimchi hook file.
+Kiro uses `ai.kiro.hooks.delegate-routing-reminder` on both backends and adds
+plain stdout. Backend hook lists and declared-option guards avoid writes to
+unavailable hook options. `lib/reminder.nix` owns the default text and builds
+strict shell applications that read store payload files.
+
+On Codex the reminder defines `ai.codex.hooks`, which cannot coexist with inline
+`ai.codex.native.settings.hooks`. Move inline hooks to the typed pool or set
+`runtimes.codex.reminder.enable = false`.
+
 The always-on routing rule uses the existing native Claude rules and AGENTS.md
 delivery for Codex, Kimchi and Kiro. Under Home Manager, Kimchi's copy lands in
 its user harness AGENTS.md. Byte-identical contributions deduplicate. The
@@ -218,17 +239,17 @@ differences live in its `HARNESSES` table; assertions in its `ASSERTIONS` table.
 
 A delegate call is classified by technique name, so the suite and the rendered
 skill read one table. Same-runtime nested children ARE logged in and can run and
-spend inside the 600 s process-group cap; no PATH shim blocks them. The Claude
-clamp and ultracode drain cases are on/off pairs. Results are `PASS`, `FAIL` or
-`ERROR`; only `ERROR` (no answer, a leak, or the routing skill missing from the
-startup record) fails the run.
+spend inside the 600 s process-group cap; no PATH shim blocks them. Results are
+`PASS`, `FAIL` or `ERROR`; only `ERROR` (no answer, a leak, or the routing skill
+missing from the startup record) fails the run.
 
 The owner check `delegate-routing-eval-structure` runs the suite's `--dry-run`
 in the sandbox: it validates every case and renders every fixture and launch
 plan with no harness and no login. Its `cases` passthru is the runner's fixture
 export. It also runs the offline source-attribution and event-schema regressions
-in `eval/test_suite.py`. No check starts a session. See `eval/README.md` for the
-isolation recipe, the caps and the operator steps.
+in `eval/test_suite.py`. Claude and Kiro each have reminder on/off pairs with
+the same task; only `reminder.enable` changes. No check starts a session. See
+`eval/README.md` for the isolation recipe, the caps and the operator steps.
 
 ## Delegate map
 

@@ -917,38 +917,6 @@ would do nothing there.
 </details>
 
 <details>
-<summary><strong>Claude Delegation-Clamp Mitigation (off by default)</strong></summary>
-
-Claude Code injects a system-prompt section telling the model not to use
-subagents, workflows, or deep research "unless the user requested it". It is
-gated on a **model capability**, not on your configuration — on for Opus 5 — and
-no setting, flag, or environment variable turns it off. It never appears in the
-transcript, so a session with delegation silently suppressed looks identical to
-a normal one. It also directly contradicts `ai.claude.ultracodeOnLaunch`, which
-asks for the opposite.
-
-Opting in installs a mitigation that patches nothing: a `UserPromptSubmit` hook
-supplies the request that the clamp's own escape clause is asking for, as
-user-side context. It is injected once per session and re-armed by a
-`PreCompact` hook, so the cost is roughly 75 tokens per session rather than per
-turn.
-
-```nix
-ai.claude.delegationClampMitigation = {
-  enable = true;          # off by default; set true to enable
-  text = "…";             # the standing request — wording is load-bearing
-};
-```
-
-Upstream:
-[anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988).
-A dated CI step re-surfaces this roughly every 90 days, once
-`config/heron-brook-tripwire.json`'s `reviewBy` passes, so the mitigation does
-not outlive its cause. See `packages/claude-code/docs/heron-brook-clamp.md`.
-
-</details>
-
-<details>
 <summary><strong>Claude Memory-Collision Guard (off by default)</strong></summary>
 
 Concurrent Claude Code sessions share one agent-memory directory and neither
@@ -1037,13 +1005,13 @@ entries live in the skill. Ordering uses named `before` and `after` edges.
 Missing or disabled anchors are ignored, cycles fail, and ties have no promised
 order.
 
-Runtime `settings.<runtime>.routing` and `workflows` compose with portable maps
-by key. A present runtime entry replaces the portable entry atomically; an
-absent key inherits. Workflow headers and their step maps compose separately: a
-runtime record without text keeps the portable header, and runtime steps replace
-portable steps by name while retaining siblings. Within one scope, fields merge
-and different same-priority text definitions conflict. Disable an inherited
-entry with `enable = false`.
+Runtime `ai.programs.delegate-routing.runtimes.<runtime>.routing` and
+`workflows` compose with portable maps by key. A present runtime entry replaces
+the portable entry atomically; an absent key inherits. Workflow headers and
+their step maps compose separately: a runtime record without text keeps the
+portable header, and runtime steps replace portable steps by name while
+retaining siblings. Within one scope, fields merge and different same-priority
+text definitions conflict. Disable an inherited entry with `enable = false`.
 
 Runtime `techniques` describe workflows, subagents, external launches, model
 introspection and usage. Override a node's fields or disable it with
