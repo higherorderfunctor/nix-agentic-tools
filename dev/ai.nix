@@ -229,51 +229,6 @@ in {
           url = "https://mcp.devenv.sh/mcp";
         };
       };
-      native.settings = {
-        env.ENABLE_LSP_TOOL = "1";
-        permissions.allow = [
-          "Bash(devenv *)"
-          "Bash(git absorb*)"
-          "Bash(git add*)"
-          "Bash(git amend*)"
-          "Bash(git branch*)"
-          "Bash(git branchless*)"
-          "Bash(git checkout*)"
-          "Bash(git commit*)"
-          "Bash(git diff*)"
-          "Bash(git fetch*)"
-          "Bash(git hide*)"
-          "Bash(git log*)"
-          "Bash(git move*)"
-          "Bash(git next*)"
-          "Bash(git prev*)"
-          "Bash(git pull*)"
-          "Bash(git push*)"
-          "Bash(git rebase*)"
-          "Bash(git record*)"
-          "Bash(git reset*)"
-          "Bash(git restack*)"
-          "Bash(git revise*)"
-          "Bash(git reword*)"
-          "Bash(git show*)"
-          "Bash(git sl*)"
-          "Bash(git smartlog*)"
-          "Bash(git status*)"
-          "Bash(git stash*)"
-          "Bash(git submit*)"
-          "Bash(git sync*)"
-          "Bash(git test*)"
-          "Bash(git unhide*)"
-          "Bash(head:*)"
-          "Bash(nix *)"
-          "Bash(treefmt *)"
-          "Bash(wc *)"
-          # `**`, not `*`: the references are namespaced one directory deep
-          # (dev/references/kimchi-surface/), and a single `*` stops at the
-          # separator, so it would silently allow nothing there.
-          "Read(dev/references/**)"
-        ];
-      };
     };
     codex = {
       enable = true;
@@ -283,14 +238,6 @@ in {
       # and writes the limit to Codex's own `project_doc_max_bytes`, so Codex
       # reads the whole file instead of silently dropping its tail.
       projectDocMaxBytes = 131072;
-      # Temporarily disable Codex's OS sandbox for project sessions. The Home
-      # Manager layer has already migrated to named permissions, but this
-      # project override deliberately takes precedence while unrestricted
-      # execution is needed here.
-      native.settings = {
-        approval_policy = "never";
-        sandbox_mode = "danger-full-access";
-      };
     };
     copilot = {
       enable = true;
@@ -358,9 +305,10 @@ in {
         # a THIRD gate — the `chat.enableWorkflows` setting, default false — and
         # it is not in the workspace-override allowlist, so no project-local
         # cli.json can satisfy it. Whoever wants `/workflow` in this shell sets it
-        # GLOBALLY (`ai.kiro.cli.native.settings.chat.enableWorkflows` under
-        # home-manager, or `kiro-cli settings chat.enableWorkflows true` without
-        # it: home-manager owns the global cli.json and reverts that). This
+        # GLOBALLY: Home Manager users set `ai.kiro.cli.workflows.enable = true`,
+        # which implies `chat.enableWorkflows`. Without Home Manager, use
+        # `kiro-cli settings chat.enableWorkflows true`; Home Manager owns the
+        # global cli.json and reverts manual changes. This
         # line still earns its place: it keeps the patched-package path
         # exercised, and gate 3 is one global setting away.
         # See packages/kiro-cli/docs/workflow-gating.md.
