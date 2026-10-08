@@ -1806,7 +1806,7 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-07 — `launcherOptionsPath` places Kiro environment
+> **Last verified:** 2026-10-08 — `launcherOptionsPath` places Kiro environment
 > and shell options, including their normalized inputs, under `ai.kiro.cli`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
@@ -1896,7 +1896,10 @@ defaults, then `SHELL` from the resolved shell, then the consumer's
 everywhere. Codex once applied the typed shell last instead; that was defensible
 in isolation and wrong in aggregate, because the same two-key config then
 resolved differently per runtime. Copilot and Kimchi do not support `shell`, so
-for them it is module defaults under the consumer pool.
+for them it is module defaults under the consumer pool. The
+`module-ai-shell-root-excluded-from-copilot-{hm,devenv}-wrapper` checks inspect
+a live launcher with an explicit environment marker and require `SHELL` to be
+absent when root `ai.shell` is set.
 
 Four runtimes were asked for; five go through `mkRuntime`. Kimchi is easy to
 miss because the issue that requested this never mentioned it.
