@@ -37,6 +37,14 @@ skill name with `substituteInPlace --replace-fail`; missing references or name
 matches fail the build. These checks do not inspect a developer's materialized
 skill directories.
 
+The repository no longer repeats instruction-file and Claude settings delivery
+assertions in `enterTest`. `ai-delivery-generated` pins the generic file
+locations and delivery methods in `config/ai-delivery-generated.nix`.
+`lib/ai/adapters/devenv.nix` also contributes `own.py --verify` for owned
+copies, including their real-file requirement. That verification still runs only
+when `devenv test` is invoked; the flake checks test delivery independently of a
+developer's checkout.
+
 `devenv.nix` still evaluates an `isCI` branch for the manual diagnostic. It
 omits tooling that enterTest never invokes, but it does not alter repository
 validation declarations. A developer exporting `CI=1` gets fewer interactive
