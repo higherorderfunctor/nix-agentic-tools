@@ -27,7 +27,6 @@
   aiTypes = import ../types.nix {inherit lib;};
   deliveryMethod = import ../deliveryMethod.nix {inherit lib;};
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
-  byteLimit = import ../../markdown/byte-limit.nix pkgs;
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # The guards' programs come from this flake's tree, not the raw pkgs.
   adapters = import ../adapters {
@@ -90,30 +89,6 @@
         visible = false;
         description = "Rendered path-scoped index entries keyed by stable rule identity.";
       };
-      defaultMaxBytes = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.submodule {
-          options = {
-            bytes = lib.mkOption {
-              type = lib.types.ints.positive;
-              internal = true;
-              visible = false;
-            };
-            resolver = lib.mkOption {
-              type = lib.types.package;
-              internal = true;
-              visible = false;
-            };
-          };
-        });
-        default = {};
-        internal = true;
-        visible = false;
-        description = ''
-          Per runtime, what it reads of this target where a raised `maxBytes`
-          does not apply (Codex's own default, outside a trusted project). A
-          file past it under a raised limit warns.
-        '';
-      };
       maxBytes = lib.mkOption {
         type = lib.types.nullOr lib.types.ints.positive;
         default = null;
@@ -147,16 +122,6 @@
       hint = "Trim the contributing context or rules, replace the final file, or raise the runtime's document-size limit.";
     })
     (lib.filterAttrs (_filename: value: value.maxBytes != null) config.ai.internal.agentsMd);
-  # A raised build limit can admit more than the runtime currently reads. The
-  # notice resolves the effective limit at shell entry, where user config and
-  # repository trust are visible, and measures the file on disk against it.
-  windowNotices = lib.concatStrings (lib.concatLists (lib.mapAttrsToList (filename: value:
-    lib.mapAttrsToList (reader: notice:
-      lib.optionalString (value.maxBytes != null && value.maxBytes > notice.bytes) ''
-        ${lib.getExe byteLimit.windowNotice} "$DEVENV_ROOT"/${lib.escapeShellArgs [filename (toString notice.bytes) reader (lib.getExe notice.resolver)]}
-      '')
-    value.defaultMaxBytes)
-  config.ai.internal.agentsMd));
   # Discover public app records from their option shape, including downstream
   # runtimes absent from this repository's first-party registry.
   runtimeNames = builtins.attrNames (lib.filterAttrs (_name: runtime:
@@ -303,11 +268,6 @@ in {
     (lib.optionalAttrs isDevenv (lib.mkMerge (
       [
         {ai.internal._maxBytes = limits;}
-        # `mkIf` rather than an empty string: `enterShell` is a lines option,
-        # so an empty definition would still add a separator to the script.
-        (lib.optionalAttrs (options ? enterShell) {
-          enterShell = lib.mkIf (windowNotices != "") windowNotices;
-        })
         (lib.mkIf (config.ai.internal.agentsMd != {}) {
           # Do not inspect rendered bytes to discover whether a target exists.
           # The separate boolean inventory lets priority arbitration discard this

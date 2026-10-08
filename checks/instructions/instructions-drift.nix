@@ -133,18 +133,13 @@
         echo "AGENTS.md puts this past Codex's default ${toString codexDefaultLimit}-byte read limit: "${lib.escapeShellArg needle} >&2
       fi
     '';
-    # dev/ai.nix raises Codex's limit, so an untrusted Codex reads only the
-    # first 32 KiB, and every shell entry runs the window notice on the
-    # project's AGENTS.md. These are those lines, run below against the built
-    # file: the notice must fire exactly while the file is past the window.
-    noticeLines = harness.windowNoticeLines repo;
   in {
     instructions-drift = assert lib.assertMsg (instructionPlans repo == instructionPlans repoCI)
     "instructions-drift: dev/ai.nix writes different instruction files when isCI is set; the committed bytes must not depend on the environment.";
     assert lib.assertMsg (failedAssertions == [])
     "instructions-drift: dev/ai.nix fails its own module assertions:\n${lib.concatStringsSep "\n" failedAssertions}";
-    assert lib.assertMsg (builtins.length noticeLines == 1)
-    "instructions-drift: dev/ai.nix raises Codex's limit, so shell entry must run exactly one AGENTS.md window notice, found:\n${lib.concatStringsSep "\n" noticeLines}";
+    assert lib.assertMsg (!(lib.hasInfix "/bin/ai-markdown-window-notice" repo.config.enterShell))
+    "instructions-drift: Codex's launcher owns the document warning; shell entry must not duplicate it.";
     # The repository's own configuration evaluates without a warning: no
     # context or rule it asks for lands in a file it has switched off, or
     # anywhere `ai.*` cannot deliver it.
@@ -162,22 +157,6 @@
 
         agentsMd=${agentsMd."AGENTS.md"}
         ${lib.concatMapStrings endsInWindow windowNeedles}
-
-        # The shell-entry notice, as devenv runs it, on the built file.
-        DEVENV_ROOT="$tmp/root"
-        mkdir -p "$DEVENV_ROOT"
-        cp "$agentsMd" "$DEVENV_ROOT/AGENTS.md"
-        ${lib.concatStringsSep "\n" noticeLines} 2>"$tmp/notice"
-        if [ "$(wc -c <"$agentsMd")" -gt ${toString codexDefaultLimit} ]; then
-          grep -q -F "reads only the first ${toString codexDefaultLimit}" "$tmp/notice" || {
-            failed=1
-            echo "AGENTS.md is past ${toString codexDefaultLimit} bytes, but the shell-entry notice is silent" >&2
-          }
-        elif [ -s "$tmp/notice" ]; then
-          failed=1
-          echo "AGENTS.md is within ${toString codexDefaultLimit} bytes, but the shell-entry notice warns:" >&2
-          cat "$tmp/notice" >&2
-        fi
 
         # The Copilot instruction files are compared as a TREE rather than
         # file by file: a fragment that is renamed away, or a new one that

@@ -38,15 +38,20 @@ in {
     # excluded outright. See dev/fragments/ai-module/shell-option.md.
 
     # Default null must touch nothing — the whole opt-in premise.
-    module-ai-shell-default-null-is-inert = mkTest "ai-shell-default-null-is-inert" (
-      let
-        settings = claudeSettings (evalHm {ai.claude.enable = true;});
-        # Unwrapped codex keeps the bare upstream store path.
-        codexPkg = builtins.head (evalHm {ai.codex.enable = true;}).config.home.packages;
-      in
-        !((settings.env or {}) ? CLAUDE_CODE_SHELL)
-        && !(lib.hasSuffix "-wrapped" (builtins.baseNameOf codexPkg))
-    );
+    module-ai-shell-default-null-is-inert = let
+      settings = claudeSettings (evalHm {ai.claude.enable = true;});
+      codexPkg = builtins.head (evalHm {ai.codex.enable = true;}).config.home.packages;
+    in
+      assert !(settings.env or {} ? CLAUDE_CODE_SHELL);
+        pkgs.runCommand "ai-shell-default-null-is-inert" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          if grep -q 'export SHELL=' ${codexPkg}/bin/codex; then
+            echo "default null injects SHELL" >&2
+            exit 1
+          fi
+          echo PASS > "$out"
+        '';
 
     # Root → Claude's dedicated variable (NOT SHELL — Claude ignores that).
     module-ai-shell-root-reaches-claude = mkTest "ai-shell-root-reaches-claude" (
@@ -95,7 +100,7 @@ in {
         needles = ["SHELL" (lib.getExe pkgs.bash)];
       };
 
-    # Codex had NO wrapper before this option; one is built on demand.
+    # The always-present Codex launcher carries an explicitly selected shell.
     module-ai-shell-codex-hm-wrapper-carries-shell = let
       result = evalHm {
         ai.shell = pkgs.bash;
