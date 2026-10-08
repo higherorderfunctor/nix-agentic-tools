@@ -1,6 +1,6 @@
 # Content-routed embedding models: option shape, validation and warnings,
-# routing text, the vanilla guarantee, and a network-free run of the patched
-# CLI and MCP server against generated model2vec fixtures.
+# routing text, and a network-free run of the patched CLI and MCP server
+# against generated model2vec fixtures.
 {
   lib,
   pkgs,
@@ -9,11 +9,9 @@
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
-  customization = import ../lib/customization.nix {inherit lib;};
-  customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
-  records = import ../lib/integrations.nix;
-  cliInstructions = ../cli-instructions.md;
+  customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
 
+  runtimeConfig = package: builtins.fromJSON (builtins.unsafeDiscardStringContext (builtins.readFile package.passthru.sembleConfig));
   sembleScript = import ./semble-script.nix pkgs;
 
   fixtureModel = import ./fixture-model.nix pkgs;
@@ -242,7 +240,7 @@ in {
               };
             };
           }).config.home.packages;
-        tables = lib.mapAttrs (_: package: package.sembleModels.MODELS or null) installed.sembleRuntimePackages;
+        tables = lib.mapAttrs (_: package: (runtimeConfig package).models) installed.sembleRuntimePackages;
       in
         !(program ? pools)
         && !(program.spec ? pools)
@@ -373,106 +371,71 @@ in {
         && dormant == []
     );
 
-    module-semble-models-vanilla-identity = mkTest "semble-models-vanilla-identity" (
+    # A module config change selects a different JSON and launcher while
+    # retaining the single first-party Semble build on both backends.
+    module-semble-runtime-config-package-sharing = mkTest "semble-runtime-config-package-sharing" (
       let
-        evaluated = evalHm {
-          ai.programs.semble = {
-            enable = true;
-            cli.instructions.enable = true;
-            subagent.enable = true;
-          };
-        };
-        finalPackage = evaluated.config.ai.programs.semble.finalPackage;
-        rule = evaluated.config.ai.claude.rules.semble;
-        disabledOnly = customizePackage pkgs.ai.semble {
-          models = [(docs // {enable = false;})];
-          defaultContent = "code";
-        };
-        grammarsOnly = customizePackage pkgs.ai.semble {grammars = [pkgs.tree-sitter-grammars.tree-sitter-awk];};
+        settings = [
+          {}
+          {grammars = [pkgs.tree-sitter-grammars.tree-sitter-awk];}
+          {
+            pathMappings = [
+              {
+                content = "code";
+                language = "bash";
+                patterns = [".envrc"];
+              }
+            ];
+          }
+          routedSettings
+        ];
+        packagesFor = evaluate:
+          map (settings:
+            (evaluate {ai.programs.semble = {enable = true;} // settings;}).config.ai.programs.semble.finalPackage)
+          settings;
+        sharesPackage = packages:
+          lib.all (package: package.unwrapped.drvPath == pkgs.ai.semble.drvPath) packages
+          && builtins.length (lib.unique (map (package: toString package.passthru.sembleConfig) packages)) == builtins.length settings;
+        config = runtimeConfig routedPackage;
       in
-        (customizePackage pkgs.ai.semble {}).drvPath
-        == pkgs.ai.semble.drvPath
-        && (customizePackage pkgs.ai.semble {
-          models = [];
-          defaultContent = ["code"];
-          defaultModel = null;
-          pathMappings = [];
-          grammars = [];
-        }).drvPath
-        == pkgs.ai.semble.drvPath
-        && disabledOnly.drvPath == pkgs.ai.semble.drvPath
-        # The module installs upstream's derivation, only behind its launchers.
-        && finalPackage.unwrapped.drvPath == pkgs.ai.semble.drvPath
-        && finalPackage == builtins.head evaluated.config.home.packages
-        # A grammar-only customization gets no models patch.
-        && !(lib.elem ../patches/models.patch grammarsOnly.drvAttrs.patches)
-        # A vanilla setup keeps the packaged rule and subagent byte for byte.
-        && (records.forCli {}).rule == {source = cliInstructions;}
-        && rule.source == cliInstructions
-        && rule.text == builtins.readFile cliInstructions
-        && evaluated.config.ai.claude.agents.semble-search.description == records.semanticAgent.description
-    );
-
-    module-semble-models-patch-selection = mkTest "semble-models-patch-selection" (
-      let
-        modelsOnly = customizePackage pkgs.ai.semble {models = [docs];};
-        both = customizePackage pkgs.ai.semble {
-          grammars = [pkgs.tree-sitter-grammars.tree-sitter-awk];
-          models = [docs];
-        };
-        contentOnly = customizePackage pkgs.ai.semble {defaultContent = "docs";};
-        defaultModelOnly = customizePackage pkgs.ai.semble {defaultModel = fallbackModel;};
-        final = (evalHm {ai.programs.semble = routedSettings;}).config.ai.programs.semble.finalPackage;
-        routedTable = (customizePackage pkgs.ai.semble routedSettings).passthru.sembleModels;
-      in
-        modelsOnly.drvAttrs.patches
-        == [../patches/models.patch]
-        && both.drvAttrs.patches == [../patches/extra-grammars.patch ../patches/models.patch]
-        && contentOnly.drvAttrs.patches == [../patches/models.patch]
-        && defaultModelOnly.drvAttrs.patches == [../patches/models.patch]
-        && lib.hasInfix "semble_models.py" modelsOnly.drvAttrs.postPatch
-        && !(lib.hasInfix "extra_grammars.py" modelsOnly.drvAttrs.postPatch)
-        # The table drops disabled entries and expands and sorts content.
-        && routedTable
-        == {
-          DEFAULT_CONTENT = ["code" "config"];
-          DEFAULT_MODEL = "${fallbackModel}";
-          MODELS = [
-            {
-              content = ["docs"];
-              model = "${docsModel}";
-            }
-            {
-              content = ["code" "config"];
-              model = "${codeConfigModel}";
-            }
-          ];
-        }
-        && (customizePackage pkgs.ai.semble {defaultContent = "all";}).passthru.sembleModels.DEFAULT_CONTENT == ["code" "config" "docs"]
-        # finalPackage wraps exactly the customized package.
-        && final.unwrapped.drvPath == (customizePackage pkgs.ai.semble routedSettings).drvPath
+        lib.all (evaluate: sharesPackage (packagesFor evaluate)) [evalHm evalDevenv]
+        && config.defaultContent == ["code" "config"]
+        && config.defaultModel == "${fallbackModel}"
+        && config.models
+        == [
+          {
+            content = ["docs"];
+            model = "${docsModel}";
+          }
+          {
+            content = ["code" "config"];
+            model = "${codeConfigModel}";
+          }
+        ]
     );
 
     # Mappings keep the consumer's list order, one entry per pattern: the
     # first match wins, and one language can map to several categories.
     module-semble-models-mapping-order = mkTest "semble-models-mapping-order" (
-      customization.mappingList [
-        {
-          language = "json";
-          content = "docs";
-          patterns = ["docs/*.json"];
-        }
-        {
-          language = "yaml";
-          content = "config";
-          patterns = ["special.lock"];
-        }
-        {
-          language = "json";
-          content = "config";
-          patterns = ["*.json" "*.lock"];
-        }
-      ]
+      (runtimeConfig (customizePackage pkgs.ai.semble {
+        pathMappings = [
+          {
+            language = "json";
+            content = "docs";
+            patterns = ["docs/*.json"];
+          }
+          {
+            language = "yaml";
+            content = "config";
+            patterns = ["special.lock"];
+          }
+          {
+            language = "json";
+            content = "config";
+            patterns = ["*.json" "*.lock"];
+          }
+        ];
+      })).pathMappings
       == [
         {
           content = "docs";
@@ -499,6 +462,14 @@ in {
 
     module-semble-models-routing-text = mkTest "semble-models-routing-text" (
       let
+        records = import ../lib/integrations.nix;
+        cliInstructions = ../cli-instructions.md;
+        vanilla = evalHm {
+          ai.programs.semble = {
+            cli.instructions.enable = true;
+            subagent.enable = true;
+          };
+        };
         evaluated = evalHm {
           ai = {
             programs.semble =
@@ -534,7 +505,11 @@ in {
           }).config.ai.claude.rules.semble.text;
         prompts = [rule agent.instructions.text kiroAgent.prompt.text];
       in
-        lib.all (text: count routingIntro text == 1 && count templateIntro text == 1 && !(lib.hasInfix "--model" text)) prompts
+        (records.forCli {}).rule
+        == {source = cliInstructions;}
+        && vanilla.config.ai.claude.rules.semble.text == builtins.readFile cliInstructions
+        && vanilla.config.ai.claude.agents.semble-search.description == records.semanticAgent.description
+        && lib.all (text: count routingIntro text == 1 && count templateIntro text == 1 && !(lib.hasInfix "--model" text)) prompts
         && lib.hasPrefix "${routingIntro} `code config`. `--content` replaces that set for one call." rule
         && lib.hasInfix "- `--content docs`: Prose: READMEs and guides." rule
         && lib.hasInfix "- `--content code config` (plain `semble search`)\n" rule

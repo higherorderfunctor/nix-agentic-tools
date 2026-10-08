@@ -8,7 +8,8 @@ applyTo: "packages/semble/**"
 # Semble integrations
 
 > **Last verified:** 2026-10-07 — Semble is built from source on this flake’s
-> nixpkgs; its grouped updater regenerates both snapshots from package passthru.
+> nixpkgs; shared runtime config validation preserves cache identity and
+> first-party PYTHONPATH isolation.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -21,6 +22,10 @@ Semble provides local semantic and lexical code search through a CLI and an MCP
 server. This repository builds it from source with its own nixpkgs and adds
 matching Home Manager and devenv convenience modules for Claude, Codex, and
 Kiro.
+
+The published package always carries both patches; with the default config,
+search behaves like upstream, but an index written by a non-Nix `semble` in the
+same cache is rebuilt once.
 
 ## Umbrella configuration
 
@@ -125,9 +130,10 @@ boundary.
 packages. Each package must expose its canonical `language` attribute and the
 compiled library at `${grammar}/parser`, which is the shape produced by
 `pkgs.tree-sitter.buildGrammar` and exported through
-`pkgs.tree-sitter-grammars`. The module patches the selected Semble Python
-package to try these store-backed parsers after its bundled grammar lookup. This
-keeps the upstream bundle intact and avoids its mutable extraction cache.
+`pkgs.tree-sitter-grammars`. The package always includes the extra-grammar
+patch, which tries the configured store-backed parsers after its bundled grammar
+lookup. This keeps the upstream bundle intact and avoids its mutable extraction
+cache.
 
 `ai.programs.semble.pathMappings` assigns files with non-standard names to a
 language and to one of Semble's `code`, `config`, or `docs` indexes. It is an
@@ -165,29 +171,30 @@ and drift from upstream's own detection.
 In Semble 0.6.0, index creation collects files before wrapping iteration in a
 progress bar. The customization patch passes content selection to that
 collection and the repository root to language detection inside the loop. The
-`module-semble-extra-grammars-load` check builds the customized package and
+`module-semble-extra-grammars-load` check runs the configured launcher and
 exercises grammar loading, mapped discovery, and cache fingerprints;
 `module-semble-null-language-runtime` indexes null-mapped files against a
-fixture model and searches them. The mapping table reaches Python through
-`json.loads`, not as a literal, because a `null` language is not Python.
-
-The customized package writes a fingerprint of its grammar and mapping set into
-index metadata and rejects caches created by a different customization. The HM
-and devenv modules additionally clear their owned cache root when the effective
+fixture model and searches them. Static Python modules read the JSON named by
+`SEMBLE_NIX_CONFIG` once, failing if the file is missing. Python computes a
+SHA-256 fingerprint over its grammar and mapping config, writes it into index
+metadata, and rejects caches created by a different config. The HM and devenv
+modules additionally clear their owned cache root when the underlying Semble
 package changes.
 
 Shebang-based inference is deliberately out of scope. Extensionless scripts must
 be listed through `pathMappings`; the integration does not read file contents to
 guess their language.
 
-Active runtimes whose package, grammar, and mapping values resolve to the same
-customized derivation share one installed wrapper and cache. When those values
-produce several derivations, the module installs one collision-free aggregate:
-its ordinary `semble` command targets a stable canonical variant, while
-runtime-generated guidance uses `semble-<runtime>` and each MCP entry points
-directly at its own variant. Distinct variants use package-keyed cache
-subdirectories, so incompatible customization fingerprints never alternate in
-one index. Named MCP entries plus the Claude, Codex and Kiro normalized
+Active runtimes whose settings render the same store JSON share one installed
+launcher and cache. When those settings render several configs, the module
+installs one collision-free aggregate: its ordinary `semble` command targets a
+stable canonical variant, while runtime-generated guidance uses
+`semble-<runtime>` and each MCP entry points directly at its own variant.
+Distinct variants use config-keyed cache subdirectories, so incompatible
+customization fingerprints never alternate in one index. Variants selecting the
+same base package share its Semble build. Config filenames include package
+identity, so explicit per-runtime package overrides remain distinct even with
+equal settings. Named MCP entries plus the Claude, Codex and Kiro normalized
 subagents use a whole-entry `mkDefault`, so an ordinary consumer value replaces
 the generated record atomically and `null` suppresses it for that runtime. The
 CLI rule instead defaults each content field: a consumer's higher-priority
@@ -221,36 +228,32 @@ value never enters the surrounding user or project shell. Consumer override of
 the variable through `env` is deliberately gone: devenv/Nix is the only config
 path.
 
-Semble is a Python application, and the module never installs its derivation
-directly. Every installed package, vanilla included, is a launcher set: a `bin/`
-of `makeWrapper` launchers and nothing else, no `lib/` and no `nix-support/`.
-Two nixpkgs behaviors make that necessary. First, a Python application
-propagates its whole closure and the interpreter
+Semble is a Python application, and the module installs a launcher set: a `bin/`
+of `makeWrapper` launchers and nothing else, no `lib/` and no `nix-support/`. A
+Python application propagates its whole closure and the interpreter
 (`nix-support/propagated-build-inputs`), and Python's setup hook turns that into
 PYTHONPATH in any shell that contains Python. Installing the base derivation in
 a devenv shell put Semble's dependencies (numpy, tokenizers, huggingface-hub,
 ...) on the project's PYTHONPATH, ahead of its own virtualenv, even in
 non-Python projects. Home Manager profiles run no setup hooks and never leaked.
-Second, the upstream entry point appends Semble's site-packages AFTER
-PYTHONPATH, so any `semble` or dependency the calling shell exports shadows
-Semble's own. Each launcher therefore unsets PYTHONPATH. Both are properties of
-every nixpkgs Python application, not of Semble; the module fixes them for the
-packages it installs without touching the base derivation.
-`module-semble-launcher-python-isolation` checks both backends, including a
-multi-variant install, and proves its fake module does shadow the unwrapped
-binary. `lib.ai.mcpServers.mkSemble` points at whatever package it is given and
+The package recipe unsets PYTHONPATH in its own entry points because nixpkgs
+appends application site-packages after the caller's PYTHONPATH. The first-party
+package and launchers built on it therefore resist a caller's shadow `semble`
+module; a consumer `package` keeps whatever PYTHONPATH handling its own recipe
+has. `module-semble-launcher-python-isolation` checks both backends, including a
+multi-variant install, and confirms the fake module shadows a direct Python
+import. `lib.ai.mcpServers.mkSemble` points at whatever package it is given and
 does not add these launchers.
 
-Both backends record each effective Semble package store path in its assigned
-cache directory. A single active package keeps the established cache root;
-multiple distinct packages use stable package-keyed directories below
-`variants/`. Home Manager activation checks the user-global cache family; devenv
-shell entry checks only that project's relocated cache family. A missing or
-changed stamp clears the indexes in that variant directory before recording the
-new identity. Extra grammars and path mappings both change the effective package
-path, so changing either uses the same invalidation path as a Semble version
-update. Savings data and the separate upstream bundled-grammar extraction cache
-are left alone.
+Both backends record the underlying Semble package store path in its assigned
+cache directory. A single active config keeps the established cache root;
+multiple configs use stable config-keyed directories below `variants/`. Home
+Manager activation checks the user-global cache family; devenv shell entry
+checks only that project's relocated cache family. A missing or changed package
+stamp clears the indexes in that variant directory before recording the new
+identity. Grammar and mapping changes leave the package stamp unchanged and
+invalidate indexes through their runtime fingerprint. Savings data and the
+separate upstream bundled-grammar extraction cache are left alone.
 
 The devenv relocation is unconditional: a project-local index is the point, and
 nothing about it is Codex-specific. Until 2026-08-10 it read otherwise, because
@@ -338,12 +341,18 @@ different cache, by design.
 
 ### Mechanism
 
-Routing is a patch to Semble (`patches/models.patch`), not a wrapper:
+The recipe always applies `patches/extra-grammars.patch` followed by
+`patches/models.patch` and installs static modules from `runtime/`:
 
-- `customizePackage` writes the routing table to `src/semble/semble_models.py`
-  in `postPatch`, the way the grammar loader is written: `DEFAULT_CONTENT`,
-  `DEFAULT_MODEL`, and `MODELS` (enabled entries only, content expanded and
-  sorted). `utils.route_model(content)` looks up the exact set.
+- `customization.config` renders store JSON with `defaultContent`,
+  `defaultModel`, `grammars`, `models`, and `pathMappings`. The package's
+  wrapper supplies the empty default config with
+  `--set-default SEMBLE_NIX_CONFIG`; configured launchers use `--set` for both
+  `semble` and `semble-mcp`. Grammar symbols and parser paths are rendered by
+  Nix, and parser/model store references remain in the JSON's closure.
+  `semble_models.py` exposes `DEFAULT_CONTENT`, `DEFAULT_MODEL`, and `MODELS`
+  from this JSON (enabled entries only, content expanded and sorted).
+  `utils.route_model(content)` looks up the exact set.
 - `cli.py`: `--content` defaults to None and resolves to `DEFAULT_CONTENT`.
   `search` and `find-related` route the resolved set, print the fallback
   warning, and set `SEMBLE_MODEL_NAME` in-process when the route names a model.
@@ -359,15 +368,11 @@ Routing is a patch to Semble (`patches/models.patch`), not a wrapper:
   keeps upstream's exact path, and `semble clear index` still reaches every
   model's index, so the cache guard needs no change.
 
-The models patch applies on its own or on top of the grammar patch. The vanilla
-settings (`models = []`, `defaultModel = null`, `defaultContent = ["code"]`,
-`pathMappings = []`, `grammars = []`) keep the published first-party base
-derivation unchanged, so it remains substitutable. Disabled entries count as
-absent. Any other value changes the package, so the cache guard clears the
-indexes on the next activation or shell entry. That includes changing only
-`defaultContent`: it costs a local, non-substitutable rebuild of Semble, where
-the removed `mcp.content` was a plain argument on upstream's cached package. The
-cost buys one default shared by the CLI and the MCP server.
+Changing grammars, mappings or model routing rebuilds only the JSON and a small
+launcher. The package advertises `passthru.sembleConfigSchema = 1`; a nondefault
+config with an unpatched consumer `package` fails evaluation because that
+package would silently ignore `SEMBLE_NIX_CONFIG`. Default configs can still use
+a consumer package without that schema.
 
 ### Routing guidance
 
@@ -490,8 +495,9 @@ in {
 
 For package-only composition,
 `lib.ai.semble.customizePackage { inherit lib pkgs; } package { grammars; pathMappings; models; defaultContent; defaultModel; }`
-applies the customizations; every field is optional and takes the option's
-shape. `lib.ai.semble.withGrammars` remains the grammar-only shorthand.
+returns a bin-only configured launcher; every field is optional and takes the
+option's shape. Its `passthru.sembleConfig` points at the rendered JSON and
+`passthru.unwrapped` at the shared Semble build.
 `lib.ai.semble.forCli { command; routing = { models; defaultContent; }; }`
 renders the CLI records with the routing block.
 

@@ -10,6 +10,8 @@
   # The text a Markdown file goes into its runtime's generated tree as, for a
   # check that holds the evaluated `config` rather than the module.
   markdownText = config: path: (markdownInput {inherit config;} path).text;
+  runtimeConfig = package: builtins.fromJSON (builtins.unsafeDiscardStringContext (builtins.readFile package.passthru.sembleConfig));
+  sembleScript = import ./semble-script.nix pkgs;
   inherit (import ../../chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
   inherit (import ../../kiro-cli/checks/helpers.nix {inherit lib pkgs harness;}) kiroSteeringContent;
 in {
@@ -137,8 +139,8 @@ in {
     # site-packages AFTER it). Every installed package, on both backends and
     # for multi-variant installs, must expose bin/ only, and a fake `semble`
     # on PYTHONPATH must not reach the real entry points. The positive control
-    # runs upstream's binary under the same PYTHONPATH and must be hijacked,
-    # so the fake is proven to shadow when nothing unsets it.
+    # imports the fake module with plain Python, proving it can shadow. The
+    # bare recipe's entry points must reject the fake too.
     module-semble-launcher-python-isolation = let
       installed = lib.concatLists [
         (evalHm {ai.programs.semble.enable = true;}).config.home.packages
@@ -149,7 +151,7 @@ in {
         }).config.packages
       ];
     in
-      pkgs.runCommand "module-test-semble-launcher-python-isolation" {} ''
+      pkgs.runCommand "module-test-semble-launcher-python-isolation" {nativeBuildInputs = [pkgs.python3];} ''
         set -euETo pipefail
         shopt -s inherit_errexit 2>/dev/null || :
         export HOME="$TMPDIR/home"
@@ -158,16 +160,18 @@ in {
         fake="$PWD/fake"
 
         status=0
-        PYTHONPATH="$fake" ${pkgs.ai.semble}/bin/semble --help > control.log 2>&1 || status=$?
+        PYTHONPATH="$fake" python3 -c 'import semble' > control.log 2>&1 || status=$?
         [ "$status" -eq 97 ] && grep -q HIJACKED control.log \
-          || { echo "FAIL: control: upstream semble was not shadowed (exit $status)" >&2; cat control.log >&2; exit 1; }
+          || { echo "FAIL: control: plain Python did not import the fake semble (exit $status)" >&2; cat control.log >&2; exit 1; }
 
-        checked=0
         for pkg in ${lib.escapeShellArgs installed}; do
           for entry in "$pkg"/*; do
             [ "$(basename "$entry")" = bin ] \
               || { echo "FAIL: $pkg exposes $(basename "$entry")/ beside bin/" >&2; exit 1; }
           done
+        done
+        checked=0
+        for pkg in ${lib.escapeShellArgs (installed ++ [pkgs.ai.semble])}; do
           for bin in "$pkg"/bin/*; do
             checked=$((checked + 1))
             if ! PYTHONPATH="$fake" "$bin" --help > run.log 2>&1; then
@@ -371,10 +375,11 @@ in {
         hm = (evalHm grammarConfig).config;
         devenv = (evalDevenv grammarConfig).config;
         hmPackage = builtins.head hm.home.packages;
+        config = runtimeConfig hmPackage;
       in
-        hmPackage.sembleExtraGrammarLanguages
+        builtins.attrNames config.grammars
         == ["awk" "jq"]
-        && hmPackage.semblePathMappings
+        && config.pathMappings
         == [
           {
             content = "config";
@@ -481,7 +486,7 @@ in {
     );
 
     module-semble-extra-grammars-load = let
-      customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
+      customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
       # First match wins in list order: "pkg/*" and "special.lock" come before
       # "*.lock", "a?.cfg" (properties) before "?b.cfg" (ini), and json splits
       # into docs and config by path.
@@ -539,29 +544,7 @@ in {
         ];
         inherit pathMappings;
       };
-    in
-      pkgs.runCommand "module-test-semble-extra-grammars-load" {} ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-
-        # Reuse the wrapped entry point's interpreter and complete Python path,
-        # replacing only its CLI dispatch tail with this parser smoke test.
-        ${pkgs.coreutils}/bin/mkdir -p repo/checks/hooks repo/docs repo/pkg
-        ${pkgs.coreutils}/bin/touch \
-          repo/.envrc \
-          repo/.gitignore \
-          repo/.sembleignore \
-          repo/ab.cfg \
-          repo/checks/hooks/pre-edit \
-          repo/docs/example.fixture.py \
-          repo/docs/example.md.fixture \
-          repo/docs/schema.json \
-          repo/flake.lock \
-          repo/pkg/deps.lock \
-          repo/settings.json \
-          repo/special.lock
-        ${pkgs.coreutils}/bin/head -n 3 ${sembleWithGrammars}/bin/.semble-wrapped > test-grammars.py
-        ${pkgs.coreutils}/bin/cat >> test-grammars.py <<'PY'
+      script = pkgs.writeText "semble-extra-grammars.py" ''
         import json
         from pathlib import Path
         from types import SimpleNamespace
@@ -647,18 +630,38 @@ in {
         metadata = json.loads((persisted / "metadata.json").read_text())
         assert metadata["nix_customization"] == CUSTOMIZATION_FINGERPRINT
         assert _metadata_matches(metadata, "test-model", (ContentType.CODE,))
-        metadata["nix_customization"] = "different-package"
+        metadata["nix_customization"] = "different-config"
         assert not _metadata_matches(metadata, "test-model", (ContentType.CODE,))
-        PY
-        ${pkgs.coreutils}/bin/chmod +x test-grammars.py
-        ./test-grammars.py
+      '';
+    in
+      pkgs.runCommand "module-test-semble-extra-grammars-load" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        # Reuse the wrapped entry point's interpreter and complete Python path,
+        # carrying its runtime config into this parser smoke test.
+        ${pkgs.coreutils}/bin/mkdir -p repo/checks/hooks repo/docs repo/pkg
+        ${pkgs.coreutils}/bin/touch \
+          repo/.envrc \
+          repo/.gitignore \
+          repo/.sembleignore \
+          repo/ab.cfg \
+          repo/checks/hooks/pre-edit \
+          repo/docs/example.fixture.py \
+          repo/docs/example.md.fixture \
+          repo/docs/schema.json \
+          repo/flake.lock \
+          repo/pkg/deps.lock \
+          repo/settings.json \
+          repo/special.lock
+        ${sembleScript "extra-grammars" sembleWithGrammars script}
         ${pkgs.coreutils}/bin/touch "$out"
       '';
 
     # A null-language mapping indexes its files with line chunks and no
     # language, bypasses the parser its suffix would pick, and logs nothing.
     module-semble-null-language-runtime = let
-      customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
+      customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
       semble = customizePackage pkgs.ai.semble {
         pathMappings = [
           {
@@ -714,6 +717,8 @@ in {
       '';
     in
       pkgs.runCommand "module-test-semble-null-language-runtime" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         export HOME="$TMPDIR/home" HF_HUB_OFFLINE=1
         ${pkgs.coreutils}/bin/mkdir -p "$HOME" repo
         for line in $(${pkgs.coreutils}/bin/seq 1 60); do
@@ -725,7 +730,7 @@ in {
         done > repo/NOTES
         printf 'def alpha():\n    return beta\n' > repo/lib.vendored.py
         printf 'def beta():\n    return alpha\n' > repo/main.py
-        ${import ./semble-script.nix pkgs "null-language" semble script} repo ${model}
+        ${sembleScript "null-language" semble script} repo ${model}
         ${pkgs.coreutils}/bin/touch "$out"
       '';
 
@@ -1121,6 +1126,24 @@ in {
           };
         };
         rule = evaluated.config.ai.kiro.rules.semble;
+        mixed =
+          (evalHm {
+            ai.programs.semble = {
+              enable = true;
+              runtimes.codex.package = pkgs.hello;
+            };
+          }).config;
+        runtimePackages = (builtins.head mixed.home.packages).sembleRuntimePackages;
+        customizedOverride = evaluate:
+          evaluate {
+            ai.programs.semble.runtimes.kiro = {
+              enable = true;
+              grammars = [pkgs.tree-sitter-grammars.tree-sitter-awk];
+              package = pkgs.hello;
+            };
+          };
+        rejectsUnpatched = evaluate:
+          builtins.any (assertion: !assertion.assertion && lib.hasInfix "sembleConfigSchema = 1" assertion.message) (customizedOverride evaluate).config.assertions;
       in
         # semble is always installed behind its launcher set. The
         # launchers are named after what they wrap, which is what keeps the
@@ -1133,6 +1156,13 @@ in {
         )
         && evaluated.config.ai.kiro.mcpServers == {}
         && rule.source == ../cli-instructions.md
+        && evaluated.config.ai.programs.semble.finalPackage.unwrapped.drvPath == pkgs.ai.semble.drvPath
+        && runtimePackages.claude.unwrapped.drvPath == pkgs.ai.semble.drvPath
+        && runtimePackages.codex.unwrapped.drvPath == pkgs.hello.drvPath
+        && (builtins.head mixed.home.packages).sembleCacheLocations.claude != (builtins.head mixed.home.packages).sembleCacheLocations.codex
+        && mixed.ai.programs.semble.finalPackage.unwrapped.drvPath == pkgs.ai.semble.drvPath
+        && builtins.all (assertion: assertion.assertion) evaluated.config.assertions
+        && lib.all rejectsUnpatched [evalHm evalDevenv]
     );
 
     module-semble-rule-text-override-wins = mkTest "semble-rule-text-override-wins" (

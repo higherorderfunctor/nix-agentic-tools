@@ -51,7 +51,7 @@
       enable = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Whether this entry routes searches. A disabled entry is left out of the package.";
+        description = "Whether this entry routes searches. A disabled entry is left out of the runtime config.";
       };
       model = lib.mkOption {
         type = lib.types.package;
@@ -120,7 +120,7 @@ in {
       type = lib.types.package;
       default = ai.semble;
       defaultText = import ../../../lib/ai/nat-package-text.nix {inherit lib;} "semble";
-      description = "Semble package installed when at least one resolved runtime integration is active.";
+      description = "Semble package installed when at least one resolved runtime integration is active. A nondefault grammars, mappings or models config requires `passthru.sembleConfigSchema = 1`.";
     };
     grammars = lib.mkOption {
       type = lib.types.listOf lib.types.package;
@@ -192,11 +192,10 @@ in {
         The CLI and the MCP server route the same way, the MCP server per
         tool call from its `content` argument.
 
-        Anything other than the vanilla settings patches Semble, so any model
-        edit changes the package and the cache guard clears the indexes on
-        the next activation or shell entry. Indexes built with a model other
-        than Semble's own live beside the default ones, suffixed with a hash
-        of the model path. A runtime override replaces the whole list.
+        Model edits change the runtime JSON and launcher while sharing the
+        Semble build. Indexes built with a model other than Semble's own live
+        beside the default ones, suffixed with a hash of the model path.
+        A runtime override replaces the whole list.
       '';
     };
     defaultContent = lib.mkOption {
