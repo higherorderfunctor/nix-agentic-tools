@@ -92,7 +92,7 @@ in {
         # extraSettings uses glab's uppercase fallback.
         && lib.hasInfix "BRAND_NEW_KEY=" script
         # The strict reader uses an absolute path even without PATH.
-        && lib.hasInfix (lib.getExe (redact.reader pkgs)) script
+        && lib.hasInfix (builtins.unsafeDiscardStringContext (lib.getExe (redact.reader pkgs))) script
         # Each env var is exported exactly once. A duplicated export is
         # harmless at runtime but means the key partitioning has drifted
         # between the options and the wrapper — which it once had.
