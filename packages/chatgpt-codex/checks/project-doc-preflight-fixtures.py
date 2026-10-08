@@ -214,6 +214,9 @@ for launcher in [hm_launcher, devenv_launcher]:
     result = run([launcher, "--version"], cwd=nested)
     assert result.returncode == 0 and result.stdout == version, result
     assert result.stderr.count(b"exceed Codex's project_doc_max_bytes") == 1, result.stderr
+    # The nearest config's notice comes first, so a timeout drops the farthest.
+    notices = [line for line in result.stderr.splitlines() if line.startswith(b"warning: Codex ignores ")]
+    assert notices and notices[0].startswith(f"warning: Codex ignores {nested}/.codex/config.toml ".encode()), result.stderr
 shutil.rmtree(root / "0")
 
 # A real module launcher must not consume stdin, contaminate JSON stdout, or
