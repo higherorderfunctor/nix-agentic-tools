@@ -66,7 +66,7 @@ in {
     #
     # Copilot and Kimchi have no `shell` option (their selection is
     # unestablished), so this root value simply does not reach them. Verified
-    # per runtime by the `ai:shell:verify` task in devenv.nix.
+    # per runtime by the flake checks in checks/ai-shell/module-eval.nix.
     shell = pkgs.bash;
 
     programs.delegate-routing = {
