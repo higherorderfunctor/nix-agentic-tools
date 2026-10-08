@@ -7,7 +7,7 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-03 — the CI build matrix reads `ciPackages`; the
+> **Last verified:** 2026-10-08 — the CI build matrix reads `ciPackages`; the
 > repo shell applies `buildOverlay`. Kimchi source builds require fresh closure
 > measurements; old binary-release figures are not current estimates. The
 > instruction copier check is gone with the generator's materializer.
@@ -27,6 +27,14 @@ previously justified the runtime workflow:
   linked worktrees;
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
   lifecycle selection and scan the complete tracked validator corpus.
+
+The repository no longer repeats instruction-file and Claude settings delivery
+assertions in `enterTest`. `ai-delivery-generated` pins the generic file
+locations and delivery methods in `config/ai-delivery-generated.nix`.
+`lib/ai/adapters/devenv.nix` also contributes `own.py --verify` for owned
+copies, including their real-file requirement. That verification still runs only
+when `devenv test` is invoked; the flake checks test delivery independently of a
+developer's checkout.
 
 `devenv.nix` still evaluates an `isCI` branch for the manual diagnostic. It
 omits tooling that enterTest never invokes, but it does not alter repository

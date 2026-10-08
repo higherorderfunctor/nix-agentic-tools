@@ -376,27 +376,6 @@ in {
     )
     test -f .github/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .github/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -f .kiro/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
-    test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
-
-    # Every instruction file `ai.*` writes here lands where its runtime reads
-    # it. Claude's context may link into the store (its loader follows a
-    # project CLAUDE.md link); the rest are read-only COPIES. A committed
-    # store symlink dangles everywhere else, Claude's scoped-rule loader
-    # skips one at project scope, and Kiro steering beside a developer's own
-    # stays a file. `test ! -L` is load-bearing because `test -f` follows
-    # symlinks. The drift check in `nix flake check` compares the committed
-    # bytes without depending on this tree.
-    test -f .claude/CLAUDE.md || { echo "FAIL: .claude/CLAUDE.md missing"; exit 1; }
-    for f in AGENTS.md .claude/rules/nix-standards.md \
-             .github/copilot-instructions.md \
-             .github/instructions/pipeline.instructions.md \
-             .kiro/steering/pipeline.md; do
-      test -f "$f" || { echo "FAIL: $f missing"; exit 1; }
-      if [ -L "$f" ]; then
-        echo "FAIL: $f is a symlink (ai.* must deliver it as a read-only copy)"
-        exit 1
-      fi
-    done
     echo "All checks passed"
   '';
 
