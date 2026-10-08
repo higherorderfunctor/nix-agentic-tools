@@ -508,10 +508,6 @@
     if fromGeneratedTree path file
     then (markdownInput evaluated path).text
     else throw "module-test: ${path} is not delivered from its generated tree";
-  # The shell-entry lines of a devenv evaluation that run the AGENTS.md
-  # window notice, matched by the notice's store path. Takes the evaluated
-  # module.
-  windowNoticeLines = evaluated: lib.filter (lib.hasInfix "/bin/ai-markdown-window-notice ") (lib.splitString "\n" evaluated.config.enterShell);
   # The parsed `<envelope>.<server>` entry of a rendered LSP file, or null.
   # Null unless `envelope` is the file's ONLY top-level key, so a bare
   # per-server map (which Copilot and Kiro both reject) never matches.
@@ -525,6 +521,6 @@
     then json.${envelope}.${server} or null
     else null;
 in {
-  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat windowNoticeLines;
+  inherit aiBase aiStubs claudeMcpPath claudeMcpServers claudeSettings deliveredFiles deliveredMarkdown deliveredTree devenvStubs evalDevenv evalDevenvModules evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm evalHmModules evalHmWithSpecialArgs fromGeneratedTree harnessNames hasLiteral hmLib hmRunShim hmStubs lspEntryOf markdownInput mcpConfigKeyOf mcpLib mkAssertion mkTest mkWrapperGrepTest ownedDocument ownPlan tomlFormat;
   inherit testing;
 }

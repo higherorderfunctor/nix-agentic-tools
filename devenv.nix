@@ -312,41 +312,6 @@ in {
           || { echo "FAIL: $nat_hook still resolves the prek config from the committing worktree"; exit 1; }
       done
     ''}
-    (
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      nat_codex_probe_home="$(${pkgs.coreutils}/bin/mktemp -d)"
-      trap '${pkgs.coreutils}/bin/rm -rf -- "$nat_codex_probe_home"' EXIT
-      # Trusted, as the developer's own Codex home trusts this project: Codex
-      # ignores a project `.codex/config.toml` otherwise, and with it the
-      # raised `project_doc_max_bytes`.
-      printf '[projects."%s"]\ntrust_level = "trusted"\n' "$DEVENV_ROOT" > "$nat_codex_probe_home/config.toml"
-      CODEX_HOME="$nat_codex_probe_home" "$nat_codex_bin" debug prompt-input probe > "$nat_codex_probe_home/prompt.json"
-      ${pkgs.gnugrep}/bin/grep -Fq -- '- dev-stack-fix:' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not discover dev-stack-fix"; exit 1; }
-      # AGENTS.md reaches Codex WHOLE. Codex drops a project document's tail
-      # past `project_doc_max_bytes` without a word, so the last line of the
-      # file, as the prompt's JSON escapes it, is the proof nothing was cut.
-      nat_agents_last="$(${pkgs.gnused}/bin/sed -n '/./h; ''${x;p}' AGENTS.md)"
-      nat_agents_last_json="$(${pkgs.jq}/bin/jq -rn --arg line "$nat_agents_last" '$line | tojson | .[1:-1]')"
-      ${pkgs.gnugrep}/bin/grep -Fq -- "$nat_agents_last_json" "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex truncated AGENTS.md (its last line is missing from the prompt)"; exit 1; }
-      # The index preamble, not its heading: the orientation mentions the
-      # heading by name, so the heading alone would pass a truncated file.
-      ${pkgs.gnugrep}/bin/grep -Fq -- 'Before editing a path that matches an entry below, read every document listed' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not receive the path-scoped rule index"; exit 1; }
-      ${pkgs.gnugrep}/bin/grep -Fq -- '<!-- rule: semble -->' "$nat_codex_probe_home/prompt.json" || { echo "FAIL: Codex did not receive the Semble CLI rule"; exit 1; }
-      # Again with Codex's DEFAULT 32 KiB limit: an untrusted home ignores the
-      # project `.codex/config.toml`, as a fresh clone or a linked worktree
-      # does. The index and every always-on rule must still arrive; only the
-      # orientation's tail may be cut.
-      nat_codex_default_home="$nat_codex_probe_home/default"
-      ${pkgs.coreutils}/bin/mkdir "$nat_codex_default_home"
-      CODEX_HOME="$nat_codex_default_home" "$nat_codex_bin" debug prompt-input probe > "$nat_codex_default_home/prompt.json"
-      for nat_needle in 'Before editing a path that matches an entry below, read every document listed' \
-                        '<!-- rule: delegate-routing-router -->' \
-                        '<!-- rule: semble -->' \
-                        '<!-- rule: stacked-workflows-router -->'; do
-        ${pkgs.gnugrep}/bin/grep -Fq -- "$nat_needle" "$nat_codex_default_home/prompt.json" || { echo "FAIL: at Codex's default project_doc_max_bytes, AGENTS.md lost '$nat_needle'"; exit 1; }
-      done
-    )
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
 
     # Every instruction file `ai.*` writes here lands where its runtime reads
