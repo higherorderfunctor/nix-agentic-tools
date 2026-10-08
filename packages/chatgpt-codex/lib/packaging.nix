@@ -21,7 +21,6 @@ rec {
       version_match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
       if not version_match:
           raise SystemExit(f"codex-extract: malformed Codex version: {version!r}")
-      version_tuple = tuple(int(part) for part in version_match.groups())
 
 
       def invoke(arguments, root):
@@ -77,11 +76,7 @@ rec {
               names = sorted(set(filter(None, [match.group(1), match.group(2)])))
               body = [match.group(4)] if match.group(4) else []
               for following in lines[index + 1:]:
-                  if re.match(
-                      r"^  (?:(-[A-Za-z]), |    )(--[A-Za-z][A-Za-z0-9-]*)"
-                      r"(?: <([^>]+)>)?(?:\.\.\.)?(?:\s{2,}(.*))?$",
-                      following,
-                  ):
+                  if match.re.match(following):
                       break
                   body.append(following.strip())
               prose = " ".join(part for part in body if part)
@@ -155,8 +150,6 @@ rec {
       }
       # Codex 0.149.0 removed `untrusted` and rejects configs that still use it.
       approval_values = {"never", "on-request"}
-      if version_tuple < (0, 149, 0):
-          approval_values.add("untrusted")
       required_values = {
           "--ask-for-approval": approval_values,
           "--sandbox": {"danger-full-access", "read-only", "workspace-write"},

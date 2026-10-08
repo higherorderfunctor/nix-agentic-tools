@@ -33,10 +33,6 @@
       inherit committed extracted;
       name = "kimchi";
       results = package.passthru.extractedRules.results;
-      rows = {
-        path = "packages/kimchi/extract/annotations.json";
-        value = package.passthru.extractedRules.file;
-      };
       sidecar = "packages/kimchi/extracted.json";
     }
     // {

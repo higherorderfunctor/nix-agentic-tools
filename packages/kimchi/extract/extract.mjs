@@ -792,11 +792,7 @@ function inertConfigKeys(
       .getJSDocTags(member)
       .find((candidate) => candidate.tagName.text === "deprecated");
     if (!tag || !member.name) continue;
-    const text = ts.getTextOfJSDocComment(tag.comment)?.trim();
-    if (!text)
-      fail(
-        `KimchiConfig.${member.name.getText()} is @deprecated without a reason`,
-      );
+    const text = ts.getTextOfJSDocComment(tag.comment)?.trim() ?? "";
     deprecated.set(syntaxName(member.name, ts), text);
   }
   const loaded = new Map();
@@ -892,7 +888,6 @@ function validateHandShape(name, descriptor, reader, root, ts) {
 function extractConfig(
   sourceFile,
   discovered,
-  declarations,
   annotations,
   kimchiSources,
   checker,
@@ -2193,7 +2188,6 @@ async function main() {
     config: extractConfig(
       configSource,
       configTsReads.config,
-      declarations,
       annotations.config,
       sourceFiles.filter((sourceFile) =>
         kimchiPaths.includes(sourceFile.fileName),

@@ -75,10 +75,6 @@
             {
               attr = "git-revise";
               dest = repoPath ../../../../extracted.json;
-              rows = {
-                name = "git-revise";
-                path = repoPath ../../../../extract/annotations.json;
-              };
             }
           ];
         };

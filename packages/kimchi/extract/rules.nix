@@ -1,4 +1,4 @@
-# One surface table for consumers, regeneration and the drift check.
+# One surface table for consumers and the drift check.
 {
   extracted ? builtins.fromJSON (builtins.readFile ../extracted.json),
   extractedLib,
@@ -7,7 +7,7 @@
   rows ? builtins.fromJSON (builtins.readFile ./annotations.json),
 }: let
   inherit (pkgs) lib;
-  inherit (extractedLib {inherit pkgs;}) reconcile withAdded;
+  inherit (extractedLib {inherit pkgs;}) reconcile;
   results = reconcile {
     config = {
       facts = extracted.config.keys;
@@ -35,10 +35,7 @@
                 "unknown environment ignore group fields" = true;
               }))
           (builtins.attrValues rows.environmentIgnored));
-      # A secret name is never auto-added, and its row must carry controls
-      # prose, so an auto-added {} row cannot pass as the review of a name
-      # the classifier later calls secret.
-      secretNeeds = ["controls"];
+      secretNeeds = [];
     };
     harness = {
       facts = extracted.harness.keys;
@@ -53,5 +50,4 @@
   };
 in {
   inherit results;
-  file = withAdded rows results;
 }

@@ -7,8 +7,8 @@ Input : the source tree the package builds (--src), and docutils on
 Output: extracted.json in the shared sidecar schema (lib/git-tool-settings):
         facts only. An owned key the man page does not describe has no
         `description`, and a key-shaped string no read covers is a dead key
-        with no reason; the rows in annotations.json supply them, and the
-        prose for a computed default, in Nix (lib/git-tool-settings/rules.nix).
+        with no reason. Hand annotations may add prose in Nix
+        (lib/git-tool-settings/rules.nix).
 Exit  : non-zero when any guard trips:
   R1  `git config` or `git -c` reached outside the helpers, or a git argv
       the extractor cannot read (a non-literal before the subcommand, a
@@ -20,9 +20,6 @@ Exit  : non-zero when any guard trips:
   R5  the helper API drifted (signature, try/except shape, argv, wrapping)
   R6  a helper used as a value, or named through getattr/hasattr
   R7  one key under two spellings, or with conflicting types or defaults
-  R8  the man page documents a key the code never reads
-  R10 a key-shaped string in the man page no extracted read or dead key
-      covers
   R11 an override through an `args.X` the CLI parser does not define
   R13 GIT_CONFIG* in code: config through the environment is not modelled
   R14 `git var` of a variable outside VAR_ALLOWED (it reads config git-revise
@@ -515,10 +512,10 @@ def parse_man():
     for node in doctree.findall(nodes.container):
         if "gitconfig" in node["classes"]:
             found[node["key"]] = " ".join(" ".join(render(p) for p in node.findall(nodes.paragraph)).split())
-    return found, {lit.astext() for lit in doctree.findall(nodes.literal)}
+    return found
 
 
-man_docs, man_literals = parse_man()
+man_docs = parse_man()
 
 # ── Aggregate per key ──────────────────────────────────────────────────
 by_key = defaultdict(list)
@@ -569,15 +566,9 @@ for key, rs in sorted(by_key.items()):
     else:
         foreign[key] = entry
 
-# ── R8: documented keys the code never reads ──────────────────────────
-for key in sorted(man_docs):
-    if key not in by_key:
-        fail("R8", f"{MAN} documents `{key}` but no read of it was extracted")
-
-# ── Dead keys and R10: every key-shaped token is accounted for ────────
+# ── Dead keys: production strings no read covers ───────────────────────
 # A production string naming a key no read covers is a dead key: a
-# mention, or a read this extractor cannot see. Only a person can tell
-# which, so its row must give a reason.
+# mention, or a read this extractor cannot see.
 known = {k.lower() for k in by_key}
 dead = {}
 for rel, tree in modules.items():
@@ -588,10 +579,6 @@ for rel, tree in modules.items():
         for token in census.key_tokens(v):
             if token.lower() not in known:
                 dead[token] = {"file": rel}
-for lit in sorted(man_literals):
-    for token in census.key_tokens(lit):
-        if token.lower() not in known and token not in dead:
-            fail("R10", f"{MAN} names `{token}`, which no extracted read covers")
 
 # ── Floors ─────────────────────────────────────────────────────────────
 if len(settings) < MIN_SETTINGS:

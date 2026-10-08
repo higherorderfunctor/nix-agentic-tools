@@ -1,11 +1,8 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-07 — the git tools' `mkRegenerateExtracted` calls
-> pass `rows` and list them in `passthru.sidecars`, reconciled by one shared
-> `lib/git-tool-settings/rules.nix`; Codex uses the injected `extractedLib`
-> alongside sidecar drift; Kimchi environment names need controls prose only
-> when secret, and an untyped Kimchi harness read is a `needs-human` reconcile
-> failure, not an extraction failure.
+> **Last verified:** 2026-10-07 — regeneration writes extracted facts only;
+> meaningful hand annotations and real uses retain removal checks, while
+> descriptions and controls are optional.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -175,45 +172,33 @@ minutes later inside `nix-update`.
 
 Owners receive `extractedLib` through the repository’s recipe and check
 contexts; applying it with `{inherit pkgs;}` provides
-`mkDriftCheck { name; extracted; committed; sidecar; results ? {}; rows ? null; }`.
-The builder returns `{ "${name}-extracted" = drv; }`, so callers merge its
-result into their checks and cannot choose a conflicting attribute. This
-includes `semble-languages-extracted` and `semble-templates-extracted`. A
-mismatch prints
-`nix build --no-link --print-out-paths .#checks.<system>.<name>-extracted.passthru.extracted`,
-then a command to copy its output over the committed sidecar and `nix fmt`. The
-check exposes `passthru.extracted` so regeneration remains buildable while drift
-is red. Optional `results` are reconcile results read from committed files;
-non-empty failures make the build fail after drift passes, without throwing
-during evaluation. Optional `rows = {path; value;}` exposes `value` as
-`passthru.rows` and prints its eval, replacement and format command for `path`
-beside the sidecar recipe and on unrecorded failures.
+`mkDriftCheck { name; extracted; committed; sidecar; results ? {}; }`. The
+builder returns `{ "${name}-extracted" = drv; }`, including the Semble language
+and template checks. A mismatch prints the command to build
+`checks.<system>.<name>-extracted.passthru.extracted`, copy it over the
+committed sidecar and format it. That passthru remains buildable while drift is
+red. Optional reconciliation `results` come from committed files; their failures
+fail the build after drift passes.
 
-`reconcile` takes one table per surface with `facts`, `rows`, required `needs`,
-allowed hand `fields`, explicit `secretNeeds`, and named `uses`. Every supplied
-hand field must be a non-blank string. Required fields must be present in the
-merged entry; a secret must have a recorded row and its required secret fields.
-It reports `removed`, `needs-human`, `secret`, `bad-row`, and `unrecorded`
-failures. Rows fill null or absent facts; replacing a non-null fact requires its
-field in the row's `replace` list. `ignored = "<reason>"` omits a name from
-consumer entries and skips required fields. Classification uses the single
-runtime-values classifier only for string-valued names or string-to-string maps.
-`withAdded` preserves the already-parsed rows and adds `{}` rows for derivable
-non-secret new names.
+`reconcile` takes one table per surface with `facts`, hand `rows`, required
+`needs`, allowed hand `fields`, explicit `secretNeeds`, and named `uses`. New
+ordinary names need no row. Removed names disappear unless a hand row or named
+use still refers to them. Supplied hand fields must be non-blank strings; rows
+fill absent or null facts, while replacing a fact requires its field in
+`replace`. Required types and secret handling remain enforced: a secret needs a
+recorded row and its required secret fields. `ignored = "<reason>"` omits a name
+and skips required fields. The shared runtime-values classifier handles only
+strings and string-to-string maps. Failures are `removed`, `needs-human`,
+`secret`, and `bad-row`; descriptions and controls are optional.
 
-`mkExtractRegen` takes a package name as `attr`, an optional `extract` passthru
-key (default `extracted`), and optionally `rows = {name; path;}`, where `name`
-identifies the drift check independently of the package. After writing and
-formatting the sidecar it runs `lib/extracted/default.nix`'s `mkRowsRegen`, the
-same command the drift check prints, to evaluate `passthru.rows`, replace `path`
-and format it. The temporary output matters: direct redirection would truncate
-the rows that this evaluation reads. `mkRegenerateExtracted` lists sidecar
-destinations in `passthru.sidecars`. Its callers are the three git tools, which
-pass `rows`, so `passthru.sidecars` lists each rows path too.
-`lib/git-tool-settings/rules.nix` is their one shared table, beside Kimchi's
-`extract/rules.nix`; each is shared by its consumer, drift check and
-regeneration. Extractors continue to enforce source structure, while
-reconciliation failures turn the resulting update PR red.
+`mkExtractRegen` takes `attr`, `dest`, and an optional `extract` passthru key
+(default `extracted`); it writes and formats the sidecar.
+`mkRegenerateExtracted` lists these destinations in `passthru.sidecars` for the
+update scripts to stage. Hand annotation files are never regenerated.
+`lib/git-tool-settings/rules.nix` and Kimchi's `extract/rules.nix` share their
+rules between consumers and drift checks. Extractor floors detect collapsed
+surfaces; live consumer checks detect removed names used by this repo, including
+the git presets' typed-option check.
 
 Each measured package exposes a BUILD-time `passthru.extracted` and emits a JSON
 sidecar that is COMMITTED (`packages/<owner>/extracted.json`). Binary probes use
@@ -261,13 +246,13 @@ counts toward `config.json` only when its `readFileSync` path resolves there;
 1.1.30 also parses `harness/settings.json` in that file, and a read that
 resolves to neither fails the extraction. The extractor emits every resolved
 environment name; reconcile in `packages/kimchi/extract/rules.nix` decides its
-acceptance, optional controls prose (required on secret names), or grouped
-ignore reason. Reconcile fails a row whose name vanished (removed) and a new
-name it cannot accept (secret or unrecorded). Harness keys take the same path: a
-key Kimchi reads that is neither a pi `Settings` key nor a typed addition is
-emitted with `type = null`, and reconcile fails it as `needs-human` until a row
-supplies the type or an ignore reason. pi's own variable names come from
-Kimchi's `piConfig.name` the way pi derives them, not from pi's `PI_` default.
+optional controls prose or grouped ignore reason. Reconcile fails a hand row
+whose name vanished and a new secret without a recorded row. Harness keys take
+the same path: a key Kimchi reads that is neither a pi `Settings` key nor a
+typed addition is emitted with `type = null`, and reconcile fails it as
+`needs-human` until a row supplies the type or an ignore reason. pi's own
+variable names come from Kimchi's `piConfig.name` the way pi derives them, not
+from pi's `PI_` default.
 
 Reach for a grep only for facts that are genuinely outside the artifact's own
 schema. Two survive in `mkClaudeExtract` for exactly that reason: the launch-pin
@@ -363,11 +348,8 @@ id from each of the opus / sonnet / haiku families; the settings census requires
 at least 100 public keys, because a schema builder that runs and returns almost
 nothing is the same defect as a dead anchor. Codex requires its recursive tree
 to retain the root and at least 20 commands, asserts the exact sandbox enum and
-the exact approval enum for the pinned version, and rejects empty feature/model
-results. The version qualification is narrow rather than an either-set
-allowance: releases before 0.149.0 require `untrusted`, while 0.149.0 and newer
-reject it, matching upstream's explicit removal. When you add a key or category,
-add its shape assertion in the same commit.
+the approval enum without `untrusted`, and rejects empty feature/model results.
+The pre-0.149.0 compatibility branch is gone.
 
 #### Kiro settings must come from the shipped TUI source
 
@@ -380,13 +362,11 @@ materialized SHA-256, then parses the actual source. HOME/XDG isolation alone is
 insufficient: native credential discovery can reach host facilities outside
 those directories.
 
-The TypeScript AST probe requires one settings registry and either a candidate
-workspace allowlist with a merge that consults that very set, or neither set nor
-merge. It evaluates their validated expressions and the selected merge helper
-with inert loaders in an isolated JavaScript VM. The paired absence yields `[]`,
-as it did for versions before 2.21.1 with no workspace merge. A one-sided
-absence or an ambiguous set fails: an unreadable allowlist would reject
-legitimate workspace settings.
+The TypeScript AST probe requires one settings registry, one workspace
+allowlist, and a merge that consults that very set. It evaluates their validated
+expressions and the selected merge helper with inert loaders in an isolated
+JavaScript VM. Missing or ambiguous anchors fail; the historical path accepting
+a binary without workspace merging is gone.
 
 #### An anchor can lose its TYPE information without losing its match
 
@@ -501,15 +481,12 @@ binary", the other is "the package layout moved" — and a build that names the
 wrong one sends the next session hunting upstream for a change that never
 happened.
 
-Codex's `extract/rules.nix` applies the injected `extractedLib` to reconcile
-committed command and canonical flag names with `extract/annotations.json`. The
-package exposes `passthru.extractedRules`, and `chatgpt-codex-extracted`
-consumes its results alongside sidecar drift. `mkExtractRegen` regenerates the
-facts and then adds derivable `{}` rows. Launcher flags come from
-`lib/launcher-flags.nix` and are recorded as `uses` of the root command's flags,
-so an upstream removal there requires updating the launcher. Feature maturity
-policy stays at the factory's `== "stable"` branch; record fields are extractor
-output rather than a second human ledger.
+Codex's `extract/rules.nix` applies the injected `extractedLib` to check
+launcher flags from `lib/launcher-flags.nix` as `uses` of the root command's
+flags. `chatgpt-codex-extracted` consumes these results alongside sidecar drift,
+so removing a used flag requires updating the launcher. Other command and flag
+names need no annotation rows. Feature maturity policy stays at the factory's
+`== "stable"` branch.
 
 ### Gotchas when adding new packages
 

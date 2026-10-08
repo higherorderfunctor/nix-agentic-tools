@@ -2,9 +2,9 @@
 # produces it (lib/git-tool-settings/extraction.nix builds all three):
 #
 #   git-revise-extracted          drift: the committed sidecar equals a fresh
-#                                 extraction of the pinned source, and the
-#                                 rows file accepts every name in it (rule
-#                                 failures). Blocking, because the typed
+#                                 extraction of the pinned source, with
+#                                 reconciliation checking types and meaningful
+#                                 hand rows. Blocking, because the typed
 #                                 options are generated from the committed
 #                                 file.
 #   git-revise-extractor-guards   the extractor fails closed: every mutant in

@@ -459,7 +459,6 @@ rec {
     dest,
     extract ? "extracted",
     pkgs,
-    rows ? null,
   }: ''
     echo "${attr}: regenerating ${dest}"
     extracted=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
@@ -468,10 +467,6 @@ rec {
     ${pkgs.coreutils}/bin/chmod 644 "${dest}"
     ${pkgs.nix}/bin/nix fmt -- "${dest}"
     echo "${attr}: wrote ${dest}"
-    ${pkgs.lib.optionalString (rows != null) ''
-      ${(import ./extracted {inherit pkgs;}).mkRowsRegen rows}
-      echo "${attr}: wrote ${rows.path}"
-    ''}
   '';
 
   # `passthru.regenerateExtracted`: the sidecar regeneration for a package
@@ -488,9 +483,8 @@ rec {
   #
   # `targets` are `mkExtractRegen` arguments: `attr` is the package name in
   # `ciPackages`, not a check path. `extract` selects its passthru key and
-  # defaults to `extracted`; `dest` is the repository path it replaces. Optional
-  # `rows = {name; path;}` names the drift check and its rows destination, which
-  # `sidecars` lists too, so update-input.sh stages the rows the sweep wrote.
+  # defaults to `extracted`; `dest` is the repository path it replaces and
+  # lists in `sidecars` for the update scripts to stage.
   mkRegenerateExtracted = {
     name,
     pkgs,
@@ -502,7 +496,7 @@ rec {
       ${builtins.concatStringsSep "\n" (map (target: mkExtractRegen (target // {inherit pkgs;})) targets)}
     '')
     .overrideAttrs (prev: {
-      passthru = (prev.passthru or {}) // {sidecars = builtins.concatMap (target: [target.dest] ++ pkgs.lib.optional (target.rows or null != null) target.rows.path) targets;};
+      passthru = (prev.passthru or {}) // {sidecars = map (target: target.dest) targets;};
     });
 
   # Source repair precedes floor extraction, which precedes vendor hashing.

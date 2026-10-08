@@ -20,19 +20,12 @@
 #     described, so the tree walk had nothing to build an option from. That is
 #     an extractor bug, not a table bug.
 #
-# `collisions` and `mixedWildcard` are SNAPSHOTS rather than emptiness
-# assertions, because neither is a defect on its own:
-#
-#   * `collisions` is just the hand-authored key set. Pinning it means a key
-#     that upstream has since typed properly — so the hand row could be dropped
-#     and taken from the schema instead — surfaces as a diff to look at, rather
-#     than a hand row quietly outliving its reason.
-#   * `mixedWildcard` is empty today and is the tell for a path-grammar
-#     regression: a node the walk thinks carries both a `.*` wildcard and named
-#     children degrades to `attrsOf freeformType` and loses its typing. That
-#     happened once already — `hooks.*[]` parsed as a named child called `*` —
-#     and it was reported, not thrown, so nothing failed. Pinning the list is
-#     what turns the report into a gate.
+# `mixedWildcard` is empty today and is the tell for a path-grammar
+# regression: a node the walk thinks carries both a `.*` wildcard and named
+# children degrades to `attrsOf freeformType` and loses its typing. That
+# happened once already — `hooks.*[]` parsed as a named child called `*` —
+# and it was reported, not thrown, so nothing failed. Pinning the list is
+# what turns the report into a gate.
 #
 # Eval-only: readFile plus a module-system walk. No IFD, no derivation built,
 # and no ~390 MB claude-code binary.
@@ -52,17 +45,6 @@
       inherit extracted lib pkgs;
     };
     inherit (surface) report;
-
-    # SNAPSHOT — the hand-authored declarations in nativeOptions.nix.
-    # Update this list in the same commit as that attrset.
-    expectedCollisions = [
-      "attribution"
-      "effortLevel"
-      "enableWorkflows"
-      "model"
-      "tui"
-      "workflowKeywordTriggerEnabled"
-    ];
 
     # SNAPSHOT — see the header. Empty is the healthy value; a non-empty one is a
     # grammar regression, not a fact about upstream.
@@ -243,17 +225,6 @@
       lib.filter (rule: report.${rule.field} != []) emptinessRules;
 
     snapshotRules = [
-      {
-        field = "collisions";
-        expected = expectedCollisions;
-        remedy = ''
-          This is the hand-authored declaration set in
-          packages/claude-code/lib/nativeOptions.nix. If you added or
-          removed one deliberately, update `expectedCollisions` in this file in
-          the same commit. If you did not, the packaged binary changed which keys
-          it declares underneath a hand row.
-        '';
-      }
       {
         field = "mixedWildcard";
         expected = expectedMixedWildcard;

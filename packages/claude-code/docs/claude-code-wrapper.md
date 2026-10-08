@@ -1,11 +1,8 @@
 ## claude-code Package and Plugin Delivery
 
-> **Last verified:** 2026-10-04 — the settings extractor follows Claude
-> 2.1.286's one-hop whole-schema wrapper when the `$schema` description lives in
-> its descriptor factory. `ai.*` delivers Claude's plugins itself: the MCP/LSP
-> personal plugin as per-file links under `home-manager/`, consumer plugins as
-> one directory link each. `$out/bin/claude` is the unwrapped binary. Enabling
-> the backend's own Claude module beside `ai.claude` fails evaluation.
+> **Last verified:** 2026-10-07 — the generated settings surface retains
+> stale-hand-row and typing checks without a duplicate hand-option name census
+> or unused report fields. The schema is required from the committed sidecar.
 >
 > Full lineage:
 > `git show 6d2fbeef:packages/claude-code/docs/claude-code-wrapper.md`.
@@ -100,7 +97,9 @@ Three things follow, and each of them is a trap if you assume the old shape:
   the generator has it.
 - **`packages/claude-code/checks/claude-settings-schema.nix` polices the
   tables.** A row aimed at a key upstream renamed, or a row present in both
-  tables, fails `nix flake check` instead of quietly doing nothing.
+  tables, fails `nix flake check` instead of quietly doing nothing. It also
+  checks missing schema paths and the wildcard grammar that could lose typing;
+  it does not pin the hand-authored name set.
 - **A key the binary does NOT declare is a hard failure**, not a freeform
   passthrough, unless `ai.claude.allowUnrecognizedSettings` names it — Claude
   ignores an unknown settings key silently, so a typo otherwise looks applied

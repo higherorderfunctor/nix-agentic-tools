@@ -3,8 +3,8 @@
 #
 #   git-absorb-extracted          drift: the committed sidecar equals a fresh
 #                                 extraction of the pinned source, and the
-#                                 rows file accepts every name in it (rule
-#                                 failures). Blocking, because the typed
+#                                 retained hand rows remain valid.
+#                                 Blocking, because the typed
 #                                 options are generated from the committed
 #                                 file.
 #   git-absorb-extractor-guards   the extractor fails closed: every mutant in

@@ -12,9 +12,9 @@ states what the extractor must do with it:
            dead keys or builtin revset names that must appear, with exit 0
   (none)   exit 0 and an output identical to the baseline
 
-What a person must then write about a new name (a type, a description, a
-dead key's reason) is lib/git-tool-settings/rules.nix's to demand, not the
-extractor's; checks/git-tool-settings/rules.nix holds those cases.
+Type requirements belong to lib/git-tool-settings/rules.nix; descriptions
+and dead-key reasons are optional. checks/git-tool-settings/rules.nix
+holds those reconciliation cases.
 
 A mutant whose edit does not apply is itself a failure, so a source change
 that retires a mutant's anchor surfaces here instead of passing vacuously.

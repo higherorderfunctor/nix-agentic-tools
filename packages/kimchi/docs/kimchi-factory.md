@@ -1,8 +1,8 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-07 — harness keys are reconciled like config keys:
-> an untyped harness read is an extracted fact that `rules.nix` fails as
-> `needs-human`, not an extraction failure.
+> **Last verified:** 2026-10-07 — hand annotations retain aliases, types and
+> secret exclusions without empty acceptance rows; environment controls prose is
+> optional while new secrets still require a recorded row.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -88,26 +88,27 @@ unless they are scalars, because `filterNulls` does not recurse into lists. So a
 key upstream adds to pi's `Settings` or to config.ts's `readConfigExtras`
 becomes an option at the next re-extraction, and a key it removes fails its
 consumer as an unknown option instead of writing bytes nothing reads. Every
-option is `nullOr` with a null default. Config rows record acceptance and may
-carry `aliasFor` or `excluded`; harness rows may carry `type` or `excluded`.
-`extract/rules.nix` defines the config, environment and harness surfaces once,
-using the shared `extractedLib` function’s `reconcile`. Recipes receive the
-function through `scopeArgs`, checks through module arguments. `mkKimchi` binds
-`lib.ai.extracted` independently of runtime package replacements. Consumers
-merge those rows with the committed facts; extraction itself emits facts and
-clones alias types from the rows' `aliasFor` references. Alias keys and inert
-keys have no option. A key is inert when upstream tags its `KimchiConfig` member
-`@deprecated` and no Kimchi code consumes it: nothing reads the loaded member,
-and nothing outside `config.ts` reads the raw `readConfigExtras` member, while
-`config.ts` still parses it to warn that it is obsolete. A release that consumes
-it again clears the flag, and the key becomes an option. Secret exclusions
-(`apiKey`, its alias, and `gitTokens`) live in the config rows, naming
-`ai.kimchi.apiKey` or `ai.kimchi.gitTokens` as their delivery path. The option
-generator keeps two hand tables: one refinement (`modelRoles`, whose role names
-and single-string roles come from the sidecar while the non-blank and non-empty
-checks do not), and one description note. `report.stale*` lists any refinement
-or note whose path the sidecar lost, and `checks/native-options.nix` fails on
-it. Reconcile detects stale exclusion rows.
+option is `nullOr` with a null default. Config annotations may carry `aliasFor`
+or `excluded`; harness annotations may carry `type` or `excluded`. Names whose
+facts suffice need no row. `extract/rules.nix` defines the config, environment
+and harness surfaces once, using the shared `extractedLib` function’s
+`reconcile`. Recipes receive the function through `scopeArgs`, checks through
+module arguments. `mkKimchi` binds `lib.ai.extracted` independently of runtime
+package replacements. Consumers merge those rows with the committed facts;
+extraction itself emits facts and clones alias types from the rows' `aliasFor`
+references. Alias keys and inert keys have no option. A key is inert when
+upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
+consumes it: nothing reads the loaded member, and nothing outside `config.ts`
+reads the raw `readConfigExtras` member, while `config.ts` still parses it to
+warn that it is obsolete. A release that consumes it again clears the flag, and
+the key becomes an option. Secret exclusions (`apiKey`, its alias, and
+`gitTokens`) live in the config rows, naming `ai.kimchi.apiKey` or
+`ai.kimchi.gitTokens` as their delivery path. The option generator keeps two
+hand tables: one refinement (`modelRoles`, whose role names and single-string
+roles come from the sidecar while the non-blank and non-empty checks do not),
+and one description note. `report.stale*` lists any refinement or note whose
+path the sidecar lost, and `checks/native-options.nix` fails on it. Reconcile
+detects stale exclusion rows.
 
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's harness additions (`fermentV2`, `modelRoles` and the rest, each
@@ -125,10 +126,10 @@ hand list instead. The option generator reads only reconciled entries, so an
 ignored read never becomes an option. An untyped read becomes an untyped JSON
 option, which both `report.untyped` and the drift check fail until its row
 supplies a `type`. As in config, a string key the classifier calls secret is
-never auto-added, and its row must carry `excluded`. Other direct readers of the
-harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts` reads
-`model` and `provider` for telemetry), so a key upstream adds there meets the
-closed submodule as an unknown option with no drift signal. The config.json
+never accepted without a recorded row carrying `excluded`. Other direct readers
+of the harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts`
+reads `model` and `provider` for telemetry), so a key upstream adds there meets
+the closed submodule as an unknown option with no drift signal. The config.json
 shapes of `teleport`, `gitTokens` and the `surveys` record have no declared
 type, so they are written by hand and pinned both ways to their readers' runtime
 guards (`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`):
@@ -154,40 +155,33 @@ factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`,
 which fails evaluation if the pinned Kimchi no longer reads it or starts
 overwriting it.
 
-The extractor emits every resolved environment name with `type = "string"`,
-which feeds the secret classifier for names without a recorded row. Secret names
-are never auto-added, and their rows must carry `controls` prose, so an
-auto-added `{}` row cannot stand in for the review of a name the classifier
-later calls secret. Otherwise `controls` is optional and non-blank when given;
-grouped `environmentIgnored` names expand into `ignored = "<reason>"` rows
-inside `rules.nix`, so they stay in the facts but disappear from the consumer
-view. Reconcile reports removed rows or users, unresolved required fields,
-missing secret delivery rows, invalid or fact-shadowing rows, duplicate ignore
-names or controls/ignore collisions, and unrecorded derivable names. Collision
-rows keep their controls or ignore reason and carry a field naming the
-collision, so `bad-row` reports its cause. Rows fill only null or absent facts
-unless their `replace` list explicitly names a field. Ignored rows skip
-required-field checks. Only string values and string-to-string maps enter the
-shared runtime-values classifier.
+The extractor emits every resolved environment name with `type = "string"`. A
+secret name still needs a recorded row, but `controls` prose is optional;
+supplied controls must be non-blank. Grouped `environmentIgnored` names expand
+into `ignored = "<reason>"` rows inside `rules.nix`, preserving facts while
+omitting them from the consumer view. Reconcile rejects stale hand rows or uses,
+missing required types or secret delivery fields, invalid or fact-shadowing
+rows, and duplicate environment rows or groups. Collision rows retain their
+prose and carry a field naming the collision so `bad-row` explains it. Rows fill
+absent or null facts unless `replace` names a field. Ignored rows skip
+required-field checks. Only strings and string-to-string maps enter the shared
+classifier.
 
-Regeneration first writes the sidecar, then evaluates
-`checks.<system>.kimchi-extracted.passthru.rows` against it and adds `{}` rows
-for new derivable, non-secret names. The drift and unrecorded diagnostics print
-the same rows command; row failures appear only after the sidecar matches.
-Failures remain data: regeneration completes and the update PR carries the facts
-and rows, while `kimchi-extracted` fails on anything that still needs a human. A
-new typed config key becomes an option automatically, and a new non-secret
-environment name is accepted with a `{}` row. Pi's own names follow Kimchi's
-`piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). The
-extractor uses the TypeScript compiler's checker for declared keys and types and
-syntax tree queries for environment access sites, while config queries
-cross-check compiler types against top-level, nested, and array-element runtime
-validation guards. Added lines from pi patch files are synthesized as source
-files and bound in isolated TypeScript programs before alias resolution; using
-the main program's checker on those foreign nodes can crash inside the compiler.
-A declaration is never taken by bare name when a reference can pick it:
-config.ts's functions and interfaces resolve in config.ts's own scope (Kimchi
-1.1.37 has a second `loadConfig`), pi's `Settings` comes from
+Regeneration writes the sidecar only; hand annotations are maintained
+separately. Reconciliation failures remain data until `kimchi-extracted` checks
+them after sidecar drift. New typed config keys become options and ordinary
+environment names are accepted without empty rows. Removed names disappear
+unless a hand row or real consumer still uses them. Pi's own names follow
+Kimchi's `piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_`
+default). The extractor uses the TypeScript compiler's checker for declared keys
+and types and syntax tree queries for environment access sites, while config
+queries cross-check compiler types against top-level, nested, and array-element
+runtime validation guards. Added lines from pi patch files are synthesized as
+source files and bound in isolated TypeScript programs before alias resolution;
+using the main program's checker on those foreign nodes can crash inside the
+compiler. A declaration is never taken by bare name when a reference can pick
+it: config.ts's functions and interfaces resolve in config.ts's own scope
+(Kimchi 1.1.37 has a second `loadConfig`), pi's `Settings` comes from
 `settings-manager.d.ts`'s exports, and the harness `definitions` are the
 interfaces `Settings` references, collected through the checker (pi also
 declares an all-required `CompactionSettings` in `compaction.d.ts`). The Kimchi

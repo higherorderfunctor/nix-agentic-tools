@@ -7,13 +7,10 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-04 — one tui/kas materializer serves settings
-> extraction and exact-match bundle-patch drift; settings extraction evaluates
-> the shipped TUI registry and workspace allowlist after sandboxed source
-> materialization; native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Kiro excludes the
-> normalized settings pool, so `ai.kiro.settings` does not exist and a root
-> effort is ignored without a warning.
+> **Last verified:** 2026-10-07 — settings extraction requires the shipped TUI
+> registry, workspace allowlist and merge; historical no-workspace-merge support
+> is removed. Native file settings remain under `ai.<runtime>.native`, and Kiro
+> excludes normalized settings.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while

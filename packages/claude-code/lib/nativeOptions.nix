@@ -17,10 +17,8 @@
 #
 # Hand-authored declarations WIN. That is not a merge-order accident: their key
 # set is handed to the generator as `externalPaths`, so the generator emits
-# NOTHING for those paths and reports each one under `report.collisions`. A
-# hand declaration can therefore never silently shadow a generated one, and a
-# hand declaration aimed at a key the binary has since dropped surfaces as
-# `report.staleExternalPaths` rather than sitting there rotting.
+# NOTHING for those paths. A hand declaration aimed at a key the binary has
+# since dropped surfaces as `report.staleExternalPaths`.
 #
 # `report` is exported for `packages/claude-code/checks/claude-settings-schema.nix`, which is what
 # makes the exception tables above self-policing in CI rather than by review.
@@ -36,10 +34,7 @@
   # Non-retired model ids from the binary's own catalog.
   knownClaudeModels = extracted.models;
 
-  # Keep this attrset SMALL. Every row is an exception to "the binary describes
-  # itself", so each one is a standing maintenance cost — and the report field
-  # `collisions` exists so a row that upstream has since typed properly shows up
-  # as a diff in the bump PR.
+  # Each hand-authored declaration supplies behavior or prose absent from the schema.
   handAuthored = {
     attribution = lib.mkOption {
       type = lib.types.submodule {
@@ -168,10 +163,7 @@
   };
 
   generated = gen.generate {
-    # `or {}` degrades a sidecar predating settings extraction to "no generated
-    # options" rather than an eval error; the freeform tail still accepts every
-    # key, and `unrecognizedSettings.nix` has its own guard for that case.
-    settings = extracted.settings or {};
+    inherit (extracted) settings;
     inherit freeformType;
     overrides = gen.overrideTable;
     # Derived, never restated: a hand-authored option and its `externalPaths`

@@ -62,27 +62,20 @@ in {
           inherit kind name surface;
           inherit details;
         };
-        added = present && !ignored && !bad && missing == [] && !secret && !recorded;
       in {
-        inherit added entry ignored;
+        inherit entry ignored;
         failures =
           lib.optional (!present) (failure "removed" (uses.${name} or "delete the stale row"))
           ++ lib.optional bad (failure "bad-row" badReasons)
           ++ lib.optionals (present && !ignored) (
             lib.optional (missing != []) (failure "needs-human" missing)
             ++ lib.optional (secret && (!recorded || missingSecret != [])) (failure "secret" missingSecret)
-          )
-          ++ lib.optional added (failure "unrecorded" "regenerate the rows");
+          );
       };
       results = lib.genAttrs names perName;
     in {
-      added = lib.filter (name: results.${name}.added) names;
       entries = lib.mapAttrs (_: result: result.entry) (lib.filterAttrs (name: result: facts ? ${name} && !result.ignored) results);
       failures = lib.concatMap (name: results.${name}.failures) names;
     })
     surfaces;
-
-  # Preserve hand rows and grouped ignores, adding only accepted new names.
-  withAdded = rows: results:
-    rows // lib.mapAttrs (surface: result: (rows.${surface} or {}) // lib.genAttrs result.added (_: {})) results;
 }

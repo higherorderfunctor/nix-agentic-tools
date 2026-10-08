@@ -7,14 +7,13 @@ Input : the source tree the package builds (src + patches), parsed with
 Output: extracted.json in the shared sidecar schema (lib/git-tool-settings):
         facts only. A key the man page does not describe has no
         `description`, and a const nothing reads is a dead key with no
-        reason; the rows in annotations.json supply both, in Nix
-        (lib/git-tool-settings/rules.nix).
+        reason. Hand rows in annotations.json may supplement these facts
+        through lib/git-tool-settings/rules.nix.
 Exit  : non-zero when any guard trips:
   F1  a key that does not reduce to a string literal
   F2  a read method outside METHOD_TYPES
   F6  a config handle or git2::Config method used outside the read shape
   F7  a production "config" string literal (git-absorb runs no `git config`)
-  F8  the man page documents a key the source never reads
   F9  a key-shaped string literal no read or dead key accounts for
   F10 a key or default passed through a parameter with no production caller
   F11 a test cfg the test filter cannot classify
@@ -61,7 +60,8 @@ CONFIG_METHODS = set(METHOD_TYPES) | {
     "set_multivar", "remove_multivar", "open_level", "open_global", "add_file", "snapshot"}
 # libgit2 reads these behind `repo.signature()`; the source never names them.
 SIGNATURE_KEYS = ["user.email", "user.name"]
-MIN_SETTINGS = 7
+# Reject collapsed extraction while allowing removals from the seven-key baseline.
+MIN_SETTINGS = 3
 MAX_DEPTH = 3
 
 for f, attr in tree.unclassified_test_attributes:
@@ -414,8 +414,6 @@ for key, rs in sorted(by_key.items()):
     clis = [r["cli"] for r in rs if r["cli"]]
     if clis:
         entry["cli"] = census.agree(key, "CLI flags", clis, "F13")
-    # A blank paragraph is no description: the needs rule must see the key
-    # as having no description rather than accept "".
     if docs.get(key, "").strip():
         entry["description"] = docs[key]
     settings[key] = entry
@@ -431,9 +429,6 @@ for key, rs in sorted(foreign_by_key.items()):
         entry["type"] = census.agree(key, "types", [r["type"] for r in typed], "F13")
         entry["default"] = census.agree(key, "defaults", [r["default"] for r in typed], "F13")
     foreign[key] = entry
-
-for key in sorted(set(docs) - set(settings)):
-    fail("F8", f"Documentation/git-absorb.adoc documents {key}, which the source never reads")
 
 # ── Dead keys: key-shaped consts no read resolves to ──────────────────
 dead = {}

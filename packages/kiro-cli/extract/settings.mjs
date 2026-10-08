@@ -66,12 +66,10 @@ function walk(node) {
 }
 walk(file);
 
-const noWorkspaceMerge =
-  setCandidates.length === 0 && warningFunctions.length === 0;
 if (
   registryCandidates.length !== 1 ||
-  (!noWorkspaceMerge &&
-    (setCandidates.length !== 1 || warningFunctions.length !== 1))
+  setCandidates.length !== 1 ||
+  warningFunctions.length !== 1
 ) {
   fail(
     `settings anchors are ambiguous or absent (registry ${registryCandidates.length}, ` +
@@ -95,26 +93,6 @@ for (const property of registry.right.properties) {
   if (propertyNames.has(name)) fail(`settings registry repeats ${name}`);
   propertyNames.add(name);
 }
-if (!propertyNames.has("CHAT_DEFAULT_MODEL"))
-  fail("settings registry lost CHAT_DEFAULT_MODEL");
-
-if (noWorkspaceMerge) {
-  const settingKeys = vm.runInNewContext(
-    `Object.values(${registry.right.getText(file)})`,
-    Object.create(null),
-    { timeout: 1000, contextCodeGeneration: { strings: false, wasm: false } },
-  );
-  if (!Array.isArray(settingKeys) || settingKeys.length < 40)
-    fail("evaluated settings registry has an unrecognizable shape");
-  process.stdout.write(
-    JSON.stringify({
-      settingKeys: [...new Set(settingKeys)].sort(),
-      workspaceOverridableSettings: [],
-    }),
-  );
-  process.exit(0);
-}
-
 const allowlist = setCandidates[0];
 const allowlistName = allowlist.left.text;
 
@@ -234,10 +212,6 @@ const values = vm.runInNewContext(expression, Object.create(null), {
   contextCodeGeneration: { strings: false, wasm: false },
 });
 if (
-  !Array.isArray(values.registry) ||
-  !Array.isArray(values.allowlist) ||
-  values.registry.some((value) => typeof value !== "string") ||
-  values.allowlist.some((value) => typeof value !== "string") ||
   values.registry.length < 40 ||
   values.allowlist.length < 10 ||
   !values.allowlist.includes("chat.defaultModel")

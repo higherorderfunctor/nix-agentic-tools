@@ -46,10 +46,6 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     assert len(result["workspaceOverridableSettings"]) == 11, result
     assert "chat.defaultModel" in result["workspaceOverridableSettings"]
 
-    absent = run('var pn;' + registry_assignment)
-    assert absent.returncode == 0, absent.stderr
-    assert json.loads(absent.stdout)["workspaceOverridableSettings"] == []
-
     cases = {
         "accept all": (
             bundle(merge=merge_with_guard("Cq.has(k)||true")),
