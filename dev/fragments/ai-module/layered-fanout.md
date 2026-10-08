@@ -1,7 +1,8 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-07 — Kiro launcher controls and normalized launcher
-> pools use `ai.kiro.cli`; shared pools and delivery stay at `ai.kiro`.
+> **Last verified:** 2026-10-08 — Kiro launcher controls and normalized launcher
+> pools use `ai.kiro.cli`; shared pools and delivery stay at `ai.kiro`; Codex
+> checks document truncation at launch rather than through shared shell entry.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -371,21 +372,21 @@ per path; a first-wins map named only `ai.codex.*` for text Kimchi supplied.
 - L4 shared AGENTS.md contributions → the record's `sharedAgentsMd` callback,
   which returns the key, the rules under that runtime's own policy (Codex and
   Kimchi every rule; Kiro only unscoped always-on rules), optional `index`
-  entries, an optional `maxBytes` and an optional `defaultMaxBytes` (fallback
-  bytes plus a command that resolves the effective limit at shell entry; past it
-  the owner warns), and nothing else: the builder reads those by name, so
-  `checkRecord.nix` rejects a missing `key` or any other field. The optional
-  `hasOnDemandIndex` bit selects the general rule-index heading from routed
-  trigger data rather than rendered Markdown. Codex and Kimchi list a scoped
-  rule that names `references` as an index entry (its globs plus links to those
-  documents) and inline every other rule, a scoped one behind a prose scope
-  note. `agentsmd.renderKeyed` writes the general `## Rule index` when that bit
-  is set and `## Path-scoped rules` otherwise, then the inlined rules and
-  context. A file with many scoped rules stays under Codex's document limit, and
-  a long context that does not (read at the 32 KiB default because the raised
-  limit is absent or untrusted) loses only its own tail. The builder adds the
-  merged context and publishes it on devenv. A limit is published even without
-  content, because the runtime reads the file whoever wrote it. The Markdown
+  entries, an optional build-time `maxBytes`, and nothing else: the builder
+  reads those by name, so `checkRecord.nix` rejects a missing `key` or any other
+  field. The optional `hasOnDemandIndex` bit selects the general rule-index
+  heading from routed trigger data rather than rendered Markdown. Codex and
+  Kimchi list a scoped rule that names `references` as an index entry (its globs
+  plus links to those documents) and inline every other rule, a scoped one
+  behind a prose scope note. `agentsmd.renderKeyed` writes the general
+  `## Rule index` when that bit is set and `## Path-scoped rules` otherwise,
+  then the inlined rules and context. A file with many scoped rules stays under
+  Codex's document limit, and a long context that does not (read at the 32 KiB
+  default because the raised limit is absent or untrusted) loses only its own
+  tail. The builder adds the merged context and publishes it on devenv. A limit
+  is published even without content, because the runtime reads the file whoever
+  wrote it. Codex's launcher checks actual truncation independently, on either
+  backend and in any repo; there is no shell-entry window notice. The Markdown
   formatter handles the generated layout (one blank line between units and after
   each rule comment, one glob or link per index line) before the tree is
   installed.
