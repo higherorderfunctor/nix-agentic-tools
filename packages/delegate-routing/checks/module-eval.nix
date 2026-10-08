@@ -65,6 +65,31 @@
       ai.programs.delegate-routing.enable = true;
       ai.programs.delegate-routing.runtimes.codex.enable = false;
     };
+    hookRuntimes =
+      if name == "hm"
+      then lib.remove "kimchi" runtimes
+      else runtimes;
+    reminderCommands = evaluation: runtime:
+      if runtime == "kiro"
+      then lib.optional (evaluation.config.ai.kiro.hooks ? delegate-routing-reminder) evaluation.config.ai.kiro.hooks.delegate-routing-reminder.action.command
+      else
+        lib.filter (lib.hasInfix "delegate-routing-reminder")
+        (lib.concatMap (block: map (handler: handler.command) block.hooks) (evaluation.config.ai.${runtime}.hooks.UserPromptSubmit or []));
+    hasReminder = evaluation: runtime: reminderCommands evaluation runtime != [];
+    reminderOff = change {ai.programs.delegate-routing.reminder.enable = false;};
+    reminderOverride = runtime:
+      change {
+        ai.programs.delegate-routing = {
+          reminder.enable = false;
+          runtimes.${runtime}.reminder.enable = true;
+        };
+      };
+    reminderCustomText = "CUSTOM REMINDER: \"delegate\"\nsecond line";
+    reminderCustom = change {ai.programs.delegate-routing.reminder.text = reminderCustomText;};
+    reminderSourcePath = ../fragments/orchestrator-session.md;
+    reminderSource = change {ai.programs.delegate-routing.reminder.source = reminderSourcePath;};
+    reminderWarning = messages: lib.any (lib.hasInfix "hooks.delegate-routing-reminder.action.prompt") messages;
+    reminderWithIgnoredPrompt = change {ai.kiro.hooks.delegate-routing-reminder.action.prompt.text = "IGNORED PROMPT";};
     manualScenario.ai = {
       claude.enable = true;
       kiro.enable = true;
@@ -574,6 +599,8 @@
       in
         portable ? enable
         && portable ? families
+        && portable ? reminder
+        && perRuntime ? reminder
         && portable ? routing
         && portable ? workflows
         && !(portable ? extraRuntimes)
@@ -595,6 +622,82 @@
       && disabled.config.ai.claude.skills ? delegate-routing
       && !(result.config.ai.skills ? delegate-routing)
       && !(result.config.ai.rules ? delegate-routing-router)
+    );
+    "module-delegate-routing-${name}-reminder" = mkTest "delegate-routing-${name}-reminder" (
+      result.config.ai.programs.delegate-routing.reminder.enable
+      && result.config.ai.programs.delegate-routing.reminder.text == (import ../lib/reminder.nix {inherit lib pkgs;}).defaultText
+      && lib.all (runtime: builtins.length (reminderCommands result runtime) == 1) hookRuntimes
+      && (name != "hm" || !(hasReminder result "kimchi"))
+      && lib.all (runtime: result.config.ai.${runtime}.rules ? delegate-routing-router) runtimes
+    );
+    "module-delegate-routing-${name}-reminder-disabled" = mkTest "delegate-routing-${name}-reminder-disabled" (
+      lib.all (runtime: hasReminder result runtime && !(hasReminder reminderOff runtime)) hookRuntimes
+      && lib.all (runtime:
+        hasReminder result runtime
+        && !(hasReminder (change {ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable = false;}) runtime)
+        && hasReminder (reminderOverride runtime) runtime
+        && lib.all (other: !(hasReminder (reminderOverride runtime) other)) (lib.remove runtime hookRuntimes)
+        && !(hasReminder (change {ai.programs.delegate-routing.runtimes.${runtime}.enable = false;}) runtime)
+        && !(hasReminder (change {ai.${runtime}.enable = lib.mkForce false;}) runtime))
+      hookRuntimes
+      && lib.all (runtime: !(hasReminder (change {ai.programs.delegate-routing.enable = false;}) runtime)) hookRuntimes
+      && failsWith (change {
+        ai.programs.delegate-routing = {
+          reminder = {
+            enable = false;
+            text = "";
+          };
+          runtimes.claude.reminder.enable = true;
+        };
+      }) "ai.programs.delegate-routing.reminder.text"
+    );
+    "module-delegate-routing-${name}-reminder-payload" = let
+      samples = lib.concatMap (runtime:
+        map (sample: {
+          command = builtins.head (reminderCommands sample.evaluation runtime);
+          expected =
+            if runtime == "kiro"
+            then sample.text
+            else
+              builtins.toJSON {
+                hookSpecificOutput = {
+                  additionalContext = sample.text;
+                  hookEventName = "UserPromptSubmit";
+                };
+              };
+        }) [
+          {
+            evaluation = result;
+            text = result.config.ai.programs.delegate-routing.reminder.text;
+          }
+          {
+            evaluation = reminderCustom;
+            text = reminderCustomText;
+          }
+          {
+            evaluation = reminderSource;
+            text = builtins.readFile reminderSourcePath;
+          }
+        ])
+      hookRuntimes;
+    in
+      pkgs.runCommand "delegate-routing-${name}-reminder-payload" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        ${lib.getExe pkgs.python3} - ${pkgs.writeText "reminder-samples.json" (builtins.toJSON samples)} <<'PYTHON'
+        import json
+        import subprocess
+        import sys
+        with open(sys.argv[1]) as source:
+            for sample in json.load(source):
+                actual = subprocess.check_output([sample["command"]]).decode()
+                assert actual == sample["expected"], (sample, actual)
+        PYTHON
+        touch "$out"
+      '';
+    "module-delegate-routing-${name}-reminder-warnings" = mkTest "delegate-routing-${name}-reminder-warnings" (
+      lib.assertMsg (!reminderWarning result.config.warnings) (lib.concatStringsSep "\n" result.config.warnings)
+      && reminderWarning reminderWithIgnoredPrompt.config.warnings
     );
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
@@ -761,6 +864,13 @@ in {
           grep -F 'delegate-routing.routing: ordering cycle involving Self' actual.stderr
           touch "$out"
         '';
+      module-delegate-routing-repo-router = let
+        repo = harness.evalDevenvModules [(import ../../../dev/ai.nix {isCI = false;})];
+        routerRules = lib.genAttrs ["claude" "codex"] (runtime: repo.config.ai.${runtime}.rules ? delegate-routing-router);
+      in
+        (mkTest "delegate-routing-repo-router" (lib.all (value: value) (builtins.attrValues routerRules))).overrideAttrs {
+          passthru = {inherit routerRules;};
+        };
     }
     // checkBackend {
       name = "devenv";

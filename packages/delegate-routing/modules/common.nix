@@ -1,7 +1,8 @@
-{
+{hookRuntimes}: {
   config,
   lib,
   options,
+  pkgs,
   ...
 }: let
   # Copilot's sizing controls are not established.
@@ -19,20 +20,27 @@
   entryTypes = import ../lib/entry-type.nix {inherit lib;};
   entries = import ../lib/resolve-entries.nix {inherit lib;};
   entryOptions = entryTypes.options;
+  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
+  reminder = import ../lib/reminder.nix {inherit lib pkgs;};
+  inherit (import ../../../lib/ai/ai-common.nix {inherit lib;}) resolveOverride;
   resolved = runtime: let
     local = portable.runtimes.${runtime};
   in {
     routing = entries.resolveRouting portable.routing local.routing;
     workflows = entries.resolveWorkflows portable.workflows local.workflows;
   };
-  enabled = runtime:
-    config.ai.programs.delegate-routing.runtimes.${runtime}.enable
-    or null;
-  # Mirror program.nix's B4 resolveOverride: null inherits the portable value; keep in sync.
   programEnabled = runtime:
-    if enabled runtime == null
-    then config.ai.programs.delegate-routing.enable
-    else enabled runtime;
+    resolveOverride {
+      cliValue = portable.runtimes.${runtime}.enable;
+      topValue = portable.enable;
+    };
+  reminderEnabled = runtime:
+    resolveOverride {
+      cliValue = portable.runtimes.${runtime}.reminder.enable;
+      topValue = portable.reminder.enable;
+    };
+  reminderRuntimes = lib.filter (runtime: lib.hasAttrByPath ["ai" runtime "hooks"] options) hookRuntimes;
+  reminderHookEnabled = runtime: sourceEnabled runtime && reminderEnabled runtime;
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
   # The skill's Kiro evidence covers the v3 engine only. Default v3 on only
@@ -85,6 +93,11 @@
         default = defaults.models.${runtime};
         description = "Alternative family selectors. Each non-empty field must match; an empty selector is invalid. Kimchi and Kiro require an explicit selection when their skill is enabled.";
       };
+      reminder.enable = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "Whether this runtime receives the per-turn reminder. null inherits ai.programs.delegate-routing.reminder.enable.";
+      };
       techniques = lib.mkOption {
         type = lib.types.attrsOf techniqueType;
         default = {};
@@ -125,6 +138,27 @@ in {
         }));
         default = {};
         description = "Portable model families keyed by vendor and family name. Override any field or add a family.";
+      };
+      reminder = lib.mkOption {
+        type = aiTypes.optionalTextSource {
+          defaultContent.text = reminder.defaultText;
+          description = "the per-turn delegate-routing reminder";
+          enableDefault = true;
+        };
+        default = {};
+        description = ''
+          A standing request in the user's voice, delivered on every turn by a
+          UserPromptSubmit hook. Claude and Codex receive JSON additionalContext
+          on both backends; Kimchi receives it on devenv only (Home Manager has
+          no Kimchi hook file). Kiro receives plain text on both backends.
+          The default grants delegation to subagents and workflows and points
+          to the delegate-routing skill. Enable follows the program by default;
+          runtimes.<runtime>.reminder.enable overrides the shared reminder enable.
+
+          On Codex this defines ai.codex.hooks and cannot coexist with inline
+          ai.codex.native.settings.hooks. Move inline hooks to ai.codex.hooks
+          or disable runtimes.codex.reminder.enable.
+        '';
       };
       runtimes = lib.genAttrs supportedRuntimes runtimeOptions;
     };
@@ -177,6 +211,9 @@ in {
           v3 = lib.mkDefault true;
         };
       })
+      (lib.genAttrs reminderRuntimes (runtime:
+        lib.mkIf (reminderHookEnabled runtime)
+        (reminder.hooks.${runtime} portable.reminder.text)))
     ];
     warnings = lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
       ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
@@ -185,6 +222,10 @@ in {
     '';
     assertions =
       [
+        {
+          assertion = !lib.any reminderHookEnabled reminderRuntimes || portable.reminder._sourceWins || portable.reminder.text != "";
+          message = "ai.programs.delegate-routing.reminder.text must be non-empty when a runtime reminder hook is enabled, unless a source supplies the content.";
+        }
         {
           assertion = lib.allUnique (map (family: family.name) flattenedFamilies);
           message = "ai.programs.delegate-routing.families: family names must be unique across vendors.";

@@ -1,5 +1,8 @@
 # Acceptance suite
 
+> **Last verified:** 2026-10-08 — Claude and Kiro each have a reminder on/off
+> pair; the always-on router stays in rules delivery.
+
 One manual suite of real sessions on Claude, Codex, Kiro and Kimchi. Each case
 checks what the delivered delegate-routing configuration makes an agent do with
 a real task. A human starts it; it spends real model turns on the operator's
@@ -36,14 +39,22 @@ those needs proof that child messages never reach the parent stream.
 ## Cases
 
 `cases.nix` evaluates this repository's own delivery (`dev/ai.nix`) through the
-devenv module harness, with each case's task shape, and exports every delivered
-file. The prompt is the task plus synthetic usage numbers; the expected behavior
-never enters it.
+devenv module harness, with each case's switches and task shape, and exports
+every delivered file. The prompt is the task plus synthetic usage numbers; the
+expected behavior never enters it.
 
-| Cases                                                   | Switch or shape | Assertion      |
-| ------------------------------------------------------- | --------------- | -------------- |
-| `codex-single`, `kimchi-single`, `kiro-single`          | one task        | `one-delegate` |
-| `codex-dependent`, `kimchi-dependent`, `kiro-dependent` | dependent chain | `workflow`     |
+| Cases                                                   | Switch or shape             | Assertion      |
+| ------------------------------------------------------- | --------------------------- | -------------- |
+| `claude-reminder-on`, `claude-reminder-off`             | reminder enabled / disabled | `delegate`     |
+| `kiro-reminder-on`, `kiro-reminder-off`                 | reminder enabled / disabled | `delegate`     |
+| `codex-single`, `kimchi-single`, `kiro-single`          | one task                    | `one-delegate` |
+| `codex-dependent`, `kimchi-dependent`, `kiro-dependent` | dependent chain             | `workflow`     |
+
+Each reminder pair uses the same task with
+`ai.programs.delegate-routing.reminder.enable` forced on or off. Routing rules
+and skill delivery stay enabled in both cases. The off case still asks whether
+delegation occurs, so a FAIL measures the reminder's effect rather than a
+fixture error.
 
 Assertions read the session's own event log. A delegate call is a tool call
 named after a `subagent` or `workflow` technique of the case's runtime, or a

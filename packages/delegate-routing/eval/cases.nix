@@ -1,6 +1,6 @@
 # Acceptance cases: the repository's real delivery (dev/ai.nix), with only the
-# task shape selected. suite.py renders each case into a fixture repository
-# and runs one real session in it. `expect` names an assertion in suite.py's
+# named switches and task shape selected. suite.py renders each case into a
+# fixture repository and runs one real session in it. `expect` names an assertion in suite.py's
 # ASSERTIONS table; the prompt never carries it.
 {
   harness,
@@ -12,10 +12,12 @@
     expect,
     id,
     runtime,
+    switches ? {},
     task,
   }: let
     evaluated = harness.evalDevenvModules [
       (import ../../../dev/ai.nix {isCI = false;})
+      {config = switches;}
     ];
     inherit (evaluated) config;
     failures = map (item: item.message) (lib.filter (item: !item.assertion) config.assertions);
@@ -65,6 +67,19 @@
     };
   single = "Implement a pure Python function `unique_words(text)` in `words.py` that returns the sorted unique words of a string; `unique_words('pear apple pear')` must return `['apple', 'pear']`.";
   dependent = "Derive a normalization specification from the examples 'Pear' -> 'pear' and 'APPLE' -> 'apple' and write it to `SPEC.md`; then implement that specification as `normalize(word)` in `normalize.py`; then validate the implementation against those examples. Each step consumes the preceding result.";
+  reminderPairs = lib.concatMap (runtime:
+    map (on:
+      mkCase {
+        inherit runtime;
+        expect = "delegate";
+        id = "${runtime}-reminder-${
+          if on
+          then "on"
+          else "off"
+        }";
+        switches.ai.programs.delegate-routing.reminder.enable = lib.mkForce on;
+        task = single;
+      }) [true false]) ["claude" "kiro"];
   # Task shape: a single task wants one delegate, a dependent chain a workflow.
   shapes = lib.concatMap (runtime: [
     (mkCase {
@@ -81,4 +96,4 @@
     })
   ]) ["codex" "kimchi" "kiro"];
 in
-  shapes
+  reminderPairs ++ shapes
