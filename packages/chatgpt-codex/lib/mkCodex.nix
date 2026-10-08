@@ -490,7 +490,7 @@
             };
           });
           default = {};
-          description = "User-level project trust, keyed by absolute path; Codex matches the working directory or its repository root exactly, and a linked worktree resolves to its main checkout, so one entry covers a clone and its worktrees. With Home Manager this is the only trust Codex keeps, because its trust prompt cannot write the Nix-owned user config.toml. Devenv rejects this bootstrap-global setting in project config.toml.";
+          description = "User-level project trust, keyed by absolute path; Codex checks canonical and original working-directory paths before the main checkout for linked worktrees. The first entry found decides, even without a trust level, so a main-checkout entry covers linked worktrees only when they have no explicit working-directory entry. With Home Manager this is the only trust Codex keeps, because its trust prompt cannot write the Nix-owned user config.toml. Devenv rejects this bootstrap-global setting in project config.toml.";
         };
         sandbox_mode = lib.mkOption {
           type = lib.types.nullOr (lib.types.enum sandboxModeNames);
