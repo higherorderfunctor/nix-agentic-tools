@@ -238,7 +238,7 @@ The ai module fans out TWO kinds of configuration:
   for darwin and pre-split nixpkgs.
 - `ai.codex.native.settings` — typed stable keys plus a TOML-compatible native
   freeform tail. The module sets neither model nor reasoning effort unless the
-  consumer declares one, leaving Codex’s lower config layers or built-in
+  consumer declares one, leaving Codex's lower config layers or built-in
   defaults to supply them. Normalized reasoning effort lowers to
   `model_reasoning_effort` at default priority; explicit native values override
   it. Both backends deliver `config.toml` as a read-only store symlink: Home

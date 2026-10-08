@@ -1194,7 +1194,7 @@ in
           rejects keys Codex ignores at project scope. Codex refuses to save
           an in-app change (`/model`, `/experimental`, `codex mcp add`, the
           trust prompt) into a Nix-owned file, so declare those here. Model and
-          reasoning effort are omitted unless declared, leaving Codex’s lower
+          reasoning effort are omitted unless declared, leaving Codex's lower
           config layers or built-in defaults to supply them. Normalized
           reasoning effort lowers to `model_reasoning_effort` at default
           priority; explicit native values override it.
