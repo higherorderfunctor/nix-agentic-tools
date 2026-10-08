@@ -7,7 +7,7 @@
 # The returned submodule declares:
 #   enable          — bool
 #   settings        — typed submodule from server's settingsOptions
-#   env             — attrsOf str (escape hatch)
+#   env             — strings or redact references (escape hatch)
 #   args            — listOf str (escape hatch)
 #   scope           — readOnly enum (from meta.scope)
 #   package?        — package (when server has a local package)
@@ -23,6 +23,7 @@
     types
     ;
 
+  redact = import ../../redact {inherit lib;};
   serviceSchema = import ./serviceSchema.nix {inherit lib;};
 in
   {
@@ -45,9 +46,9 @@ in
         };
 
         env = mkOption {
-          type = types.attrsOf types.str;
+          type = types.attrsOf redact.types.environmentEntry;
           default = {};
-          description = "Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store -- use credentials for secrets.";
+          description = "Extra environment variables (escape hatch for options not yet in settings). Secret names require runtime references.";
         };
 
         args = mkOption {

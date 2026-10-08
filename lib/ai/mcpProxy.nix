@@ -97,7 +97,7 @@
 }: let
   inherit (lib) concatStringsSep filterAttrs foldl' mapAttrs mapAttrs' mapAttrsToList;
 
-  credentialsLib = import ../credentials.nix {inherit lib;};
+  redact = import ../redact {inherit lib;};
 
   # Upper-case; every non-alphanumeric becomes '_'. Same shape as the
   # Kiro preprocessor's `deriveEnvVar`, deliberately NOT shared with it:
@@ -285,7 +285,7 @@
         else {inherit (value) helper;};
     in {
       rendered = prefix + envRef var + suffix;
-      secrets = {${var} = cred;};
+      secrets = {${var} = cred // {option = "ai.mcpServers.${serverName}.proxy.headers.${field}";};};
     };
 
   # ── Per-server proxy spec ───────────────────────────────────────────
@@ -330,6 +330,7 @@
           then {inherit (url) file;}
           else {inherit (url) helper;}
         )
+        // {option = "ai.mcpServers.${serverName}.url";}
       else null;
     urlLiteral =
       if urlCred
@@ -430,7 +431,7 @@
 
   # ── ExecStart wrapper ───────────────────────────────────────────────
   # Reads every secret from its file (absolute coreutils paths, empty and
-  # missing-file guards — see lib/credentials.nix), splits the upstream
+  # missing-file guards from redact), splits the upstream
   # url into origin and path, then execs Caddy. Nothing lands in argv.
   #
   # Failing CLOSED here is deliberate and differs from the kiro launcher,
@@ -441,7 +442,17 @@
     secretExports =
       concatStringsSep "\n"
       (mapAttrsToList
-        (var: cred: credentialsLib.mkSecretExport pkgs var cred)
+        (var: cred:
+          redact.read {
+            inherit pkgs;
+            value =
+              if (cred.file or null) != null
+              then redact.file {path = cred.file;}
+              else redact.command {path = cred.helper;};
+            inherit (cred) option;
+            target = var;
+            export = true;
+          })
         (spec.headerSecrets
           // lib.optionalAttrs (spec.urlSecret != null) {
             ${spec.urlVar} = spec.urlSecret;

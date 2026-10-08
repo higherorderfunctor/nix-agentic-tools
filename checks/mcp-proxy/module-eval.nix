@@ -11,6 +11,20 @@
   inherit (import ../../packages/chatgpt-codex/checks/helpers.nix {inherit lib pkgs harness;}) hmCodexSettings;
 in {
   checks = {
+    module-mcp-proxy-start-script-reads-secrets-at-runtime = mkTest "mcp-proxy-start-script-reads-secrets-at-runtime" (
+      let
+        spec = mcpProxyLib.specFor "example" proxySampleServer;
+        script = (mcpProxyLib.startScriptFor spec).text;
+      in
+        lib.hasInfix "redact-read" script
+        && lib.hasInfix "set -euETo pipefail" script
+        && lib.hasInfix "shopt -s inherit_errexit" script
+        && !(lib.hasInfix "--header" script)
+        && lib.all (var: lib.hasInfix "export ${var}" script) (builtins.attrNames spec.headerSecrets ++ [spec.urlVar])
+        && lib.hasInfix "ai.mcpServers.example.proxy.headers.X-Api-Key" script
+        && lib.hasInfix "ai.mcpServers.example.url" script
+    );
+
     # Kiro content pipeline: a credential http HEADER renders to a
     # `${env:VAR}` placeholder (Kiro expands it at launch) and a credential
     # URL to a bare `${VAR}` envsubst sentinel (WE expand it at activation)
@@ -519,28 +533,6 @@ in {
         ]
     );
 
-    # Secrets must be read at RUNTIME from their files and never appear in
-    # argv — /proc/<pid>/cmdline is world-readable. The environment is still
-    # readable by same-uid processes, so this is not a process-isolation
-    # boundary. Also pins the absolute-coreutils-path rule and fail-closed.
-    module-mcp-proxy-start-script-reads-secrets-at-runtime = mkTest "mcp-proxy-start-script-reads-secrets-at-runtime" (
-      let
-        s = builtins.readFile (mcpProxyLib.startScriptFor (mcpProxyLib.specFor "example" proxySampleServer));
-      in
-        lib.hasInfix "/bin/cat \"/run/secrets/service-token\"" s
-        && lib.hasInfix "export MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN" s
-        && lib.hasInfix "set -euETo pipefail" s
-        && lib.hasInfix "shopt -s inherit_errexit" s
-        # Fail closed: an empty or unreadable secret must not start a proxy
-        # that would answer every client with the upstream's 401.
-        && lib.hasInfix "resolved empty from" s
-        && lib.hasInfix "the file is missing or unreadable" s
-        # Never a bare `cat` — this wrapper can be spawned with no PATH.
-        && !(lib.hasInfix "\ncat " s)
-        # The secret must not be an ARGUMENT to caddy.
-        && !(lib.hasInfix "--header" s)
-    );
-
     # A credential-valued http header reaching the shared renderServer via a
     # non-Kiro path throws — non-Kiro ecosystems do not inject secret
     # headers (rather than serialize the raw file path). Forced via toJSON.
@@ -561,81 +553,5 @@ in {
         url.file = "/f";
       })))
     .success);
-
-    # The guard is the point of the change, so exercise it as SHELL rather
-    # than as a grep: run a generated snippet against a genuinely empty file
-    # and against a populated one. A grep proves the line was emitted; only
-    # running it proves the line works.
-    module-credential-empty-guard-aborts = let
-      credLib = import ../../lib/credentials.nix {inherit lib;};
-      # `mkSecretExport` bakes the path in at generation time and the test
-      # needs two different files, so the path is a placeholder substituted
-      # per-case below.
-      runner = pkgs.writeShellScript "empty-guard-runner" ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        ${credLib.mkSecretExport pkgs "TEST_TOKEN" {file = "@SECRET@";}}
-        echo "REACHED-PROGRAM"
-      '';
-    in
-      pkgs.runCommand "module-test-credential-empty-guard-aborts" {
-        nativeBuildInputs = [pkgs.gnused];
-      } ''
-        # stdenv's buildCommand already runs with errexit, pipefail AND
-        # inherit_errexit on (measured against the pinned nixpkgs), so this
-        # line is not what makes a failing assertion below fail the build.
-        # It adds the three stdenv deliberately leaves off — `-u`, `-E`, `-T`
-        # — and brings the snippet in line with the repo-wide strict-mode
-        # rule. Verified safe here: setting them inside a buildCommand does
-        # not upset the phases stdenv runs afterwards.
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-
-        empty=$(mktemp) && : > "$empty"
-        full=$(mktemp) && printf 'a-real-token' > "$full"
-        sed "s|@SECRET@|$full|"  ${runner} > full.sh
-        sed "s|@SECRET@|$empty|" ${runner} > empty.sh
-
-        # Positive control. Without it, a guard that rejected EVERYTHING would
-        # still pass the negative case below and look correct.
-        got=$(${pkgs.bash}/bin/bash full.sh 2>&1)
-        [ "$got" = "REACHED-PROGRAM" ] || {
-          echo "FAIL: populated secret was rejected (got: $got)" >&2
-          exit 1
-        }
-
-        # A DIRECTORY must abort with the guard's own message. `-r` alone is
-        # true for a readable directory, so without the `-d` branch this
-        # sails past and dies on `cat: …: Is a directory`, losing the
-        # variable name and the path the guard exists to report.
-        mkdir -p secret-dir
-        sed "s|@SECRET@|$PWD/secret-dir|" ${runner} > dir.sh
-        if got=$(${pkgs.bash}/bin/bash dir.sh 2>&1); then
-          echo "FAIL: a directory as the secret path did not abort (got: $got)" >&2
-          exit 1
-        fi
-        case "$got" in
-          *"is a directory, not a secret file"*) : ;;
-          *)
-            echo "FAIL: directory aborted, but not via the guard (got: $got)" >&2
-            exit 1 ;;
-        esac
-
-        # The real case: an empty file must abort, non-zero, before the
-        # program is reached.
-        if got=$(${pkgs.bash}/bin/bash empty.sh 2>&1); then
-          echo "FAIL: empty secret did not abort the wrapper (got: $got)" >&2
-          exit 1
-        fi
-        case "$got" in
-          *REACHED-PROGRAM*)
-            echo "FAIL: reached the program despite the guard" >&2; exit 1 ;;
-          *"TEST_TOKEN resolved empty"*) : ;;
-          *)
-            echo "FAIL: aborted, but not via the guard (got: $got)" >&2; exit 1 ;;
-        esac
-
-        echo PASS > "$out"
-      '';
   };
 }

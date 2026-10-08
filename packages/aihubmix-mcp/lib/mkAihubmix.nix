@@ -4,14 +4,10 @@
 # to produce a typed attrset that conforms to the common MCP server
 # schema (type, package, command, args, env, settings, url).
 #
-# The server reads its credential from the AIHUBMIX_API_KEY environment
-# variable at startup and refuses to serve tools without it. It is NOT
-# declared as a typed `settings.credentials` option here: the common
-# schema's `env` passthrough is the live surface, and the repo's
-# credential handling (runtime `cat` of a sops-managed file, never a
-# store-baked secret) is supplied by `lib.ai.mkStdioEntry` /
-# `lib.mcp.nix`. See packages/kagi-mcp/lib/mkKagi.nix for the same
-# split.
+# The server reads AIHUBMIX_API_KEY at startup and refuses tools without it.
+# Use `env.AIHUBMIX_API_KEY = redact.file {path = "/run/secrets/aihubmix";};`
+# (or redact.command). The shared MCP renderer reads the reference at launch;
+# only the reference path enters the store. There is no settings.credentials.
 {
   lib,
   pkgs,

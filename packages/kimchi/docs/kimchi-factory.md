@@ -1,7 +1,9 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-10-07 — extractor floors guard config, environment and
-> harness surfaces; secret environment rows must state what they control.
+> harness surfaces; secret environment rows must state what they control; API
+> keys and Git tokens use redact references, and environment references are read
+> at launch with literal credentials rejected.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -298,23 +300,25 @@ read from the sidecar's `resources` type (`src/resources/types.ts`
 variable on commas and trims each entry, so such a key would enable a different
 id than the one declared. The variable is an additive comma list
 (`store.ts:45-61`), so the wrapper must not `--set` it: a caller's value, or an
-`ai.kimchi.environmentVariables` entry (which is `--set` first), is kept and the
-declared ids are appended to it. The wrapper check runs the launcher against a
-stub for an unset, empty and non-empty caller value rather than grepping its
+`ai.kimchi.environmentVariables` entry (which is exported first), is kept and
+the declared ids are appended to it. The wrapper check runs the launcher against
+a stub for an unset, empty and non-empty caller value rather than grepping its
 text. Locked by `module-kimchi-devenv-env-shadowed-resources` and
 `module-kimchi-wrapper-builds`.
 
-`ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
-`lib/credentials.nix` shape. Kimchi reads git tokens only from the user
-`config.json` and has no environment input for them
+`ai.kimchi.gitTokens.<host>` takes a
+`redact.file { path = "/run/secrets/token"; }` or
+`redact.command { path = "/path/to/reader"; }` reference. A null entry is
+omitted. Kimchi reads git tokens only from the user `config.json` and has no
+environment input for them
 (`src/extensions/teleport/provisioning/git-token.ts`), so this branch cannot use
-shared delivery: its `content.run` renderer exports each token from its file and
-merges it into the declaration with `jq` when the writer runs. It remains a 0400
-`copy-ro` file; shared delivery accepts only `content.value`. The store holds
-the credential path. The writer is ordered after the `secrets` token.
-`native.settings` has no `gitTokens` option, which would write the secret into
-the store. Devenv rejects the option by name. The API key needs no leaf: Kimchi
-prefers `KIMCHI_API_KEY` over the file everywhere it reads the key
+shared delivery: its `content.run` renderer exports each token from its file or
+command and merges it into the declaration with `jq` when the writer runs. It
+remains a 0400 `copy-ro` file; shared delivery accepts only `content.value`. The
+store holds the credential path. The writer is ordered after the `secrets`
+token. `native.settings` has no `gitTokens` option, which would write the secret
+into the store. Devenv rejects the option by name. The API key needs no leaf:
+Kimchi prefers `KIMCHI_API_KEY` over the file everywhere it reads the key
 (`loadConfig`, the telemetry and mismatch paths in `src/config.ts`), and the
 launcher exports it from `ai.kimchi.apiKey`. With it set, an in-app login or
 logout changes nothing the next launch reads. Locked by
@@ -526,24 +530,25 @@ key Kimchi cannot read. Locked by `module-kimchi-config-json-nested`.
 
 ## Gotcha: apiKey is a runtime SOPS credential, never a store literal
 
-`apiKey` is `lib.mcp.mkCredentialsOption "KIMCHI_API_KEY"` — the same
-`{ file | helper }` discriminated union the MCP servers use. The key is exported
-at launch via `lib.mcp.mkCredentialsSnippet`
-(`KIMCHI_API_KEY="$(<coreutils>/bin/cat <file>)"`) injected through
-`wrapProgram --run`, so the decrypted secret is read at runtime and the store
-holds only the **path**, never the key. Never reintroduce a plaintext `str`
-apiKey funneled into `--set`: that bakes the secret into a world-readable
-`/nix/store` wrapper. Mimic the existing credential pattern; do not invent a new
-secret surface.
+`apiKey` has type `redact.types.redacted` with a null default. Set it to
+`redact.file { path = "/run/secrets/kimchi-key"; }` or a `redact.command`
+reference. The shared reader exports `KIMCHI_API_KEY` through
+`wrapProgram --run` at launch; only the reference path enters the store. Failed,
+unreadable, empty or NUL-containing inputs abort before Kimchi runs. Diagnostics
+name `ai.kimchi.apiKey` and never print the value or command output.
+
+The root and Kimchi-specific environment pools use the same reader. Ordinary
+keys accept literals or references; credential-named keys require references.
+Neither pool writes the developer's session environment.
 
 ## Gotcha: wrapProgram separator
 
 Join `wrapProgram` flags with a single space — `lib.concatStringsSep " "`,
 matching `mkKiro` / `mkCopilot`. A `" \<newline>  "` separator inside a regular
-Nix string collapses the backslash, so with two or more env vars the second
-`--set` runs as its own command → `exit 127`. The package is wrapped in **both**
-backends (the wrapper owns the env vars and the credential export), so HM and
-devenv stay at parity by construction. Locked by `module-kimchi-wrapper-builds`.
+Nix string collapses the backslash, so a later flag runs as its own command and
+exits 127. Environment values are exported at launch through a runtime block.
+The package is wrapped in both backends, preserving the same credential and env
+delivery. Locked by `module-kimchi-wrapper-builds`.
 
 ## Orientation-only steering
 

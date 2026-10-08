@@ -14,14 +14,10 @@
 #
 # Either way the secret VALUE never enters the store — only its file path.
 #
-# Mirrors the file/helper credential union used by packaged MCP servers
-# (see `mkCredentialsOption` in lib/mcp.nix) and adds `prefix`/`suffix`
-# (e.g. a literal "Bearer ") plus an optional explicit env-var name.
-#
-# The file XOR helper mutex (and the "exactly one set" rule) is NOT
-# encoded in the type — a submodule cannot assert cleanly without a full
-# module eval. It is enforced by an `if/throw` at render/collect time,
-# matching the gitlab-mcp `instanceUrl` ⊕ `apiUrl` precedent.
+# HTTP retains its file/helper shape for Kiro's native substitution path.
+# The proxy converts these sources to redact references at its reader boundary.
+# Prefix/suffix decorate HTTP values; stdio env uses bare redact references.
+# The renderer enforces exactly one source before collecting a credential.
 #
 # Rendering + env-var derivation + the wrapper export live in the shared
 # `lib.ai` helpers so the placeholder written into mcp.json and the var

@@ -83,7 +83,11 @@ in {
   };
 
   settingsOptions = {
-    credentials = mcpLib.mkCredentialsOption "GITHUB_PERSONAL_ACCESS_TOKEN";
+    credentials = mkOption {
+      type = types.nullOr mcpLib.redact.types.redacted;
+      default = null;
+      description = "Runtime reference exported as GITHUB_PERSONAL_ACCESS_TOKEN.";
+    };
 
     ghHost = mkOption {
       type = types.nullOr types.str;

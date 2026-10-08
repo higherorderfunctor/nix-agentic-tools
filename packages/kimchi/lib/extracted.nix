@@ -251,7 +251,7 @@ in {
   # Every variable the factory sets itself goes through this, so a Kimchi
   # release that stops reading one (reconciliation reports it removed), or
   # starts overwriting it (the entry.ts analysis flips `consumerOverridable`),
-  # fails evaluation by name instead of leaving a dead `--set` in the wrapper.
+  # fails evaluation by name instead of leaving a dead environment export at launch.
   environmentName = name:
     if (variables.${name}.consumerOverridable or false)
     then name

@@ -1,7 +1,7 @@
 # Wrap copilot-cli so it reads the MCP config the module renders — shared by
 # BOTH backends (DRY). Returns the raw package when nothing needs wrapping.
 #
-# `environmentVariables` are baked as `--set` args on BOTH backends. devenv
+# `environmentVariables` are exported at launch on BOTH backends. devenv
 # used to pass `{}` and export through its native `env` attrset instead; that
 # wrote the PROJECT SHELL, handing every variable to the developer's own
 # session, so it was retired on 2026-08-10.
@@ -74,4 +74,5 @@ in
     exe = "copilot";
     flags = lib.optional mcp ''--add-flags "--additional-mcp-config @${mcpConfigPath}"'';
     name = "copilot-cli-wrapped";
+    option = "ai.copilot.environmentVariables";
   }

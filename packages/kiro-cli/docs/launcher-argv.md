@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-07 — launcher controls use `ai.kiro.cli`;
 > delegate-routing defaults the two workflow tweaks on for managed Kiro with
-> workflows enabled.
+> workflows enabled; environment references resolve through the shared redact
+> reader before launching Kiro.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -173,11 +174,12 @@ each opt-in tweak selecting the patched path on both backends.
 `ai.kiro.cli.extraPackages` adds one more environment-only injection to both the
 launcher and direct chat wrappers. Their store-backed `bin` directories are
 prepended after ordinary and secret environment exports, so an explicit
-`ai.kiro.cli.environmentVariables.PATH` becomes the base and the requested
-packages are first at that wrapper boundary. With no explicit PATH, the caller's
-inherited value remains after the prefix. Setting the Kiro-specific PATH entry
-to null suppresses a root `ai.environmentVariables.PATH`, restoring the ambient
-base before `extraPackages` is prepended.
+`ai.kiro.cli.environmentVariables.PATH` (literal or redact reference) becomes
+the base and the requested packages are first at that wrapper boundary. With no
+explicit PATH, the caller's inherited value remains after the prefix. Setting
+the Kiro-specific PATH entry to null suppresses a root
+`ai.environmentVariables.PATH`, restoring the ambient base before
+`extraPackages` is prepended.
 
 That is not final override precedence on Linux. The upstream FHS `/init` then
 sources `/etc/profile`, which puts `/run/wrappers/bin:/usr/bin:/usr/sbin` ahead

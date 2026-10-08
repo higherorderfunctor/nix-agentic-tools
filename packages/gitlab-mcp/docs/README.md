@@ -1,5 +1,8 @@
 # gitlab-mcp
 
+> **Last verified:** 2026-10-07 — redact URL diagnostics name instanceUrl;
+> deferred env vars retain their upstream references.
+
 [zereight/gitlab-mcp](https://github.com/zereight/gitlab-mcp) packaged as a Nix
 derivation with a typed home-manager surface. Exposes 182 GitLab REST/GraphQL
 tools (merge requests, issues, pipelines, wikis, work items, etc.) to MCP-aware
@@ -9,40 +12,39 @@ self-hosted instances are configured per the "Instance URL" section below.
 ## Quick start (HM)
 
 ```nix
-{ config, ... }: {
+{ config, redact, ... }: {
   services.mcp-servers.servers.gitlab-mcp = {
     enable = true;
-    settings.pat.file = config.sops.secrets."gitlab-personal-access-token".path;
+    settings.pat = redact.file {
+      path = config.sops.secrets."gitlab-personal-access-token".path;
+    };
   };
 }
 ```
 
 The PAT (`GITLAB_PERSONAL_ACCESS_TOKEN`) is the only required credential. The
-`settings.pat` option is the standard sops-nix / agenix surface — `.file` reads
-a decrypted file at service start, `.helper` reads from a credential-helper
-script. Exactly one must be set; raw inline tokens are intentionally not
-supported (they would land in the Nix store).
+`settings.pat` option accepts a `redact.file { path = "…"; }` or
+`redact.command { path = "…"; }` reference. Inline tokens are a type error. The
+shared reader refuses unreadable, empty, NUL-containing, or failed command
+output before starting the server; its diagnostics never include the value.
 
 ## Instance URL
 
-Two ways to point at a non-default instance, mutually exclusive:
+`instanceUrl` maps to `GITLAB_API_URL` and accepts a public string or a
+reference:
 
 ```nix
-# Plain URL — lands in the Nix store. Use when the URL is public
-# knowledge (e.g. a self-hosted instance everyone in the org knows).
+# Public URL, stored in Nix.
 services.mcp-servers.servers.gitlab-mcp.settings.instanceUrl =
   "https://gitlab.example.com";
 ```
 
 ```nix
-# Credential form — keeps the URL out of the store. Use when the
-# instance URL itself is sensitive.
-services.mcp-servers.servers.gitlab-mcp.settings.apiUrl.file =
-  config.sops.secrets."gitlab-instance-url".path;
+# Private URL, read only when the server starts.
+services.mcp-servers.servers.gitlab-mcp.settings.instanceUrl = redact.file {
+  path = config.sops.secrets."gitlab-instance-url".path;
+};
 ```
-
-Setting both raises an eval-time error. Both forms end up as `GITLAB_API_URL`
-for the server.
 
 ## Trust posture knobs
 
@@ -80,8 +82,8 @@ environment variable is omitted).
   default to keep the default tool list small.
 - `caCertPath = "/etc/ssl/certs/ca.pem"` — path to a CA bundle for self-signed
   GitLab instances (`GITLAB_CA_CERT_PATH`).
-- `jobToken.file` — set `GITLAB_JOB_TOKEN` for CI-scoped operations that prefer
-  the job token over the PAT.
+- `jobToken = redact.file { path = "…"; }` — set `GITLAB_JOB_TOKEN` for
+  CI-scoped operations that prefer the job token over the PAT.
 
 ## OAuth and other deferred env vars
 
@@ -97,5 +99,23 @@ services.mcp-servers.servers.gitlab-mcp.env = {
 };
 ```
 
-See `docs/plans/gitlab-mcp-packaging-slim.md` in the repo for the full
-deferred-vars table with upstream source references.
+| Env var                                   | Upstream                                                                                                                        | Reason deferred                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `ENABLE_DYNAMIC_API_URL`                  | [`config.ts:87-88`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L87-L88)     | Per-session API URL routing; OAuth-adjacent                                                  |
+| `GITLAB_AUTH_COOKIE_PATH`                 | [`config.ts:34`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L34)            | Niche auth path (cookie-based)                                                               |
+| `GITLAB_GRAPHQL_URL`                      | [`index.ts:1934`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/index.ts#L1934)          | Auto-derived from `GITLAB_API_URL`; only override if hosting GraphQL on a non-default origin |
+| `GITLAB_IS_OLD`                           | [`config.ts:36`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L36)            | Compatibility flag for old GitLab versions                                                   |
+| `GITLAB_OAUTH_APP_ID`                     | [`config.ts:79`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L79)            | OAuth out of scope                                                                           |
+| `GITLAB_OAUTH_CALLBACK_PROXY`             | [`config.ts:85`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L85)            | OAuth out of scope                                                                           |
+| `GITLAB_OAUTH_SCOPES`                     | [`config.ts:80`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L80)            | OAuth out of scope                                                                           |
+| `GITLAB_POOL_MAX_SIZE`                    | [`config.ts:211`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L211)          | Connection-pool tuning; default 100 is fine                                                  |
+| `GITLAB_TOOL_POLICY_APPROVE`              | [`config.ts:56-58`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L56-L58)     | Fine-grained policy; revisit once consumers ask                                              |
+| `GITLAB_TOOL_POLICY_HIDDEN`               | [`config.ts:60-62`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L60-L62)     | Fine-grained policy; revisit once consumers ask                                              |
+| `HOST` / `PORT`                           | [`config.ts:192,196`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L192)      | HTTP-mode only — bridged through mcp-proxy                                                   |
+| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | [`config.ts:202-204`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L202-L204) | Standard env names — picked up from process env via `env = {}` escape hatch                  |
+| `MCP_SERVER_URL`                          | [`config.ts:78`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L78)            | OAuth out of scope                                                                           |
+| `NODE_TLS_REJECT_UNAUTHORIZED`            | [`config.ts:205`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L205)          | Standard Node flag; rarely set                                                               |
+| `OAUTH_STATELESS_*` (5 vars)              | [`config.ts:96,141-186`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L96)    | OAuth out of scope                                                                           |
+| `REMOTE_AUTHORIZATION`                    | [`config.ts:71`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L71)            | Part of OAuth surface                                                                        |
+| `SESSION_TIMEOUT_SECONDS`                 | [`config.ts:171`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L171)          | Server tuning; defaults are fine                                                             |
+| `SSE` / `STREAMABLE_HTTP`                 | [`config.ts:69-70`](https://github.com/zereight/gitlab-mcp/blob/c2577169b21d62197f767895fe97651ffb2d7443/config.ts#L69-L70)     | Native HTTP/SSE transport — we use `mcp-proxy` bridge instead                                |

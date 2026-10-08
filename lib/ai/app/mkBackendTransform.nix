@@ -37,6 +37,7 @@
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
   hooks = import ../hooks.nix {inherit lib;};
+  redact = import ../../redact {inherit lib;};
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
@@ -248,7 +249,7 @@
       type = lib.types.nullOr aiCommon.optionalContentModule;
     };
     environmentVariables = {
-      type = lib.types.attrsOf lib.types.str;
+      type = redact.types.environment;
     };
     hooks = {
       apply = lib.filterAttrs (_event: blocks: blocks != []);
@@ -352,8 +353,8 @@
         // lib.optionalAttrs (packageText != null) {defaultText = packageText;});
     }
     // poolOption "environmentVariables" {
-      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-      description = "Environment variables baked into the ${appRecord.name} launcher wrapper. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
+      type = redact.types.environment;
+      description = "Environment variables delivered by the ${appRecord.name} launcher wrapper. Literals are stored; redact.file and redact.command references are read at launch. Credential-named keys require references. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
     }
     // lib.optionalAttrs (supportsPool "shell") {
       shell = lib.mkOption {

@@ -39,9 +39,9 @@
 
     # Stand-in for the real copilot-cli: prints the argv it received (one ARG
     # line per token, so an empty or space-bearing argument stays unambiguous)
-    # plus one baked env var, which is how the `--set` export path is asserted.
+    # plus one env var exported at launch, asserting the runtime export.
     # `${COPILOT_MODEL-unset}` keeps its default so the `-u` in strict mode
-    # reports an unbaked env var rather than aborting the stub.
+    # reports an unset env var rather than aborting the stub.
     echoArgv = pkgs.writeShellScript "copilot-cli-stub-argv" ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
@@ -168,7 +168,7 @@
 
       # ── environmentVariables reach the process, not just the Nix string ─────
       # The HM module's only export mechanism is this wrapper, and until now
-      # nothing asserted the `--set` args survived postBuild at all — the same
+      # nothing asserted the launch exports survived postBuild at all — the same
       # build-time blind spot the two shipped defects lived in.
       got="$(baked "$HA" "$RA" ${hmMcpEnv}/bin/copilot)"
       if [ "$got" = "claude-sonnet-4" ]; then

@@ -323,28 +323,33 @@ _: {
       ];
       sources = ["markdown-formatting"];
     };
-    # mcp-secrets: SOPS/agenix-injectable http MCP headers + url, the Kiro
-    # `${env:VAR}` / activation-envsubst delivery, the read-only mcp.json,
-    # and managed proxy ownership/lowering. Scoped to the ownership and
-    # transform paths, schema, shared renderer, proxy checks, Kiro secret
-    # preprocessor, and the launcher wrapper that exports the decrypted
-    # values at runtime.
+    # mcp-secrets: redact references for launchers, packaged credentials and
+    # managed services; HTTP headers/URLs, Kiro delivery and proxy ownership.
+    # Include each consumer boundary so edits load its runtime-secret contract.
     mcp-secrets = {
       scopes = [
         "checks/*/factory-eval.nix"
         "checks/*/module-eval.nix"
+        "checks/redact/**"
         "lib/ai/app/mkBackendTransform.nix"
+        "lib/ai/launcher.nix"
         "lib/ai/mcpProxy.nix"
         "lib/ai/mcpServer/**"
         "lib/ai/sharedOptions.nix"
         "lib/mcp.nix"
+        "lib/redact/**"
         "lib/testing/factory-harness.nix"
         "lib/testing/module-harness.nix"
         "packages/*/checks/factory-eval.nix"
         "packages/*/checks/module-eval.nix"
+        "packages/*/modules/mcp-server.nix"
+        "packages/glab/lib/**"
+        "packages/glab/modules/**"
+        "packages/kimchi/lib/mkKimchi.nix"
         "packages/kiro-cli/lib/mcpSecrets.nix"
         "packages/kiro-cli/lib/mkKiro.nix"
         "packages/kiro-cli/lib/wrapPackage.nix"
+        "packages/mcp-services/**"
       ];
       sources = ["mcp-secrets"];
     };

@@ -122,7 +122,7 @@
 
     credSnippet =
       if hasCreds
-      then mcpLib.mkCredentialsSnippet pkgs credVars evaluatedSettings
+      then mcpLib.credentialsEnvironment pkgs "services.mcp-servers.servers.${name}" credVars evaluatedSettings
       else "";
 
     # `--host` is passed explicitly rather than left to mcp-proxy's own
@@ -151,6 +151,13 @@
         ++ optionals (httpCmd == "bridge") [config.ai.internal.packages.mcpServers.mcp-proxy];
       text = ''
         ${shellStrict.shoptHeader}
+        ${mcpLib.serverEnvironment {
+          inherit pkgs;
+          environmentOptions = (mcpLib.loadServer name).meta.environmentOptions or {};
+          extraEnv = srv.env;
+          values = filterAttrs (_: mcpLib.redact.isReference) (effectiveEnvFor name srv "http");
+          option = "services.mcp-servers.servers.${name}";
+        }}
         ${credSnippet}
         exec ${rawCmd}${optionalString (argsStr != "") " ${argsStr}"}
       '';
@@ -192,7 +199,8 @@
     (mapAttrs (name: srv:
       mcpLib.credentialFilePaths
       (credentialVarsFor name)
-      (mcpLib.evalSettings name srv.settings))
+      (mcpLib.evalSettings name srv.settings)
+      (effectiveEnvFor name srv "http"))
     serviceServers);
 
   mkRotationCheck = name: paths: let
@@ -304,7 +312,7 @@ in {
         concatLists (mapAttrsToList (optName: spec:
           lib.optional spec.required {
             assertion = evaluatedSettings.${optName} != null;
-            message = "services.mcp-servers.servers.${name}.settings.${optName}: credentials are required (set file or helper)";
+            message = "services.mcp-servers.servers.${name}.settings.${optName}: a redact reference is required";
           })
         credVars))
       enabledServers);
@@ -313,7 +321,7 @@ in {
 
     systemd.user.services = mkIf pkgs.stdenv.hostPlatform.isLinux (mapAttrs' (name: srv: let
       serverDef = serverFiles.${name};
-      srvEnv = effectiveEnvFor name srv "http";
+      srvEnv = lib.filterAttrs (_: value: !mcpLib.redact.isReference value) (effectiveEnvFor name srv "http");
       # Optional per-server ExecStartPre, contributed by a server module's
       # `settingsToPreStart`, for setup that must happen before the daemon
       # inits. NO SERVER DECLARES ONE TODAY: openmemory-mcp was the only

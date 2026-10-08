@@ -30,7 +30,7 @@
   # `host` is added on top because a self-hosted instance URL can itself
   # be something an operator would rather not publish in a world-readable
   # store path, even though upstream does not class it as a credential.
-  # Its `plain` branch covers the ordinary public case.
+  # A literal string covers the ordinary public case.
   #
   # `unique` is load-bearing: `host` is also a member of `byName`, and
   # without it a future upstream that flips `host` to keyring-eligible

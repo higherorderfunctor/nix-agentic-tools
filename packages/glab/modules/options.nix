@@ -21,7 +21,7 @@
 {lib}: let
   inherit (lib) mkOption types;
 
-  credentialsLib = import ../../../lib/credentials.nix {inherit lib;};
+  redact = import ../../../lib/redact {inherit lib;};
 
   # Key partitioning + env-var mapping live in ONE place, shared with
   # ../lib/mkGlab.nix, which renders the exports these options describe.
@@ -52,9 +52,21 @@
     };
 
   mkSecretFor = name:
-    credentialsLib.mkSecretOption {
-      envVar = envVarOf name;
-      inherit (byName.${name}) description;
+    mkOption {
+      type = types.nullOr (
+        if name == "host"
+        then redact.types.maybeRedacted types.str
+        else redact.types.redacted
+      );
+      default = null;
+      description = ''
+        ${byName.${name}.description}
+
+        Mapped to ${envVarOf name}. Use `redact.file { path = "/run/secrets/${name}"; }`
+        or `redact.command { path = "/run/wrappers/bin/read-${name}"; }`.
+        ${lib.optionalString (name == "host") "A public hostname may also be a literal string."}
+        `null` leaves the variable unset.
+      '';
     };
 in {
   options.glab =
@@ -114,7 +126,7 @@ in {
               Home Manager activation, deferred until a graphical Linux user
               session is available.
 
-              The synchronizer reads `file` and `helper` credentials only at
+              The synchronizer reads `redact.file` and `redact.command` references only at
               service runtime and passes the token to glab over standard input.
               It never places the token in the Nix store, command arguments, or
               a persistent environment variable. A Secret Service availability

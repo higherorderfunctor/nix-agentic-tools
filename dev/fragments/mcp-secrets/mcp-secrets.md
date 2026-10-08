@@ -1,11 +1,7 @@
-## SOPS-Injectable Remote HTTP MCP Servers
+## Runtime References and MCP Secrets
 
-> **Last verified:** 2026-09-29 — Caddy config persistence is disabled, and
-> every managed proxy uses private runtime XDG directories. Claude's settings
-> and MCP files are Nix-owned read-only links. Proxy ownership is explicit and
-> keyed by server name, so each owner gets its own daemon; every ecosystem
-> renders servers via `renderServer`; Kiro's mcp.json is always a read-only
-> copy.
+> **Last verified:** 2026-10-07 — references are read in memory; diagnostics
+> name public options, and MCP settings-derived env retains its option label.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, so the reasoning is not re-derived from scratch. Full
@@ -154,9 +150,10 @@ through the environment.
   after the host, `${_rest#*/}` returns `_rest` unchanged and the path silently
   becomes the hostname.
 
-It fails CLOSED, deliberately differing from the launcher wrapper below: an
-empty or unreadable secret exits 1 naming the variable and the file, rather than
-starting a proxy that would answer every client with the upstream's 401.
+The proxy uses the strict redact reader. Unreadable, empty, NUL-containing, or
+failed command output aborts before Caddy starts. Diagnostics name the option
+and never include source output or the value. HTTP retains its existing
+file/helper shape because Kiro has a separate native substitution path.
 
 ### Two header surfaces, and which one is which
 
@@ -426,3 +423,54 @@ the project file only when a server is declared.
 Claude's files are not merge candidates: its `.claude/settings.json` and its
 `.mcp.json` files (the Home Manager personal plugin's and the devenv project's)
 are Nix-owned read-only links by policy.
+
+### Packaged credentials and stdio environment
+
+`lib.redact` and the Home Manager/devenv `redact` module argument expose the
+same constructors and types. `redact.file { path = "/run/secrets/token"; }` and
+`redact.command { path = "/absolute/bin/read-token"; }` construct one reference
+union: options do not choose separate file and command types.
+`redact.types.redacted` requires a reference and refuses literal tokens,
+passwords and keys. `redact.types.maybeRedacted lib.types.str` also accepts a
+literal string, for optionally private hosts, URLs and usernames. Only strings
+are supported. References store the source path, never its contents; use a
+runtime path rather than a Nix path literal that copies the secret into the
+store.
+
+A single strict reader resolves each reference before its consumer starts. It
+rejects unreadable, empty, or NUL-containing input and failed commands,
+including commands that print a value before failing. Command stderr is
+suppressed; diagnostics identify the option only. Trailing line feeds are
+trimmed, matching shell command substitution. Values travel through shell
+assignment and the environment (or the consumer's stdin), never argv. The
+reader's arguments contain the option name, source kind, and source path only.
+Reference values stay out of the Nix store, argv and reader diagnostics; a
+wrapper resolves env references at launch, and glab keyring synchronization
+sends its token on stdin. Consumer logging still needs its own protection, such
+as the proxy header filter above.
+
+Packaged Context7, GitHub, GitLab, and Kagi credentials accept only
+`redact.file { path = "…"; }` or `redact.command { path = "…"; }` references.
+GitLab's `instanceUrl` accepts either a literal string or a reference and maps
+to `GITLAB_API_URL`.
+
+Stdio `env` accepts literal strings and references; names flagged as secret by
+`lib/runtime-values/classify.nix` require references. `lib/mcp.nix` wraps both
+raw commands and packaged servers when references are present, resolving them
+before exec. Serialized MCP config contains only public values and wrapper
+paths. Managed MCP services use the same reader, and file-backed env references
+participate in their existing restart-on-rotation mechanism.
+
+### Behavior changes
+
+Command references suppress stderr, including interactive prompts and helper
+errors. Referenced glab hosts skip seeding, so `glab auth status` reports
+`gitlab.com` unless a prior login or keyring synchronization created a host
+entry. Environment names must match `[a-zA-Z_][a-zA-Z0-9_]*`, including raw MCP
+command entries. MCP env accepts strings or references; null entries are type
+errors. Managed services resolve env references in the same HTTP mode used for
+literal exports and rotation tracking.
+
+GitLab's `meta.environmentOptions.GITLAB_API_URL = "instanceUrl"` maps a
+settings-derived env reference back to `settings.instanceUrl` in diagnostics. An
+explicit env override keeps its env option label.

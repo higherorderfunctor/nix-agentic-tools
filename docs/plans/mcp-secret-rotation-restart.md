@@ -7,16 +7,16 @@
 Long-lived MCP services (`serviceServers` = local package + HTTP mode,
 materialised as `systemd.user.services.mcp-<name>` in
 `packages/mcp-services/modules/homeManager/default.nix`) read their credential
-**once, at `ExecStart`**. The generated wrapper inlines a credentials snippet
-(`lib/mcp.nix:mkCredentialsSnippet`) that does
-`TOKEN="$(cat <path>)"; export TOKEN`.
+**once, at `ExecStart`**. The generated wrapper uses
+`lib/mcp.nix:credentialsEnvironment` to resolve each redact reference through
+`redact-read` and export the token at launch.
 
 When a token is rotated, the secret manager re-renders the **same path** with
 new content. The unit's `ExecStart` references that stable path, so the
 generated unit is byte-identical — neither home-manager nor systemd sees
 anything to restart, and the running process keeps serving with the stale token.
-A manual `systemctl --user restart mcp-<name>` fixes it (the wrapper re-`cat`s
-on start); nothing was _triggering_ that restart.
+A manual `systemctl --user restart mcp-<name>` fixes it (the wrapper re-reads
+the reference on start); nothing was _triggering_ that restart.
 
 stdio servers are unaffected: their wrapper re-`cat`s on every client spawn, so
 they pick up rotation on next launch.
@@ -61,7 +61,7 @@ Properties:
 - **Activation-safe** — every step is guarded (`if … ; then`, `|| true`) so a
   missing/unreadable secret or a failed restart can never abort the rest of HM
   activation. First activation records a baseline and does not restart.
-- **Helper-based credentials** (`credentials.helper`) have no stable file to
+- **Helper-based credentials** (`redact.command`) have no stable file to
   fingerprint and are intentionally excluded.
 
 ### Code

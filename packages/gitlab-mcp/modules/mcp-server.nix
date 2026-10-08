@@ -1,18 +1,11 @@
 # Typed schema for gitlab-mcp (zereight/gitlab-mcp).
 #
 # Upstream env vars and tool registry verified 2026-05-20 against
-# c2577169b21d62197f767895fe97651ffb2d7443 (v2.1.13). See
-# docs/plans/gitlab-mcp-packaging-slim.md for the upstream
-# verification trail. GITLAB_DISABLE_VERSION_CHECK (disableVersionCheck)
+# c2577169b21d62197f767895fe97651ffb2d7443 (v2.1.13).
+# GITLAB_DISABLE_VERSION_CHECK (disableVersionCheck)
 # is newer: verified 2026-10-03 against
 # 1b375eb0252065d14e8b2853a905b0ddbaa4f1ff (v2.1.68), config.ts.
 #
-# Naming divergence from github-mcp (single generic `credentials`
-# vs three named `pat`/`apiUrl`/`jobToken`) is deliberate and
-# user-approved: each credential here describes a distinct
-# upstream env var whose purpose is meaningful to the consumer.
-# Normalizing all MCP modules to a unified credential schema is a
-# separate, deferred design — do not "fix" this in passing.
 {
   lib,
   mcpLib,
@@ -213,6 +206,7 @@
   ];
 in {
   meta = {
+    environmentOptions.GITLAB_API_URL = "instanceUrl";
     modes = {
       stdio = "gitlab-mcp";
       http = "bridge";
@@ -224,10 +218,6 @@ in {
         envVar = "GITLAB_PERSONAL_ACCESS_TOKEN";
         required = true;
       };
-      apiUrl = {
-        envVar = "GITLAB_API_URL";
-        required = false;
-      };
       jobToken = {
         envVar = "GITLAB_JOB_TOKEN";
         required = false;
@@ -238,21 +228,22 @@ in {
 
   settingsOptions = {
     # ── Credentials ────────────────────────────────────────────
-    pat = mcpLib.mkCredentialsOption "GITLAB_PERSONAL_ACCESS_TOKEN";
-    apiUrl = mcpLib.mkCredentialsOption "GITLAB_API_URL";
-    jobToken = mcpLib.mkCredentialsOption "GITLAB_JOB_TOKEN";
+    jobToken = mkOption {
+      type = types.nullOr mcpLib.redact.types.redacted;
+      default = null;
+      description = "Runtime reference exported as GITLAB_JOB_TOKEN.";
+    };
+    pat = mkOption {
+      type = types.nullOr mcpLib.redact.types.redacted;
+      default = null;
+      description = "Runtime reference exported as GITLAB_PERSONAL_ACCESS_TOKEN.";
+    };
 
     # ── Typed options ──────────────────────────────────────────
     instanceUrl = mkOption {
-      type = types.nullOr types.str;
+      type = types.nullOr (mcpLib.redact.types.maybeRedacted types.str);
       default = null;
-      description = ''
-        GitLab instance URL (plain string, lands in Nix store).
-        Flows to GITLAB_API_URL. Use this when the URL is public
-        knowledge. For URLs that must stay out of the store, use
-        `settings.apiUrl.file` / `settings.apiUrl.helper` instead
-        — the two are mutually exclusive.
-      '';
+      description = "GitLab instance URL, either a public literal or a runtime reference. Mapped to GITLAB_API_URL.";
     };
 
     caCertPath = mkOption {
@@ -331,16 +322,6 @@ in {
       default = false;
       description = "Enable pipeline tools. Sets USE_PIPELINE=true.";
     };
-  };
-
-  # Both inputs target GITLAB_API_URL; reject conflicts before rendering settings.
-  settingsModule = {config, ...}: {
-    config.assertions = [
-      {
-        assertion = config.instanceUrl == null || ((config.apiUrl.file or null) == null && (config.apiUrl.helper or null) == null);
-        message = "gitlab-mcp: settings.instanceUrl and settings.apiUrl.file/helper are mutually exclusive";
-      }
-    ];
   };
 
   settingsToEnv = cfg: _mode: let

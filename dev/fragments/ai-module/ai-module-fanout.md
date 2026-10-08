@@ -1,9 +1,10 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-07 — the runtime record's `launcherOptionsPath`
-> moves Kiro launcher options to `ai.kiro.cli`; Codex guards launcher flags as
-> real uses without per-name annotation rows; per-runtime program overrides
-> accept portable `settings`.
+> moves Kiro launcher options to `ai.kiro.cli`; supported launcher environment
+> pools accept redact references and reject literal credentials; Codex guards
+> launcher flags as real uses without per-name annotation rows; per-runtime
+> program overrides accept portable `settings`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -515,13 +516,13 @@ scope or a non-empty list for `fileMatch` content.
   drop it for that runtime with `ai.<runtime>.lspServers.<name> = null`. Copilot
   also keys `lspServers` by the attribute name and rejects the whole file for a
   name outside `[A-Za-z0-9_-]+`, so such a name throws for Copilot too.
-- `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
-  of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
-  joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
-  is a different thing and still is — that filters what SPAWNED commands
-  inherit, while this pool configures the CLI process itself. Claude is the one
-  exclusion: it has no wrapper here, and `ai.claude.native.settings.env` is its
-  native equivalent.
+- `ai.environmentVariables` — shared environment literals or redact references,
+  resolved by the launcher wrapper of every harness that has one: **Codex,
+  Copilot, Kimchi and Kiro**. Codex joined on 2026-08-10 when it gained a
+  wrapper; its `shell_environment_policy` is a different thing and still is —
+  that filters what SPAWNED commands inherit, while this pool configures the CLI
+  process itself. Claude is the one exclusion: it has no wrapper here, and
+  `ai.claude.native.settings.env` is its native equivalent.
 
   **Never reach for Home Manager session variables or devenv `env` to deliver a
   runtime variable** — not for Codex, not for anything. An earlier revision of
