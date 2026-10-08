@@ -36,6 +36,19 @@ let
     '';
   squashArm = "        squash: config.squash\n            || bool_value(";
 in [
+  {
+    name = "collapsed-owned-settings";
+    edits = [
+      (replace config ''"absorb.autoStageIfNothingStaged"'' ''"probe.autoStageIfNothingStaged"'')
+      (replace config ''"absorb.createSquashCommits"'' ''"probe.createSquashCommits"'')
+      (replace config ''"absorb.fixupTargetAlwaysSHA"'' ''"probe.fixupTargetAlwaysSHA"'')
+      (replace config ''"absorb.forceAuthor"'' ''"probe.forceAuthor"'')
+      (replace config ''"absorb.forceDetach"'' ''"probe.forceDetach"'')
+      (replace config ''"absorb.maxStack"'' ''"probe.maxStack"'')
+      (replace config ''"absorb.oneFixupPerCommit"'' ''"probe.oneFixupPerCommit"'')
+    ];
+    fails = ["F15"];
+  }
   # ── Prototype mutants ─────────────────────────────────────────────────
   {name = "P1-control";}
   {

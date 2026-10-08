@@ -4,7 +4,7 @@ Each extractor (packages/git-*/extract/extract.py) walks its own program's
 syntax tree into per-site records and hands them here to be aggregated and
 written as the sidecar lib/git-tool-settings/default.nix reads. The sidecar
 holds facts only, null or absent where the source cannot state one; hand rows
-fill those in Nix (lib/git-tool-settings/rules.nix). default.nix documents
+may fill those in Nix (lib/git-tool-settings/rules.nix). default.nix documents
 the schema; this module writes only fields it admits.
 """
 

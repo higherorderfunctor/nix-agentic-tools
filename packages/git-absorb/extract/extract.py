@@ -60,8 +60,8 @@ CONFIG_METHODS = set(METHOD_TYPES) | {
     "set_multivar", "remove_multivar", "open_level", "open_global", "add_file", "snapshot"}
 # libgit2 reads these behind `repo.signature()`; the source never names them.
 SIGNATURE_KEYS = ["user.email", "user.name"]
-# Reject collapsed extraction while allowing removals from the seven-key baseline.
-MIN_SETTINGS = 3
+# Reject collapsed extraction.
+MIN_SETTINGS = 3  # the pinned release reads 7
 MAX_DEPTH = 3
 
 for f, attr in tree.unclassified_test_attributes:

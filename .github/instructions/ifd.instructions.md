@@ -7,9 +7,9 @@ applyTo: ".github/actions/warm-ifd/**,.github/workflows/ci.yml,.github/workflows
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-10-07 — regeneration writes extracted facts only;
-> meaningful hand annotations and real uses retain removal checks, while
-> descriptions and controls are optional.
+> **Last verified:** 2026-10-07 — regeneration writes extracted facts only; hand
+> annotations and real uses retain removal checks; extractor floors guard
+> collapsed surfaces, and secret environment rows require controls prose.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 52e86965:dev/fragments/overlays/ifd-patterns.md`.
@@ -187,7 +187,7 @@ committed sidecar and format it. That passthru remains buildable while drift is
 red. Optional reconciliation `results` come from committed files; their failures
 fail the build after drift passes.
 
-`reconcile` takes one table per surface with `facts`, hand `rows`, required
+`reconcile` takes one table per surface with `facts`, hand `rows`, optional
 `needs`, allowed hand `fields`, explicit `secretNeeds`, and named `uses`. New
 ordinary names need no row. Removed names disappear unless a hand row or named
 use still refers to them. Supplied hand fields must be non-blank strings; rows
@@ -196,7 +196,8 @@ fill absent or null facts, while replacing a fact requires its field in
 recorded row and its required secret fields. `ignored = "<reason>"` omits a name
 and skips required fields. The shared runtime-values classifier handles only
 strings and string-to-string maps. Failures are `removed`, `needs-human`,
-`secret`, and `bad-row`; descriptions and controls are optional.
+`secret`, and `bad-row`; descriptions and ordinary controls prose are optional.
+Kimchi secret environment rows must state what they control.
 
 `mkExtractRegen` takes `attr`, `dest`, and an optional `extract` passthru key
 (default `extracted`); it writes and formats the sidecar.
@@ -355,8 +356,7 @@ id from each of the opus / sonnet / haiku families; the settings census requires
 at least 100 public keys, because a schema builder that runs and returns almost
 nothing is the same defect as a dead anchor. Codex requires its recursive tree
 to retain the root and at least 20 commands, asserts the exact sandbox enum and
-the approval enum without `untrusted`, and rejects empty feature/model results.
-The pre-0.149.0 compatibility branch is gone.
+the exact approval enum, and rejects empty feature/model results.
 
 #### Kiro settings must come from the shipped TUI source
 
@@ -372,8 +372,7 @@ those directories.
 The TypeScript AST probe requires one settings registry, one workspace
 allowlist, and a merge that consults that very set. It evaluates their validated
 expressions and the selected merge helper with inert loaders in an isolated
-JavaScript VM. Missing or ambiguous anchors fail; the historical path accepting
-a binary without workspace merging is gone.
+JavaScript VM. Missing or ambiguous anchors fail.
 
 #### An anchor can lose its TYPE information without losing its match
 

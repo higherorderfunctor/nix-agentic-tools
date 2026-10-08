@@ -1,5 +1,5 @@
-# lib/git-tool-settings/rules.nix: what the git tools' surface table adds to
-# the new-key rule, which checks/extracted/reconcile.nix covers in general.
+# lib/git-tool-settings/rules.nix: the git tools' reconciliation rules.
+# checks/extracted/reconcile.nix covers the shared rules.
 # Each case is one sidecar fact and its row, and the failures it must give.
 {
   harness,
@@ -61,11 +61,10 @@
       settings.row = {ignored = "probe";};
       kinds = ["bad-row"];
     };
-    # A write-only key becomes no option, so nothing needs its prose.
+    # A write-only key becomes no option, so it needs no type.
     write-only-setting-accepted = {
       settings.fact = {
         reads = {};
-        type = "string";
         writes."probe.rs#write" = ["repository"];
       };
       settings.row = null;

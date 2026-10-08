@@ -1,4 +1,4 @@
-# The new-key rule over committed facts and rows. It needs only nixpkgs lib,
+# Reconcile committed facts, hand rows and named uses. It needs only nixpkgs lib,
 # so a consumer that declares options before `pkgs` exists (the git tools'
 # option modules) can call it.
 {lib}: let

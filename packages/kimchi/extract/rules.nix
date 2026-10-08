@@ -18,7 +18,7 @@
     };
     environment = {
       facts = extracted.environment.variables;
-      # Optional prose: nothing reads it, and an extractor cannot derive it.
+      # Ordinary names may carry prose; secret rows require it below.
       fields = ["controls"];
       needs = [];
       # Duplicate names or groups with unknown fields become bad-row data.
@@ -35,7 +35,9 @@
                 "unknown environment ignore group fields" = true;
               }))
           (builtins.attrValues rows.environmentIgnored));
-      secretNeeds = [];
+      # A secret name's row must say what it controls, so a bare {} row
+      # cannot pass as its review.
+      secretNeeds = ["controls"];
     };
     harness = {
       facts = extracted.harness.keys;

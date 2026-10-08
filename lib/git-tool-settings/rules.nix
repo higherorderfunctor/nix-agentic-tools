@@ -19,13 +19,11 @@
     };
     settings = {
       facts = extracted.settings;
-      # Which of these a key needs depends on its entry, so `needs` below
-      # decides; listing them here lets a row fill or replace them.
+      # Read settings need a type; rows may fill or replace these fields.
       fields = ["defaultDescription" "description" "note" "type"];
       rows = rows.settings;
       # No settings row field delivers a value outside the store; a name the
-      # classifier calls secret is never auto-accepted, so it waits for a
-      # person to write its row.
+      # classifier calls secret needs a recorded row.
       secretNeeds = [];
     };
   };

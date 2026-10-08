@@ -33,7 +33,7 @@ Method order, as the repo requires:
           fallback chain and CLI override; docutils for the man page's
           `.. gitconfig::` directives.
   regex   only the shared key-token net (census.py), run over decoded AST
-          string constants and docutils literal text.
+          string constants.
 """
 
 import argparse

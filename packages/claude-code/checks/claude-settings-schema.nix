@@ -24,8 +24,8 @@
 # regression: a node the walk thinks carries both a `.*` wildcard and named
 # children degrades to `attrsOf freeformType` and loses its typing. That
 # happened once already — `hooks.*[]` parsed as a named child called `*` —
-# and it was reported, not thrown, so nothing failed. Pinning the list is
-# what turns the report into a gate.
+# and it was reported, not thrown, so nothing failed. Requiring an empty list
+# turns the report into a gate.
 #
 # Eval-only: readFile plus a module-system walk. No IFD, no derivation built,
 # and no ~390 MB claude-code binary.
@@ -45,10 +45,6 @@
       inherit extracted lib pkgs;
     };
     inherit (surface) report;
-
-    # SNAPSHOT — see the header. Empty is the healthy value; a non-empty one is a
-    # grammar regression, not a fact about upstream.
-    expectedMixedWildcard = [];
 
     # ── Composed-surface behavior ────────────────────────────────
     # The rules above interrogate the REPORT. These run real values through the
@@ -184,11 +180,32 @@
     # Each entry: a field that must be empty, and what a non-empty one means.
     emptinessRules = [
       {
-        field = "staleOverrides";
+        field = "missingPaths";
         remedy = ''
-          A row in `overrideTable` (packages/claude-code/lib/generateSettingsOptions.nix)
-          names a path the packaged binary no longer emits, so it applies to
-          nothing. Delete the row, or re-point it at the key upstream renamed to.
+          The sidecar lists these as public top-level settings keys but carries
+          no `settings.paths` entry describing them, so no option could be
+          generated. That is an EXTRACTOR defect (packages/claude-code/extract/census.mjs),
+          not a table one — the schema walk lost a subtree.
+        '';
+      }
+      {
+        field = "mixedWildcard";
+        remedy = ''
+          A node carrying BOTH a `.*` wildcard and named children cannot be an
+          `attrsOf`, so it degraded to `attrsOf <freeform>` and lost its typing.
+          Either the sidecar's path grammar grew a spelling `parseSegment` in
+          packages/claude-code/lib/generateSettingsOptions.nix does not handle
+          (this is what `hooks.*[]` did), or the binary genuinely gained such a
+          node. Fix the parser or model the node with an explicit typed option.
+        '';
+      }
+      {
+        field = "shadowedOverrides";
+        remedy = ''
+          A path is in BOTH hand tables: `overrideTable` and the hand-authored
+          declarations. The hand declaration wins, so the override row is dead
+          code that looks live. Delete one side — keeping both is how a future
+          edit lands in the half that is not used.
         '';
       }
       {
@@ -202,45 +219,17 @@
         '';
       }
       {
-        field = "shadowedOverrides";
+        field = "staleOverrides";
         remedy = ''
-          A path is in BOTH hand tables: `overrideTable` and the hand-authored
-          declarations. The hand declaration wins, so the override row is dead
-          code that looks live. Delete one side — keeping both is how a future
-          edit lands in the half that is not used.
-        '';
-      }
-      {
-        field = "missingPaths";
-        remedy = ''
-          The sidecar lists these as public top-level settings keys but carries
-          no `settings.paths` entry describing them, so no option could be
-          generated. That is an EXTRACTOR defect (packages/claude-code/extract/census.mjs),
-          not a table one — the schema walk lost a subtree.
+          A row in `overrideTable` (packages/claude-code/lib/generateSettingsOptions.nix)
+          names a path the packaged binary no longer emits, so it applies to
+          nothing. Delete the row, or re-point it at the key upstream renamed to.
         '';
       }
     ];
 
     emptinessFailures =
       lib.filter (rule: report.${rule.field} != []) emptinessRules;
-
-    snapshotRules = [
-      {
-        field = "mixedWildcard";
-        expected = expectedMixedWildcard;
-        remedy = ''
-          A node carrying BOTH a `.*` wildcard and named children cannot be an
-          `attrsOf`, so it degraded to `attrsOf <freeform>` and lost its typing.
-          Either the sidecar's path grammar grew a spelling `parseSegment` in
-          packages/claude-code/lib/generateSettingsOptions.nix does not handle
-          (this is what `hooks.*[]` did), or the binary genuinely gained such a
-          node. Fix the parser, or update `expectedMixedWildcard` here.
-        '';
-      }
-    ];
-
-    snapshotFailures =
-      lib.filter (rule: report.${rule.field} != rule.expected) snapshotRules;
 
     describeEmptiness = rule: ''
       report.${rule.field} is not empty:
@@ -249,20 +238,8 @@
 
       ${rule.remedy}'';
 
-    describeSnapshot = rule: ''
-      report.${rule.field} does not match its snapshot.
-
-        expected:
-      ${renderList rule.expected}
-
-        actual:
-      ${renderList report.${rule.field}}
-
-      ${rule.remedy}'';
-
     failures =
       map describeEmptiness emptinessFailures
-      ++ map describeSnapshot snapshotFailures
       ++ map describeBehavior behaviorFailures;
   in {
     claude-settings-schema =

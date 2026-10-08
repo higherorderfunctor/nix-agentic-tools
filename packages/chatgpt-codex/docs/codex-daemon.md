@@ -1,8 +1,7 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-07 — launcher flags are checked directly as
-> root-command uses, with no annotation rows; Home Manager owns daemon selection
-> and settings.
+> **Last verified:** 2026-10-07 — launcher flags are checked as root-command
+> `uses`; Home Manager owns daemon selection and settings.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched

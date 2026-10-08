@@ -939,10 +939,6 @@
   # it must refuse a key Kiro would drop rather than emit a plausible-looking
   # no-op. Home Manager writes the GLOBAL file, where every key is honored —
   # that is why this is a lowering difference and not a divergent option.
-  #
-  # An EMPTY list means this kiro honors no workspace override at all (true for
-  # every release before 2.21.1), which is a stronger statement than "this key
-  # is not allowed" and gets its own message below.
   inherit (kiroExtracted) workspaceOverridableSettings;
 
   # The FLATTEN BOUNDARY: every dotted path kiro's binary names as a complete
