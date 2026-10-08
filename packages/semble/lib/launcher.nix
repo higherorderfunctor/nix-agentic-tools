@@ -8,21 +8,17 @@
   spec,
   cacheDir ? null,
 }: let
-  configFile = import ./configFile.nix {inherit pkgs;};
   customization = import ./customization.nix {inherit lib;};
   normalized = customization.normalize spec;
-  errors = customization.errors normalized;
+  errors = customization.errors normalized ++ customization.schemaErrors package spec;
   config = customization.config normalized;
-  sembleConfig = configFile package config;
+  sembleConfig = pkgs.writeText "semble-config.json" (builtins.toJSON config);
   launcherArgs =
     ["--set" "SEMBLE_NIX_CONFIG" "${sembleConfig}"]
     ++ lib.optionals (cacheDir != null) ["--set" "SEMBLE_CACHE_LOCATION" cacheDir];
 in
   assert lib.assertMsg (errors == [])
   "semble.customizePackage:\n${lib.concatStringsSep "\n" errors}";
-  # An unpatched consumer package silently ignores nondefault runtime config.
-  assert lib.assertMsg (config == customization.config {} || (package.passthru.sembleConfigSchema or null) == 1)
-  "Semble nondefault configuration requires a package exposing passthru.sembleConfigSchema = 1.";
     pkgs.runCommand "${lib.getName package}-wrapped" {
       nativeBuildInputs = [pkgs.makeWrapper];
       passthru = {

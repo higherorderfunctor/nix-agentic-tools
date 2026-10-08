@@ -108,16 +108,6 @@
     spec.pathMappings)
     ++ map (pattern: "Semble `pathMappings` pattern \"${pattern}\" is listed more than once; only its first entry could ever match.")
     (duplicates (builtins.filter builtins.isString patterns));
-in {
-  inherit bundledLanguages expand layouts normalize;
-
-  # Every message for a normalized spec; empty means valid.
-  errors = spec: modelErrors spec ++ grammarErrors spec ++ mappingErrors spec;
-
-  warnings = spec:
-    lib.optional (enabledModels spec != [] && !(lib.any (entry: expand entry.content == expand spec.defaultContent) (enabledModels spec)))
-    "Semble `models` has no entry for `defaultContent` (${lib.concatStringsSep " " (expand spec.defaultContent)}), so a plain `semble search` uses `defaultModel` and warns on every call.";
-
   # All runtime keys are present, including the upstream defaults. Store paths
   # retain their string context so the JSON keeps grammars and models alive.
   config = requested: let
@@ -149,4 +139,18 @@ in {
       mapping.patterns)
     spec.pathMappings;
   };
+
+  defaultConfig = config {};
+  schemaErrors = package: requested:
+    lib.optional (config requested != defaultConfig && (package.passthru.sembleConfigSchema or null) != 1)
+    "Semble nondefault configuration requires a package exposing passthru.sembleConfigSchema = 1.";
+in {
+  inherit bundledLanguages config defaultConfig expand layouts normalize schemaErrors;
+
+  # Every message for a normalized spec; empty means valid.
+  errors = spec: modelErrors spec ++ grammarErrors spec ++ mappingErrors spec;
+
+  warnings = spec:
+    lib.optional (enabledModels spec != [] && !(lib.any (entry: expand entry.content == expand spec.defaultContent) (enabledModels spec)))
+    "Semble `models` has no entry for `defaultContent` (${lib.concatStringsSep " " (expand spec.defaultContent)}), so a plain `semble search` uses `defaultModel` and warns on every call.";
 }

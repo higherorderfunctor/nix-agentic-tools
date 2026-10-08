@@ -486,7 +486,7 @@ in {
     );
 
     module-semble-extra-grammars-load = let
-      customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
+      customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
       # First match wins in list order: "pkg/*" and "special.lock" come before
       # "*.lock", "a?.cfg" (properties) before "?b.cfg" (ini), and json splits
       # into docs and config by path.
@@ -661,7 +661,7 @@ in {
     # A null-language mapping indexes its files with line chunks and no
     # language, bypasses the parser its suffix would pick, and logs nothing.
     module-semble-null-language-runtime = let
-      customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
+      customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
       semble = customizePackage pkgs.ai.semble {
         pathMappings = [
           {
@@ -1159,7 +1159,7 @@ in {
         && evaluated.config.ai.programs.semble.finalPackage.unwrapped.drvPath == pkgs.ai.semble.drvPath
         && runtimePackages.claude.unwrapped.drvPath == pkgs.ai.semble.drvPath
         && runtimePackages.codex.unwrapped.drvPath == pkgs.hello.drvPath
-        && runtimePackages.claude.sembleConfig != runtimePackages.codex.sembleConfig
+        && (builtins.head mixed.home.packages).sembleCacheLocations.claude != (builtins.head mixed.home.packages).sembleCacheLocations.codex
         && mixed.ai.programs.semble.finalPackage.unwrapped.drvPath == pkgs.ai.semble.drvPath
         && builtins.all (assertion: assertion.assertion) evaluated.config.assertions
         && lib.all rejectsUnpatched [evalHm evalDevenv]

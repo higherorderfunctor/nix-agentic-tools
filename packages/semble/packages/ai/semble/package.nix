@@ -11,7 +11,7 @@
 }: let
   inherit (python3.pkgs) buildPythonPackage;
   customization = import ../../../lib/customization.nix {inherit lib;};
-  defaultConfig = pkgs.writeText "semble-config.json" (builtins.toJSON (customization.config {}));
+  defaultConfig = pkgs.writeText "semble-config.json" (builtins.toJSON customization.defaultConfig);
   buildSystem = with python3.pkgs; [setuptools setuptools-scm];
   sourcesFiles = {
     model2vec = ../../../model2vec-sources.json;

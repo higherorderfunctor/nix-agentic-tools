@@ -14,14 +14,12 @@
     ai = config.ai.internal.packages;
     inherit lib;
   });
-  renderConfig = import ../lib/configFile.nix {inherit pkgs;};
   customization = import ../lib/customization.nix {inherit lib;};
   records = import ../lib/integrations.nix;
   runtimes = program.supportedRuntimes;
   cacheRoot = cacheLocation {inherit config lib;};
   launcher = import ../lib/launcher.nix {inherit lib pkgs;};
   defaultSpec = customization.normalize {};
-  defaultConfig = customization.config defaultSpec;
 
   featurePaths = {
     instructions = ["cli" "instructions"];
@@ -52,19 +50,16 @@
   # config for launcher construction until those assertions report the errors.
   configState = cfg: let
     requested = customization.normalize {inherit (cfg) defaultContent defaultModel grammars models pathMappings;};
-    requestedConfig = customization.config requested;
     validationErrors = customization.errors requested;
     errors =
       validationErrors
-      ++ lib.optional (validationErrors == [] && requestedConfig != defaultConfig && (cfg.package.passthru.sembleConfigSchema or null) != 1)
-      "Semble runtime customization requires `package.passthru.sembleConfigSchema = 1`; an unpatched package would ignore SEMBLE_NIX_CONFIG.";
+      ++ lib.optionals (validationErrors == []) (customization.schemaErrors cfg.package requested);
     spec =
       if errors == []
       then requested
       else defaultSpec;
   in {
     inherit cfg errors spec;
-    configFile = renderConfig cfg.package (customization.config spec);
     customizationWarnings = customization.warnings requested;
   };
 
@@ -85,7 +80,7 @@
   activeStates = builtins.filter (state: state.integrationActive) stateList;
   integrationActive = activeStates != [];
   codexSelected = lib.any states.codex.selected ["instructions" "mcp" "subagent"];
-  configKey = state: builtins.hashString "sha256" (builtins.unsafeDiscardStringContext (toString state.configFile));
+  configKey = state: builtins.hashString "sha256" (builtins.unsafeDiscardStringContext "${toString state.cfg.package}\n${builtins.toJSON (customization.config state.spec)}");
   variantKeys = lib.unique (map configKey activeStates);
   variantCount = lib.length variantKeys;
   # Each distinct config gets a launcher and its own cache. The package stamp
@@ -178,7 +173,7 @@
             ${variant.wrappedPackage}/bin/semble clear index >/dev/null
 
           temporary="$(${pkgs.coreutils}/bin/mktemp "$cache_dir/.nix-package.XXXXXX")"
-          trap '${pkgs.coreutils}/bin/rm "$temporary"' EXIT
+          trap '${pkgs.coreutils}/bin/rm -f "$temporary"' EXIT
           printf '%s\n' "$expected" > "$temporary"
           ${pkgs.coreutils}/bin/mv -f "$temporary" "$stamp"
           trap - EXIT

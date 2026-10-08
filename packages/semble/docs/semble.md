@@ -1,8 +1,8 @@
 # Semble integrations
 
 > **Last verified:** 2026-10-07 — Semble is built from source on this flake’s
-> nixpkgs; runtime JSON selects grammars, mappings and models without rebuilding
-> it.
+> nixpkgs; shared runtime config validation preserves cache identity and
+> first-party PYTHONPATH isolation.
 >
 > Full lineage: `git show 3dc3057b:packages/semble/docs/semble.md`.
 
@@ -15,6 +15,10 @@ Semble provides local semantic and lexical code search through a CLI and an MCP
 server. This repository builds it from source with its own nixpkgs and adds
 matching Home Manager and devenv convenience modules for Claude, Codex, and
 Kiro.
+
+The published package always carries both patches; with the default config,
+search behaves like upstream, but an index written by a non-Nix `semble` in the
+same cache is rebuilt once.
 
 ## Umbrella configuration
 
@@ -226,12 +230,13 @@ a devenv shell put Semble's dependencies (numpy, tokenizers, huggingface-hub,
 ...) on the project's PYTHONPATH, ahead of its own virtualenv, even in
 non-Python projects. Home Manager profiles run no setup hooks and never leaked.
 The package recipe unsets PYTHONPATH in its own entry points because nixpkgs
-appends application site-packages after the caller's PYTHONPATH. Both the bare
-package and configured launchers therefore resist a caller's shadow `semble`
-module. `module-semble-launcher-python-isolation` checks both backends,
-including a multi-variant install, and confirms the fake module shadows a direct
-Python import. `lib.ai.mcpServers.mkSemble` points at whatever package it is
-given and does not add these launchers.
+appends application site-packages after the caller's PYTHONPATH. The first-party
+package and launchers built on it therefore resist a caller's shadow `semble`
+module; a consumer `package` keeps whatever PYTHONPATH handling its own recipe
+has. `module-semble-launcher-python-isolation` checks both backends, including a
+multi-variant install, and confirms the fake module shadows a direct Python
+import. `lib.ai.mcpServers.mkSemble` points at whatever package it is given and
+does not add these launchers.
 
 Both backends record the underlying Semble package store path in its assigned
 cache directory. A single active config keeps the established cache root;

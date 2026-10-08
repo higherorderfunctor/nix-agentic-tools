@@ -9,7 +9,7 @@
 }: let
   inherit (harness) evalDevenv evalHm mkTest;
   programFactory = import ../../../lib/ai/program.nix {inherit lib;};
-  customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
+  customizePackage = (import ../lib/default.nix).ai.semble.customizePackage {inherit lib pkgs;};
 
   runtimeConfig = package: builtins.fromJSON (builtins.unsafeDiscardStringContext (builtins.readFile package.passthru.sembleConfig));
   sembleScript = import ./semble-script.nix pkgs;
@@ -462,6 +462,14 @@ in {
 
     module-semble-models-routing-text = mkTest "semble-models-routing-text" (
       let
+        records = import ../lib/integrations.nix;
+        cliInstructions = ../cli-instructions.md;
+        vanilla = evalHm {
+          ai.programs.semble = {
+            cli.instructions.enable = true;
+            subagent.enable = true;
+          };
+        };
         evaluated = evalHm {
           ai = {
             programs.semble =
@@ -497,7 +505,11 @@ in {
           }).config.ai.claude.rules.semble.text;
         prompts = [rule agent.instructions.text kiroAgent.prompt.text];
       in
-        lib.all (text: count routingIntro text == 1 && count templateIntro text == 1 && !(lib.hasInfix "--model" text)) prompts
+        (records.forCli {}).rule
+        == {source = cliInstructions;}
+        && vanilla.config.ai.claude.rules.semble.text == builtins.readFile cliInstructions
+        && vanilla.config.ai.claude.agents.semble-search.description == records.semanticAgent.description
+        && lib.all (text: count routingIntro text == 1 && count templateIntro text == 1 && !(lib.hasInfix "--model" text)) prompts
         && lib.hasPrefix "${routingIntro} `code config`. `--content` replaces that set for one call." rule
         && lib.hasInfix "- `--content docs`: Prose: READMEs and guides." rule
         && lib.hasInfix "- `--content code config` (plain `semble search`)\n" rule

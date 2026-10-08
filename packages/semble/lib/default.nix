@@ -1,12 +1,13 @@
-let
-  customizePackage = import ./customizePackage.nix;
-in {
+{
   ai = {
     mcpServers.mkSemble = import ./mkSemble.nix;
     semble =
       import ./integrations.nix
       // {
-        inherit customizePackage;
+        customizePackage = {
+          lib,
+          pkgs,
+        }: package: spec: import ./launcher.nix {inherit lib pkgs;} {inherit package spec;};
       };
   };
 }
