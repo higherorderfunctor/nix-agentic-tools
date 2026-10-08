@@ -1,12 +1,8 @@
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-10-03 — the overlay and module default hand consumers
-> this flake's own kiro-cli build; a pre-split nixpkgs is reached only through
-> `follows` or the overlay's fallback. The sandbox contracts below were verified
-> on 2026-08-16: `ai.kiro.useFhsSandbox = false` selects the pinned unwrapped
-> payload explicitly, and `true` stays the default. `trustedMcpTools` composes
-> inside the FHS payload so launcher dispatch reaches it under both supported
-> nixpkgs topologies, and the structural check pins that shape.
+> **Last verified:** 2026-10-07 — package selection, environment and FHS
+> controls use `ai.kiro.cli`; the recorded upstream sandbox measurements below
+> are unchanged.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
@@ -88,11 +84,11 @@ devenv sessions do not silently lose `--trust-tools`.
 
 ## Supplying missing tools
 
-Use `ai.kiro.extraPackages` for tools Kiro needs but the synthesized root does
-not provide:
+Use `ai.kiro.cli.extraPackages` for tools Kiro needs but the synthesized root
+does not provide:
 
 ```nix
-ai.kiro.extraPackages = with pkgs; [
+ai.kiro.cli.extraPackages = with pkgs; [
   file
   iproute2
   tree
@@ -101,10 +97,10 @@ ai.kiro.extraPackages = with pkgs; [
 ```
 
 The Kiro launcher prepends `lib.makeBinPath` of those packages to PATH and then
-preserves the caller's PATH. If `ai.kiro.environmentVariables.PATH` is set, that
-explicit value becomes the preserved base instead. The wrapper references each
-package, so its store path is rooted; bubblewrap preserves the resulting PATH
-and bind-mounts `/nix`, so the tools remain executable inside the FHS root.
+preserves the caller's PATH. If `ai.kiro.cli.environmentVariables.PATH` is set,
+that explicit value becomes the preserved base instead. The wrapper references
+each package, so its store path is rooted; bubblewrap preserves the resulting
+PATH and bind-mounts `/nix`, so the tools remain executable inside the FHS root.
 Setting that Kiro-specific PATH entry to null suppresses a root
 `ai.environmentVariables.PATH`; the ambient PATH becomes the preserved base.
 
@@ -119,27 +115,27 @@ same-named FHS command therefore wins over the added package on Linux.
 The default stays upstream-compatible:
 
 ```nix
-ai.kiro.useFhsSandbox = true;
+ai.kiro.cli.useFhsSandbox = true;
 ```
 
 Consumers willing to give up the extracted-`bun` compatibility fix can select
 the pinned unwrapped payload explicitly:
 
 ```nix
-ai.kiro.useFhsSandbox = false;
+ai.kiro.cli.useFhsSandbox = false;
 ```
 
 That removes bubblewrap from Kiro's launch chain and restores the host's normal
 namespace and PATH resolution. It does not select a separately packaged binary:
 rollout patches, version pinning, TERM defaults, environment variables, secrets,
 identity materialization, and argv injection still use the same overlay payload
-and wrapper helpers. A custom `ai.kiro.package` must expose `passthru.unwrapped`
-on every rollout-resolved variant; otherwise evaluation fails with a named
-assertion instead of silently retaining the sandbox. Direct package consumers
-can make the same choice with `pkgs.ai.kiro-cli.unwrapped`. The overlay exposes
-that route even on pre-split nixpkgs (reachable only when a consumer sets
-`follows` or lands on the overlay's fallback), where it selects the
-already-direct package and is therefore a no-op.
+and wrapper helpers. A custom `ai.kiro.cli.package` must expose
+`passthru.unwrapped` on every rollout-resolved variant; otherwise evaluation
+fails with a named assertion instead of silently retaining the sandbox. Direct
+package consumers can make the same choice with `pkgs.ai.kiro-cli.unwrapped`.
+The overlay exposes that route even on pre-split nixpkgs (reachable only when a
+consumer sets `follows` or lands on the overlay's fallback), where it selects
+the already-direct package and is therefore a no-op.
 
 With the sandbox enabled, a custom FHS package used with `trustedMcpTools` must
 also expose `passthru.withFhsPayload`. Without it the FHS command shadows the

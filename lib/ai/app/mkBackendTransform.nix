@@ -48,6 +48,14 @@
     inherit (appRecord) pkgs;
   };
   cfg = config.ai.${appRecord.name};
+  launcherOptionsPath = appRecord.launcherOptionsPath or [];
+  launcherCfg = lib.attrByPath launcherOptionsPath {} cfg;
+  poolOptionsPath = pool: lib.optionals (builtins.elem pool ["environmentVariables" "shell"]) launcherOptionsPath;
+  normalizedPath = pool: poolOptionsPath pool ++ ["normalized" pool];
+  placeNormalized = values:
+    lib.foldl' lib.recursiveUpdate {} (lib.mapAttrsToList (pool: value:
+      lib.setAttrByPath (normalizedPath pool) value)
+    values);
   deliveryWarnings = import ../delivery-warnings.nix {inherit lib;} {
     inherit appRecord backend config options;
     # Where this runtime's context and rules land, from its own path
@@ -85,7 +93,7 @@
   poolAgents = mergePool "agents" config.ai.agents (cfg.agents or {});
   rawAgents = lib.optionalAttrs hasNativeAgents (lib.filterAttrs (_: value: !(agent.isSemantic value)) poolAgents);
   mergedAgents = removeAttrs poolAgents (builtins.attrNames rawAgents);
-  mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
+  mergedEnvironmentVariables = mergePool "environmentVariables" config.ai.environmentVariables (launcherCfg.environmentVariables or {});
   mergedLspServers = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
   # Suppression applies after runtime entries replace root entries so a
   # runtime-local `enable = false` can retract an inherited root rule.
@@ -119,7 +127,7 @@
     then
       aiCommon.resolveOverride {
         topValue = config.ai.shell;
-        cliValue = cfg.shell or null;
+        cliValue = launcherCfg.shell or null;
       }
     else null;
 
@@ -314,10 +322,56 @@
     lib.optionalAttrs (supportsPool pool) {
       ${pool} = lib.mkOption ({default = {};} // declaration // poolOptions.${pool} or {});
     };
+  normalizedOptions = placeNormalized (lib.mapAttrs (pool: spec:
+    lib.mkOption (spec
+      // {
+        default = spec.default or {};
+        defaultText = lib.literalExpression (
+          if normalizedKeyedPools ? ${pool}
+          then "{}"
+          else "the root-to-runtime ${pool} fold"
+        );
+        internal = false;
+        readOnly = false;
+        description = ''
+          Merged ${pool} consumed by ${appRecord.name}'s transformer. The
+          supported root-to-runtime fold supplies per-key defaults after
+          replacement and tombstone filtering for keyed pools, so ordinary
+          additions preserve unrelated inherited keys. Other pools default
+          to the fold as a whole. Use `lib.mkForce` on this ordinary option
+          to replace the transformer's input.
+        '';
+      })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools));
+  launcherOptions = lib.setAttrByPath launcherOptionsPath (
+    {
+      package = lib.mkOption ({
+          type = lib.types.nullOr lib.types.package;
+          default = package;
+          description = "The ${appRecord.name} package, or null to configure the runtime without installing it.";
+        }
+        // lib.optionalAttrs (packageText != null) {defaultText = packageText;});
+    }
+    // poolOption "environmentVariables" {
+      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
+      description = "Environment variables baked into the ${appRecord.name} launcher wrapper. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
+    }
+    // lib.optionalAttrs (supportsPool "shell") {
+      shell = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        default = null;
+        example = lib.literalExpression "pkgs.bash";
+        description = ''
+          Shell ${appRecord.name} uses to execute the commands it runs.
+          `null` (the default) inherits `ai.shell`; a non-null value here
+          wins over it. With both null the shell is left untouched.
+        '';
+      };
+    }
+  );
   hasAgentsDir = supportsPool "agents";
   normalizedPool = name: neutral:
     if supportsPool name
-    then cfg.normalized.${name}
+    then lib.getAttrFromPath (normalizedPath name) cfg
     else neutral;
   # A default context can compose source bytes. Keep its presence structural
   # until final-file priority arbitration has kept that generated content.
@@ -363,7 +417,7 @@
   # no launcher and lowers the parts into `settings.env` instead.
   callbackArgs = {
     inherit backend cfg config moduleEnvironmentVariables options;
-    inherit (cfg) normalized;
+    normalized = lib.genAttrs supportedPools (pool: lib.getAttrFromPath (normalizedPath pool) cfg);
     launcherEnvironment =
       moduleEnvironmentVariables
       // lib.optionalAttrs (callbackArgs.resolvedShell != null) {
@@ -441,7 +495,7 @@
   # installing a package.
   #
   # The default is load-bearing: a record that says nothing about packages
-  # installs `cfg.package`. It used to be the reverse — installation
+  # installs `launcherCfg.package`. It used to be the reverse — installation
   # was a per-factory `home.packages` / `packages` write with no shared
   # requirement — and `claude` shipped with that write missing from BOTH
   # backends, visible only as `claude` missing from the devenv profile while
@@ -453,8 +507,8 @@
   # `installPackage` accepts the same callback args as `config`, so a factory
   # that wraps its binary derives the wrapper once and never repeats the
   # lowering.
-  installPackageFn = backendSpec.installPackage or appRecord.installPackage or (_: cfg.package);
-  rawInstalledPackages = lib.optional (cfg.package != null) (installPackageFn callbackArgs);
+  installPackageFn = backendSpec.installPackage or appRecord.installPackage or (_: launcherCfg.package);
+  rawInstalledPackages = lib.optional (launcherCfg.package != null) (installPackageFn callbackArgs);
   installedPackages =
     if options ? warnings
     then rawInstalledPackages
@@ -467,7 +521,7 @@
     then {home.packages = installedPackages;}
     else {packages = installedPackages;};
 in {
-  options.ai.${appRecord.name} =
+  options.ai.${appRecord.name} = lib.recursiveUpdate (
     {
       _generatedTree = deliveryOptions.generatedTreeOption;
       _maxBytes = deliveryOptions.maxBytesOption;
@@ -544,32 +598,6 @@ in {
           they were written.
         '';
       };
-      normalized = lib.mapAttrs (pool: spec:
-        lib.mkOption (spec
-          // {
-            default = spec.default or {};
-            defaultText = lib.literalExpression (
-              if normalizedKeyedPools ? ${pool}
-              then "{}"
-              else "the root-to-runtime ${pool} fold"
-            );
-            internal = false;
-            readOnly = false;
-            description = ''
-              Merged ${pool} consumed by ${appRecord.name}'s transformer. The
-              supported root-to-runtime fold supplies per-key defaults after
-              replacement and tombstone filtering for keyed pools, so ordinary
-              additions preserve unrelated inherited keys. Other pools default
-              to the fold as a whole. Use `lib.mkForce` on this ordinary option
-              to replace the transformer's input.
-            '';
-          })) (lib.filterAttrs (pool: _: supportsPool pool) normalizedPools);
-      package = lib.mkOption ({
-          type = lib.types.nullOr lib.types.package;
-          default = package;
-          description = "The ${appRecord.name} package, or null to configure the runtime without installing it.";
-        }
-        // lib.optionalAttrs (packageText != null) {defaultText = packageText;});
       internal = lib.mkOption {
         type = lib.types.submodule {
           options._integration_writable_roots = lib.mkOption {
@@ -617,10 +645,6 @@ in {
           description = "Directory of native agent files (${lib.concatStringsSep ", " agentsDirSuffixes}), expanded into raw `ai.${appRecord.name}.agents` entries keyed by basename minus the suffix. Accepts a path, a path-like string or derivation, or `{ path, filter? }`. Only top-level regular files with those suffixes are expanded; subdirectories and other files are not delivered, and two files with one stem fail evaluation. They blend with named entries; a named entry at the same key wins.";
         }
         // poolOptions.agentsDir or {});
-    }
-    // poolOption "environmentVariables" {
-      type = lib.types.attrsOf (lib.types.nullOr lib.types.str);
-      description = "Environment variables baked into the ${appRecord.name} launcher wrapper. Scoped to the ${lib.toSentenceCase appRecord.name} process and the commands it spawns; never exported into the project shell. Null suppresses a root entry at the same key.";
     }
     // poolOption "lspServers" {
       type = lib.types.attrsOf (lib.types.nullOr aiCommon.lspServerModule);
@@ -700,28 +724,18 @@ in {
         '';
       };
     }
-    // lib.optionalAttrs (supportsPool "shell") {
-      shell = lib.mkOption {
-        type = lib.types.nullOr lib.types.package;
-        default = null;
-        example = lib.literalExpression "pkgs.bash";
-        description = ''
-          Shell ${appRecord.name} uses to execute the commands it runs.
-          `null` (the default) inherits `ai.shell`; a non-null value here
-          wins over it. With both null the shell is left untouched.
-        '';
-      };
-    }
-    // nativeOptions;
+    // nativeOptions
+  ) (lib.recursiveUpdate launcherOptions normalizedOptions);
 
   config = lib.mkMerge [
     # Both real backends expose warnings. Minimal evalModules callers without
     # that option still see diagnostics when they force the installed packages.
     (lib.optionalAttrs (options ? warnings) {warnings = deliveryWarnings;})
     {
-      ai.${appRecord.name}.normalized =
+      ai.${appRecord.name} = placeNormalized (
         lib.mapAttrs (_: pool: lib.mapAttrs (_: lib.mkDefault) pool)
-        (lib.filterAttrs (pool: _: supportsPool pool) normalizedKeyedPools);
+        (lib.filterAttrs (pool: _: supportsPool pool) normalizedKeyedPools)
+      );
     }
     (lib.optionalAttrs hasNativeAgents {
       ai.${appRecord.name}.native.agents = nativeAgentDefaults;

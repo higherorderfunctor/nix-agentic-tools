@@ -7,9 +7,10 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-07 — Codex guards launcher flags as real uses
-> without per-name annotation rows; per-runtime program overrides accept
-> portable `settings`.
+> **Last verified:** 2026-10-07 — the runtime record's `launcherOptionsPath`
+> moves Kiro launcher options to `ai.kiro.cli`; Codex guards launcher flags as
+> real uses without per-name annotation rows; per-runtime program overrides
+> accept portable `settings`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -103,19 +104,29 @@ upstream modules write the same files: `ai.claude.enable` beside Home Manager's
 enabled runtime, lowering it to `home.packages` on Home Manager and `packages`
 on devenv — the two option names being the whole reason it cannot live in a
 factory without being written twice per runtime. A backend spec that says
-nothing installs the plain `cfg.package`; one that wraps its binary supplies an
-`installPackage` callback taking the same arguments as `config`, on the record
-or on one backend spec, which wins. Setting `ai.<runtime>.package = null`
-explicitly skips installation without disabling any generated configuration; the
-transform does not call `installPackage` in that case. A setting that needs the
-managed binary path or wrapper WARNS, not asserts, and only once the consumer
-actually wrote it — the test is that setting's own option priority landing below
-the bare declared default (1500), the same idiom `lib/ai/delivery-warnings.nix`
-uses. A default-on feature (Kiro's `gitSshConfigWorkaround`, Codex's Home
-Manager-only `pinDaemonToPackage`) stays silent at its default value and names
-itself only once explicitly set. Kiro folds every inert setting into one warning
-naming each option; Codex's `pinDaemonToPackage` gets the same treatment on its
-own.
+nothing installs the selected launcher package; one that wraps its binary
+supplies an `installPackage` callback taking the same arguments as `config`, on
+the record or on one backend spec, which wins. Setting the launcher
+`package = null` explicitly skips installation without disabling any generated
+configuration; the transform does not call `installPackage` in that case. A
+setting that needs the managed binary path or wrapper WARNS, not asserts, and
+only once the consumer actually wrote it — the test is that setting's own option
+priority landing below the bare declared default (1500), the same idiom
+`lib/ai/delivery-warnings.nix` uses. A default-on feature (Kiro's
+`gitSshConfigWorkaround`, Codex's Home Manager-only `pinDaemonToPackage`) stays
+silent at its default value and names itself only once explicitly set. Kiro
+folds every inert setting into one warning naming each option; Codex's
+`pinDaemonToPackage` gets the same treatment on its own.
+
+Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
+`shell`, `extraPackages`, `native.settings`, `trustedMcpTools`, `tweaks`,
+`unlockedRolloutFeatures`, `useFhsSandbox`, `v3` and `workflows.enable`. The
+environment and shell folds live at `cli.normalized.environmentVariables` and
+`cli.normalized.shell`. All other normalized pools, native agents, permissions,
+hooks, MCP/LSP, files and activation remain shared under `ai.kiro`. There are no
+old-path aliases or separate CLI enable.
+`ai.kiro.enable = true; ai.kiro.cli.package = null;` keeps shared files without
+installing a CLI.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and
@@ -198,23 +209,23 @@ The ai module fans out TWO kinds of configuration:
 **Per-CLI options** (live inside `ai.{claude,codex,copilot,kimchi,kiro}.*`):
 
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
-  `ai.kimchi.package` / `ai.kiro.package` — package override. All five are
+  `ai.kimchi.package` / `ai.kiro.cli.package` — package override. All five are
   installed by the shared backend transform unless set to `null`. Four supply an
   `installPackage` callback that wraps the selected package when the runtime
   needs env or flag injection and installs it bare otherwise — wrapping is
   conditional, not automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's own
   wrappers, return the bare package when there is nothing to bake in). The
   process environment each one bakes in is the builder's `launcherEnvironment`.
-- `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
-  both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
-  visibility gap; it remains independent of `ai.shell`, which selects an
-  executable rather than supplying commands.
-- `ai.kiro.useFhsSandbox` — defaults true and keeps nixpkgs' Linux compatibility
-  wrapper. False selects the configured package's pinned `passthru.unwrapped`
-  payload in both backends; validation inspects the rollout-resolved package, so
-  custom factories must preserve that route. Packages without it fail a named
-  assertion. This is runtime-specific package selection, not a normalized
-  sandbox pool.
+- `ai.kiro.cli.extraPackages` — store-backed tools added to Kiro's runtime PATH
+  in both backends. It is Kiro-specific because it closes the Linux
+  `buildFHSEnv` visibility gap; it remains independent of `ai.shell`, which
+  selects an executable rather than supplying commands.
+- `ai.kiro.cli.useFhsSandbox` — defaults true and keeps nixpkgs' Linux
+  compatibility wrapper. False selects the configured package's pinned
+  `passthru.unwrapped` payload in both backends; validation inspects the
+  rollout-resolved package, so custom factories must preserve that route.
+  Packages without it fail a named assertion. This is runtime-specific package
+  selection, not a normalized sandbox pool.
 - A custom Linux FHS package used with `trustedMcpTools` must expose both
   `passthru.unwrapped` and `passthru.withFhsPayload`. Otherwise the synthesized
   `/usr/bin/kiro-cli-chat` can shadow the outer trust wrapper, so the module
@@ -729,13 +740,13 @@ but `checks/modules/options-doc.nix` deliberately builds both renderings so this
 consumer-facing contract cannot become dead code. It compares every `ai.codex.*`
 option name, checks the expected top-level surface, and verifies that
 shared-pool descriptions discuss Codex. It also requires every runtime's native
-file option under `ai.<runtime>.native` and rejects the retired flat
-`nativeSettings`/`harnessSettings` names. Each guard runs through a shell helper
-that names the option and the rendering it failed on, and reports a jq or grep
-error as an error, so an unreadable rendering cannot pass an absence guard.
-README.md remains generated from `dev/generate.nix`;
-`checks/instructions/instructions-drift.nix` prevents its checked-in capability
-matrix from diverging from that source.
+file option under `ai.<runtime>.native` (`ai.kiro.cli.native` for Kiro) and
+rejects the retired flat `nativeSettings`/`harnessSettings` names. Each guard
+runs through a shell helper that names the option and the rendering it failed
+on, and reports a jq or grep error as an error, so an unreadable rendering
+cannot pass an absence guard. README.md remains generated from
+`dev/generate.nix`; `checks/instructions/instructions-drift.nix` prevents its
+checked-in capability matrix from diverging from that source.
 
 ### Verifying fanout works
 
@@ -909,8 +920,9 @@ package-provenance guard (see `collision-semantics.md`).
 
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-07 — Kiro environment pool provenance follows
+> `ai.kiro.cli.environmentVariables`; replacement and null withdrawal semantics
+> are unchanged.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -1049,8 +1061,9 @@ runtime replacement for two owners.
 
 ### Where repo modules contribute
 
-Repo modules write `ai.<runtime>.<pool>`, never the root `ai.<pool>`. The root
-level belongs to consumers as the portable default surface. A separate
+Repo modules write `ai.<runtime>.<pool>` (Kiro environment uses
+`ai.kiro.cli.environmentVariables`), never the root `ai.<pool>`. The root level
+belongs to consumers as the portable default surface. A separate
 `rootPoolViolations` provenance guard enforces that boundary. Per-runtime null
 on nullable pools and `enable = false` on rules let a consumer undo an inherited
 root entry, but consumers should not have to retract package wiring that
@@ -1125,7 +1138,8 @@ and testing their distinct composition contracts.
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
 every supported pool, additionally filters disabled rules, and contributes the
-result as per-key defaults beneath `ai.<runtime>.normalized.<pool>`, whose
+result as per-key defaults beneath `ai.<runtime>.normalized.<pool>` (Kiro's
+environment pool uses `ai.kiro.cli.normalized.environmentVariables`), whose
 option default is `{}`. Ordinary extensions retain unrelated inherited keys;
 whole-pool `mkForce` replaces the merged input. Package callbacks and
 transformer arguments read those public options. A text-source record crosses
@@ -1336,57 +1350,8 @@ See `hm-modules/module-conventions.md` on "Nix path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-04 — devenv symlink guards use the final file
-> target, follow their own runtime's writers before file creation, and report
-> every conflict before failing. A record's `agentNativeType` +
-> `agentTransformer` give it a typed `native.agents` layer below the normalized
-> agents pool; every agents runtime gets `agentsDir`, and a runtime extends the
-> builder's `agents` description only through `agentsDescriptionSuffix`. Rule
-> inclusion resolves from one portable priority list and runtime support table
-> before L4 rendering. The shared AGENTS.md notice resolves each runtime's
-> effective limit at shell entry. Claude delivers every surface through
-> `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
-> Every delivered entry is a file the layer writes. L5 is the delivery router
-> plus one adapter per backend; every runtime describes delivery once through
-> the record-level `config`, which `mkRuntime` makes the only delivery callback,
-> and the delivery matrix is generated from the layer for every runtime's files.
-> Normalized pools carry only a text-source record's winning arm. Claude's
-> devenv rules and Codex's execpolicy rules are read-only copies whose writers
-> survive a disable. Copilot's settings files are read-only copies of one
-> `materialize-copilot-config` writer; its only reconciled document is the HM
-> `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
-> `mcp.json` are read-only copies in one directory ledger. Kimchi shares its HM
-> user `config.json` and `harness/settings.json`; its other settings files are
-> read-only copies of one `kimchiFiles` writer. Codex's `config.toml` is a store
-> symlink on both backends and its daemon `settings.json` a read-only copy of
-> `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
-> pool. Native file settings live under `ai.<runtime>.native`. The builder
-> publishes each record's devenv shared AGENTS.md contribution, and its key in
-> `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`. Claude's
-> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
-> ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
-> declares the per-runtime `agents`, `environmentVariables` and `lspServers`
-> options, plus `agentsDir` for every agents runtime; a record's `poolOptions`
-> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
-> builder would not read, a malformed native agent layer or agent field, and a
-> stray field in the `sharedAgentsMd` result. Every reconciled document is one
-> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
-> `index` entries: Codex and Kimchi render a scoped rule that names `references`
-> as a path-scoped index entry instead of inlining its body. The shared
-> AGENTS.md map lowers through the router as `internal`, as a read-only copy,
-> and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
-> effective-limit resolver for the owner's notice under a raised `maxBytes`; its
-> built bytes are measured in the generated-file tree. The router puts every
-> live build-time whole file into one tree per invocation; raw files and
-> recursive directory sources pass through without formatting or format guards,
-> while runtime shape guards inspect installed copies. Switch-time overlays,
-> `content.run`, and shared document leaves stay outside the tree. Generators
-> mark their `content` with `_generated`, so a consumer's replacement of a
-> unit's file warns like a switch-off. Rule and semantic-agent generators pass
-> raw Nix data to `lib/frontmatter.nix`, which renders quoted YAML as text. The
-> generated-file builder formats whole Markdown files, including headers.
-> `parseCompare` compares parsed YAML frontmatter values; files without a header
-> compare as `null`.
+> **Last verified:** 2026-10-07 — Kiro launcher controls and normalized launcher
+> pools use `ai.kiro.cli`; shared pools and delivery stay at `ai.kiro`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -1460,6 +1425,14 @@ not move them back.
 │   - Devenv: files.*                                        │
 └────────────────────────────────────────────────────────────┘
 ```
+
+The runtime record has one data-only placement field, `launcherOptionsPath`,
+default `[]`. Kiro sets `["cli"]`: only package, environment, shell and the
+corresponding normalized inputs move there. Declarations, per-key fold defaults
+and callback reads share that path. Callbacks still receive the shared `cfg` and
+one complete `normalized` view. Native agents and every file/ledger remain at
+the runtime root. The field must be a list of nonempty strings; constructor and
+transform both validate it.
 
 ### Rules
 
@@ -1833,8 +1806,8 @@ touch L1/L2b; final rendering and emission stay stable.
 
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-07 — `launcherOptionsPath` places Kiro environment
+> and shell options, including their normalized inputs, under `ai.kiro.cli`.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -1863,9 +1836,8 @@ it cannot reintroduce the `_module.args` recursion documented against
 A same-named native option does not imply normalized-pool support.
 Runtime-shaped passthrough now lives under `native.settings`, independently of
 the capability list. Normalized `settings` is the deliberate uniform exception:
-all five runtimes list it so the same closed schema is available at every
-runtime scope, even when a particular field currently has a lossless native
-lowering only for a subset such as Claude and Codex.
+Claude, Codex, Copilot and Kimchi list it; Kiro excludes it because effort is
+persisted per model.
 
 ### `ai.shell` deliberately uses null-as-inherit
 
@@ -1904,9 +1876,10 @@ feature default without replacing unrelated leaves.
 
 ### Shell is one capability entry
 
-`mkBackendTransform.nix` declares `ai.<name>.shell` and computes `resolvedShell`
-only when `shell` appears in the app record's `supportedPools`. There is no
-sibling shell-specific capability flag.
+`mkBackendTransform.nix` declares `shell` below the record's
+`launcherOptionsPath` (`ai.kiro.cli.shell` for Kiro, `ai.<name>.shell`
+elsewhere) and computes `resolvedShell` only when `shell` appears in the app
+record's `supportedPools`. There is no sibling shell-specific capability flag.
 
 | runtime | knob                       | delivery                                |
 | ------- | -------------------------- | --------------------------------------- |
@@ -1939,8 +1912,8 @@ The standing decision is to keep `ai.shell = null`: null means the module does
 not choose a shell, consistently across runtimes. Consumers who want a stable
 shell can set `ai.shell = pkgs.bashInteractive` (or a Kiro-specific override),
 and consumers willing to give up the extracted-`bun` compatibility wrapper can
-set `ai.kiro.useFhsSandbox = false`. Shell selection and namespace selection are
-independent choices; neither silently implies the other.
+set `ai.kiro.cli.useFhsSandbox = false`. Shell selection and namespace selection
+are independent choices; neither silently implies the other.
 
 ### NEVER write the shell environment
 
@@ -2029,13 +2002,13 @@ three runtimes demonstrably do not perform.
   `module-ai-shell-explicit-env-beats-typed-{codex,kiro}`; change them together
   or not at all.
 - **Always-on process defaults do not write hidden normalized-pool entries.**
-  `ai.<cli>.environmentVariables` is the consumer's replacement/negation
-  surface, and definition provenance treats package claims there as owned API.
-  Internal defaults such as the sandbox-safe SSH command therefore ride
-  `ai._sandboxSafeSshCommand` / the `resolvedShell` callback argument and merge
-  under consumer values at the wrapper call site. Opt-in packages may publish
-  documented per-runtime pool entries; two packages still cannot own the same
-  key and scope. See `collision-semantics.md`.
+  `ai.<cli>.environmentVariables` (Kiro: `ai.kiro.cli.environmentVariables`) is
+  the consumer's replacement/negation surface, and definition provenance treats
+  package claims there as owned API. Internal defaults such as the sandbox-safe
+  SSH command therefore ride `ai._sandboxSafeSshCommand` / the `resolvedShell`
+  callback argument and merge under consumer values at the wrapper call site.
+  Opt-in packages may publish documented per-runtime pool entries; two packages
+  still cannot own the same key and scope. See `collision-semantics.md`.
 
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.

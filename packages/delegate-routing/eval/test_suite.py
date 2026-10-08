@@ -115,6 +115,26 @@ class CliRecords(unittest.TestCase):
         self.assertIn("use_subagent", harness["calls"](events[1])[0]["name"])
 
 
+class WorkflowFixture(unittest.TestCase):
+    def test_kiro_global_prerequisite_follows_effective_inventory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            real = root / "operator"
+            source = real / ".kiro/settings/cli.json"
+            suite.write_json(source, {"chat.enableWorkflows": False, "chat.enableTangentMode": True})
+            original = source.read_bytes()
+            for enabled in (False, True):
+                ctx = {"home": root / str(enabled), "repo": root / "repo", "logs": root / "logs",
+                       "hook": root / "hook", "exe": "kiro-cli", "prompt": "test", "baseline_argv": [],
+                       "case": {"techniques": {"kiro": {"run_workflow": "workflow"} if enabled else {}}}}
+                with patch.object(suite, "REAL_HOME", real):
+                    suite.kiro_setup(ctx)
+                written = suite.read_json(ctx["home"] / ".kiro/settings/cli.json", {})
+                self.assertEqual(written["chat.enableWorkflows"], enabled)
+                self.assertTrue(written["chat.enableTangentMode"])
+                self.assertEqual(source.read_bytes(), original)
+
+
 class Selection(unittest.TestCase):
     CASES = [{"id": name, "runtime": runtime, "expect": "one-delegate", "task": "t", "usage": {},
               "techniques": {runtime: {"Agent": "subagent"}},

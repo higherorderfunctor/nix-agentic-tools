@@ -36,14 +36,14 @@
   runtimeEnabled = runtime: lib.attrByPath ["ai" runtime "enable"] false config;
   sourceEnabled = runtime: programEnabled runtime && runtimeEnabled runtime;
   # The skill's Kiro evidence covers the v3 engine only. Default v3 on only
-  # when ai.kiro.package != null: the managed wrapper carries --v3 to launches.
+  # when ai.kiro.cli.package != null: the managed wrapper carries --v3 to launches.
   reachesKiro = lib.any (runtime:
     sourceEnabled runtime
     && builtins.elem "kiro" ([runtime] ++ portable.runtimes.${runtime}.extraRuntimes ++ portable.runtimes.${runtime}.manualExternalDelegates))
   supportedRuntimes;
-  kiroV3Declared = lib.hasAttrByPath ["ai" "kiro" "v3"] options;
+  kiroV3Declared = lib.hasAttrByPath ["ai" "kiro" "cli" "v3"] options;
   models = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.models);
-  techniques = lib.genAttrs supportedRuntimes (runtime: config.ai.programs.delegate-routing.runtimes.${runtime}.techniques);
+  techniques = familyFunctions.effectiveTechniques config;
   flattenedFamilies = familyFunctions.flatten portable.families;
   vendors = lib.unique (map (family: family.vendor) flattenedFamilies);
   names = lib.unique (map (family: family.name) flattenedFamilies);
@@ -167,13 +167,19 @@ in {
         });
       }
       # Guarded on the declaration: a consumer without the Kiro module has no
-      # ai.kiro.v3 to set.
+      # ai.kiro.cli.v3 to set.
       (lib.optionalAttrs kiroV3Declared {
-        kiro.v3 = lib.mkIf (reachesKiro && config.ai.kiro.package != null) (lib.mkDefault true);
+        kiro.cli = lib.mkIf (reachesKiro && config.ai.kiro.cli.package != null) {
+          tweaks = lib.mkIf config.ai.kiro.cli.workflows.enable {
+            relativeFileCheckPaths = lib.mkDefault true;
+            stripVendorWorktreeSteering = lib.mkDefault true;
+          };
+          v3 = lib.mkDefault true;
+        };
       })
     ];
-    warnings = lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.v3) ''
-      ai.programs.delegate-routing reaches Kiro, but ai.kiro.v3 is false. The
+    warnings = lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
+      ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
       skill's Kiro behavior is verified on the v3 engine only; sessions on
       another engine may not delegate as the skill describes.
     '';

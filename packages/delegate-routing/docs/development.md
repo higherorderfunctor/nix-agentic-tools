@@ -1,14 +1,8 @@
 # Delegate routing package
 
-> **Last verified:** 2026-10-07 — one enabled "Work and review" workflow ships
-> the Subtractive standard; a runtime workflow record without text keeps the
-> portable header; all delegate runtimes must be managed, and reaching Kiro
-> defaults `ai.kiro.v3` on only when its package is managed. Delegate evidence
-> is two parts: the map (`docs/delegates/` plus `probes/delegates/`) and the
-> acceptance suite (`eval/`, one real-session runner for all four harnesses with
-> one root baseline table and requested/observed controls and source-attributed
-> startup checks); `probes/delegates/run.py` re-runs the map's case rows;
-> techniques hand-declare `runsOwnSubagents` from map rows.
+> **Last verified:** 2026-10-07 — managed Kiro uses `ai.kiro.cli`;
+> workflow-enabled reach defaults both workflow tweaks, and skill rendering and
+> acceptance inventory share effective technique selection.
 
 `ai.programs.delegate-routing` exposes portable `families`, `routing` and
 `workflows`. Runtime controls live under `runtimes.<runtime>` for Claude, Codex,
@@ -132,13 +126,29 @@ a model turn. Shared table rendering escapes cells once.
 ## Delivery and previews
 
 When an enabled runtime reaches Kiro, as the session runtime or through
-`extraRuntimes` or `manualExternalDelegates`, the program sets `ai.kiro.v3` with
-`mkDefault` only when `ai.kiro.package != null`. The skill's Kiro evidence
-covers the v3 engine only. A consumer's own `ai.kiro.v3 = false` still wins and
-emits a mismatch warning. Every reached runtime must be enabled. With a managed
-package, Kiro's wrapper carries `--v3` to interactive and delegate launches
-alike; with `package = null`, there is no wrapper, v3 is left unset and the
-mismatch warning fires. A consumer without the Kiro module is untouched.
+`extraRuntimes` or `manualExternalDelegates`, the program sets `ai.kiro.cli.v3`
+with `mkDefault` only when `ai.kiro.cli.package != null`. The skill's Kiro
+evidence covers the v3 engine only. A consumer's own `ai.kiro.cli.v3 = false`
+still wins and emits a mismatch warning. Every reached runtime must be enabled.
+With a managed package, Kiro's wrapper carries `--v3` to interactive and
+delegate launches alike; with `package = null`, there is no wrapper, v3 is left
+unset and the mismatch warning fires. A consumer without the Kiro module is
+untouched.
+
+The same reach test defaults `cli.tweaks.relativeFileCheckPaths` and
+`cli.tweaks.stripVendorWorktreeSteering` to true only when
+`cli.workflows.enable` is true and the CLI package is managed. Explicit false
+wins; identity is not enabled.
+
+Kiro's `run_workflow` appears only with `cli.workflows.enable`, v3, and no
+explicit false for `cli.native.settings.chat.enableWorkflows`. Devenv's null
+setting leaves the external global prerequisite to its shell-entry warning. A
+raw rollout request alone does not opt into advertising the technique. The
+effective rendering view applies this gate even over an explicit technique
+enable; the acceptance inventory uses the same helper in
+`lib/select-families.nix` and excludes disabled nodes. Workflow modes are
+interactive, headless and ACP, with map-case comments beside each Kiro modes
+value. Introspection has no modes field.
 
 Reaching Kiro on devenv withholds `trustedMcpTools` from `kiro acp` (warned),
 while Home Manager drops bare tokens such as `use_aws` from the
@@ -186,17 +196,18 @@ devenv module harness with only each case's switches changed, and exports every
 delivered file plus the evaluated delegate technique names. `eval/suite.py` is
 the single runner: it renders each case into a fresh fixture repository, runs
 one session under a scratch `HOME` that keeps only the login and carried-over
-settings; it hides config from the loader, not files from the model. It caps the
-session and asserts on the session's own event log. Root model and effort come
-from the single `ROOT_BASELINES` table at the operator’s strong-tier medium;
-Codex model/effort and Kiro default model are not copied. Claude debug scope
-counts attribute bundled skills without a name allowlist; Codex resolves catalog
-paths, and Kiro reads workspace skill source metadata from CLI stream updates.
-Kimchi separates extension flags from the task with `--`. Kiro resolves the
-newest matching Opus model only for live runs. Results record requested controls
-separately from root event/log observations, with `not exposed` for missing
-fields. Harness differences live in its `HARNESSES` table; assertions in its
-`ASSERTIONS` table.
+settings; the Kiro fixture writes the global workflow setting from its effective
+technique inventory without changing the operator's home. It hides config from
+the loader, not files from the model. It caps the session and asserts on the
+session's own event log. Root model and effort come from the single
+`ROOT_BASELINES` table at the operator’s strong-tier medium; Codex model/effort
+and Kiro default model are not copied. Claude debug scope counts attribute
+bundled skills without a name allowlist; Codex resolves catalog paths, and Kiro
+reads workspace skill source metadata from CLI stream updates. Kimchi separates
+extension flags from the task with `--`. Kiro resolves the newest matching Opus
+model only for live runs. Results record requested controls separately from root
+event/log observations, with `not exposed` for missing fields. Harness
+differences live in its `HARNESSES` table; assertions in its `ASSERTIONS` table.
 
 A delegate call is classified by technique name, so the suite and the rendered
 skill read one table. Same-runtime nested children ARE logged in and can run and

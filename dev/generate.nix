@@ -559,7 +559,7 @@
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same, plus Kimchi's project `.kimchi/hooks.json` |
     | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Copilot + Kiro; Claude has no project LSP route (warns); Codex has no native LSP registry |
     | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.native.settings.env` |
-    | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
+    | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / per-runtime `shell` (`ai.kiro.cli.shell` for Kiro; Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
     ### Kimchi project delivery
@@ -697,6 +697,27 @@
     Semble adds its cache and glab adds its effective `configDir`. Explicit rules
     in the same emitted layer win at identical paths. A parent containing
     multiple worktrees remains an explicit consumer root.
+
+    Kiro keeps shared files under `ai.kiro` and CLI controls under `ai.kiro.cli`:
+
+    ```nix
+    ai.kiro = {
+      enable = true;
+      cli = {
+        v3 = true;
+        workflows.enable = true;
+      };
+      # cli.package = null; # keep shared files without installing the CLI
+    };
+    ```
+
+    Package, process environment, shell, extra packages, native CLI settings,
+    trust flags, tweaks, rollout features and FHS selection all use `cli`.
+    Agents, hooks, permissions, MCP/LSP, context, rules and skills stay shared.
+    Workflows imply the global chat setting on Home Manager; devenv requires
+    that setting in the user's global config and warns if it is missing.
+    Delegate routing defaults the two workflow tweaks when it reaches that
+    managed CLI, and advertises `run_workflow` only when workflows are enabled.
 
     > **Kiro steering-copy upgrade:** when upgrading from a release that
     > materialized steering as real copies, keep the previous

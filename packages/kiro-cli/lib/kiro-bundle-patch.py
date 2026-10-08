@@ -24,7 +24,7 @@ RELATIVE_FILE_CHECK_PARAGRAPH = (
     rb"""Step agents' cwd is that root, so the writing step and the check agree. """
     rb"""A path that never resolves evaluates false forever \u2014 the loop then spins to \`maxIterations\` instead of stopping."""
 )
-# Fixed-text tweaks, keyed by their `ai.kiro.tweaks` option name.
+# Fixed-text tweaks, keyed by their `ai.kiro.cli.tweaks` option name.
 FIXED = {
     "relativeFileCheckPaths": (FILE_CHECK_PARAGRAPH, RELATIVE_FILE_CHECK_PARAGRAPH),
     "stripVendorWorktreeSteering": (WORKTREE_PARAGRAPH, b""),

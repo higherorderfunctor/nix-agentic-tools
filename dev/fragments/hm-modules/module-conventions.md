@@ -1,6 +1,6 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-10-04 — module sites read this flake's roots from
+> **Last verified:** 2026-10-07 — module sites read this flake's roots from
 > `ai.internal.roots` (`ai.internal.packages` is its `ai`), this flake's build
 > checked by the module's own nixpkgs unless the overlay is applied. Kimchi's
 > user config.json and harness settings.json are shared documents;
@@ -16,7 +16,8 @@
 > document mode or native-writer lock. Semble's `pathMappings` and model routing
 > live at the program root. Native file settings live under
 > `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`). Shared documents, each declared by
+> `native.harnessSettings`); Kiro CLI settings live at
+> `ai.kiro.cli.native.settings`. Shared documents, each declared by
 > `facts.harnessWrites` (the router, never a factory, calls
 > `helpers.mkOwnBundle`), reconcile owned leaves through `lib/ai/own.{nix,py}`
 > on HM activation (Claude's `.claude.json` and Copilot's `config.json`
@@ -47,8 +48,11 @@ declare the real type: `types.submodule`, `types.nullOr`, `types.attrsOf`,
 `types.enum`, `types.attrTag`, `types.listOf`, etc.
 
 **Submodules as containers.** Per-ecosystem config lives in a submodule:
-`ai.claude`, `ai.codex`, `ai.copilot`, `ai.kimchi`, and `ai.kiro` are each a
-`types.submodule { options = { enable; package; ... }; }`. The submodule is the
+`ai.claude`, `ai.codex`, `ai.copilot`, `ai.kimchi`, and `ai.kiro` are
+`types.submodule` containers. Kiro keeps shared file options and `enable` at
+`ai.kiro`; its launcher options (`package`, `environmentVariables`, `shell`,
+`native.settings`, and other CLI controls) live under `ai.kiro.cli`. Other
+runtimes keep launcher options at their runtime root. The submodule is the
 logical grouping — do not flatten per-ecosystem options into the top level.
 
 **Flat at top level for cross-ecosystem.** `ai.context`, `ai.rules`,
@@ -58,12 +62,14 @@ enabled at `mkDefault` priority. Anything that's "one option, many destinations"
 lives flat.
 
 **Keep normalized and native settings separate.** `ai.<runtime>.settings` is a
-closed normalized submodule shared by every runtime. Runtime-shaped passthrough
-belongs under `ai.<runtime>.native.settings`; when wrapping a CLI's native
-settings file, use `freeformType = jsonFormat.type` plus explicit `mkOption`
-declarations for known typed keys (for example, `native.settings.model` and
-`native.settings.telemetry`). Unknown native keys flow through freely; known
-keys get type-checked. Do not add runtime-native keys to normalized `settings`.
+closed normalized submodule for runtimes that support the settings pool; Kiro
+excludes that pool. Runtime-shaped passthrough belongs under
+`ai.<runtime>.native.settings` (`ai.kiro.cli.native.settings` for Kiro); when
+wrapping a CLI's native settings file, use `freeformType = jsonFormat.type` plus
+explicit `mkOption` declarations for known typed keys (for example,
+`native.settings.model` and `native.settings.telemetry`). Unknown native keys
+flow through freely; known keys get type-checked. Do not add runtime-native keys
+to normalized `settings`.
 
 **Defaults via `mkOption { default = ...; }`**, not `mkDefault` in the
 declaration. Reserve `mkDefault` for fanout values in the config block (so
@@ -120,9 +126,10 @@ config = mkMerge [
 
 ### Package override pattern
 
-**Every per-CLI submodule exposes a `package` option.** Consumers can swap out
-the package entirely. Wrapping pattern (copilot-cli, kiro-cli; Claude has no
-wrapper):
+**Every runtime exposes a launcher `package` option.** Kiro uses
+`ai.kiro.cli.package`; other runtimes use `ai.<runtime>.package`. Consumers can
+swap out the package entirely. In this example, `cfg` denotes that launcher
+subtree (copilot-cli, kiro-cli; Claude has no wrapper):
 
 ```nix
 pkgs.symlinkJoin {

@@ -15,5 +15,4 @@ import ../common.nix {
     '';
   };
   installPackages = packages: {inherit packages;};
-  relocatesCache = true;
 }

@@ -165,10 +165,10 @@
   # recovered declaratively now reports instead of staying silent.
   trustToolsWarnings = lib.optional (runtime
     == "kiro"
-    && cfg.trustedMcpTools != []
-    && ((appRecord.pkgs.stdenv.hostPlatform.isDarwin or false) || cfg.v3)
-    && !(cfg.v3 && backend == "hm"))
-  (message ["ai" "kiro" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.v3 recovers it declaratively through settings/permissions.yaml.");
+    && cfg.cli.trustedMcpTools != []
+    && ((appRecord.pkgs.stdenv.hostPlatform.isDarwin or false) || cfg.cli.v3)
+    && !(cfg.cli.v3 && backend == "hm"))
+  (message ["ai" "kiro" "cli" "trustedMcpTools"] "Darwin's launcher resolves the chat binary by bundle discovery and the `acp` subcommand rejects --trust-tools under the v3 engine, so the grant is withheld on those argv paths; only Home Manager with ai.kiro.cli.v3 recovers it declaratively through settings/permissions.yaml.");
   mcpWarnings = lib.concatMap (entry: let
     srv = entry.value;
     http = (srv.url or null) != null;

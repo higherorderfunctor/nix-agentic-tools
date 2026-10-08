@@ -1,17 +1,25 @@
 ## Kiro workflows: three gates, all of them silent
 
-> **Last verified:** 2026-10-07 — settings extraction requires the registry and
-> workspace merge; the pinned TUI still excludes `chat.enableWorkflows` from the
-> workspace allowlist.
+> **Last verified:** 2026-10-07 — `ai.kiro.cli.workflows.enable` unlocks the
+> rollout and implies the global chat setting on Home Manager; devenv retains
+> its global-setting warning; the pinned TUI still excludes
+> `chat.enableWorkflows` from the workspace allowlist.
 
-`ai.kiro.unlockedRolloutFeatures = ["workflows"]` is necessary and **not**
-sufficient. Three independent conditions must hold, none of them errors or logs
-when it fails, and each has already cost a debugging session:
+Enable workflows with `ai.kiro.cli.workflows.enable = true` and
+`ai.kiro.cli.v3 = true`. The switch adds `"workflows"` to the effective rollout
+list alongside any `cli.unlockedRolloutFeatures`, and Home Manager implies
+`cli.native.settings.chat.enableWorkflows = lib.mkDefault true`. An explicit
+false still wins. Devenv cannot write that global-only key: set it in the global
+config, and shell entry warns when it is absent or false. Low-level
+`cli.unlockedRolloutFeatures = ["workflows"]` retains the same Home Manager
+setting implication.
+
+Three independent gates remain:
 
 | #   | Gate                                    | Set by                                 | Failure look                   |
 | --- | --------------------------------------- | -------------------------------------- | ------------------------------ |
 | 1   | rollout manifest says the feature is on | the byte patch (`mkKiroRolloutPatch`)  | `/workflow` absent             |
-| 2   | engine is `kas`                         | `ai.kiro.v3 = true`                    | `/workflow` absent             |
+| 2   | engine is `kas`                         | `ai.kiro.cli.v3 = true`                | `/workflow` absent             |
 | 3   | `chat.enableWorkflows` is true          | the GLOBAL `~/.kiro/settings/cli.json` | commands present, TOOLS absent |
 
 Gates 1 and 2 already have assertions in `mkKiro.nix`. Gate 3 is implied with
@@ -89,7 +97,8 @@ it is read, filtered out, and dropped without a warning. The two backends
 therefore honor different key sets, because they write different files:
 
 - **Home Manager** writes the GLOBAL file. Every key works. Unlocking
-  `workflows` implies `native.settings.chat.enableWorkflows = mkDefault true`
+  `workflows` implies
+  `cli.native.settings.chat.enableWorkflows = mkDefault true`
   (`workflowsSettingImplication`), so gates 1 and 3 cannot drift apart, and an
   explicit value still wins.
 - **devenv** writes the PROJECT-LOCAL file. Only allowlisted keys work, so

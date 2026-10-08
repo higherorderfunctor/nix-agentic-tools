@@ -39,6 +39,7 @@ in {
     defaults ? {},
     hm ? {},
     devenv ? {},
+    launcherOptionsPath ? [],
     poolOptions ? {},
     supportedPools ? [],
     ...
@@ -56,6 +57,8 @@ in {
   in
     checkBackend "hm" hm
     && checkBackend "devenv" devenv
+    && lib.assertMsg (builtins.isList launcherOptionsPath && lib.all (part: builtins.isString part && part != "") launcherOptionsPath)
+    "ai runtime ${name}: launcherOptionsPath must be a list of nonempty strings (an empty list keeps launcher options at the runtime root)."
     && lib.assertMsg (unknownDefaults == [])
     "ai runtime ${name}: defaults carries ${listed unknownDefaults}; it takes only ${listed defaultsKeys}."
     && lib.assertMsg (unknownPoolOptions == [])

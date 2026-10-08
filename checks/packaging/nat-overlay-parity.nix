@@ -45,6 +45,7 @@
   self,
   ...
 }: let
+  optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
   inherit (pkgs.stdenv.hostPlatform) system;
   drvOf = drv: builtins.unsafeDiscardStringContext drv.drvPath;
   outOf = drv: builtins.unsafeDiscardStringContext drv.outPath;
@@ -160,10 +161,12 @@
   gitTools = ["git-absorb" "git-branchless" "git-revise"];
   rulePath = ".claude/rules/heading.md";
   rows = backend:
-    lib.mapAttrsToList (runtime: leaf: {
-      name = "${backend} ai.${runtime}.package";
+    lib.mapAttrsToList (runtime: leaf: let
+      path = optionPaths.launcher runtime "package";
+    in {
+      name = "${backend} ${lib.showOption path}";
       path = [leaf];
-      read = config: config.ai.${runtime}.package;
+      read = config: lib.getAttrFromPath path config;
     })
     runtimes
     ++ map (tool: {
