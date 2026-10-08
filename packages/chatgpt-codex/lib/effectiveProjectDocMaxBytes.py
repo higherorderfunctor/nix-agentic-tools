@@ -109,8 +109,8 @@ def resolve(git, directory, default, overrides=(), profile=None):
         "directories": [str(folder) for folder in chain],
         "filenames": names,
         "limit": effective,
-        # The trust of each walked directory, as the --trust mode prints it,
-        # so a caller warning about every project layer resolves once.
+        # The trust of each walked directory, so a caller warning about every
+        # project layer resolves once.
         "directory_trust": {str(folder): trust(folder) or "untrusted" for folder in chain},
         "untrusted": doc_trust == "untrusted",
         "untrusted_config": next((str(path) for path, limit in reversed(skipped) if limit > effective), None),
@@ -120,7 +120,7 @@ def resolve(git, directory, default, overrides=(), profile=None):
 
 if __name__ == "__main__":
     git, directory, default, *arguments = sys.argv[1:]
-    mode = arguments[0] if arguments[:1] in (["--json"], ["--trust"]) else None
+    mode = arguments[0] if arguments[:1] == ["--json"] else None
     arguments = arguments[1:] if mode else arguments
     overrides = []
     profile = None
@@ -130,7 +130,4 @@ if __name__ == "__main__":
         elif arguments[index] in {"-p", "--profile"}:
             profile = arguments[index + 1]
     resolution = resolve(git, directory, int(default), overrides, profile)
-    if mode == "--trust":
-        print(resolution["directory_trust"][resolution["directories"][-1]])
-    else:
-        print(json.dumps(resolution) if mode == "--json" else resolution["limit"])
+    print(json.dumps(resolution) if mode == "--json" else resolution["limit"])

@@ -71,8 +71,9 @@ def main():
     # notice warns when Codex will ignore it, the permission notice when its
     # model opposes the user's. The user config is skipped where the walk
     # reaches CODEX_HOME's parent, as the resolver skips it. Trust comes from
-    # the resolution above, not one more resolver run per directory.
-    for directory in resolution["directories"]:
+    # the resolution above, not one more resolver run per directory. The
+    # nearest layer goes first, so the bound cuts the farthest layers.
+    for directory in reversed(resolution["directories"]):
         config = Path(directory) / ".codex/config.toml"
         if config.is_file() and str(config) != resolution["user_config"]:
             subprocess.run([trust_notice, directory, resolution["directory_trust"][directory]], check=False)

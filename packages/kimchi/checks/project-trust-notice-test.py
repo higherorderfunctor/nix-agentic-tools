@@ -81,10 +81,13 @@ with tempfile.TemporaryDirectory() as temporary:
             probe(True)
             trust.write_text(malformed)
             probe(False)
-        # From $HOME the project harness path is the user harness itself,
-        # unless configDir moved the user harness elsewhere.
+        # From $HOME the project harness path is user scope: the user harness
+        # itself, or the fixed permissions directory a custom configDir
+        # leaves behind, holding a readable user permissions file.
+        permissions = user_home / ".config/kimchi/harness/permissions.json"
+        permissions.parent.mkdir(parents=True, exist_ok=True)
+        permissions.write_text("{}")
         write_trust([])
         probe(True)
-        if relative == ".config/kimchi/harness":
-            probe(False, user_home)
+        probe(False, user_home)
         project_file.unlink()

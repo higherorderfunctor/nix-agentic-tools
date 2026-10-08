@@ -35,6 +35,11 @@
   # writes; shared by the emitter and `contentTargets`.
   userHarnessDir = cfg: "${cfg.configDir}/harness";
   userContextPath = cfg: "${userHarnessDir cfg}/${cfg.context.filename}";
+  # Kimchi 1.1.37 hard-codes the user permissions file to
+  # resolve(homedir(), ".config", "kimchi", "harness", "permissions.json")
+  # (src/extensions/permissions/config.ts:35), so unlike the rest of the
+  # harness it does not follow configDir even under a package override.
+  userPermissionsDir = ".config/kimchi/harness";
   agentsMdUnits = mergedRules:
     lib.ai.transformers.agentsmd.agentsMdUnits {
       inherit (aiCommon) readContent resolveInclusion;
@@ -323,10 +328,13 @@
     # Every trust-gated project file lives under these two namespaces; the
     # notice warns when user trust will discard the ones at the launch
     # directory. Home Manager's trust store follows configDir; devenv's user
-    # harness is the runtime default.
-    projectTrustNotice =
-      import ./projectTrustNotice.nix pkgs ({projectPaths = [projectDir projectHarnessDir];}
-        // lib.optionalAttrs (backend == "hm") {userHarnessDir = userHarnessDir cfg;});
+    # harness is the runtime default. The fixed user permissions directory is
+    # user scope wherever configDir points, so the notice skips it too.
+    projectTrustNotice = import ./projectTrustNotice.nix pkgs ({
+        inherit userPermissionsDir;
+        projectPaths = [projectDir projectHarnessDir];
+      }
+      // lib.optionalAttrs (backend == "hm") {userHarnessDir = userHarnessDir cfg;});
 
     # wrapProgram args: `--set` for non-secret env, `--suffix` for devenv's
     # resource ids, `--run` for the runtime secret export. Joined with a
@@ -426,14 +434,10 @@
       if isDevenv
       then projectDir
       else harness;
-    # Kimchi 1.1.37 hard-codes the user file to
-    # resolve(homedir(), ".config", "kimchi", "harness", "permissions.json")
-    # (src/extensions/permissions/config.ts:35), so unlike the rest of the
-    # harness it does not follow configDir even under a package override.
     permissionsDir =
       if isDevenv
       then projectDir
-      else ".config/kimchi/harness";
+      else userPermissionsDir;
     # Kimchi 1.1.37 loads `<agentDir>/agents/*.md` and a trusted project's
     # `.kimchi/agents/*.md` (src/extensions/agents/personas/custom-agents.ts:21-35).
     agentsDir =

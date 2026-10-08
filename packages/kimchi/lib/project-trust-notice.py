@@ -39,8 +39,10 @@ def holds_readable_file(namespace):
 
 directory = Path(sys.argv[1]).resolve()
 harness = Path(sys.argv[2])
-# From $HOME the project harness namespace is the user harness itself.
-paths = [directory / path for path in sys.argv[3:] if (directory / path).resolve() != harness.resolve()]
+# From $HOME the project harness namespace is user scope: the user harness
+# itself, or the fixed user permissions directory when configDir moved it.
+user_scope = {harness.resolve(), Path(sys.argv[3]).resolve()}
+paths = [directory / path for path in sys.argv[4:] if (directory / path).resolve() not in user_scope]
 if any(map(holds_readable_file, paths)) and untrusted(directory, harness):
     print(
         f"warning: Kimchi project files at {directory} are untrusted by "
