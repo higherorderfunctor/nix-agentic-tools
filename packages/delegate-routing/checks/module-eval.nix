@@ -651,6 +651,17 @@
         };
       }) "ai.programs.delegate-routing.reminder.text"
     );
+    "module-delegate-routing-${name}-reminder-hooks-dir-conflict" = let
+      withHooksDir = change {ai.kiro.hooksDir = ../../kiro-cli/checks/fixtures/kiro-hooks-dir;};
+      withoutReminder = change {
+        ai.kiro.hooksDir = ../../kiro-cli/checks/fixtures/kiro-hooks-dir;
+        ai.programs.delegate-routing.runtimes.kiro.reminder.enable = false;
+      };
+    in
+      mkTest "delegate-routing-${name}-reminder-hooks-dir-conflict" (
+        failsWith withHooksDir "Set runtimes.kiro.reminder.enable = false or move those hooks out of hooksDir."
+        && passes withoutReminder
+      );
     "module-delegate-routing-${name}-reminder-payload" = let
       samples = lib.concatMap (runtime:
         map (sample: {
@@ -695,10 +706,21 @@
         PYTHON
         touch "$out"
       '';
-    "module-delegate-routing-${name}-reminder-warnings" = mkTest "delegate-routing-${name}-reminder-warnings" (
-      lib.assertMsg (!reminderWarning result.config.warnings) (lib.concatStringsSep "\n" result.config.warnings)
-      && reminderWarning reminderWithIgnoredPrompt.config.warnings
-    );
+    "module-delegate-routing-${name}-reminder-warnings" = let
+      unsupportedWarning = evaluation: lib.any (lib.hasInfix "runtimes.kimchi.reminder.enable is true, but this backend cannot deliver") evaluation.config.warnings;
+    in
+      mkTest "delegate-routing-${name}-reminder-warnings" (
+        lib.assertMsg (!reminderWarning result.config.warnings) (lib.concatStringsSep "\n" result.config.warnings)
+        && reminderWarning reminderWithIgnoredPrompt.config.warnings
+        && !(unsupportedWarning result)
+        && unsupportedWarning (reminderOverride "kimchi") == (name == "hm")
+        && !(unsupportedWarning (change {
+          ai.programs.delegate-routing.runtimes.kimchi = {
+            enable = false;
+            reminder.enable = true;
+          };
+        }))
+      );
     "module-delegate-routing-${name}-routing-defaults" = mkTest "delegate-routing-${name}-routing-defaults" (
       builtins.attrNames (lib.filterAttrs (_: entry: entry.enable) routingDefaults)
       == ["Choose execution" "Follow the user's request" "Load delegate-routing" "Size the work" "Validate the result"]
@@ -866,7 +888,7 @@ in {
         '';
       module-delegate-routing-repo-router = let
         repo = harness.evalDevenvModules [(import ../../../dev/ai.nix {isCI = false;})];
-        routerRules = lib.genAttrs ["claude" "codex"] (runtime: repo.config.ai.${runtime}.rules ? delegate-routing-router);
+        routerRules = lib.genAttrs runtimes (runtime: repo.config.ai.${runtime}.rules ? delegate-routing-router);
       in
         (mkTest "delegate-routing-repo-router" (lib.all (value: value) (builtins.attrValues routerRules))).overrideAttrs {
           passthru = {inherit routerRules;};

@@ -158,6 +158,9 @@ in {
           On Codex this defines ai.codex.hooks and cannot coexist with inline
           ai.codex.native.settings.hooks. Move inline hooks to ai.codex.hooks
           or disable runtimes.codex.reminder.enable.
+
+          On Kiro this adds an inline hook and cannot coexist with ai.kiro.hooksDir.
+          Set runtimes.kiro.reminder.enable = false or move those hooks out of hooksDir.
         '';
       };
       runtimes = lib.genAttrs supportedRuntimes runtimeOptions;
@@ -215,13 +218,20 @@ in {
         lib.mkIf (reminderHookEnabled runtime)
         (reminder.hooks.${runtime} portable.reminder.text)))
     ];
-    warnings = lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
-      ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
-      skill's Kiro behavior is verified on the v3 engine only; sessions on
-      another engine may not delegate as the skill describes.
-    '';
+    warnings =
+      map (runtime: "ai.programs.delegate-routing.runtimes.${runtime}.reminder.enable is true, but this backend cannot deliver a reminder hook for ${runtime}.")
+      (lib.filter (runtime: sourceEnabled runtime && portable.runtimes.${runtime}.reminder.enable == true && !(builtins.elem runtime hookRuntimes)) supportedRuntimes)
+      ++ lib.optional (kiroV3Declared && reachesKiro && !config.ai.kiro.cli.v3) ''
+        ai.programs.delegate-routing reaches Kiro, but ai.kiro.cli.v3 is false. The
+        skill's Kiro behavior is verified on the v3 engine only; sessions on
+        another engine may not delegate as the skill describes.
+      '';
     assertions =
       [
+        {
+          assertion = !(builtins.elem "kiro" reminderRuntimes && reminderHookEnabled "kiro") || config.ai.kiro.hooksDir == null;
+          message = "ai.programs.delegate-routing: the Kiro reminder cannot coexist with ai.kiro.hooksDir. Set runtimes.kiro.reminder.enable = false or move those hooks out of hooksDir.";
+        }
         {
           assertion = !lib.any reminderHookEnabled reminderRuntimes || portable.reminder._sourceWins || portable.reminder.text != "";
           message = "ai.programs.delegate-routing.reminder.text must be non-empty when a runtime reminder hook is enabled, unless a source supplies the content.";

@@ -19,6 +19,8 @@
       };
     });
 in {
+  # Wording is load-bearing: re-derive the four properties in
+  # packages/claude-code/docs/heron-brook-clamp.md before changing it.
   defaultText = "Standing request from me, the user: you may delegate to subagents and workflows whenever they fit; follow the delegate-routing skill when you do.";
 
   # Definitions under ai.<runtime>; Kiro consumes plain stdout.

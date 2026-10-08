@@ -47,9 +47,8 @@
 # If evidence later says B nags more than it helps, A is a small edit: swap the
 # decision to "allow", move the text to `additionalContext`, and drop the marker.
 #
-# ── Fail-open, and note this INVERTS the delegation clamp's bias ───────────────
-# The clamp degrades toward injecting, because losing its injection loses the
-# mitigation. This degrades toward ALLOWING, and the asymmetry is load-bearing: a
+# ── Fail-open ───────────────────────────────────────────────────────────────
+# This degrades toward ALLOWING, and that is load-bearing: a
 # deny we failed to record repeats forever, so the model would retry into the same
 # denial with no way through. A guard that cannot write its marker MUST let the
 # write proceed. Failures still exit 0, with an option-named warning on stderr.
