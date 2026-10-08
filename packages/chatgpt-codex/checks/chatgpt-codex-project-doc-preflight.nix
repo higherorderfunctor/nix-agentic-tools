@@ -52,7 +52,7 @@ in {
       python3 ${./project-doc-preflight-fixtures.py} \
         ${codex}/bin/codex ${lib.getExe preflight} \
         ${hmLauncher}/bin/codex ${devenvLauncher}/bin/codex \
-        ${fakeLauncher}/bin/codex ${../lib/projectDocPreflight.py}
+        ${fakeLauncher}/bin/codex ${../lib/projectDocPreflight.py} ${pkgs.bash}/bin/bash
       echo PASS > "$out"
     '';
 }
