@@ -1,7 +1,8 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-07 — `launcherOptionsPath` places Kiro environment
-> and shell options, including their normalized inputs, under `ai.kiro.cli`.
+> **Last verified:** 2026-10-08 — `launcherOptionsPath` places Kiro environment
+> and shell options, including their normalized inputs, under `ai.kiro.cli`;
+> Codex always installs one launcher with an offline document preflight.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -173,16 +174,16 @@ three runtimes demonstrably do not perform.
   polite defaults a user may override (`TERM`, `GH_TELEMETRY`). A configured
   shell must beat the ambient environment. For Codex this matters more than it
   looks, because "unset" is not neutral — it lands on the passwd shell.
-- **Codex had no wrapper before this option.** It now installs
-  `lib.ai.mkLauncher` (`lib/ai/launcher.nix`), which Copilot's wrapper also
-  calls. The wrapper is skipped entirely when it has nothing to bake in, so a
-  Codex with nothing to deliver still gets the bare upstream path.
-- **On devenv that empty case is unreachable.** devenv's Codex launcher always
-  passes `--no-daemon` (`packages/chatgpt-codex/docs/codex-daemon.md` says why),
-  so enabling Codex on devenv ALWAYS builds a wrapper, whatever the environment
-  pool holds, while Home Manager ships it bare. That divergence is asserted by
-  `module-codex-enabled-installs-package`; if you are wondering why the two
-  backends install different store paths, this is why, and it is intended.
+- **Codex always installs one launcher on both backends.** `lib.ai.mkLauncher`
+  runs the project-document preflight after injecting the process environment,
+  then execs the original package binary. Its `launcherPackage` passthru
+  flattens a selected launcher, so a devenv package wrapping a Home Manager
+  launcher runs the check only once. The preflight reads local files without
+  starting a Codex session. Copilot still gets the bare package when it has no
+  environment or flags to inject.
+- **Devenv additionally passes `--no-daemon`.**
+  `packages/chatgpt-codex/docs/codex-daemon.md` says why. Home Manager's
+  launcher carries the same document check without that flag.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it

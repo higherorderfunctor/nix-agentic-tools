@@ -56,12 +56,9 @@
 #                                    #   factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
 #     sharedAgentsMd ? <absent>;     # callback (same args) → {key; hasOnDemandIndex?;
-#                                    #   index?; rules?; maxBytes?; defaultMaxBytes?}:
+#                                    #   index?; rules?; maxBytes?}:
 #                                    #   the devenv repository AGENTS.md
-#                                    #   contribution; `defaultMaxBytes` supplies the runtime's
-#                                    #   fallback bytes and an effective-limit resolver, and
-#                                    #   devenv shell entry warns past the resolved limit. The transform
-#                                    #   rejects any other field
+#                                    #   contribution. The transform rejects any other field.
 #     contentTargets ? <absent>;     # callback (same args) → {context?; rules?}: the
 #                                    #   path each context/rule unit lands in, from the
 #                                    #   SAME bindings the delivery uses. A unit whose

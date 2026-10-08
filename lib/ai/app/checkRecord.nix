@@ -29,7 +29,7 @@
   # The pools whose option `mkBackendTransform.nix` declares through
   # `poolOption`, and so the only ones `poolOptions` can override.
   poolOptionPools = ["environmentVariables" "lspServers"];
-  sharedAgentsMdKeys = ["defaultMaxBytes" "hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
+  sharedAgentsMdKeys = ["hasOnDemandIndex" "index" "key" "maxBytes" "rules"];
   contentTargetsKeys = ["context" "rules"];
   unknownIn = allowed: attrs: lib.subtractLists allowed (builtins.attrNames attrs);
   listed = lib.concatStringsSep ", ";
@@ -83,5 +83,5 @@ in {
     unknown = unknownIn sharedAgentsMdKeys result;
   in
     lib.assertMsg (result ? key && unknown == [])
-    "ai runtime ${name}: sharedAgentsMd must return {key; hasOnDemandIndex?; index?; rules?; maxBytes?; defaultMaxBytes?}${lib.optionalString (unknown != []) ", but it also returned ${listed unknown}"}.";
+    "ai runtime ${name}: sharedAgentsMd must return {key; hasOnDemandIndex?; index?; rules?; maxBytes?}${lib.optionalString (unknown != []) ", but it also returned ${listed unknown}"}.";
 }

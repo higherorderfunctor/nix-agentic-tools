@@ -19,8 +19,8 @@
   # launcher is the only declarative place for it and for the rest of the
   # environment pool. When `SHELL` is unset or not executable Codex falls back
   # to the PASSWORD-DATABASE shell, so leaving it unset is not neutral. With
-  # nothing to bake in, the bare upstream package is installed (Home Manager
-  # only).
+  # no extra environment, the project-document preflight still needs a wrapper
+  # on both backends. The preflight is local and never starts a Codex session.
   #
   # devenv's launcher also always passes `--no-daemon`, the one flag that both
   # skips auto-start AND refuses to attach to a daemon already running. A
@@ -44,6 +44,7 @@
     ...
   } @ args: let
     hookTrust = hookTrustFor args;
+    package = cfg.package.launcherPackage or cfg.package;
   in
     lib.ai.mkLauncher pkgs {
       environmentVariables = launcherEnvironment;
@@ -56,10 +57,10 @@
         )
       );
       name = "chatgpt-codex-wrapped";
-      inherit (cfg) package;
+      inherit package;
+      preflight = import ./projectDocPreflight.nix pkgs;
     };
   daemonSelect = import ./daemonSelect.nix pkgs;
-  effectiveProjectDocMaxBytes = import ./effectiveProjectDocMaxBytes.nix pkgs;
   packageLayout = import ./packageLayout.nix;
   jsonFormat = pkgs.formats.json {};
   tomlFormat = pkgs.formats.toml {};
@@ -1173,8 +1174,9 @@ in
           `project_doc_max_bytes` at default priority, so Codex reads as much
           as this limit admits. On devenv that key lands in the project's
           `.codex/config.toml`, which Codex applies only in a trusted project.
-          On every devenv shell entry, a file larger than Codex's effective
-          user or trusted-project limit warns before Codex can truncate it.
+          Every module-provided Codex launcher warns on stderr when its
+          project documentation exceeds the effective byte budget, including in
+          repositories without devenv.
           Home Manager writes the key to user config, which no trust gates.
         '';
       };
@@ -1261,10 +1263,6 @@ in
       ...
     }:
       {
-        defaultMaxBytes = {
-          bytes = codexProjectDocMaxBytes;
-          resolver = effectiveProjectDocMaxBytes;
-        };
         key = agentsMdPath "devenv" cfg;
         maxBytes = cfg.projectDocMaxBytes;
       }

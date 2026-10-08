@@ -6,7 +6,7 @@
   harness,
   ...
 }: let
-  inherit (harness) aiStubs claudeSettings deliveredFiles deliveredTree evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownPlan tomlFormat windowNoticeLines;
+  inherit (harness) aiStubs claudeSettings deliveredFiles deliveredTree evalDevenv evalDevenvWithGetEnv evalDevenvWithSpecialArgs evalHm fromGeneratedTree hasLiteral markdownInput mkTest mkWrapperGrepTest ownPlan tomlFormat;
   # The daemon's settings.json is a read-only copy in the one directory target
   # of Home Manager's daemon-settings writer. `ownPlan` throws on an absent
   # writer, so a renamed entry fails the check.
@@ -46,24 +46,18 @@ in {
         && devenv.config.packages == []
     );
 
-    # The two backends legitimately install DIFFERENT derivations here. devenv's
-    # launcher always passes `--no-daemon` (see mkCodex.nix), so enabling Codex
-    # on devenv always produces a wrapper, whatever the environment pool holds.
-    # The pool would force one too: devenv has no `programs.git`, so the
-    # sandbox-safe Git SSH default rides Codex's launcher rather than being
-    # exported into the project shell. Home Manager states that default in
-    # Git's own config, so with nothing else to deliver the upstream package
-    # ships untouched. The SSH VALUE is asserted by
-    # `module-ai-git-ssh-default-follows-harnesses`; this one is about shape.
+    # Both backends always install a launcher for the document preflight.
+    # Devenv additionally carries --no-daemon and its Git SSH environment.
     module-codex-enabled-installs-package = mkTest "codex-enabled-installs-package" (
       let
         hm = evalHm {ai.codex.enable = true;};
         devenv = evalDevenv {ai.codex.enable = true;};
-        expected = aiStubs.chatgpt-codex;
+        hmPackages = hm.config.home.packages;
         devenvPackages = devenv.config.packages;
       in
-        hm.config.home.packages
-        == [expected]
+        builtins.length hmPackages
+        == 1
+        && lib.hasSuffix "chatgpt-codex-wrapped" (builtins.baseNameOf (builtins.head hmPackages))
         && builtins.length devenvPackages == 1
         && lib.hasSuffix "chatgpt-codex-wrapped" (
           builtins.baseNameOf (builtins.head devenvPackages)
@@ -2192,53 +2186,6 @@ in {
           grep -q -F ${lib.escapeShellArg "${path} renders to 32769 bytes, exceeding its limit (32768 bytes). ${hint}"} ${failure}/testBuildFailure.log
           echo PASS > "$out"
         '';
-
-    # On devenv a RAISED limit lands in trust-gated project config, so a file
-    # past Codex's own 32 KiB is all an untrusted project reads. Every shell
-    # entry runs the window notice on the project's AGENTS.md, which it
-    # measures whoever wrote it; a limit at the default runs nothing. Home
-    # Manager writes the limit to user config, which no trust gates, and has
-    # no shell entry. What the notice prints is
-    # `checks/markdown/markdown-byte-limit-scripts.nix`.
-    module-codex-window-notice = mkTest "codex-window-notice" (
-      let
-        expected = ["${lib.getExe (import ../../../lib/markdown/byte-limit.nix pkgs).windowNotice} \"$DEVENV_ROOT\"/${lib.escapeShellArgs ["AGENTS.md" "32768" "codex" (lib.getExe (import ../lib/effectiveProjectDocMaxBytes.nix pkgs))]}"];
-        devenv = projectDocMaxBytes:
-          evalDevenv {
-            ai = {
-              codex = {
-                enable = true;
-                inherit projectDocMaxBytes;
-              };
-              context.text = "CONTEXT";
-            };
-          };
-        hm = evalHm {
-          ai.codex = {
-            context.text = "CONTEXT";
-            enable = true;
-            projectDocMaxBytes = 131072;
-          };
-        };
-        # A store-backed replacement with no `format` is `raw`, as on Home
-        # Manager: it is in the shared generated tree, under the limit.
-        replaced = evalDevenv {
-          ai.codex = {
-            enable = true;
-            files."AGENTS.md".content.source = pkgs.writeText "big" (lib.concatStrings (lib.replicate 40000 "x"));
-            projectDocMaxBytes = 131072;
-          };
-        };
-      in
-        windowNoticeLines (devenv 32768)
-        == []
-        && windowNoticeLines (devenv 131072) == expected
-        && windowNoticeLines replaced == expected
-        && replaced.config.ai.internal._maxBytes."AGENTS.md".bytes == 131072
-        && fromGeneratedTree "AGENTS.md" (deliveredFiles replaced.config)."AGENTS.md"
-        && hm.config.ai.codex._maxBytes.".codex/AGENTS.md".bytes == 131072
-        && hm.config.warnings == []
-    );
 
     # `format = "raw"` delivers AGENTS.md as written on both backends. It is
     # built into the generated tree, which measures it and neither formats nor

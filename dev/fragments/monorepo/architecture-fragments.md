@@ -1,6 +1,6 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-10-03 — `generate:all` regenerates instructions, repo
+> **Last verified:** 2026-10-08 — `generate:all` regenerates instructions, repo
 > documents and devenv.yaml; devenv.lock is synced separately with
 > `devenv update <input>`; fragment sources live in the dev or package tree;
 > package categories live in owner registries; `dev/generate.nix` turns them
@@ -41,11 +41,13 @@ it per runtime through the `lib/ai/transformers/` pipeline:
   rule that names `references` as an index entry for the same reason. The index
   and the always-on rules come before the orientation, so Codex's default 32 KiB
   read keeps them in a fresh clone or a linked worktree, where the raised
-  `project_doc_max_bytes` in the gitignored `.codex/` does not apply. A devenv
-  shell entry warns when AGENTS.md is past the limit Codex will actually apply
-  there — resolved at entry from the user config and, for a trusted main
-  checkout, the project `.codex/config.toml` — so the primary checkout is silent
-  and a linked worktree warns until the orientation shrinks below 32 KiB.
+  `project_doc_max_bytes` in the gitignored `.codex/` does not apply. Every
+  module-provided Codex launcher warns on stderr when its byte budget truncates
+  or omits project documentation, including in repos without devenv. The check
+  reads local docs and reuses the effective-limit resolver, which adds a trust
+  remedy when an untrusted project config raises the limit. The
+  instructions-drift build check still guards this repo's index and rule markers
+  within 32 KiB.
 
 The source fragments are authoritative. Every runtime file above is a generated
 projection that `ai.*` writes: AGENTS.md and `.github/` are committed, the

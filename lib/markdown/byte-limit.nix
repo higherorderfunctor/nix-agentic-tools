@@ -1,13 +1,8 @@
-# The two byte-limit programs: `byteLimitCheck`, which the generated tree's
-# install check runs on each limited file (lib/generated.nix), and `windowNotice`,
-# which devenv's shell entry runs on the project's AGENTS.md
-# (lib/ai/app/sharedAgentsMd.nix). They live apart from generated-file exports
-# exports so nothing public exists only for the check that executes them
-# (checks/markdown/markdown-byte-limit-scripts.nix).
+# The generated tree's install check runs byteLimitCheck on every limited file.
+# Launch-time Codex truncation checks live with its launcher, not this guard.
 pkgs: let
-  # Both byte-limit programs are scripts rather than inline shell so the
-  # checks execute exactly what the tree and the devenv shell run. Their one
-  # external command, `wc`, is referenced by store path, so neither relies on
+  # The script is shared with the fixture check. Its one
+  # external command, `wc`, is referenced by store path, so it never relies on
   # the caller's PATH.
   strictShellApplication = import ../strict-shell-application.nix pkgs;
 
@@ -32,32 +27,6 @@ pkgs: let
       fi
     '';
   };
-
-  # `FILE BYTES READER RESOLVER`: one warning on stderr when FILE is larger
-  # than RESOLVER reports READER will take, and silence otherwise, including
-  # when FILE does not exist. A failed or invalid resolution uses BYTES.
-  windowNotice = strictShellApplication {
-    name = "ai-markdown-window-notice";
-    text = ''
-      if [ "$#" -ne 4 ]; then
-        echo "usage: ai-markdown-window-notice FILE BYTES READER RESOLVER" >&2
-        exit 2
-      fi
-      file=$1
-      limit=$2
-      reader=$3
-      resolver=$4
-      [ -f "$file" ] || exit 0
-      size=$(${pkgs.coreutils}/bin/wc -c <"$file")
-      resolved="$("$resolver" "$(${pkgs.coreutils}/bin/dirname "$file")" "$limit" 2>/dev/null || :)"
-      if [[ "$resolved" =~ ^[0-9]+$ ]]; then
-        limit=$resolved
-      fi
-      if [ "$size" -gt "$limit" ]; then
-        echo "warning: $file is $size bytes; $reader reads only the first $limit bytes with its current configuration. Raise the limit in $reader, or shrink the always-loaded content." >&2
-      fi
-    '';
-  };
 in {
-  inherit byteLimitCheck windowNotice;
+  inherit byteLimitCheck;
 }
