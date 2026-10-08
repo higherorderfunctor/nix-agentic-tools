@@ -162,7 +162,7 @@
           };
         } ? attribution)))
 
-      # Null typed keys are filtered out, and the undocumented `ultracode` key is
+      # Null typed keys are filtered out, and the `ultracode` key is
       # never written unless ultracodeOnLaunch is set.
       (perBackend "null-settings-filtered" (arm: let
         settings = settingsOf arm {ai.claude.enable = true;};
@@ -189,9 +189,9 @@
       in
         settings ? workflowKeywordTriggerEnabled && !settings.workflowKeywordTriggerEnabled))
 
-      # Meta option: ultracodeOnLaunch writes the undocumented `ultracode` key
+      # Meta option: ultracodeOnLaunch writes the `ultracode` key
       # and the `enableWorkflows` master toggle — and ONLY those: not effortLevel
-      # (ultracode implies xhigh) nor workflowKeywordTriggerEnabled (orthogonal
+      # (ultracode keeps the session effort) nor workflowKeywordTriggerEnabled (orthogonal
       # per-turn key).
       (perBackend "ultracode-on-launch-writes-settings" (arm: let
         settings = settingsOf arm {
