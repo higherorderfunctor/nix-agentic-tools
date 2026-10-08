@@ -1,9 +1,8 @@
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-03 — the CI build matrix reads `ciPackages`; the
-> repo shell applies `buildOverlay`. Kimchi source builds require fresh closure
-> measurements; old binary-release figures are not current estimates. The
-> instruction copier check is gone with the generator's materializer.
+> **Last verified:** 2026-10-07 — runtime PATH provenance is a consumer-wide
+> shell-entry warning, covered by module fixtures rather than the
+> repository-only enterTest loop.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -83,7 +82,8 @@ comm -23 \
 It is unconditional — no `!isCI` guard, by design. If that closure growth ever
 becomes unacceptable, the answer is `ai.kimchi.enable`, not an `!isCI` branch;
 the decision rule above forbids using that branch for anything a guard depends
-on, and enterTest asserts these binaries are on PATH.
+on, and the shared installation block warns at shell entry when PATH resolves a
+runtime outside the devenv profile.
 
 ### Codex uses an unrestricted project override
 

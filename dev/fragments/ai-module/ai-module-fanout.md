@@ -1,9 +1,7 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-07 — the runtime record's `launcherOptionsPath`
-> moves Kiro launcher options to `ai.kiro.cli`; Codex guards launcher flags as
-> real uses without per-name annotation rows; per-runtime program overrides
-> accept portable `settings`.
+> **Last verified:** 2026-10-07 — devenv checks installed runtime binary
+> provenance at shell entry and warns when PATH resolves outside the profile.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -130,6 +128,16 @@ omission is inert rather than invisible. `checks/ai-fanout/module-eval.nix`'s
 `every-runtime-installs-package` asserts a non-empty package list for every
 runtime on both backends under the unchanged defaults. Explicit null is the
 consumer opt-out; it does not weaken the default-install invariant.
+
+On devenv, the installation block also emits one PATH-provenance notice for each
+enabled runtime with a non-null package. It derives the executable name from the
+selected package, compares the shell's `command -v` result with
+`$DEVENV_PROFILE/bin/<name>` after resolving symlinks, and warns if a
+user-global or other shell install shadows the profile copy. Missing
+profile/binary paths stay silent, and the standalone strict-mode notice always
+exits zero. Disabled runtimes and explicit null package selections emit no
+notice. Module fixtures execute the rendered command for every runtime; this
+replaces the repository-only fail-hard `enterTest` loop.
 
 The one bounded exception is an `activation` writer with
 `runWhenDisabled = true`, declared outside the product gate by
