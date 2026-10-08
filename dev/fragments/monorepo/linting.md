@@ -1,6 +1,6 @@
 ## Linting
 
-> **Last verified:** 2026-10-03 — local and CI cspell hooks tolerate batches
+> **Last verified:** 2026-10-08 — local and CI cspell hooks tolerate batches
 > excluded entirely by ignorePaths while still failing spelling errors; the
 > separate shellcheck backend retains its empty-corpus guard. Full lineage:
 > `git show f7189d05:dev/fragments/monorepo/linting.md`.
@@ -29,12 +29,13 @@ belongs only to the pre-commit restager.
 
 Full-corpus work is not a shell-entry concern. `devenv:treefmt:run` and
 `devenv:git-hooks:run` remain explicit named diagnostics with no activation DAG
-edges. `devenv test` invokes the same packaged hook runner only after
-shell-entry tasks finish, before its runtime smoke assertions. This placement is
-deliberate: devenv's `RunMode::All` can traverse from a shared prerequisite into
-a sibling lane, so leaving the hook task behind `devenv:git-hooks:install` made
-ordinary shell activation run the full repository even though the hook task
-targeted `devenv:enterTest`.
+edges. `devenv test` no longer invokes the full-corpus hook runner: automatic CI
+covers those validators through `checks.repo-lints`, `checks.formatting` and
+`checks.shellcheck-corpus`. Keep full-corpus tasks detached from activation:
+devenv's `RunMode::All` can traverse from a shared prerequisite into a sibling
+lane, so leaving the hook task behind `devenv:git-hooks:install` made ordinary
+shell activation run the full repository even though the hook task targeted
+`devenv:enterTest`.
 
 The treefmt hook enables treefmt's SQLite evaluation cache and sets
 `require_serial = true`. prek otherwise partitions the files across concurrent

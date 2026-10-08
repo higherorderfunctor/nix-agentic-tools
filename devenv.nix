@@ -265,10 +265,6 @@ in {
 
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
-    # Shell-entry tasks have finished, so full-corpus validation cannot race
-    # materialization. Keep this here rather than in the task DAG: RunMode::All
-    # can pull a sibling task through a shared prerequisite during shell entry.
-    ${lib.getExe runRepoHooks}
     echo "Validating devenv configuration..."
     # Every enabled `ai.*` runtime must resolve to the binary THIS devenv
     # profile provides, not to whatever the developer has installed
@@ -411,8 +407,7 @@ in {
       # Keep full-corpus work as named diagnostics. Upstream wires both tasks
       # into activation; detach them because devenv's RunMode::All can traverse
       # from a shared prerequisite into a sibling lane (cachix/devenv#2337).
-      # The immutable config lets the hook task remain dependency-free while
-      # `enterTest` invokes the same helper after shell-entry tasks complete.
+      # The immutable config lets the manual hook task remain dependency-free.
       "devenv:git-hooks:run" = {
         after = lib.mkForce [];
         before = lib.mkForce [];
