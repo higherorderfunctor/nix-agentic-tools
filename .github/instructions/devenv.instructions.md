@@ -145,10 +145,11 @@ its throwaway AGENTS.md without the Semble rule; the drift check pins
 
 Integration roots remain available to normal workspace-write and named-profile
 consumers, but this project override intentionally does not use them. enterTest
-asserts that the wrapper injects no `--profile`, the project config selects
-`danger-full-access`, and no stale whole-file profile remains in `CODEX_HOME`. A
-permission model mixed across the user and project layers is the ai module's
-shell-entry warning, not a repo assertion.
+asserts that the project config selects `danger-full-access`. A permission model
+mixed across the user and project layers is the ai module's shell-entry warning,
+not a repo assertion. The old `--profile` wrapper and stale whole-file profile
+assertions are gone: `ai.codex.profiles` was removed, and
+`packages/chatgpt-codex/lib/launcher-flags.nix` owns the launcher flags.
 
 Two proofs to preserve when touching the diagnostic: with `CI` unset the shell
 must contain grammar/path-customized Semble and its scoped cache root, while an
