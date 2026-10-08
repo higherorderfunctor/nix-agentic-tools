@@ -483,6 +483,27 @@ in {
       && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );
     ai-warnings-delivery-input-options = harness.mkTest "ai-warnings-delivery-input-options" inputsDeclared;
+    ai-warnings-kiro-hook-prompts = harness.mkTest "ai-warnings-kiro-hook-prompts" (
+      lib.all (mode: let
+        warningsFor = extra:
+          evaluate mode {
+            ai.kiro = {
+              enable = true;
+              hooks.probe =
+                lib.recursiveUpdate {
+                  trigger = "UserPromptSubmit";
+                  action.command = "true";
+                }
+                extra;
+            };
+          };
+        unset = warningsFor {};
+        withPrompt = warningsFor {action.prompt.text = "probe";};
+      in
+        assert lib.assertMsg (unset == []) "${mode}: command hook with no prompt warned: ${builtins.toJSON unset}";
+          contains "ai.kiro.hooks.probe.action.prompt" withPrompt)
+      ["devenv" "hm"]
+    );
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
       let
         valid = mcp.evalSettings "gitlab-mcp" {

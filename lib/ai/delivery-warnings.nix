@@ -140,18 +140,20 @@
     (message (entry.path ++ ["inclusion"]) "Kiro CLI does not load manual steering; this mode only works in IDE clients.")) (entries "rules"));
   hookWarnings = lib.optionals (runtime == "kiro") (lib.concatMap (name: let
     hook = cfg.hooks.${name};
+    # The payload the selected action.type ignores, and whether it is set.
+    # Unset prompts still carry record fields; inspect their content.
     ignored =
       if hook.action.type == "agent"
-      then ["command"]
-      else ["prompt"];
+      then {command = nonEmpty hook.action.command;}
+      else {prompt = aiCommon.hasContent hook.action.prompt;};
   in
     lib.optionals (hook.enabled != false) (
       lib.optional (hook.action.type == "agent" && hook.timeout != null)
       (message ["ai" "kiro" "hooks" name "timeout"] "Agent hook actions have no subprocess timeout.")
-      ++ lib.concatMap (field:
-        lib.optional (nonEmpty hook.action.${field})
+      ++ lib.concatLists (lib.mapAttrsToList (field: set:
+        lib.optional set
         (message ["ai" "kiro" "hooks" name "action" field] "The selected action.type uses the other action payload."))
-      ignored
+      ignored)
     )) (builtins.attrNames cfg.hooks));
   # `--trust-tools` reaches the chat binary on BOTH backends, so this is a
   # withhold test rather than a platform test. Two argv paths drop the flag:
