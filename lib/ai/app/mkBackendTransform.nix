@@ -37,6 +37,7 @@
   deliveryOptions = import ../delivery-options.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
   hooks = import ../hooks.nix {inherit lib;};
+  pathProvenanceNotice = import ../runtime-path-provenance-notice.nix appRecord.pkgs;
   runtimeFiles = import ../runtime-files.nix {inherit lib;};
   # `pkgs` comes off the RECORD, never from the module arguments. Naming
   # it in this function's formals makes the module system resolve it via
@@ -519,7 +520,15 @@
   packageInstallConfig =
     if backend == "hm"
     then {home.packages = installedPackages;}
-    else {packages = installedPackages;};
+    else
+      {packages = installedPackages;}
+      // lib.optionalAttrs (options ? enterShell) {
+        enterShell = lib.mkIf (launcherCfg.package != null) (let
+          runtime = builtins.baseNameOf (lib.getExe launcherCfg.package);
+        in ''
+          ${lib.getExe pathProvenanceNotice} ${lib.escapeShellArg runtime} "$(command -v ${lib.escapeShellArg runtime} || :)" "''${DEVENV_PROFILE:-}"
+        '');
+      };
 in {
   options.ai.${appRecord.name} = lib.recursiveUpdate (
     {
