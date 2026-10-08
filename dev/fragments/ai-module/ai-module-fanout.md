@@ -1,9 +1,8 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-07 — the runtime record's `launcherOptionsPath`
-> moves Kiro launcher options to `ai.kiro.cli`; Codex guards launcher flags as
-> real uses without per-name annotation rows; per-runtime program overrides
-> accept portable `settings`.
+> **Last verified:** 2026-10-07 — devenv warns at shell entry when delivered
+> Codex project config and user config use opposite permission models, naming
+> both files and the winning selector.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -249,11 +248,15 @@ The ai module fans out TWO kinds of configuration:
   config layers; both backends may therefore contribute to one policy without
   restating lower-layer roots. The older sandbox model and permission profiles
   remain mutually exclusive, so the module fails when both appear in one
-  settings tree and consumers must not put legacy `sandbox_mode` in another
-  loaded layer. Profile names and inheritance graphs remain runtime-validated by
-  Codex because config layers may contribute parents dynamically. The distinct
-  whole-file `ai.codex.profiles.<name>` surface (a separate static
-  `${configDir}/<name>.config.toml` user layer selected with
+  settings tree. At devenv shell entry, `codex-permission-layers-notice` parses
+  the delivered project file and `${CODEX_HOME:-$HOME/.codex}/config.toml`,
+  warns when their models differ, and names the winning selector when the
+  project is trusted and loaded. Selectors resolve low-to-high; tables alone do
+  not select a model. Disabled delivery, missing/unreadable files and malformed
+  TOML stay silent. Profile names and inheritance graphs remain
+  runtime-validated by Codex because config layers may contribute parents
+  dynamically. The distinct whole-file `ai.codex.profiles.<name>` surface (a
+  separate static `${configDir}/<name>.config.toml` user layer selected with
   `codex --profile <name>`) was removed 2026-09-19 as unreachable dead code; see
   the Settled bullet above. `projects.<path>.trust_level` is accepted only by
   Home Manager's user-global file, where it is the only project trust Codex

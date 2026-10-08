@@ -2193,6 +2193,42 @@ in {
           echo PASS > "$out"
         '';
 
+    module-codex-permission-layers-notice = let
+      evaluated = evalDevenv {ai.codex.enable = true;};
+      linesOf = evaluated: lib.filter (lib.hasInfix "/bin/codex-permission-layers-notice ") (lib.splitString "\n" evaluated.config.enterShell);
+      command = lib.head (linesOf evaluated);
+      suppressed = evalDevenv {
+        ai.codex = {
+          enable = true;
+          files.".codex/config.toml".content.enable = false;
+        };
+      };
+    in
+      assert builtins.length (linesOf evaluated) == 1;
+      assert linesOf (evalDevenv {}) == [] && linesOf suppressed == [];
+      assert linesOf (evalDevenv {
+        ai.codex = {
+          enable = true;
+          native.settings = {
+            model = null;
+            model_reasoning_effort = null;
+          };
+        };
+      })
+      == [];
+        pkgs.runCommand "module-test-codex-permission-layers-notice" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          export DEVENV_ROOT="$TMPDIR/project" CODEX_HOME="$TMPDIR/user"
+          mkdir -p "$DEVENV_ROOT/.codex" "$CODEX_HOME"
+          ${pkgs.python3}/bin/python3 ${./permission-layers-notice-test.py} ${pkgs.writeShellScript "rendered-permission-layers-notice" ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            ${command}
+          ''}
+          echo PASS > "$out"
+        '';
+
     # On devenv a RAISED limit lands in trust-gated project config, so a file
     # past Codex's own 32 KiB is all an untrusted project reads. Every shell
     # entry runs the window notice on the project's AGENTS.md, which it

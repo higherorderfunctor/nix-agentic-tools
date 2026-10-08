@@ -316,8 +316,6 @@ in {
     nat_codex_config=.codex/config.toml
     test -f "$nat_codex_config" || { echo "FAIL: Codex project config was not written"; exit 1; }
     ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "danger-full-access"' "$nat_codex_config" || { echo "FAIL: Codex project config does not disable the sandbox"; exit 1; }
-    ! ${pkgs.gnugrep}/bin/grep -Fq '[sandbox_workspace_write]' "$nat_codex_config" || { echo "FAIL: Codex project config retains workspace-write refinements while the sandbox is disabled"; exit 1; }
-    ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config mixes named permissions with the sandbox override"; exit 1; }
     test ! -e "''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml" || { echo "FAIL: a stale nix-agentic-tools Codex profile is still materialized in CODEX_HOME"; exit 1; }
     ${lib.optionalString (!isCI) ''
       nat_hooks_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-path hooks)"
