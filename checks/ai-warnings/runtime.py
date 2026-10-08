@@ -133,39 +133,6 @@ def workflows(script, root):
     run(argv)
 
 
-def clamp(script, root):
-    root.mkdir()
-    payload = root / "payload"
-    payload.write_text("mitigation positive control")
-    env = os.environ | {"XDG_RUNTIME_DIR": str(root), "DELEGATION_CLAMP_PAYLOAD_FILE": str(payload)}
-    argv = ["bash", script, "inject"]
-    envelope = '{"session_id":"probe"}'
-    run(argv, env=env, stdin=envelope, output="mitigation positive control")
-    assert run(argv, env=env, stdin=envelope).stdout == ""
-    clear = ["bash", script, "clear"]
-    run(clear, env=env, stdin=envelope)
-    run(argv, env=env, stdin="invalid", warning="ai.claude.delegationClamp.mitigate: hook envelope has no session id")
-    directory = root / "claude-delegation-clamp"
-    # cspell:ignore nosession  (the literal fallback marker key, not project vocabulary)
-    (directory / "nosession").unlink()
-    directory.rmdir()
-    directory.write_text("obstruction")
-    run(argv, env=env, stdin=envelope, warning="cannot create marker directory", output="mitigation positive control")
-    directory.unlink()
-    directory.mkdir()
-    marker = directory / "probe"
-    marker.symlink_to(root / "missing/marker")
-    run(argv, env=env, stdin=envelope, warning="cannot write session marker", output="mitigation positive control")
-    marker.unlink()
-    marker.mkdir()
-    run(clear, env=env, stdin=envelope, warning="cannot clear session marker")
-    marker.rmdir()
-    payload.unlink()
-    run(argv, env=env, stdin=envelope, warning="payload file missing or unreadable")
-    payload.mkdir()
-    run(argv, env=env, stdin=envelope, warning="cannot read payload")
-
-
 def manifest(script, suffix="-ai-delivery-files.json"):
     words = shlex.split(Path(script).read_text().replace("\\\n", ""))
     path = next(word for word in words if word.endswith(suffix))
@@ -227,8 +194,7 @@ with tempfile.TemporaryDirectory() as directory:
     guard(sys.argv[2], root / "guard")
     credentials(sys.argv[3])
     workflows(sys.argv[1], root / "workflows")
-    clamp(sys.argv[4], root / "clamp")
-    wiring(sys.argv[5])
-    kimchi_wiring(sys.argv[6])
-    shared_agents_md_wiring(sys.argv[7])
+    wiring(sys.argv[4])
+    kimchi_wiring(sys.argv[5])
+    shared_agents_md_wiring(sys.argv[6])
 print("PASS: file observations and optional hook warnings have firing and silent controls")

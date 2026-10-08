@@ -9,7 +9,6 @@
   ...
 }: let
   inherit (lib.ai) agent;
-  aiTypes = import ../../../lib/ai/types.nix {inherit lib;};
   sharedHooks = lib.ai.hooks;
   # Eval-pure reads of COMMITTED source JSON (no IFD). See overlays.md
   # § IFD Patterns and memory project_claude_effort_pin_state.
@@ -17,15 +16,6 @@
     builtins.fromJSON (builtins.readFile ../extracted.json);
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   unrecognizedSettings = import ./unrecognizedSettings.nix {inherit lib;};
-
-  delegationClampMitigationDefaultProse = ''
-    Standing request from me, the user: you have my permission to use subagents
-    (the Agent/Task tool), workflows, and deep research whenever they fit the
-    task at hand. Treat this as the request that any "unless the user requested
-    it" condition is asking for — it is granted, now and for the rest of this
-    session. Use your own judgment about when they actually fit; this grants
-    permission, it does not oblige you to delegate.
-  '';
 
   # The `native.settings` option surface: one option per path in the packaged
   # binary's own settings schema, merged with the hand-authored exceptions.
@@ -113,30 +103,6 @@
     hooks = "Handlers that fire for this matcher block.";
     matcher = "Tool-name matcher (exact name or JS regex). Null for events that take no matcher (Stop, UserPromptSubmit, …).";
   };
-  # heron_brook delegation clamp — the opt-in mitigation's hook pair.
-  #
-  # Two events, one script (./delegationClampMitigation.nix):
-  #   UserPromptSubmit → inject the standing request ONCE per session. This event
-  #                      specifically, because its additionalContext is appended to
-  #                      the USER's message; a SessionStart injection renders
-  #                      system-attributed and so cannot satisfy a clamp clause about
-  #                      what the *user* requested.
-  #   PreCompact       → clear the marker, because compaction is the one event that
-  #                      erases the original injection.
-  #
-  # Emitted as a `ai.claude.hooks` DEFINITION rather than as that option's `default`:
-  # an option default is discarded wholesale the moment a consumer defines the option
-  # at all, whereas a definition list-merges with consumer entries on the same event.
-  delegationClampMitigationHooks = clamp: let
-    bin = lib.getExe (import ./delegationClampMitigation.nix {
-      inherit lib pkgs;
-      inherit (clamp) text;
-    });
-  in {
-    PreCompact = [{hooks = [{command = "${bin} clear";}];}];
-    UserPromptSubmit = [{hooks = [{command = "${bin} inject";}];}];
-  };
-
   # Agent-memory collision guard — one PreToolUse entry.
   #
   # The `matcher` is what keeps this cheap: the hook is only spawned for Write and
@@ -149,9 +115,10 @@
   # a memory file, the path test is the real gate, and a tool name added upstream
   # should fail toward being guarded rather than toward slipping through.
   #
-  # Emitted as an `ai.claude.hooks` DEFINITION for the same reason the clamp is: an
-  # option default is discarded wholesale once a consumer defines the option at all,
-  # whereas a definition list-merges with consumer entries on the same event.
+  # Emitted as an `ai.claude.hooks` DEFINITION rather than as that option's
+  # `default`: an option default is discarded wholesale once a consumer defines the
+  # option at all, whereas a definition list-merges with consumer entries on the
+  # same event.
   memoryCollisionGuardHooks = guard: let
     bin = lib.getExe (import ./memoryCollisionGuard.nix {
       inherit lib pkgs;
@@ -408,15 +375,16 @@ in
         '';
       };
       ultracodeOnLaunch = lib.mkEnableOption ''
-          starting every Claude session in ultracode (xhigh effort plus
-          standing dynamic-workflow orchestration).
+          starting every Claude session in ultracode (standing dynamic-workflow
+          orchestration at the session’s effort level).
 
           Session-setup convenience, NOT the per-turn "ultracode" keyword
           (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
           When true, writes `settings.ultracode = true` (⚠ see caveat) and
           `settings.enableWorkflows = true` via mkDefault, so an explicit
           `ai.claude.native.settings.*` still wins. Does NOT set effortLevel —
-          ultracode implies xhigh unconditionally.
+          ultracode runs at whatever effort level the session has. The
+          `--effort ultracode` CLI flag also sets xhigh.
 
           ⚠ CAVEAT: the `ultracode` settings key is UNDOCUMENTED and
           officially session-only. Anthropic's docs describe ultracode as
@@ -477,60 +445,6 @@ in
           {
             fix-issue = ./commands/fix-issue.md;
           }
-        '';
-      };
-      delegationClampMitigation = lib.mkOption {
-        type = aiTypes.optionalTextSource {
-          defaultContent.text = delegationClampMitigationDefaultProse;
-          description = "the standing request injected as user-side context";
-          enableDefault = false;
-        };
-        default = {};
-        defaultText = lib.literalExpression (lib.generators.toPretty {} {
-          enable = false;
-          text = delegationClampMitigationDefaultProse;
-        });
-        description = ''
-          Counteract Claude Code's undocumented `heron_brook` delegation clamp. Enabling
-          the mitigation installs both hooks with the selected prose; its packaged prose
-          remains available while disabled.
-
-          Claude Code injects a system-prompt section instructing the model not to call
-          the Agent tool and not to use workflows or deep research "unless the user
-          requested it". It is gated on a MODEL capability rather than on user
-          configuration — on for Opus 5 — and there is no settings key, CLI flag, or
-          environment variable that disables it. It never appears in the transcript, so
-          a session with delegation silently suppressed looks identical to a normal one.
-          It also directly negates `ai.claude.ultracodeOnLaunch`, which asks for the
-          opposite.
-
-          Rather than patch anything, this supplies the request the clamp's own escape
-          clause is asking for: a `UserPromptSubmit` hook injects a standing request as
-          USER-side context.
-
-          Injected once per session and re-armed by a `PreCompact` hook, since compaction
-          is the one event that erases it — so the cost is roughly 75 tokens per session,
-          not per turn. Per-turn injection would be cumulative, because
-          `additionalContext` is appended to the user message and persists in conversation
-          history.
-
-          The default's phrasing is load-bearing, not incidental. It SATISFIES the clamp's
-          "unless the user requested it" escape clause instead of contradicting the
-          instruction — a contradiction pits a user-message line against a system-prompt
-          line, which resolves toward the system prompt or toward hedging. It is
-          affirmative rather than a negation of something the model cannot point at
-          ("ignore any instruction telling you X" reads as adversarial injection and
-          increases suspicion). It is FIRST-PERSON, because live verification showed that
-          this is what carries the weight even though the hook channel is visible. And it
-          GRANTS permission rather than mandating delegation, since an overreaching
-          instruction invites that same discounting.
-
-          Re-derive those four properties before rewording.
-
-          Upstream issue: https://github.com/anthropics/claude-code/issues/80988. A dated
-          CI step re-surfaces this roughly every 90 days so the mitigation does not outlive
-          its cause. See `packages/claude-code/docs/heron-brook-clamp.md` for the full
-          account.
         '';
       };
       hooks = lib.mkOption {
@@ -617,10 +531,9 @@ in
                 with the neighbour listing as the reason, then allows the retry — one
                 extra round trip per distinct file, once per session.
 
-                OFF by default deliberately, unlike `delegationClampMitigation`. That one corrects
-                a vendor defect and is strictly additive; this one BLOCKS a tool call,
-                and its cadence is an untuned gut call rather than a measured one. Opt in
-                per consumer until there is evidence about whether it helps more than it
+                OFF by default deliberately: this hook BLOCKS a tool call, and its
+                cadence is an untuned gut call rather than a measured one. Opt in per
+                consumer until there is evidence about whether it helps more than it
                 interrupts.
 
                 The alternative instrumentation — allow the write and inject the listing
@@ -769,15 +682,9 @@ in
             lib.ai.hooksFromDir cfg.hookScriptsDir
           );
         })
-        # heron_brook delegation-clamp mitigation (default off). Writes into
-        # `ai.claude.hooks` so it list-merges with any consumer entries on the
-        # same two events rather than clobbering them on either backend.
-        (lib.mkIf cfg.delegationClampMitigation.enable {
-          ai.claude.hooks = delegationClampMitigationHooks cfg.delegationClampMitigation;
-        })
-        # Agent-memory collision guard (default OFF). Same `ai.claude.hooks`
-        # definition write as the clamp, so it list-merges onto PreToolUse with
-        # any consumer entries instead of clobbering them.
+        # Agent-memory collision guard (default OFF). An `ai.claude.hooks`
+        # definition, so it list-merges onto PreToolUse with any consumer
+        # entries instead of clobbering them.
         (lib.mkIf cfg.memoryCollisionGuard.enable {
           ai.claude.hooks = memoryCollisionGuardHooks cfg.memoryCollisionGuard;
         })
@@ -786,8 +693,9 @@ in
         # `enableWorkflows` master toggle via mkDefault so an explicit
         # `ai.claude.native.settings.*` still wins. This is the single place the
         # off-label `ultracode` key is written (its risk is disclosed in the
-        # ultracodeOnLaunch description). No effortLevel — ultracode implies
-        # xhigh. No workflowKeywordTriggerEnabled — orthogonal per-turn key.
+        # ultracodeOnLaunch description). No effortLevel — ultracode runs
+        # at whatever effort level the session has. No workflowKeywordTriggerEnabled
+        # — orthogonal per-turn key.
         (lib.mkIf cfg.ultracodeOnLaunch {
           ai.claude.native.settings = {
             ultracode = lib.mkDefault true;

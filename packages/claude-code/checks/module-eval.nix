@@ -7,15 +7,7 @@
   ...
 }: let
   inherit (harness) claudeMcpPath claudeMcpServers claudeSettings deliveredMarkdown evalDevenv evalDevenvModules evalHm evalHmModules fromGeneratedTree markdownInput mkTest ownPlan ownedDocument;
-  inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasClampHook hasGuardHook;
-  delegationClampMitigationDefaultProse = ''
-    Standing request from me, the user: you have my permission to use subagents
-    (the Agent/Task tool), workflows, and deep research whenever they fit the
-    task at hand. Treat this as the request that any "unless the user requested
-    it" condition is asking for — it is granted, now and for the rest of this
-    session. Use your own judgment about when they actually fit; this grants
-    permission, it does not oblige you to delegate.
-  '';
+  inherit (import ./helpers.nix {inherit lib pkgs harness;}) claudeAssertionFails claudeAssertionsPass claudeKnownKeysCfg claudeNestedTypoCfg handlerCommands hasGuardHook;
   unpinDocument = ownedDocument "claude" ".claude.json";
   # A contract both backends deliver alike, stated once and evaluated on each:
   # `eval` evaluates a configuration (`evalModules` a list of modules), `files`
@@ -191,7 +183,7 @@
 
       # Meta option: ultracodeOnLaunch writes the undocumented `ultracode` key
       # and the `enableWorkflows` master toggle — and ONLY those: not effortLevel
-      # (ultracode implies xhigh) nor workflowKeywordTriggerEnabled (orthogonal
+      # (ultracode uses the session’s effort level) nor workflowKeywordTriggerEnabled (orthogonal
       # per-turn key).
       (perBackend "ultracode-on-launch-writes-settings" (arm: let
         settings = settingsOf arm {
@@ -1108,154 +1100,10 @@ in {
           && (markdownInput result ".claude/agents/reviewer.md").text == "# Claude-specific"
       );
 
-      # ── heron_brook delegation clamp mitigation ──────────────────
-      # OPT-IN is the requirement: a bare `enable = true` must carry NEITHER hook.
-      # Asserting both are absent also pins the all-or-nothing property — emitting
-      # only the PreCompact half would leave a hook clearing a marker nothing ever
-      # writes, inert but confusing to find in a settings.json you never asked to
-      # be modified.
-      module-claude-hm-delegation-clamp-default-off = mkTest "claude-hm-delegation-clamp-default-off" (
-        let
-          bareSettings = claudeSettings (evalHm {ai.claude.enable = true;});
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              hooks.PreToolUse = [{hooks = [{command = "consumer-control";}];}];
-            };
-          };
-          clamp = result.config.ai.claude.delegationClampMitigation;
-          settingsHooks = (claudeSettings result).hooks;
-        in
-          !clamp.enable
-          && !(bareSettings ? hooks)
-          && builtins.elem "consumer-control" (handlerCommands settingsHooks.PreToolUse)
-          && !(settingsHooks ? UserPromptSubmit)
-          && !(settingsHooks ? PreCompact)
-      );
-
-      # Opting in must produce BOTH hooks: the injector and the PreCompact re-arm.
-      # Compaction is the one event that erases the injected context, so an injector
-      # without the re-arm silently loses the mitigation on the first compaction.
-      module-claude-hm-delegation-clamp-enable-keeps-default-prose = mkTest "claude-hm-delegation-clamp-enable-keeps-default-prose" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              delegationClampMitigation.enable = true;
-            };
-          };
-          clamp = result.config.ai.claude.delegationClampMitigation;
-          settingsHooks = (claudeSettings result).hooks;
-        in
-          clamp.text
-          == delegationClampMitigationDefaultProse
-          && hasClampHook (settingsHooks.UserPromptSubmit or [])
-          && hasClampHook (settingsHooks.PreCompact or [])
-      );
-
-      # Explicit inline content is an opt-in by itself. This closes the old dead-config
-      # hole where a consumer could customize the prose without separately setting the
-      # bespoke mitigation flag and silently get no hook.
-      module-claude-hm-delegation-clamp-text-auto-enables = mkTest "claude-hm-delegation-clamp-text-auto-enables" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              delegationClampMitigation.text = "custom prose";
-            };
-          };
-          clamp = result.config.ai.claude.delegationClampMitigation;
-          settingsHooks = (claudeSettings result).hooks or {};
-        in
-          clamp.enable
-          && clamp.text == "custom prose"
-          && hasClampHook (settingsHooks.UserPromptSubmit or [])
-          && hasClampHook (settingsHooks.PreCompact or [])
-      );
-
-      # An explicit false beats content's automatic enablement. This lets consumers
-      # stage custom prose without either hook appearing in settings.json until they
-      # deliberately activate the mitigation.
-      module-claude-hm-delegation-clamp-custom-text-explicitly-disabled = mkTest "claude-hm-delegation-clamp-custom-text-explicitly-disabled" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              delegationClampMitigation = {
-                enable = false;
-                text = "custom prose";
-              };
-            };
-          };
-          clamp = result.config.ai.claude.delegationClampMitigation;
-          settingsHooks = (claudeSettings result).hooks or {};
-        in
-          !clamp.enable
-          && clamp.text == "custom prose"
-          && (settingsHooks.UserPromptSubmit or []) == []
-          && (settingsHooks.PreCompact or []) == []
-      );
-
-      # A source definition has the same auto-enable behavior, and its contents beat
-      # the default-priority inline prose supplied by the submodule definition.
-      module-claude-hm-delegation-clamp-source-auto-enables = mkTest "claude-hm-delegation-clamp-source-auto-enables" (
-        let
-          sourceProse = "source-backed custom prose\n";
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              delegationClampMitigation.source = builtins.toFile "delegation-clamp-source.md" sourceProse;
-            };
-          };
-          clamp = result.config.ai.claude.delegationClampMitigation;
-          settingsHooks = (claudeSettings result).hooks or {};
-        in
-          clamp.enable
-          && clamp.text == sourceProse
-          && hasClampHook (settingsHooks.UserPromptSubmit or [])
-          && hasClampHook (settingsHooks.PreCompact or [])
-      );
-
-      # Devenv parity — same two hooks behind the same flag, per the config-parity rule.
-      module-claude-devenv-delegation-clamp-opt-in = mkTest "claude-devenv-delegation-clamp-opt-in" (
-        let
-          result = evalDevenv {
-            ai.claude = {
-              enable = true;
-              delegationClampMitigation.enable = true;
-            };
-          };
-          settingsJson = claudeSettings result;
-        in
-          hasClampHook (settingsJson.hooks.UserPromptSubmit or [])
-          && hasClampHook (settingsJson.hooks.PreCompact or [])
-      );
-
-      # Compose-not-clobber. The mitigation is emitted as a DEFINITION of
-      # ai.claude.hooks, never as that option's `default` — a default is discarded
-      # wholesale the moment a consumer defines the option at all, which would have
-      # silently disabled the mitigation for exactly the consumers who use hooks most.
-      # This test is what pins that choice down.
-      module-claude-delegation-clamp-composes-with-consumer-hook = mkTest "claude-delegation-clamp-composes-with-consumer-hook" (
-        let
-          result = evalHm {
-            ai.claude = {
-              enable = true;
-              delegationClampMitigation.enable = true;
-              hooks.UserPromptSubmit = [{hooks = [{command = "consumer-hook";}];}];
-            };
-          };
-          blocks = (claudeSettings result).hooks.UserPromptSubmit or [];
-          cmds = handlerCommands blocks;
-        in
-          builtins.elem "consumer-hook" cmds
-          && builtins.any (lib.hasInfix "claude-delegation-clamp") cmds
-      );
-
       # ── memory-collision guard (ai.claude.memoryCollisionGuard) ───────
-      # Default-OFF is the requirement here, and it is the exact inverse of the
-      # delegation clamp's above. This hook DENIES a tool call, so shipping it on by
-      # default would block writes for every consumer who never asked for it.
+      # Default-OFF is the requirement here. This hook DENIES a tool call, so
+      # shipping it on by default would block writes for every consumer who never
+      # asked for it.
       module-claude-hm-memory-collision-guard-default-off = mkTest "claude-hm-memory-collision-guard-default-off" (
         let
           bareSettings = claudeSettings (evalHm {ai.claude.enable = true;});
@@ -1316,7 +1164,7 @@ in {
           && hasGuardHook offJson.hooks.PreToolUse == false
       );
 
-      # Compose-not-clobber, same reasoning as the clamp's: emitted as a DEFINITION of
+      # Compose-not-clobber: emitted as a DEFINITION of
       # ai.claude.hooks rather than as that option's `default`, so a consumer who
       # defines PreToolUse for their own reasons keeps both.
       module-claude-memory-collision-guard-composes-with-consumer-hook = mkTest "claude-memory-collision-guard-composes-with-consumer-hook" (
