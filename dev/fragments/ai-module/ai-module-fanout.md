@@ -1,8 +1,9 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-10-07 — the runtime record's `launcherOptionsPath`
-> moves Kiro launcher options to `ai.kiro.cli`; shared file ownership and other
-> runtimes are unchanged.
+> moves Kiro launcher options to `ai.kiro.cli`; Codex guards launcher flags as
+> real uses without per-name annotation rows; per-runtime program overrides
+> accept portable `settings`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -45,9 +46,9 @@
 > - **Codex's hand-classified command and flag ledger is retired — don't bring
 >   it back.** It required a person to classify every new upstream name, and its
 >   field ledgers pinned our own extractor's output. By operator decision
->   (2026-10), reconcile auto-accepts derivable non-secret names as `{}` rows;
->   only launcher flags stay guarded, as `uses`. The ledger and its `--worktree`
->   and `exec-server forward` reclassification notes:
+>   (2026-10), extracted names need no acceptance rows; launcher flags stay
+>   guarded as `uses`. The ledger and its `--worktree` and `exec-server forward`
+>   reclassification notes:
 >   `git show 60bfb552:packages/chatgpt-codex/lib/extractedCoverage.nix`.
 
 The `ai.*` HM module provides a unified interface that fans out shared AI-CLI
@@ -56,16 +57,14 @@ Kiro). It is NOT a thin wrapper — the gating semantics, default-setting
 behavior, and fanout patterns are load-bearing and got bitten into production by
 a silent no-op bug. Read this fragment before changing the gating.
 
-### Codex extracted names reconcile against rows
+### Codex checks the names its launcher uses
 
 `packages/chatgpt-codex/extracted.json` is generated fact from the pinned
-binary. `packages/chatgpt-codex/extract/rules.nix` reconciles command names and
-canonical flag names against `extract/annotations.json`. Regeneration adds `{}`
-rows for new names. `chatgpt-codex-extracted` reports unrecorded names, removed
-rows or launcher flags, and invalid rows. The launcher flags live in
-`lib/launcher-flags.nix`, and their own `launcherFlags` surface checks them
-against the root command's flags as reconciliation's `uses`, so a flag dropped
-from the root fails as `removed` even if its row is deleted.
+binary. `packages/chatgpt-codex/extract/rules.nix` checks launcher flags from
+`lib/launcher-flags.nix` against the root command's flags as reconciliation's
+`uses`. `chatgpt-codex-extracted` reports a used flag removed from that command.
+Other removed upstream names disappear from the extracted surface without an
+acceptance ledger.
 
 Stable feature names become typed directly from the sidecar; every other
 maturity remains available through the boolean freeform table. Model slugs stay

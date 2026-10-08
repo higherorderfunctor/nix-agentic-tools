@@ -8,8 +8,9 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 ## Kiro settings: a flat format with object values, and where the key stops
 
 > **Last verified:** 2026-10-07 — Kiro CLI settings use
-> `ai.kiro.cli.native.settings`; flattening and workspace restrictions are
-> unchanged.
+> `ai.kiro.cli.native.settings`; settings extraction requires the shipped TUI
+> registry, workspace allowlist and merge, and historical no-workspace-merge
+> support is removed. Kiro excludes normalized settings.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while

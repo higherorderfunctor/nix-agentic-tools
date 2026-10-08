@@ -1,9 +1,8 @@
 # Git tool settings: census, sidecar, generator
 
-> **Last verified:** 2026-10-07 — extractors emit facts only; rows in
-> `extract/annotations.json` fill them through `lib/git-tool-settings/rules.nix`
-> (the new-key rule), which the generator, drift check and rows regeneration
-> share; only read keys need `type` and `description`.
+> **Last verified:** 2026-10-07 — hand annotations carry useful data only; types
+> remain required for read settings, while descriptions, default prose and
+> dead-key reasons are optional. Regeneration writes facts only.
 >
 > **Settled — do not relitigate.**
 >
@@ -63,21 +62,18 @@ The sidecar holds facts only, a field absent where the source cannot state it.
 `rules.nix` runs `reconcile` (`lib/extracted/reconcile.nix`, lib-only so the
 option modules can call it) over two surfaces of the rows file:
 
-- `settings` — a key the tool reads needs `type` and `description`; a write-only
-  key (`reads == {}`, branchless only) becomes no option and needs neither. A
-  row may fill either, replace a fact only for a field it lists in `replace`,
-  and add `defaultDescription` or `note`. A key with a `defaultExpr` also needs
-  `defaultDescription`. `rules.nix` decides these needs per entry, so each name
-  gets one `needs-human` failure listing every missing field.
-- `deadKeys` — key-shaped names the source never reads (an unread const; in
-  git-revise, any string a read does not cover); each needs a `reason`. Not
-  `ignored` on a settings row: a dead key read again becomes a setting and its
-  reason row fails as `removed`.
+- `settings` — a read key needs a `type`; a write-only key becomes no option. A
+  row may fill missing types or optional prose, replace facts listed in
+  `replace`, and add `defaultDescription` or `note`.
+- `deadKeys` — key-shaped names the source never reads; a row may explain one
+  with `reason`. If that key becomes read, its reason row becomes stale. A
+  settings row cannot use `ignored`: generator `exclusions` owns option
+  omission.
 
-Failures (`removed`, `needs-human`, `bad-row`, `secret`, `unrecorded`) are data:
-the generator builds options from the entries regardless, and the drift check
-fails on them. Rows regeneration writes `{}` for each accepted new name. The
-cases specific to this table are `checks/git-tool-settings/rules.nix`.
+New ordinary names need no row. A removed name disappears unless a meaningful
+hand row remains. Reconciliation failures (`removed`, `needs-human`, `bad-row`,
+`secret`) are data; the drift check fails on them. Type and secret approval
+rules remain enforced. The cases live in `checks/git-tool-settings/rules.nix`.
 
 ## Generator
 
@@ -100,8 +96,7 @@ description field.
 - `<tool>-extracted` — drift between the committed sidecar and a fresh
   extraction, plus the rule's failures over the committed sidecar and rows,
   built by `lib/extracted/default.nix`’s `mkDriftCheck`. It prints a sorted JSON
-  diff, the failures, and the recipes to rebuild the sidecar and to rewrite the
-  rows from the check’s `passthru.rows`.
+  diff, the failures, and the recipe to rebuild the sidecar.
 - `<tool>-extractor-guards` — the mutants: each trips the guards it names or
   moves the output exactly as declared.
 - `<tool>-extracted-binary` — every extracted key is a string in the installed
@@ -133,10 +128,14 @@ description field.
 
 Each package's `passthru.regenerateExtracted`
 (`packageLib.mkRegenerateExtracted`) rewrites its sidecar from
-`passthru.extracted`, then its rows from the drift check's `passthru.rows`; both
-paths are in its `sidecars`, which the update scripts stage. git-branchless runs
-it on its flake-input bump; git-absorb and git-revise, rev-bump targets, run it
-from `update-pkg.sh` after the bump. A failing extraction holds the bump back.
+`passthru.extracted` and lists that destination in `sidecars` for update
+staging. Hand annotations are not regenerated. git-branchless runs this on its
+flake-input bump; git-absorb and git-revise run it from `update-pkg.sh` after a
+rev bump. Extractor floors reject collapsed surfaces. Removing an unused name is
+allowed; live module checks and `module-sws-preset-leaves-are-options` reject
+removals still used by the repo's presets. These consumer checks run in
+mandatory CI; the standalone drift check only checks facts and annotations.
+
 Locally:
 `"$(nix build --no-link --print-out-paths .#<tool>.passthru.regenerateExtracted)"`.
 

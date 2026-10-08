@@ -17,10 +17,6 @@
       inherit committed extracted;
       name = "chatgpt-codex";
       results = package.passthru.extractedRules.results;
-      rows = {
-        path = "packages/chatgpt-codex/extract/annotations.json";
-        value = package.passthru.extractedRules.file;
-      };
       sidecar = "packages/chatgpt-codex/extracted.json";
     };
 }

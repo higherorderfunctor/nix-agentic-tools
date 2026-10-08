@@ -940,10 +940,6 @@
   # it must refuse a key Kiro would drop rather than emit a plausible-looking
   # no-op. Home Manager writes the GLOBAL file, where every key is honored —
   # that is why this is a lowering difference and not a divergent option.
-  #
-  # An EMPTY list means this kiro honors no workspace override at all (true for
-  # every release before 2.21.1), which is a stronger statement than "this key
-  # is not allowed" and gets its own message below.
   inherit (kiroExtracted) workspaceOverridableSettings;
 
   # The FLATTEN BOUNDARY: every dotted path kiro's binary names as a complete
@@ -982,41 +978,26 @@
   in
     lib.optional (dropped != []) {
       assertion = false;
-      message =
-        ''
-          ai.kiro.cli.native.settings: devenv writes these settings to the PROJECT-LOCAL
-          ${cfg.configDir}/settings/cli.json, and kiro honors only an allowlist
-          of keys there. These keys would be written and then
-          silently discarded at runtime: ${listed}
-        ''
-        + (
-          if workspaceOverridableSettings == []
-          then ''
+      message = ''
+        ai.kiro.cli.native.settings: devenv writes these settings to the PROJECT-LOCAL
+        ${cfg.configDir}/settings/cli.json, and kiro honors only an allowlist
+        of keys there. These keys would be written and then
+        silently discarded at runtime: ${listed}
 
-            The pinned kiro honors NO workspace override at all — its TUI has no
-            workspace merge — so no key belongs in this file. Set these under
-            home-manager (`ai.kiro.cli.native.settings`, which owns the global
-            ~/.kiro/settings/cli.json). Without home-manager the global file
-            is Kiro's own: `kiro-cli settings <key> <value>`.
-          ''
-          else ''
+        Workspace-overridable keys for the pinned kiro:
+        ${lib.concatStringsSep ", " workspaceOverridableSettings}
 
-            Workspace-overridable keys for the pinned kiro:
-            ${lib.concatStringsSep ", " workspaceOverridableSettings}
+        Anything else is global-only: set it under home-manager
+        (`ai.kiro.cli.native.settings`, which owns the global
+        ~/.kiro/settings/cli.json). Without home-manager the global file
+        is Kiro's own: `kiro-cli settings <key> <value>`.
 
-            Anything else is global-only: set it under home-manager
-            (`ai.kiro.cli.native.settings`, which owns the global
-            ~/.kiro/settings/cli.json). Without home-manager the global file
-            is Kiro's own: `kiro-cli settings <key> <value>`.
-
-            That list describes the binary this flake PINS, read out of
-            `packages/kiro-cli/extracted.json`. It is not re-derived from an
-            overridden `ai.kiro.cli.package`, so a newer kiro whose allowlist has
-            grown is still judged against the pinned one — bump the pin (and
-            its sidecar) rather than working around this.
-
-          ''
-        );
+        That list describes the binary this flake PINS, read out of
+        `packages/kiro-cli/extracted.json`. It is not re-derived from an
+        overridden `ai.kiro.cli.package`, so a newer kiro whose allowlist has
+        grown is still judged against the pinned one — bump the pin (and
+        its sidecar) rather than working around this.
+      '';
     };
 
   # `chat.enableWorkflows` is the THIRD gate on the `workflows` rollout feature

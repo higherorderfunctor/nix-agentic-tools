@@ -9,7 +9,8 @@ applyTo: "packages/kiro-cli/packages/ai/kiro-cli/package.nix,packages/kiro-cli/l
 
 > **Last verified:** 2026-10-07 — `ai.kiro.cli.workflows.enable` unlocks the
 > rollout and implies the global chat setting on Home Manager; devenv retains
-> its global-setting warning.
+> its global-setting warning; the pinned TUI still excludes
+> `chat.enableWorkflows` from the workspace allowlist.
 
 Enable workflows with `ai.kiro.cli.workflows.enable = true` and
 `ai.kiro.cli.v3 = true`. The switch adds `"workflows"` to the effective rollout
@@ -127,16 +128,13 @@ the same reason `rolloutFeatures` is: the set IS the contract.
 The extractor materializes the shipped TUI source in a Nix build sandbox and
 uses its JavaScript AST to find the registry and candidate allowlist by their
 contents, not by minified variable names. It also requires the workspace merge
-function to consult that same set. A missing or ambiguous registry is fatal.
-When both the set and merge are absent, the extractor returns `[]`, matching
-releases before 2.21.1 that had no workspace override. If only one is absent, it
-fails; silently treating an unreadable allowlist as empty would reject settings
-Kiro actually honors. The validated registry and set expressions and the
-selected merge helper are evaluated in an isolated VM with inert loaders. This
-resolves symbolic members through the bundle's own registry and verifies which
-keys the merge actually copies. `module-kiro-workspace-allowlist-from-sidecar`
-checks for `chat.defaultModel` specifically because it appears symbolically in
-the set.
+function to consult that same set. A missing or ambiguous registry, set, or
+merge is fatal. The extractor no longer supports the pre-2.21.1 shape without
+workspace merging. The validated registry and set expressions and the selected
+merge helper are evaluated in an isolated VM with inert loaders. This resolves
+symbolic members through the bundle's own registry and verifies which keys the
+merge actually copies. `module-kiro-workspace-allowlist-from-sidecar` checks for
+`chat.defaultModel` specifically because it appears symbolically in the set.
 
 That test also asserts `chat.enableWorkflows` is ABSENT from the allowlist. If
 upstream adds it, the test failing is the signal to relax the devenv guidance

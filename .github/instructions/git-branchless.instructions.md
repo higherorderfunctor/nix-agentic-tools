@@ -7,10 +7,9 @@ applyTo: "packages/git-branchless/**"
 
 # git-branchless config extraction
 
-> **Last verified:** 2026-10-07 — the extractor emits facts only and the rows
-> file fills them in Nix; 24 `branchless.*` keys (23 typed options), 17 foreign
-> keys, 36 builtin revset functions; 41 mutants fail closed or move the output
-> as declared.
+> **Last verified:** 2026-10-07 — hand annotations retain types and useful prose
+> without empty acceptance rows; missing descriptions and dead-key reasons are
+> optional. Existing settings and revset floors remain.
 >
 > **Settled — do not relitigate.**
 >
@@ -49,10 +48,9 @@ It never builds Rust, and passthru leaves the package's store path alone.
    shapes, keys, defaults and types from typed nodes, writes `extracted.json`
    (facts only) and exits non-zero on any guard.
 2. `extract/annotations.json` — the rows file, the only hand input, applied in
-   Nix by `lib/git-tool-settings/rules.nix`: a row per key (`{}` when the facts
-   suffice), prose the source cannot state (computed defaults, alias-family
-   descriptions, the patch note), types for two untyped reads, and a `reason`
-   per dead key.
+   Nix by `lib/git-tool-settings/rules.nix`: useful prose (computed defaults,
+   alias-family descriptions, the patch note), types for two untyped reads, and
+   optional dead-key reasons. Names the facts fully describe need no row.
 
 Every config access goes through `ConfigRead`/`ConfigWrite` in
 `git-branchless-lib/src/git/config.rs`, which is why a structured scan works.
@@ -97,9 +95,10 @@ string nodes in the tree (a macro's token tree keeps them typed), so a read the
 resolver cannot follow still leaves its key in a literal. It does not catch a
 key built entirely at run time without a `branchless.` literal.
 
-A read with no type, a key with no description, a new dead key, and a row whose
-key is gone are not guards: they fail the drift check through the rows rule (see
-the git-tool-settings fragment).
+A read with no type or a hand row whose key is gone fails the drift check
+through reconciliation. Descriptions and dead-key reasons are optional. An
+unused removed upstream key disappears from generated options; live module and
+preset checks catch names this repo still uses.
 
 `checks/extractor-mutants.nix` holds one upstream-shaped change per guard and
 per known blind spot; `git-branchless-extractor-guards` runs them through

@@ -46,15 +46,11 @@
   # the check is a property of the option, not of a backend, and the two
   # backends write the same settings tree. Same shape as mkKiro's `mkAssertions cfg`.
   #
-  # `extracted.settings or null` degrades a sidecar that predates settings
-  # extraction to "check off" rather than "eval throws" — but only while the
-  # allowlist is empty; see the first assertion in unrecognizedSettings.nix.
-  #
   # `cfg.package.version` is read ONLY inside message strings, so a passing
   # assertion never forces the package (and never triggers overlay IFD).
   nativeFileAssertions = cfg:
     unrecognizedSettings.mkAssertions {
-      declared = extracted.settings or null;
+      declared = extracted.settings;
       # The tree actually written — identical to the
       # `aiCommon.filterNulls cfg.native.settings` settings document below.
       # Filtering FIRST is load-bearing: a typed sub-option sitting at its

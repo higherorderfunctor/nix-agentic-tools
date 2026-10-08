@@ -19,8 +19,7 @@ let
     append = text;
   };
   replace = file: from: to: {inherit file from to;};
-  # A man-page subsection documenting `absorb.<key>`: the description P2
-  # extracts, and the unread key K9 documents.
+  # A man-page subsection documenting `absorb.<key>`: the description P2 extracts.
   documented = key:
     replace adoc "GENERATE SQUASH COMMITS INSTEAD OF FIXUPS\n" ''
       PROBE ${key}
@@ -37,6 +36,19 @@ let
     '';
   squashArm = "        squash: config.squash\n            || bool_value(";
 in [
+  {
+    name = "collapsed-owned-settings";
+    edits = [
+      (replace config ''"absorb.autoStageIfNothingStaged"'' ''"probe.autoStageIfNothingStaged"'')
+      (replace config ''"absorb.createSquashCommits"'' ''"probe.createSquashCommits"'')
+      (replace config ''"absorb.fixupTargetAlwaysSHA"'' ''"probe.fixupTargetAlwaysSHA"'')
+      (replace config ''"absorb.forceAuthor"'' ''"probe.forceAuthor"'')
+      (replace config ''"absorb.forceDetach"'' ''"probe.forceDetach"'')
+      (replace config ''"absorb.maxStack"'' ''"probe.maxStack"'')
+      (replace config ''"absorb.oneFixupPerCommit"'' ''"probe.oneFixupPerCommit"'')
+    ];
+    fails = ["F15"];
+  }
   # ── Prototype mutants ─────────────────────────────────────────────────
   {name = "P1-control";}
   {
@@ -150,15 +162,6 @@ in [
     fails = ["F13"];
   }
   {
-    name = "P17-read-removed";
-    edits = [
-      (replace config "    bool_value(\n        repo,\n        FIXUP_TARGET_ALWAYS_SHA_CONFIG_NAME,\n        FIXUP_TARGET_ALWAYS_SHA_DEFAULT,\n    )" ''
-        let _ = repo;
-            FIXUP_TARGET_ALWAYS_SHA_DEFAULT'')
-    ];
-    fails = ["F8" "F15"];
-  }
-  {
     name = "P18-key-parameter-without-caller";
     edits = [
       (append config ''
@@ -184,7 +187,7 @@ in [
     ];
   }
 
-  # ── Review blind spots (git-absorb-critic K1-K10) ─────────────────────
+  # ── Review blind spots ─────────────────────────────────────────────
   {
     # Literal key, default through a parameter: paired per call path.
     name = "K1-default-from-a-parameter";
@@ -274,16 +277,6 @@ in [
     name = "K8-and-instead-of-or";
     edits = [(replace config squashArm "        squash: config.squash\n            && bool_value(")];
     fails = ["F12"];
-  }
-  {
-    name = "K9-man-page-documents-an-unread-key";
-    edits = [(documented "neverRead")];
-    fails = ["F8"];
-  }
-  {
-    name = "K10-man-page-renames-a-key";
-    edits = [(replace adoc "    forceDetach = true\n" "    forceDetached = true\n")];
-    fails = ["F8"];
   }
   {
     name = "K11-negated-ok-arm";

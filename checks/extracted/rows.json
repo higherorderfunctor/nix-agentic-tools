@@ -1,6 +1,0 @@
-{
-  "config": { "existing": { "excluded": "runtime file delivery" } },
-  "environmentIgnored": {
-    "host": { "names": ["HOME"], "reason": "host state" }
-  }
-}

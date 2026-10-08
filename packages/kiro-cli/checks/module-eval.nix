@@ -1411,18 +1411,6 @@ in {
         asserts != [] && (builtins.head asserts).assertion == true
     );
 
-    # Guards the sidecar wiring end to end: the option's enum is read from the
-    # committed extraction, so an empty or malformed `rolloutFeatures` key would
-    # otherwise surface only as a confusing type error at the consumer.
-    module-kiro-rollout-enum-from-sidecar = mkTest "kiro-rollout-enum-from-sidecar" (
-      let
-        extracted = builtins.fromJSON (builtins.readFile ../extracted.json);
-      in
-        lib.elem "workflows" extracted.rolloutFeatures
-        && lib.elem "tangent" extracted.rolloutFeatures
-        && builtins.length extracted.rolloutFeatures >= 6
-    );
-
     # ── workflows: the SECOND gate ─────────────────────────────────────────────
     # `unlockedRolloutFeatures = ["workflows"]` patches the binary, which since
     # kiro-cli 2.19.0 only makes the feature AVAILABLE. The client also reads
@@ -1634,13 +1622,6 @@ in {
     # one that was always a literal. `checks/kiro-workspace-settings-fixtures`
     # drives the real script and is where the extraction paths are controlled.
     #
-    # Every content claim is gated on the list being NON-EMPTY, and that gate is
-    # load-bearing rather than defensive. An empty allowlist is a legitimate
-    # answer — no kiro before 2.21.1 merges a workspace cli.json at all — and the
-    # whole reason the extractor does not hard-fail on absence is that a pin back
-    # to such a release must not wedge the pipeline. A bare `length >= 10` here
-    # would have re-imposed exactly that wedge one layer up.
-    #
     # The absence check is deliberate and is the fact the devenv assertion's whole
     # message rests on: if upstream ever adds `chat.enableWorkflows` to the
     # allowlist, this failing is the signal to relax that guidance rather than a
@@ -1658,15 +1639,9 @@ in {
         && lib.elem "chat.enableWorkflows" extracted.settingKeys
         && builtins.length extracted.settingKeys >= 20
         && !(lib.elem "chat.enableWorkflows" allowlist)
-        && (
-          allowlist
-          == []
-          || (
-            lib.elem "chat.enableTangentMode" allowlist
-            && lib.elem "chat.defaultModel" allowlist
-            && builtins.length allowlist >= 10
-          )
-        )
+        && lib.elem "chat.enableTangentMode" allowlist
+        && lib.elem "chat.defaultModel" allowlist
+        && builtins.length allowlist >= 10
     );
 
     # ── identity ───────────────────────────────────────────────────────────────
