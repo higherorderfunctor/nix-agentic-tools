@@ -1,8 +1,10 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-07 — supported launcher environment pools accept
-> redact references and reject literal credentials; per-runtime program
-> overrides accept portable `settings`.
+> **Last verified:** 2026-10-07 — the runtime record's `launcherOptionsPath`
+> moves Kiro launcher options to `ai.kiro.cli`; supported launcher environment
+> pools accept redact references and reject literal credentials; Codex guards
+> launcher flags as real uses without per-name annotation rows; per-runtime
+> program overrides accept portable `settings`.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -45,9 +47,9 @@
 > - **Codex's hand-classified command and flag ledger is retired — don't bring
 >   it back.** It required a person to classify every new upstream name, and its
 >   field ledgers pinned our own extractor's output. By operator decision
->   (2026-10), reconcile auto-accepts derivable non-secret names as `{}` rows;
->   only launcher flags stay guarded, as `uses`. The ledger and its `--worktree`
->   and `exec-server forward` reclassification notes:
+>   (2026-10), extracted names need no acceptance rows; launcher flags stay
+>   guarded as `uses`. The ledger and its `--worktree` and `exec-server forward`
+>   reclassification notes:
 >   `git show 60bfb552:packages/chatgpt-codex/lib/extractedCoverage.nix`.
 
 The `ai.*` HM module provides a unified interface that fans out shared AI-CLI
@@ -56,16 +58,14 @@ Kiro). It is NOT a thin wrapper — the gating semantics, default-setting
 behavior, and fanout patterns are load-bearing and got bitten into production by
 a silent no-op bug. Read this fragment before changing the gating.
 
-### Codex extracted names reconcile against rows
+### Codex checks the names its launcher uses
 
 `packages/chatgpt-codex/extracted.json` is generated fact from the pinned
-binary. `packages/chatgpt-codex/extract/rules.nix` reconciles command names and
-canonical flag names against `extract/annotations.json`. Regeneration adds `{}`
-rows for new names. `chatgpt-codex-extracted` reports unrecorded names, removed
-rows or launcher flags, and invalid rows. The launcher flags live in
-`lib/launcher-flags.nix`, and their own `launcherFlags` surface checks them
-against the root command's flags as reconciliation's `uses`, so a flag dropped
-from the root fails as `removed` even if its row is deleted.
+binary. `packages/chatgpt-codex/extract/rules.nix` checks launcher flags from
+`lib/launcher-flags.nix` against the root command's flags as reconciliation's
+`uses`. `chatgpt-codex-extracted` reports a used flag removed from that command.
+Other removed upstream names disappear from the extracted surface without an
+acceptance ledger.
 
 Stable feature names become typed directly from the sidecar; every other
 maturity remains available through the boolean freeform table. Model slugs stay
@@ -98,19 +98,29 @@ upstream modules write the same files: `ai.claude.enable` beside Home Manager's
 enabled runtime, lowering it to `home.packages` on Home Manager and `packages`
 on devenv — the two option names being the whole reason it cannot live in a
 factory without being written twice per runtime. A backend spec that says
-nothing installs the plain `cfg.package`; one that wraps its binary supplies an
-`installPackage` callback taking the same arguments as `config`, on the record
-or on one backend spec, which wins. Setting `ai.<runtime>.package = null`
-explicitly skips installation without disabling any generated configuration; the
-transform does not call `installPackage` in that case. A setting that needs the
-managed binary path or wrapper WARNS, not asserts, and only once the consumer
-actually wrote it — the test is that setting's own option priority landing below
-the bare declared default (1500), the same idiom `lib/ai/delivery-warnings.nix`
-uses. A default-on feature (Kiro's `gitSshConfigWorkaround`, Codex's Home
-Manager-only `pinDaemonToPackage`) stays silent at its default value and names
-itself only once explicitly set. Kiro folds every inert setting into one warning
-naming each option; Codex's `pinDaemonToPackage` gets the same treatment on its
-own.
+nothing installs the selected launcher package; one that wraps its binary
+supplies an `installPackage` callback taking the same arguments as `config`, on
+the record or on one backend spec, which wins. Setting the launcher
+`package = null` explicitly skips installation without disabling any generated
+configuration; the transform does not call `installPackage` in that case. A
+setting that needs the managed binary path or wrapper WARNS, not asserts, and
+only once the consumer actually wrote it — the test is that setting's own option
+priority landing below the bare declared default (1500), the same idiom
+`lib/ai/delivery-warnings.nix` uses. A default-on feature (Kiro's
+`gitSshConfigWorkaround`, Codex's Home Manager-only `pinDaemonToPackage`) stays
+silent at its default value and names itself only once explicitly set. Kiro
+folds every inert setting into one warning naming each option; Codex's
+`pinDaemonToPackage` gets the same treatment on its own.
+
+Kiro's launcher subtree is `ai.kiro.cli`: `package`, `environmentVariables`,
+`shell`, `extraPackages`, `native.settings`, `trustedMcpTools`, `tweaks`,
+`unlockedRolloutFeatures`, `useFhsSandbox`, `v3` and `workflows.enable`. The
+environment and shell folds live at `cli.normalized.environmentVariables` and
+`cli.normalized.shell`. All other normalized pools, native agents, permissions,
+hooks, MCP/LSP, files and activation remain shared under `ai.kiro`. There are no
+old-path aliases or separate CLI enable.
+`ai.kiro.enable = true; ai.kiro.cli.package = null;` keeps shared files without
+installing a CLI.
 
 The direction of that default is load-bearing. Installation used to be a
 per-factory `home.packages` / `packages` write with no shared requirement, and
@@ -193,23 +203,23 @@ The ai module fans out TWO kinds of configuration:
 **Per-CLI options** (live inside `ai.{claude,codex,copilot,kimchi,kiro}.*`):
 
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
-  `ai.kimchi.package` / `ai.kiro.package` — package override. All five are
+  `ai.kimchi.package` / `ai.kiro.cli.package` — package override. All five are
   installed by the shared backend transform unless set to `null`. Four supply an
   `installPackage` callback that wraps the selected package when the runtime
   needs env or flag injection and installs it bare otherwise — wrapping is
   conditional, not automatic (`lib.ai.mkLauncher`, and Kiro's and Kimchi's own
   wrappers, return the bare package when there is nothing to bake in). The
   process environment each one bakes in is the builder's `launcherEnvironment`.
-- `ai.kiro.extraPackages` — store-backed tools added to Kiro's runtime PATH in
-  both backends. It is Kiro-specific because it closes the Linux `buildFHSEnv`
-  visibility gap; it remains independent of `ai.shell`, which selects an
-  executable rather than supplying commands.
-- `ai.kiro.useFhsSandbox` — defaults true and keeps nixpkgs' Linux compatibility
-  wrapper. False selects the configured package's pinned `passthru.unwrapped`
-  payload in both backends; validation inspects the rollout-resolved package, so
-  custom factories must preserve that route. Packages without it fail a named
-  assertion. This is runtime-specific package selection, not a normalized
-  sandbox pool.
+- `ai.kiro.cli.extraPackages` — store-backed tools added to Kiro's runtime PATH
+  in both backends. It is Kiro-specific because it closes the Linux
+  `buildFHSEnv` visibility gap; it remains independent of `ai.shell`, which
+  selects an executable rather than supplying commands.
+- `ai.kiro.cli.useFhsSandbox` — defaults true and keeps nixpkgs' Linux
+  compatibility wrapper. False selects the configured package's pinned
+  `passthru.unwrapped` payload in both backends; validation inspects the
+  rollout-resolved package, so custom factories must preserve that route.
+  Packages without it fail a named assertion. This is runtime-specific package
+  selection, not a normalized sandbox pool.
 - A custom Linux FHS package used with `trustedMcpTools` must expose both
   `passthru.unwrapped` and `passthru.withFhsPayload`. Otherwise the synthesized
   `/usr/bin/kiro-cli-chat` can shadow the outer trust wrapper, so the module
@@ -724,13 +734,13 @@ but `checks/modules/options-doc.nix` deliberately builds both renderings so this
 consumer-facing contract cannot become dead code. It compares every `ai.codex.*`
 option name, checks the expected top-level surface, and verifies that
 shared-pool descriptions discuss Codex. It also requires every runtime's native
-file option under `ai.<runtime>.native` and rejects the retired flat
-`nativeSettings`/`harnessSettings` names. Each guard runs through a shell helper
-that names the option and the rendering it failed on, and reports a jq or grep
-error as an error, so an unreadable rendering cannot pass an absence guard.
-README.md remains generated from `dev/generate.nix`;
-`checks/instructions/instructions-drift.nix` prevents its checked-in capability
-matrix from diverging from that source.
+file option under `ai.<runtime>.native` (`ai.kiro.cli.native` for Kiro) and
+rejects the retired flat `nativeSettings`/`harnessSettings` names. Each guard
+runs through a shell helper that names the option and the rendering it failed
+on, and reports a jq or grep error as an error, so an unreadable rendering
+cannot pass an absence guard. README.md remains generated from
+`dev/generate.nix`; `checks/instructions/instructions-drift.nix` prevents its
+checked-in capability matrix from diverging from that source.
 
 ### Verifying fanout works
 

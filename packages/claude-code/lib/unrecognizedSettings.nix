@@ -260,8 +260,7 @@ in rec {
   # config callback, which serves both.
   #
   # Arguments:
-  #   declared    sidecar `settings` record, or null when the sidecar predates
-  #               settings extraction (see the "no schema" assertion below)
+  #   declared    sidecar `settings` record
   #   settings    the settings tree actually written — pass
   #               `filterNulls cfg.native.settings`, not the raw option, so a
   #               typed option whose default is null never reports itself
@@ -318,23 +317,8 @@ in rec {
           + "    so it never suppressed anything."
       );
   in [
-    # The check silently doing nothing is worse than the check being absent,
-    # because an allowlist entry is a consumer saying "I know this one is
-    # unchecked" — which is a lie if the checker never ran. Fail loudly
-    # rather than degrading quietly.
     {
-      assertion = declared != null || allowed == [];
-      message = ''
-        ${allowOptionPath} is set, but the packaged claude-code's extracted
-        sidecar carries no settings schema, so the unrecognized-key check is not
-        running and those entries suppress nothing.
-
-        Either update the package (whose packages/claude-code/extracted.json
-        then carries a `settings` record), or drop ${allowOptionPath}.
-      '';
-    }
-    {
-      assertion = declared == null || unrecognized == [];
+      assertion = unrecognized == [];
       message = ''
         ${optionPath}: ${toString nUnrecognized} ${
           if nUnrecognized == 1
@@ -367,7 +351,7 @@ in rec {
       '';
     }
     {
-      assertion = declared == null || staleEntries == [];
+      assertion = staleEntries == [];
       message = ''
         ${allowOptionPath}: ${toString nStale} ${
           if nStale == 1

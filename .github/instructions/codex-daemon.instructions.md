@@ -7,10 +7,8 @@ applyTo: "packages/chatgpt-codex/**"
 
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-07 — launcher flags come from
-> `lib/launcher-flags.nix` and fail reconciliation when the root command drops
-> one; Home Manager owns daemon selection and settings, while devenv excludes
-> daemon state.
+> **Last verified:** 2026-10-07 — launcher flags are checked as root-command
+> `uses`; Home Manager owns daemon selection and settings.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -100,8 +98,7 @@ sandbox will own that home.
 - `--no-daemon` lives in `lib/launcher-flags.nix`'s `devenv` list, which
   `mkCodex.nix` builds the launcher from. `extract/rules.nix` checks it as a
   `uses` dependency of the root command's flags, so `chatgpt-codex-extracted`
-  fails with `removed` if upstream drops it from the root command, even if its
-  `launcherFlags` annotation row is deleted.
+  fails with `removed` if upstream drops it from the root command.
 
 ## Settled — do not relitigate
 

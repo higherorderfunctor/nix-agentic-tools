@@ -46,10 +46,6 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
     assert len(result["workspaceOverridableSettings"]) == 11, result
     assert "chat.defaultModel" in result["workspaceOverridableSettings"]
 
-    absent = run('var pn;' + registry_assignment)
-    assert absent.returncode == 0, absent.stderr
-    assert json.loads(absent.stdout)["workspaceOverridableSettings"] == []
-
     cases = {
         "accept all": (
             bundle(merge=merge_with_guard("Cq.has(k)||true")),
@@ -72,7 +68,7 @@ with tempfile.TemporaryDirectory(prefix="kiro-settings-fixtures-") as tmp:
             "repeats CHAT_DEFAULT_MODEL",
         ),
         "missing merge warning": (bundle(merge="function merge(){}"), "ambiguous or absent"),
-        "missing set only": ('var pn,Cq;' + registry_assignment + merge_with_guard("Cq.has(k)"), "ambiguous or absent"),
+        "missing set": ('var pn,Cq;' + registry_assignment + merge_with_guard("Cq.has(k)"), "ambiguous or absent"),
         "mutated allowlist": (bundle() + 'Cq.add("chat.unknown");', "mutated, shadowed, or escapes"),
         "negated guard": (
             bundle(merge=merge_with_guard("!Cq.has(k)")),

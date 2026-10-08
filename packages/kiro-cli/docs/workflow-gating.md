@@ -1,18 +1,25 @@
 ## Kiro workflows: three gates, all of them silent
 
-> **Last verified:** 2026-09-23 — the shipped TUI source still excludes
-> `chat.enableWorkflows` from the workspace settings allowlist; native file
-> settings live under `ai.<runtime>.native` (`native.settings`; Kimchi also
-> `native.harnessSettings`).
+> **Last verified:** 2026-10-07 — `ai.kiro.cli.workflows.enable` unlocks the
+> rollout and implies the global chat setting on Home Manager; devenv retains
+> its global-setting warning; the pinned TUI still excludes
+> `chat.enableWorkflows` from the workspace allowlist.
 
-`ai.kiro.unlockedRolloutFeatures = ["workflows"]` is necessary and **not**
-sufficient. Three independent conditions must hold, none of them errors or logs
-when it fails, and each has already cost a debugging session:
+Enable workflows with `ai.kiro.cli.workflows.enable = true` and
+`ai.kiro.cli.v3 = true`. The switch adds `"workflows"` to the effective rollout
+list alongside any `cli.unlockedRolloutFeatures`, and Home Manager implies
+`cli.native.settings.chat.enableWorkflows = lib.mkDefault true`. An explicit
+false still wins. Devenv cannot write that global-only key: set it in the global
+config, and shell entry warns when it is absent or false. Low-level
+`cli.unlockedRolloutFeatures = ["workflows"]` retains the same Home Manager
+setting implication.
+
+Three independent gates remain:
 
 | #   | Gate                                    | Set by                                 | Failure look                   |
 | --- | --------------------------------------- | -------------------------------------- | ------------------------------ |
 | 1   | rollout manifest says the feature is on | the byte patch (`mkKiroRolloutPatch`)  | `/workflow` absent             |
-| 2   | engine is `kas`                         | `ai.kiro.v3 = true`                    | `/workflow` absent             |
+| 2   | engine is `kas`                         | `ai.kiro.cli.v3 = true`                | `/workflow` absent             |
 | 3   | `chat.enableWorkflows` is true          | the GLOBAL `~/.kiro/settings/cli.json` | commands present, TOOLS absent |
 
 Gates 1 and 2 already have assertions in `mkKiro.nix`. Gate 3 is implied with
@@ -90,7 +97,8 @@ it is read, filtered out, and dropped without a warning. The two backends
 therefore honor different key sets, because they write different files:
 
 - **Home Manager** writes the GLOBAL file. Every key works. Unlocking
-  `workflows` implies `native.settings.chat.enableWorkflows = mkDefault true`
+  `workflows` implies
+  `cli.native.settings.chat.enableWorkflows = mkDefault true`
   (`workflowsSettingImplication`), so gates 1 and 3 cannot drift apart, and an
   explicit value still wins.
 - **devenv** writes the PROJECT-LOCAL file. Only allowlisted keys work, so
@@ -113,16 +121,13 @@ the same reason `rolloutFeatures` is: the set IS the contract.
 The extractor materializes the shipped TUI source in a Nix build sandbox and
 uses its JavaScript AST to find the registry and candidate allowlist by their
 contents, not by minified variable names. It also requires the workspace merge
-function to consult that same set. A missing or ambiguous registry is fatal.
-When both the set and merge are absent, the extractor returns `[]`, matching
-releases before 2.21.1 that had no workspace override. If only one is absent, it
-fails; silently treating an unreadable allowlist as empty would reject settings
-Kiro actually honors. The validated registry and set expressions and the
-selected merge helper are evaluated in an isolated VM with inert loaders. This
-resolves symbolic members through the bundle's own registry and verifies which
-keys the merge actually copies. `module-kiro-workspace-allowlist-from-sidecar`
-checks for `chat.defaultModel` specifically because it appears symbolically in
-the set.
+function to consult that same set. A missing or ambiguous registry, set, or
+merge is fatal. The extractor no longer supports the pre-2.21.1 shape without
+workspace merging. The validated registry and set expressions and the selected
+merge helper are evaluated in an isolated VM with inert loaders. This resolves
+symbolic members through the bundle's own registry and verifies which keys the
+merge actually copies. `module-kiro-workspace-allowlist-from-sidecar` checks for
+`chat.defaultModel` specifically because it appears symbolically in the set.
 
 That test also asserts `chat.enableWorkflows` is ABSENT from the allowlist. If
 upstream adds it, the test failing is the signal to relax the devenv guidance

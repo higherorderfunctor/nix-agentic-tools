@@ -1,5 +1,5 @@
-# lib/git-tool-settings/rules.nix: what the git tools' surface table adds to
-# the new-key rule, which checks/extracted/reconcile.nix covers in general.
+# lib/git-tool-settings/rules.nix: the git tools' reconciliation rules.
+# checks/extracted/reconcile.nix covers the shared rules.
 # Each case is one sidecar fact and its row, and the failures it must give.
 {
   harness,
@@ -17,16 +17,10 @@
       settings.row = {defaultDescription = "what probe() returns";};
       kinds = [];
     };
-    # The option text alone would say "whatever `probe()` computes".
-    computed-default-needs-prose = {
+    computed-default-without-prose = {
       settings.fact = setting // {defaultExpr = "probe()";};
       settings.row = null;
-      kinds = ["needs-human"];
-    };
-    dead-key-needs-reason = {
-      deadKeys.fact = {const = "PROBE";};
-      deadKeys.row = null;
-      kinds = ["needs-human"];
+      kinds = [];
     };
     # A dead key read again is a setting, and its reason row goes stale.
     dead-key-read-again = {
@@ -41,22 +35,25 @@
       deadKeys.row = {reason = "declared, never read";};
       kinds = [];
     };
+    dead-key-without-reason = {
+      deadKeys.fact = {const = "PROBE";};
+      deadKeys.row = null;
+      kinds = [];
+    };
     new-setting-accepted = {
       settings.fact = setting;
       settings.row = null;
-      added = ["probe.key"];
-      kinds = ["unrecorded"];
-    };
-    # A key the tool reads becomes an option, whose text needs prose.
-    read-setting-needs-description = {
-      settings.fact = builtins.removeAttrs setting ["description"];
-      settings.row = null;
-      kinds = ["needs-human"];
+      kinds = [];
     };
     read-setting-needs-type = {
       settings.fact = builtins.removeAttrs setting ["type"];
       settings.row = null;
       kinds = ["needs-human"];
+    };
+    read-setting-without-description = {
+      settings.fact = builtins.removeAttrs setting ["description"];
+      settings.row = null;
+      kinds = [];
     };
     # An ignored row would drop the option and skip its needs, unreported.
     settings-row-cannot-ignore = {
@@ -64,16 +61,14 @@
       settings.row = {ignored = "probe";};
       kinds = ["bad-row"];
     };
-    # A write-only key becomes no option, so nothing needs its prose.
+    # A write-only key becomes no option, so it needs no type.
     write-only-setting-accepted = {
       settings.fact = {
         reads = {};
-        type = "string";
         writes."probe.rs#write" = ["repository"];
       };
       settings.row = null;
-      added = ["probe.key"];
-      kinds = ["unrecorded"];
+      kinds = [];
     };
   };
   # `null` leaves the name out of facts or rows.
@@ -91,8 +86,7 @@
       ;
   in
     map (failure: failure.kind) (results.deadKeys.failures ++ results.settings.failures)
-    == case.kinds
-    && results.settings.added == (case.added or []);
+    == case.kinds;
   failed = builtins.attrNames (lib.filterAttrs (_: case: !(run case)) cases);
 in {
   checks.git-tool-settings-rules = harness.mkTest "git-tool-settings-rules" (

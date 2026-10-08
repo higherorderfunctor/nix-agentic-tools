@@ -4,7 +4,7 @@
   pkgs,
   ...
 }: let
-  inherit (import ../../lib/extracted {inherit pkgs;}) reconcile withAdded;
+  inherit (import ../../lib/extracted {inherit pkgs;}) reconcile;
   base = {
     facts.value.type = "string";
     fields = ["aliasFor" "description" "excluded"];
@@ -14,11 +14,6 @@
   };
   # Every case names its refused input or the consumer-visible result.
   cases = {
-    auto-accept-unrecorded = {
-      added = ["value"];
-      input.rows = {};
-      kinds = ["unrecorded"];
-    };
     bad-field = {
       input.rows.value.bogus = true;
       kinds = ["bad-row"];
@@ -42,10 +37,9 @@
     blank-controls = {
       input = {
         fields = ["controls"];
-        needs = ["controls"];
         rows.value.controls = "";
       };
-      kinds = ["bad-row" "needs-human"];
+      kinds = ["bad-row"];
     };
     blank-excluded = {
       input = {
@@ -63,8 +57,7 @@
         facts = {token.type = "boolean";};
         rows = {};
       };
-      added = ["token"];
-      kinds = ["unrecorded"];
+      kinds = [];
     };
     fill-only = {
       input = {
@@ -86,9 +79,23 @@
       input.facts.value.type = null;
       kinds = ["needs-human"];
     };
+    new-name = {
+      input.rows = {};
+      kinds = [];
+    };
     removed-row = {
-      input.facts = {};
+      input = {
+        facts = {};
+        rows.value.description = "hand prose";
+      };
       kinds = ["removed"];
+    };
+    removed-unused = {
+      input = {
+        facts = {};
+        rows = {};
+      };
+      kinds = [];
     };
     removed-use = {
       input = {
@@ -181,8 +188,7 @@
         facts = {token.type = "object";};
         rows = {};
       };
-      added = ["token"];
-      kinds = ["unrecorded"];
+      kinds = [];
     };
   };
   run = case: let
@@ -201,27 +207,12 @@
   in
     map (failure: failure.kind) result.failures
     == case.kinds
-    && result.added == (case.added or [])
     && builtins.attrNames result.entries == (case.entries or (builtins.attrNames surface.facts))
     && (!(case ? description) || result.entries.value.description == case.description)
     && (!(case ? type) || result.entries.value.type == case.type);
   failures = builtins.attrNames (lib.filterAttrs (_: case: !(run case)) cases);
-  new = reconcile {config = base // {rows = {};};};
-  file = withAdded (builtins.fromJSON (builtins.readFile ./rows.json)) new;
-  recorded = reconcile {
-    config =
-      base
-      // {
-        facts = base.facts // {existing.type = "string";};
-        rows = file.config;
-      };
-  };
 in {
   checks.extracted-reconcile = harness.mkTest "extracted-reconcile" (
-    assert lib.assertMsg (failures == []) (builtins.toJSON failures);
-    assert file.config.value == {};
-    assert file.config.existing.excluded == "runtime file delivery";
-    assert file.environmentIgnored.host.reason == "host state";
-    assert recorded.config.failures == []; true
+    assert lib.assertMsg (failures == []) (builtins.toJSON failures); true
   );
 }

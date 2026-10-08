@@ -658,29 +658,29 @@
     # Assertion evaluation must not call a missing custom-package rollout
     # function before the dedicated assertion below can report that shape.
     resolvedPackage =
-      if cfg.package == null
+      if cfg.cli.package == null
       then null
-      else if cfg.unlockedRolloutFeatures != [] && !(cfg.package ? withRolloutFeatures)
-      then cfg.package
+      else if (effectiveRolloutFeatures cfg) != [] && !(cfg.cli.package ? withRolloutFeatures)
+      then cfg.cli.package
       else resolvePackage cfg;
     packageNeedsFhsPayload = package:
       package
       != null
       && (package.kiroFhsSandbox or (package ? unwrapped || package ? withFhsPayload));
     needsFhsPayloadComposition =
-      cfg.useFhsSandbox
+      cfg.cli.useFhsSandbox
       && pkgs.stdenv.hostPlatform.isLinux
-      && cfg.trustedMcpTools != []
-      && (packageNeedsFhsPayload cfg.package || packageNeedsFhsPayload resolvedPackage);
+      && cfg.cli.trustedMcpTools != []
+      && (packageNeedsFhsPayload cfg.cli.package || packageNeedsFhsPayload resolvedPackage);
   in
     [
       {
         # No resolved package at all (`package = null`) means no wrapper is
         # built, so this constraint — which is about what the WRAPPER can
         # select from — does not apply; it must not fire on null alone.
-        assertion = cfg.useFhsSandbox || cfg.package == null || resolvedPackage ? unwrapped;
+        assertion = cfg.cli.useFhsSandbox || cfg.cli.package == null || resolvedPackage ? unwrapped;
         message = ''
-          ai.kiro: `useFhsSandbox = false` needs the resolved `package` to
+          ai.kiro.cli: `useFhsSandbox = false` needs the resolved `package` to
           expose `passthru.unwrapped`, which `pkgs.ai.kiro-cli` and its rollout
           variants from this flake's overlay provide. The resolved package has
           no unwrapped payload to select. Either keep the FHS sandbox or use an
@@ -693,7 +693,7 @@
           !needsFhsPayloadComposition
           || (resolvedPackage ? unwrapped && resolvedPackage ? withFhsPayload);
         message = ''
-          ai.kiro: `trustedMcpTools` with the Linux FHS sandbox needs the
+          ai.kiro.cli: `trustedMcpTools` with the Linux FHS sandbox needs the
           resolved `package` to expose both `passthru.unwrapped` and
           `passthru.withFhsPayload`. Without that composition seam the FHS
           launcher's `/usr/bin/kiro-cli-chat` shadows the outer trust wrapper,
@@ -712,10 +712,10 @@
         # launch intentionally falls back after a patch error, and a rejected
         # identity belongs at the configuration site rather than at launch.
         assertion =
-          !cfg.tweaks.identity.enable
-          || builtins.match ".*[.!?][[:space:]]*" cfg.tweaks.identity.text != null;
+          !cfg.cli.tweaks.identity.enable
+          || builtins.match ".*[.!?][[:space:]]*" cfg.cli.tweaks.identity.text != null;
         message = ''
-          ai.kiro: `tweaks.identity` must end with sentence punctuation (`.`, `!` or
+          ai.kiro.cli: `tweaks.identity` must end with sentence punctuation (`.`, `!` or
           `?`). It replaces the FIRST SENTENCE of the vendor identity and the
           preserved remainder is re-joined directly after it, so a value that
           does not close its own sentence runs INTO that remainder instead of
@@ -730,12 +730,12 @@
         # A null `package` is covered by the inert-settings warning below, not
         # this assertion — it must not fire on null alone.
         assertion =
-          cfg.unlockedRolloutFeatures == [] || cfg.package == null || cfg.package ? withRolloutFeatures;
+          (effectiveRolloutFeatures cfg) == [] || cfg.cli.package == null || cfg.cli.package ? withRolloutFeatures;
         message = ''
-          ai.kiro: `unlockedRolloutFeatures` needs a `package` exposing
+          ai.kiro.cli: `unlockedRolloutFeatures` or `workflows.enable` needs a `package` exposing
           `passthru.withRolloutFeatures`, which `pkgs.ai.kiro-cli` from this
           flake's overlay provides. The configured `package` does not, so it
-          cannot be patched. Either drop `unlockedRolloutFeatures` or set
+          cannot be patched. Either clear `unlockedRolloutFeatures` and disable `workflows.enable`, or set
           `package` back to an overlay-provided kiro-cli.
         '';
       }
@@ -751,15 +751,15 @@
         #      unwrapped and nothing injects `--v3`.
         #   2. Workflow slash-commands are populated only when the resolved
         #      engine is `kas`; on the legacy engine they are filtered out.
-        assertion = cfg.unlockedRolloutFeatures == [] || cfg.v3;
+        assertion = (effectiveRolloutFeatures cfg) == [] || cfg.cli.v3;
         message = ''
-          ai.kiro: `unlockedRolloutFeatures` requires `v3 = true`.
+          ai.kiro.cli: `unlockedRolloutFeatures` or `workflows.enable` requires `v3 = true`.
 
           The features are surfaced only by the v3 (`kas`) engine, and nothing
           else in this module injects `--v3`, so as configured the binary would
           be patched and the features would stay invisible with no error.
 
-          Set `ai.kiro.v3 = true`, or drop `unlockedRolloutFeatures`.
+          Set `ai.kiro.cli.v3 = true`, or clear `unlockedRolloutFeatures` and disable `ai.kiro.cli.workflows.enable`.
         '';
       }
     ]
@@ -854,8 +854,8 @@
   #   "subagent"  -> { capability = subagent; }
   #   "use_aws" / other bare tokens -> dropped (aws_tool removed in v3)
   mkPermissionRules = cfg: let
-    hasV3 = cfg.v3;
-    trusted = cfg.trustedMcpTools;
+    hasV3 = cfg.cli.v3;
+    trusted = cfg.cli.trustedMcpTools;
     mcpMatches = map (t: let
       body = lib.removePrefix "@" t;
     in
@@ -886,7 +886,7 @@
     if hasV3 && dropped != []
     then
       lib.warn
-      "ai.kiro: trustedMcpTools entries not representable as v3 permissions, dropped: ${lib.concatStringsSep ", " dropped}"
+      "ai.kiro.cli.trustedMcpTools entries not representable as v3 permissions, dropped: ${lib.concatStringsSep ", " dropped}"
       rules
     else rules;
 
@@ -894,15 +894,16 @@
   # invariant, not a nicety), so the resolution lives here rather than being
   # open-coded at each `wrapKiroPackage` call site.
   #
-  # No canonicalization here on purpose. `withRolloutFeatures` sorts and
-  # de-duplicates its own argument (see `canonFeatures` in
-  # packages/kiro-cli/packages/ai/kiro-cli/package.nix), because that is where derivation identity is
-  # decided and doing it there covers direct callers too. Repeating it here
-  # would be a second source of truth that can silently drift out of step.
+  # Combine the convenience switch with the raw escape hatch without changing
+  # either option. The package constructor still owns canonical sorting for
+  # derivation identity, including direct callers of `withRolloutFeatures`.
+  effectiveRolloutFeatures = cfg:
+    lib.unique (cfg.cli.unlockedRolloutFeatures ++ lib.optional cfg.cli.workflows.enable "workflows");
+
   resolvePackage = cfg:
-    if cfg.unlockedRolloutFeatures == []
-    then cfg.package
-    else cfg.package.withRolloutFeatures cfg.unlockedRolloutFeatures;
+    if (effectiveRolloutFeatures cfg) == []
+    then cfg.cli.package
+    else cfg.cli.package.withRolloutFeatures (effectiveRolloutFeatures cfg);
 
   # ── Engine-bundle rewrites, shared by BOTH backends (config parity) ────────
   # These three live here rather than in either backend block for the same
@@ -912,26 +913,26 @@
 
   # The materializer is version-pinned, so it must be built from the RESOLVED
   # package (a rollout-unlocked variant is a different derivation but the same
-  # version) rather than from `cfg.package`.
+  # version) rather than from `cfg.cli.package`.
   resolveBundleMaterializer = cfg: let
     replace = enabledBooleanTweaks cfg;
   in
-    if !cfg.tweaks.identity.enable && replace == []
+    if !cfg.cli.tweaks.identity.enable && replace == []
     then null
     else
       mkBundleMaterializer {
         identity =
-          if cfg.tweaks.identity.enable
-          then cfg.tweaks.identity.text
+          if cfg.cli.tweaks.identity.enable
+          then cfg.cli.tweaks.identity.text
           else null;
         inherit replace;
         cliVersion = (resolvePackage cfg).version;
       };
 
-  # Boolean `ai.kiro.tweaks` that each select one fixed-text bundle
+  # Boolean `ai.kiro.cli.tweaks` that each select one fixed-text bundle
   # replacement; the names are the patcher's `FIXED` keys.
   booleanTweaks = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
-  enabledBooleanTweaks = cfg: lib.filter (name: cfg.tweaks.${name}) booleanTweaks;
+  enabledBooleanTweaks = cfg: lib.filter (name: cfg.cli.tweaks.${name}) booleanTweaks;
 
   # Kiro honors a PROJECT-LOCAL `.kiro/settings/cli.json` only for the keys on
   # the allowlist its TUI carries; everything else in that file is read and
@@ -939,10 +940,6 @@
   # it must refuse a key Kiro would drop rather than emit a plausible-looking
   # no-op. Home Manager writes the GLOBAL file, where every key is honored —
   # that is why this is a lowering difference and not a divergent option.
-  #
-  # An EMPTY list means this kiro honors no workspace override at all (true for
-  # every release before 2.21.1), which is a stronger statement than "this key
-  # is not allowed" and gets its own message below.
   inherit (kiroExtracted) workspaceOverridableSettings;
 
   # The FLATTEN BOUNDARY: every dotted path kiro's binary names as a complete
@@ -970,7 +967,7 @@
   # `flattenKiroSettings` stops at a known key, so the written key is now the
   # setting key and the two agree.
   nativeSettingKeys = cfg:
-    builtins.attrNames (flattenKiroSettings (aiCommon.filterNulls cfg.native.settings));
+    builtins.attrNames (flattenKiroSettings (aiCommon.filterNulls cfg.cli.native.settings));
 
   # devenv-ONLY. Never add this to `mkAssertions`: under Home Manager these same
   # keys are correct, and asserting there would reject a working config.
@@ -981,41 +978,26 @@
   in
     lib.optional (dropped != []) {
       assertion = false;
-      message =
-        ''
-          ai.kiro: devenv writes `native.settings` to the PROJECT-LOCAL
-          ${cfg.configDir}/settings/cli.json, and kiro honors only an allowlist
-          of keys there. These keys would be written and then
-          silently discarded at runtime: ${listed}
-        ''
-        + (
-          if workspaceOverridableSettings == []
-          then ''
+      message = ''
+        ai.kiro.cli.native.settings: devenv writes these settings to the PROJECT-LOCAL
+        ${cfg.configDir}/settings/cli.json, and kiro honors only an allowlist
+        of keys there. These keys would be written and then
+        silently discarded at runtime: ${listed}
 
-            The pinned kiro honors NO workspace override at all — its TUI has no
-            workspace merge — so no key belongs in this file. Set these under
-            home-manager (`ai.kiro.native.settings`, which owns the global
-            ~/.kiro/settings/cli.json). Without home-manager the global file
-            is Kiro's own: `kiro-cli settings <key> <value>`.
-          ''
-          else ''
+        Workspace-overridable keys for the pinned kiro:
+        ${lib.concatStringsSep ", " workspaceOverridableSettings}
 
-            Workspace-overridable keys for the pinned kiro:
-            ${lib.concatStringsSep ", " workspaceOverridableSettings}
+        Anything else is global-only: set it under home-manager
+        (`ai.kiro.cli.native.settings`, which owns the global
+        ~/.kiro/settings/cli.json). Without home-manager the global file
+        is Kiro's own: `kiro-cli settings <key> <value>`.
 
-            Anything else is global-only: set it under home-manager
-            (`ai.kiro.native.settings`, which owns the global
-            ~/.kiro/settings/cli.json). Without home-manager the global file
-            is Kiro's own: `kiro-cli settings <key> <value>`.
-
-            That list describes the binary this flake PINS, read out of
-            `packages/kiro-cli/extracted.json`. It is not re-derived from an
-            overridden `ai.kiro.package`, so a newer kiro whose allowlist has
-            grown is still judged against the pinned one — bump the pin (and
-            its sidecar) rather than working around this.
-
-          ''
-        );
+        That list describes the binary this flake PINS, read out of
+        `packages/kiro-cli/extracted.json`. It is not re-derived from an
+        overridden `ai.kiro.cli.package`, so a newer kiro whose allowlist has
+        grown is still judged against the pinned one — bump the pin (and
+        its sidecar) rather than working around this.
+      '';
     };
 
   # `chat.enableWorkflows` is the THIRD gate on the `workflows` rollout feature
@@ -1023,7 +1005,7 @@
   # upstream, so unlocking the feature without it is silently inert — the third
   # such trap on this one option, see the `v3` assertion in `mkAssertions` and
   # packages/kiro-cli/docs/workflow-gating.md. Implied together, `mkDefault` so an explicit
-  # `ai.kiro.native.settings.chat.enableWorkflows` still wins.
+  # `ai.kiro.cli.native.settings.chat.enableWorkflows` still wins.
   #
   # HOME MANAGER ONLY, deliberately. The key is absent from
   # `workspaceOverridableSettings`, so contributing it on the devenv backend
@@ -1031,8 +1013,8 @@
   # `mkDevenvWorkspaceSettingsAssertions` above, failing a config the consumer
   # never wrote. devenv consumers set it globally; the assertion says so.
   workflowsSettingImplication = cfg:
-    lib.mkIf (builtins.elem "workflows" cfg.unlockedRolloutFeatures) {
-      ai.kiro.native.settings.chat.enableWorkflows = lib.mkDefault true;
+    lib.mkIf (builtins.elem "workflows" (effectiveRolloutFeatures cfg)) {
+      ai.kiro.cli.native.settings.chat.enableWorkflows = lib.mkDefault true;
     };
 
   # Rendered mcp.json body (DRY: both backends AND the mkMcpJsonScript
@@ -1148,7 +1130,7 @@
       ${assemble}
     '';
 
-  # `ai.shell` / `ai.kiro.shell` reach Kiro as `SHELL` in the builder's
+  # `ai.shell` / `ai.kiro.cli.shell` reach Kiro as `SHELL` in the builder's
   # `launcherEnvironment`. Kiro's v3 engine selects its command shell with
   # `process.env.SHELL || "/bin/sh"`, so `SHELL` is the whole knob, and `||`
   # makes an unusable path fail loudly at spawn rather than be ignored.
@@ -1175,7 +1157,7 @@
     ...
   }:
     wrapKiroPackage {
-      inherit (cfg) extraPackages trustedMcpTools useFhsSandbox v3;
+      inherit (cfg.cli) extraPackages trustedMcpTools useFhsSandbox v3;
       package = resolvePackage cfg;
       environmentVariables = launcherEnvironment;
       inherit ((import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers) secretEnv;
@@ -1202,6 +1184,7 @@ in
     # Carried as DATA, not a module argument — see mkRuntime.nix.
     inherit pkgs;
     name = "kiro";
+    launcherOptionsPath = ["cli"];
     # The native agent layer (see mkRuntime.nix): each normalized agent
     # lowers into `ai.kiro.native.agents.<name>`, a typed agent record.
     # `tools` is not lowered — Kiro takes capability tags, not the
@@ -1239,111 +1222,296 @@ in
       lspServers.description = "Typed LSP server definitions; null suppresses a root entry at the same key. Non-null entries translate via `mkKiroLspFile` into `<configDir>/settings/lsp.json`. Kiro reads that file relative to the workspace, so under home-manager it is live only when kiro runs with $HOME as its workspace; the devenv backend delivers it per project.";
     };
     options = {
-      # Dark-shipped upstream features, unlocked by patching the rollout
-      # manifest the chat binary carries in rodata (see
-      # `vu.mkKiroRolloutPatch`). The enum is EXTRACTED from that manifest
-      # into the committed sidecar, never curated, so it tracks upstream.
-      #
-      # Why a package patch and not an env var: `tui.js` does read
-      # `KIRO_ENABLED_FEATURES`, but the rust chat binary RECOMPUTES and
-      # overwrites that variable before spawning bun — measured, the parent
-      # held `["workflows"]` and the child received `["tangent"]`. The
-      # `KIRO_ROLLOUT_FORCE_INTERNAL` / `_NIGHTLY` escape hatches do not help
-      # either; `segment: "internal"` resolves off the authenticated identity.
-      # So the manifest is the only client-side seam.
-      #
-      # Default `[]` leaves the package byte-identical to stock.
-      unlockedRolloutFeatures = lib.mkOption {
-        type = lib.types.listOf (lib.types.enum kiroExtracted.rolloutFeatures);
-        default = [];
-        example = ["workflows"];
-        description = ''
-          Upstream rollout features to force on by patching the kiro binary's
-          embedded rollout manifest.
+      cli = {
+        extraPackages = lib.mkOption {
+          type = lib.types.listOf lib.types.package;
+          default = [];
+          example = lib.literalExpression "with pkgs; [file which]";
+          description = ''
+            Packages whose binary directories are added to Kiro's PATH. The
+            launcher initially prepends them while preserving the inherited
+            PATH, or uses an explicit `environmentVariables.PATH` as the base
+            when configured.
 
-          These are DARK-SHIPPED and uncertified — `workflows` is documented
-          upstream as "Dark-shipped at 0% until release certification is
-          complete". Enabling one ships pre-release code; expect rough edges.
+            This is the reliable way to expose tools inside Kiro's Linux FHS
+            visibility sandbox: `/nix/store` is mounted and PATH is inherited,
+            while host `/usr` is replaced by the synthesized root. Linux FHS
+            startup can put its synthesized command directories ahead afterward,
+            so this option supplies missing tools rather than overriding tools
+            already in that root. The addition is scoped to Kiro's launcher and
+            is never exported into the Home Manager session or devenv project
+            shell. On Darwin, where Kiro has no FHS wrapper, the runtime-local
+            prefix remains first.
+          '';
+        };
+        # Kiro-specific freeform settings with typed subkeys for known
+        # knobs. They are the whole of settings/cli.json, a read-only copy on
+        # both backends.
+        native.settings = lib.mkOption {
+          type = lib.types.submodule {
+            freeformType = (pkgs.formats.json {}).type;
+            options = {
+              chat = lib.mkOption {
+                type = lib.types.submodule {
+                  freeformType = (pkgs.formats.json {}).type;
+                  options = {
+                    defaultModel = lib.mkOption {
+                      type =
+                        lib.types.nullOr
+                        (lib.types.either (lib.types.enum kiroExtracted.models) lib.types.str);
+                      default = null;
+                      description = ''
+                        Default chat model. Suggestions are generated from Kiro's
+                        public model documentation into packages/kiro-cli/extracted.json.
+                        Availability depends on your account; any string is accepted.
+                      '';
+                    };
+                    enableThinking = lib.mkOption {
+                      type = lib.types.nullOr lib.types.bool;
+                      default = null;
+                      description = "Enable thinking/reasoning mode.";
+                    };
+                    enableWorkflows = lib.mkOption {
+                      type = lib.types.nullOr lib.types.bool;
+                      default = null;
+                      description = ''
+                        Enable the `/workflow` and `/goal` commands and the
+                        agent-side workflow tools (`run_workflow`,
+                        `inspect_workflow`, ...).
 
-          Unlocking `workflows` also enables `/goal`, since the client maps the
-          one flag onto both the `workflows` and `goal` session settings.
+                        This is the THIRD of the feature's gates, after the
+                        manifest patch and the `kas` engine, and independent of
+                        both: `unlockedRolloutFeatures =
+                        ["workflows"]` only makes the feature AVAILABLE, and since
+                        kiro-cli 2.19.0 the client also requires this setting,
+                        which upstream defaults to false. Unlocking without it is
+                        silently inert — no error, no log; the workflow tools
+                        simply never reach the session.
 
-          NOT SUFFICIENT ON ITS OWN for `workflows` since kiro-cli 2.19.0. The
-          patch only makes the feature AVAILABLE; the client's own check gained
-          a second condition, the `chat.enableWorkflows` setting, which upstream
-          defaults to false. Under home-manager this module implies that setting via
-          `mkDefault` when `workflows` is unlocked, so the pair stays
-          consistent and an explicit
-          `native.settings.chat.enableWorkflows` still wins. Under devenv the
-          setting is global-only and must be set outside the project — see
-          `native.settings`.
-        '';
-      };
-      # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
-      # off, and with none enabled the managed install launches the stock
-      # bundle: no materializer, no patched copy, no wrapper reason.
-      tweaks = {
-        identity = lib.mkOption {
-          type = aiTypes.optionalTextSource {
-            description = "the replacement for the first sentence of the kiro-cli identity";
-            enableDefault = false;
+                        Under home-manager you need not set it by hand: unlocking
+                        `workflows` implies it via `mkDefault`, and an explicit
+                        value here still wins. Under devenv it must be set
+                        GLOBALLY — it is not in the workspace-override allowlist,
+                        so a project-local write of it is discarded.
+
+                        Takes effect at the next kiro start, and the engine
+                        persists the flag per session, so prefer a fresh session
+                        over resuming one created while it was off.
+                      '';
+                    };
+                  };
+                };
+                default = {};
+                description = "Chat-related settings.";
+              };
+              telemetry = lib.mkOption {
+                type = lib.types.submodule {
+                  freeformType = (pkgs.formats.json {}).type;
+                  options = {
+                    enabled = lib.mkOption {
+                      type = lib.types.nullOr lib.types.bool;
+                      default = null;
+                      description = "Enable telemetry reporting.";
+                    };
+                  };
+                };
+                default = {};
+                description = "Telemetry settings.";
+              };
+            };
           };
           default = {};
-          example.text = "You are Atlas, a senior systems engineer working in a terminal.";
           description = ''
-            Replace the FIRST SENTENCE of the kiro-cli identity in the engine's
-            system prompt. The rest of the vendor block — the prose about running
-            in a terminal with no graphical editor, referring to files by path,
-            and surfacing command output directly — is preserved byte-for-byte,
-            because that is the part that keeps the agent behaving like a terminal
-            program.
+            The whole of `settings/cli.json`, written as a read-only copy on
+            activation (HM, `~/.kiro/settings/cli.json`, always) or shell entry
+            (devenv, the project file, only when something is declared). Kiro's
+            own writers (`/model`, the settings panel, `kiro-cli settings`)
+            rename a new file over it; the next activation or shell entry backs
+            that file up and restores the declaration, so in-app changes do not
+            persist.
 
-            This is the very first segment of msg0, ahead of steering, learnings
-            and file tree, so it is the highest-leverage place to state what the
-            agent IS.
+            Known keys are typed; unknown keys are accepted via freeformType —
+            by the TYPE. Whether a key is then honored is a separate question the
+            backend answers, and under devenv the answer is no for anything off
+            the allowlist below, including two of the typed options above
+            (`chat.enableWorkflows`, `telemetry.enabled`). Those are global-only
+            settings; the type accepts them because Home Manager writes the file
+            where they work.
 
-            Mechanically: the patched engine bundle is materialized under
-            `$XDG_CACHE_HOME/nix-agentic-tools/kiro-bundle/` at launch and
-            selected via `KIRO_KAS_SERVER_PATH`. Vendor state is never modified.
-            The exact vendor sentence is defined in `kiro-bundle-patch.py` and
-            checked against the pinned bundle in CI.
+            Nested Nix lowers to kiro's flat dotted keys, and it stops at a
+            COMPLETE key rather than flattening all the way, so an object-valued
+            setting works: `chat.modelDefaults.<model>.<field>` is written as
+            `"chat.modelDefaults"` with the record intact underneath. The
+            boundary is `settingKeys` from the extracted sidecar, so it tracks
+            version bumps.
 
-            FAIL-OPEN: if the engine bundle cannot be resolved or the vendor
-            source text no longer occurs exactly once, a named warning goes to stderr.
-            Each drifted replacement is skipped independently; healthy replacements
-            still apply. With none applied, the CLI launches UNPATCHED.
-
-            May not contain a backtick or `''${` — the value is spliced into a JS
-            template literal.
+            THE TWO BACKENDS DO NOT HONOR THE SAME KEYS, because they write
+            different files. HM writes the GLOBAL `~/.kiro/settings/cli.json`,
+            where kiro honors everything. devenv writes the PROJECT-LOCAL
+            `<configDir>/settings/cli.json`, which kiro merges over the global one
+            through an allowlist — every other key is read and discarded with no
+            warning. The devenv backend therefore REFUSES a non-allowlisted key at
+            eval rather than writing a file that looks applied and is not; the
+            assertion names the keys the pinned kiro does honor there. That
+            allowlist is extracted from the binary
+            (`packages/kiro-cli/extracted.json`, `workspaceOverridableSettings`),
+            so it tracks version bumps instead of being curated here.
           '';
         };
-        relativeFileCheckPaths = lib.mkOption {
+        # MCP tools to auto-approve — appends `--trust-tools=<csv>`
+        # to `kiro-cli-chat`. Eliminates the need for a bespoke
+        # symlinkJoin wrapper in the consumer.
+        trustedMcpTools = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (both backends).";
+          example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
+        };
+        # Opt-in patches to the vendor KAS engine bundle. Every tweak defaults
+        # off, and with none enabled the managed install launches the stock
+        # bundle: no materializer, no patched copy, no wrapper reason.
+        tweaks = {
+          identity = lib.mkOption {
+            type = aiTypes.optionalTextSource {
+              description = "the replacement for the first sentence of the kiro-cli identity";
+              enableDefault = false;
+            };
+            default = {};
+            example.text = "You are Atlas, a senior systems engineer working in a terminal.";
+            description = ''
+              Replace the FIRST SENTENCE of the kiro-cli identity in the engine's
+              system prompt. The rest of the vendor block — the prose about running
+              in a terminal with no graphical editor, referring to files by path,
+              and surfacing command output directly — is preserved byte-for-byte,
+              because that is the part that keeps the agent behaving like a terminal
+              program.
+
+              This is the very first segment of msg0, ahead of steering, learnings
+              and file tree, so it is the highest-leverage place to state what the
+              agent IS.
+
+              Mechanically: the patched engine bundle is materialized under
+              `$XDG_CACHE_HOME/nix-agentic-tools/kiro-bundle/` at launch and
+              selected via `KIRO_KAS_SERVER_PATH`. Vendor state is never modified.
+              The exact vendor sentence is defined in `kiro-bundle-patch.py` and
+              checked against the pinned bundle in CI.
+
+              FAIL-OPEN: if the engine bundle cannot be resolved or the vendor
+              source text no longer occurs exactly once, a named warning goes to stderr.
+              Each drifted replacement is skipped independently; healthy replacements
+              still apply. With none applied, the CLI launches UNPATCHED.
+
+              May not contain a backtick or `''${` — the value is spliced into a JS
+              template literal.
+            '';
+          };
+          relativeFileCheckPaths = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = ''
+              Replace the vendor workflow instruction to use absolute stop-condition
+              paths: the step writes the stop-condition file, and `fileCheck.path`
+              checks it, at the same plain workspace-relative path, without
+              templates. Absolute worktree paths can be rejected for sibling worktrees.
+              Uses the shared exact-match bundle materializer on Home Manager and
+              devenv. Source drift warns and skips this replacement independently;
+              the pinned-bundle CI check fails on missing or duplicate source text.
+            '';
+          };
+          stripVendorWorktreeSteering = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = ''
+              Remove the vendor workflow worktree paragraph (worktrees under
+              `.worktrees/`, rebased onto `mainline`) at launch, for repositories
+              whose own instructions supply the git workflow. Uses the same
+              exact-match bundle materializer as `tweaks.identity`, on Home
+              Manager and devenv. A source-text drift prints a warning and
+              skips this replacement; healthy replacements still apply. With none
+              applied, Kiro launches unpatched. The pinned-bundle CI check fails on either
+              missing or duplicate text.
+            '';
+          };
+        };
+        # Dark-shipped upstream features, unlocked by patching the rollout
+        # manifest the chat binary carries in rodata (see
+        # `vu.mkKiroRolloutPatch`). The enum is EXTRACTED from that manifest
+        # into the committed sidecar, never curated, so it tracks upstream.
+        #
+        # Why a package patch and not an env var: `tui.js` does read
+        # `KIRO_ENABLED_FEATURES`, but the rust chat binary RECOMPUTES and
+        # overwrites that variable before spawning bun — measured, the parent
+        # held `["workflows"]` and the child received `["tangent"]`. The
+        # `KIRO_ROLLOUT_FORCE_INTERNAL` / `_NIGHTLY` escape hatches do not help
+        # either; `segment: "internal"` resolves off the authenticated identity.
+        # So the manifest is the only client-side seam.
+        #
+        # Default `[]` leaves the package byte-identical to stock.
+        unlockedRolloutFeatures = lib.mkOption {
+          type = lib.types.listOf (lib.types.enum kiroExtracted.rolloutFeatures);
+          default = [];
+          example = ["workflows"];
+          description = ''
+            Upstream rollout features to force on by patching the kiro binary's
+            embedded rollout manifest.
+
+            These are DARK-SHIPPED and uncertified — `workflows` is documented
+            upstream as "Dark-shipped at 0% until release certification is
+            complete". Enabling one ships pre-release code; expect rough edges.
+
+            Unlocking `workflows` also enables `/goal`, since the client maps the
+            one flag onto both the `workflows` and `goal` session settings.
+
+            NOT SUFFICIENT ON ITS OWN for `workflows` since kiro-cli 2.19.0. The
+            patch only makes the feature AVAILABLE; the client's own check gained
+            a second condition, the `chat.enableWorkflows` setting, which upstream
+            defaults to false. Under home-manager this module implies that setting via
+            `mkDefault` when `workflows` is unlocked, so the pair stays
+            consistent and an explicit
+            `native.settings.chat.enableWorkflows` still wins. Under devenv the
+            setting is global-only and must be set outside the project — see
+            `native.settings`.
+          '';
+        };
+        useFhsSandbox = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = ''
+            Whether to use nixpkgs' Linux FHS compatibility wrapper. The default
+            keeps upstream's runtime support for the generic-glibc `bun` that
+            Kiro extracts dynamically. Set this to false to launch this flake's
+            pinned unwrapped package directly, restoring ordinary host namespace
+            visibility at the cost of that compatibility guarantee. This has no
+            practical effect on Darwin, where nixpkgs already ships the unwrapped
+            package.
+          '';
+        };
+        # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
+        # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
+        # `chat` subcommand and are rejected by the launcher, so the launcher's
+        # sole engine selector is this boolean.
+        #
+        # There is deliberately NO `tui` option. One existed: it injected `--tui`
+        # and implied `--v3`, and that implication was load-bearing rather than
+        # decorative — bare `--tui` conflicts with the chat binary's default
+        # engine (v1 on 2.16.0) and the launcher supplies none of its own.
+        # `--tui` selects the new TUI harness for the OLD engine; v3 already uses
+        # that harness, so under v3 it is redundant, and it is going away with v3
+        # regardless. Anyone who wants it on an older engine passes it on the
+        # command line.
+        v3 = lib.mkOption {
           type = lib.types.bool;
           default = false;
           description = ''
-            Replace the vendor workflow instruction to use absolute stop-condition
-            paths: the step writes the stop-condition file, and `fileCheck.path`
-            checks it, at the same plain workspace-relative path, without
-            templates. Absolute worktree paths can be rejected for sibling worktrees.
-            Uses the shared exact-match bundle materializer on Home Manager and
-            devenv. Source drift warns and skips this replacement independently;
-            the pinned-bundle CI check fails on missing or duplicate source text.
+            Append `--v3` (next-generation Kiro agent) to the kiro-cli
+            launcher wrapper. Applied by both backends.
+
+            Required by `unlockedRolloutFeatures`: those features are surfaced
+            only by the v3 (`kas`) engine, so unlocking them without this patches
+            the binary and changes nothing observable.
           '';
         };
-        stripVendorWorktreeSteering = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-          description = ''
-            Remove the vendor workflow worktree paragraph (worktrees under
-            `.worktrees/`, rebased onto `mainline`) at launch, for repositories
-            whose own instructions supply the git workflow. Uses the same
-            exact-match bundle materializer as `tweaks.identity`, on Home
-            Manager and devenv. A source-text drift prints a warning and
-            skips this replacement; healthy replacements still apply. With none
-            applied, Kiro launches unpatched. The pinned-bundle CI check fails on either
-            missing or duplicate text.
-          '';
-        };
+        workflows.enable = lib.mkEnableOption "Kiro CLI workflows (requires cli.v3; devenv also needs global chat.enableWorkflows)";
       };
       # Config directory (HOME-relative for HM, project-relative for
       # devenv). All file writes use this as root prefix. Exposed as an
@@ -1352,188 +1520,6 @@ in
         type = lib.types.str;
         default = ".kiro";
         description = "Config directory relative to HOME / devenv root.";
-      };
-      # Kiro-specific freeform settings with typed subkeys for known
-      # knobs. They are the whole of settings/cli.json, a read-only copy on
-      # both backends.
-      native.settings = lib.mkOption {
-        type = lib.types.submodule {
-          freeformType = (pkgs.formats.json {}).type;
-          options = {
-            chat = lib.mkOption {
-              type = lib.types.submodule {
-                freeformType = (pkgs.formats.json {}).type;
-                options = {
-                  defaultModel = lib.mkOption {
-                    type =
-                      lib.types.nullOr
-                      (lib.types.either (lib.types.enum kiroExtracted.models) lib.types.str);
-                    default = null;
-                    description = ''
-                      Default chat model. Suggestions are generated from Kiro's
-                      public model documentation into packages/kiro-cli/extracted.json.
-                      Availability depends on your account; any string is accepted.
-                    '';
-                  };
-                  enableThinking = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Enable thinking/reasoning mode.";
-                  };
-                  enableWorkflows = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = ''
-                      Enable the `/workflow` and `/goal` commands and the
-                      agent-side workflow tools (`run_workflow`,
-                      `inspect_workflow`, ...).
-
-                      This is the THIRD of the feature's gates, after the
-                      manifest patch and the `kas` engine, and independent of
-                      both: `unlockedRolloutFeatures =
-                      ["workflows"]` only makes the feature AVAILABLE, and since
-                      kiro-cli 2.19.0 the client also requires this setting,
-                      which upstream defaults to false. Unlocking without it is
-                      silently inert — no error, no log; the workflow tools
-                      simply never reach the session.
-
-                      Under home-manager you need not set it by hand: unlocking
-                      `workflows` implies it via `mkDefault`, and an explicit
-                      value here still wins. Under devenv it must be set
-                      GLOBALLY — it is not in the workspace-override allowlist,
-                      so a project-local write of it is discarded.
-
-                      Takes effect at the next kiro start, and the engine
-                      persists the flag per session, so prefer a fresh session
-                      over resuming one created while it was off.
-                    '';
-                  };
-                };
-              };
-              default = {};
-              description = "Chat-related settings.";
-            };
-            telemetry = lib.mkOption {
-              type = lib.types.submodule {
-                freeformType = (pkgs.formats.json {}).type;
-                options = {
-                  enabled = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Enable telemetry reporting.";
-                  };
-                };
-              };
-              default = {};
-              description = "Telemetry settings.";
-            };
-          };
-        };
-        default = {};
-        description = ''
-          The whole of `settings/cli.json`, written as a read-only copy on
-          activation (HM, `~/.kiro/settings/cli.json`, always) or shell entry
-          (devenv, the project file, only when something is declared). Kiro's
-          own writers (`/model`, the settings panel, `kiro-cli settings`)
-          rename a new file over it; the next activation or shell entry backs
-          that file up and restores the declaration, so in-app changes do not
-          persist.
-
-          Known keys are typed; unknown keys are accepted via freeformType —
-          by the TYPE. Whether a key is then honored is a separate question the
-          backend answers, and under devenv the answer is no for anything off
-          the allowlist below, including two of the typed options above
-          (`chat.enableWorkflows`, `telemetry.enabled`). Those are global-only
-          settings; the type accepts them because Home Manager writes the file
-          where they work.
-
-          Nested Nix lowers to kiro's flat dotted keys, and it stops at a
-          COMPLETE key rather than flattening all the way, so an object-valued
-          setting works: `chat.modelDefaults.<model>.<field>` is written as
-          `"chat.modelDefaults"` with the record intact underneath. The
-          boundary is `settingKeys` from the extracted sidecar, so it tracks
-          version bumps.
-
-          THE TWO BACKENDS DO NOT HONOR THE SAME KEYS, because they write
-          different files. HM writes the GLOBAL `~/.kiro/settings/cli.json`,
-          where kiro honors everything. devenv writes the PROJECT-LOCAL
-          `<configDir>/settings/cli.json`, which kiro merges over the global one
-          through an allowlist — every other key is read and discarded with no
-          warning. The devenv backend therefore REFUSES a non-allowlisted key at
-          eval rather than writing a file that looks applied and is not; the
-          assertion names the keys the pinned kiro does honor there. That
-          allowlist is extracted from the binary
-          (`packages/kiro-cli/extracted.json`, `workspaceOverridableSettings`),
-          so it tracks version bumps instead of being curated here.
-        '';
-      };
-      extraPackages = lib.mkOption {
-        type = lib.types.listOf lib.types.package;
-        default = [];
-        example = lib.literalExpression "with pkgs; [file which]";
-        description = ''
-          Packages whose binary directories are added to Kiro's PATH. The
-          launcher initially prepends them while preserving the inherited
-          PATH, or uses an explicit `environmentVariables.PATH` as the base
-          when configured.
-
-          This is the reliable way to expose tools inside Kiro's Linux FHS
-          visibility sandbox: `/nix/store` is mounted and PATH is inherited,
-          while host `/usr` is replaced by the synthesized root. Linux FHS
-          startup can put its synthesized command directories ahead afterward,
-          so this option supplies missing tools rather than overriding tools
-          already in that root. The addition is scoped to Kiro's launcher and
-          is never exported into the Home Manager session or devenv project
-          shell. On Darwin, where Kiro has no FHS wrapper, the runtime-local
-          prefix remains first.
-        '';
-      };
-      useFhsSandbox = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = ''
-          Whether to use nixpkgs' Linux FHS compatibility wrapper. The default
-          keeps upstream's runtime support for the generic-glibc `bun` that
-          Kiro extracts dynamically. Set this to false to launch this flake's
-          pinned unwrapped package directly, restoring ordinary host namespace
-          visibility at the cost of that compatibility guarantee. This has no
-          practical effect on Darwin, where nixpkgs already ships the unwrapped
-          package.
-        '';
-      };
-      # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
-      # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
-      # `chat` subcommand and are rejected by the launcher, so the launcher's
-      # sole engine selector is this boolean.
-      #
-      # There is deliberately NO `tui` option. One existed: it injected `--tui`
-      # and implied `--v3`, and that implication was load-bearing rather than
-      # decorative — bare `--tui` conflicts with the chat binary's default
-      # engine (v1 on 2.16.0) and the launcher supplies none of its own.
-      # `--tui` selects the new TUI harness for the OLD engine; v3 already uses
-      # that harness, so under v3 it is redundant, and it is going away with v3
-      # regardless. Anyone who wants it on an older engine passes it on the
-      # command line.
-      v3 = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Append `--v3` (next-generation Kiro agent) to the kiro-cli
-          launcher wrapper. Applied by both backends.
-
-          Required by `unlockedRolloutFeatures`: those features are surfaced
-          only by the v3 (`kas`) engine, so unlocking them without this patches
-          the binary and changes nothing observable.
-        '';
-      };
-      # MCP tools to auto-approve — appends `--trust-tools=<csv>`
-      # to `kiro-cli-chat`. Eliminates the need for a bespoke
-      # symlinkJoin wrapper in the consumer.
-      trustedMcpTools = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [];
-        description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (both backends).";
-        example = ["@context7-mcp" "@git-intel-mcp/hotspots" "subagent"];
       };
       # V3 capability-based permissions -> `<configDir>/settings/permissions.yaml`.
       # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
@@ -1657,18 +1643,18 @@ in
       # builds them. `environmentVariables` and `secrets` are backed by a
       # root/per-runtime pool pair; the rest are Kiro-only options.
       wrapperReasonPaths = {
-        environmentVariables = [["ai" "environmentVariables"] ["ai" "kiro" "environmentVariables"]];
-        extraPackages = [["ai" "kiro" "extraPackages"]];
+        environmentVariables = [["ai" "environmentVariables"] ["ai" "kiro" "cli" "environmentVariables"]];
+        extraPackages = [["ai" "kiro" "cli" "extraPackages"]];
         secrets = [["ai" "mcpServers"] ["ai" "kiro" "mcpServers"]];
-        trustedMcpTools = [["ai" "kiro" "trustedMcpTools"]];
-        v3 = [["ai" "kiro" "v3"]];
+        trustedMcpTools = [["ai" "kiro" "cli" "trustedMcpTools"]];
+        v3 = [["ai" "kiro" "cli" "v3"]];
       };
       wrapperPackageReasons =
         lib.mapAttrsToList (key: reason:
           reason // {explicit = explicitAt wrapperReasonPaths.${key};})
         (builtins.removeAttrs (wrapperReasons {
           environmentVariables = mergedEnvironmentVariables;
-          inherit (cfg) extraPackages trustedMcpTools v3;
+          inherit (cfg.cli) extraPackages trustedMcpTools v3;
           inherit (kiroSecrets) secretEnv;
         }) ["bundle"]);
       # Beside the wrapper's own reasons: package-dependent options the
@@ -1687,29 +1673,29 @@ in
             name = "ai.gitSshConfigWorkaround";
           }
           {
-            active = cfg.tweaks.identity.enable;
-            explicit = explicitAt [["ai" "kiro" "tweaks" "identity" "enable"]];
-            name = "ai.kiro.tweaks.identity";
+            active = cfg.cli.tweaks.identity.enable;
+            explicit = explicitAt [["ai" "kiro" "cli" "tweaks" "identity" "enable"]];
+            name = "ai.kiro.cli.tweaks.identity";
           }
         ]
         ++ map (name: {
-          active = cfg.tweaks.${name};
-          explicit = explicitAt [["ai" "kiro" "tweaks" name]];
-          name = "ai.kiro.tweaks.${name}";
+          active = cfg.cli.tweaks.${name};
+          explicit = explicitAt [["ai" "kiro" "cli" "tweaks" name]];
+          name = "ai.kiro.cli.tweaks.${name}";
         })
         booleanTweaks
         ++ [
           {
             active = resolvedShell != null;
             # The selected shell reaches Kiro only as SHELL in the managed launcher.
-            explicit = explicitAt [["ai" "shell"] ["ai" "kiro" "shell"]];
-            name = "ai.shell / ai.kiro.shell";
+            explicit = explicitAt [["ai" "shell"] ["ai" "kiro" "cli" "shell"]];
+            name = "ai.shell / ai.kiro.cli.shell";
           }
           {
-            active = cfg.unlockedRolloutFeatures != [];
+            active = (effectiveRolloutFeatures cfg) != [];
             # Rollout features rebuild the selected package through withRolloutFeatures.
-            explicit = explicitAt [["ai" "kiro" "unlockedRolloutFeatures"]];
-            name = "ai.kiro.unlockedRolloutFeatures";
+            explicit = explicitAt [["ai" "kiro" "cli" "unlockedRolloutFeatures"] ["ai" "kiro" "cli" "workflows" "enable"]];
+            name = "ai.kiro.cli.unlockedRolloutFeatures / ai.kiro.cli.workflows.enable";
           }
         ];
       # Defaults stay silent and nothing asserts on `package = null` alone —
@@ -1718,8 +1704,8 @@ in
         map (reason: reason.name)
         (lib.filter (reason: reason.active && reason.explicit) packageDependentReasons);
       packageWarnings =
-        lib.optional (cfg.package == null && inertPackageOptions != [])
-        "ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ${lib.concatStringsSep ", " inertPackageOptions}. Unset them or set ai.kiro.package.";
+        lib.optional (cfg.cli.package == null && inertPackageOptions != [])
+        "ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ${lib.concatStringsSep ", " inertPackageOptions}. Unset them or set ai.kiro.cli.package.";
       hasUrlSecret = kiroSecrets.urlSecretEnv != {};
       mcpRender = mkMcpJsonScript {
         # The task never changes cwd; only this renderer anchors relative
@@ -1729,7 +1715,7 @@ in
         templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
         inherit (kiroSecrets) urlSecretEnv;
       };
-      flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.native.settings);
+      flatSettings = flattenKiroSettings (aiCommon.filterNulls cfg.cli.native.settings);
       permissionRules = mkPermissionRules cfg;
       steeringEmitters = mkSteeringEmitters {
         inherit cfg mergedContext hasMergedContext mergedRules;

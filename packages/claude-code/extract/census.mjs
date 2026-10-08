@@ -190,10 +190,7 @@ async function loadSplit(root, info) {
 // quietly resurrecting that evaluator -- a held-back package with a legible
 // reason is the outcome we want. Recovering it means restoring the loader from
 // this commit's history, not loosening anything here.
-function loadMono(root, info, scratch) {
-  void root;
-  void info;
-  void scratch;
+function loadMono() {
   throw new Error(
     "claude-census: this binary is a pre-code-split monolith (no chunk-*.js modules). " +
       "The monolith loader was deliberately not shipped -- see the comment above " +
@@ -413,15 +410,10 @@ function confirmAlias(schema, p, alias) {
 }
 
 // ---------------------------------------------------------------------------
-export async function census(
-  root,
-  scratch = path.dirname(new URL(import.meta.url).pathname),
-) {
+export async function census(root) {
   const info = L.locate(root);
   const loaded =
-    info.exports.size > 0
-      ? await loadSplit(root, info)
-      : loadMono(root, info, scratch);
+    info.exports.size > 0 ? await loadSplit(root, info) : loadMono();
   const { mod } = loaded;
 
   const build = () => mod.__c_build(info.features);
@@ -487,12 +479,11 @@ export async function census(
 }
 
 // ---------------------------------------------------------------------------
-// The five legacy sidecar keys, so far as the census can honestly supply them.
+// Sidecar keys derived from the settings census.
 // `rawEnums` carries SOURCE order, which `effortLevels` needs (the committed
 // sidecar is low/medium/high/xhigh — a ladder, not a sort).
 // ---------------------------------------------------------------------------
 export function legacyFromCensus(settings, rawEnums) {
-  const allTop = sortC([...settings.publicKeys, ...settings.internalKeys]);
   const paths = settings.paths;
 
   const effort = new Set();
@@ -506,22 +497,15 @@ export function legacyFromCensus(settings, rawEnums) {
   }
 
   return {
-    // NOT derivable from the settings schema — these are local-config keys.
-    launchEffortPins: null,
     effortLevels: effort.size === 1 ? JSON.parse([...effort][0]) : null,
     effortLevelEnumsSeen: effort.size,
     hookEvents: paths.hooks && paths.hooks.enum ? paths.hooks.enum : null,
-    // The legacy key is a hand-written triple that the old grep only VALIDATED;
-    // the census can supply every boolean top-level key instead.
+    // These off-label settings have hand-authored consumers in mkClaude.nix.
     settingsBooleanKeys: [
       "enableWorkflows",
       "ultracode",
       "workflowKeywordTriggerEnabled",
     ].filter((k) => paths[k] && paths[k].type === "boolean"),
-    settingsBooleanKeysAll: allTop.filter(
-      (k) => paths[k] && paths[k].type === "boolean",
-    ),
-    models: null, // a separate catalog module — see report
   };
 }
 

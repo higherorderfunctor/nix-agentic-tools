@@ -46,23 +46,13 @@
 #    inside settings.json for every declared-but-unset element field, and
 #    nothing downstream strips it. Array elements stay freeform.
 #
-# Hand-authored declarations always win (`externalPaths`), and every skip,
-# override and unmappable type is REPORTED rather than silently dropped.
+# Hand-authored declarations always win (`externalPaths`). The report tracks
+# stale hand declarations and path shapes that lose typing.
 {lib}: let
   inherit (lib) types;
 
   # ── report plumbing ───────────────────────────────────────────────────────
   emptyReport = {
-    # Path is declared by hand elsewhere in the submodule; the hand one wins
-    # and the generator emitted nothing. Delete the hand one to reclaim it.
-    collisions = [];
-    # Path matched the override table; the override's declaration was emitted.
-    overridden = [];
-    # Path exists in the sidecar but has no sound Nix type; left to the
-    # freeform passthrough (still settable, just untyped).
-    unmapped = [];
-    # `[]` subtrees deliberately left freeform (invariant 3).
-    arrayElements = [];
     # A node carrying BOTH `.*` and named children; `attrsOf` cannot express
     # that, so it degraded to `attrsOf <freeform>`.
     mixedWildcard = [];
@@ -154,22 +144,11 @@ in rec {
   # HAND-AUTHORED OVERRIDES, keyed by dotted path. Adding a future exception is
   # one row here.
   #
-  # A value is EITHER a finished option declaration (an attrset, normally from
-  # `lib.mkOption`) OR a function `ctx -> option`, where
-  #   ctx = { path; type; enum; generatedType; freeformType; }
-  # `generatedType` is the type the generator WOULD have produced, so an
-  # override can widen the machine-derived type instead of restating it — a
-  # restated type silently stops tracking the binary the day upstream changes
-  # it, which is the whole failure this extractor exists to end.
+  # Values are finished option declarations, normally from `lib.mkOption`.
   #
   # An override only applies to a path that EXISTS in the sidecar. One that does
   # not is surfaced as `report.staleOverrides` rather than silently emitted, so
   # an upstream rename cannot leave a dead exception sitting here unnoticed.
-  #
-  # A plain attrset, not a builder: no row needs build-time data any more. A
-  # future one that does (a model list, a version) turns this into a function
-  # again, and there is exactly one call site to follow —
-  # nativeOptions.nix.
   #
   # Two rows that used to live here are gone on purpose — do not restore either:
   #
@@ -201,24 +180,20 @@ in rec {
   #   generate {
   #     settings       # the sidecar's `settings` object
   #     freeformType   # (pkgs.formats.json {}).type
-  #     overrides ? {} # path -> option | (ctx -> option)
+  #     overrides ? {} # path -> option
   #     externalPaths ? []  # paths hand-declared elsewhere; generator stands down
   #   }
   #   => { options = <attrsOf option declarations>; report = { … }; }
   #
-  # Returns a RECORD, not a bare options attrset, because invariant 5 (a
-  # collision with a hand-authored option must be REPORTABLE) cannot be carried
-  # by the options attrset itself without polluting it with a fake option.
-  # Callers use `.options`; a check consumes `.report`.
+  # Callers use `.options`; the schema check consumes `.report`.
   generate = {
     settings,
     freeformType,
     overrides ? {},
     externalPaths ? [],
   }: let
-    publicKeys = settings.publicKeys or [];
-    internalKeys = settings.internalKeys or [];
-    allPaths = settings.paths or {};
+    inherit (settings) internalKeys publicKeys;
+    allPaths = settings.paths;
 
     firstSegment = path: builtins.head (lib.splitString "." (builtins.head (lib.splitString "[" path)));
 
@@ -234,8 +209,6 @@ in rec {
     isBranchPath = path: lib.hasInfix "|" path;
 
     keptPaths = lib.filterAttrs (p: _: isPublic p && !(isBranchPath p)) allPaths;
-    droppedInternal = sortStrs (lib.filter (p: !(isPublic p)) (lib.attrNames allPaths));
-    droppedBranch = sortStrs (lib.filter (p: isPublic p && isBranchPath p) (lib.attrNames allPaths));
 
     tree =
       lib.foldl'
@@ -249,9 +222,6 @@ in rec {
     walkType = path: node: let
       enumVals = node.enum or null;
       t = node.type or null;
-
-      unmappable = reason:
-        reportWith {unmapped = ["${path} (${reason})"];};
 
       objectish =
         # Named children AND a `.*` wildcard cannot both live under one
@@ -327,64 +297,34 @@ in rec {
       }
       else if t == "object" || (t == null && (node.children != {} || node.wild != null))
       then objectish
-      else if t == "enum"
-      then {
-        type = null;
-        report = unmappable "enum with no value set";
-      }
-      else if t == null
-      then {
-        type = null;
-        report = unmappable "no type in sidecar";
-      }
       else {
         # anyOf / const-without-enum / anything the emitter grows later. A
         # WRONG type rejects legal values; no type just falls through to the
         # freeform passthrough, which still accepts the key.
         type = null;
-        report = unmappable t;
+        report = emptyReport;
       };
 
     # path -> node -> { option = <declaration> | null; report = …; }
-    walkOption = path: node: let
-      elemNote =
-        if node.elem != null
-        then ["${path}[]"]
-        else [];
-    in
-      # Hand-authored wins, and the whole subtree belongs to it.
+    walkOption = path: node:
+    # Hand-authored wins, and the whole subtree belongs to it.
       if lib.elem path externalPaths
       then {
         option = null;
-        report = reportWith {
-          collisions = [path];
-          arrayElements = elemNote;
-        };
+        report = emptyReport;
       }
       else let
         t = walkType path node;
-        withElem = mergeReports [t.report (reportWith {arrayElements = elemNote;})];
       in
         if overrides ? ${path}
-        then let
-          ov = overrides.${path};
-          ctx = {
-            inherit path freeformType;
-            type = node.type or null;
-            enum = node.enum or null;
-            generatedType = t.type;
-          };
-        in {
-          option =
-            if lib.isFunction ov
-            then ov ctx
-            else ov;
-          report = mergeReports [withElem (reportWith {overridden = [path];})];
+        then {
+          option = overrides.${path};
+          inherit (t) report;
         }
         else if t.type == null
         then {
           option = null;
-          report = withElem;
+          inherit (t) report;
         }
         else {
           option = lib.mkOption {
@@ -394,7 +334,7 @@ in rec {
             default = null;
             description = describe path;
           };
-          report = withElem;
+          inherit (t) report;
         };
 
     walkChildren = prefix: children: let
@@ -433,16 +373,11 @@ in rec {
         # the binary no longer emits.
         staleOverrides = sortStrs (lib.filter (p: !(knownPath p)) (lib.attrNames overrides));
         staleExternalPaths = sortStrs (lib.filter (p: !(knownPath p)) externalPaths);
-        # An override row that a hand-declaration shadows: `externalPaths` wins
-        # (invariant 5), so the row is INERT. Either delete the hand
+        # An override row that a hand-declaration shadows: `externalPaths` wins,
+        # so the row is INERT. Either delete the hand
         # declaration and let the override own the path, or delete the row.
         shadowedOverrides =
           sortStrs (lib.filter (p: overrides ? ${p}) externalPaths);
-        # Honouring the binary's own @internal filter (invariant 1), plus
-        # anyOf-branch paths outside the documented grammar.
-        internalSkipped = sortStrs internalKeys;
-        internalPathsSkipped = droppedInternal;
-        branchPathsSkipped = droppedBranch;
       };
   };
 }

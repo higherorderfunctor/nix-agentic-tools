@@ -5,9 +5,6 @@
     }
   },
   "settings": {
-    "branchless.commitDescriptors.branches": {},
-    "branchless.commitDescriptors.differentialRevision": {},
-    "branchless.commitDescriptors.relativeTime": {},
     "branchless.core.mainBranch": {
       "defaultDescription": "computed: `branchless.mainBranch`, then `init.defaultBranch`, then `master`. `git branchless init` writes a value into every repository it initializes.",
       "type": "string"
@@ -15,31 +12,16 @@
     "branchless.core.protectCheckedOutBranches": {
       "note": "Only this repository's build reads this key: its protect-checked-out-branches patch adds it. Upstream git-branchless ignores it."
     },
-    "branchless.hint.addSkippedFiles": {},
-    "branchless.hint.cleanCachedTestResults": {},
-    "branchless.hint.moveImplicitHeadArgument": {},
-    "branchless.hint.restackWarnAbandoned": {},
-    "branchless.hint.smartlogFixAbandoned": {},
-    "branchless.hint.testShowVerbose": {},
     "branchless.mainBranch": { "type": "string" },
-    "branchless.navigation.autoSwitchBranches": {},
-    "branchless.next.interactive": {},
-    "branchless.record.untrackedFiles": {},
-    "branchless.restack.preserveTimestamps": {},
     "branchless.revsets.alias.<name>": {
       "description": "Revset aliases: `<name>` becomes callable as `<name>()` in any revset. `$1` is replaced with the first argument, `$2` with the second, and so on. A name that matches a builtin revset function is never used, because builtins are looked up first."
     },
-    "branchless.smartlog.defaultRevset": {},
-    "branchless.smartlog.reverse": {},
-    "branchless.smartlog.showWorktrees": {},
     "branchless.test.alias.<name>": {
       "description": "Named test commands for `git test run -c <name>`. The alias named `default` runs when neither `--command` nor `--exec` is given."
     },
     "branchless.test.jobs": {
       "defaultDescription": "unset, which runs 1 job. A configured value never changes the execution strategy: only the command-line `--jobs` above 1 switches to the `worktree` strategy, so a value above 1 with `branchless.test.strategy` left at `working-copy` makes every `git test run` fail. The value is read and validated even when `--jobs` is given, and a negative value is an error.",
       "description": "Default number of parallel jobs for `git test run`. `0` runs one job per physical CPU."
-    },
-    "branchless.test.strategy": {},
-    "branchless.undo.createSnapshots": {}
+    }
   }
 }

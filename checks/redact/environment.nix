@@ -31,6 +31,9 @@
       test -z "''${REMOVED+x}"
       printf '%s\n' "$@"
     '';
+  # Kiro keeps its launcher options (package, environment) under ai.kiro.cli.
+  launcherPath = runtime: lib.optional (runtime == "kiro") "cli";
+  launcher = runtime: config: lib.attrByPath (launcherPath runtime) {} config.ai.${runtime};
   configured = evaluate: runtime: exe: reference:
     evaluate {
       ai.environmentVariables = {
@@ -39,14 +42,15 @@
         REDACT_TOKEN = reference;
         REMOVED = "root";
       };
-      ai.${runtime} = {
-        enable = true;
-        environmentVariables = {
-          PUBLIC_SETTING = "public";
-          REMOVED = null;
+      ai.${runtime} =
+        {enable = true;}
+        // lib.setAttrByPath (launcherPath runtime) {
+          environmentVariables = {
+            PUBLIC_SETTING = "public";
+            REMOVED = null;
+          };
+          package = stub exe;
         };
-        package = stub exe;
-      };
     };
   packages = reference:
     lib.mapAttrs (runtime: exe:
@@ -61,7 +65,7 @@
         inherit lib;
         pkgs = pkgs // {writeShellScript = _: text: text;};
       }).wrapPackage {
-        environmentVariables = (configured harness.evalHm "kiro" "kiro-cli" reference).config.ai.kiro.normalized.environmentVariables;
+        environmentVariables = (launcher "kiro" (configured harness.evalHm "kiro" "kiro-cli" reference).config).normalized.environmentVariables;
         package = stub "kiro-cli";
         trustedMcpTools = [];
         v3 = false;
@@ -84,7 +88,7 @@ in {
     lib.all (evaluate:
       lib.all (runtime: let
         evaluated = configured evaluate runtime runtimes.${runtime} file;
-        pool = evaluated.config.ai.${runtime}.normalized.environmentVariables;
+        pool = (launcher runtime evaluated.config).normalized.environmentVariables;
       in
         pool.REDACT_TOKEN
         == file
@@ -109,7 +113,7 @@ in {
             exit 1
           fi
           test ! -s argv
-          grep -q 'ai.${runtime}.environmentVariables.REDACT_TOKEN' diagnostics
+          grep -q 'ai.${lib.concatStringsSep "." ([runtime] ++ launcherPath runtime)}.environmentVariables.REDACT_TOKEN' diagnostics
           if grep -Fq "$sentinel" diagnostics; then echo "leak: ${runtime} failed reference diagnostics" >&2; exit 1; fi
         '')
         runtimes)}

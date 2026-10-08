@@ -4,9 +4,8 @@
 # must produce: `fails` lists guard codes that must all fire; `adds` /
 # `changes` / `deadKeysAdd` describe an output that must move with the
 # source; a mutant with none must leave the output identical to the real one.
-# What a person must write for a new name (a description, a computed
-# default's prose, a dead key's reason) is lib/git-tool-settings/rules.nix's
-# to demand; checks/git-tool-settings/rules.nix holds those cases.
+# Type requirements belong to lib/git-tool-settings/rules.nix;
+# checks/git-tool-settings/rules.nix holds those cases. Prose is optional.
 #
 # P* came with the prototype. K* are the independent review's blind spots
 # (a global option before `config`, a helper named through getattr, an argv
@@ -168,16 +167,6 @@ in [
     name = "P-key-literal-in-help";
     edits = [(replace tui "help=\"force disable revise.autoSquash behaviour\"" "help=\"force disable revise.autoSquash and revise.squashMode behaviour\"")];
     deadKeysAdd = ["revise.squashMode"];
-  }
-  {
-    name = "P-doc-only-key";
-    edits = [(replace man ".. gitconfig:: revise.gpgSign" ".. gitconfig:: revise.ghost\n\n   Documented, never read.\n\n.. gitconfig:: revise.gpgSign")];
-    fails = ["R8"];
-  }
-  {
-    name = "P-doc-mentions-unread-key";
-    edits = [(replace man "not set, the value of ``rebase.autoSquash`` is used instead." "not set, the value of ``rebase.autoSquash`` is used instead. See also ``revise.fixupMode``.")];
-    fails = ["R10"];
   }
   {
     name = "P-env-config-injection";

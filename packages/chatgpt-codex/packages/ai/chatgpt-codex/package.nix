@@ -260,10 +260,6 @@ in
               attr = "chatgpt-codex";
               dest = repoPath ../../../extracted.json;
               inherit pkgs;
-              rows = {
-                name = "chatgpt-codex";
-                path = repoPath ../../../extract/annotations.json;
-              };
             }}
           '';
         };

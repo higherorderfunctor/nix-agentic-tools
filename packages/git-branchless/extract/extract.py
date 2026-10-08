@@ -6,7 +6,7 @@ Input : the PATCHED source tree (the package's unpack + patch output), parsed
 Output: extracted.json, one record per key (see the sidecar at the bottom):
         facts only. A read with no type or doc comment has neither field, and
         a key-shaped const nothing reads is a dead key with no reason; the
-        rows in annotations.json supply them, in Nix
+        rows in annotations.json may supply them, in Nix
         (lib/git-tool-settings/rules.nix).
 Exit  : non-zero when any guard trips. Every guard names its code (F1..F15)
         so a failure says which call shape the resolver no longer

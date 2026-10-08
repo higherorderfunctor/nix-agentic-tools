@@ -7,13 +7,9 @@ applyTo: "packages/kiro-cli/checks/kiro-fhs-contract.nix,packages/kiro-cli/check
 
 # The nixpkgs FHS sandbox: what kiro can and cannot see
 
-> **Last verified:** 2026-10-03 — the overlay and module default hand consumers
-> this flake's own kiro-cli build; a pre-split nixpkgs is reached only through
-> `follows` or the overlay's fallback. The sandbox contracts below were verified
-> on 2026-08-16: `ai.kiro.useFhsSandbox = false` selects the pinned unwrapped
-> payload explicitly, and `true` stays the default. `trustedMcpTools` composes
-> inside the FHS payload so launcher dispatch reaches it under both supported
-> nixpkgs topologies, and the structural check pins that shape.
+> **Last verified:** 2026-10-07 — package selection, environment and FHS
+> controls use `ai.kiro.cli`; the recorded upstream sandbox measurements below
+> are unchanged.
 >
 > Full lineage: `git show 0057d8ed:packages/kiro-cli/docs/fhs-sandbox.md`.
 
@@ -95,11 +91,11 @@ devenv sessions do not silently lose `--trust-tools`.
 
 ## Supplying missing tools
 
-Use `ai.kiro.extraPackages` for tools Kiro needs but the synthesized root does
-not provide:
+Use `ai.kiro.cli.extraPackages` for tools Kiro needs but the synthesized root
+does not provide:
 
 ```nix
-ai.kiro.extraPackages = with pkgs; [
+ai.kiro.cli.extraPackages = with pkgs; [
   file
   iproute2
   tree
@@ -108,10 +104,10 @@ ai.kiro.extraPackages = with pkgs; [
 ```
 
 The Kiro launcher prepends `lib.makeBinPath` of those packages to PATH and then
-preserves the caller's PATH. If `ai.kiro.environmentVariables.PATH` is set, that
-explicit value becomes the preserved base instead. The wrapper references each
-package, so its store path is rooted; bubblewrap preserves the resulting PATH
-and bind-mounts `/nix`, so the tools remain executable inside the FHS root.
+preserves the caller's PATH. If `ai.kiro.cli.environmentVariables.PATH` is set,
+that explicit value becomes the preserved base instead. The wrapper references
+each package, so its store path is rooted; bubblewrap preserves the resulting
+PATH and bind-mounts `/nix`, so the tools remain executable inside the FHS root.
 Setting that Kiro-specific PATH entry to null suppresses a root
 `ai.environmentVariables.PATH`; the ambient PATH becomes the preserved base.
 
@@ -126,27 +122,27 @@ same-named FHS command therefore wins over the added package on Linux.
 The default stays upstream-compatible:
 
 ```nix
-ai.kiro.useFhsSandbox = true;
+ai.kiro.cli.useFhsSandbox = true;
 ```
 
 Consumers willing to give up the extracted-`bun` compatibility fix can select
 the pinned unwrapped payload explicitly:
 
 ```nix
-ai.kiro.useFhsSandbox = false;
+ai.kiro.cli.useFhsSandbox = false;
 ```
 
 That removes bubblewrap from Kiro's launch chain and restores the host's normal
 namespace and PATH resolution. It does not select a separately packaged binary:
 rollout patches, version pinning, TERM defaults, environment variables, secrets,
 identity materialization, and argv injection still use the same overlay payload
-and wrapper helpers. A custom `ai.kiro.package` must expose `passthru.unwrapped`
-on every rollout-resolved variant; otherwise evaluation fails with a named
-assertion instead of silently retaining the sandbox. Direct package consumers
-can make the same choice with `pkgs.ai.kiro-cli.unwrapped`. The overlay exposes
-that route even on pre-split nixpkgs (reachable only when a consumer sets
-`follows` or lands on the overlay's fallback), where it selects the
-already-direct package and is therefore a no-op.
+and wrapper helpers. A custom `ai.kiro.cli.package` must expose
+`passthru.unwrapped` on every rollout-resolved variant; otherwise evaluation
+fails with a named assertion instead of silently retaining the sandbox. Direct
+package consumers can make the same choice with `pkgs.ai.kiro-cli.unwrapped`.
+The overlay exposes that route even on pre-split nixpkgs (reachable only when a
+consumer sets `follows` or lands on the overlay's fallback), where it selects
+the already-direct package and is therefore a no-op.
 
 With the sandbox enabled, a custom FHS package used with `trustedMcpTools` must
 also expose `passthru.withFhsPayload`. Without it the FHS command shadows the
@@ -260,9 +256,9 @@ ls /nix/store/*-kiro-cli-*fhsenv-rootfs/usr/bin | wc -l   # 233 = the whole worl
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-10-07 — environment references resolve through the
-> shared redact reader before launching Kiro; PATH composition and the separate
-> MCP-secret path retain their existing ordering.
+> **Last verified:** 2026-10-07 — launcher controls use `ai.kiro.cli`;
+> delegate-routing defaults the two workflow tweaks on for managed Kiro with
+> workflows enabled.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show 0057d8ed:packages/kiro-cli/docs/launcher-argv.md`.
@@ -330,7 +326,7 @@ $ kiro-cli --v3 acp --trust-tools=fs_read
 error: the following arguments are not supported with --agent-engine=v3: --trust-tools
 ```
 
-So `ai.kiro.v3 = true` gives an ACP session the v3 engine with **no
+So `ai.kiro.cli.v3 = true` gives an ACP session the v3 engine with **no
 `--agent-engine` translation in this repo**. Do not add one.
 
 **A caller's explicit `--agent-engine` wins, upstream.**
@@ -359,8 +355,8 @@ Two different rules, for two different reasons — do not "make them consistent"
 
 ### `KIRO_KAS_SERVER_PATH` — an ENV injection, not a flag
 
-`ai.kiro.tweaks` adds a third thing the wrapper does. It is deliberately not in
-the table above, because it is not argv at all:
+`ai.kiro.cli.tweaks` adds a third thing the wrapper does. It is deliberately not
+in the table above, because it is not argv at all:
 
 | Binary                         | Variable               | When                                                                                              |
 | ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------- |
@@ -373,9 +369,11 @@ Four properties worth knowing before touching it:
   `kiro-cli-chat` invoked directly is a supported entry point, and it is the
   binary that actually spawns node. Exporting in one place only patches the
   composed path and silently misses the direct one.
-- **Every tweak is opt-in; the default is the stock bundle.** With no tweak
-  enabled there is no materializer, no wrapper reason and no patched copy.
-  `tweaks.identity.text` supplies inline identity prose and
+- **The CLI option defaults select the stock bundle.** Delegate routing supplies
+  `mkDefault true` for both workflow tweaks when it reaches a managed CLI with
+  `cli.workflows.enable`; an explicit false wins. Identity remains opt-in. With
+  no tweak enabled there is no materializer, no wrapper reason and no patched
+  copy. `tweaks.identity.text` supplies inline identity prose and
   `tweaks.identity.source` reads a packaged file;
   `tweaks.identity.enable = false` disables either form explicitly. The boolean
   `tweaks.stripVendorWorktreeSteering` (default false) removes the vendor
@@ -428,15 +426,14 @@ each opt-in tweak selecting the patched path on both backends.
 
 ### `extraPackages` — a PATH prefix, not an FHS rebuild
 
-`ai.kiro.extraPackages` adds one more environment-only injection to both the
+`ai.kiro.cli.extraPackages` adds one more environment-only injection to both the
 launcher and direct chat wrappers. Their store-backed `bin` directories are
 prepended after ordinary and secret environment exports, so an explicit
-`ai.kiro.environmentVariables.PATH` (literal or redact reference) becomes the
-base and the requested packages are first at that wrapper boundary. With no
-explicit PATH, the caller's inherited value remains after the prefix. Setting
-the Kiro-specific PATH entry to null suppresses a root
-`ai.environmentVariables.PATH`, restoring the ambient base before
-`extraPackages` is prepended.
+`ai.kiro.cli.environmentVariables.PATH` becomes the base and the requested
+packages are first at that wrapper boundary. With no explicit PATH, the caller's
+inherited value remains after the prefix. Setting the Kiro-specific PATH entry
+to null suppresses a root `ai.environmentVariables.PATH`, restoring the ambient
+base before `extraPackages` is prepended.
 
 That is not final override precedence on Linux. The upstream FHS `/init` then
 sources `/etc/profile`, which puts `/run/wrappers/bin:/usr/bin:/usr/sbin` ahead
@@ -548,13 +545,13 @@ environment exports, `extraPackages`, identity materialization, and `--v3` are
 inherited across bubblewrap and keep their established ordering. Moving only the
 shadowed chat-specific injection is what limits the behavioral change.
 
-`ai.kiro.useFhsSandbox = false` skips this package-composition layer entirely
-and applies the ordinary wrappers to `passthru.unwrapped`. That is an explicit
-compatibility tradeoff, not the default; see [`fhs-sandbox.md`](fhs-sandbox.md)
-for the extracted-`bun` risk. Module assertions inspect the rollout-resolved
-package and reject a custom FHS package that advertises an unwrapped payload but
-cannot recompose it, because accepting that shape would recreate the same
-unreachable outer trust wrapper.
+`ai.kiro.cli.useFhsSandbox = false` skips this package-composition layer
+entirely and applies the ordinary wrappers to `passthru.unwrapped`. That is an
+explicit compatibility tradeoff, not the default; see
+[`fhs-sandbox.md`](fhs-sandbox.md) for the extracted-`bun` risk. Module
+assertions inspect the rollout-resolved package and reject a custom FHS package
+that advertises an unwrapped payload but cannot recompose it, because accepting
+that shape would recreate the same unreachable outer trust wrapper.
 
 **What the launcher forwarded in the pre-split measurement**, captured with a
 `kiro-cli-chat` decoy first on PATH. The wrapper test continues to pin these
@@ -642,7 +639,7 @@ declaratively — the grant is simply absent for that session.
 >
 > The real gate is a **JSON rollout manifest carried in the ELF's rodata**, in
 > TWO identical copies, parsed at runtime — see `vu.mkKiroRolloutPatch` and
-> `ai.kiro.unlockedRolloutFeatures`. Its feature names are extracted into
+> `ai.kiro.cli.unlockedRolloutFeatures`. Its feature names are extracted into
 > `packages/kiro-cli/extracted.json` under `rolloutFeatures`, so read that file
 > rather than re-deriving the list by hand (the extractor found two entries a
 > careful manual read had missed). Note the manifest's own `workflows`
@@ -658,8 +655,8 @@ declaratively — the grant is simply absent for that session.
 > BOTH conditions gate it — the flag must be unlocked AND the engine must be v3.
 > On the legacy engine the commands are filtered out wholesale.
 >
-> That is why `ai.kiro.unlockedRolloutFeatures` asserts `v3 = true`. Without the
-> assertion the misconfiguration is silent in the worst way: the binary is
+> That is why `ai.kiro.cli.unlockedRolloutFeatures` asserts `v3 = true`. Without
+> the assertion the misconfiguration is silent in the worst way: the binary is
 > genuinely patched, the option is genuinely set, and `/workflow` is simply
 > never there. It cost a consumer repo a debugging session before the assertion
 > existed.
@@ -729,7 +726,7 @@ A `chat` probe needs input supplied. Without it, `--no-interactive` reports
 engine-conflict check, so it cannot tell an accepted flag from a rejected one.
 `acp` rejects a conflicting option before it reads any input.
 
-**Consequence for a consumer:** with `ai.kiro.v3 = true`, an invocation like
+**Consequence for a consumer:** with `ai.kiro.cli.v3 = true`, an invocation like
 `kiro-cli acp --model auto` fails with upstream's conflict error. That is
 deliberate. The alternative — withholding `--v3` whenever a conflicting option
 appears — would silently downgrade the engine the user asked for, and would

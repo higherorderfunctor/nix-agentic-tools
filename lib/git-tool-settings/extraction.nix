@@ -116,17 +116,9 @@ in {
         ${jq} -r '.settings | keys | "ok — all \(length) extracted keys are strings in ${installed}"' ${committed} >"$out"
       '';
     }
-    # Drift: the committed sidecar equals a fresh extraction, and the rows
-    # file accepts every name in it (./rules.nix). The update pipeline
-    # commits whatever the extractor says, plus a `{}` row for each new name
-    # the rule accepts, so correctness rests on the guards, the mutants and
-    # the rule's failures.
+    # Compare fresh facts and reject stale or invalid hand annotations.
     // mkDriftCheck {
       inherit committed extracted name sidecar;
       inherit (rules) results;
-      rows = {
-        path = "${dirOf sidecar}/extract/annotations.json";
-        value = rules.file;
-      };
     };
 }

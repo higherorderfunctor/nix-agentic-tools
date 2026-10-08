@@ -792,11 +792,7 @@ function inertConfigKeys(
       .getJSDocTags(member)
       .find((candidate) => candidate.tagName.text === "deprecated");
     if (!tag || !member.name) continue;
-    const text = ts.getTextOfJSDocComment(tag.comment)?.trim();
-    if (!text)
-      fail(
-        `KimchiConfig.${member.name.getText()} is @deprecated without a reason`,
-      );
+    const text = ts.getTextOfJSDocComment(tag.comment)?.trim() ?? "";
     deprecated.set(syntaxName(member.name, ts), text);
   }
   const loaded = new Map();
@@ -892,7 +888,6 @@ function validateHandShape(name, descriptor, reader, root, ts) {
 function extractConfig(
   sourceFile,
   discovered,
-  declarations,
   annotations,
   kimchiSources,
   checker,
@@ -2193,7 +2188,6 @@ async function main() {
     config: extractConfig(
       configSource,
       configTsReads.config,
-      declarations,
       annotations.config,
       sourceFiles.filter((sourceFile) =>
         kimchiPaths.includes(sourceFile.fileName),
@@ -2248,6 +2242,15 @@ async function main() {
       ts,
     ),
   };
+  // The pinned release reads 22 config keys.
+  if (Object.keys(result.config.keys).length < 11)
+    fail("config surface fell below 11 keys");
+  // The pinned release reads 214 environment variables.
+  if (Object.keys(result.environment.variables).length < 100)
+    fail("environment surface fell below 100 variables");
+  // The pinned release reads 60 harness keys.
+  if (Object.keys(result.harness.keys).length < 30)
+    fail("harness surface fell below 30 keys");
   const encoded = `${JSON.stringify(result, null, 2)}\n`;
   if (args.out === "-") process.stdout.write(encoded);
   else await writeFile(args.out, encoded);

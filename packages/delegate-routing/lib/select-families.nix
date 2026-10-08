@@ -33,4 +33,22 @@
       (flatten families));
 in {
   inherit automatic candidates flatten select;
+
+  # Rendered skills and acceptance inventory share this view. An explicit
+  # technique enable cannot advertise a workflow the CLI config disables.
+  effectiveTechniques = config: let
+    cli = config.ai.kiro.cli or {};
+    workflowAvailable =
+      (cli.workflows.enable or false)
+      && (cli.v3 or false)
+      && (cli.native.settings.chat.enableWorkflows or null) != false;
+  in
+    lib.mapAttrs (runtime: settings:
+      lib.mapAttrs (name: node:
+        node
+        // {
+          enable = node.enable && (runtime != "kiro" || name != "run_workflow" || workflowAvailable);
+        })
+      settings.techniques)
+    config.ai.programs.delegate-routing.runtimes;
 }

@@ -7,8 +7,8 @@ applyTo: "packages/kimchi/**"
 
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-10-07 — API keys and Git tokens use redact references;
-> environment references are read at launch, with literal credentials rejected.
+> **Last verified:** 2026-10-07 — extractor floors guard config, environment and
+> harness surfaces; secret environment rows must state what they control.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkRuntime` participant,
 closest in shape to `mkKiro` (dual config trees with runtime-writable user
@@ -94,26 +94,27 @@ unless they are scalars, because `filterNulls` does not recurse into lists. So a
 key upstream adds to pi's `Settings` or to config.ts's `readConfigExtras`
 becomes an option at the next re-extraction, and a key it removes fails its
 consumer as an unknown option instead of writing bytes nothing reads. Every
-option is `nullOr` with a null default. Config rows record acceptance and may
-carry `aliasFor` or `excluded`; harness rows may carry `type` or `excluded`.
-`extract/rules.nix` defines the config, environment and harness surfaces once,
-using the shared `extractedLib` function’s `reconcile`. Recipes receive the
-function through `scopeArgs`, checks through module arguments. `mkKimchi` binds
-`lib.ai.extracted` independently of runtime package replacements. Consumers
-merge those rows with the committed facts; extraction itself emits facts and
-clones alias types from the rows' `aliasFor` references. Alias keys and inert
-keys have no option. A key is inert when upstream tags its `KimchiConfig` member
-`@deprecated` and no Kimchi code consumes it: nothing reads the loaded member,
-and nothing outside `config.ts` reads the raw `readConfigExtras` member, while
-`config.ts` still parses it to warn that it is obsolete. A release that consumes
-it again clears the flag, and the key becomes an option. Secret exclusions
-(`apiKey`, its alias, and `gitTokens`) live in the config rows, naming
-`ai.kimchi.apiKey` or `ai.kimchi.gitTokens` as their delivery path. The option
-generator keeps two hand tables: one refinement (`modelRoles`, whose role names
-and single-string roles come from the sidecar while the non-blank and non-empty
-checks do not), and one description note. `report.stale*` lists any refinement
-or note whose path the sidecar lost, and `checks/native-options.nix` fails on
-it. Reconcile detects stale exclusion rows.
+option is `nullOr` with a null default. Config annotations may carry `aliasFor`
+or `excluded`; harness annotations may carry `type` or `excluded`. Names whose
+facts suffice need no row. `extract/rules.nix` defines the config, environment
+and harness surfaces once, using the shared `extractedLib` function’s
+`reconcile`. Recipes receive the function through `scopeArgs`, checks through
+module arguments. `mkKimchi` binds `lib.ai.extracted` independently of runtime
+package replacements. Consumers merge those rows with the committed facts;
+extraction itself emits facts and clones alias types from the rows' `aliasFor`
+references. Alias keys and inert keys have no option. A key is inert when
+upstream tags its `KimchiConfig` member `@deprecated` and no Kimchi code
+consumes it: nothing reads the loaded member, and nothing outside `config.ts`
+reads the raw `readConfigExtras` member, while `config.ts` still parses it to
+warn that it is obsolete. A release that consumes it again clears the flag, and
+the key becomes an option. Secret exclusions (`apiKey`, its alias, and
+`gitTokens`) live in the config rows, naming `ai.kimchi.apiKey` or
+`ai.kimchi.gitTokens` as their delivery path. The option generator keeps two
+hand tables: one refinement (`modelRoles`, whose role names and single-string
+roles come from the sidecar while the non-blank and non-empty checks do not),
+and one description note. `report.stale*` lists any refinement or note whose
+path the sidecar lost, and `checks/native-options.nix` fails on it. Reconcile
+detects stale exclusion rows.
 
 The extractor has hand-written parts of its own, each guarded only as far as
 stated. Kimchi's harness additions (`fermentV2`, `modelRoles` and the rest, each
@@ -131,10 +132,10 @@ hand list instead. The option generator reads only reconciled entries, so an
 ignored read never becomes an option. An untyped read becomes an untyped JSON
 option, which both `report.untyped` and the drift check fail until its row
 supplies a `type`. As in config, a string key the classifier calls secret is
-never auto-added, and its row must carry `excluded`. Other direct readers of the
-harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts` reads
-`model` and `provider` for telemetry), so a key upstream adds there meets the
-closed submodule as an unknown option with no drift signal. The config.json
+never accepted without a recorded row carrying `excluded`. Other direct readers
+of the harness file are not censused (in 1.1.37, `telemetry/config-snapshot.ts`
+reads `model` and `provider` for telemetry), so a key upstream adds there meets
+the closed submodule as an unknown option with no drift signal. The config.json
 shapes of `teleport`, `gitTokens` and the `surveys` record have no declared
 type, so they are written by hand and pinned both ways to their readers' runtime
 guards (`readTeleportCompactHintEnabled`, `readGitToken`, `readSurveyConfig`):
@@ -160,42 +161,35 @@ factory sets itself (`KIMCHI_API_KEY`, `KIMCHI_ENABLE_RESOURCES`,
 which fails evaluation if the pinned Kimchi no longer reads it or starts
 overwriting it.
 
-The extractor emits every resolved environment name with `type = "string"`,
-which feeds the secret classifier for names without a recorded row. Secret names
-are never auto-added, and their rows must carry `controls` prose, so an
-auto-added `{}` row cannot stand in for the review of a name the classifier
-later calls secret. Otherwise `controls` is optional and non-blank when given;
-grouped `environmentIgnored` names expand into `ignored = "<reason>"` rows
-inside `rules.nix`, so they stay in the facts but disappear from the consumer
-view. Reconcile reports removed rows or users, unresolved required fields,
-missing secret delivery rows, invalid or fact-shadowing rows, duplicate ignore
-names or controls/ignore collisions, and unrecorded derivable names. Collision
-rows keep their controls or ignore reason and carry a field naming the
-collision, so `bad-row` reports its cause. Rows fill only null or absent facts
-unless their `replace` list explicitly names a field. Ignored rows skip
-required-field checks. Only string values and string-to-string maps enter the
-shared runtime-values classifier.
+The extractor emits every resolved environment name with `type = "string"`. A
+secret name needs a recorded row stating what it controls; ordinary names may
+carry optional `controls` prose. Supplied controls must be non-blank. Grouped
+`environmentIgnored` names expand into `ignored = "<reason>"` rows inside
+`rules.nix`, preserving facts while omitting them from the consumer view.
+Reconcile rejects stale hand rows or uses, missing required types or secret
+delivery fields, invalid or fact-shadowing rows, and duplicate environment rows
+or groups. Collision rows retain their prose and carry a field naming the
+collision so `bad-row` explains it. Rows fill absent or null facts unless
+`replace` names a field. Ignored rows skip required-field checks. Only strings
+and string-to-string maps enter the shared classifier.
 
-Regeneration first writes the sidecar, then evaluates
-`checks.<system>.kimchi-extracted.passthru.rows` against it and adds `{}` rows
-for new derivable, non-secret names. The drift and unrecorded diagnostics print
-the same rows command; row failures appear only after the sidecar matches.
-Failures remain data: regeneration completes and the update PR carries the facts
-and rows, while `kimchi-extracted` fails on anything that still needs a human. A
-new typed config key becomes an option automatically, and a new non-secret
-environment name is accepted with a `{}` row. Pi's own names follow Kimchi's
-`piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not pi's `PI_` default). The
-extractor uses the TypeScript compiler's checker for declared keys and types and
-syntax tree queries for environment access sites, while config queries
-cross-check compiler types against top-level, nested, and array-element runtime
-validation guards. Added lines from pi patch files are synthesized as source
-files and bound in isolated TypeScript programs before alias resolution; using
-the main program's checker on those foreign nodes can crash inside the compiler.
-A declaration is never taken by bare name when a reference can pick it:
-config.ts's functions and interfaces resolve in config.ts's own scope (Kimchi
-1.1.37 has a second `loadConfig`), pi's `Settings` comes from
-`settings-manager.d.ts`'s exports, and the harness `definitions` are the
-interfaces `Settings` references, collected through the checker (pi also
+Regeneration writes the sidecar only; hand annotations are maintained
+separately. Reconciliation failures remain data until `kimchi-extracted` checks
+them after sidecar drift. New typed config keys become options and ordinary
+environment names are accepted without empty rows. Removed names disappear; a
+hand row or real consumer that still uses one makes the update fail. Pi's own
+names follow Kimchi's `piConfig.name` (`KIMCHI_CODING_AGENT_SESSION_DIR`, not
+pi's `PI_` default). The extractor uses the TypeScript compiler's checker for
+declared keys and types and syntax tree queries for environment access sites,
+while config queries cross-check compiler types against top-level, nested, and
+array-element runtime validation guards. Added lines from pi patch files are
+synthesized as source files and bound in isolated TypeScript programs before
+alias resolution; using the main program's checker on those foreign nodes can
+crash inside the compiler. A declaration is never taken by bare name when a
+reference can pick it: config.ts's functions and interfaces resolve in
+config.ts's own scope (Kimchi 1.1.37 has a second `loadConfig`), pi's `Settings`
+comes from `settings-manager.d.ts`'s exports, and the harness `definitions` are
+the interfaces `Settings` references, collected through the checker (pi also
 declares an all-required `CompactionSettings` in `compaction.d.ts`). The Kimchi
 harness schemas still looked up by name must match exactly one declaration among
 the modules reachable from `src/entry.ts`, so the dead
@@ -311,25 +305,23 @@ read from the sidecar's `resources` type (`src/resources/types.ts`
 variable on commas and trims each entry, so such a key would enable a different
 id than the one declared. The variable is an additive comma list
 (`store.ts:45-61`), so the wrapper must not `--set` it: a caller's value, or an
-`ai.kimchi.environmentVariables` entry (which is exported first), is kept and
-the declared ids are appended to it. The wrapper check runs the launcher against
-a stub for an unset, empty and non-empty caller value rather than grepping its
+`ai.kimchi.environmentVariables` entry (which is `--set` first), is kept and the
+declared ids are appended to it. The wrapper check runs the launcher against a
+stub for an unset, empty and non-empty caller value rather than grepping its
 text. Locked by `module-kimchi-devenv-env-shadowed-resources` and
 `module-kimchi-wrapper-builds`.
 
-`ai.kimchi.gitTokens.<host>` takes a
-`redact.file { path = "/run/secrets/token"; }` or
-`redact.command { path = "/path/to/reader"; }` reference. A null entry is
-omitted. Kimchi reads git tokens only from the user `config.json` and has no
-environment input for them
+`ai.kimchi.gitTokens.<host>` takes a `{ file | helper }` credential, the
+`lib/credentials.nix` shape. Kimchi reads git tokens only from the user
+`config.json` and has no environment input for them
 (`src/extensions/teleport/provisioning/git-token.ts`), so this branch cannot use
-shared delivery: its `content.run` renderer exports each token from its file or
-command and merges it into the declaration with `jq` when the writer runs. It
-remains a 0400 `copy-ro` file; shared delivery accepts only `content.value`. The
-store holds the credential path. The writer is ordered after the `secrets`
-token. `native.settings` has no `gitTokens` option, which would write the secret
-into the store. Devenv rejects the option by name. The API key needs no leaf:
-Kimchi prefers `KIMCHI_API_KEY` over the file everywhere it reads the key
+shared delivery: its `content.run` renderer exports each token from its file and
+merges it into the declaration with `jq` when the writer runs. It remains a 0400
+`copy-ro` file; shared delivery accepts only `content.value`. The store holds
+the credential path. The writer is ordered after the `secrets` token.
+`native.settings` has no `gitTokens` option, which would write the secret into
+the store. Devenv rejects the option by name. The API key needs no leaf: Kimchi
+prefers `KIMCHI_API_KEY` over the file everywhere it reads the key
 (`loadConfig`, the telemetry and mismatch paths in `src/config.ts`), and the
 launcher exports it from `ai.kimchi.apiKey`. With it set, an in-app login or
 logout changes nothing the next launch reads. Locked by
@@ -541,25 +533,24 @@ key Kimchi cannot read. Locked by `module-kimchi-config-json-nested`.
 
 ## Gotcha: apiKey is a runtime SOPS credential, never a store literal
 
-`apiKey` has type `redact.types.redacted` with a null default. Set it to
-`redact.file { path = "/run/secrets/kimchi-key"; }` or a `redact.command`
-reference. The shared reader exports `KIMCHI_API_KEY` through
-`wrapProgram --run` at launch; only the reference path enters the store. Failed,
-unreadable, empty or NUL-containing inputs abort before Kimchi runs. Diagnostics
-name `ai.kimchi.apiKey` and never print the value or command output.
-
-The root and Kimchi-specific environment pools use the same reader. Ordinary
-keys accept literals or references; credential-named keys require references.
-Neither pool writes the developer's session environment.
+`apiKey` is `lib.mcp.mkCredentialsOption "KIMCHI_API_KEY"` — the same
+`{ file | helper }` discriminated union the MCP servers use. The key is exported
+at launch via `lib.mcp.mkCredentialsSnippet`
+(`KIMCHI_API_KEY="$(<coreutils>/bin/cat <file>)"`) injected through
+`wrapProgram --run`, so the decrypted secret is read at runtime and the store
+holds only the **path**, never the key. Never reintroduce a plaintext `str`
+apiKey funneled into `--set`: that bakes the secret into a world-readable
+`/nix/store` wrapper. Mimic the existing credential pattern; do not invent a new
+secret surface.
 
 ## Gotcha: wrapProgram separator
 
 Join `wrapProgram` flags with a single space — `lib.concatStringsSep " "`,
 matching `mkKiro` / `mkCopilot`. A `" \<newline>  "` separator inside a regular
-Nix string collapses the backslash, so a later flag runs as its own command and
-exits 127. Environment values are exported at launch through a runtime block.
-The package is wrapped in both backends, preserving the same credential and env
-delivery. Locked by `module-kimchi-wrapper-builds`.
+Nix string collapses the backslash, so with two or more env vars the second
+`--set` runs as its own command → `exit 127`. The package is wrapped in **both**
+backends (the wrapper owns the env vars and the credential export), so HM and
+devenv stay at parity by construction. Locked by `module-kimchi-wrapper-builds`.
 
 ## Orientation-only steering
 

@@ -1,8 +1,9 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-10-07 — launcher environment literals and redact
-> references use shared runtime exports; configured values retain precedence
-> over the ambient environment.
+> **Last verified:** 2026-10-07 — `launcherOptionsPath` places Kiro environment
+> and shell options, including their normalized inputs, under `ai.kiro.cli`;
+> launcher environment literals and redact references use shared runtime
+> exports, and configured values retain precedence over the ambient environment.
 >
 > Full lineage: `git show 0057d8ed:dev/fragments/ai-module/shell-option.md`.
 
@@ -31,9 +32,8 @@ it cannot reintroduce the `_module.args` recursion documented against
 A same-named native option does not imply normalized-pool support.
 Runtime-shaped passthrough now lives under `native.settings`, independently of
 the capability list. Normalized `settings` is the deliberate uniform exception:
-all five runtimes list it so the same closed schema is available at every
-runtime scope, even when a particular field currently has a lossless native
-lowering only for a subset such as Claude and Codex.
+Claude, Codex, Copilot and Kimchi list it; Kiro excludes it because effort is
+persisted per model.
 
 ### `ai.shell` deliberately uses null-as-inherit
 
@@ -72,9 +72,10 @@ feature default without replacing unrelated leaves.
 
 ### Shell is one capability entry
 
-`mkBackendTransform.nix` declares `ai.<name>.shell` and computes `resolvedShell`
-only when `shell` appears in the app record's `supportedPools`. There is no
-sibling shell-specific capability flag.
+`mkBackendTransform.nix` declares `shell` below the record's
+`launcherOptionsPath` (`ai.kiro.cli.shell` for Kiro, `ai.<name>.shell`
+elsewhere) and computes `resolvedShell` only when `shell` appears in the app
+record's `supportedPools`. There is no sibling shell-specific capability flag.
 
 | runtime | knob                       | delivery                                |
 | ------- | -------------------------- | --------------------------------------- |
@@ -107,8 +108,8 @@ The standing decision is to keep `ai.shell = null`: null means the module does
 not choose a shell, consistently across runtimes. Consumers who want a stable
 shell can set `ai.shell = pkgs.bashInteractive` (or a Kiro-specific override),
 and consumers willing to give up the extracted-`bun` compatibility wrapper can
-set `ai.kiro.useFhsSandbox = false`. Shell selection and namespace selection are
-independent choices; neither silently implies the other.
+set `ai.kiro.cli.useFhsSandbox = false`. Shell selection and namespace selection
+are independent choices; neither silently implies the other.
 
 ### NEVER write the shell environment
 
@@ -198,13 +199,13 @@ three runtimes demonstrably do not perform.
   `module-ai-shell-explicit-env-beats-typed-{codex,kiro}`; change them together
   or not at all.
 - **Always-on process defaults do not write hidden normalized-pool entries.**
-  `ai.<cli>.environmentVariables` is the consumer's replacement/negation
-  surface, and definition provenance treats package claims there as owned API.
-  Internal defaults such as the sandbox-safe SSH command therefore ride
-  `ai._sandboxSafeSshCommand` / the `resolvedShell` callback argument and merge
-  under consumer values at the wrapper call site. Opt-in packages may publish
-  documented per-runtime pool entries; two packages still cannot own the same
-  key and scope. See `collision-semantics.md`.
+  `ai.<cli>.environmentVariables` (Kiro: `ai.kiro.cli.environmentVariables`) is
+  the consumer's replacement/negation surface, and definition provenance treats
+  package claims there as owned API. Internal defaults such as the sandbox-safe
+  SSH command therefore ride `ai._sandboxSafeSshCommand` / the `resolvedShell`
+  callback argument and merge under consumer values at the wrapper call site.
+  Opt-in packages may publish documented per-runtime pool entries; two packages
+  still cannot own the same key and scope. See `collision-semantics.md`.
 
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.

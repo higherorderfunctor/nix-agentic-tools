@@ -61,6 +61,52 @@ in {
         && (builtins.tryEval (ai.app.mkRuntime (base // {hm.installPackage = _: pkgs.hello;}))).success
     );
 
+    factory-launcher-options-path = mkTest "launcher-options-path" (let
+      base = {
+        inherit pkgs;
+        name = "testapp";
+        defaults.package = pkgs.hello;
+      };
+      transformed = backend: record: config:
+        lib.evalModules {
+          modules = [
+            ai.sharedOptions
+            (
+              if backend == "hm"
+              then hmStubs
+              else devenvStubs
+            )
+            (ai.app.${backend + "Transform"} record)
+            {inherit config;}
+          ];
+        };
+      invalid = ["cli" [""] [1] null];
+      check = backend: let
+        record = ai.app.mkRuntime (base // {launcherOptionsPath = ["cli"];});
+        eval = config: transformed backend record config;
+        packages = evaluated:
+          if backend == "hm"
+          then evaluated.config.home.packages
+          else evaluated.config.packages;
+        normal = eval {ai.testapp.enable = true;};
+        custom = transformed backend (record // {installPackage = _: throw "null package called installPackage";}) {
+          ai.testapp = {
+            enable = true;
+            cli.package = null;
+          };
+        };
+      in
+        packages normal
+        == [pkgs.hello]
+        && packages custom == []
+        && !(normal.options.ai.testapp ? package)
+        && lib.all (path:
+          !(builtins.tryEval (ai.app.mkRuntime (base // {launcherOptionsPath = path;}))).success
+          && !(builtins.tryEval (transformed backend (record // {launcherOptionsPath = path;}) {}).config.ai.testapp.enable).success)
+        invalid;
+    in
+      lib.all check ["devenv" "hm"]);
+
     # A native agent layer is one pair on the record, `agentNativeType` with
     # `agentTransformer`, and it lowers the agents pool. Either half alone, or
     # the pair on a record without that pool, must fail where the record is

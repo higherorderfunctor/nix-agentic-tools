@@ -16,17 +16,27 @@
     )
     .config
     .warnings;
-  records = lib.mapAttrs (_: file:
-    import file {
+  inherit
+    (import ../../lib/ai/option-paths.nix {
       lib = harness.hmLib;
       inherit pkgs;
-    }) {
-    claude = ../../packages/claude-code/lib/mkClaude.nix;
-    codex = ../../packages/chatgpt-codex/lib/mkCodex.nix;
-    copilot = ../../packages/copilot-cli/lib/mkCopilot.nix;
-    kimchi = ../../packages/kimchi/lib/mkKimchi.nix;
-    kiro = ../../packages/kiro-cli/lib/mkKiro.nix;
-  };
+    })
+    records
+    ;
+  declaredPaths = lib.genAttrs policy.modes (mode:
+    map (option: option.loc) (lib.optionAttrSetToDocList
+      (
+        if mode == "hm"
+        then harness.evalHm {}
+        else harness.evalDevenv {}
+      ).options));
+  # Refuse an inputOptions path that is not a declared option, including the
+  # retired ai.kiro.native.settings and ai.kiro.environmentVariables paths.
+  inputsDeclared = lib.all (row:
+    lib.all (path:
+      lib.assertMsg (builtins.elem path declaredPaths.${row.mode})
+      "delivery row ${policy.key row}: inputOptions path ${lib.showOption path} is not a declared option")
+    (row.inputOptions or [])) (lib.concatMap policy.writersOf policy.rows);
   contains = needle: messages: lib.any (lib.hasInfix needle) messages;
   sample = {
     agents.probe = {
@@ -92,7 +102,7 @@
       && empty == []
       && (!supported || warns ["ai" row.ecosystem row.surface])
     else warns path;
-  # `ai.kiro.trustedMcpTools` is NOT a case here: the wrapper appends
+  # `ai.kiro.cli.trustedMcpTools` is NOT a case here: the wrapper appends
   # `--trust-tools` on both backends, so a devenv consumer setting it has no
   # delivery gap to be told about. The narrower withhold it does have — the v3
   # `acp` arm and Darwin's bundle-discovery launcher — is asserted by
@@ -403,7 +413,7 @@
     declaration = {
       ai.kiro = {
         enable = true;
-        inherit trustedMcpTools v3;
+        cli = {inherit trustedMcpTools v3;};
       };
     };
   in
@@ -435,16 +445,16 @@ in {
   checks = {
     ai-warnings-darwin-trust = harness.mkTest "ai-warnings-darwin-trust" (
       # Withheld: Darwin under either engine, and the v3 `acp` arm anywhere.
-      contains "ai.kiro.trustedMcpTools" (trustWarnings {
+      contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "hm";
         darwin = true;
       })
-      && contains "ai.kiro.trustedMcpTools" (trustWarnings {
+      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "devenv";
         darwin = true;
         v3 = true;
       })
-      && contains "ai.kiro.trustedMcpTools" (trustWarnings {
+      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "devenv";
         v3 = true;
       })
@@ -472,6 +482,7 @@ in {
       && lib.assertMsg deliveredLspSilent "an LSP cell warns about `extensions`, or warns with no gap recorded for it"
       && lib.assertMsg nativeAgentsListed "config/ai-delivery-facts.nix must list `ai.<runtime>.native.agents` as an agents input exactly for the runtimes whose record has `agentNativeType`"
     );
+    ai-warnings-delivery-input-options = harness.mkTest "ai-warnings-delivery-input-options" inputsDeclared;
     ai-warnings-mcp-assertions = harness.mkTest "ai-warnings-mcp-assertions" (
       let
         valid = mcp.evalSettings "gitlab-mcp" {

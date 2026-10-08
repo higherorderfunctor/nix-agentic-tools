@@ -33,7 +33,7 @@
 }: let
   patcher = ./kiro-bundle-patch.py;
 in
-  # Both backends select the same `ai.kiro.tweaks`; every tweak defaults off.
+  # Both backends select the same `ai.kiro.cli.tweaks`; every tweak defaults off.
   # `replace` names the enabled fixed-text tweaks (the patcher's `FIXED` keys).
   {
     cliVersion,

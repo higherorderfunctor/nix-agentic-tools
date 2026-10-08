@@ -559,14 +559,14 @@ in {
         Shell each enabled AI app uses to execute the commands it runs.
         `null` (the default) does not touch the shell, so every existing
         consumer keeps current behavior and opting in is explicit.
-        Override per app with `ai.<name>.shell`; a non-null per-app value
+        Override per app with `ai.<name>.shell` (`ai.kiro.cli.shell` for Kiro); a non-null per-app value
         wins, `null` inherits this one.
 
         Fans out to **Claude, Codex and Kiro only**. Claude reads
         `CLAUDE_CODE_SHELL` from its settings file; Codex and Kiro read
         `SHELL` from their own process environment and receive it baked into
         their launcher wrapper, on both backends. An explicit
-        `ai.<name>.environmentVariables.SHELL` beats this option, the same way
+        `ai.<name>.environmentVariables.SHELL` (`ai.kiro.cli.environmentVariables.SHELL` for Kiro) beats this option, the same way
         an explicit `settings.env` entry beats it for Claude. Copilot and
         Kimchi are
         deliberately excluded rather than silently ignored: neither one's

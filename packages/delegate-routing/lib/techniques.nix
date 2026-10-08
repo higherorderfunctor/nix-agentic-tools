@@ -101,6 +101,7 @@
   kiro = {
     invoke_sub_agent = {
       kind = "subagent";
+      # docs/delegates/system-prompt.md: pr-hl-invoke, pr-acp-invoke.
       modes = ["headless" "acp"];
       notes = "inherits the session model";
       pinsEffort = false;
@@ -109,6 +110,7 @@
     "kiro-cli chat" = {
       command = ''kiro-cli chat --no-interactive --model <id> --effort <effort> "<prompt>"'';
       kind = "external";
+      # docs/delegates/tools.md: codex:R3 v3-headless.
       modes = ["headless"];
       notes = "models with no effort control ignore --effort";
       pinsEffort = true;
@@ -123,6 +125,7 @@
     };
     orchestrate_subagent = {
       kind = "subagent";
+      # docs/delegates/tools.md: claude:h3-all, codex:R6; system-prompt.md: pr-acp-orch.
       modes = ["interactive" "acp"];
       notes = "some ACP clients enable it in place of invoke_sub_agent";
       pinsEffort = false;
@@ -130,7 +133,8 @@
     };
     run_workflow = {
       kind = "workflow";
-      modes = ["interactive"];
+      # docs/delegates/system-prompt.md: pr-hl-wf, pr-acp-wf; tools.md: claude:k-wfpins.
+      modes = ["interactive" "headless" "acp"];
       notes = "`modelId`/`effortLevel` per step (step > workflow > session); hidden unless workflows are enabled; an unknown modelId fails mid-run, so put pinned steps first";
       pinsEffort = true;
       pinsModel = true;

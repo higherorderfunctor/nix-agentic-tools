@@ -107,11 +107,6 @@
     unset-is-null =
       leafValues != [] && lib.all (v: v == null || v == {}) leafValues;
 
-    upstream-default-is-described =
-      lib.hasInfix "`\"working-copy\"`" (optionAt real "branchless.test.strategy").description
-      && lib.hasInfix "physical CPU" (optionAt real "branchless.test.jobs").description
-      && lib.hasInfix "never changes the execution strategy" (optionAt real "branchless.test.jobs").description;
-
     jobs-range =
       accepts real {branchless.test.jobs = 0;}
       && accepts real {branchless.test.jobs = 2147483647;}

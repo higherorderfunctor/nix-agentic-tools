@@ -42,9 +42,9 @@ def workflows(config_dir):
         enabled = False
     if not enabled:
         print(
-            "WARNING: ai.kiro.unlockedRolloutFeatures includes workflows but "
+            "WARNING: Kiro workflows requested by ai.kiro.cli.workflows.enable or ai.kiro.cli.unlockedRolloutFeatures, but "
             f"devenv cannot enable its global setting: {settings} does not set "
-            "chat.enableWorkflows=true. Configure ai.kiro.native.settings.chat.enableWorkflows "
+            "chat.enableWorkflows=true. Configure ai.kiro.cli.native.settings.chat.enableWorkflows "
             "in Home Manager; the project setting is not honored.",
             file=sys.stderr,
         )
