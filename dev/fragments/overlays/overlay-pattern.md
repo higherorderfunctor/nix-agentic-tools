@@ -641,7 +641,12 @@ to any versioned attribute family:
   `virtualStoreType: global` puts package files under the dependency fetcher's
   store, and nixpkgs' JSON normalization tries to parse non-JSON fixtures. The
   configure hook installs dependencies offline with lifecycle scripts disabled;
-  the explicit bundle step performs the required preparation afterward.
+  the explicit bundle step performs the required preparation afterward. Both
+  installs pass `--no-runtime` so upstream's platform-specific Node runtime
+  entries stay in the frozen lockfile but are not downloaded or linked; the
+  bundler uses Nix's build Node. Without it, a dependency store fetched on Linux
+  contains only Linux's managed Node and offline Darwin configuration tries to
+  download its own runtime.
 - pnpm_12 keeps a version/source/cargo/pnpm sidecar and `mkUpdateScript`'s cheap
   no-op exit. A `mkHashFix` restores source, cargo and pnpm hashes after a bump
   and is exposed as `fixVendorHash` for input-update repair. npm's `latest-12`

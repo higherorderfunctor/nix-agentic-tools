@@ -23,7 +23,12 @@
   pnpm = pkgs.ai.generic.pnpm_11;
   # Upstream's global virtual store nests package files inside the fetcher's
   # metadata tree, where nixpkgs would try to normalize non-JSON fixtures.
-  pnpmInstallFlags = ["--config.enable-global-virtual-store=false"];
+  pnpmInstallFlags = [
+    "--config.enable-global-virtual-store=false"
+    # Nix supplies Node; skip upstream's platform-specific runtime downloads
+    # while retaining their entries for frozen-lockfile validation.
+    "--no-runtime"
+  ];
   pnpmWorkspaces = ["@pnpm/esm-loader"];
 
   # mkUpdateScript writes a version-only candidate; fake hashes let the fixers
