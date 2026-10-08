@@ -284,9 +284,10 @@ The ai module fans out TWO kinds of configuration:
   trust prompt saves there. The same launch preflight runs
   `codex-project-trust-notice`, which warns when a readable project config will
   be ignored because nothing trusts the project, including when the user config
-  is missing. It reuses the preflight's `effectiveProjectDocMaxBytes` resolver.
-  Unreadable or malformed inputs stay silent, and the warning never changes the
-  launch. `ai.codex.execpolicyRules.<name>` writes native Starlark to
+  is missing. It takes each directory's trust from the preflight's one
+  `effectiveProjectDocMaxBytes` resolver run. Unreadable or malformed inputs
+  stay silent, and the warning never changes the launch.
+  `ai.codex.execpolicyRules.<name>` writes native Starlark to
   `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
   separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
   Home Manager reserves `execpolicyRules.default` because Codex appends accepted

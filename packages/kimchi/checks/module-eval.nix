@@ -259,23 +259,43 @@ in {
 
   checks = {
     # Both backends' launchers warn from the launch directory, so the notice
-    # reaches Home Manager-only users in any repo.
+    # reaches Home Manager-only users in any repo. Each launcher is paired
+    # with the user harness it reads trust from: Home Manager's follows
+    # configDir.
     module-kimchi-project-trust-notice = let
-      launchers = map (launcher: "${launcher}/bin/kimchi") [
-        (lib.head
-          (evalHm {
-            ai.kimchi = {
+      hmLauncher = kimchi:
+        lib.head
+        (evalHm {
+          ai.kimchi =
+            {
               enable = true;
               package = kimchiStub;
-            };
-          }).config.home.packages)
-        (lib.head
-          (evalDevenv {
-            ai.kimchi = {
-              enable = true;
-              package = kimchiStub;
-            };
-          }).config.packages)
+            }
+            // kimchi;
+        }).config.home.packages;
+      launchers = lib.concatMap ({
+        launcher,
+        harness,
+      }: ["${launcher}/bin/kimchi" harness]) [
+        {
+          launcher = hmLauncher {};
+          harness = ".config/kimchi/harness";
+        }
+        {
+          launcher = hmLauncher {configDir = "custom/kimchi";};
+          harness = "custom/kimchi/harness";
+        }
+        {
+          launcher =
+            lib.head
+            (evalDevenv {
+              ai.kimchi = {
+                enable = true;
+                package = kimchiStub;
+              };
+            }).config.packages;
+          harness = ".config/kimchi/harness";
+        }
       ];
     in
       pkgs.runCommand "module-test-kimchi-project-trust-notice" {} ''

@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -201,6 +202,19 @@ for launcher in [hm_launcher, devenv_launcher]:
     result = run([launcher, "--version"])
     assert result.returncode == 0 and result.stdout == version, result
     assert result.stderr.count(b"exceed Codex's project_doc_max_bytes") == 1, result.stderr
+# Untrusted project configs at every level each start notice processes; the
+# document warning must still print inside the launcher's one-second bound.
+# Thirty-two levels outlast that bound when the notices run first.
+nested = root
+for level in range(32):
+    nested = nested / str(level)
+    (nested / ".codex").mkdir(parents=True)
+    (nested / ".codex/config.toml").write_text("model = 'unused'\n")
+for launcher in [hm_launcher, devenv_launcher]:
+    result = run([launcher, "--version"], cwd=nested)
+    assert result.returncode == 0 and result.stdout == version, result
+    assert result.stderr.count(b"exceed Codex's project_doc_max_bytes") == 1, result.stderr
+shutil.rmtree(root / "0")
 
 # A real module launcher must not consume stdin, contaminate JSON stdout, or
 # change the real command's exit status, even when its preflight warns.

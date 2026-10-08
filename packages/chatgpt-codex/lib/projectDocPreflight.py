@@ -64,15 +64,22 @@ def main():
         check=True,
     )
     resolution = json.loads(result.stdout)
+    # Document warnings first: the notices below start a process per project
+    # config, and the launcher's one-second bound must not cut these short.
+    document_warnings(resolution)
     # Every project config layer Codex would load from this launch: the trust
     # notice warns when Codex will ignore it, the permission notice when its
     # model opposes the user's. The user config is skipped where the walk
-    # reaches CODEX_HOME's parent, as the resolver skips it.
+    # reaches CODEX_HOME's parent, as the resolver skips it. Trust comes from
+    # the resolution above, not one more resolver run per directory.
     for directory in resolution["directories"]:
         config = Path(directory) / ".codex/config.toml"
         if config.is_file() and str(config) != resolution["user_config"]:
-            subprocess.run([trust_notice, directory], check=False)
+            subprocess.run([trust_notice, directory, resolution["directory_trust"][directory]], check=False)
             subprocess.run([permission_notice, str(config)], check=False)
+
+
+def document_warnings(resolution):
     # Explicitly untrusted projects suppress project instructions upstream;
     # an undecided project still reads docs but ignores project config.
     if resolution["untrusted"]:

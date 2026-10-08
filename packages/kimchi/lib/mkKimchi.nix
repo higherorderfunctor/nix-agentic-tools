@@ -30,10 +30,6 @@
   projectHarnessDir = ".config/kimchi/harness";
   # The project directory for Kimchi's own files.
   projectDir = ".kimchi";
-  # Every trust-gated project file lives under these two namespaces; the
-  # launcher's notice warns when user trust will discard the ones at the launch
-  # directory.
-  projectTrustNotice = import ./projectTrustNotice.nix pkgs [projectDir projectHarnessDir];
   projectContextFilename = "AGENTS.md";
   # The user harness directory, and the context file in it Home Manager
   # writes; shared by the emitter and `contentTargets`.
@@ -323,6 +319,14 @@
         exit 1
       fi
     '';
+
+    # Every trust-gated project file lives under these two namespaces; the
+    # notice warns when user trust will discard the ones at the launch
+    # directory. Home Manager's trust store follows configDir; devenv's user
+    # harness is the runtime default.
+    projectTrustNotice =
+      import ./projectTrustNotice.nix pkgs ({projectPaths = [projectDir projectHarnessDir];}
+        // lib.optionalAttrs (backend == "hm") {userHarnessDir = userHarnessDir cfg;});
 
     # wrapProgram args: `--set` for non-secret env, `--suffix` for devenv's
     # resource ids, `--run` for the runtime secret export. Joined with a

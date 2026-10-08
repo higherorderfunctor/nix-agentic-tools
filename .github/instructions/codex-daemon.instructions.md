@@ -130,6 +130,11 @@ Codex will ignore the file because nothing trusts the project, and
 `codex-permission-layers-notice` warns when its permission model opposes the
 user config's. They used to run at devenv shell entry, which Home Manager-only
 users never reach. A resolver failure skips them with the rest of the preflight.
+The document warnings print first, so per-config notice processes cannot push
+them past the launcher's one-second bound, and each trust notice takes its
+directory's trust from the preflight's one `--json` resolution
+(`directory_trust`) instead of running the resolver again; run alone, the notice
+resolves trust itself.
 
 `lib/ai/launcher-preflight.nix` isolates the whole preflight, for this launcher
 and Kimchi's: a one-second timeout over its process group, no stdin, stdout

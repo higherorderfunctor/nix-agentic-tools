@@ -13,14 +13,16 @@ with tempfile.TemporaryDirectory() as temporary:
     root = base / "parent/project"
     root.mkdir(parents=True)
     user_home = base / "home"
-    harness = user_home / ".config/kimchi/harness"
-    harness.mkdir(parents=True)
-    trust, settings = harness / "trust.json", harness / "settings.json"
 
     def write_trust(entries):
         trust.write_text(json.dumps({str(path): value for path, value in entries}))
 
-    for launcher, target in itertools.product(sys.argv[1:], (".kimchi/config.json", ".config/kimchi/harness/settings.json")):
+    # Arguments pair each launcher with its user harness, relative to HOME.
+    pairs = list(zip(sys.argv[1::2], sys.argv[2::2]))
+    for (launcher, relative), target in itertools.product(pairs, (".kimchi/config.json", ".config/kimchi/harness/settings.json")):
+        harness = user_home / relative
+        harness.mkdir(parents=True, exist_ok=True)
+        trust, settings = harness / "trust.json", harness / "settings.json"
         project_file = root / target
         project_file.parent.mkdir(parents=True, exist_ok=True)
         project_file.write_text('{"defaultProjectTrust": "always"}')
@@ -79,8 +81,10 @@ with tempfile.TemporaryDirectory() as temporary:
             probe(True)
             trust.write_text(malformed)
             probe(False)
-        # From $HOME the project harness path is the user harness itself.
+        # From $HOME the project harness path is the user harness itself,
+        # unless configDir moved the user harness elsewhere.
         write_trust([])
         probe(True)
-        probe(False, user_home)
+        if relative == ".config/kimchi/harness":
+            probe(False, user_home)
         project_file.unlink()

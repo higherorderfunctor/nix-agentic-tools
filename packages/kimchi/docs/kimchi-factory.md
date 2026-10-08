@@ -390,16 +390,17 @@ launch, so Home Manager-only users get it in any repository. It checks the
 launch directory, because Kimchi reads trust-gated project files from its exact
 working directory, and it warns when a readable file sits under `.kimchi/` or
 `.config/kimchi/harness/` there. From `$HOME` that harness path is the user
-harness itself and is skipped. It reads the pinned runtime's fixed user harness
-at `$HOME/.config/kimchi/harness`, checks the nearest boolean trust entry at or
-above the real launch directory, and uses user `settings.json`'s
-`defaultProjectTrust` only without a persisted decision. `always` allows;
-`ask`/`never` deny unattended sessions. Explicit denial wins over `always`, null
-entries inherit, and project settings cannot grant trust. Missing/unreadable
-trust files stay silent; without a decision, missing/unreadable settings also
-stay silent. Empty or unreadable namespaces and root AGENTS.md alone do not
-warn. The shared `lib/ai/launcher-preflight.nix` isolates it as it does Codex's
-preflight: bounded to one second, no stdin, stdout discarded, failure ignored.
+harness itself and is skipped. It reads the user harness under `$HOME`: Home
+Manager passes its `configDir` harness, devenv the runtime default
+`.config/kimchi/harness`. It checks the nearest boolean trust entry at or above
+the real launch directory, and uses user `settings.json`'s `defaultProjectTrust`
+only without a persisted decision. `always` allows; `ask`/`never` deny
+unattended sessions. Explicit denial wins over `always`, null entries inherit,
+and project settings cannot grant trust. Missing/unreadable trust files stay
+silent; without a decision, missing/unreadable settings also stay silent. Empty
+or unreadable namespaces and root AGENTS.md alone do not warn. The shared
+`lib/ai/launcher-preflight.nix` isolates it as it does Codex's preflight:
+bounded to one second, no stdin, stdout discarded, failure ignored.
 `module-kimchi-project-trust-notice` runs its fixtures through each backend's
 launcher, covering both project namespaces with positive controls.
 
