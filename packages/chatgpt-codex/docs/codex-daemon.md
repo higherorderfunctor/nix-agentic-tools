@@ -1,7 +1,8 @@
 # Codex's app-server daemon: Home Manager selects its package
 
-> **Last verified:** 2026-10-07 — launcher flags are checked as root-command
-> `uses`; Home Manager owns daemon selection and settings.
+> **Last verified:** 2026-10-08 — launcher flags are checked as root-command
+> `uses`; Home Manager owns daemon selection and settings; both backends run the
+> offline project-document preflight before it execs the original binary.
 
 Since 0.157 Codex runs a shared background app-server daemon. It always runs
 `$CODEX_HOME/packages/app-server-daemon/current`, never the CLI that launched
@@ -77,6 +78,49 @@ rejected value. With the flag, `codex agents`, `codex queue` and `--remote`
 refuse to run; `codex remote-control` and `codex app-server daemon …` ignore it
 and still reach the user daemon. A VM or sandbox home is out of scope: the
 sandbox will own that home.
+
+## Every module launcher checks project documentation
+
+Home Manager and devenv always install a launcher. It sets the configured
+process environment, runs `lib/projectDocPreflight.nix`, then execs the original
+package binary. `lib.ai.mkLauncher` preserves that binary's package as
+`launcherPackage`; selecting an existing launcher flattens it rather than
+nesting wrappers and running the preflight twice.
+
+`debug prompt-input` needs no auth and succeeds in an offline Nix sandbox.
+Measured on 0.161.0 with an empty Codex home: five repo calls took 34.5, 23.0,
+23.3, 23.6 and 22.9 ms; five empty-git-repo calls took 22.6, 22.2, 22.7, 23.5
+and 24.3 ms. It is still unsuitable for a launcher preflight: it creates a
+session and starts network and MCP prewarming. `strace` showed DNS queries to
+`api.openai.com`; an advisory launch check must not start those connections or
+configured MCP processes.
+
+The preflight therefore reads local files. The existing
+`effectiveProjectDocMaxBytes` resolver parses TOML, accounts for system, user,
+profile, trusted-project and session limits, handles lowered limits and clone
+trust inherited by linked worktrees, and returns the root-to-cwd directories and
+override/default/fallback filenames. Unix managed settings come from
+`/etc/codex/managed_config.toml`; a same-named Codex-home file is ignored.
+Custom-root trust gates project config, while only cwd/Git-clone distrust
+suppresses project docs. The preflight measures the cumulative budget,
+respecting empty overrides, whitespace-only content and explicitly untrusted
+projects (which Codex does not load). Config, profile and cwd flags reach the
+resolver; extracted CLI value requirements skip unrelated arguments, and `--`
+ends option parsing. Unknown flags skip the advisory rather than guessing what
+value they consume. Remote-session and managed-worktree launch paths are not
+predicted; the check measures the local launch directory.
+
+Warnings go only to stderr and name `project_doc_max_bytes` and
+`ai.codex.projectDocMaxBytes`. The resolver adds the user-config trust remedy
+when a skipped project config raises the limit. Missing/unreadable files,
+invalid config and resolver failures are silent. The preflight has a one-second
+outer timeout, reads no stdin, and cannot change Codex's stdout or exit status.
+It runs in repositories without devenv too. The devenv shell-entry notice and
+manual `enterTest` prompt probe are deleted; `instructions-drift` still checks
+the generated index and rule marker offsets. The
+`chatgpt-codex-project-doc-preflight` check calibrates every discovery fixture
+against the real binary's prompt builder in the offline Nix build sandbox, and
+tests both backend launchers and failure isolation.
 
 ## Gates
 
