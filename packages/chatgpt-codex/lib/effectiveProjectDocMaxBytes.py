@@ -1,5 +1,6 @@
 """Shared local resolver for Codex's document budget and project trust."""
 
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -27,7 +28,7 @@ def merge(base, extra):
 
 def resolve(git, directory, default, overrides=(), profile=None):
     directory = Path(directory).expanduser().resolve()
-    codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).resolve()
+    codex_home = Path(os.environ.get("CODEX_HOME") or str(Path.home() / ".codex")).resolve()
     user_config = codex_home / "config.toml"
     config = merge(read_config(Path("/etc/codex/config.toml")), read_config(user_config))
     if profile:
@@ -43,9 +44,9 @@ def resolve(git, directory, default, overrides=(), profile=None):
         except ValueError:
             parsed = tomllib.loads(f"{key}={json.dumps(value)}")
         merge(session, parsed)
-    discovery = merge(json.loads(json.dumps(config)), session)
+    discovery = merge(deepcopy(config), session)
     # Managed local settings have higher precedence than session flags.
-    managed = read_config(codex_home / "managed_config.toml")
+    managed = read_config(Path("/etc/codex/managed_config.toml"))
     merge(discovery, managed)
     markers = discovery.get("project_root_markers", [".git"])
     root = next((folder for folder in (directory, *directory.parents) if any((folder / marker).exists() for marker in markers)), directory)
@@ -53,13 +54,15 @@ def resolve(git, directory, default, overrides=(), profile=None):
         [git, "-c", "core.fsmonitor=false", "-C", str(directory), "rev-parse", "--path-format=absolute", "--git-common-dir"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=False,
     )
-    main_checkout = Path(result.stdout.strip()).parent if result.returncode == 0 else root
+    main_checkout = Path(result.stdout.strip()).parent if result.returncode == 0 else None
     projects = discovery.get("projects", {})
 
     def trust(folder):
         # Directory entry, configured root, then clone root; the last route
         # lets linked worktrees inherit the main checkout's trust.
         for path in (folder, root, main_checkout):
+            if path is None:
+                continue
             entry = projects.get(str(path), {})
             if entry.get("trust_level") in {"trusted", "untrusted"}:
                 return entry["trust_level"]
@@ -99,11 +102,14 @@ def resolve(git, directory, default, overrides=(), profile=None):
         # Upstream POSIX candidate_filenames rejects these concrete inputs.
         if name and name not in {".", ".."} and "/" not in name and "\0" not in name and name not in names:
             names.append(name)
+    # Active-project distrust suppresses docs using cwd and the Git clone root,
+    # not the custom marker root used to gate project configuration layers.
+    doc_trust = next((projects[str(path)]["trust_level"] for path in (directory, main_checkout) if path is not None and projects.get(str(path), {}).get("trust_level") in {"trusted", "untrusted"}), None)
     return {
         "directories": [str(folder) for folder in chain],
         "filenames": names,
         "limit": effective,
-        "untrusted": trust(directory) == "untrusted",
+        "untrusted": doc_trust == "untrusted",
         "untrusted_config": next((str(path) for path, limit in reversed(skipped) if limit > effective), None),
         "user_config": str(user_config),
     }
