@@ -14,6 +14,48 @@
   settingsHarnessNames = lib.remove "kiro" harnessNames;
 in {
   checks = {
+    module-runtime-path-provenance-notice = let
+      binaries = {
+        claude = "claude";
+        codex = "codex";
+        copilot = "copilot";
+        kimchi = "kimchi";
+        kiro = "kiro-cli";
+      };
+      fixtureFor = runtime: let
+        package =
+          (pkgs.writeShellScriptBin binaries.${runtime} ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            exit 0
+          '').overrideAttrs (_: {
+            passthru.kiroFhsSandbox = false;
+          });
+        launcherPath = lib.optional (runtime == "kiro") "cli";
+        configFor = package: {
+          ai.${runtime} = {enable = true;} // lib.setAttrByPath launcherPath ({inherit package;} // lib.optionalAttrs (runtime == "kiro") {useFhsSandbox = false;});
+        };
+        evaluated = evalDevenv (configFor package);
+        noticeLines = config: lib.filter (lib.hasInfix "/bin/ai-runtime-path-provenance-notice ") (lib.splitString "\n" config.enterShell);
+        lines = noticeLines evaluated.config;
+      in
+        assert builtins.length lines == 1;
+        assert noticeLines (evalDevenv (configFor null)).config == [];
+          pkgs.writeShellScript "rendered-${runtime}-path-notice" ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            ${lib.head lines}
+          '';
+    in
+      assert lib.sort builtins.lessThan (builtins.attrNames binaries) == lib.sort builtins.lessThan harnessNames;
+      assert !(lib.hasInfix "/bin/ai-runtime-path-provenance-notice " (evalDevenv {}).config.enterShell);
+        pkgs.runCommand "module-test-runtime-path-provenance-notice" {} ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${pkgs.python3}/bin/python3 ${./runtime-path-provenance-test.py} ${lib.escapeShellArgs (lib.mapAttrsToList (runtime: _: fixtureFor runtime) binaries)}
+          echo PASS > "$out"
+        '';
+
     # ── Structural gate: every enabled runtime installs SOMETHING ──
     #
     # This is the test that would have caught `claude`. Installation used to be

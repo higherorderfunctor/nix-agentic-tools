@@ -4,7 +4,8 @@
 > repo shell applies `buildOverlay`. Kimchi source builds require fresh closure
 > measurements; old binary-release figures are not current estimates. The
 > instruction copier check is gone with the generator's materializer. The Codex
-> permission-mix assertions moved to the ai module's shell-entry warning.
+> permission-mix assertions and runtime PATH provenance are consumer-wide
+> shell-entry warnings, not repository enterTest loops.
 >
 > Full lineage: `git show d1c28a21:dev/fragments/devenv/ci-lean-closure.md`.
 
@@ -92,7 +93,8 @@ comm -23 \
 It is unconditional — no `!isCI` guard, by design. If that closure growth ever
 becomes unacceptable, the answer is `ai.kimchi.enable`, not an `!isCI` branch;
 the decision rule above forbids using that branch for anything a guard depends
-on, and enterTest asserts these binaries are on PATH.
+on, and the shared installation block warns at shell entry when PATH resolves a
+runtime outside the devenv profile.
 
 ### Codex uses an unrestricted project override
 
