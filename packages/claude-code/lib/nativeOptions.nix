@@ -13,7 +13,7 @@
 #      schema is not the option surface we want: a coercion (`attribution.*`
 #      takes a bool), a soft enum the schema spells as a bare string (`model`),
 #      or prose that carries operational knowledge the schema cannot
-#      (`tui`'s read-only-store caveat, `ultracode`'s off-label status).
+#      (`tui`'s read-only-store caveat).
 #
 # Hand-authored declarations WIN. That is not a merge-order accident: their key
 # set is handed to the generator as `externalPaths`, so the generator emits

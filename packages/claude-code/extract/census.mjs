@@ -500,7 +500,7 @@ export function legacyFromCensus(settings, rawEnums) {
     effortLevels: effort.size === 1 ? JSON.parse([...effort][0]) : null,
     effortLevelEnumsSeen: effort.size,
     hookEvents: paths.hooks && paths.hooks.enum ? paths.hooks.enum : null,
-    // These off-label settings have hand-authored consumers in mkClaude.nix.
+    // These settings have hand-authored consumers in mkClaude.nix.
     settingsBooleanKeys: [
       "enableWorkflows",
       "ultracode",
