@@ -354,9 +354,9 @@ in {
       in
         ((claudeSettings hm).effortLevel or null)
         == "medium"
-        && hmCodexSettings hm == withHmDaemonDefault {model = "gpt-6-astra";}
+        && hmCodexSettings hm == withHmDaemonDefault {}
         && ((claudeSettings devenv).effortLevel or null) == "medium"
-        && devenv.config.ai.codex.files.".codex/config.toml".content.value == {model = "gpt-6-astra";}
+        && !(devenv.config.ai.codex.files ? ".codex/config.toml")
     );
 
     module-shared-hooks-reject-non-portable-event = mkTest "shared-hooks-reject-non-portable-event" (!(builtins.tryEval (

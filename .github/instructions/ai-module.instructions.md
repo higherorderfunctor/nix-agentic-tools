@@ -7,11 +7,9 @@ applyTo: "checks/*/module-eval.nix,checks/ai-delivery/**,checks/module-provenanc
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-10-08 — devenv warns at shell entry when delivered
-> Codex project config and user config use opposite permission models, naming
-> both files and the winning selector, and when an installed runtime's PATH
-> binary resolves outside the devenv profile; Codex's launcher owns the document
-> preflight. The delivered-project-config trust warning shares its resolver.
+> **Last verified:** 2026-10-08 — Codex sets neither model nor reasoning effort
+> unless the consumer declares one; normalized reasoning effort still lowers at
+> default priority.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
 > TRIED and rejected, or a measurement that would otherwise be re-derived
@@ -246,23 +244,23 @@ The ai module fans out TWO kinds of configuration:
   packages may declare `passthru.kiroFhsSandbox = false`; the overlay does this
   for darwin and pre-split nixpkgs.
 - `ai.codex.native.settings` — typed stable keys plus a TOML-compatible native
-  freeform tail. Its model defaults to `gpt-6-astra` and reasoning effort to
-  `xhigh` on both backends. Explicit native values override these defaults;
-  normalized reasoning effort also overrides the native option default. Setting
-  either native key to null omits it, allowing Codex's lower config layers or
-  runtime defaults to supply it. Both backends deliver `config.toml` as a
-  read-only store symlink: Home Manager always owns `${configDir}/config.toml`,
-  and devenv writes the trusted project's `.codex/config.toml` when something is
-  declared. Every Codex config writer writes a temporary beside the link's
-  target, so an in-app save (`/model`, `/experimental`, `codex mcp add`, the
-  trust prompt, `/hooks`) fails with "failed to persist config" and the link
-  survives; `chatgpt-codex-readonly-config` holds that against the pinned
-  binary. Devenv rejects provider, profile, notification, response-metadata,
-  realtime-endpoint and telemetry keys that Codex ignores at project scope. MCP
-  configuration is composed into either file through the same typed server pool.
-  Stable security settings type `allow_login_shell`, `approval_policy`
-  (including granular prompt categories), `approvals_reviewer`, `sandbox_mode`,
-  and `sandbox_workspace_write`. `default_permissions` and named `permissions`
+  freeform tail. The module sets neither model nor reasoning effort unless the
+  consumer declares one, leaving Codex’s lower config layers or built-in
+  defaults to supply them. Normalized reasoning effort lowers to
+  `model_reasoning_effort` at default priority; explicit native values override
+  it. Both backends deliver `config.toml` as a read-only store symlink: Home
+  Manager always owns `${configDir}/config.toml`, and devenv writes the trusted
+  project's `.codex/config.toml` when something is declared. Every Codex config
+  writer writes a temporary beside the link's target, so an in-app save
+  (`/model`, `/experimental`, `codex mcp add`, the trust prompt, `/hooks`) fails
+  with "failed to persist config" and the link survives;
+  `chatgpt-codex-readonly-config` holds that against the pinned binary. Devenv
+  rejects provider, profile, notification, response-metadata, realtime-endpoint
+  and telemetry keys that Codex ignores at project scope. MCP configuration is
+  composed into either file through the same typed server pool. Stable security
+  settings type `allow_login_shell`, `approval_policy` (including granular
+  prompt categories), `approvals_reviewer`, `sandbox_mode`, and
+  `sandbox_workspace_write`. `default_permissions` and named `permissions`
   profiles type inheritance, workspace roots, filesystem access and scoped
   paths, deny-glob scan depth, and network proxy/domain/socket policy. Codex
   merges entries under the same named permission profile across user and project
