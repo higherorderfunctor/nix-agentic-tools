@@ -52,7 +52,7 @@
             kiro = {
               native.agents.probe.prompt = {text = "probe";};
               hooksJson.probe = ''{"event":"pre-commit"}'';
-              native.settings =
+              cli.native.settings =
                 if mode == "hm"
                 then {chat.defaultModel = "probe";}
                 else {chat.enableTangentMode = true;};

@@ -35,6 +35,13 @@
     # manifest must not claim it.
     files.".custom-kiro/consumer-owned.md".text = "consumer";
   };
+  workflowWarning = declaration:
+    (harness.evalDevenv {
+      ai.kiro = {
+        enable = true;
+        cli = declaration;
+      };
+    }).config.enterShell;
   # Kimchi's context.filename names the Home Manager harness file only; devenv
   # always writes the project-root AGENTS.md. Evaluated alone so no other
   # runtime's AGENTS.md writer can stand in for Kimchi's.
@@ -104,5 +111,14 @@ in {
   checks.ai-warnings-files-wired = harness.mkTest "ai-warnings-files-wired" (
     lib.hasInfix "file-warnings.py" enabled.config.enterShell
     && enabled.config.tasks."ai:delivery:observe-retired".before == ["devenv:files:cleanup"]
+    && lib.hasInfix "workflows" (workflowWarning {
+      workflows.enable = true;
+      v3 = true;
+    })
+    && lib.hasInfix "workflows" (workflowWarning {
+      unlockedRolloutFeatures = ["workflows"];
+      v3 = true;
+    })
+    && !(lib.hasInfix "workflows" (workflowWarning {}))
   );
 }

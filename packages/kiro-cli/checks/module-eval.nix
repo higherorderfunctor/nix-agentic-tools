@@ -137,12 +137,116 @@ in {
       && !(evalDevenv {}).config.ai.kiro.enable
     );
 
+    module-kiro-cli-namespace = mkTest "kiro-cli-namespace" (let
+      moved = [
+        ["environmentVariables"]
+        ["extraPackages"]
+        ["native" "settings"]
+        ["normalized" "environmentVariables"]
+        ["normalized" "shell"]
+        ["package"]
+        ["shell"]
+        ["trustedMcpTools"]
+        ["tweaks"]
+        ["unlockedRolloutFeatures"]
+        ["useFhsSandbox"]
+        ["v3"]
+      ];
+      check = evaluate: let
+        result = evaluate {};
+        tree = result.options.ai.kiro;
+      in
+        lib.all (path: !lib.hasAttrByPath path tree && lib.hasAttrByPath (["cli"] ++ path) tree) moved
+        && lib.all (key: builtins.hasAttr key tree) ["activation" "agents" "configDir" "context" "enable" "files" "hooks" "lspServers" "mcpServers" "permissions" "rules" "skills"]
+        && !(tree.cli ? enable)
+        && !(builtins.tryEval (evaluate {ai.kiro = {package = null;};}).config).success;
+    in
+      lib.all check [evalHm evalDevenv]);
+
+    module-kiro-cli-normalized-launcher-pools = mkTest "kiro-cli-normalized-launcher-pools" (let
+      check = evaluate: let
+        base.ai = {
+          environmentVariables = {
+            KEEP = "root";
+            REMOVE = "root";
+            REPLACE = "root";
+          };
+          shell = pkgs.bash;
+          kiro.cli.environmentVariables = {
+            REMOVE = null;
+            REPLACE = "runtime";
+          };
+        };
+        inherited = (evaluate base).config.ai.kiro.cli.normalized;
+        added =
+          (evaluate (lib.recursiveUpdate base {
+            ai.kiro.cli.normalized.environmentVariables.ADDED = "normalized";
+          })).config.ai.kiro.cli.normalized;
+        forced =
+          (evaluate (lib.recursiveUpdate base {
+            ai.kiro.cli.normalized = {
+              environmentVariables = lib.mkForce {ONLY = "forced";};
+              shell = lib.mkForce pkgs.bashNonInteractive;
+            };
+          })).config.ai.kiro.cli.normalized;
+      in
+        inherited.environmentVariables
+        == {
+          KEEP = "root";
+          REPLACE = "runtime";
+        }
+        && inherited.shell == pkgs.bash
+        && added.environmentVariables
+        == {
+          ADDED = "normalized";
+          KEEP = "root";
+          REPLACE = "runtime";
+        }
+        && forced.environmentVariables == {ONLY = "forced";}
+        && forced.shell == pkgs.bashNonInteractive;
+    in
+      lib.all check [evalHm evalDevenv]);
+
+    module-kiro-cli-workflows = mkTest "kiro-cli-workflows" (let
+      base.ai.kiro = {
+        enable = true;
+        cli = {
+          unlockedRolloutFeatures = ["tangent"];
+          v3 = true;
+          workflows.enable = true;
+        };
+      };
+      hm = evalHm base;
+      devenv = evalDevenv base;
+      explicitFalse = evalHm (lib.recursiveUpdate base {ai.kiro.cli.native.settings.chat.enableWorkflows = false;});
+      equivalent = evaluate:
+        evaluate (lib.recursiveUpdate base {
+          ai.kiro.cli = {
+            unlockedRolloutFeatures = ["tangent" "workflows"];
+            workflows.enable = false;
+          };
+        });
+      fails = evaluate: change: needle:
+        lib.any (item: !item.assertion && lib.hasInfix needle item.message)
+        (evaluate (lib.recursiveUpdate base change)).config.assertions;
+    in
+      (hmCliSettings hm)."chat.enableWorkflows"
+      && !(hmCliSettings explicitFalse)."chat.enableWorkflows"
+      && !(devenv.config.ai.kiro.files ? ".kiro/settings/cli.json")
+      && soleSame (kiroWrappedDrvs hm.config.home.packages) (kiroWrappedDrvs (equivalent evalHm).config.home.packages)
+      && soleSame (kiroWrappedDrvs devenv.config.packages) (kiroWrappedDrvs (equivalent evalDevenv).config.packages)
+      && lib.all (evaluate:
+        fails evaluate {ai.kiro.cli.v3 = false;} "v3 = true"
+        && fails evaluate {ai.kiro.cli.package = pkgs.hello;} "withRolloutFeatures") [evalHm evalDevenv]
+      && fails evalDevenv {ai.kiro.cli.native.settings.chat.enableWorkflows = true;} "PROJECT-LOCAL"
+      && lib.any (lib.hasInfix "ai.kiro.cli.workflows.enable") (evalHm (lib.recursiveUpdate base {ai.kiro.cli.package = null;})).config.warnings);
+
     module-kiro-package-null-skips-install-keeps-files = mkTest "kiro-package-null-skips-install-keeps-files" (
       let
         config.ai.kiro = {
           context.text = "PACKAGE-NULL-CONTEXT";
           enable = true;
-          package = null;
+          cli.package = null;
         };
         devenv = evalDevenv config;
         hm = evalHm config;
@@ -159,14 +263,14 @@ in {
         evaluated = evalDevenv {
           ai.kiro = {
             enable = true;
-            package = null;
-            v3 = true;
+            cli.package = null;
+            cli.v3 = true;
           };
         };
       in
         builtins.all (entry: entry.assertion) evaluated.config.assertions
         && evaluated.config.warnings
-        == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.v3. Unset them or set ai.kiro.package."]
+        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.v3. Unset them or set ai.kiro.cli.package."]
     );
 
     # Defaults (including the default-on `ai.gitSshConfigWorkaround`) stay
@@ -177,7 +281,7 @@ in {
         evaluated = evalDevenv {
           ai.kiro = {
             enable = true;
-            package = null;
+            cli.package = null;
           };
         };
       in
@@ -193,13 +297,13 @@ in {
             (eval {
               ai.kiro = {
                 enable = true;
-                package = null;
-                tweaks.${name} = active;
+                cli.package = null;
+                cli.tweaks.${name} = active;
               };
             }).config.warnings;
         in
           warnings true
-          == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.tweaks.${name}. Unset them or set ai.kiro.package."]
+          == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.kiro.cli.tweaks.${name}. Unset them or set ai.kiro.cli.package."]
           && warnings false == [];
       in
         builtins.all (
@@ -215,14 +319,14 @@ in {
             gitSshConfigWorkaround = true;
             kiro = {
               enable = true;
-              package = null;
+              cli.package = null;
             };
           };
         };
       in
         builtins.all (entry: entry.assertion) evaluated.config.assertions
         && evaluated.config.warnings
-        == ["ai.kiro.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.gitSshConfigWorkaround. Unset them or set ai.kiro.package."]
+        == ["ai.kiro.cli.package is null, so these settings are inert (they need the managed Kiro wrapper; the system binary runs without them): ai.gitSshConfigWorkaround. Unset them or set ai.kiro.cli.package."]
     );
 
     # Kiro persists effort only inside per-model `chat.modelDefaults` records,
@@ -781,7 +885,7 @@ in {
           ai.kiro = {
             enable = true;
             # A workspace-overridable key, so the devenv guard accepts it.
-            native.settings.chat.enableTangentMode = true;
+            cli.native.settings.chat.enableTangentMode = true;
           };
         };
         evaluated =
@@ -865,7 +969,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            native.settings.chat.defaultModel = "claude-sonnet-4";
+            cli.native.settings.chat.defaultModel = "claude-sonnet-4";
           };
         };
       in
@@ -879,7 +983,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            native.settings.chat.defaultModel = "claude-opus-4.8";
+            cli.native.settings.chat.defaultModel = "claude-opus-4.8";
           };
         };
       in
@@ -892,7 +996,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            native.settings.chat.defaultModel = "some-future-model";
+            cli.native.settings.chat.defaultModel = "some-future-model";
           };
         };
       in
@@ -908,7 +1012,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            v3 = true;
+            cli.v3 = true;
           };
         };
         packages = result.config.home.packages;
@@ -944,7 +1048,7 @@ in {
           (evalHm {
             ai.kiro = {
               enable = true;
-              v3 = true;
+              cli.v3 = true;
             };
           })
       .config
@@ -956,8 +1060,8 @@ in {
           (evalHm {
             ai.kiro = {
               enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = ["workflows"];
+              cli.v3 = true;
+              cli.unlockedRolloutFeatures = ["workflows"];
             };
           })
       .config
@@ -976,7 +1080,7 @@ in {
           (evalDevenv {
             ai.kiro = {
               enable = true;
-              v3 = true;
+              cli.v3 = true;
             };
           })
       .config
@@ -987,8 +1091,8 @@ in {
           (evalDevenv {
             ai.kiro = {
               enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = ["workflows"];
+              cli.v3 = true;
+              cli.unlockedRolloutFeatures = ["workflows"];
             };
           })
       .config
@@ -1017,8 +1121,8 @@ in {
           (evalHm {
             ai.kiro = {
               enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = features;
+              cli.v3 = true;
+              cli.unlockedRolloutFeatures = features;
             };
           })
         .config
@@ -1045,8 +1149,8 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            package = pkgs.hello;
-            unlockedRolloutFeatures = ["workflows"];
+            cli.package = pkgs.hello;
+            cli.unlockedRolloutFeatures = ["workflows"];
           };
         };
         asserts =
@@ -1063,7 +1167,7 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            unlockedRolloutFeatures = ["workflows"];
+            cli.unlockedRolloutFeatures = ["workflows"];
           };
         };
         asserts =
@@ -1081,7 +1185,7 @@ in {
           ai.gitSshConfigWorkaround = false;
           ai.kiro = {
             enable = true;
-            useFhsSandbox = false;
+            cli.useFhsSandbox = false;
           };
         };
         packages = result.config.home.packages;
@@ -1098,7 +1202,7 @@ in {
           ai.gitSshConfigWorkaround = false;
           ai.kiro = {
             enable = true;
-            useFhsSandbox = false;
+            cli.useFhsSandbox = false;
           };
         };
         packages = result.config.packages;
@@ -1115,7 +1219,7 @@ in {
       result = evalDevenv {
         ai.kiro = {
           enable = true;
-          useFhsSandbox = false;
+          cli.useFhsSandbox = false;
         };
       };
     in
@@ -1136,7 +1240,7 @@ in {
           ai.gitSshConfigWorkaround = false;
           ai.kiro = {
             enable = true;
-            trustedMcpTools = ["fs_read"];
+            cli.trustedMcpTools = ["fs_read"];
           };
         };
         packages = result.config.packages;
@@ -1156,8 +1260,8 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            package = pkgs.hello;
-            useFhsSandbox = false;
+            cli.package = pkgs.hello;
+            cli.useFhsSandbox = false;
           };
         };
         asserts =
@@ -1174,7 +1278,7 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            useFhsSandbox = false;
+            cli.useFhsSandbox = false;
           };
         };
         asserts =
@@ -1200,8 +1304,8 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            package = preSplitPackage;
-            useFhsSandbox = false;
+            cli.package = preSplitPackage;
+            cli.useFhsSandbox = false;
           };
         };
         asserts =
@@ -1224,8 +1328,8 @@ in {
         ev = evalDevenv {
           ai.kiro = {
             enable = true;
-            package = customFhsPackage;
-            trustedMcpTools = ["fs_read"];
+            cli.package = customFhsPackage;
+            cli.trustedMcpTools = ["fs_read"];
           };
         };
         asserts =
@@ -1235,7 +1339,7 @@ in {
         asserts != [] && (builtins.head asserts).assertion == false
     );
 
-    # Assertions inspect the resolved rollout variant, not merely cfg.package.
+    # Assertions inspect the resolved rollout variant, not merely cfg.cli.package.
     # A custom factory that drops the FHS passthru contract must fail by name
     # before wrapping can silently retain the sandbox or lose trust injection.
     module-kiro-trust-rejects-rollout-variant-without-payload-seam = mkTest "kiro-trust-rejects-rollout-variant-without-payload-seam" (
@@ -1255,10 +1359,12 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            package = customFhsPackage;
-            trustedMcpTools = ["fs_read"];
-            unlockedRolloutFeatures = ["workflows"];
-            v3 = true;
+            cli = {
+              package = customFhsPackage;
+              trustedMcpTools = ["fs_read"];
+              unlockedRolloutFeatures = ["workflows"];
+              v3 = true;
+            };
           };
         };
         asserts =
@@ -1277,7 +1383,7 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            unlockedRolloutFeatures = ["workflows"];
+            cli.unlockedRolloutFeatures = ["workflows"];
           };
         };
         asserts =
@@ -1294,8 +1400,8 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            unlockedRolloutFeatures = ["workflows"];
+            cli.v3 = true;
+            cli.unlockedRolloutFeatures = ["workflows"];
           };
         };
         asserts =
@@ -1329,12 +1435,12 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            unlockedRolloutFeatures = ["workflows"];
+            cli.v3 = true;
+            cli.unlockedRolloutFeatures = ["workflows"];
           };
         };
       in
-        ev.config.ai.kiro.native.settings.chat.enableWorkflows == true
+        ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows == true
     );
 
     # The implication is a DEFAULT, not a mandate. Without `mkDefault` this would
@@ -1345,13 +1451,15 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            unlockedRolloutFeatures = ["workflows"];
-            native.settings.chat.enableWorkflows = false;
+            cli = {
+              native.settings.chat.enableWorkflows = false;
+              unlockedRolloutFeatures = ["workflows"];
+              v3 = true;
+            };
           };
         };
       in
-        ev.config.ai.kiro.native.settings.chat.enableWorkflows == false
+        ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows == false
     );
 
     # Positive control for the two above: without the unlock nothing writes the
@@ -1361,11 +1469,11 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            v3 = true;
+            cli.v3 = true;
           };
         };
       in
-        ev.config.ai.kiro.native.settings.chat.enableWorkflows == null
+        ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows == null
     );
 
     # devenv must NOT inherit the implication: it writes the project-local
@@ -1377,12 +1485,12 @@ in {
         ev = evalDevenv {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            unlockedRolloutFeatures = ["workflows"];
+            cli.v3 = true;
+            cli.unlockedRolloutFeatures = ["workflows"];
           };
         };
       in
-        ev.config.ai.kiro.native.settings.chat.enableWorkflows
+        ev.config.ai.kiro.cli.native.settings.chat.enableWorkflows
         == null
         && builtins.all (a: a.assertion) ev.config.assertions
     );
@@ -1397,7 +1505,7 @@ in {
         result = evalDevenv {
           ai.kiro = {
             enable = true;
-            native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
+            cli.native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
         text = builtins.toJSON (dvCliSettings result);
@@ -1416,7 +1524,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
+            cli.native.settings.chat.modelDefaults."claude-opus-5".effort = "high";
           };
         };
         declared = hmCliSettings result;
@@ -1435,7 +1543,7 @@ in {
         result = evalDevenv {
           ai.kiro = {
             enable = true;
-            native.settings.chat.enableTangentMode = true;
+            cli.native.settings.chat.enableTangentMode = true;
           };
         };
         text = builtins.toJSON (dvCliSettings result);
@@ -1453,8 +1561,8 @@ in {
         ev = evalDevenv {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            native.settings.chat.enableWorkflows = true;
+            cli.v3 = true;
+            cli.native.settings.chat.enableWorkflows = true;
           };
         };
         asserts =
@@ -1471,8 +1579,8 @@ in {
         ev = evalDevenv {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            native.settings.chat.enableTangentMode = true;
+            cli.v3 = true;
+            cli.native.settings.chat.enableTangentMode = true;
           };
         };
         asserts =
@@ -1490,8 +1598,8 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            native.settings.chat.enableWorkflows = true;
+            cli.v3 = true;
+            cli.native.settings.chat.enableWorkflows = true;
           };
         };
       in
@@ -1572,7 +1680,7 @@ in {
           (evalHm {
             ai.kiro = {
               enable = true;
-              v3 = true;
+              cli.v3 = true;
             };
           })
         .config
@@ -1584,8 +1692,8 @@ in {
           (evalHm {
             ai.kiro = {
               enable = true;
-              v3 = true;
-              tweaks.identity.text = "You are Atlas, a senior systems engineer.";
+              cli.v3 = true;
+              cli.tweaks.identity.text = "You are Atlas, a senior systems engineer.";
             };
           })
         .config
@@ -1605,7 +1713,7 @@ in {
           (evalDevenv {
             ai.kiro = {
               enable = true;
-              v3 = true;
+              cli.v3 = true;
             };
           })
         .config
@@ -1616,8 +1724,8 @@ in {
           (evalDevenv {
             ai.kiro = {
               enable = true;
-              v3 = true;
-              tweaks.identity.text = "You are Atlas, a senior systems engineer.";
+              cli.v3 = true;
+              cli.tweaks.identity.text = "You are Atlas, a senior systems engineer.";
             };
           })
         .config
@@ -1636,7 +1744,7 @@ in {
           (evalHm {
             ai.kiro = {
               enable = true;
-              v3 = true;
+              cli.v3 = true;
             };
           })
         .config
@@ -1648,8 +1756,8 @@ in {
           (evalHm {
             ai.kiro = {
               enable = true;
-              v3 = true;
-              tweaks.identity.enable = false;
+              cli.v3 = true;
+              cli.tweaks.identity.enable = false;
             };
           })
         .config
@@ -1667,18 +1775,18 @@ in {
           a = eval {
             ai.kiro = {
               enable = true;
-              v3 = true;
+              cli.v3 = true;
             };
           };
           b = eval {
             ai.kiro = {
               enable = true;
-              tweaks.${name} = true;
-              v3 = true;
+              cli.tweaks.${name} = true;
+              cli.v3 = true;
             };
           };
         in
-          !a.config.ai.kiro.tweaks.${name} && soleFork (kiroWrappedDrvs (select a)) (kiroWrappedDrvs (select b));
+          !a.config.ai.kiro.cli.tweaks.${name} && soleFork (kiroWrappedDrvs (select a)) (kiroWrappedDrvs (select b));
         names = ["relativeFileCheckPaths" "stripVendorWorktreeSteering"];
       in
         builtins.all (forks evalHm (v: v.config.home.packages)) names
@@ -1696,8 +1804,8 @@ in {
         ev = evalHm {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            tweaks.identity.text = "You are Atlas, a senior systems engineer";
+            cli.v3 = true;
+            cli.tweaks.identity.text = "You are Atlas, a senior systems engineer";
           };
         };
         asserts =
@@ -1716,8 +1824,8 @@ in {
           ev = evalHm {
             ai.kiro = {
               enable = true;
-              v3 = true;
-              tweaks.identity.text = ident;
+              cli.v3 = true;
+              cli.tweaks.identity.text = ident;
             };
           };
         in
@@ -1740,7 +1848,7 @@ in {
           ai.gitSshConfigWorkaround = false;
           ai.kiro = {
             enable = true;
-            v3 = true;
+            cli.v3 = true;
           };
         };
         packages = result.config.packages;
@@ -1776,7 +1884,7 @@ in {
       in
         builtins.length packages
         == 1
-        && (builtins.head packages).drvPath == result.config.ai.kiro.package.drvPath
+        && (builtins.head packages).drvPath == result.config.ai.kiro.cli.package.drvPath
         && !(lib.any (p: p.name == "kiro-cli-wrapped") packages)
     );
 
@@ -1855,8 +1963,8 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            v3 = true;
-            trustedMcpTools = ["@openmemory" "@git-intel-mcp/hotspots" "subagent" "use_aws"];
+            cli.v3 = true;
+            cli.trustedMcpTools = ["@openmemory" "@git-intel-mcp/hotspots" "subagent" "use_aws"];
           };
         };
       in
@@ -1870,7 +1978,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            trustedMcpTools = ["@openmemory"];
+            cli.trustedMcpTools = ["@openmemory"];
           };
         };
       in
@@ -2076,7 +2184,7 @@ in {
         result = evalHm {
           ai.kiro = {
             enable = true;
-            environmentVariables.KIRO_LOG_LEVEL = "debug";
+            cli.environmentVariables.KIRO_LOG_LEVEL = "debug";
           };
         };
         packages = result.config.home.packages;
@@ -2092,7 +2200,7 @@ in {
       result = evalHm {
         ai.kiro = {
           enable = true;
-          extraPackages = [pkgs.which];
+          cli.extraPackages = [pkgs.which];
         };
       };
     in
@@ -2108,7 +2216,7 @@ in {
       result = evalDevenv {
         ai.kiro = {
           enable = true;
-          extraPackages = [pkgs.which];
+          cli.extraPackages = [pkgs.which];
         };
       };
     in
@@ -2130,7 +2238,7 @@ in {
       in
         builtins.length packages
         == 1
-        && first.drvPath == result.config.ai.kiro.package.drvPath
+        && first.drvPath == result.config.ai.kiro.cli.package.drvPath
         && first.name != "kiro-cli-wrapped"
     );
 
@@ -3247,7 +3355,7 @@ in {
       result = evalDevenv {
         ai.kiro = {
           enable = true;
-          environmentVariables.KIRO_LOG_LEVEL = "debug";
+          cli.environmentVariables.KIRO_LOG_LEVEL = "debug";
         };
       };
     in
@@ -3270,7 +3378,7 @@ in {
             # which would leave this exercising a config the module declares
             # invalid. The subject of the test — that settings reach the file at
             # all — is unchanged.
-            native.settings.chat.enableTangentMode = true;
+            cli.native.settings.chat.enableTangentMode = true;
           };
         };
       in
@@ -3784,7 +3892,7 @@ in {
         needles = ["KIRO_DEBUG" "kiro-devenv-fanout-sentinel"];
       };
 
-    # Devenv: per-CLI ai.kiro.environmentVariables wins over top-level on name
+    # Devenv: per-CLI ai.kiro.cli.environmentVariables wins over top-level on name
     # collision. `absentNeedles` is the half that matters — the wrapper baking
     # BOTH values would satisfy a presence-only check while leaving which one
     # actually wins undetermined.
@@ -3793,7 +3901,7 @@ in {
         ai = {
           kiro.enable = true;
           environmentVariables.SHARED = "top-level-loser";
-          kiro.environmentVariables.SHARED = "kiro-specific-winner";
+          kiro.cli.environmentVariables.SHARED = "kiro-specific-winner";
         };
       };
     in

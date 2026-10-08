@@ -7,13 +7,9 @@ applyTo: "lib/ai/ai-common.nix,packages/kiro-cli/lib/packaging.nix,packages/kiro
 
 ## Kiro settings: a flat format with object values, and where the key stops
 
-> **Last verified:** 2026-10-04 — one tui/kas materializer serves settings
-> extraction and exact-match bundle-patch drift; settings extraction evaluates
-> the shipped TUI registry and workspace allowlist after sandboxed source
-> materialization; native file settings live under `ai.<runtime>.native`
-> (`native.settings`; Kimchi also `native.harnessSettings`). Kiro excludes the
-> normalized settings pool, so `ai.kiro.settings` does not exist and a root
-> effort is ignored without a warning.
+> **Last verified:** 2026-10-07 — Kiro CLI settings use
+> `ai.kiro.cli.native.settings`; flattening and workspace restrictions are
+> unchanged.
 
 **Settled — do not relitigate:** Native `settings list --all` is not a
 substitute for the TUI workspace contract. It reports 60 workspace keys while
@@ -23,7 +19,7 @@ materialized source.
 
 ### Model suggestions are a public catalog, not an account entitlement list
 
-`native.settings.chat.defaultModel` reads `extracted.json.models` as a soft
+`cli.native.settings.chat.defaultModel` reads `extracted.json.models` as a soft
 enum. Any string remains accepted. The model field is derived from
 `model-catalog.json`, a snapshot of the names in
 [Kiro's public comparison table](https://kiro.dev/docs/models.md). The other
@@ -66,8 +62,8 @@ registry cannot establish a complete suggestion list.
 ### Flat settings and object values
 
 `~/.kiro/settings/cli.json` is FLAT: its keys are dotted strings, not nested
-objects. `native.settings` lets you write the nested Nix that reads naturally
-and `flattenKiroSettings` lowers it:
+objects. `cli.native.settings` lets you write the nested Nix that reads
+naturally and `flattenKiroSettings` lowers it:
 
 ```nix
 { mcp.loadedBefore = true; chat.enableTangentMode = true; }
@@ -128,7 +124,7 @@ change what the user asked for. So the factory leaves `settings` out of its
 `supportedPools`, and an unsupported pool declares no per-runtime option. The
 root `ai.settings.reasoningEffort` is ignored for Kiro without a warning, as any
 unsupported pool's root value is: no per-runtime option could silence one. Use
-`ai.kiro.native.settings.chat.modelDefaults.<model>.effort` for the native
+`ai.kiro.cli.native.settings.chat.modelDefaults.<model>.effort` for the native
 per-model value, or Kiro's session-only `--effort` flag when persistence is not
 wanted.
 

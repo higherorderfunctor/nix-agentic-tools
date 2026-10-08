@@ -229,3 +229,8 @@ Open decisions:
   false when MCP is not under test, or the Kimchi fixture drops its stdio
   entries. Whether a connected HTTP MCP server also blocks exit is untested
   (needs network).
+
+Kiro fixtures set the isolated global `chat.enableWorkflows` from the enabled
+technique inventory. They never depend on or modify the operator's global
+workflow preference. The inventory and rendered skill use the same effective
+technique selection; disabled nodes are excluded.

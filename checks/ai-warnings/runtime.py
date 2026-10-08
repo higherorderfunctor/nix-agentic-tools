@@ -123,12 +123,12 @@ def credentials(manifest):
 
 def workflows(script, root):
     argv = [sys.executable, script, "workflows", str(root)]
-    run(argv, warning="ai.kiro.unlockedRolloutFeatures includes workflows")
+    run(argv, warning="ai.kiro.cli.workflows.enable or ai.kiro.cli.unlockedRolloutFeatures")
     settings = root / "settings/cli.json"
     settings.parent.mkdir(parents=True)
     for value in ['{}', '{"chat.enableWorkflows":false}', 'invalid']:
         settings.write_text(value)
-        run(argv, warning="ai.kiro.unlockedRolloutFeatures includes workflows")
+        run(argv, warning="ai.kiro.cli.workflows.enable or ai.kiro.cli.unlockedRolloutFeatures")
     settings.write_text('{"chat.enableWorkflows":true}')
     run(argv)
 

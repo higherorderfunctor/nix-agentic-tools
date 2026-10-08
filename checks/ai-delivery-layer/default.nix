@@ -225,7 +225,7 @@
       native.harnessSettings.hideThinkingBlock = true;
       native.settings.llmEndpoint = "SNAPSHOT-NATIVE";
     };
-    kiro.native.settings.chat.defaultModel = "SNAPSHOT-NATIVE";
+    kiro.cli.native.settings.chat.defaultModel = "SNAPSHOT-NATIVE";
   };
   snapshotConfig = runtimes: {
     ai = pools // lib.genAttrs runtimes (runtime: {enable = true;} // native.${runtime});

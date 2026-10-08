@@ -84,8 +84,8 @@ this repository that is two options, declared in
 `packages/kiro-cli/lib/mkKiro.nix`:
 
 ```nix
-ai.kiro.unlockedRolloutFeatures = ["workflows"];
-ai.kiro.v3 = true;                  # required — the commands need the kas engine
+ai.kiro.cli.unlockedRolloutFeatures = ["workflows"];
+ai.kiro.cli.v3 = true;                  # required — the commands need the kas engine
 ```
 
 **`KIRO_ENABLED_FEATURES` does not work, and the reason is worth knowing because
@@ -1527,7 +1527,7 @@ the check agree without any interpolation. Since at least 2.21.4 the vendor's
 workflow-creator prompt prescribes absolute `{{worktree_path}}/…` paths. These
 fail for sibling worktrees outside the workspace. Require workspace-relative
 fileCheck paths in the `workflowPrompt` brief, or opt into
-`ai.kiro.tweaks.relativeFileCheckPaths = true` on Home Manager or devenv
+`ai.kiro.cli.tweaks.relativeFileCheckPaths = true` on Home Manager or devenv
 (default false). In the pinned 2.27.1 bundle the conflicting paragraph begins
 "Every path in a prompt or stop condition is absolute" and explicitly extends
 that rule to `fileCheck.path`. This exact-match tweak keeps absolute
@@ -1545,7 +1545,7 @@ the condition can never match and the loop silently runs to `maxIterations`
 
 The repository no longer injects per-turn workflow reminders or decodes the
 vendor steering. The separate opt-in
-`ai.kiro.tweaks.stripVendorWorktreeSteering` removes the vendor paragraph
+`ai.kiro.cli.tweaks.stripVendorWorktreeSteering` removes the vendor paragraph
 assigning worktree setup and a `mainline` fast-forward to workflows, leaving git
 workflow to repository instructions. Each selected replacement applies
 independently: exact source drift warns and skips only that replacement at
