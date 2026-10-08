@@ -526,10 +526,9 @@ Two kinds of generated content, two owners:
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
 
-The primary checkout has no instruction files left by the old generator. Its
-one-time cleanup is retired; the operator will prune old worktrees that still
-hold those files (decision, 2026-10-08). The ownership writer only prunes files
-in its own ledger, so it does not replace that historical cleanup.
+The old generator's one-time cleanup task is retired. Legacy checkouts may still
+hold instruction files outside the ownership writer's ledger. The writer only
+prunes files in its own ledger, so those legacy files can be deleted by hand.
 
 ### Source Layout
 
