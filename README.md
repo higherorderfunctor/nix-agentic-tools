@@ -1020,6 +1020,19 @@ from the live runtime list, using its own spelling. Usage commands come from the
 existing technique catalog. Both Home Manager and devenv expose the same
 options.
 
+#### Per-turn reminder
+
+The default-on `reminder.{enable,text,source}` supplies a standing request
+granting delegation; `runtimes.<r>.reminder.enable` overrides its shared enable.
+Claude and Codex receive JSON `additionalContext` on both backends, Kimchi on
+devenv only, and Kiro receives plain stdout on both backends. On Codex, inline
+`ai.codex.native.settings.hooks` conflicts with the reminder: move inline hooks
+to `ai.codex.hooks` or set `runtimes.codex.reminder.enable = false`. On Kiro,
+`ai.kiro.hooksDir` conflicts: move those hooks out of `hooksDir` or set
+`runtimes.kiro.reminder.enable = false`. The user-voiced request satisfies
+Claude's delegation escape clause; see
+[anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988).
+
 </details>
 
 <details>
