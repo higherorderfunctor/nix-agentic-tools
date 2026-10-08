@@ -37,6 +37,7 @@
 }: {
   checks = let
     docs = import ../../lib/options-doc.nix {inherit lib pkgs self;};
+    optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
     # The shared runtime registry. This site used to hardcode a FOUR-element list
     # without kimchi, which was a coverage gap rather than an exclusion: kimchi's
     # HM and devenv facets predate this check by about six weeks, and nothing
@@ -223,7 +224,7 @@
       # namespace (Kiro's is CLI-specific); Kimchi owns a second, harness
       # settings file. The former flat names are a deliberate clean cut rather
       # than a compatibility alias.
-      ${guardEach "require_key" jsonDocs [] (map (runtime: "ai.${runtime}.${lib.optionalString (runtime == "kiro") "cli."}native.settings") runtimes)}
+      ${guardEach "require_key" jsonDocs [] (map (runtime: lib.showOption (optionPaths.nativeSettings runtime)) runtimes)}
       ${guardEach "forbid_key" jsonDocs [] (map (runtime: "ai.${runtime}.nativeSettings") runtimes)}
       ${guard "require_key" jsonDocs ["ai.kimchi.native.harnessSettings"]}
       ${guard "forbid_key" jsonDocs ["ai.kimchi.harnessSettings"]}

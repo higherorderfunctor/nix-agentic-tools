@@ -45,6 +45,7 @@
   self,
   ...
 }: let
+  optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
   inherit (pkgs.stdenv.hostPlatform) system;
   drvOf = drv: builtins.unsafeDiscardStringContext drv.drvPath;
   outOf = drv: builtins.unsafeDiscardStringContext drv.outPath;
@@ -161,7 +162,7 @@
   rulePath = ".claude/rules/heading.md";
   rows = backend:
     lib.mapAttrsToList (runtime: leaf: let
-      path = ["ai" runtime] ++ lib.optional (runtime == "kiro") "cli" ++ ["package"];
+      path = optionPaths.launcher runtime "package";
     in {
       name = "${backend} ${lib.showOption path}";
       path = [leaf];

@@ -984,7 +984,7 @@
       assertion = false;
       message =
         ''
-          ai.kiro: devenv writes `native.settings` to the PROJECT-LOCAL
+          ai.kiro.cli.native.settings: devenv writes these settings to the PROJECT-LOCAL
           ${cfg.configDir}/settings/cli.json, and kiro honors only an allowlist
           of keys there. These keys would be written and then
           silently discarded at runtime: ${listed}

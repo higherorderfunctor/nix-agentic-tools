@@ -4,6 +4,7 @@
   ...
 }: let
   inherit (harness) harnessNames;
+  optionPaths = import ../../lib/ai/option-paths.nix {inherit lib;};
 
   # ── The A1 backstop: no module in THIS repo may define a ROOT ai.* option ──
   #
@@ -184,12 +185,16 @@
         }
       ]
       ++ map (runtime: {
+        inherit runtime;
         label = "ai.${runtime}";
         path = ["ai" runtime];
       })
       harnessNames;
     claimsFor = scope: pool: let
-      optionPath = scope.path ++ lib.optional (scope.label == "ai.kiro" && pool == "environmentVariables") "cli" ++ [pool];
+      optionPath =
+        if scope ? runtime && pool == "environmentVariables"
+        then optionPaths.launcher scope.runtime pool
+        else scope.path ++ [pool];
       opt = lib.attrByPath optionPath null evaluated.options;
       declaredIn = map toString (opt.declarations or []);
       isPackageDefinition = definition:

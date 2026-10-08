@@ -2003,13 +2003,13 @@ three runtimes demonstrably do not perform.
   `module-ai-shell-explicit-env-beats-typed-{codex,kiro}`; change them together
   or not at all.
 - **Always-on process defaults do not write hidden normalized-pool entries.**
-  `ai.<cli>.environmentVariables` is the consumer's replacement/negation
-  surface, and definition provenance treats package claims there as owned API.
-  Internal defaults such as the sandbox-safe SSH command therefore ride
-  `ai._sandboxSafeSshCommand` / the `resolvedShell` callback argument and merge
-  under consumer values at the wrapper call site. Opt-in packages may publish
-  documented per-runtime pool entries; two packages still cannot own the same
-  key and scope. See `collision-semantics.md`.
+  `ai.<cli>.environmentVariables` (Kiro: `ai.kiro.cli.environmentVariables`) is
+  the consumer's replacement/negation surface, and definition provenance treats
+  package claims there as owned API. Internal defaults such as the sandbox-safe
+  SSH command therefore ride `ai._sandboxSafeSshCommand` / the `resolvedShell`
+  callback argument and merge under consumer values at the wrapper call site.
+  Opt-in packages may publish documented per-runtime pool entries; two packages
+  still cannot own the same key and scope. See `collision-semantics.md`.
 
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.

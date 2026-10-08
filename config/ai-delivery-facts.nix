@@ -1,6 +1,7 @@
 # Consumer facts and independent input probes. Physical paths, methods and
 # activation names belong to the generated delivery matrix.
 {lib}: let
+  optionPaths = import ../lib/ai/option-paths.nix {inherit lib;};
   absent = reason: {
     inherit reason;
     primitive = "notApplicable";
@@ -24,7 +25,7 @@
     pruneTrigger = "none; switching the profile/shell selects a new store launcher with the current environment.";
   };
   mcpProbe = ecosystem: probe ["ai" ecosystem "mcpServers"] {probe.command = "true";} {};
-  settingsProbe = ecosystem: probe ["ai" ecosystem "native" "settings"] {model = "probe";} {};
+  settingsProbe = ecosystem: probe (optionPaths.nativeSettings ecosystem) {model = "probe";} {};
   hookProbe = probe ["ai" "kiro" "hooksJson"] {probe = ''{"event":"pre-commit"}'';} {};
   ownRetraction = mode: "On ${retractionMoment mode}, lib/ai/own.nix's write entry runs lib/ai/own.py, which reads the leaves the prior generation's ledger recorded, removes the retired ones, reasserts the declared ones, and preserves unowned siblings. Both loops live in that program's `run`: every retraction across every target, then every assertion.";
   # The same program with the other container, for a target whose units are
@@ -47,7 +48,7 @@
       then [["ai" ecosystem "native" "settings" "permissions"]]
       else []
     else if surface == "settings"
-    then [["ai" ecosystem "native" "settings"]] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "native" "harnessSettings"]
+    then [(optionPaths.nativeSettings ecosystem)] ++ lib.optional (ecosystem == "kimchi") ["ai" "kimchi" "native" "harnessSettings"]
     # Every agents runtime has `agentsDir`; Codex and Kiro also take native
     # records, which alone can produce a file (a native-only agent). The
     # ai-warnings-delivery check holds this list to the records'
@@ -58,7 +59,13 @@
       ++ lib.optional (builtins.elem ecosystem ["codex" "kiro"]) ["ai" ecosystem "native" "agents"]
     else if ecosystem == "kiro" && surface == "hooks"
     then [["ai" "kiro" "hooks"] ["ai" "kiro" "hooksDir"] ["ai" "kiro" "hooksJson"]]
-    else [["ai" surface] ["ai" ecosystem surface]];
+    else
+      [["ai" surface]]
+      ++ lib.optional (builtins.elem surface optionPaths.records.${ecosystem}.supportedPools) (
+        if surface == "environmentVariables"
+        then optionPaths.launcher ecosystem surface
+        else ["ai" ecosystem surface]
+      );
   both = value: {
     devenv = value;
     hm = value;
@@ -181,7 +188,7 @@
         } {}
     else if row.ecosystem == "kiro"
     then
-      probe ["ai" "kiro" "cli" "native" "settings"]
+      probe (optionPaths.nativeSettings row.ecosystem)
       (
         if row.mode == "hm"
         then {chat.defaultModel = "probe";}
