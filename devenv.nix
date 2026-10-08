@@ -250,19 +250,6 @@ in {
     ];
   };
 
-  # ── Shell Init ──────────────────────────────────────────────────────────
-  enterShell = ''
-    for dir in .claude/skills .github/skills .kiro/skills; do
-      if [ -d "$dir" ]; then
-        find "$dir" -maxdepth 1 -type l | while read -r link; do
-          if [ ! -e "$link" ]; then
-            rm -f "$link"
-          fi
-        done
-      fi
-    done
-  '';
-
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
     # Shell-entry tasks have finished, so full-corpus validation cannot race

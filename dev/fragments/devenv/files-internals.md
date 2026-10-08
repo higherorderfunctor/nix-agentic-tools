@@ -1,6 +1,6 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-10-04 — Claude's skills are `ai.*` delivery entries.
+> **Last verified:** 2026-10-08 — Claude's skills are `ai.*` delivery entries.
 > The repository's instruction files are `ai.*`'s own read-only copies (`own`),
 > never `files.*` symlinks; the generator's materializer and the AGENTS.md seed
 > are gone. Copilot, Kiro and Kimchi settings and Codex daemon settings are
@@ -151,9 +151,12 @@ Look for `Conflicting file <path>` or `Conflicting non-file <path>` lines.
 
 devenv tracks managed files in `${config.devenv.state}/files.json`. On every
 run, the cleanup task reads previous state, compares to current config, and
-removes orphaned symlinks pointing into `/nix/store/*`. It **only removes
-symlinks** — never real files or directories. This is another reason Layout A →
-B transitions get stuck: orphan cleanup can't clear a real dir that a previous
+removes orphaned symlinks pointing into `/nix/store/*`. The repository needs no
+extra top-level skill-link prune: Claude, Copilot and Kiro skills are real
+directories with per-file links. Cleanup handles removed entries, and the
+delivery guard handles changed store-link targets. It **only removes symlinks**
+— never real files or directories. This is another reason Layout A → B
+transitions get stuck: orphan cleanup can't clear a real dir that a previous
 generation laid down.
 
 ### The user-space walker (the delivery router's one walk)
