@@ -7,6 +7,26 @@
   ...
 }: let
   inherit (harness) claudeSettings evalDevenv evalHm mkTest mkWrapperGrepTest;
+  copilotRootShellTest = backend: evaluate: let
+    result = evaluate {
+      ai.shell = pkgs.bash;
+      ai.copilot = {
+        enable = true;
+        environmentVariables.AI_COPILOT_PROBE = "wrapper-live";
+      };
+    };
+    packages =
+      if backend == "hm"
+      then result.config.home.packages
+      else result.config.packages;
+  in
+    mkWrapperGrepTest {
+      name = "ai-shell-root-excluded-from-copilot-${backend}-wrapper";
+      package = builtins.head packages;
+      bin = "copilot";
+      needles = ["AI_COPILOT_PROBE" "wrapper-live"];
+      absentNeedles = ["SHELL"];
+    };
 in {
   checks = {
     # ── ai.shell — root default with per-runtime override ───────────
@@ -163,6 +183,11 @@ in {
         needles = ["/explicit/zsh"];
         absentNeedles = [(lib.getExe pkgs.bash)];
       };
+
+    # A live wrapper must not receive the unsupported root shell on either
+    # backend. The explicit marker proves wrapping independently of SHELL.
+    module-ai-shell-root-excluded-from-copilot-devenv-wrapper = copilotRootShellTest "devenv" evalDevenv;
+    module-ai-shell-root-excluded-from-copilot-hm-wrapper = copilotRootShellTest "hm" evalHm;
 
     # POSITIVE CONTROL for the two exclusion tests below. They assert an
     # eval FAILURE, and a test that only ever asserts failure passes just as
