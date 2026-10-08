@@ -187,6 +187,10 @@ subprocess.run(["git", "-C", str(root), "worktree", "add", "-qb", "fixture-linke
 sized(linked / "AGENTS.md", 40000)
 trust()
 notice(False, cwd=linked)
+# Measured with Codex 0.161.0: an empty worktree entry does not revoke trust.
+with (Path(os.environ["CODEX_HOME"]) / "config.toml").open("a") as stream:
+    stream.write(f"\n[projects.{json.dumps(str(linked))}]\n")
+notice(False, cwd=linked)
 user_config()
 assert b"must be trusted" in notice(True, cwd=linked)
 

@@ -38,13 +38,17 @@ def probe(directory, warning, expected_limit=32768):
     assert result.stdout == "", result
     if warning:
         assert "warning: Codex ignores" in result.stderr
-        assert "an explicit cwd entry overrides main-checkout trust" in result.stderr
+        assert "Set the project trust_level to trusted in the user config" in result.stderr
         assert str(directory / ".codex/config.toml") in result.stderr
         assert str(user) in result.stderr
     else:
         assert result.stderr == "", result.stderr
-    result = subprocess.run([limit, str(directory), "32768"], env=env, capture_output=True, text=True, check=True)
-    assert result.stderr == "" and result.stdout.strip() == str(expected_limit), result
+    result = subprocess.run([limit, str(directory), "32768"], env=env, capture_output=True, text=True, check=False)
+    if expected_limit is None:
+        # The shared resolver rejects malformed TOML; advisory callers stay silent.
+        assert result.returncode != 0, result
+    else:
+        assert result.returncode == 0 and result.stderr == "" and result.stdout.strip() == str(expected_limit), result
 
 
 trust([])
@@ -56,11 +60,13 @@ trust([(root, "trusted"), (worktree, "untrusted")])
 probe(worktree, True)
 trust([(plain, "trusted")])
 probe(plain, False, 65536)
-# Empty cwd entry shadows main-checkout trust, as in Codex's own lookup.
+# Measured with Codex 0.161.0: an empty worktree entry keeps clone trust.
 trust([(root, "trusted")])
 with user.open("a") as stream:
     stream.write(f"\n[projects.{json.dumps(str(worktree))}]\n")
-probe(worktree, True)
+probe(worktree, False, 65536)
+trust([(worktree, "trusted")])
+probe(worktree, False, 65536)
 # Missing user config is untrusted; missing project config stays silent.
 # Each unreadable input follows an otherwise identical bad case.
 trust([])
@@ -83,4 +89,4 @@ for unreadable in (user, project):
         unreadable.chmod(0o600)
 probe(root, True)
 user.write_text("not toml!")
-probe(root, False)
+probe(root, False, None)
