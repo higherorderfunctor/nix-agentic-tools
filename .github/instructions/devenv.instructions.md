@@ -7,7 +7,7 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-03 — the CI build matrix reads `ciPackages`; the
+> **Last verified:** 2026-10-08 — the CI build matrix reads `ciPackages`; the
 > repo shell applies `buildOverlay`. Kimchi source builds require fresh closure
 > measurements; old binary-release figures are not current estimates. The
 > instruction copier check is gone with the generator's materializer.
@@ -136,9 +136,10 @@ its throwaway AGENTS.md without the Semble rule; the drift check pins
 
 Integration roots remain available to normal workspace-write and named-profile
 consumers, but this project override intentionally does not use them. enterTest
-asserts that the wrapper injects no `--profile`, the project config selects
-`danger-full-access` without workspace refinements or named permission keys, and
-no stale whole-file profile remains in `CODEX_HOME`.
+asserts that the project config selects `danger-full-access` without workspace
+refinements or named permission keys. The old `--profile` wrapper and stale
+whole-file profile assertions are gone: `ai.codex.profiles` was removed, and
+`packages/chatgpt-codex/lib/launcher-flags.nix` owns the launcher flags.
 
 Two proofs to preserve when touching the diagnostic: with `CI` unset the shell
 must contain grammar/path-customized Semble and its scoped cache root, while an

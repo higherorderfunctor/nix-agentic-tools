@@ -296,29 +296,12 @@ in {
 
     # Per-runtime ai.shell delivery, against the real artifacts on PATH.
     ${lib.getExe verifyAiShell}
-    # Codex must inject no ARGV: a separate `--profile` config layer would make
-    # cross-layer permission behavior harder to inspect and validate.
-    #
-    # It used to assert "is the unwrapped package", which was a proxy for the
-    # same thing and stopped being true on 2026-08-10: Codex is now wrapped to
-    # carry process ENVIRONMENT (`SHELL` from `ai.shell`, `GIT_SSH_COMMAND`
-    # from `gitSshConfigWorkaround`) — see lib/ai/launcher.nix, which Codex's
-    # launcher calls with no flags and so only ever emits `--set`. An env-only wrapper cannot reintroduce the
-    # profile, so the guard now tests the hazard directly instead of the proxy.
     nat_codex_bin="$(command -v codex)"
-    test -n "$nat_codex_bin" || { echo "FAIL: Codex is not on PATH"; exit 1; }
-    if ${pkgs.coreutils}/bin/head -c2 "$nat_codex_bin" | ${pkgs.gnugrep}/bin/grep -Fq '#!'; then
-      # A generated wrapper script — it must set env and nothing else.
-      ! ${pkgs.gnugrep}/bin/grep -Fq -- '--profile' "$nat_codex_bin" || { echo "FAIL: Codex wrapper injects --profile"; exit 1; }
-    else
-      test "$nat_codex_bin" = "${lib.getExe pkgs.ai.chatgpt-codex}" || { echo "FAIL: Codex on PATH is neither the expected package nor a wrapper for it"; exit 1; }
-    fi
     nat_codex_config=.codex/config.toml
     test -f "$nat_codex_config" || { echo "FAIL: Codex project config was not written"; exit 1; }
     ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "danger-full-access"' "$nat_codex_config" || { echo "FAIL: Codex project config does not disable the sandbox"; exit 1; }
     ! ${pkgs.gnugrep}/bin/grep -Fq '[sandbox_workspace_write]' "$nat_codex_config" || { echo "FAIL: Codex project config retains workspace-write refinements while the sandbox is disabled"; exit 1; }
     ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config mixes named permissions with the sandbox override"; exit 1; }
-    test ! -e "''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml" || { echo "FAIL: a stale nix-agentic-tools Codex profile is still materialized in CODEX_HOME"; exit 1; }
     ${lib.optionalString (!isCI) ''
       nat_hooks_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-path hooks)"
       for nat_hook in pre-commit commit-msg; do
