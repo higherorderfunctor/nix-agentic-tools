@@ -1,7 +1,8 @@
 # pnpm 12 — override nixpkgs' source-built pnpm_12 now that it exists;
 # the operator prefers compiling over unpacking upstream's native binaries.
-# Only our version, source/cargo hashes, locked Rust platform and update script
-# move. Nixpkgs owns the phases, install layout, completions and metadata.
+# Our version, dependency pins, loader preparation, locked Rust platform and
+# update script move. Nixpkgs owns the phases, install layout, completions
+# and metadata.
 # Use .override for version: the GitHub tag, majorVersion and upstream update
 # selector read the ARGUMENT version, so overrideAttrs would keep the old tag.
 # Historical binary/placeholder measurements:
@@ -17,9 +18,16 @@
   srcHash = sources.srcHash or lib.fakeHash;
   sourcesFile = repoPath ../../../../sources-12.json;
   sidecarMajor = lib.versions.major sources.version;
+  # Bootstrap with the pinned JavaScript implementation, never the Rust
+  # pnpm being built. Fetch and configure must use the same store layout.
+  pnpm = pkgs.ai.generic.pnpm_11;
+  # Upstream's global virtual store nests package files inside the fetcher's
+  # metadata tree, where nixpkgs would try to normalize non-JSON fixtures.
+  pnpmInstallFlags = ["--config.enable-global-virtual-store=false"];
+  pnpmWorkspaces = ["@pnpm/esm-loader"];
 
   # mkUpdateScript writes a version-only candidate; fake hashes let the fixers
-  # evaluate it, then restore source before deriving its cargo vendor tree.
+  # evaluate it, then restore source before deriving its dependency trees.
   fixVendorHash = packageLib.mkHashFix {
     inherit pkgs sourcesFile;
     attr = "pnpm_12";
@@ -32,6 +40,7 @@
         drvPattern = "-vendor";
         key = "cargoHash";
       }
+      packageLib.hashFixTargets.pnpmDeps
     ];
   };
   package = pkgs.pnpm_12.override {
@@ -48,6 +57,30 @@ in
   # No postPatch of our own: nixpkgs strips the cargo-sources block itself.
   # The removed copy: `git show f38b946f:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
     package.overrideAttrs (finalAttrs: prev: {
+      inherit pnpmInstallFlags pnpmWorkspaces;
+      pnpmDeps = pkgs.fetchPnpmDeps {
+        inherit (finalAttrs) src version;
+        inherit pnpm pnpmInstallFlags pnpmWorkspaces;
+        fetcherVersion = 4;
+        hash = sources.pnpmDepsHash or lib.fakeHash;
+        pname = "pnpm-${finalAttrs.version}";
+      };
+      nativeBuildInputs =
+        (prev.nativeBuildInputs or [])
+        ++ [
+          pkgs.nodejs
+          pnpm
+          pkgs.pnpmConfigHook
+        ];
+      preBuild =
+        (prev.preBuild or "")
+        + ''
+          (
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          node pnpm/esm-loader/scripts/bundle-runtime.mjs
+          )
+        '';
       doInstallCheck = true;
       # Upstream's passthru testVersion is separate from the package build.
       # Keep its install checks if introduced, and require our exact pin too.
