@@ -42,7 +42,7 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-> **Last verified:** 2026-10-03 — repo documents and agent files are built by
+> **Last verified:** 2026-10-08 — repo documents and agent files are built by
 > `mkTree` with the evaluated `ai.formatter` treefmt config and the named
 > guards; scoped rules rely on the normalized matcher-derived `fileMatch`
 > trigger default. `generate:all` writes instruction and repo-document
@@ -81,6 +81,10 @@ Two kinds of generated content, two owners:
 
 `ai.*` genuinely cannot express the human documents: they are not context or
 rules of any runtime. Everything instruction-shaped goes through `ai.*`.
+
+The old generator's one-time cleanup task is retired. Legacy checkouts may still
+hold instruction files outside the ownership writer's ledger. The writer only
+prunes files in its own ledger, so those legacy files can be deleted by hand.
 
 ### Source Layout
 
