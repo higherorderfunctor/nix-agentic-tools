@@ -192,11 +192,10 @@ in {
         The CLI and the MCP server route the same way, the MCP server per
         tool call from its `content` argument.
 
-        Anything other than the vanilla settings patches Semble, so any model
-        edit changes the package and the cache guard clears the indexes on
-        the next activation or shell entry. Indexes built with a model other
-        than Semble's own live beside the default ones, suffixed with a hash
-        of the model path. A runtime override replaces the whole list.
+        Model edits change the runtime JSON and launcher while sharing the
+        Semble build. Indexes built with a model other than Semble's own live
+        beside the default ones, suffixed with a hash of the model path.
+        A runtime override replaces the whole list.
       '';
     };
     defaultContent = lib.mkOption {

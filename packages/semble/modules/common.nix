@@ -1,17 +1,7 @@
 {
-  # Where this backend keeps semble's cache. Both backends answer; only a
-  # backend that MOVES the cache off semble's own default has to tell semble
-  # about it (see `relocatesCache`).
   cacheLocation,
   installCacheInvalidation,
   installPackages,
-  # True when `cacheLocation` is a relocation rather than semble's default.
-  # Relocating means semble must be told, and the only honest place to put
-  # that is the process that reads it. This module does not write the shell
-  # environment on either backend: devenv's `env` attrset would export the
-  # value into the project shell, handing it to the developer's own session
-  # and every other process running there, not just semble.
-  relocatesCache ? false,
 }: {
   config,
   lib,
@@ -24,11 +14,14 @@
     ai = config.ai.internal.packages;
     inherit lib;
   });
+  renderConfig = import ../lib/configFile.nix {inherit pkgs;};
   customization = import ../lib/customization.nix {inherit lib;};
   records = import ../lib/integrations.nix;
   runtimes = program.supportedRuntimes;
   cacheRoot = cacheLocation {inherit config lib;};
-  customizePackage = import ../lib/customizePackage.nix {inherit lib pkgs;};
+  launcher = import ../lib/launcher.nix {inherit lib pkgs;};
+  defaultSpec = customization.normalize {};
+  defaultConfig = customization.config defaultSpec;
 
   featurePaths = {
     instructions = ["cli" "instructions"];
@@ -55,22 +48,24 @@
     then portableFeature
     else portable.enable;
 
-  # The customization checks, shared by every runtime state and by
-  # `finalPackage`, which is built from the portable config.
-  mkCustomization = cfg: let
-    spec = customization.normalize {inherit (cfg) defaultContent defaultModel grammars models pathMappings;};
-    packageCustomizable = customization.isVanilla spec || cfg.package ? overridePythonAttrs;
+  # Validation also feeds module assertions, so invalid specs use the default
+  # config for launcher construction until those assertions report the errors.
+  configState = cfg: let
+    requested = customization.normalize {inherit (cfg) defaultContent defaultModel grammars models pathMappings;};
+    requestedConfig = customization.config requested;
+    validationErrors = customization.errors requested;
     errors =
-      customization.errors spec
-      ++ lib.optional (!packageCustomizable)
-      "Semble grammar, path-mapping or model customization requires `package` to expose overridePythonAttrs.";
-  in {
-    inherit errors;
-    customizationWarnings = customization.warnings spec;
-    customizedPackage =
+      validationErrors
+      ++ lib.optional (validationErrors == [] && requestedConfig != defaultConfig && (cfg.package.passthru.sembleConfigSchema or null) != 1)
+      "Semble runtime customization requires `package.passthru.sembleConfigSchema = 1`; an unpatched package would ignore SEMBLE_NIX_CONFIG.";
+    spec =
       if errors == []
-      then customizePackage cfg.package spec
-      else cfg.package;
+      then requested
+      else defaultSpec;
+  in {
+    inherit cfg errors spec;
+    configFile = renderConfig cfg.package (customization.config spec);
+    customizationWarnings = customization.warnings requested;
   };
 
   mkState = runtime: let
@@ -79,13 +74,9 @@
     cfg = program.resolve config runtime;
     selected = featureName: featureEnabled portable override featureName;
   in
-    mkCustomization cfg
+    configState cfg
     // {
-      inherit
-        cfg
-        runtime
-        selected
-        ;
+      inherit runtime selected;
       integrationActive = lib.any selected ["instructions" "mcp" "subagent"];
     };
 
@@ -94,57 +85,31 @@
   activeStates = builtins.filter (state: state.integrationActive) stateList;
   integrationActive = activeStates != [];
   codexSelected = lib.any states.codex.selected ["instructions" "mcp" "subagent"];
-  packageKey = package: builtins.hashString "sha256" (builtins.unsafeDiscardStringContext (toString package));
-  variantKeys = lib.unique (map (state: packageKey state.customizedPackage) activeStates);
+  configKey = state: builtins.hashString "sha256" (builtins.unsafeDiscardStringContext (toString state.configFile));
+  variantKeys = lib.unique (map configKey activeStates);
   variantCount = lib.length variantKeys;
-  # One installed variant per distinct customized package. A package that no
-  # active runtime uses (only `finalPackage` can ask for one) gets its own
-  # package-keyed cache directory, so it never shares an index with another.
-  mkVariant = package: let
-    key = packageKey package;
+  # Each distinct config gets a launcher and its own cache. The package stamp
+  # still records the underlying Semble build, independent of runtime config.
+  mkVariant = state: let
+    key = configKey state;
     cacheDir =
       if variantCount == 1 && lib.elem key variantKeys
       then cacheRoot
       else "${cacheRoot}/variants/${builtins.substring 0 16 key}";
-    launcherArgs =
-      ["--unset" "PYTHONPATH"]
-      ++ lib.optionals relocatesCache ["--set" "SEMBLE_CACHE_LOCATION" cacheDir];
+    package = state.cfg.package;
   in {
     inherit cacheDir package;
-    # Every installed package, vanilla included, goes through this launcher
-    # set rather than being installed as-is, for two Python reasons:
-    #
-    # - It carries ONLY `bin/`. Semble is a Python application, and nixpkgs
-    #   propagates a Python application's whole closure plus the interpreter
-    #   (`nix-support/propagated-build-inputs`). In a devenv shell, Python's
-    #   setup hook turns that into PYTHONPATH entries for numpy, tokenizers,
-    #   huggingface-hub and the rest, ahead of the project's own virtualenv.
-    #   A launcher with no `lib/` and no `nix-support/` leaks nothing.
-    # - Each launcher unsets PYTHONPATH. nixpkgs' entry point appends the
-    #   app's own site-packages AFTER PYTHONPATH, so any `semble` (or numpy)
-    #   the calling shell exports would shadow Semble's own.
-    #
-    # The upstream derivation is untouched; only these launchers are new.
-    wrappedPackage =
-      pkgs.runCommand "${lib.getName package}-wrapped" {
-        nativeBuildInputs = [pkgs.makeWrapper];
-        passthru = (package.passthru or {}) // {unwrapped = package;};
-        meta = lib.optionalAttrs (package.meta ? mainProgram) {inherit (package.meta) mainProgram;};
-      } ''
-        mkdir -p "$out/bin"
-        for bin in ${package}/bin/*; do
-          makeWrapper "$bin" "$out/bin/$(basename "$bin")" ${lib.escapeShellArgs launcherArgs}
-        done
-      '';
+    wrappedPackage = launcher {
+      inherit cacheDir package;
+      inherit (state) spec;
+    };
   };
-  variants =
-    builtins.listToAttrs
-    (map (state: {
-        name = packageKey state.customizedPackage;
-        value = mkVariant state.customizedPackage;
-      })
-      activeStates);
-  variantFor = state: variants.${packageKey state.customizedPackage};
+  variants = builtins.listToAttrs (map (state: {
+      name = configKey state;
+      value = mkVariant state;
+    })
+    activeStates);
+  variantFor = state: variants.${configKey state};
   statePackage = state: (variantFor state).wrappedPackage;
   multiVariant = variantCount > 1;
   commandFor = state:
@@ -160,8 +125,8 @@
 
   # The package `semble` resolves to for the portable config, with the same
   # cache relocation as the installed launcher.
-  portablePackage = (mkCustomization config.ai.programs.semble).customizedPackage;
-  finalPackage = (variants.${packageKey portablePackage} or (mkVariant portablePackage)).wrappedPackage;
+  portableState = configState config.ai.programs.semble;
+  finalPackage = (variants.${configKey portableState} or (mkVariant portableState)).wrappedPackage;
 
   installedPackage =
     if !multiVariant
@@ -181,6 +146,8 @@
           sembleRuntimePackages = lib.genAttrs (map (state: state.runtime) activeStates) (runtime: statePackage states.${runtime});
         };
       } ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
         ${pkgs.coreutils}/bin/mkdir -p "$out/bin"
         for bin in ${canonicalPackage}/bin/*; do
           ${pkgs.coreutils}/bin/ln -s "$bin" "$out/bin/$(basename "$bin")"
@@ -211,7 +178,7 @@
             ${variant.wrappedPackage}/bin/semble clear index >/dev/null
 
           temporary="$(${pkgs.coreutils}/bin/mktemp "$cache_dir/.nix-package.XXXXXX")"
-          trap '${pkgs.coreutils}/bin/rm -f "$temporary"' EXIT
+          trap '${pkgs.coreutils}/bin/rm "$temporary"' EXIT
           printf '%s\n' "$expected" > "$temporary"
           ${pkgs.coreutils}/bin/mv -f "$temporary" "$stamp"
           trap - EXIT
@@ -220,23 +187,9 @@
     '';
   };
 
-  # A relocating backend relocates UNCONDITIONALLY. The intent is a
-  # project-local cache, full stop — nothing about it is Codex-specific.
-  #
-  # It read otherwise until 2026-08-10 only because the `SEMBLE_CACHE_LOCATION`
-  # write happened to live inside the codex-cache hook, which is gated on
-  # `codexSelected`. The cache therefore moved depending on whether CODEX was
-  # enabled: semble for Claude alone got the XDG default, the same project with
-  # Codex on got the project-local one. That was an artifact of where the write
-  # sat, and the operator confirmed the project-local cache was always the
-  # point; Codex merely inherited the write path by being co-located with it.
-  #
-  # Granting Codex the writable root DOES stay gated on `codexSelected` below.
-  # That gate is real: it is about Codex's sandbox, not about where semble
-  # keeps its index.
-
-  # The MCP server routes each call by content from the package's own table,
-  # so it takes no arguments.
+  # Both backends bake their owned cache location into the launcher. Codex's
+  # writable root remains gated below because it only serves that sandbox.
+  # MCP routes calls using the same runtime JSON as the CLI.
   mcpEntry = state: {
     args = [];
     command = "${statePackage state}/bin/semble-mcp";
@@ -315,7 +268,7 @@ in {
       type = lib.types.package;
       readOnly = true;
       description = ''
-        The Semble package built from the portable `ai.programs.semble`
+        The Semble launcher configured from the portable `ai.programs.semble`
         config: grammars, path mappings and model routing applied, with the
         module's cache location baked in.
       '';

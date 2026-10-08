@@ -1,7 +1,8 @@
 ## Binary Cache Maintenance
 
 > **Last verified:** 2026-10-07 — Semble is built and published by the package
-> matrix; conditional customization still builds a separate derivation.
+> matrix; runtime config variants share that build and add only JSON and
+> launchers.
 
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
@@ -26,12 +27,12 @@ Extra Semble grammars already in nixpkgs remain direct consumer-owned
 `pkgs.tree-sitter-grammars` inputs. Do not re-export them from this flake:
 Cachix's nixpkgs follow already supplies those store paths. A future custom
 grammar absent from nixpkgs must be exposed as a flake package so the
-authenticated package matrix publishes it. The Semble package patched to load
-the selected grammars is a consumer-specific build, separate from the published
-base package: the `module-semble-extra-grammars-load` flake check builds it in
-the read-only Cachix job, parses real AWK and jq samples, and exercises
-mapped-file discovery and language selection. This proves customization without
-publishing a grammar-set-specific Semble derivation.
+authenticated package matrix publishes it. The published Semble build always
+includes the runtime-config patches. Consumer grammar, mapping and model
+selections rebuild only store JSON and a bin-only launcher. The
+`module-semble-extra-grammars-load` flake check parses real AWK and jq samples
+through that launcher and exercises mapped-file discovery and language
+selection.
 
 This is separate from `devenv test` closure policy.
 `ai.programs.semble.install = !isCI` (dev/ai.nix) keeps the interactive package

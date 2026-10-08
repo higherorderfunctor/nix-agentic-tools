@@ -10,6 +10,8 @@
   versionCheckHook,
 }: let
   inherit (python3.pkgs) buildPythonPackage;
+  customization = import ../../../lib/customization.nix {inherit lib;};
+  defaultConfig = pkgs.writeText "semble-config.json" (builtins.toJSON (customization.config {}));
   buildSystem = with python3.pkgs; [setuptools setuptools-scm];
   sourcesFiles = {
     model2vec = ../../../model2vec-sources.json;
@@ -171,11 +173,29 @@ in
 
     build-system = buildSystem;
 
+    # One Semble build reads all variants' configuration at runtime.
+    patches = [
+      ../../../patches/extra-grammars.patch
+      ../../../patches/models.patch
+    ];
+    # Scope strict mode: Python's later wrapping hook reads unset array keys.
+    postPatch = ''
+      (
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        cp ${../../../runtime}/*.py src/semble/
+      )
+    '';
+
     # setuptools_scm normally derives the version from git metadata, but the
     # fetched source tarball has none. Inject the version explicitly so the
     # build doesn't fall back to 0.0.0+unknown (which would also break the
     # static `attr = semble.version.__version__` resolver in pyproject.toml).
-    env.SETUPTOOLS_SCM_PRETEND_VERSION = finalAttrs.version;
+    env = {
+      # Import checks bypass the entry-point wrappers and still need the config.
+      SEMBLE_NIX_CONFIG = defaultConfig;
+      SETUPTOOLS_SCM_PRETEND_VERSION = finalAttrs.version;
+    };
 
     # Ship the [mcp] extra unconditionally — Nix users get one closure either
     # way, and exposing both binaries (`semble` and `semble-mcp`) is cleaner
@@ -193,6 +213,13 @@ in
       vicinity
     ];
 
+    makeWrapperArgs = [
+      "--unset"
+      "PYTHONPATH"
+      "--set-default"
+      "SEMBLE_NIX_CONFIG"
+      "${defaultConfig}"
+    ];
     nativeBuildInputs = [makeWrapper];
 
     # `semble-mcp` is a stable entry-point name for the MCP role; with no
@@ -215,7 +242,14 @@ in
     doInstallCheck = true;
     nativeInstallCheckInputs = [versionCheckHook];
 
-    passthru = {inherit updateScript;} // (import ../../../extract {inherit lib pkgs;}) finalAttrs.finalPackage;
+    passthru =
+      {
+        inherit updateScript;
+        # Direct interpreter scripts and extractors bypass the bin wrappers.
+        sembleConfig = defaultConfig;
+        sembleConfigSchema = 1;
+      }
+      // (import ../../../extract {inherit lib pkgs;}) finalAttrs.finalPackage;
 
     meta = with lib; {
       changelog = "https://github.com/MinishLab/semble/releases/tag/v${finalAttrs.version}";

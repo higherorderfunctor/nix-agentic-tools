@@ -1,7 +1,6 @@
 # Semble package customization: extra grammars, path mappings and
-# content-routed embedding models. Validation, the vanilla test, and the data
-# baked into a customized package. Shared by `customizePackage` (direct
-# callers, which throw) and the convenience module (which reports the same
+# content-routed embedding models. Validation and runtime configuration shared
+# by `customizePackage` (direct callers, which throw) and the module (which reports
 # messages as assertions and warnings).
 #
 # A spec is `{ grammars ? []; pathMappings ? []; models ? []; defaultContent ?
@@ -109,9 +108,6 @@
     spec.pathMappings)
     ++ map (pattern: "Semble `pathMappings` pattern \"${pattern}\" is listed more than once; only its first entry could ever match.")
     (duplicates (builtins.filter builtins.isString patterns));
-
-  modelsVanilla = spec: enabledModels spec == [] && spec.defaultModel == null && expand spec.defaultContent == contentScope.default;
-  grammarsVanilla = spec: spec.grammars == [] && spec.pathMappings == [];
 in {
   inherit bundledLanguages expand layouts normalize;
 
@@ -122,31 +118,35 @@ in {
     lib.optional (enabledModels spec != [] && !(lib.any (entry: expand entry.content == expand spec.defaultContent) (enabledModels spec)))
     "Semble `models` has no entry for `defaultContent` (${lib.concatStringsSep " " (expand spec.defaultContent)}), so a plain `semble search` uses `defaultModel` and warns on every call.";
 
-  inherit enabledModels grammarsVanilla modelsVanilla;
-  isVanilla = spec: grammarsVanilla spec && modelsVanilla spec;
-
-  # src/semble/semble_models.py: the routing table. Disabled entries are left
-  # out; content is expanded so the patch compares exact sets.
-  table = spec: {
-    DEFAULT_CONTENT = expand spec.defaultContent;
-    DEFAULT_MODEL =
+  # All runtime keys are present, including the upstream defaults. Store paths
+  # retain their string context so the JSON keeps grammars and models alive.
+  config = requested: let
+    spec = normalize requested;
+  in {
+    defaultContent = expand spec.defaultContent;
+    defaultModel =
       if spec.defaultModel == null
       then null
       else "${spec.defaultModel}";
-    MODELS =
+    grammars = lib.listToAttrs (map (grammar:
+      lib.nameValuePair grammar.language {
+        parser = "${grammar}/parser";
+        symbol = "tree_sitter_${lib.replaceStrings ["-"] ["_"] grammar.language}";
+      })
+    spec.grammars);
+    models =
       map (entry: {
         content = expand entry.content;
         model = "${entry.model}";
       })
       (enabledModels spec);
+    # Preserve first-match precedence across entries and their patterns.
+    pathMappings = lib.concatMap (mapping:
+      map (pattern: {
+        inherit (mapping) content language;
+        inherit pattern;
+      })
+      mapping.patterns)
+    spec.pathMappings;
   };
-
-  # The path mappings flattened to one entry per pattern, in list order: the
-  # first match wins, so the consumer's order is the precedence.
-  mappingList = lib.concatMap (mapping:
-    map (pattern: {
-      inherit (mapping) content language;
-      inherit pattern;
-    })
-    mapping.patterns);
 }

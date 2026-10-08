@@ -7,7 +7,6 @@ in {
       import ./integrations.nix
       // {
         inherit customizePackage;
-        withGrammars = args: package: grammars: customizePackage args package {inherit grammars;};
       };
   };
 }
