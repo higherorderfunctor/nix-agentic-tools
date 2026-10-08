@@ -29,6 +29,14 @@ previously justified the runtime workflow:
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
   lifecycle selection and scan the complete tracked validator corpus.
 
+The repository's extra dev-skill delivery assertions are retired. Codex's
+whole-directory skill link is covered by `module-codex-skills-fanout`, and
+`module-sws-skill-references-resolve` checks bundled references. The dev-prefix
+builder in `dev/ai.nix` dereferences references with `cp -RL` and rewrites the
+skill name with `substituteInPlace --replace-fail`; missing references or name
+matches fail the build. These checks do not inspect a developer's materialized
+skill directories.
+
 `devenv.nix` still evaluates an `isCI` branch for the manual diagnostic. It
 omits tooling that enterTest never invokes, but it does not alter repository
 validation declarations. A developer exporting `CI=1` gets fewer interactive
