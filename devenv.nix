@@ -331,14 +331,6 @@ in {
           || { echo "FAIL: $nat_hook still resolves the prek config from the committing worktree"; exit 1; }
       done
     ''}
-    test -f .claude/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
-    # Deref'd references must resolve on disk (guards the dangling-symlink
-    # regression end-to-end, not just at the store-path level).
-    test -f .claude/skills/dev-stack-fix/references/git-branchless.md || { echo "FAIL: dev-stack-fix reference git-branchless.md does not resolve"; exit 1; }
-    test -f .claude/skills/repo-review/SKILL.md || { echo "FAIL: .claude/skills/repo-review/SKILL.md missing"; exit 1; }
-    test -L .agents/skills/dev-stack-fix || { echo "FAIL: .agents/skills/dev-stack-fix is not a skill-directory symlink"; exit 1; }
-    test -f .agents/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .agents/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
-    ${pkgs.gnugrep}/bin/grep -Fq 'name: dev-stack-fix' .agents/skills/dev-stack-fix/SKILL.md || { echo "FAIL: Codex dev-stack-fix metadata is not dev-prefixed"; exit 1; }
     (
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
@@ -374,8 +366,6 @@ in {
         ${pkgs.gnugrep}/bin/grep -Fq -- "$nat_needle" "$nat_codex_default_home/prompt.json" || { echo "FAIL: at Codex's default project_doc_max_bytes, AGENTS.md lost '$nat_needle'"; exit 1; }
       done
     )
-    test -f .github/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .github/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
-    test -f .kiro/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
 
     # Every instruction file `ai.*` writes here lands where its runtime reads

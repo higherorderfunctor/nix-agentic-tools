@@ -7,7 +7,7 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # Diagnostic-lean devenv closure taxonomy
 
-> **Last verified:** 2026-10-03 — the CI build matrix reads `ciPackages`; the
+> **Last verified:** 2026-10-08 — the CI build matrix reads `ciPackages`; the
 > repo shell applies `buildOverlay`. Kimchi source builds require fresh closure
 > measurements; old binary-release figures are not current estimates. The
 > instruction copier check is gone with the generator's materializer.
@@ -27,6 +27,14 @@ previously justified the runtime workflow:
   linked worktrees;
 - `repo-validation-policy`, `repo-lints`, and `shellcheck-corpus` prove
   lifecycle selection and scan the complete tracked validator corpus.
+
+The repository's extra dev-skill delivery assertions are retired. Codex's
+whole-directory skill link is covered by `module-codex-skills-fanout`, and
+`module-sws-skill-references-resolve` checks bundled references. The dev-prefix
+builder in `dev/ai.nix` dereferences references with `cp -RL` and rewrites the
+skill name with `substituteInPlace --replace-fail`; missing references or name
+matches fail the build. These checks do not inspect a developer's materialized
+skill directories.
 
 `devenv.nix` still evaluates an `isCI` branch for the manual diagnostic. It
 omits tooling that enterTest never invokes, but it does not alter repository
