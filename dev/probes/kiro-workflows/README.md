@@ -10,7 +10,7 @@ so a future session can extend rather than rebuild.
 ## Prerequisite
 
 The engine is dark-shipped and off by default — see §1.1. Without
-`ai.kiro.unlockedRolloutFeatures = ["workflows"]` the workflow tools do not
+`ai.kiro.cli.unlockedRolloutFeatures = ["workflows"]` the workflow tools do not
 exist and nothing here is runnable.
 
 **The probe root must be inside the workspace root** (§7.1). A `fileCheck` path

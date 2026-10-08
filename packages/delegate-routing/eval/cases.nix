@@ -48,10 +48,10 @@
     (harness.deliveredFiles config);
     # The delegate techniques the delivered skill offers, by runtime. The
     # runner classifies logged tool calls and shell commands by these names.
-    techniques = lib.mapAttrs (_: runtime:
+    techniques = lib.mapAttrs (_: nodes:
       lib.mapAttrs (_: technique: technique.kind)
-      (lib.filterAttrs (_: technique: builtins.elem technique.kind delegateKinds) runtime.techniques))
-    config.ai.programs.delegate-routing.runtimes;
+      (lib.filterAttrs (_: technique: technique.enable && builtins.elem technique.kind delegateKinds) nodes))
+    ((import ../lib/select-families.nix {inherit lib;}).effectiveTechniques config);
   in
     assert lib.assertMsg (failures == []) (lib.concatStringsSep "\n" failures); {
       inherit expect files id runtime switches task techniques;

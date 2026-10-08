@@ -341,26 +341,80 @@
     # on by default, the program being off leaves Kiro alone, and an explicit
     # consumer value wins.
     "module-delegate-routing-${name}-kiro-v3" = mkTest "delegate-routing-${name}-kiro-v3" (
-      result.config.ai.kiro.v3
-      && !(builtins.any (lib.hasInfix "ai.kiro.v3") result.config.warnings)
-      && !(change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.v3
-      && (change {ai.programs.delegate-routing.runtimes.kiro.enable = false;}).config.ai.kiro.v3
+      result.config.ai.kiro.cli.v3
+      && !(builtins.any (lib.hasInfix "ai.kiro.cli.v3") result.config.warnings)
+      && !(change {ai.programs.delegate-routing.enable = false;}).config.ai.kiro.cli.v3
+      && (change {ai.programs.delegate-routing.runtimes.kiro.enable = false;}).config.ai.kiro.cli.v3
       && !(change {
         ai.programs.delegate-routing.runtimes = {
           kiro.enable = false;
           claude.manualExternalDelegates = ["kimchi"];
         };
-      }).config.ai.kiro.v3
+      }).config.ai.kiro.cli.v3
       && (let
-        unmanaged = change {ai.kiro.package = null;};
+        unmanaged = change {ai.kiro.cli.package = null;};
       in
-        !unmanaged.config.ai.kiro.v3
-        && !(builtins.any (lib.hasInfix "ai.kiro.package is null") unmanaged.config.warnings))
+        !unmanaged.config.ai.kiro.cli.v3
+        && !(builtins.any (lib.hasInfix "ai.kiro.cli.package is null") unmanaged.config.warnings))
       && (let
-        optedOut = change {ai.kiro.v3 = false;};
+        optedOut = change {ai.kiro.cli.v3 = false;};
       in
-        !optedOut.config.ai.kiro.v3 && builtins.any (lib.hasInfix "ai.kiro.v3 is false") optedOut.config.warnings)
+        !optedOut.config.ai.kiro.cli.v3 && builtins.any (lib.hasInfix "ai.kiro.cli.v3 is false") optedOut.config.warnings)
     );
+    "module-delegate-routing-${name}-kiro-workflows" = mkTest "delegate-routing-${name}-kiro-workflows" (let
+      enabled = change {ai.kiro.cli.workflows.enable = true;};
+      enabledSkill = readSkill enabled "kiro";
+      tweaksOn = result:
+        result.config.ai.kiro.cli.tweaks.relativeFileCheckPaths
+        && result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
+      tweaksOff = result:
+        !result.config.ai.kiro.cli.tweaks.relativeFileCheckPaths
+        && !result.config.ai.kiro.cli.tweaks.stripVendorWorktreeSteering;
+      workflowChange = config: change (lib.recursiveUpdate {ai.kiro.cli.workflows.enable = true;} config);
+      hidden = config: !(lib.hasInfix "`run_workflow`" (readSkill (workflowChange config) "kiro"));
+      effective = (import ../lib/select-families.nix {inherit lib;}).effectiveTechniques;
+    in
+      tweaksOff result
+      && tweaksOn enabled
+      && !enabled.config.ai.kiro.cli.tweaks.identity.enable
+      && tweaksOff (workflowChange {ai.programs.delegate-routing.enable = false;})
+      && tweaksOff (workflowChange {ai.kiro.cli.package = null;})
+      && tweaksOff (workflowChange {
+        ai.kiro.enable = lib.mkForce false;
+        ai.claude.enable = lib.mkForce false;
+      })
+      && tweaksOff (workflowChange {
+        ai.programs.delegate-routing.runtimes.kiro.enable = false;
+        ai.programs.delegate-routing.runtimes.claude.manualExternalDelegates = ["kimchi"];
+      })
+      && tweaksOn (workflowChange {ai.programs.delegate-routing.runtimes.kiro.enable = false;})
+      && tweaksOn (evaluate (lib.recursiveUpdate manualScenario {
+        ai.kiro.cli.workflows.enable = true;
+        ai.programs.delegate-routing.runtimes.kiro.models = [{vendors = ["anthropic"];}];
+      }))
+      && tweaksOn (workflowChange {
+        ai.programs.delegate-routing.runtimes.kiro.enable = false;
+        ai.programs.delegate-routing.runtimes.claude = {
+          extraRuntimes = ["kiro"];
+          manualExternalDelegates = [];
+        };
+      })
+      && tweaksOff (workflowChange {
+        ai.kiro.cli.tweaks = {
+          relativeFileCheckPaths = false;
+          stripVendorWorktreeSteering = false;
+        };
+      })
+      && !(lib.hasInfix "`run_workflow`" kiro)
+      && !(lib.hasInfix "`run_workflow`" (readSkill (change {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = true;}) "kiro"))
+      && techniqueCells enabledSkill "run_workflow" == ["`run_workflow`" "workflow" "true" "true" "interactive+headless+acp"]
+      && hidden {ai.kiro.cli.v3 = false;}
+      && hidden {ai.kiro.cli.native.settings.chat.enableWorkflows = false;}
+      && hidden {ai.programs.delegate-routing.runtimes.kiro.techniques.run_workflow.enable = false;}
+      && !(lib.hasInfix "`run_workflow`" (readSkill enabled "claude"))
+      && (effective enabled.config).kiro.run_workflow.enable
+      && !(effective result.config).kiro.run_workflow.enable);
+
     "module-delegate-routing-${name}-kiro-models" = mkTest "delegate-routing-${name}-kiro-models" (
       requiresSelection "kiro"
       && lib.hasInfix "opus (anthropic)" kiro

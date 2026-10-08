@@ -1,11 +1,7 @@
 ## AI CLI Packages
 
-> **Last verified:** 2026-10-04 — the unfree packages are absent from `packages`
-> and read from `ciPackages` or `legacyPackages`, repository commands included;
-> main-tracking rev bumps are done by `update-pkg.sh`; chatgpt-codex compiles
-> nixpkgs' `codex` from source, assembles upstream's complete package layout
-> itself, adds the voice and zsh resources from the release archive and stamps
-> the voice build commit into the CLI.
+> **Last verified:** 2026-10-07 — Kiro CLI controls live under `ai.kiro.cli`;
+> shared `.kiro` file declarations remain under `ai.kiro`.
 
 ### Overview
 
@@ -121,7 +117,7 @@ token and cannot be rate-limited; prefer it over a hand-rolled
 ### Patched Kiro variants stay local — TWO credentialed paths, not one
 
 `pkgs.ai.kiro-cli-workflows` exposes the same derivation selected by
-`ai.kiro.unlockedRolloutFeatures = ["workflows"]`. It must never reach the
+`ai.kiro.cli.unlockedRolloutFeatures = ["workflows"]`. It must never reach the
 public cache: it is a MODIFIED proprietary binary, and republishing one is a
 different act from mirroring the vendor's own build.
 

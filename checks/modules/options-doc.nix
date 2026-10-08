@@ -13,8 +13,8 @@
 #      deliberate runtime exclusion; and
 #   4. the retired normalized `instructions` surface reappears while preserving
 #      otherwise exact HM/devenv parity; and
-#   5. a native settings option leaves `ai.<runtime>.native`, or a retired
-#      flat name (`nativeSettings`, Kimchi's `harnessSettings`) comes back.
+#   5. a native settings option leaves its runtime's native namespace, or a
+#      retired flat name (`nativeSettings`, Kimchi's `harnessSettings`) comes back.
 #
 # Every guard goes through one of the shell helpers at the top of the build,
 # so a failure names the guard, the option or text, and which rendering
@@ -132,6 +132,8 @@
       lib.concatMapStringsSep "\n" (name: guard helper renderings ([name] ++ extra)) names;
   in {
     options-doc-ai-parity = pkgs.runCommand "options-doc-ai-parity" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       diff="${lib.getExe' pkgs.diffutils "diff"}"
       grep="${lib.getExe pkgs.gnugrep}"
       jq="${lib.getExe pkgs.jq}"
@@ -218,9 +220,10 @@
       "$diff" -u "${expectedCodexRoots}" actual-codex-option-roots
 
       # Every runtime owns one native settings file under an ordinary
-      # namespace; Kimchi owns a second, harness settings file. The former flat
-      # names are a deliberate clean cut rather than a compatibility alias.
-      ${guardEach "require_key" jsonDocs [] (map (runtime: "ai.${runtime}.native.settings") runtimes)}
+      # namespace (Kiro's is CLI-specific); Kimchi owns a second, harness
+      # settings file. The former flat names are a deliberate clean cut rather
+      # than a compatibility alias.
+      ${guardEach "require_key" jsonDocs [] (map (runtime: "ai.${runtime}.${lib.optionalString (runtime == "kiro") "cli."}native.settings") runtimes)}
       ${guardEach "forbid_key" jsonDocs [] (map (runtime: "ai.${runtime}.nativeSettings") runtimes)}
       ${guard "require_key" jsonDocs ["ai.kimchi.native.harnessSettings"]}
       ${guard "forbid_key" jsonDocs ["ai.kimchi.harnessSettings"]}

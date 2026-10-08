@@ -160,10 +160,12 @@
   gitTools = ["git-absorb" "git-branchless" "git-revise"];
   rulePath = ".claude/rules/heading.md";
   rows = backend:
-    lib.mapAttrsToList (runtime: leaf: {
-      name = "${backend} ai.${runtime}.package";
+    lib.mapAttrsToList (runtime: leaf: let
+      path = ["ai" runtime] ++ lib.optional (runtime == "kiro") "cli" ++ ["package"];
+    in {
+      name = "${backend} ${lib.showOption path}";
       path = [leaf];
-      read = config: config.ai.${runtime}.package;
+      read = config: lib.getAttrFromPath path config;
     })
     runtimes
     ++ map (tool: {

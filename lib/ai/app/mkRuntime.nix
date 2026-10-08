@@ -15,6 +15,8 @@
 #     defaults ? {};                 # {package?, packageText?} — shared across
 #                                    #   backends; packageText is the package
 #                                    #   option's defaultText
+#     launcherOptionsPath ? [];     # package/env/shell and normalized launcher pools
+#                                    #   live below this relative option path
 #     options ? {};                  # shared option declarations (both backends see these)
 #     supportedPools ? [];           # normalized ai.* pools the runtime consumes.
 #                                    # Unsupported per-runtime pool options are absent;
@@ -46,10 +48,10 @@
 #     config ? _: {};                # ONE delivery callback for BOTH backends; it
 #                                    #   receives `backend` and describes delivery
 #                                    #   rather than lowering it.
-#     installPackage ? (_: cfg.package);
+#     installPackage ? <selected launcher package>;
 #                                    # callback (same args as `config`) returning the
 #                                    #   derivation to install. OMIT to install the plain
-#                                    #   `cfg.package`. The transform owns the
+#                                    #   package at launcherOptionsPath. The transform owns the
 #                                    #   `home.packages` / `packages` lowering, so a
 #                                    #   factory never writes either.
 #     migrationConfig ? _: {};       # bounded cleanup emitted outside runtime enable
@@ -90,6 +92,7 @@
 {lib}: args @ {
   name,
   defaults ? {},
+  launcherOptionsPath ? [],
   options ? {},
   supportedPools ? [],
   contextFilename ? null,
@@ -131,7 +134,7 @@
   # need it must degrade rather than throw.
   pkgs ? null,
 }:
-assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults hm devenv poolOptions supportedPools;}
+assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults hm devenv launcherOptionsPath poolOptions supportedPools;}
   // builtins.intersectAttrs {
     agentNativeType = null;
     agentTransformer = null;
@@ -140,7 +143,7 @@ assert (import ./checkRecord.nix {inherit lib;}).record ({inherit name defaults 
   }
   args);
   {
-    inherit name defaults options poolOptions supportedPools hm devenv pkgs;
+    inherit name defaults launcherOptionsPath options poolOptions supportedPools hm devenv pkgs;
   }
   // lib.optionalAttrs (config != null) {inherit config;}
   // lib.optionalAttrs (installPackage != null) {inherit installPackage;}

@@ -92,7 +92,7 @@
       && empty == []
       && (!supported || warns ["ai" row.ecosystem row.surface])
     else warns path;
-  # `ai.kiro.trustedMcpTools` is NOT a case here: the wrapper appends
+  # `ai.kiro.cli.trustedMcpTools` is NOT a case here: the wrapper appends
   # `--trust-tools` on both backends, so a devenv consumer setting it has no
   # delivery gap to be told about. The narrower withhold it does have — the v3
   # `acp` arm and Darwin's bundle-discovery launcher — is asserted by
@@ -403,7 +403,7 @@
     declaration = {
       ai.kiro = {
         enable = true;
-        inherit trustedMcpTools v3;
+        cli = {inherit trustedMcpTools v3;};
       };
     };
   in
@@ -435,16 +435,16 @@ in {
   checks = {
     ai-warnings-darwin-trust = harness.mkTest "ai-warnings-darwin-trust" (
       # Withheld: Darwin under either engine, and the v3 `acp` arm anywhere.
-      contains "ai.kiro.trustedMcpTools" (trustWarnings {
+      contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "hm";
         darwin = true;
       })
-      && contains "ai.kiro.trustedMcpTools" (trustWarnings {
+      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "devenv";
         darwin = true;
         v3 = true;
       })
-      && contains "ai.kiro.trustedMcpTools" (trustWarnings {
+      && contains "ai.kiro.cli.trustedMcpTools" (trustWarnings {
         backend = "devenv";
         v3 = true;
       })

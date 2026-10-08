@@ -23,7 +23,7 @@ in {
     # to have installed user-globally.
     #
     # `lib/ai/app/mkBackendTransform.nix` now owns installation and defaults to
-    # installing `cfg.package`, so saying nothing installs the plain package
+    # installing the selected launcher package, so saying nothing installs it
     # rather than nothing. This table pins the delivery CHANNEL per runtime per
     # backend, which is the half a default cannot enforce: whether each one
     # installs a wrapper or the bare package.
@@ -32,7 +32,7 @@ in {
         # The SHAPE of each runtime's installed derivation per backend, not merely
         # that something was installed. `packages != []` alone is not enough: a
         # misspelled or dropped `installPackage` key falls through to the
-        # transform's `cfg.package` default and installs the runtime's BARE
+        # transform's plain-package default and installs the runtime's BARE
         # binary — no flag injection, no baked environment, no `secretEnv` — while
         # a count-only assertion still passes. Before the seam existed a wrong key
         # name was a Nix eval error inside `config`; now it is a silent
@@ -608,7 +608,7 @@ in {
           };
           kimchi.environmentVariables.removed = null;
           kiro = {
-            environmentVariables.removed = null;
+            cli.environmentVariables.removed = null;
             lspServers.removed = null;
             mcpServers.removed = null;
             rules.removed.enable = false;

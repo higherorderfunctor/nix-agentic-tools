@@ -75,7 +75,7 @@
 
   wrapperReasons = {
     environmentVariables ? {},
-    environmentVariablesName ? "ai.environmentVariables / ai.kiro.environmentVariables",
+    environmentVariablesName ? "ai.environmentVariables / ai.kiro.cli.environmentVariables",
     extraPackages ? [],
     bundleMaterializer ? null,
     secretEnv ? {},
@@ -84,7 +84,7 @@
   }: {
     bundle = {
       active = bundleMaterializer != null;
-      name = "ai.kiro.tweaks";
+      name = "ai.kiro.cli.tweaks";
     };
     environmentVariables = {
       active = environmentVariables != {};
@@ -92,7 +92,7 @@
     };
     extraPackages = {
       active = extraPackages != [];
-      name = "ai.kiro.extraPackages";
+      name = "ai.kiro.cli.extraPackages";
     };
     secrets = {
       active = secretEnv != {};
@@ -100,11 +100,11 @@
     };
     trustedMcpTools = {
       active = trustedMcpTools != [];
-      name = "ai.kiro.trustedMcpTools";
+      name = "ai.kiro.cli.trustedMcpTools";
     };
     v3 = {
       active = v3;
-      name = "ai.kiro.v3";
+      name = "ai.kiro.cli.v3";
     };
   };
 

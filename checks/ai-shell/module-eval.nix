@@ -152,7 +152,7 @@ in {
         ai.shell = pkgs.bash;
         ai.kiro = {
           enable = true;
-          environmentVariables.SHELL = "/explicit/zsh";
+          cli.environmentVariables.SHELL = "/explicit/zsh";
         };
       };
     in

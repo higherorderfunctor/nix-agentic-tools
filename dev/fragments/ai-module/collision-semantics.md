@@ -1,7 +1,8 @@
 ## ai.\* Pool Composition and Collision Semantics
 
-> **Last verified:** 2026-10-04 — per-runtime program overrides use
-> `ai.programs.<program>.runtimes.<runtime>`; portable `settings` is allowed.
+> **Last verified:** 2026-10-07 — Kiro environment pool provenance follows
+> `ai.kiro.cli.environmentVariables`; replacement and null withdrawal semantics
+> are unchanged.
 >
 > **Settled — do not relitigate.** Full lineage:
 > `git show ce31eaaa:dev/fragments/ai-module/collision-semantics.md`.
@@ -140,8 +141,9 @@ runtime replacement for two owners.
 
 ### Where repo modules contribute
 
-Repo modules write `ai.<runtime>.<pool>`, never the root `ai.<pool>`. The root
-level belongs to consumers as the portable default surface. A separate
+Repo modules write `ai.<runtime>.<pool>` (Kiro environment uses
+`ai.kiro.cli.environmentVariables`), never the root `ai.<pool>`. The root level
+belongs to consumers as the portable default surface. A separate
 `rootPoolViolations` provenance guard enforces that boundary. Per-runtime null
 on nullable pools and `enable = false` on rules let a consumer undo an inherited
 root entry, but consumers should not have to retract package wiring that
@@ -216,7 +218,8 @@ and testing their distinct composition contracts.
 `lib/ai/ai-common.nix:mergePool` owns the shallow merge and post-merge null
 filter for nullable pools. `lib/ai/app/mkBackendTransform.nix` calls it once for
 every supported pool, additionally filters disabled rules, and contributes the
-result as per-key defaults beneath `ai.<runtime>.normalized.<pool>`, whose
+result as per-key defaults beneath `ai.<runtime>.normalized.<pool>` (Kiro's
+environment pool uses `ai.kiro.cli.normalized.environmentVariables`), whose
 option default is `{}`. Ordinary extensions retain unrelated inherited keys;
 whole-pool `mkForce` replaces the merged input. Package callbacks and
 transformer arguments read those public options. A text-source record crosses

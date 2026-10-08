@@ -181,7 +181,7 @@
         } {}
     else if row.ecosystem == "kiro"
     then
-      probe ["ai" "kiro" "native" "settings"]
+      probe ["ai" "kiro" "cli" "native" "settings"]
       (
         if row.mode == "hm"
         then {chat.defaultModel = "probe";}

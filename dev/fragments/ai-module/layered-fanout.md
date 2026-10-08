@@ -1,56 +1,7 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-10-04 — devenv symlink guards use the final file
-> target, follow their own runtime's writers before file creation, and report
-> every conflict before failing. A record's `agentNativeType` +
-> `agentTransformer` give it a typed `native.agents` layer below the normalized
-> agents pool; every agents runtime gets `agentsDir`, and a runtime extends the
-> builder's `agents` description only through `agentsDescriptionSuffix`. Rule
-> inclusion resolves from one portable priority list and runtime support table
-> before L4 rendering. The shared AGENTS.md notice resolves each runtime's
-> effective limit at shell entry. Claude delivers every surface through
-> `ai.claude.files`; its settings.json and devenv .mcp.json are read-only links.
-> Every delivered entry is a file the layer writes. L5 is the delivery router
-> plus one adapter per backend; every runtime describes delivery once through
-> the record-level `config`, which `mkRuntime` makes the only delivery callback,
-> and the delivery matrix is generated from the layer for every runtime's files.
-> Normalized pools carry only a text-source record's winning arm. Claude's
-> devenv rules and Codex's execpolicy rules are read-only copies whose writers
-> survive a disable. Copilot's settings files are read-only copies of one
-> `materialize-copilot-config` writer; its only reconciled document is the HM
-> `trustedFolders` leaf of its state file `config.json`. Kiro's `cli.json` and
-> `mcp.json` are read-only copies in one directory ledger. Kimchi shares its HM
-> user `config.json` and `harness/settings.json`; its other settings files are
-> read-only copies of one `kimchiFiles` writer. Codex's `config.toml` is a store
-> symlink on both backends and its daemon `settings.json` a read-only copy of
-> `materialize-codex-daemon-settings`. Kiro excludes the normalized `settings`
-> pool. Native file settings live under `ai.<runtime>.native`. The builder
-> publishes each record's devenv shared AGENTS.md contribution, and its key in
-> `ai.internal.agentsMdTargets`, from the record's `sharedAgentsMd`. Claude's
-> `.claude.json` has an ungated mode-narrowing command writer beside its unpin
-> ledger. Codex's daemon `settings.json` maps to no matrix cell. The builder
-> declares the per-runtime `agents`, `environmentVariables` and `lspServers`
-> options, plus `agentsDir` for every agents runtime; a record's `poolOptions`
-> carries only what differs. `checkRecord.nix` rejects a `poolOptions` key the
-> builder would not read, a malformed native agent layer or agent field, and a
-> stray field in the `sharedAgentsMd` result. Every reconciled document is one
-> `helpers.mkReconciledDocument` call. A shared AGENTS.md contribution may carry
-> `index` entries: Codex and Kimchi render a scoped rule that names `references`
-> as a path-scoped index entry instead of inlining its body. The shared
-> AGENTS.md map lowers through the router as `internal`, as a read-only copy,
-> and a contribution's `defaultMaxBytes` supplies fallback bytes plus an
-> effective-limit resolver for the owner's notice under a raised `maxBytes`; its
-> built bytes are measured in the generated-file tree. The router puts every
-> live build-time whole file into one tree per invocation; raw files and
-> recursive directory sources pass through without formatting or format guards,
-> while runtime shape guards inspect installed copies. Switch-time overlays,
-> `content.run`, and shared document leaves stay outside the tree. Generators
-> mark their `content` with `_generated`, so a consumer's replacement of a
-> unit's file warns like a switch-off. Rule and semantic-agent generators pass
-> raw Nix data to `lib/frontmatter.nix`, which renders quoted YAML as text. The
-> generated-file builder formats whole Markdown files, including headers.
-> `parseCompare` compares parsed YAML frontmatter values; files without a header
-> compare as `null`.
+> **Last verified:** 2026-10-07 — Kiro launcher controls and normalized launcher
+> pools use `ai.kiro.cli`; shared pools and delivery stay at `ai.kiro`.
 >
 > Full lineage: `git show ce31eaaa:dev/fragments/ai-module/layered-fanout.md`.
 
@@ -124,6 +75,14 @@ not move them back.
 │   - Devenv: files.*                                        │
 └────────────────────────────────────────────────────────────┘
 ```
+
+The runtime record has one data-only placement field, `launcherOptionsPath`,
+default `[]`. Kiro sets `["cli"]`: only package, environment, shell and the
+corresponding normalized inputs move there. Declarations, per-key fold defaults
+and callback reads share that path. Callbacks still receive the shared `cfg` and
+one complete `normalized` view. Native agents and every file/ledger remain at
+the runtime root. The field must be a list of nonempty strings; constructor and
+transform both validate it.
 
 ### Rules
 

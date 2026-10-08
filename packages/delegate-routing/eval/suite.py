@@ -273,7 +273,11 @@ def codex_setup(ctx):
 def kiro_setup(ctx):
     real = read_json(REAL_HOME / ".kiro/settings/cli.json", {}) or {}
     settings = ctx["home"] / ".kiro/settings/cli.json"
-    write_json(settings, {key: real[key] for key in ("chat.enableCheckpoint", "chat.enableTangentMode", "chat.enableWorkflows") if key in real})
+    carried = {key: real[key] for key in ("chat.enableCheckpoint", "chat.enableTangentMode") if key in real}
+    # This global-only prerequisite belongs to the isolated fixture, never the
+    # operator's home. Match the effective technique inventory from cases.nix.
+    carried["chat.enableWorkflows"] = "run_workflow" in ctx["case"]["techniques"]["kiro"]
+    write_json(settings, carried)
     hook = ctx["repo"] / ".kiro/hooks/suite-log.json"
     write_json(hook, {"version": "v1", "hooks": [{"name": "suite-log", "trigger": "PreToolUse", "action": {"type": "command", "command": str(ctx["hook"])}}]})
     data = Path(os.environ.get("XDG_DATA_HOME") or REAL_HOME / ".local/share")

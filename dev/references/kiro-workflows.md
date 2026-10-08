@@ -104,13 +104,13 @@ copies. See `packages/kiro-cli/docs/launcher-argv.md` for the full anatomy.
 In this repository it is unlocked by patching that manifest:
 
 ```nix
-ai.kiro.unlockedRolloutFeatures = ["workflows"];
+ai.kiro.cli.unlockedRolloutFeatures = ["workflows"];
 ```
 
 declared in `packages/kiro-cli/lib/mkKiro.nix`. Two assertions guard it: the
 option requires a `package` exposing `passthru.withRolloutFeatures`, and it
-requires `ai.kiro.v3 = true` — the feature-gated commands reach the palette only
-on the v3 (`kas`) engine, so patching the binary is necessary but not
+requires `ai.kiro.cli.v3 = true` — the feature-gated commands reach the palette
+only on the v3 (`kas`) engine, so patching the binary is necessary but not
 sufficient.
 
 **`KIRO_ENABLED_FEATURES` does not work.** `tui.js` reads it, which makes it

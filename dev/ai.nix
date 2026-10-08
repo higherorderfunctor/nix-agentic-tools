@@ -308,65 +308,63 @@ in {
     kiro = {
       enable = true;
       mcpServers.agnix = agnixMcp;
-      # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
-      # a launcher-global option, so it reaches every subcommand including
-      # `acp`. Without it devenv's kiro-cli ran the legacy engine and
-      # hooks/slash-commands never loaded.
-      #
-      # This was `tui = true`. That option is now REMOVED: `--tui` selects the
-      # new TUI harness for the OLD engine, v3 already uses it, and it is going
-      # away with v3. It used to imply `--v3`, and that implication was
-      # load-bearing rather than decorative — bare `--tui` conflicts with the
-      # chat binary's default engine (v1) and the launcher supplies none — so
-      # `tui = true` only ever worked by dragging `--v3` along. Ask for the
-      # engine directly.
-      v3 = true;
-      # Dogfood the rollout unlock: surfaces `/workflow` and `/goal` plus the
-      # five bundled recipes. Inert without `v3` above, because workflow
-      # commands are only populated when the resolved engine is `kas` —
-      # patching the binary alone is not enough, and the failure is silent.
-      #
-      # Names come from `packages/kiro-cli/extracted.json` (`rolloutFeatures`),
-      # extracted from the binary rather than curated. UNCERTIFIED upstream:
-      # `workflows` is documented as "Dark-shipped at 0% until release
-      # certification is complete".
-      #
-      # STILL INERT FROM HERE, and knowingly so. Since kiro-cli 2.19.0 there is
-      # a THIRD gate — the `chat.enableWorkflows` setting, default false — and
-      # it is not in the workspace-override allowlist, so no project-local
-      # cli.json can satisfy it. Whoever wants `/workflow` in this shell sets it
-      # GLOBALLY (`ai.kiro.native.settings.chat.enableWorkflows` under
-      # home-manager, or `kiro-cli settings chat.enableWorkflows true` without
-      # it: home-manager owns the global cli.json and reverts that). This
-      # line still earns its place: it keeps the patched-package path
-      # exercised, and gate 3 is one global setting away.
-      # See packages/kiro-cli/docs/workflow-gating.md.
-      unlockedRolloutFeatures = ["workflows"];
-      tweaks = {
-        # Dogfood `tweaks.identity`. It replaces ONLY the vendor's opening sentence
-        # ("You are Kiro CLI, an agentic AI software engineer that runs in the
-        # command line."). Everything after it is preserved byte-for-byte — the
-        # terminal/no-GUI prose that keeps the agent surfacing file paths and
-        # command output instead of pointing at editor affordances. That
-        # preservation is the whole reason the option replaces a SENTENCE rather
-        # than the block, and it is what makes a persona safe to set here: the
-        # behavioral contract is untouched, only the self-description moves.
+      cli = {
+        tweaks = {
+          # Dogfood `tweaks.identity`. It replaces ONLY the vendor's opening sentence
+          # ("You are Kiro CLI, an agentic AI software engineer that runs in the
+          # command line."). Everything after it is preserved byte-for-byte — the
+          # terminal/no-GUI prose that keeps the agent surfacing file paths and
+          # command output instead of pointing at editor affordances. That
+          # preservation is the whole reason the option replaces a SENTENCE rather
+          # than the block, and it is what makes a persona safe to set here: the
+          # behavioral contract is untouched, only the self-description moves.
+          #
+          # This is segment 1 of msg0, ahead of steering, learnings and the file
+          # tree. The value may not contain a backtick or a dollar-brace — it is
+          # spliced into a JS template literal, and the bundle patcher refuses
+          # both rather than emitting a bundle that dies at engine spawn.
+          #
+          # Expect flavor rather than behavior change: one line sits above the
+          # vendor's terse-engineer prose AND (because `workflows` is unlocked
+          # above) its ~3.9k-token workflow-orchestration block.
+          identity.text = ''
+            You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
+          '';
+        };
+        # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
+        # a launcher-global option, so it reaches every subcommand including
+        # `acp`. Without it devenv's kiro-cli ran the legacy engine and
+        # hooks/slash-commands never loaded.
         #
-        # This is segment 1 of msg0, ahead of steering, learnings and the file
-        # tree. The value may not contain a backtick or a dollar-brace — it is
-        # spliced into a JS template literal, and the bundle patcher refuses
-        # both rather than emitting a bundle that dies at engine spawn.
+        # This was `tui = true`. That option is now REMOVED: `--tui` selects the
+        # new TUI harness for the OLD engine, v3 already uses it, and it is going
+        # away with v3. It used to imply `--v3`, and that implication was
+        # load-bearing rather than decorative — bare `--tui` conflicts with the
+        # chat binary's default engine (v1) and the launcher supplies none — so
+        # `tui = true` only ever worked by dragging `--v3` along. Ask for the
+        # engine directly.
+        v3 = true;
+        # Dogfood the rollout unlock: surfaces `/workflow` and `/goal` plus the
+        # five bundled recipes. Inert without `v3` above, because workflow
+        # commands are only populated when the resolved engine is `kas` —
+        # patching the binary alone is not enough, and the failure is silent.
         #
-        # Expect flavor rather than behavior change: one line sits above the
-        # vendor's terse-engineer prose AND (because `workflows` is unlocked
-        # above) its ~3.9k-token workflow-orchestration block.
-        identity.text = ''
-          You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
-        '';
-        # This repository's git workflow (sibling worktrees branched off
-        # `main`, one PR each) contradicts the vendor steering's
-        # `.worktrees/<name>` + `mainline` paragraph, so strip it.
-        stripVendorWorktreeSteering = true;
+        # Names come from `packages/kiro-cli/extracted.json` (`rolloutFeatures`),
+        # extracted from the binary rather than curated. UNCERTIFIED upstream:
+        # `workflows` is documented as "Dark-shipped at 0% until release
+        # certification is complete".
+        #
+        # STILL INERT FROM HERE, and knowingly so. Since kiro-cli 2.19.0 there is
+        # a THIRD gate — the `chat.enableWorkflows` setting, default false — and
+        # it is not in the workspace-override allowlist, so no project-local
+        # cli.json can satisfy it. Whoever wants `/workflow` in this shell sets it
+        # GLOBALLY (`ai.kiro.cli.native.settings.chat.enableWorkflows` under
+        # home-manager, or `kiro-cli settings chat.enableWorkflows true` without
+        # it: home-manager owns the global cli.json and reverts that). This
+        # line still earns its place: it keeps the patched-package path
+        # exercised, and gate 3 is one global setting away.
+        # See packages/kiro-cli/docs/workflow-gating.md.
+        workflows.enable = true;
       };
     };
 

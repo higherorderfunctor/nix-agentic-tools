@@ -189,7 +189,7 @@
       })
       harnessNames;
     claimsFor = scope: pool: let
-      optionPath = scope.path ++ [pool];
+      optionPath = scope.path ++ lib.optional (scope.label == "ai.kiro" && pool == "environmentVariables") "cli" ++ [pool];
       opt = lib.attrByPath optionPath null evaluated.options;
       declaredIn = map toString (opt.declarations or []);
       isPackageDefinition = definition:
@@ -205,7 +205,7 @@
           file = toString definition.file;
           inherit key;
           owner = packageOwnerOf definition.file;
-          id = "${scope.label}.${pool}.${key}";
+          id = "${lib.showOption optionPath}.${key}";
         }) (builtins.attrNames definition.value))
       definitions;
     in
