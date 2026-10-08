@@ -108,9 +108,11 @@ composed registry and ninja DAG:
   builds pnpm 12 from source with `generic-rust.nix`, so `pnpm_12` is a
   `.override` of nixpkgs' `pnpm_12` rather than an `mkMajor.nix` caller. It
   moves the version, `srcHash`, `cargoHash`, the locked `rustPlatform` and the
-  update script; its sidecar's hashes are restored by `passthru.fixVendorHash`.
-  It carries its own major guard. Until 2026-10-03 it unpacked upstream's
-  prebuilt `@pnpm/exe.<platform>` binaries; measurements at
+  update script. Its `pnpmDepsHash` pins offline JavaScript dependencies;
+  `preBuild` generates the embedded loader with upstream's bundler using pnpm_11
+  as the bootstrap. Its sidecar's source, Cargo and pnpm hashes are restored by
+  `passthru.fixVendorHash`. It carries its own major guard. Until 2026-10-03 it
+  unpacked upstream's prebuilt `@pnpm/exe.<platform>` binaries; measurements at
   `git show 58e27237:packages/pnpm/packages/ai/generic/pnpm_12/package.nix`.
 - **Hand-bumped, with currency annotated instead of swept** (`aihubmix-mcp`): a
   package carrying a local patch against upstream's published BUILD OUTPUT

@@ -91,6 +91,7 @@
       "kimchi"
       "kimchi-workflows"
       "oxlint"
+      "pnpm_12"
     ];
 
     # Pull pnpm out of a derivation's nativeBuildInputs by pname.
