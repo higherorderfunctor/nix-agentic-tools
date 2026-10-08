@@ -2,7 +2,8 @@
 
 > **Last verified:** 2026-10-08 — devenv warns at shell entry when delivered
 > Codex project config and user config use opposite permission models, naming
-> both files and the winning selector; Codex's launcher owns the document
+> both files and the winning selector, and when an installed runtime's PATH
+> binary resolves outside the devenv profile; Codex's launcher owns the document
 > preflight.
 >
 > **Settled — do not relitigate.** Each of these records an approach that was
